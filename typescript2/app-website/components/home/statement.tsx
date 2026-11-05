@@ -37,8 +37,17 @@ export default function Statement() {
               <div className="mt-6 flex flex-col gap-5 max-w-[36rem] v4-body text-ink-2">
                 <p>
                   But to make something 100x better, you have to vertically
-                  integrate. So we built a virtual machine that runs anywhere, a
-                  compiler that knows which errors you're hitting in production,
+                  integrate. So{' '}
+                  <strong className="font-semibold text-head">
+                    we built BAML
+                  </strong>
+                  , with a virtual machine that makes it run anywhere,
+                </p>
+                <p>
+                  a compiler that knows which errors you're hitting in
+                  production,
+                </p>
+                <p>
                   and a data lake that stores every call in a structured way,
                   even with the types you declared.
                 </p>

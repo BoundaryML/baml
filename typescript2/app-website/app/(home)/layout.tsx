@@ -40,6 +40,8 @@ export const viewport: Viewport = {
   themeColor: '#0a0a0a',
 };
 
+/** The root layout: the document with the site's fonts, structured data, and analytics around every
+ *  page. */
 export default function RootLayout({
   children,
 }: {

@@ -11,6 +11,10 @@ import { useEffect, useState } from 'react';
 const KEY = 'bamlcode:solved:v1';
 const EVENT = 'bamlcode:progress';
 
+/**
+ * The slugs of the solved problems from localStorage, or an empty set on the
+ * server.
+ */
 export function getSolved(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
@@ -21,6 +25,7 @@ export function getSolved(): Set<string> {
   }
 }
 
+/** Records a problem as solved and notifies listeners in this tab. */
 export function markSolved(slug: string): void {
   if (typeof window === 'undefined') return;
   const solved = getSolved();

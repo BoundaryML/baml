@@ -49,8 +49,10 @@ type Slab = { thick: number; y: number };
 const silhouette = ({ thick: d, y }: Slab) =>
   `M272,${y}L424,${y + 45}L424,${y + 45 + d}L272,${y + 90 + d}L120,${y + 45 + d}L120,${y + 45}Z`;
 
+/** How far above its resting place a layer sits when it is `q` of the way in. */
 const drop = (q: number) => -(1 - q) * DROP;
 
+/** The BAML stack as isometric slabs. `shown` holds each layer's arrival, from 0 to 1. */
 function Stack({ shown }: { shown: number[] }) {
   const id = useId();
   return (
@@ -150,6 +152,7 @@ function Stack({ shown }: { shown: number[] }) {
   );
 }
 
+/** Section 2's drawing: the three Raptor engines, then the BAML stack, at a given scroll progress. */
 export default function Blueprints({ progress }: { progress: number }) {
   const out = 1 - ramp(progress, ...RAPTORS_OUT);
   const layers = LAYERS.map((_, i) => {

@@ -43,6 +43,7 @@ function share(hour: number) {
 const CALLS_PER_HOUR = 4200;
 const TOKENS = { input: 300, output: 5 };
 const PRICE = { 'gpt-6-luna': [0.1, 0.5], 'gpt-6-sol': [2, 10] } as const;
+/** Dollars for one call at a model's [input, output] price per million tokens. */
 const perCall = ([input, output]: readonly [number, number]) =>
   (TOKENS.input * input + TOKENS.output * output) / 1e6;
 const LUNA = perCall(PRICE['gpt-6-luna']);
@@ -59,6 +60,7 @@ function spend(from: number, to: number) {
   return total;
 }
 
+/** A dollar amount formatted as US currency with two decimals. */
 const dollars = (v: number) =>
   v.toLocaleString('en-US', {
     currency: 'USD',
@@ -66,11 +68,14 @@ const dollars = (v: number) =>
     minimumFractionDigits: 2,
     style: 'currency',
   });
+/** A per-call cost written as the cost of a thousand calls. */
 const per1k = (v: number) => `${dollars(v * 1000)} per 1k calls`;
 
 const W = 720;
 const H = 200;
+/** The chart x position of an hour. */
 const x = (hour: number) => (hour / HOURS) * W;
+/** The chart y position of a share of traffic. */
 const y = (s: number) => H - s * H;
 
 const EDGE = ROLLOUT.map(
@@ -100,6 +105,8 @@ const MODELS = [
   },
 ];
 
+/** The rollout chart: gpt-6-sol's share of traffic over three days and each day's spend, filled in as
+ *  the reader scrolls. */
 function RolloutChart() {
   const plot = useRef<HTMLDivElement>(null);
   const [progress] = useScrollProgress(plot, plot);
@@ -230,6 +237,7 @@ function RolloutChart() {
   );
 }
 
+/** Section 7, Improve: the experiments phase, holding the rollout chart. */
 export default function Improve() {
   return (
     <Phase

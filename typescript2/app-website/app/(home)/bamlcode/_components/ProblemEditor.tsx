@@ -9,6 +9,10 @@ import type { LspDiagnostic, SolveRuntime } from '../_lib/runtime';
 type EditorInstance = Parameters<OnMount>[0];
 type MonacoNs = Parameters<OnMount>[1];
 
+/**
+ * The Monaco marker severity for an LSP diagnostic severity. Unknown values
+ * are errors.
+ */
 function markerSeverity(monaco: MonacoNs, s?: number) {
   if (s === 2) return monaco.MarkerSeverity.Warning;
   if (s === 3 || s === 4) return monaco.MarkerSeverity.Info;

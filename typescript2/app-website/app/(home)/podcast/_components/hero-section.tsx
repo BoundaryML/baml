@@ -5,6 +5,7 @@ import { PAGE_WRAP } from '@/components/home/page-shell';
 const HOST_LINK =
   'text-head underline decoration-accent decoration-1 underline-offset-[3px] hover:text-clover transition-colors';
 
+/** The podcast page's header: the show's name, its hosts, and when it airs. */
 export function HeroSection() {
   return (
     <section

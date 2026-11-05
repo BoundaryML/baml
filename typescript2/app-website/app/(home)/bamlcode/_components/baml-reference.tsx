@@ -105,11 +105,16 @@ const SECTIONS: Section[] = [
   },
 ];
 
+/** The last segment of a dotted name, e.g. `stringify` in `json.stringify`. */
 function leaf(name: string): string {
   const i = name.lastIndexOf('.');
   return i < 0 ? name : name.slice(i + 1);
 }
 
+/**
+ * A search result: a symbol or one of its methods, with its signature, docs,
+ * and source location. A class lists its methods when `expandMethods` is set.
+ */
 function DocCard({
   symbol,
   matchedMethod,
@@ -167,6 +172,10 @@ function DocCard({
   );
 }
 
+/**
+ * The `baml describe` panel: search results as doc cards, or the cheat sheet
+ * when the search box is empty.
+ */
 export function BamlReference() {
   const [query, setQuery] = useState('');
   const q = query.trim();

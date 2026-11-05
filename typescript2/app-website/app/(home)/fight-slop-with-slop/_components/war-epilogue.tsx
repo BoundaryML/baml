@@ -2,6 +2,10 @@ import Image from 'next/image';
 import { section } from '@/components/home/analytics';
 import { PAGE_WRAP } from '@/components/home/page-shell';
 
+/**
+ * The closing section: why the war is being lost, and the bet on clean
+ * constructs at the language level.
+ */
 export default function WarEpilogue() {
   return (
     <section

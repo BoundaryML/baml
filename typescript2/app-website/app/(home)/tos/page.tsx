@@ -12,6 +12,7 @@ export const metadata = createMetadata({
 // Legal text, set as a reading column in the homepage's BAML lane: Lexend headings, body in ink-2.
 // It isn't linked from the nav or the footer.
 
+/** The terms of service, as a single reading column. */
 export default function TermsOfServicePage() {
   return (
     <PageShell>

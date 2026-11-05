@@ -90,6 +90,7 @@ const teamMembers: TeamMember[] = [
   },
 ];
 
+/** The team page: an intro with the team photo, a card for each member, and the open roles. */
 export default function WhoAreWePage() {
   return (
     <PageShell>
@@ -225,6 +226,7 @@ export default function WhoAreWePage() {
   );
 }
 
+/** The X logo, sized for a team member's social links. */
 function XMark() {
   return (
     <svg
@@ -240,6 +242,7 @@ function XMark() {
   );
 }
 
+/** The LinkedIn logo, sized for a team member's social links. */
 function LinkedInMark() {
   return (
     <svg

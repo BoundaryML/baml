@@ -37,9 +37,11 @@ export type PodcastEpisode = {
 const PODCAST_DATA_URL =
   'https://raw.githubusercontent.com/ai-that-works/ai-that-works/refs/heads/main/data.json';
 
-// Extracts a single-video YouTube ID. Playlist URLs (.../playlist?list=...) and
-// channel links intentionally return null so they are never treated as a
-// watchable video (no thumbnail, no "Watch" CTA, no embed).
+/**
+ * Extracts a single-video YouTube ID. Playlist URLs (.../playlist?list=...) and
+ * channel links intentionally return null so they are never treated as a
+ * watchable video (no thumbnail, no "Watch" CTA, no embed).
+ */
 const getYouTubeVideoId = (url?: string | null): string | null => {
   if (!url) return null;
   const match = url.match(
@@ -259,6 +261,10 @@ const fallbackEpisodeData: FallbackEpisodeInput[] = [
   },
 ];
 
+/**
+ * A URL slug for a bundled episode, from its slug or title, or from its number
+ * when neither gives one.
+ */
 const slugifyFallbackEpisode = (
   episode: FallbackEpisodeInput,
   index: number,
@@ -280,6 +286,11 @@ export const fallbackEpisodes: PodcastEpisode[] = fallbackEpisodeData.map(
   }),
 );
 
+/**
+ * Converts the feed's episodes to PodcastEpisode, newest first, numbered by
+ * date. Workshops and other events are dropped; with no episodes left, the
+ * bundled episodes are returned instead.
+ */
 function mapExternalEpisodes(
   externalEpisodes: ExternalEpisode[],
 ): PodcastEpisode[] {
@@ -339,6 +350,10 @@ function mapExternalEpisodes(
     });
 }
 
+/**
+ * Fetches the episodes from the ai-that-works feed, revalidated every ten
+ * minutes. Falls back to the bundled episodes if the feed fails.
+ */
 export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
   try {
     // Hard timeout so a stalled connection (e.g. rate-limited from a CI/build

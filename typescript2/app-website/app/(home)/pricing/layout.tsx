@@ -9,6 +9,7 @@ export const metadata = createMetadata({
   title: 'Pricing',
 });
 
+/** Renders the pricing page unchanged. The layout exists only to carry the page's metadata. */
 export default function PricingLayout({
   children,
 }: {

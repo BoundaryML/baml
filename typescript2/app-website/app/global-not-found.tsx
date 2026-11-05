@@ -10,9 +10,9 @@ export const metadata: Metadata = {
   title: 'Page not found · Boundary',
 };
 
-// `experimental.globalNotFound` is enabled, so this renders the whole document for unmatched routes
-// rather than going through the root layout. It loads the same fonts and stylesheet as the root
-// layout and sits in the homepage's nav and footer.
+/** The 404 page. `experimental.globalNotFound` is enabled, so this renders the whole document for
+ *  unmatched routes rather than going through the root layout. It loads the same fonts and stylesheet
+ *  as the root layout and sits in the homepage's nav and footer. */
 export default function GlobalNotFound() {
   return (
     <html

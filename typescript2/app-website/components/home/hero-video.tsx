@@ -22,12 +22,15 @@ import { HIGHLIGHT, RED } from './story';
 const W = 1200;
 const H = 720;
 
+/** `v` held between `lo` and `hi`, 0 and 1 by default. */
 export const clamp = (v: number, lo = 0, hi = 1) =>
   Math.min(hi, Math.max(lo, v));
+/** The part of `text` typed by time `t`, when typing starts at `at` and takes `ms`. */
 export const typed = (text: string, t: number, at: number, ms = 500) =>
   text.slice(0, Math.round(clamp((t - at) / ms) * text.length));
 const lastAt = <T extends { at: number }>(list: T[], t: number) =>
   list.reduce((found, item) => (item.at <= t ? item : found), list[0]);
+/** Whether `t` falls in [from, to). */
 export const within = (
   t: number,
   from: number,
@@ -114,6 +117,8 @@ export type Script = {
 const TOP = 24;
 const TALL = 604;
 
+/** A window at a fixed position in the frame: a title bar with three dots and a title, over its
+ *  content. */
 export function Window({
   children,
   className = 'border-white/12',
@@ -187,6 +192,7 @@ function Hint({ text, tone }: { text: string; tone?: Tone }) {
   );
 }
 
+/** An alarm clock icon, red and pinging while `firing` and green once resolved. */
 export function Alarm({ firing }: { firing: boolean }) {
   return (
     <span className="relative grid place-items-center size-4">
@@ -248,6 +254,7 @@ function Marked({
   return <>{pieces}</>;
 }
 
+/** The editor's lines with line numbers, tinted, marked, and annotated as `deco` describes. */
 export function Editor({ deco, lines }: { deco: Deco; lines: string[] }) {
   const prose = proseLines(lines);
   return (
@@ -305,8 +312,9 @@ const OUT_TONE = {
   pass: 'text-white/70',
 };
 
-// The lines start at the top of the window. Once they fill it, the newest line stays at the bottom and the
-// oldest scroll off the top: the inner column is at least as tall as the window, and sits at its bottom.
+/** The terminal's entries up to time `t`. The lines start at the top of the window. Once they fill it,
+ *  the newest line stays at the bottom and the oldest scroll off the top: the inner column is at least
+ *  as tall as the window, and sits at its bottom. */
 export function Terminal({ entries, t }: { entries: Entry[]; t: number }) {
   const shown = entries.filter((e) => e.at <= t);
   return (
@@ -448,6 +456,7 @@ const SARCASTIC = [
   'Sure, I will just wait another week.',
 ];
 
+/** The sarcastic inputs behind the alert, each labelled other, one more every 200 ms after `since`. */
 export function Inputs({ since }: { since: number }) {
   return (
     <div>
@@ -773,6 +782,7 @@ const LOOP: Script = {
   total: 34000,
 };
 
+/** Version 22: the player running the loop from writing a function to fixing it from production. */
 export default function HeroVideo() {
   return <Player script={LOOP} />;
 }
@@ -919,6 +929,7 @@ function codeDeco(t: number): Deco {
   return deco;
 }
 
+/** The alert on classify as a terminal line, firing at 3.1% or resolved at 0.3%. */
 export function AlertRow({ resolved }: { resolved?: boolean }) {
   return (
     <p className="flex items-center gap-2.5">
@@ -1015,6 +1026,7 @@ const CODE: Script = {
   total: 38000,
 };
 
+/** Version 24: the player running the script where the code lights up with each query. */
 export function HeroVideoCode() {
   return <Player script={CODE} />;
 }

@@ -6,6 +6,7 @@ import { SoftwareApplicationStructuredData } from '@/components/structured-data'
 
 // The pricing page, in the homepage's BAML lane. It isn't linked from the nav or the footer.
 
+/** The pricing page: BAML is free and open source, with cloud tools to come. */
 export default function PricingPage() {
   return (
     <PageShell>

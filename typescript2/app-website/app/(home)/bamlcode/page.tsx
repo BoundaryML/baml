@@ -13,7 +13,7 @@ export const metadata = createMetadata({
   title: 'bamlcode: LeetCode for BAML',
 });
 
-// The problem list, in the homepage's BAML lane. It isn't linked from the nav or the footer.
+/** The problem list, in the homepage's BAML lane. It isn't linked from the nav or the footer. */
 export default function BamlCodeIndex() {
   const items = PROBLEMS.map((p) => ({
     category: p.category,

@@ -79,17 +79,19 @@ const FIELDS: {
   },
 ];
 
-// Compose a single-line address from Photon's structured properties.
+/** Compose a single-line address from Photon's structured properties. */
 function formatAddress(p: Record<string, string | undefined>): string {
   const street = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name;
   const region = [p.state, p.postcode].filter(Boolean).join(' ');
   return [street, p.city, region, p.country].filter(Boolean).join(', ');
 }
 
-// Address auto-finisher backed by Photon (komoot) — a free, keyless geocoder
-// with permissive CORS. Type a few characters, pick a full address from the
-// list. If the request fails (offline / rate-limited), it degrades to a plain
-// text input so the form is never blocked.
+/**
+ * Address auto-finisher backed by Photon (komoot), a free, keyless geocoder
+ * with permissive CORS. Type a few characters, pick a full address from the
+ * list. If the request fails (offline / rate-limited), it degrades to a plain
+ * text input so the form is never blocked.
+ */
 function AddressField({
   value,
   onChange,
@@ -199,9 +201,11 @@ function AddressField({
   );
 }
 
-// Provider wrapper: builds the Convex client from the public deployment URL.
-// If the URL isn't configured yet, the form still renders and "submits" — it
-// just doesn't persist (so the page never crashes before Convex is wired up).
+/**
+ * Provider wrapper: builds the Convex client from the public deployment URL.
+ * If the URL isn't configured yet, the form still renders and "submits", but
+ * it doesn't persist (so the page never crashes before Convex is wired up).
+ */
 export function CouncilGate() {
   const url = process.env.NEXT_PUBLIC_CONVEX_URL;
   const client = useMemo(
@@ -219,6 +223,10 @@ export function CouncilGate() {
   );
 }
 
+/**
+ * The council wired to Convex: the password check is a query and the
+ * submission a mutation.
+ */
 function CouncilWithConvex() {
   const convex = useConvex();
   const submit = useMutation(api.council.submit);
@@ -227,6 +235,10 @@ function CouncilWithConvex() {
   return <Council persist={(args) => submit(args)} verify={verify} />;
 }
 
+/**
+ * The password gate, then the member form one field at a time, then a
+ * confirmation once the form is sent.
+ */
 function Council({
   persist,
   verify,

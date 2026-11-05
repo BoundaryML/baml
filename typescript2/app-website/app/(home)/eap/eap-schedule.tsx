@@ -10,6 +10,7 @@ const LUMA_CALENDAR_URL = 'https://luma.com/baml';
 // --- formatting helpers. Pass timeZone === undefined to render in the viewer's
 // local zone; pass the event's zone to render in Pacific. ---
 
+/** The date as "Tue, Jan 6". */
 function dateStr(iso: string, timeZone?: string): string {
   return new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
@@ -18,6 +19,7 @@ function dateStr(iso: string, timeZone?: string): string {
     weekday: 'short',
   }).format(new Date(iso));
 }
+/** The time of day as "10:00 AM", with the zone's abbreviation if asked. */
 function timeStr(iso: string, timeZone?: string, withZone = false): string {
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
@@ -26,6 +28,7 @@ function timeStr(iso: string, timeZone?: string, withZone = false): string {
     timeZoneName: withZone ? 'short' : undefined,
   }).format(new Date(iso));
 }
+/** The weekday in the plural, e.g. "Tuesdays". */
 function weekdayPlural(iso: string, timeZone?: string): string {
   const wd = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -33,11 +36,13 @@ function weekdayPlural(iso: string, timeZone?: string): string {
   }).format(new Date(iso));
   return `${wd}s`;
 }
+/** The event's start time in its own zone, Pacific. */
 function ptClock(event: EapEvent): string {
   // The Pacific time-of-day, e.g. "10:00 AM", used as the slot key and label.
   return timeStr(event.start_at, event.timezone);
 }
 
+/** How long until a start time, e.g. "in 3 hours" or "starting soon". */
 function relative(startMs: number, now: number): string {
   const mins = Math.round((startMs - now) / MIN);
   if (mins < 60) return mins <= 1 ? 'starting soon' : `in ${mins} min`;
@@ -46,15 +51,17 @@ function relative(startMs: number, now: number): string {
   const days = Math.round(hrs / 24);
   return `in ${days} day${days === 1 ? '' : 's'}`;
 }
+/** How long until a live session ends, e.g. "ends in 12 min". */
 function endsIn(endMs: number, now: number): string {
   const mins = Math.max(0, Math.round((endMs - now) / MIN));
   return mins < 1 ? 'ending now' : `ends in ${mins} min`;
 }
+/** The "N going" label, or null when nobody has registered. */
 function goingLabel(n: number | null): string | null {
   return n && n > 0 ? `${n} going` : null;
 }
 
-// The hour (0-23) the event lands at in the viewer's local zone.
+/** The hour (0-23) the event lands at in the viewer's local zone. */
 function localHour(iso: string): number {
   return Number(
     new Intl.DateTimeFormat('en-US', {
@@ -64,9 +71,12 @@ function localHour(iso: string): number {
   );
 }
 
-// How convenient a local hour is, higher = better. Comfortable window is roughly
-// 8am-9pm, peaking early afternoon; hours outside are penalised the deeper into
-// the night they fall. Lets us surface the slot that lands at a sane local time.
+/**
+ * How convenient a local hour is, higher = better. Comfortable window is
+ * roughly 8am-9pm, peaking early afternoon; hours outside are penalised the
+ * deeper into the night they fall. Lets us surface the slot that lands at a
+ * sane local time.
+ */
 function convenience(hour: number): number {
   if (hour >= 8 && hour <= 21) return 100 - Math.abs(hour - 13);
   const intoNight = hour < 8 ? 8 - hour : hour - 21;
@@ -79,6 +89,10 @@ interface Avail {
   badge: { cls: string; label: string } | null;
   bookable: boolean;
 }
+/**
+ * Whether a session can be booked, and the Full or Waitlist badge when it
+ * isn't plainly open.
+ */
 function availabilityOf(event: EapEvent): Avail {
   // Luma exposes no capacity, so registration_open is the reliable signal: when
   // the host closes it (full or past cutoff) new sign-ups go to the waitlist.
@@ -90,6 +104,7 @@ function availabilityOf(event: EapEvent): Avail {
   return { badge: null, bookable: true };
 }
 
+/** A calendar tile with the month and day, or a flat date when `minimal`. */
 function CalTile({
   event,
   local,
@@ -130,6 +145,7 @@ function CalTile({
   );
 }
 
+/** The featured card for the next session, with a button to book it. */
 function FeaturedNext({
   event,
   now,
@@ -198,6 +214,7 @@ function FeaturedNext({
   );
 }
 
+/** The featured card for a session in progress, linking to it on Luma. */
 function FeaturedLive({ event, now }: { event: EapEvent; now: number }) {
   const going = goingLabel(event.goingCount);
   return (
@@ -232,6 +249,7 @@ function FeaturedLive({ event, now }: { event: EapEvent; now: number }) {
   );
 }
 
+/** One session in a time slot's list: its date, a badge, and a book button. */
 function Row({
   event,
   local,
@@ -283,6 +301,7 @@ function Row({
   );
 }
 
+/** Which regions a session's Pacific time suits, for the slot's header. */
 function slotHint(event: EapEvent): string {
   const hour = Number(
     new Intl.DateTimeFormat('en-US', {
@@ -296,6 +315,7 @@ function slotHint(event: EapEvent): string {
     : 'Evening in the Americas, morning in Asia-Pacific';
 }
 
+/** A time slot's header: the weekday and time, and the regions it suits. */
 function GroupHeader({ sample, local }: { sample: EapEvent; local: boolean }) {
   const tz = local ? undefined : sample.timezone;
   return (
@@ -316,6 +336,7 @@ function GroupHeader({ sample, local }: { sample: EapEvent; local: boolean }) {
   );
 }
 
+/** The message shown when no sessions are scheduled, with a calendar link. */
 function EmptyState() {
   return (
     <div className="eap-empty">
@@ -328,6 +349,7 @@ function EmptyState() {
   );
 }
 
+/** Groups sessions by their Pacific start time, keeping their order. */
 function groupBySlot(
   events: EapEvent[],
 ): { events: EapEvent[]; key: string }[] {
@@ -344,9 +366,11 @@ function groupBySlot(
   return [...map.entries()].map(([key, evs]) => ({ events: evs, key }));
 }
 
-// Rank slots so the one that lands at a convenient LOCAL hour comes first. Only
-// meaningful once we know the viewer's zone (local); before that we fall back to
-// soonest-first so the server render stays deterministic.
+/**
+ * Rank slots so the one that lands at a convenient LOCAL hour comes first.
+ * Only meaningful once we know the viewer's zone (local); before that we fall
+ * back to soonest-first so the server render stays deterministic.
+ */
 function orderSlots(
   slots: { events: EapEvent[]; key: string }[],
   local: boolean,
@@ -365,6 +389,10 @@ function orderSlots(
   });
 }
 
+/**
+ * The EAP session list: a featured session (live or next) beside the other
+ * times grouped by slot, and the registration modal for the chosen session.
+ */
 export function EapSchedule({
   events,
   discord,

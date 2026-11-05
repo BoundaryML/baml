@@ -17,6 +17,10 @@ const SITE_URL =
 const ORGANIZATION_ID = `${SITE_URL}/#organization`;
 const WEBSITE_ID = `${SITE_URL}/#website`;
 
+// The organization behind the site, shared by every graph that names it.
+const ORGANIZATION_NAME = 'Boundary';
+const ORGANIZATION_LOGO = `${SITE_URL}${boundaryIcon.src}`;
+
 // Real social profiles, sourced from app/_lib/config.tsx (siteConfig).
 const SAME_AS = [
   'https://github.com/boundaryml',
@@ -26,13 +30,16 @@ const SAME_AS = [
   'https://youtube.com/@boundaryml',
 ];
 
+/** Returns an absolute URL, prefixing paths with the site's base URL. */
 function toAbsoluteUrl(pathOrUrl: string): string {
   if (/^https?:\/\//.test(pathOrUrl)) return pathOrUrl;
   return `${SITE_URL}${pathOrUrl.startsWith('/') ? '' : '/'}${pathOrUrl}`;
 }
 
-// Normalize a date (e.g. "Jan 24, 2025" or an ISO string) to ISO 8601, which is
-// what schema.org expects. Falls back to the original if it can't be parsed.
+/**
+ * Normalizes a date (e.g. "Jan 24, 2025" or an ISO string) to ISO 8601, which
+ * is what schema.org expects. Falls back to the original if it can't be parsed.
+ */
 function toIsoDate(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
@@ -63,15 +70,15 @@ export function SiteStructuredData() {
         '@id': ORGANIZATION_ID,
         '@type': 'Organization',
         legalName: 'Gloo Chat, Inc.',
-        logo: `${SITE_URL}${boundaryIcon.src}`,
-        name: 'Boundary',
+        logo: ORGANIZATION_LOGO,
+        name: ORGANIZATION_NAME,
         sameAs: SAME_AS,
         url: `${SITE_URL}/`,
       },
       {
         '@id': WEBSITE_ID,
         '@type': 'WebSite',
-        name: 'Boundary',
+        name: ORGANIZATION_NAME,
         publisher: { '@id': ORGANIZATION_ID },
         url: `${SITE_URL}/`,
       },
@@ -108,7 +115,11 @@ export function ArticleStructuredData({
     '@type': 'Article',
     author: authorName
       ? { '@type': 'Person', name: authorName }
-      : { '@id': ORGANIZATION_ID, '@type': 'Organization', name: 'BAML' },
+      : {
+          '@id': ORGANIZATION_ID,
+          '@type': 'Organization',
+          name: ORGANIZATION_NAME,
+        },
     datePublished: toIsoDate(datePublished),
     description,
     headline,
@@ -117,11 +128,8 @@ export function ArticleStructuredData({
     publisher: {
       '@id': ORGANIZATION_ID,
       '@type': 'Organization',
-      logo: {
-        '@type': 'ImageObject',
-        url: `${SITE_URL}/baml-sheep.png`,
-      },
-      name: 'BAML',
+      logo: { '@type': 'ImageObject', url: ORGANIZATION_LOGO },
+      name: ORGANIZATION_NAME,
     },
     url: canonicalUrl,
     ...(dateModified ? { dateModified: toIsoDate(dateModified) } : {}),

@@ -74,7 +74,9 @@ const GRID =
   'grid grid-cols-[52px_repeat(2,minmax(0,1fr))_14px_repeat(4,minmax(0,1fr))] md:grid-cols-[132px_repeat(2,minmax(0,1fr))_48px_repeat(4,minmax(0,1fr))] gap-x-1 md:gap-x-2 items-center';
 const ROW = 'h-11 md:h-14';
 
+/** `n` held between 0 and 1. */
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
+/** Quadratic ease in and out over 0 to 1. */
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
 /** The grid column a stage sits in: past the name column, and past the deploy line after Test. */
@@ -276,6 +278,7 @@ function BamlBar({
   );
 }
 
+/** A build or test command in a stage's cell, shown on wide screens only. `lit` gives it the accent. */
 function Command({ children, lit }: { children: string; lit?: boolean }) {
   return (
     <span
@@ -286,6 +289,8 @@ function Command({ children, lit }: { children: string; lit?: boolean }) {
   );
 }
 
+/** The v4 hero diagram in the given /diagram-styles style, played as a looping lap from build to
+ *  production. */
 export default function Tracker({ style }: { style: string }) {
   const t = useLap();
   // How many stages the lap has filled, in stage widths.

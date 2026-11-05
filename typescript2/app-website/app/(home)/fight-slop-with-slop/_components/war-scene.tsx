@@ -130,6 +130,10 @@ const COLUMN: { kind: Kind; size: number; off: number }[] = [
   { kind: 'walk', off: -139, size: 98 },
 ];
 
+/**
+ * Styles for an animated sprite of `kind`, scaled to `height`, with its strip
+ * width and frame time as CSS variables.
+ */
 function sprite(kind: Kind, height: number): CSSProperties {
   const f = F[kind];
   const w = Math.round((height * f.fw) / f.fh);
@@ -145,9 +149,11 @@ function sprite(kind: Kind, height: number): CSSProperties {
   };
 }
 
+/** `n` held between `lo` and `hi`. */
 const clamp = (n: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, n));
 
+/** The text card and images for one battle scene, shown while it's active. */
 function ScenePanel({
   scene,
   active,
@@ -229,6 +235,10 @@ function ScenePanel({
   );
 }
 
+/**
+ * The scroll-driven war hero: a pinned battle stage whose marching column and
+ * scenes advance with scroll.
+ */
 export default function WarScene() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HTMLDivElement>(null);

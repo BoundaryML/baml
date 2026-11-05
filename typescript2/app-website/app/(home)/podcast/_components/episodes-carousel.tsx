@@ -10,6 +10,7 @@ interface EpisodesCarouselProps {
   currentSlug?: string;
 }
 
+/** A horizontally scrolling row of episode cards, leaving out the episode at `currentSlug`. */
 export function EpisodesCarousel({
   episodes,
   currentSlug,

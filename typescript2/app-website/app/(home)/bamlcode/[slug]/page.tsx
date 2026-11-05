@@ -14,10 +14,12 @@ import '@/app/(home)/styles/v3.css';
 import '@/app/(home)/styles/home.css';
 import '../bamlcode.css';
 
+/** The slug of every problem, so each problem page is built ahead of time. */
 export function generateStaticParams() {
   return PROBLEMS.map((p) => ({ slug: p.slug }));
 }
 
+/** The problem page's title and description, or a bare title for an unknown slug. */
 export async function generateMetadata({
   params,
 }: {
@@ -32,6 +34,7 @@ export async function generateMetadata({
   };
 }
 
+/** A problem page: the statement beside the workbench, under the homepage's nav. */
 export default async function ProblemPage({
   params,
 }: {

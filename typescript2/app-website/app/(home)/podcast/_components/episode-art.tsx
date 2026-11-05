@@ -2,6 +2,7 @@ import { Play } from 'lucide-react';
 import Image from 'next/image';
 import type { PodcastEpisode } from '../podcast-data';
 
+/** The video ID from a YouTube watch, short, or embed URL, or null if there isn't one. */
 export const getYouTubeVideoId = (url: string) => {
   const match = url.match(
     /(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([^&\n?#]+)/,

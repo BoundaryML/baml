@@ -153,6 +153,7 @@ const POINTS = [
   },
 ];
 
+/** Section 4, Build: the code panel of language examples beside the points about the language. */
 export default function Language() {
   return (
     <Phase

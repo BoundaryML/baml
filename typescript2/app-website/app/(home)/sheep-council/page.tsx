@@ -11,9 +11,9 @@ export const metadata = createMetadata({
   title: 'The Sheep Council',
 });
 
-// The Sheep Council's members-only page, in the homepage's BAML lane. It isn't linked from the nav
-// or the footer. The hand-drawn council chamber fills the space between the nav and the footer,
-// under a scrim of the theme's ground so the glass card reads on top.
+/** The Sheep Council's members-only page, in the homepage's BAML lane. It isn't linked from the nav
+ *  or the footer. The hand-drawn council chamber fills the space between the nav and the footer,
+ *  under a scrim of the theme's ground so the glass card reads on top. */
 export default function SheepCouncilPage() {
   return (
     <PageShell>

@@ -14,8 +14,8 @@ export const metadata = createMetadata({
   title: 'War on Slop',
 });
 
-// The War on Slop campaign page, in the homepage's BAML lane. It isn't linked from the nav or the
-// footer.
+/** The War on Slop campaign page, in the homepage's BAML lane. It isn't linked from the nav or the
+ *  footer. */
 export default function Page() {
   return (
     <PageShell>

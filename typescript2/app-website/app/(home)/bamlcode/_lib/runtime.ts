@@ -67,6 +67,7 @@ const TERMINAL_RUN_STATUS = new Set([
   'panicked',
 ]);
 
+/** Whether a project key from the worker names the bamlcode project. */
 function projectMatches(projectKey: string): boolean {
   return projectKey.split('/').includes(ID);
 }
@@ -92,6 +93,7 @@ function stripHoverFences(text: string): string {
     .trim();
 }
 
+/** Resolves once `cond` holds or `timeoutMs` passes, polling every 40 ms. */
 function waitUntil(cond: () => boolean, timeoutMs: number): Promise<void> {
   return new Promise((resolve) => {
     const start = Date.now();
@@ -117,6 +119,10 @@ let active: InternalRuntime | null = null;
 const pendingLsp = new Map<number, (result: unknown) => void>();
 let nextLspReq = 1;
 
+/**
+ * The text of an LSP hover's contents, whether a string, a markup object, or a
+ * list of either.
+ */
 function flattenHover(contents: unknown): string {
   if (contents == null) return '';
   if (typeof contents === 'string') return contents;
@@ -126,6 +132,10 @@ function flattenHover(contents: unknown): string {
   return typeof c.value === 'string' ? c.value : '';
 }
 
+/**
+ * The shared BexVM worker, created on first use. Resolves once the worker is
+ * ready, and routes its diagnostics, LSP results, and project updates.
+ */
 function ensureSharedWorker(): Promise<Worker> {
   if (sharedWorkerPromise) return sharedWorkerPromise;
   sharedWorkerPromise = new Promise<Worker>((resolve) => {
@@ -162,6 +172,7 @@ function ensureSharedWorker(): Promise<Worker> {
   return sharedWorkerPromise;
 }
 
+/** The run store client over the shared worker, created on first use. */
 function ensureSharedClient(): Promise<RunStoreClient> {
   if (sharedClientPromise) return sharedClientPromise;
   sharedClientPromise = ensureSharedWorker().then((w) =>
@@ -205,6 +216,10 @@ export async function describeExpr(expr: string): Promise<string> {
   return text || `No description found for \`${e}\`.`;
 }
 
+/**
+ * Sends an LSP request to the worker. Resolves with null if no answer comes
+ * within 4 seconds.
+ */
 async function lspRequest(method: string, params: unknown): Promise<unknown> {
   const w = await ensureSharedWorker();
   const reqId = nextLspReq++;
@@ -238,6 +253,7 @@ export interface SolveRuntime {
   deactivate(): void;
 }
 
+/** A runtime for one problem's solve page, on top of the shared worker. */
 export function createSolveRuntime(
   problem: Problem,
   initialSolution: string,

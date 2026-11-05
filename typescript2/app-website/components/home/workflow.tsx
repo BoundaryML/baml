@@ -50,6 +50,7 @@ const LABEL =
 
 // ---- The cards the agent prints --------------------------------------------------------------------
 
+/** A card the agent prints in the terminal: a title row with a note on the right, over a body. */
 function Card({
   children,
   right,
@@ -77,6 +78,8 @@ const MINUTES = Array.from({ length: 48 }, (_, i) => {
   return { calls, errors };
 });
 
+/** One function's calls per minute as bars, with the failed share in red. Bars appear as `since`
+ *  grows. */
 function Spark({ scale, since }: { scale: number; since: number }) {
   const shown = Math.floor(since / 18);
   return (
@@ -115,6 +118,7 @@ const WATCHED = [
   { calls: 12480, errors: '0.1%', name: 'route', scale: 0.96 },
 ];
 
+/** The card for the watch request: calls and error rate over the last hour for classify and route. */
 function WatchCard({ since }: { since: number }) {
   const grow = ramp(since, 0, 900);
   return (
@@ -156,6 +160,7 @@ const TOP_ERRORS = [
   { count: 9, fn: 'route', text: 'Unroutable { label: "other" }' },
 ];
 
+/** The card for the top errors request: a ranked list of errors over the last day, one row at a time. */
 function TopErrorsCard({ since }: { since: number }) {
   const max = TOP_ERRORS[0].count;
   return (
@@ -224,6 +229,7 @@ const THRESHOLD = 3;
 const NOW = 0.4;
 const TRACK = 5;
 
+/** The card for the alert request: the OpenAI failure rate against its 3% threshold, marked armed. */
 function AlertCard({ since }: { since: number }) {
   return (
     <Card right="checks every minute" title="New alert">
@@ -362,6 +368,7 @@ function deco(t: number): Deco {
 const W = 1200;
 const H = 560;
 
+/** The editor and the terminal over it at time `t`, scaled to the frame's width. */
 function Stage({ t }: { t: number }) {
   const frame = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(0);
@@ -488,6 +495,7 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
   );
 }
 
+/** Section 3: the pinned editor and terminal frame with its step rail, played by scrolling. */
 export default function Workflow() {
   const track = useRef<HTMLDivElement>(null);
   const pin = useRef<HTMLDivElement>(null);

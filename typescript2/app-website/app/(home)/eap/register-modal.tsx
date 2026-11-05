@@ -5,6 +5,10 @@ import type { EapEvent, RegistrationQuestion } from '@/lib/luma';
 
 type Status = 'error' | 'idle' | 'submitting' | 'success';
 
+/**
+ * A field for one of the event's registration questions: a select when it has
+ * options, otherwise a text input.
+ */
 function QuestionField({ question }: { question: RegistrationQuestion }) {
   const name = `q_${question.id}`;
   const label = (
@@ -40,6 +44,10 @@ function QuestionField({ question }: { question: RegistrationQuestion }) {
   );
 }
 
+/**
+ * A modal that registers for a session through /api/eap/register, with name,
+ * email, and the event's own questions. Escape closes it.
+ */
 export function RegisterModal({
   event,
   onClose,

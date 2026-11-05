@@ -20,6 +20,10 @@ const BTN_SECONDARY = `${BTN} border border-accent/35 text-accent hover:border-a
 // Paint the user's dispatch onto a 1200×675 (Twitter card ratio) canvas they can
 // download and attach to a post. X's intent URL can't carry an image, so we hand
 // them the PNG + a prefilled composer.
+/**
+ * Splits text into lines that fit `maxWidth` in the context's current font,
+ * keeping its paragraph breaks.
+ */
 function wrapLines(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -42,9 +46,12 @@ function wrapLines(
   return lines;
 }
 
-// The card follows the page: the theme's ground, rule, and ink, Lexend for the
-// title, Geist for the dispatch, and Geist Pixel Square for the footer line.
-// Canvas can't read CSS classes, so the tokens are read off <html> at draw time.
+/**
+ * The card follows the page: the theme's ground, rule, and ink, Lexend for
+ * the title, Geist for the dispatch, and Geist Pixel Square for the footer
+ * line. Canvas can't read CSS classes, so the tokens are read off <html> at
+ * draw time.
+ */
 function theme() {
   const css = getComputedStyle(document.documentElement);
   const v = (name: string) => css.getPropertyValue(name).trim();
@@ -61,6 +68,7 @@ function theme() {
   };
 }
 
+/** Paints the share card for a name and dispatch onto a 1200 by 675 canvas. */
 function drawCard(canvas: HTMLCanvasElement, name: string, dispatch: string) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -107,6 +115,7 @@ function drawCard(canvas: HTMLCanvasElement, name: string, dispatch: string) {
   ctx.fillText(handle, W - 80 - ctx.measureText(handle).width, H - 96);
 }
 
+/** A preview of the share card, with buttons to post to X and download it. */
 function ShareCard({ name, dispatch }: { name: string; dispatch: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -189,6 +198,7 @@ function ShareCard({ name, dispatch }: { name: string; dispatch: string }) {
   );
 }
 
+/** The pledge form. Once a pledge is sent, it shows the share card instead. */
 export default function PledgeForm() {
   const submit = useMutation(api.slopPledges.submit);
   const [name, setName] = useState('');

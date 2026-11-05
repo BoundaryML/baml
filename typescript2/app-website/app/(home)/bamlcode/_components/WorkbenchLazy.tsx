@@ -22,6 +22,7 @@ const Workbench = dynamic(
   },
 );
 
+/** The workbench for a problem, loaded in the browser only. */
 export default function WorkbenchLazy({ problem }: { problem: Problem }) {
   return <Workbench problem={problem} />;
 }

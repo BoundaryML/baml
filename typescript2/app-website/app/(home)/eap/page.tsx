@@ -18,8 +18,8 @@ export const metadata = createMetadata({
 // The public Luma calendar, so people can browse everything if nothing is listed.
 const LUMA_CALENDAR_URL = 'https://luma.com/baml';
 
-// The early access sign-up page, in the homepage's BAML lane. It isn't linked from the nav or the
-// footer.
+/** The early access sign-up page, in the homepage's BAML lane. It isn't linked from the nav or the
+ *  footer. */
 export default async function EapPage() {
   const events = await getEapEvents();
 

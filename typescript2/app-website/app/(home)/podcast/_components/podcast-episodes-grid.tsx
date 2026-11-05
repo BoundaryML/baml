@@ -11,6 +11,7 @@ interface PodcastEpisodesGridProps {
   episodes: PodcastEpisode[];
 }
 
+/** A grid of episode cards, each linking to its episode page and logging the click. */
 export function PodcastEpisodesGrid({ episodes }: PodcastEpisodesGridProps) {
   return (
     <ul className="grid gap-4 md:gap-5 grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))]">

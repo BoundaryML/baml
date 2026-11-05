@@ -7,11 +7,13 @@ import { PAGE_WRAP } from '@/components/home/page-shell';
 import PledgeForm from './pledge-form';
 import PledgeWall from './pledge-wall';
 
-// Both the pledge wall and the share form talk to Convex, so they live under a
-// single ConvexProvider built from the shared deployment URL (the same
-// NEXT_PUBLIC_CONVEX_URL the Sheep Council uses). Mirrors the safe-degrade
-// pattern in ../../sheep-council/council-gate.tsx: if the URL isn't configured
-// the section simply renders nothing rather than crashing the page.
+/**
+ * The pledge wall and the share form. Both talk to Convex, so they live under a
+ * single ConvexProvider built from the shared deployment URL (the same
+ * NEXT_PUBLIC_CONVEX_URL the Sheep Council uses). Mirrors the safe-degrade
+ * pattern in ../../sheep-council/council-gate.tsx: if the URL isn't configured
+ * the section simply renders nothing rather than crashing the page.
+ */
 export default function PledgeSection() {
   const url = process.env.NEXT_PUBLIC_CONVEX_URL;
   const client = useMemo(

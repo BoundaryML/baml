@@ -22,12 +22,17 @@ import { fetchPodcastEpisodes } from '../podcast-data';
 export const dynamic = 'force-static';
 export const dynamicParams = false;
 
+/** The slug of every episode, so each episode page is built ahead of time. */
 export async function generateStaticParams(): Promise<{ slug: string }[]> {
   const episodes = await fetchPodcastEpisodes();
   return episodes.map((ep) => ({ slug: ep.slug }));
 }
 
-// Helper function to fetch README from GitHub
+/**
+ * Fetches an episode's README from GitHub as Markdown, with HTML images
+ * converted, the episode title and YouTube links removed, and blank lines
+ * collapsed. Returns an empty string if it can't be fetched.
+ */
 async function fetchReadmeFromGitHub(
   codeUrl: string,
   episodeTitle: string,
@@ -98,8 +103,11 @@ async function fetchReadmeFromGitHub(
   }
 }
 
-// Generate metadata for SEO.
-// Next 15: `params` is a Promise — must be awaited before access.
+/**
+ * The episode page's title, description, Open Graph, and Twitter card
+ * metadata. Next 15: `params` is a Promise, so it must be awaited before
+ * access.
+ */
 export async function generateMetadata({
   params,
 }: {
@@ -189,6 +197,10 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * An episode page: the video, the description, the README when the episode
+ * has code, its topics, and a carousel of other episodes.
+ */
 export default async function EpisodePage({
   params,
 }: {

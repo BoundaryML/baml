@@ -24,6 +24,7 @@ import type { Problem, ProblemTest } from './types';
 
 export const GRADER_PREFIX = 'bc_grade_';
 
+/** The name of the grader function for the test case at `index`. */
 export function graderFnName(index: number): string {
   return `${GRADER_PREFIX}${index}`;
 }
@@ -34,6 +35,7 @@ export interface GraderCase {
   test: ProblemTest;
 }
 
+/** One grader case per test in the problem, in order. */
 export function graderCases(problem: Problem): GraderCase[] {
   return problem.tests.map((test, index) => ({
     fnName: graderFnName(index),
@@ -42,6 +44,7 @@ export function graderCases(problem: Problem): GraderCase[] {
   }));
 }
 
+/** The BAML source of one grader function for a test case. */
 function graderFn(fnName: string, test: ProblemTest): string {
   // Grade via a status-propagating failure, NOT `assert`: assertion failures
   // (and panics) are soft-caught by the run harness, so the run status stays

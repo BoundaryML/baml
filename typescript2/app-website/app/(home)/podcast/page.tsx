@@ -27,7 +27,7 @@ export const metadata = createMetadata({
     '🦄 ai that works: Weekly AI Development Sessions | BAML Podcast',
 });
 
-// The podcast index, in the homepage's BAML lane. It isn't linked from the nav or the footer.
+/** The podcast index, in the homepage's BAML lane. It isn't linked from the nav or the footer. */
 export default async function PodcastPage() {
   const fetched = await fetchPodcastEpisodes();
   const podcastEpisodes = fetched.length > 0 ? fetched : fallbackEpisodes;

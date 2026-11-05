@@ -13,6 +13,7 @@ export const metadata = createMetadata({
   title: 'Tech docs',
 });
 
+/** The tech docs placeholder: a heading and a note that the articles are coming. */
 export default function TechDocsPage() {
   return (
     <PageShell>

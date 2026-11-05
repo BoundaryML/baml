@@ -13,6 +13,7 @@ const NAV_CLEARANCE = 88;
 // position eases in rather than snapping.
 const EASE = 0.18;
 
+/** `v` held between 0 and 1. */
 const clamp = (v: number) => Math.min(1, Math.max(0, v));
 
 /** Where the reader is in the track, from 0 to 1. Also centers a pinned block under the nav. */

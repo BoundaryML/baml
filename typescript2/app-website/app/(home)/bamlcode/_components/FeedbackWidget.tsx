@@ -32,6 +32,10 @@ export function FeedbackWidget({ slug }: { slug?: string }) {
 
 type Status = 'idle' | 'sending' | 'done' | 'error';
 
+/**
+ * The feedback form: name, email, and feedback, sent to Convex with the
+ * problem's slug.
+ */
 function FeedbackForm({ slug }: { slug?: string }) {
   const submit = useMutation(api.bamlcodeFeedback.submit);
   const [open, setOpen] = useState(true);

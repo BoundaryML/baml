@@ -70,6 +70,7 @@ export const PROBLEMS_BY_SLUG: Record<string, Problem> = Object.fromEntries(
   PROBLEMS.map((p) => [p.slug, p]),
 );
 
+/** The problem with the given slug, or undefined if there is none. */
 export function getProblem(slug: string): Problem | undefined {
   return PROBLEMS_BY_SLUG[slug];
 }

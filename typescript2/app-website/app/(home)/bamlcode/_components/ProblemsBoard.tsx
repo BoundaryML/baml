@@ -22,13 +22,19 @@ const DIFF_ABBR: Record<Difficulty, string> = {
 
 // Deterministic, illustrative acceptance rate + frequency bars (LeetCode shows
 // real telemetry; we have none, so derive stable cosmetic values from the id).
+/** A stable, cosmetic acceptance rate for a problem, as a percentage string. */
 function acceptance(id: number): string {
   return (38 + ((id * 4099) % 480) / 10).toFixed(1);
 }
+/** Five stable, cosmetic frequency bar heights, from 0.28 to 1. */
 function freqBars(id: number): number[] {
   return [0, 1, 2, 3, 4].map((i) => 0.28 + (((id >> i) & 3) / 3) * 0.72);
 }
 
+/**
+ * The problem list with search, category, and difficulty filters, marking the
+ * problems the reader has solved.
+ */
 export function ProblemsBoard({ problems }: { problems: BoardItem[] }) {
   const solved = useSolved();
   const [query, setQuery] = useState('');

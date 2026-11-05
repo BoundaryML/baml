@@ -10,6 +10,7 @@ export const BAML_THEME = 'baml-dark';
  */
 let registered = false;
 
+/** Registers the BAML language and the `baml-dark` theme with Monaco, once. */
 export function registerBaml(monaco: Monaco) {
   if (registered) return;
   registered = true;

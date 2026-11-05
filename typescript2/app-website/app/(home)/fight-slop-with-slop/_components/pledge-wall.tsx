@@ -34,6 +34,7 @@ const FALLBACK_PLEDGES: Pledge[] = [
   },
 ];
 
+/** One pledge's name and description. A `clone` is hidden from screen readers. */
 function PledgeCard({ pledge, clone }: { pledge: Pledge; clone?: boolean }) {
   return (
     <div
@@ -50,6 +51,10 @@ function PledgeCard({ pledge, clone }: { pledge: Pledge; clone?: boolean }) {
   );
 }
 
+/**
+ * Two rows of pledges scrolling in opposite directions, from Convex or a
+ * fallback set when there are none yet.
+ */
 export default function PledgeWall() {
   const pledges = useQuery(api.slopPledges.list);
 

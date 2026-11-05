@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import type { RunView, SolveRuntime } from '../_lib/runtime';
 import type { Problem } from '../_lib/types';
 
+/** The function name in a signature such as `function TwoSum(...)`, or ''. */
 function fnNameOf(signature: string): string {
   return signature.match(/function\s+(\w+)/)?.[1] ?? '';
 }
