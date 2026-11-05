@@ -89,7 +89,8 @@ impl ClassCrossing {
             | RustPayloadKind::SseStream
             | RustPayloadKind::HttpServer
             | RustPayloadKind::TlsKeys
-            | RustPayloadKind::OutputFormat => Self::Opaque,
+            | RustPayloadKind::OutputFormat
+            | RustPayloadKind::Lock => Self::Opaque,
         }
     }
 

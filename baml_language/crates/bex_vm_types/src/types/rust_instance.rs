@@ -136,6 +136,8 @@ pub mod payload {
     pub type Prompt = Arc<crate::PromptAst>;
     /// An `ai.OutputFormat`: the platform's schema of an output type.
     pub type OutputFormat = Arc<dyn crate::resource::OutputFormatResource>;
+    /// A `baml.fs.Lock`: the platform's held lock.
+    pub type Lock = Arc<dyn crate::resource::LockResource>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -190,6 +192,7 @@ pub enum RustPayload {
     Video(payload::Media),
     Prompt(payload::Prompt),
     OutputFormat(payload::OutputFormat),
+    Lock(payload::Lock),
 }
 
 impl RustPayload {
@@ -236,6 +239,7 @@ impl RustPayload {
             Self::Video(_) => RustPayloadKind::Video,
             Self::Prompt(_) => RustPayloadKind::Prompt,
             Self::OutputFormat(_) => RustPayloadKind::OutputFormat,
+            Self::Lock(_) => RustPayloadKind::Lock,
         }
     }
 
@@ -255,6 +259,7 @@ impl RustPayload {
             Self::HttpBody(resource) => resource.network(),
             Self::SseStream(resource) => resource.network(),
             Self::OutputFormat(resource) => resource.network(),
+            Self::Lock(resource) => resource.network(),
             Self::Foreign(_)
             | Self::DefaultHasher(_)
             | Self::Sha256(_)
@@ -342,7 +347,8 @@ impl RustPayload {
             | Self::TlsKeys(_)
             | Self::HostValue(_)
             | Self::Prompt(_)
-            | Self::OutputFormat(_) => None,
+            | Self::OutputFormat(_)
+            | Self::Lock(_) => None,
         }
     }
 }
@@ -393,6 +399,7 @@ impl RustPayload {
             }
             Self::Prompt(_) => TypeId::of::<payload::Prompt>(),
             Self::OutputFormat(_) => TypeId::of::<payload::OutputFormat>(),
+            Self::Lock(_) => TypeId::of::<payload::Lock>(),
         }
     }
 }

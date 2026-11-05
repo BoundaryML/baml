@@ -167,6 +167,7 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::File(_)
                         | crate::RustPayload::Glob(_)
                         | crate::RustPayload::OutputFormat(_)
+                        | crate::RustPayload::Lock(_)
                         | crate::RustPayload::TcpStream(_)
                         | crate::RustPayload::TcpListener(_)
                         | crate::RustPayload::UdpSocket(_)

@@ -611,15 +611,3 @@ impl io::IoNamespaceFs for WasmIoFs {
         })
     }
 }
-
-impl sys_ops::io::IoClassFsLock for WasmIoFs {
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _lock: sys_ops::io::owned::fs::Lock,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
-    }
-}

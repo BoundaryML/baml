@@ -748,15 +748,3 @@ fn bridge_failure(message: impl Into<String>) -> VmRustFnError {
     }
     .into()
 }
-
-impl sys_ops::io::IoClassFsLock for WebFs {
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _lock: sys_ops::io::owned::fs::Lock,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
-    }
-}

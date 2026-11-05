@@ -97,11 +97,13 @@ pub enum RustPayloadKind {
     Prompt,
     /// An `ai.OutputFormat`: an output type's schema, ready to render.
     OutputFormat,
+    /// A `baml.fs.Lock`: a platform's held advisory lock.
+    Lock,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 40] = [
+    pub const ALL: [Self; 41] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -142,6 +144,7 @@ impl RustPayloadKind {
         Self::Video,
         Self::Prompt,
         Self::OutputFormat,
+        Self::Lock,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -185,6 +188,7 @@ impl RustPayloadKind {
         "Video",
         "Prompt",
         "OutputFormat",
+        "Lock",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -232,6 +236,7 @@ impl RustPayloadKind {
             Self::Video => Some("Video"),
             Self::Prompt => Some("Prompt"),
             Self::OutputFormat => Some("OutputFormat"),
+            Self::Lock => Some("Lock"),
         }
     }
 
@@ -473,6 +478,65 @@ mod tests {
             if let Some(spelling) = kind.spelling() {
                 assert_eq!(RustPayloadKind::from_spelling(spelling), Some(kind));
             }
+        }
+    }
+
+    /// Lock the Borsh wire format: compiled artifacts store a kind by its tag,
+    /// so every kind keeps its tag and a new kind takes the next one.
+    #[test]
+    fn rust_payload_kind_borsh_tags_are_locked() {
+        fn locked(kind: RustPayloadKind) -> u8 {
+            match kind {
+                RustPayloadKind::Foreign => 0,
+                RustPayloadKind::DefaultHasher => 1,
+                RustPayloadKind::Sha256 => 2,
+                RustPayloadKind::Aes256GcmSiv => 3,
+                RustPayloadKind::Aes128GcmSiv => 4,
+                RustPayloadKind::ChaCha20Poly1305 => 5,
+                RustPayloadKind::XChaCha20Poly1305 => 6,
+                RustPayloadKind::Regex => 7,
+                RustPayloadKind::CsvRecord => 8,
+                RustPayloadKind::Limit => 9,
+                RustPayloadKind::CancelToken => 10,
+                RustPayloadKind::SpanId => 11,
+                RustPayloadKind::TraceOptions => 12,
+                RustPayloadKind::ReservedSpan => 13,
+                RustPayloadKind::File => 14,
+                RustPayloadKind::Glob => 15,
+                RustPayloadKind::TcpStream => 16,
+                RustPayloadKind::TcpListener => 17,
+                RustPayloadKind::UdpSocket => 18,
+                RustPayloadKind::Xoshiro256PlusPlus => 19,
+                RustPayloadKind::ChaCha20 => 20,
+                RustPayloadKind::InterfaceWitness => 21,
+                RustPayloadKind::CsvReader => 22,
+                RustPayloadKind::CsvWriter => 23,
+                RustPayloadKind::ClassBuilder => 24,
+                RustPayloadKind::ChildProcess => 25,
+                RustPayloadKind::ReadPipe => 26,
+                RustPayloadKind::WritePipe => 27,
+                RustPayloadKind::WebSocket => 28,
+                RustPayloadKind::HttpBody => 29,
+                RustPayloadKind::SseStream => 30,
+                RustPayloadKind::HttpServer => 31,
+                RustPayloadKind::TlsKeys => 32,
+                RustPayloadKind::HostValue => 33,
+                RustPayloadKind::Image => 34,
+                RustPayloadKind::Audio => 35,
+                RustPayloadKind::Pdf => 36,
+                RustPayloadKind::Video => 37,
+                RustPayloadKind::Prompt => 38,
+                RustPayloadKind::OutputFormat => 39,
+                RustPayloadKind::Lock => 40,
+            }
+        }
+        for (index, kind) in RustPayloadKind::ALL.into_iter().enumerate() {
+            assert_eq!(borsh::to_vec(&kind).unwrap(), [locked(kind)], "{kind:?}");
+            assert_eq!(
+                usize::from(locked(kind)),
+                index,
+                "{kind:?} is out of order in `ALL`"
+            );
         }
     }
 

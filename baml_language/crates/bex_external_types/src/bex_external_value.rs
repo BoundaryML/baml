@@ -903,6 +903,7 @@ pub fn payload_value(payload: &bex_vm_types::RustPayload) -> Option<BexExternalV
         | RustPayload::File(_)
         | RustPayload::Glob(_)
         | RustPayload::OutputFormat(_)
+        | RustPayload::Lock(_)
         | RustPayload::TcpStream(_)
         | RustPayload::TcpListener(_)
         | RustPayload::UdpSocket(_)

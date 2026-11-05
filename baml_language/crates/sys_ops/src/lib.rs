@@ -2323,12 +2323,6 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_lock(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_lock_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_lock_close(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_fs_open = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
@@ -2820,18 +2814,6 @@ impl io::IoNamespaceArchive for DefaultIoOps {
             resource: "archive".into(),
             message: "Operation not supported on this platform".into(),
         })
-    }
-}
-
-impl io::IoClassFsLock for DefaultIoOps {
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _lock: io::owned::fs::Lock,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
     }
 }
 

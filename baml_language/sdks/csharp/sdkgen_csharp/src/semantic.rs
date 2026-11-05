@@ -290,7 +290,6 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.SseStream"
         | "baml.http.Server"
         | "baml.http.TlsConfig"
-        | "baml.fs.Lock"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
         | "baml.csv.Writer" => Some(BuiltinProjection::Resource),
@@ -300,7 +299,6 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv._NeedData"
         | "baml.csv._Skip"
         | "baml.csv._Headers"
-        | "ai.OutputFormat"
         | "baml.errors.HostCallable"
         | "ai.PromptMessage"
         | AI_STREAM_DONE
@@ -6511,7 +6509,7 @@ mod tests {
             Some(BuiltinProjection::StructuralEnum),
         );
         assert_eq!(
-            fields_projection(&stdlib_name("fs", "Lock")),
+            fields_projection(&stdlib_name("csv", "Reader")),
             Some(BuiltinProjection::Resource),
         );
 

@@ -449,9 +449,20 @@ pub(crate) fn fs_write_atomic(
         Ok(())
     })
 }
+/// A held lock: a `baml.fs.Lock`'s payload. Closing it, or dropping it,
+/// releases the lock.
 struct LockHandle(Mutex<Option<std::fs::File>>);
 
-impl sys_types::BexRustData for LockHandle {
+impl sys_types::resource::LockResource for LockHandle {
+    fn close(self: Arc<Self>) -> sys_types::OpOutput<()> {
+        // A poisoned lock still holds the file, which this releases.
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        sys_types::OpOutput::ok(())
+    }
+
     // The OS handle and Mutex store no owned heap buffers.
     fn measure(&self, _: &mut sys_types::Meter) {}
 }
@@ -476,9 +487,8 @@ pub(crate) fn fs_lock(
         loop {
             match fs2::FileExt::try_lock_exclusive(&file) {
                 Ok(()) => {
-                    return Ok(owned::fs::Lock {
-                        _handle: Arc::new(LockHandle(Mutex::new(Some(file)))),
-                    });
+                    let lock: owned::fs::Lock = Arc::new(LockHandle(Mutex::new(Some(file))));
+                    return Ok(lock);
                 }
                 Err(e)
                     if e.kind() == std::io::ErrorKind::WouldBlock
@@ -494,22 +504,6 @@ pub(crate) fn fs_lock(
             }
         }
     })
-}
-impl io::IoClassFsLock for NativeSysOps {
-    fn close(
-        &self,
-        _: &Arc<BexHeap>,
-        _: CallId,
-        lock: owned::fs::Lock,
-        _: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        if let Some(handle) = lock._handle.downcast_ref::<LockHandle>() {
-            if let Ok(mut file) = handle.0.lock() {
-                file.take();
-            }
-        }
-        SysOpOutput::ok(())
-    }
 }
 
 #[cfg(test)]

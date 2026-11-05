@@ -155,6 +155,7 @@ macro_rules! walk_object_edges {
                     | RustPayload::File(_)
                     | RustPayload::Glob(_)
                     | RustPayload::OutputFormat(_)
+                    | RustPayload::Lock(_)
                     | RustPayload::TcpStream(_)
                     | RustPayload::TcpListener(_)
                     | RustPayload::UdpSocket(_)

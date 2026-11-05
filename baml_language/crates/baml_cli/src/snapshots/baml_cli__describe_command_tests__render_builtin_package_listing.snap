@@ -102,7 +102,7 @@ function         baml.fs.rename                   <builtin>/baml/ns_fs/fs.baml:2
 function         baml.fs.canonicalize             <builtin>/baml/ns_fs/fs.baml:245
 function         baml.fs.write_atomic             <builtin>/baml/ns_fs/fs.baml:251
 class            baml.fs.Lock                     <builtin>/baml/ns_fs/fs.baml:257
-function         baml.fs.lock                     <builtin>/baml/ns_fs/fs.baml:265
+function         baml.fs.lock                     <builtin>/baml/ns_fs/fs.baml:266
 enum             baml.future.State                <builtin>/baml/ns_future/future.baml:19
 class            baml.future.Future               <builtin>/baml/ns_future/future.baml:26
 class            baml.future.Success              <builtin>/baml/ns_future/future.baml:79
