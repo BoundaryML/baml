@@ -94,6 +94,7 @@ jobs:
             ':scripts/baml-package-manager-artifacts' \
             ':scripts/baml-pack-wrapper-release' \
             ':scripts/baml-test-homebrew-package' \
+            ':scripts/baml-test-aur-package' \
             ':scripts/baml-release-platforms' \
             ':scripts/baml_release_platforms.py' \
             ':tools/baml_nightly_select.py' \

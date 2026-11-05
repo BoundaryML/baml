@@ -134,6 +134,7 @@ def aur_srcinfo(pkgname: str, pkgdesc: str, version: str, arch_lines: list[str])
         "\tarch = x86_64",
         "\tarch = aarch64",
         "\tlicense = Apache-2.0",
+        "\toptions = !strip",
     ]
     lines.extend(arch_lines)
     lines.extend(

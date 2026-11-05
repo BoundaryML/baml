@@ -2323,9 +2323,40 @@ jobs:
             --formula dry-run/package-manager/homebrew/Formula/baml.rb \
             --wrapper-dir dist/wrapper
 
+  dry-run-aur:
+    name: Verify Arch dry-run package
+    needs: [plan, all-builds, dry-run-artifacts]
+    if: ${{ needs.plan.outputs.dry_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: archlinux:base-devel
+    steps:
+      - name: Install package verification tools
+        run: pacman --disable-sandbox -Syu --noconfirm git python
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: wrapper-baml
+          path: dist/wrapper
+      - uses: actions/download-artifact@v8
+        with:
+          name: dry-run-release-files
+          path: dry-run
+      - name: Build, install, and verify the real Arch package
+        env:
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          python scripts/baml-test-aur-package \
+            --package-dir dry-run/package-manager/aur \
+            --wrapper-dir dist/wrapper \
+            --version "$WRAPPER_VERSION"
+
   dry-run-summary:
     name: Dry-run summary
-    needs: [plan, all-builds, dry-run-artifacts, dry-run-homebrew]
+    needs: [plan, all-builds, dry-run-artifacts, dry-run-homebrew, dry-run-aur]
     if: ${{ needs.plan.outputs.dry_run == 'true' }}
     runs-on: ubuntu-latest
     steps:
