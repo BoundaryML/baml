@@ -124,9 +124,8 @@ const POINTS = [
   {
     body: (
       <>
-        Types hold at runtime, with no <Cmd>any</Cmd> and no unchecked casts.
-        Errors are part of a function's type, and pattern matching is
-        exhaustive.
+        Types exist at runtime. There's no <Cmd>any</Cmd>. No unchecked casts.
+        Thrown errors are statically analyzed. Pattern matching is exhaustive.
       </>
     ),
     title: 'A type system like Rust.',
