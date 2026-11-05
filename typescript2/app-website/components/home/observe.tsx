@@ -180,7 +180,7 @@ function Tile({
 export default function Observe() {
   return (
     <Phase
-      heading="Create dashboards and alerts from your data."
+      heading="Create dashboards and alerts from your traces."
       id="observe"
       intro="Make custom dashboards that are 100% tied to your product by using the SQL-based query API."
       name="Observe"
