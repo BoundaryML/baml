@@ -187,9 +187,9 @@ function Python() {
   return (
     <pre className="h-full -mx-2 overflow-hidden font-mono [font-variant-ligatures:none] text-[12px] md:text-[12.5px] leading-[1.65] text-body">
       {PY.map((runs, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: the sample's lines never reorder.
         <span
           className={`block min-h-[1lh] px-2 rounded-[3px] whitespace-pre ${FOCUS.has(i) ? 'bg-clover/12' : ''}`}
+          // biome-ignore lint/suspicious/noArrayIndexKey: the sample's lines never reorder.
           key={i}
         >
           {runs.map(([text, tone], j) => (
