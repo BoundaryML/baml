@@ -106,9 +106,9 @@ fn is_generated_gitignore(name: &std::ffi::OsStr, path: &Path) -> bool {
 }
 
 /// Output an earlier `baml generate` left at the default location, now that
-/// `package_name` installs the SDK at `output_dir` instead.
-/// `destinations` are every directory this run writes; output another
-/// generator still writes there is not superseded.
+/// `package_name` installs the SDK elsewhere. `destinations` are the
+/// directories this run writes: output a generator still writes is not
+/// superseded.
 pub(super) fn superseded_default_output(
     output_root: &Path,
     destinations: &[PathBuf],
