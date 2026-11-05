@@ -17,6 +17,15 @@ const LOGOS: {
   { h: 20, name: 'Vetcove', src: '/logos/vetcove.svg', w: 89 },
 ];
 
+// Logos are drawn 1.2 times their listed size.
+const SCALE = 1.2;
+const LOGOS_WIDTH = LOGOS.reduce((sum, l) => sum + l.w * SCALE, 0);
+// Each logo gets the same padding on both sides. Where there's room, the padding stretches so one row is
+// exactly as wide as the strip: a logo leaving on the left is entering on the right, and the loop
+// repeats with no visible seam. On narrower screens the padding stays at 2rem and the row overflows.
+const PAD = `max(2rem, calc((100cqw - ${LOGOS_WIDTH}px) / ${LOGOS.length * 2}))`;
+
+/** One run of the logos. The marquee draws two, the second hidden from screen readers. */
 function Row({ copy }: { copy?: boolean }) {
   return (
     <ul
@@ -24,13 +33,13 @@ function Row({ copy }: { copy?: boolean }) {
       className={`flex items-center shrink-0 ${copy ? 'v2-marquee-copy' : ''}`}
     >
       {LOGOS.map((l) => (
-        <li className="px-8 md:px-12" key={l.name}>
+        <li key={l.name} style={{ paddingInline: PAD }}>
           <Image
             alt={copy ? '' : l.name}
-            className={`${l.light ? 'logo-mark-light' : 'logo-mark'} w-auto max-w-none opacity-70`}
+            className={`${l.light ? 'logo-mark-light' : 'logo-mark'} max-w-none object-contain opacity-70`}
             height={l.h}
             src={l.src}
-            style={{ height: l.h * 1.2 }}
+            style={{ height: l.h * SCALE, width: l.w * SCALE }}
             width={l.w}
           />
         </li>
@@ -39,6 +48,7 @@ function Row({ copy }: { copy?: boolean }) {
   );
 }
 
+/** The customer logo strip under the hero, scrolling between the page's grid rails. */
 export default function Logos() {
   return (
     <section
@@ -49,10 +59,13 @@ export default function Logos() {
       <p className="mb-7 text-center text-[15px] text-white/60">
         Used by engineers at
       </p>
-      <div className="v2-marquee">
-        <div className="v2-marquee-track">
-          <Row />
-          <Row copy />
+      {/* The strip spans rail to rail, like the section dividers, and is clipped there. */}
+      <div className="mx-auto max-w-[1440px] px-(--frame-gutter)">
+        <div className="v2-marquee @container">
+          <div className="v2-marquee-track">
+            <Row />
+            <Row copy />
+          </div>
         </div>
       </div>
     </section>
