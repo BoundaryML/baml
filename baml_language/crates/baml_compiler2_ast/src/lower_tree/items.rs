@@ -6,7 +6,9 @@
 //!
 //! Spans are the rowan lowering's: an item starts at its keyword (its `///`
 //! lines and directives, trivia to rowan, come before that), and a member
-//! ends before the `,`/`;` it owns.
+//! ends before the `,`/`;` it owns. Members lower in source order, each as
+//! it is met (the rowan lowering went kind by kind, which only the order of
+//! diagnostics and environment references saw).
 
 use std::path::Path;
 
@@ -16,9 +18,10 @@ use baml_syntax::{
         AnyAttrArg, AnyClassMember, AnyDoc, AnyEnumMember, AnyExpr, AnyFunctionBody, AnyImplMember,
         AnyInterfaceMember, AnyItem, AnyLlmField, AnyPattern, AnyStringLike, AnyTemplatePart,
         AnyType, AssocTypeDecl, AssocTypeDef, AttrArgs, Attribute, BacktickString, Block,
-        BlockAttr, ClassDef, ClientValueDef, DirectiveKind, EnumDef, Field, FileTree, FunctionDef,
-        GenericParamList, ImplementsBlock, ImplementsFor, InterfaceDef, InterfaceFieldLink,
-        LetItem, LlmBody, MethodSig, RemovedItem, StringLit, TestDef, TypeAliasDef, WithClause,
+        BlockAttr, ClassDef, ClientValueDef, DirectiveKind, EnumDef, EnumVariant, Field, FileTree,
+        FunctionDef, GenericParamList, ImplementsBlock, ImplementsFor, InterfaceDef,
+        InterfaceFieldLink, LetItem, LlmBody, MethodSig, RemovedItem, StringLit, TestDef,
+        TypeAliasDef, WithClause,
     },
     token::{TokenIdx, TokenKind},
     tree::{Id, List, Missing},
@@ -31,7 +34,7 @@ use crate::{
     ast::{
         self, AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, DeclarativeMeta, Expr,
         ExprId, FieldDef, FunctionBodyDef, FunctionDefaults, FunctionMetadata, FunctionOrigin,
-        GenericParam, ImplementsBlockDef, ImplementsForDef, Item, LetDef, LetOrigin, LlmBodyDef,
+        GenericParam, ImplOrigin, ImplementsForDef, Item, LetDef, LetOrigin, LlmBodyDef,
         LlmPromptSpans, MethodSigDef, Param, Pattern, RawAttribute, RawAttributeArg,
         TemplateSegment, TraceHookDirective, TypeExpr, TypeExprKind, VariantDef,
     },
@@ -39,9 +42,9 @@ use crate::{
     companions::expand_companions,
     lower_cst::{
         ClassMethodContext, TestRegistration, append_spec_client_param, append_spec_on_event_param,
-        check_missing_type, classify_client_string, fold_implements_for,
-        reject_reserved_llm_params, reject_unquoted_client_shorthand,
-        synthesize_init_test_function, warn_quoted_prompt_interpolation,
+        check_missing_type, classify_client_string, reject_reserved_llm_params,
+        reject_unquoted_client_shorthand, synthesize_init_test_function,
+        warn_quoted_prompt_interpolation,
     },
     lower_expr_body::{
         InitTestContext, LlmClient, LlmSpecSource, LoweringContext, TopLevelLetSurface,
@@ -95,7 +98,12 @@ fn lower_file_on(
                     out.extend(companions.into_iter().map(Item::Function));
                 }
             }
-            AnyItem::Class(id) => out.extend(items.class(id).map(Item::Class)),
+            AnyItem::Class(id) => {
+                if let Some((class, impls)) = items.class(id) {
+                    out.push(Item::Class(class));
+                    out.extend(impls.into_iter().map(Item::ImplementsFor));
+                }
+            }
             AnyItem::Enum(id) => out.extend(items.enum_def(id).map(Item::Enum)),
             AnyItem::Interface(id) => out.extend(items.interface(id).map(Item::Interface)),
             AnyItem::ImplementsFor(id) => {
@@ -114,7 +122,6 @@ fn lower_file_on(
             AnyItem::Bogus(_) => {}
         }
     }
-    fold_implements_for(&mut out);
     if !registrations.is_empty() {
         let init_fn = synthesize_init_test_function(
             &registrations,
@@ -241,14 +248,11 @@ impl<'t> Items<'t> {
         })
     }
 
-    /// The `@@` attributes among a declaration's members, in source order.
-    fn block_attributes(&self, members: impl Iterator<Item = Id<BlockAttr>>) -> Vec<RawAttribute> {
-        members
-            .filter_map(|id| {
-                let attr = *self.v.node(id);
-                Some(self.raw_attribute(attr.path.ok()?, attr.args, self.v.range_of(id)))
-            })
-            .collect()
+    /// One `@@` attribute; none when its name is missing (reported by the
+    /// parser).
+    fn block_attribute(&self, id: Id<BlockAttr>) -> Option<RawAttribute> {
+        let attr = *self.v.node(id);
+        Some(self.raw_attribute(attr.path.ok()?, attr.args, self.v.range_of(id)))
     }
 
     /// The `@` attributes of a member.
@@ -765,7 +769,9 @@ impl<'t> Items<'t> {
 
     // ── Classes, enums, interfaces ───────────────────────────────────────────
 
-    fn class(&mut self, id: Id<ClassDef>) -> Option<ast::ClassDef> {
+    /// A class and the `implements` blocks written in its body, which are its
+    /// own items (an in-body block is shorthand for `implements<…> I for C<…>`).
+    fn class(&mut self, id: Id<ClassDef>) -> Option<(ast::ClassDef, Vec<ImplementsForDef>)> {
         let v = self.v;
         let class = *v.node(id);
         let span = span_from(v.token_range(class.kw.idx), v.range_of(id));
@@ -778,74 +784,58 @@ impl<'t> Items<'t> {
         };
         let generic_params = self.generic_params(class.generics);
         let class_name = v.name(name_id);
-        let members: Vec<_> = v.tree.list(class.members).to_vec();
-
-        let fields = members
+        let owner_generic_param_names: Vec<Name> = generic_params
             .iter()
-            .filter_map(|member| match member {
-                AnyClassMember::Field(id) => Some(*id),
-                _ => None,
-            })
-            .map(|field| {
-                self.field(
-                    field,
+            .map(|param| param.name.clone())
+            .collect();
+        let self_type = ast::class_self_type(&class_name, &generic_params, v.name_range(name_id));
+        let mut fields = Vec::new();
+        let mut methods = Vec::new();
+        let mut implements = Vec::new();
+        let mut attributes = Vec::new();
+        for &member in v.tree.list(class.members) {
+            match member {
+                AnyClassMember::Field(id) => fields.push(self.field(
+                    id,
                     |field_name| format!("field `{class_name}.{field_name}`"),
                     "a class field type",
-                )
-            })
-            .collect();
-
-        let mut methods = Vec::new();
-        for member in &members {
-            let AnyClassMember::Method(method) = member else {
-                continue;
-            };
-            let Some(func) = self.function(
-                *method,
-                Some(ClassMethodContext {
-                    name: &class_name,
-                    generic_params: &generic_params,
-                }),
-            ) else {
-                continue;
-            };
-            let owner_generic_param_names: Vec<Name> = generic_params
-                .iter()
-                .map(|param| param.name.clone())
-                .collect();
-            let companions =
-                expand_companions(&func, Some(&class_name), &owner_generic_param_names);
-            methods.push(func);
-            methods.extend(companions);
+                )),
+                AnyClassMember::Method(id) => {
+                    let Some(func) = self.function(
+                        id,
+                        Some(ClassMethodContext {
+                            name: &class_name,
+                            generic_params: &generic_params,
+                        }),
+                    ) else {
+                        continue;
+                    };
+                    let companions =
+                        expand_companions(&func, Some(&class_name), &owner_generic_param_names);
+                    methods.push(func);
+                    methods.extend(companions);
+                }
+                AnyClassMember::Implements(id) => {
+                    implements.extend(self.implements_block(id, &generic_params, &self_type));
+                }
+                AnyClassMember::BlockAttr(id) => attributes.extend(self.block_attribute(id)),
+                // Reported by the parser.
+                AnyClassMember::Bogus(_) => {}
+            }
         }
-
-        let implements = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyClassMember::Implements(id) => Some(*id),
-                _ => None,
-            })
-            .filter_map(|block| self.implements_block(block))
-            .collect();
-
-        let block_attrs = members.iter().filter_map(|member| match member {
-            AnyClassMember::BlockAttr(id) => Some(*id),
-            _ => None,
-        });
         let mut class_def = ast::ClassDef {
             name: class_name.clone(),
             generic_params,
             fields,
             methods,
-            implements,
-            attributes: self.block_attributes(block_attrs),
+            attributes,
             docstring: self.docstring(class.docs),
             span,
             name_span: v.name_range(name_id),
         };
         // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
         maybe_inject_cleanup_guard(&mut class_def);
-        Some(class_def)
+        Some((class_def, implements))
     }
 
     /// A class or interface field. A field with no type is already reported
@@ -892,40 +882,39 @@ impl<'t> Items<'t> {
             });
             return None;
         };
-        let members: Vec<_> = v.tree.list(enum_def.members).to_vec();
-        let variants = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyEnumMember::Variant(id) => Some(*id),
-                _ => None,
-            })
-            .map(|id| {
-                let variant = *v.node(id);
-                VariantDef {
-                    name: v.name(variant.name),
-                    attributes: self.member_attributes(variant.attrs),
-                    docstring: self.docstring(variant.docs),
-                    span: self.member_span(
-                        v.name_range(variant.name),
-                        v.range_of(id),
-                        variant.sep.map(|sep| sep.idx),
-                    ),
-                    name_span: v.name_range(variant.name),
-                }
-            })
-            .collect();
-        let block_attrs = members.iter().filter_map(|member| match member {
-            AnyEnumMember::BlockAttr(id) => Some(*id),
-            _ => None,
-        });
+        let mut variants = Vec::new();
+        let mut attributes = Vec::new();
+        for &member in v.tree.list(enum_def.members) {
+            match member {
+                AnyEnumMember::Variant(id) => variants.push(self.variant(id)),
+                AnyEnumMember::BlockAttr(id) => attributes.extend(self.block_attribute(id)),
+                AnyEnumMember::Bogus(_) => {}
+            }
+        }
         Some(ast::EnumDef {
             name: v.name(name_id),
             variants,
-            attributes: self.block_attributes(block_attrs),
+            attributes,
             docstring: self.docstring(enum_def.docs),
             span,
             name_span: v.name_range(name_id),
         })
+    }
+
+    fn variant(&self, id: Id<EnumVariant>) -> VariantDef {
+        let v = self.v;
+        let variant = *v.node(id);
+        VariantDef {
+            name: v.name(variant.name),
+            attributes: self.member_attributes(variant.attrs),
+            docstring: self.docstring(variant.docs),
+            span: self.member_span(
+                v.name_range(variant.name),
+                v.range_of(id),
+                variant.sep.map(|sep| sep.idx),
+            ),
+            name_span: v.name_range(variant.name),
+        }
     }
 
     fn interface(&mut self, id: Id<InterfaceDef>) -> Option<ast::InterfaceDef> {
@@ -964,49 +953,27 @@ impl<'t> Items<'t> {
             })
             .collect();
 
-        let members: Vec<_> = v.tree.list(iface.members).to_vec();
-        let fields = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyInterfaceMember::Field(id) => Some(*id),
-                _ => None,
-            })
-            .map(|field| {
-                self.field(
-                    field,
+        let mut fields = Vec::new();
+        let mut required_methods = Vec::new();
+        let mut associated_types = Vec::new();
+        let mut default_methods = Vec::new();
+        let mut attributes = Vec::new();
+        for &member in v.tree.list(iface.members) {
+            match member {
+                AnyInterfaceMember::Field(id) => fields.push(self.field(
+                    id,
                     |field_name| format!("interface field `{iface_name}.{field_name}`"),
                     "an interface field type",
-                )
-            })
-            .collect();
-        let required_methods = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyInterfaceMember::MethodSig(id) => Some(*id),
-                _ => None,
-            })
-            .filter_map(|sig| self.method_sig(sig))
-            .collect();
-        let associated_types = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyInterfaceMember::AssocType(id) => Some(*id),
-                _ => None,
-            })
-            .filter_map(|decl| self.associated_type_decl(decl))
-            .collect();
-        let default_methods = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyInterfaceMember::Method(id) => Some(*id),
-                _ => None,
-            })
-            .filter_map(|method| self.function(method, None))
-            .collect();
-        let block_attrs = members.iter().filter_map(|member| match member {
-            AnyInterfaceMember::BlockAttr(id) => Some(*id),
-            _ => None,
-        });
+                )),
+                AnyInterfaceMember::MethodSig(id) => required_methods.extend(self.method_sig(id)),
+                AnyInterfaceMember::AssocType(id) => {
+                    associated_types.extend(self.associated_type_decl(id));
+                }
+                AnyInterfaceMember::Method(id) => default_methods.extend(self.function(id, None)),
+                AnyInterfaceMember::BlockAttr(id) => attributes.extend(self.block_attribute(id)),
+                AnyInterfaceMember::Bogus(_) => {}
+            }
+        }
 
         Some(ast::InterfaceDef {
             name: iface_name,
@@ -1016,7 +983,7 @@ impl<'t> Items<'t> {
             associated_types,
             required_methods,
             default_methods,
-            attributes: self.block_attributes(block_attrs),
+            attributes,
             docstring: self.docstring(iface.docs),
             span,
             name_span: v.name_range(name_id),
@@ -1111,52 +1078,46 @@ impl<'t> Items<'t> {
         Vec<ast::FunctionDef>,
     ) {
         let v = self.v;
-        let members: Vec<_> = v.tree.list(members).to_vec();
-        for member in &members {
-            let AnyImplMember::Field(field) = member else {
-                continue;
-            };
-            let node = *v.node(*field);
-            self.diags.push(
-                LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
-                    interface_name: interface_label.to_string(),
-                    field_name: v.name(node.name).to_string(),
-                    span: self.member_span(
-                        v.name_range(node.name),
-                        v.range_of(*field),
-                        node.sep.map(|sep| sep.idx),
-                    ),
-                },
-            );
+        let mut field_links = Vec::new();
+        let mut associated_type_bindings = Vec::new();
+        let mut methods = Vec::new();
+        for &member in v.tree.list(members) {
+            match member {
+                AnyImplMember::Field(id) => {
+                    let node = *v.node(id);
+                    self.diags.push(
+                        LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
+                            interface_name: interface_label.to_string(),
+                            field_name: v.name(node.name).to_string(),
+                            span: self.member_span(
+                                v.name_range(node.name),
+                                v.range_of(id),
+                                node.sep.map(|sep| sep.idx),
+                            ),
+                        },
+                    );
+                }
+                AnyImplMember::FieldLink(id) => {
+                    field_links.extend(self.interface_field_link(id));
+                }
+                AnyImplMember::AssocType(id) => {
+                    associated_type_bindings.extend(self.associated_type_binding(id));
+                }
+                AnyImplMember::Method(id) => methods.extend(self.function(id, None)),
+                AnyImplMember::Bogus(_) => {}
+            }
         }
-        let field_links = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyImplMember::FieldLink(id) => Some(*id),
-                _ => None,
-            })
-            .filter_map(|link| self.interface_field_link(link))
-            .collect();
-        let associated_type_bindings = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyImplMember::AssocType(id) => Some(*id),
-                _ => None,
-            })
-            .filter_map(|def| self.associated_type_binding(def))
-            .collect();
-        let methods = members
-            .iter()
-            .filter_map(|member| match member {
-                AnyImplMember::Method(id) => Some(*id),
-                _ => None,
-            })
-            .filter_map(|method| self.function(method, None))
-            .collect();
         (field_links, associated_type_bindings, methods)
     }
 
-    fn implements_block(&mut self, id: Id<ImplementsBlock>) -> Option<ImplementsBlockDef> {
+    /// An in-body `implements I { … }` block as the `implements<…> I for C<…>`
+    /// it is shorthand for: the class's generics, the class as the for-target.
+    fn implements_block(
+        &mut self,
+        id: Id<ImplementsBlock>,
+        class_generic_params: &[GenericParam],
+        class_self_type: &TypeExpr,
+    ) -> Option<ImplementsForDef> {
         let v = self.v;
         let block = *v.node(id);
         let target = self.declared_type(
@@ -1167,13 +1128,16 @@ impl<'t> Items<'t> {
         let label = Self::interface_label(&target);
         let (field_links, associated_type_bindings, methods) =
             self.impl_members(block.members, &label);
-        Some(ImplementsBlockDef {
-            target,
+        Some(ImplementsForDef {
+            generic_params: class_generic_params.to_vec(),
+            interface_target: target,
+            for_target: class_self_type.clone(),
             field_links,
             associated_type_bindings,
             methods,
-            is_out_of_body: false,
+            origin: ImplOrigin::InBody,
             span: span_from(v.token_range(block.kw.idx), v.range_of(id)),
+            docstring: None,
         })
     }
 
@@ -1201,6 +1165,7 @@ impl<'t> Items<'t> {
             field_links,
             associated_type_bindings,
             methods,
+            origin: ImplOrigin::OutOfBody,
             span: span_from(v.token_range(imp.kw.idx), v.range_of(id)),
             docstring: self.docstring(imp.docs),
         })

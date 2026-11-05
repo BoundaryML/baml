@@ -39,7 +39,7 @@ use baml_base::{Name, SourceFile, line_index::LineIndex};
 use baml_compiler2_hir::{
     body::{FunctionBody, function_body},
     item_data::{
-        ImplSubjectData, MethodOwner, class_data, file_functions, function_data, function_llm_meta,
+        MethodOwner, class_data, file_functions, function_data, function_llm_meta,
         function_source_map, impl_block_data, impl_enclosing_class, interface_data,
         llm_prompt_segments, method_owner,
     },
@@ -222,14 +222,7 @@ fn qualified_name<'db>(
             Some(class) => class_data(db, class).name.to_string(),
             None => {
                 let data = impl_block_data(db, block);
-                match data.subject {
-                    ImplSubjectData::Free { for_target, .. } => {
-                        data.type_refs.display(for_target).to_string()
-                    }
-                    ImplSubjectData::InClass { class, .. } => {
-                        class_data(db, class).name.to_string()
-                    }
-                }
+                data.type_refs.display(data.for_target).to_string()
             }
         },
     };

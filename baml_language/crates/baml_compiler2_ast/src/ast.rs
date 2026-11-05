@@ -1877,8 +1877,6 @@ pub struct ClassDef {
     pub generic_params: Vec<GenericParam>,
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
-    /// `implements I { ... }` blocks declared inside the class body (BEP-044).
-    pub implements: Vec<ImplementsBlockDef>,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
@@ -1888,8 +1886,8 @@ pub struct ClassDef {
 
 /// Definition of an `interface` declaration (BEP-044).
 ///
-/// Interfaces declare a contract over fields and methods. Classes opt in to
-/// the contract via [`ImplementsBlockDef`] inside the class body.
+/// Interfaces declare a contract over fields and methods. Types opt in to
+/// the contract with an `implements` block ([`ImplementsForDef`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceDef {
     pub name: Name,
@@ -1929,25 +1927,6 @@ pub struct MethodSigDef {
     pub name_span: TextRange,
 }
 
-/// One `implements I { ... }` block inside a class body (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplementsBlockDef {
-    /// The target interface, captured as a `TypeExpr` so we can accept generic
-    /// parameterization like `implements Container<int>`. The path's first
-    /// segment is the interface name.
-    pub target: TypeExpr,
-    /// Explicit mappings from interface fields to class fields:
-    /// `interface_field as class_field`.
-    pub field_links: Vec<InterfaceFieldLinkDef>,
-    /// Associated type bindings, e.g. `type Item = int`.
-    pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
-    /// Method overrides / definitions inside this `implements` block.
-    pub methods: Vec<FunctionDef>,
-    /// True when this block came from top-level `implements I for T`.
-    pub is_out_of_body: bool,
-    pub span: TextRange,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceFieldLinkDef {
     pub interface_field: Name,
@@ -1957,7 +1936,23 @@ pub struct InterfaceFieldLinkDef {
     pub class_field_span: TextRange,
 }
 
-/// Top-level `implements I for T { ... }` block (BEP-044).
+/// Where an `implements` block was written. The in-body spelling is
+/// shorthand for the out-of-body one (`TYPE_SYSTEM.md`, "Interface
+/// Implementations"); the origin is kept for the rules that read it — an
+/// interface with fields can only be implemented in-body — and must not
+/// influence resolution, dispatch or coherence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ImplOrigin {
+    /// `class C<T> { implements I { … } }`: the block's generics are the
+    /// class's and its for-target is `C<T>`.
+    InBody,
+    /// `implements<…> I for T { … }` at the top level.
+    OutOfBody,
+}
+
+/// An `implements` block (BEP-044), in either spelling: `implements I for T
+/// { ... }` at the top level, or `implements I { ... }` inside the body of
+/// the class it is for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsForDef {
     /// Generic type parameters on the implements block, each with its set of
@@ -1974,8 +1969,75 @@ pub struct ImplementsForDef {
     pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
     /// Method definitions inside the block.
     pub methods: Vec<FunctionDef>,
+    pub origin: ImplOrigin,
     pub span: TextRange,
     pub docstring: Option<String>,
+}
+
+impl ImplementsForDef {
+    /// Whether this block implements for `class` itself; see
+    /// [`impl_is_for_class`].
+    pub fn is_for_class(&self, class: &ClassDef) -> bool {
+        impl_is_for_class(
+            self.origin,
+            self.generic_params.is_empty(),
+            &self.for_target,
+            &class.name,
+        )
+    }
+}
+
+/// Whether an `implements` block with these parts implements for the class
+/// named `class_name` itself: written in its body, or written out-of-body for
+/// exactly that class (no generics on the block, the class named bare). Such a
+/// block's generics are the class's and its for-type is the class applied to
+/// them; everything else is a free implementation with a for-type of its own.
+/// The ONE rule, read by the AST's consumers and by HIR's `class_impls`.
+pub fn impl_is_for_class(
+    origin: ImplOrigin,
+    no_generics: bool,
+    for_target: &TypeExpr,
+    class_name: &Name,
+) -> bool {
+    let TypeExprKind::Path {
+        path, generic_args, ..
+    } = &for_target.kind
+    else {
+        return false;
+    };
+    match origin {
+        ImplOrigin::InBody => path.last() == Some(class_name),
+        ImplOrigin::OutOfBody => {
+            no_generics
+                && generic_args.is_empty()
+                && matches!(path.segments(), [name] if name == class_name)
+        }
+    }
+}
+
+/// The type a class's in-body `implements` blocks are for: the class applied
+/// to its own generic parameters (`C<T, U>`), spanning its name.
+pub fn class_self_type(
+    class_name: &Name,
+    generic_params: &[GenericParam],
+    span: TextRange,
+) -> TypeExpr {
+    TypeExprKind::Path {
+        path: Path::bare(class_name.clone()),
+        generic_args: generic_params
+            .iter()
+            .map(|param| {
+                TypeExprKind::Path {
+                    path: Path::bare(param.name.clone()),
+                    generic_args: Vec::new(),
+                    associated_type_bindings: Vec::new(),
+                }
+                .at(param.name_span)
+            })
+            .collect(),
+        associated_type_bindings: Vec::new(),
+    }
+    .at(span)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

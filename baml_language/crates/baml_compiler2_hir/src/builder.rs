@@ -18,8 +18,8 @@ use crate::{
     contributions::{Contribution, Definition, DefinitionKind, FileSymbolContributions},
     diagnostic::{Hir2Diagnostic, MemberSite},
     file_package::file_package,
-    ids::{FunctionMarker, LocalItemId},
-    item_tree::{ImplBlock, ImplSubject, InterfaceFieldLink},
+    ids::{ClassMarker, FunctionMarker, LocalItemId},
+    item_tree::{ImplBlock, InterfaceFieldLink},
     loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
     semantic_index::{
@@ -75,6 +75,9 @@ pub struct SemanticIndexBuilder<'db> {
     /// Depth of class scopes we're inside (> 0 means methods shouldn't
     /// contribute to top-level symbols — they belong to the class scope).
     class_depth: u32,
+    /// The class most recently allocated: the owner of the in-body
+    /// `implements` blocks that follow it in the item list.
+    last_class: Option<LocalItemId<ClassMarker>>,
 
     /// Expression to lexical scope mappings, sorted by arena-safe key at the end.
     expr_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
@@ -112,6 +115,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             item_scopes: FxHashMap::default(),
             scope_stack: Vec::new(),
             class_depth: 0,
+            last_class: None,
             expr_scopes: Vec::new(),
             lambda_scopes: Vec::new(),
             path_resolutions: Vec::new(),
@@ -1410,6 +1414,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
         }
         let local_id = self.item_tree.alloc_class(c, attrs, field_attrs);
+        self.last_class = Some(local_id);
         let loc = ClassLoc::new(self.db, self.file, local_id);
         self.reject_root_name(&c.name, c.name_span);
         self.reject_root_generics(&c.generic_params);
@@ -1441,7 +1446,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             // `to_string` / `to_json` are not magic methods: each must be provided
             // by implementing `baml.ToString` / `baml.ToJson`, never declared
             // directly on the class. (Methods inside `implements I { ... }` blocks
-            // live in `c.implements`, not `c.methods`, so an interface impl is fine.)
+            // are the impl's, not `c.methods`, so an interface impl is fine.)
             if method.name.as_str() == "to_string" {
                 self.diagnostics
                     .push(Hir2Diagnostic::ToStringMustImplementInterface {
@@ -1475,76 +1480,37 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         // Walk class methods — inside class scope, so methods won't be
         // contributed as top-level symbols. `Class::methods` carries ONLY the
-        // class-level methods: an in-body `implements I { … }` method belongs
-        // to its impl block (the compiler sees no distinction between the
-        // in-class and out-of-body spellings beyond syntax), so those ids
-        // live on the `ImplBlock` and resolve through the impl tier.
+        // class-level methods: an in-body `implements I { … }` block is its
+        // own item (the AST gives it the class as its for-target), so its
+        // methods live on the `ImplBlock` and resolve through the impl tier.
         self.class_depth += 1;
         let method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
-        for impl_block in &c.implements {
-            let mut block_method_ids = Vec::new();
-            for m in &impl_block.methods {
-                let fid = self.lower_function(m);
-                // BEP-044: remember which interface this method came from so
-                // `default.<name>()` calls inside the body can resolve back
-                // to the interface's default function.
-                self.item_tree.record_method_interface_target(
-                    fid,
-                    impl_block.target.clone(),
-                    impl_block.associated_type_bindings.clone(),
-                );
-                block_method_ids.push(fid);
-            }
-            // Dual-write: also record this in-body impl under a stable `ImplId`.
-            // An in-body `implements I {}` (and a simple `implement I for C`
-            // merged onto the class) is `InClass`; its for-type is the class.
-            let iface_head = impl_head_name(&impl_block.target);
-            let block = ImplBlock {
-                subject: ImplSubject::InClass {
-                    class: local_id,
-                    out_of_body: impl_block.is_out_of_body,
-                },
-                interface_target: impl_block.target.clone(),
-                field_links: impl_block
-                    .field_links
-                    .iter()
-                    .map(InterfaceFieldLink::from_ast)
-                    .collect(),
-                associated_type_bindings: impl_block.associated_type_bindings.clone(),
-                methods: block_method_ids,
-                span: impl_block.span,
-                // In-body `implements` blocks don't carry a docstring today —
-                // the AST `ImplementsBlock` has no field for one.
-                docstring: None,
-            };
-            self.item_tree.alloc_impl(&iface_head, &c.name, block);
-        }
         self.class_depth -= 1;
 
         self.item_tree.set_class_methods(local_id, method_ids);
         self.pop_scope();
     }
 
+    /// Lower an `implements` block, in either spelling: the AST has already
+    /// given an in-body block the class's generics and the class as its
+    /// for-target, so one path serves both.
     fn lower_implements_for(&mut self, imp: &ast::ImplementsForDef) {
         self.class_depth += 1;
         self.reject_root_generics(&imp.generic_params);
-        // For blanket impls (implements<T> I for C<T>), push a class-like scope
-        // so TIR can resolve `self` and type variables in method bodies.
-        let has_generic_params = !imp.generic_params.is_empty();
-        let mut impl_scope: Option<FileScopeId> = None;
-        if has_generic_params {
-            // Derive a synthetic scope name from the for_target for `self` resolution.
-            // Use the for_target's root name (e.g. "Container" from "Container<T>").
-            let scope_name = match &imp.for_target.kind {
-                baml_compiler2_ast::TypeExprKind::Path { path, .. } => path.first().cloned(),
-                _ => None,
-            };
-            self.push_scope(ScopeKind::Class, scope_name, imp.span);
-            impl_scope = Some(self.current_scope_id());
-        }
+        // A class-like scope named after the for-target's root, so TIR can
+        // resolve `self` and the block's type variables in method bodies.
+        let scope_name = match &imp.for_target.kind {
+            baml_compiler2_ast::TypeExprKind::Path { path, .. } => path.first().cloned(),
+            _ => None,
+        };
+        self.push_scope(ScopeKind::Class, scope_name, imp.span);
+        let impl_scope = self.current_scope_id();
         let mut method_ids = Vec::new();
         for method in &imp.methods {
             let fid = self.lower_function(method);
+            // BEP-044: remember which interface this method came from so
+            // `default.<name>()` calls inside the body can resolve back to
+            // the interface's default function.
             self.item_tree.record_method_interface_target(
                 fid,
                 imp.interface_target.clone(),
@@ -1552,19 +1518,19 @@ impl<'db> SemanticIndexBuilder<'db> {
             );
             method_ids.push(fid);
         }
-        if has_generic_params {
-            self.pop_scope();
-        }
+        self.pop_scope();
         self.class_depth -= 1;
-        // Record this out-of-body impl under a stable `ImplId` in the unified `impls` store.
         let iface_head = impl_head_name(&imp.interface_target);
         let for_head = impl_head_name(&imp.for_target);
-        let generics = imp.generic_params.clone();
+        let owner = match imp.origin {
+            baml_compiler2_ast::ImplOrigin::InBody => self.last_class,
+            baml_compiler2_ast::ImplOrigin::OutOfBody => None,
+        };
         let block = ImplBlock {
-            subject: ImplSubject::Free {
-                for_target: imp.for_target.clone(),
-                generics,
-            },
+            for_target: imp.for_target.clone(),
+            generics: imp.generic_params.clone(),
+            origin: imp.origin,
+            owner,
             interface_target: imp.interface_target.clone(),
             field_links: imp
                 .field_links
@@ -1577,9 +1543,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             docstring: imp.docstring.clone(),
         };
         let impl_id = self.item_tree.alloc_impl(&iface_head, &for_head, block);
-        if let Some(scope) = impl_scope {
-            self.record_scope_owner(scope, ItemScopeOwner::Impl(impl_id));
-        }
+        self.record_scope_owner(impl_scope, ItemScopeOwner::Impl(impl_id));
     }
 
     /// Lower an `interface I { ... }` declaration (BEP-044).
@@ -1822,11 +1786,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     let type_expr = &field.type_expr;
                     self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                 }
-                for method in class
-                    .methods
-                    .iter()
-                    .chain(class.implements.iter().flat_map(|block| &block.methods))
-                {
+                for method in &class.methods {
                     self.validate_function_phase1(method, is_builtin_file);
                 }
             }

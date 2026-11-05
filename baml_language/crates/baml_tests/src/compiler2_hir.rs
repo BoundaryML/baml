@@ -279,12 +279,11 @@ mod tests {
         );
     }
 
-    /// Stage 1 dual-write invariant: the unified `impls` map holds exactly one
-    /// `ImplBlock` per legacy impl entry (in-body `Class::implements` +
-    /// out-of-body `implements_for`), partitioned correctly by subject, and
-    /// `class_to_impls` indexes every `InClass` impl.
+    /// Every `implements` block, in either spelling, is one `ImplBlock` with a
+    /// for-target and an origin; a block for a class of its file is found
+    /// from the class, a blanket impl is not.
     #[test]
-    fn impls_map_is_consistent_with_legacy_representation() {
+    fn impls_have_one_shape_with_an_origin() {
         let mut db = make_db();
         let file = db.file(
             "impls.baml",
@@ -313,47 +312,39 @@ mod tests {
             "#,
         );
 
+        use baml_compiler2_ast::ImplOrigin;
         use baml_compiler2_hir::item_data::{
-            ImplSubjectData, class_data, class_impls, file_classes, file_free_impls, file_impls,
-            impl_block_data,
+            class_impls, file_classes, file_impls, impl_block_data, impl_enclosing_class,
         };
 
-        let legacy_in_class: usize = file_classes(&db, file)
+        // One `ImplBlock` per block written, in source order, whatever its
+        // spelling: Dog's in-body block, `Show for Cat`, `Show<T> for Box<T>`.
+        let impls = file_impls(&db, file);
+        assert_eq!(impls.len(), 3);
+        let origins: Vec<ImplOrigin> = impls
             .iter()
-            .map(|&c| class_data(&db, c).implements.len())
-            .sum();
-        let legacy_out_of_body = file_free_impls(&db, file).len();
-
-        // One ImplBlock per legacy entry.
+            .map(|&b| impl_block_data(&db, b).origin)
+            .collect();
         assert_eq!(
-            file_impls(&db, file).len(),
-            legacy_in_class + legacy_out_of_body,
-            "expected one ImplBlock per legacy impl entry"
+            origins,
+            [
+                ImplOrigin::InBody,
+                ImplOrigin::OutOfBody,
+                ImplOrigin::OutOfBody
+            ]
         );
 
-        // Subject partition matches the legacy split.
-        let in_class = file_impls(&db, file)
+        // A block for a class of this file — written in its body, or
+        // out-of-body for exactly that class — is that class's; the blanket
+        // impl for `Box<T>` is nobody's.
+        let classes = file_classes(&db, file);
+        let per_class: Vec<usize> = classes.iter().map(|&c| class_impls(&db, c).len()).collect();
+        assert_eq!(per_class, [1, 1, 0], "Dog, Cat, Box");
+        let enclosing: Vec<Option<_>> = impls
             .iter()
-            .filter(|&&b| {
-                matches!(
-                    impl_block_data(&db, b).subject,
-                    ImplSubjectData::InClass { .. }
-                )
-            })
-            .count();
-        assert_eq!(in_class, legacy_in_class, "InClass count mismatch");
-        assert_eq!(
-            file_impls(&db, file).len() - in_class,
-            legacy_out_of_body,
-            "Free count mismatch"
-        );
-
-        // `class_impls` indexes exactly the InClass impls.
-        let indexed: usize = file_classes(&db, file)
-            .iter()
-            .map(|&c| class_impls(&db, c).len())
-            .sum();
-        assert_eq!(indexed, legacy_in_class, "class_to_impls coverage mismatch");
+            .map(|&b| impl_enclosing_class(&db, b))
+            .collect();
+        assert_eq!(enclosing, [Some(classes[0]), Some(classes[1]), None]);
 
         // Every impl carries its lowered method ids (here, `show`).
         for &block in file_impls(&db, file) {
@@ -2261,25 +2252,24 @@ function target() -> int { 1 }
             "MyClient"
         );
 
-        // The `implements … for …` block merges onto same-file `MyClass`, so it
-        // is an in-class impl — its docstring is intentionally absent today.
-        // A cross-file (free) impl keeps its docstring.
-        let in_class_impl = *item_data::class_impls(&db, class)
+        // The `implements … for …` block is for same-file `MyClass`, so the
+        // class finds it; written out-of-body, it keeps its docstring (the
+        // old class-merging fold dropped it).
+        let class_impl = *item_data::class_impls(&db, class)
             .first()
-            .expect("MyClass has an in-class impl");
+            .expect("MyClass has an impl");
         assert_eq!(
-            item_data::impl_block_data(&db, in_class_impl)
+            item_data::impl_block_data(&db, class_impl)
                 .docstring
                 .as_deref(),
-            None,
-            "in-class impl docstrings are absent today"
+            Some("Impl docs.")
         );
 
         let file_b = db.file(
             "spans_b.baml",
             "/// Free impl docs.\nimplements MyIface for int {\n  function m(self) -> int { 2 }\n}\n",
         );
-        let free_impl = *item_data::file_free_impls(&db, file_b).first().unwrap();
+        let free_impl = *item_data::file_impls(&db, file_b).first().unwrap();
         assert_eq!(
             item_data::impl_block_data(&db, free_impl)
                 .docstring

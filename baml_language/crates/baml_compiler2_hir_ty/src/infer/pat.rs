@@ -2073,10 +2073,10 @@ impl PatCtx for HirPatCtx<'_, '_> {
         &self,
         iface_ty: &baml_type::Ty,
         class_qtn: &baml_type::DeclName,
-        _class_type_args: &[baml_type::Ty],
+        class_type_args: &[baml_type::Ty],
     ) -> Option<Vec<usize>> {
         use baml_compiler2_hir::contributions::Definition;
-        let baml_type::Ty::Interface(iface_qtn, ..) = iface_ty else {
+        let baml_type::Ty::Interface(iface_qtn, iface_args, iface_assoc) = iface_ty else {
             return None;
         };
         let db = self.infer.db;
@@ -2102,23 +2102,26 @@ impl PatCtx for HirPatCtx<'_, '_> {
                     .collect()
             }
         };
+        // The impl by which THIS realized class type implements THIS realized
+        // interface — selected like every other impl goal, so a class that
+        // implements one interface at several argument lists (`Foo<int>` and
+        // `Foo<string>`) gets the links of the matching block, not the first
+        // block of that name.
+        let concrete = crate::impls::try_interned_ty(&baml_type::Ty::Class(
+            class_qtn.clone(),
+            class_type_args.into(),
+        ))?;
+        let goal = baml_type::interned::InferInterface::from_constraint(
+            &baml_type::Interface::new(iface_qtn.clone(), iface_args.clone(), iface_assoc.clone()),
+        );
+        let resolved = crate::impls::resolve_impl(db, &concrete, &goal)?;
+        // Field links are source data (an interface with fields is implemented
+        // in-body, so the block is in this compilation).
+        let crate::impls::ResolvedImplFacts::Source { block, .. } = resolved.facts else {
+            return None;
+        };
+        let block = baml_compiler2_hir::item_data::impl_block_data(db, block);
         let class_data = baml_compiler2_hir::item_data::class_data(db, class);
-        let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
-        // The class's block for that interface, matched by HEAD: the block's
-        // written target lowers to a name, which is the same whether the
-        // interface is declared in source or served from its rows.
-        let block = class_data.implements.iter().find(|block| {
-            crate::interfaces::resolve_ref_to_interface_name(
-                db,
-                &class_data.type_refs,
-                block.target,
-                pkg_items,
-                &pkg.namespace_path,
-            )
-            .as_ref()
-                == Some(iface_qtn)
-        })?;
         iface_fields
             .iter()
             .map(|field| {

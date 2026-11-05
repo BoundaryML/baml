@@ -1131,12 +1131,7 @@ dependency's `{partner}`)"
                     ));
                 }
             }
-            let out_of_body = match &block.subject {
-                baml_compiler2_hir::item_data::ImplSubjectData::InClass { out_of_body, .. } => {
-                    *out_of_body
-                }
-                baml_compiler2_hir::item_data::ImplSubjectData::Free { .. } => true,
-            };
+            let out_of_body = block.origin == baml_compiler2_ast::ImplOrigin::OutOfBody;
             if out_of_body && !fields.is_empty() {
                 mounted_structural.push((
                     TirTypeError::OutOfBodyImplementsFieldInterface {
@@ -1272,19 +1267,6 @@ fn validate_associated_type_bindings_in_items(
                         namespace_path,
                         &mut diagnostics,
                     );
-                }
-                for block in &class.implements {
-                    for method in &block.methods {
-                        validate_associated_type_bindings_in_function(
-                            db,
-                            file_id,
-                            method,
-                            &outer_bounds,
-                            pkg_items,
-                            namespace_path,
-                            &mut diagnostics,
-                        );
-                    }
                 }
             }
             baml_compiler2_ast::Item::Interface(iface) => {

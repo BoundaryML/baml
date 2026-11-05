@@ -888,10 +888,6 @@ implements ToJson for other.Dog {
                 _ => None,
             })
             .expect("expected local Dog class");
-        assert!(
-            class.implements.is_empty(),
-            "qualified target other.Dog must not merge into local Dog"
-        );
 
         let imp = items
             .iter()
@@ -901,6 +897,10 @@ implements ToJson for other.Dog {
             })
             .expect("qualified target should remain an ImplementsFor item");
         assert_eq!(imp.for_target.to_string(), "other.Dog");
+        assert!(
+            !imp.is_for_class(class),
+            "qualified target other.Dog is not an implementation for local Dog"
+        );
     }
 
     #[test]
@@ -928,10 +928,6 @@ implements ToJson for Dog<int> {
                 _ => None,
             })
             .expect("expected local Dog class");
-        assert!(
-            class.implements.is_empty(),
-            "generic target Dog<int> must not merge into generic class Dog<T>"
-        );
 
         let imp = items
             .iter()
@@ -941,6 +937,10 @@ implements ToJson for Dog<int> {
             })
             .expect("generic target should remain an ImplementsFor item");
         assert_eq!(imp.for_target.to_string(), "Dog<int>");
+        assert!(
+            !imp.is_for_class(class),
+            "generic target Dog<int> is not an implementation for generic class Dog<T>"
+        );
     }
 
     #[test]

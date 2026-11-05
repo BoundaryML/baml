@@ -12,7 +12,10 @@
 
 use baml_base::SourceFile;
 
-use crate::loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, TypeAliasLoc};
+use crate::{
+    ids::{ClassMarker, LocalItemId},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
+};
 
 /// Declare an enumeration query: `file_<plural>(file) -> Vec<XLoc>`, ordered by
 /// source position. Synthesized companions share their parent's span, so they
@@ -89,33 +92,57 @@ file_items!(
 #[salsa::tracked(returns(ref))]
 pub fn file_impls(db: &dyn crate::Db, file: SourceFile) -> Vec<ImplLoc<'_>> {
     let item_tree = crate::file_item_tree(db, file);
-    let mut items: Vec<_> = item_tree.impls.iter().collect();
-    items.sort_by_key(|(_, block)| block.span.start());
-    items
-        .into_iter()
-        .map(|(id, _)| ImplLoc::new(db, file, *id))
-        .collect()
-}
-
-/// The out-of-body (`implement I for T`) blocks in `file`, in source order.
-#[salsa::tracked(returns(ref))]
-pub fn file_free_impls(db: &dyn crate::Db, file: SourceFile) -> Vec<ImplLoc<'_>> {
-    let item_tree = crate::file_item_tree(db, file);
     item_tree
-        .free_impls
+        .impl_order
         .iter()
         .map(|id| ImplLoc::new(db, file, *id))
         .collect()
 }
 
-/// The `implements` blocks whose subject is `class`, in source order.
+/// Whether `block` implements for `class` itself: written in the class's
+/// body (its recorded owner — identity, never the name, so two classes of
+/// one name keep their own blocks), or out-of-body for exactly that class
+/// (the AST's rule, `impl_is_for_class`). Every other block has a for-type
+/// of its own and is found through it.
+fn impl_is_for_class(
+    block: &crate::item_tree::ImplBlock,
+    class_id: LocalItemId<ClassMarker>,
+    class: &crate::item_tree::Class,
+) -> bool {
+    match block.origin {
+        baml_compiler2_ast::ImplOrigin::InBody => block.owner == Some(class_id),
+        baml_compiler2_ast::ImplOrigin::OutOfBody => baml_compiler2_ast::ast::impl_is_for_class(
+            block.origin,
+            block.generics.is_empty(),
+            &block.for_target,
+            &class.name,
+        ),
+    }
+}
+
+/// The `implements` blocks that are for `class` itself (see
+/// `impl_is_for_class`), in source order.
 #[salsa::tracked(returns(ref))]
 pub fn class_impls<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> Vec<ImplLoc<'db>> {
     let file = class.file(db);
     let item_tree = crate::file_item_tree(db, file);
+    let class_data = &item_tree[class.id(db)];
     item_tree
-        .class_to_impls
-        .get(&class.id(db))
-        .map(|impls| impls.iter().map(|id| ImplLoc::new(db, file, *id)).collect())
-        .unwrap_or_default()
+        .impl_order
+        .iter()
+        .filter(|id| impl_is_for_class(&item_tree.impls[id], class.id(db), class_data))
+        .map(|id| ImplLoc::new(db, file, *id))
+        .collect()
+}
+
+/// The class `block` is for, when it is for a class of its own file (see
+/// `impl_is_for_class`); `None` for a free block.
+pub fn impl_class<'db>(db: &'db dyn crate::Db, block: ImplLoc<'db>) -> Option<ClassLoc<'db>> {
+    let file = block.file(db);
+    let item_tree = crate::file_item_tree(db, file);
+    let data = &item_tree.impls[&block.id(db)];
+    super::file_classes(db, file)
+        .iter()
+        .copied()
+        .find(|class| impl_is_for_class(data, class.id(db), &item_tree[class.id(db)]))
 }

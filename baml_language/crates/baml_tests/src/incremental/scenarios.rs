@@ -518,7 +518,6 @@ type ClassFingerprint = (
     Vec<baml_compiler2_hir::item_data::GenericParamData>,
     baml_compiler2_hir::type_ref::TypeRefStore,
     Vec<baml_compiler2_hir::item_data::FieldData>,
-    Vec<baml_compiler2_hir::item_data::ImplementsData>,
     baml_compiler2_hir::item_tree::ClassAttrs,
 );
 
@@ -533,7 +532,6 @@ fn class_fingerprint(
         data.generic_params.clone(),
         data.type_refs.clone(),
         data.fields.clone(),
-        data.implements.clone(),
         data.attrs.clone(),
     )
 }

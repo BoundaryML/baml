@@ -17,10 +17,9 @@ use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
         AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
-        FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
-        ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
-        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TypeAliasDef, TypeExpr,
-        TypeExprKind, VariantDef,
+        FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplOrigin, ImplementsForDef,
+        InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind, LlmBodyDef, MethodSigDef,
+        Param, RawAttribute, RawAttributeArg, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -123,8 +122,9 @@ fn lower_file_with_path_and_test_owner_impl(
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLASS_DEF => {
-                if let Some(class) = lower_class(&child, &mut diags, &mut env_var_refs) {
+                if let Some((class, impls)) = lower_class(&child, &mut diags, &mut env_var_refs) {
                     items.push(Item::Class(class));
+                    items.extend(impls.into_iter().map(Item::ImplementsFor));
                 }
             }
             baml_compiler_syntax::SyntaxKind::ENUM_DEF => {
@@ -233,8 +233,6 @@ fn lower_file_with_path_and_test_owner_impl(
         }
     }
 
-    fold_implements_for(&mut items);
-
     // Synthesize a per-file $init_test function for all collected test/testset registrations.
     // The path-derived suffix keeps the name unique across files while staying
     // stable across compilations (unlike a load-order file id).
@@ -252,58 +250,6 @@ fn lower_file_with_path_and_test_owner_impl(
     check_string_escapes(root, &mut diags);
 
     (items, diags, env_var_refs)
-}
-
-/// BEP-044: merge top-level `implements I for T` items into the target
-/// class when `T` names a local class. Targets declared in another file,
-/// primitives, and fixed-shape types must remain as first-class
-/// implementation records for later package-level resolution.
-pub(crate) fn fold_implements_for(items: &mut Vec<Item>) {
-    let impl_fors: Vec<ImplementsForDef> = items
-        .iter()
-        .filter_map(|item| match item {
-            Item::ImplementsFor(imp) => Some(imp.clone()),
-            _ => None,
-        })
-        .collect();
-    items.retain(|item| !matches!(item, Item::ImplementsFor(_)));
-    for imp in impl_fors {
-        if !imp.generic_params.is_empty() {
-            items.push(Item::ImplementsFor(imp));
-            continue;
-        }
-        let target_name = match &imp.for_target.kind {
-            crate::ast::TypeExprKind::Path {
-                path, generic_args, ..
-            } if path.len() == 1 && generic_args.is_empty() => path.first().cloned(),
-            _ => None,
-        };
-        if let Some(target_name) = target_name {
-            let target_class = items.iter_mut().find_map(|item| {
-                if let Item::Class(class) = item
-                    && class.name == target_name
-                {
-                    Some(class)
-                } else {
-                    None
-                }
-            });
-            if let Some(class) = target_class {
-                class.implements.push(ImplementsBlockDef {
-                    target: imp.interface_target,
-                    field_links: imp.field_links,
-                    associated_type_bindings: imp.associated_type_bindings,
-                    methods: imp.methods,
-                    is_out_of_body: true,
-                    span: imp.span,
-                });
-            } else {
-                items.push(Item::ImplementsFor(imp));
-            }
-        } else {
-            items.push(Item::ImplementsFor(imp));
-        }
-    }
 }
 
 /// Report invalid escape sequences in every `"..."`, `b"..."`, and backtick
@@ -1231,11 +1177,13 @@ fn tools_value_element(
         .and_then(ast::ToolsField::value_element)
 }
 
+/// A class and the `implements` blocks written in its body, which are its
+/// own items (an in-body block is shorthand for `implements<…> I for C<…>`).
 fn lower_class(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<crate::ast::ClassDef> {
+) -> Option<(crate::ast::ClassDef, Vec<ImplementsForDef>)> {
     let class = ast::ClassDef::cast(node.clone())?;
     let Some(name_token) = class.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
@@ -1322,9 +1270,13 @@ fn lower_class(
         })
         .collect();
 
+    let self_type =
+        crate::ast::class_self_type(&class_name_ident, &generic_params, name_token.text_range());
     let implements = class
         .implements_blocks()
-        .filter_map(|block| lower_implements_block(&block, diags, env_var_refs))
+        .filter_map(|block| {
+            lower_implements_block(&block, &generic_params, &self_type, diags, env_var_refs)
+        })
         .collect();
 
     let mut class_def = crate::ast::ClassDef {
@@ -1332,7 +1284,6 @@ fn lower_class(
         generic_params,
         fields,
         methods,
-        implements,
         attributes: lower_attributes_from_node(node),
         docstring: crate::docstring::extract_docstring(node),
         span: node.span_range(),
@@ -1342,7 +1293,7 @@ fn lower_class(
     // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
     crate::cleanup_guard::maybe_inject_cleanup_guard(&mut class_def);
 
-    Some(class_def)
+    Some((class_def, implements))
 }
 
 /// BEP-044 generic bounds: walk `GENERIC_PARAM_LIST` and return each
@@ -1703,11 +1654,15 @@ fn lower_method_sig(
     })
 }
 
+/// An in-body `implements I { … }` block as the `implements<…> I for C<…>`
+/// it is shorthand for: the class's generics, the class as the for-target.
 fn lower_implements_block(
     block: &ast::ImplementsBlock,
+    class_generic_params: &[crate::ast::GenericParam],
+    class_self_type: &TypeExpr,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<ImplementsBlockDef> {
+) -> Option<ImplementsForDef> {
     let target_node = block.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
@@ -1756,13 +1711,16 @@ fn lower_implements_block(
         .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
         .collect();
 
-    Some(ImplementsBlockDef {
-        target,
+    Some(ImplementsForDef {
+        generic_params: class_generic_params.to_vec(),
+        interface_target: target,
+        for_target: class_self_type.clone(),
         field_links,
         associated_type_bindings,
         methods,
-        is_out_of_body: false,
+        origin: ImplOrigin::InBody,
         span: block.syntax().span_range(),
+        docstring: None,
     })
 }
 
@@ -1844,6 +1802,7 @@ fn lower_implements_for(
         field_links,
         associated_type_bindings,
         methods,
+        origin: ImplOrigin::OutOfBody,
         span: node.span_range(),
         docstring: crate::docstring::extract_docstring(node),
     })

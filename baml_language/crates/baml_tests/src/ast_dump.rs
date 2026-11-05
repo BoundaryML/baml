@@ -174,13 +174,7 @@ fn rowan_bodies(text: &str, label: &str) -> BTreeMap<(u32, u32), (ExprBody, AstS
     for item in &items {
         match item {
             Item::Function(f) => take(f),
-            Item::Class(c) => {
-                c.methods.iter().for_each(&mut take);
-                c.implements
-                    .iter()
-                    .flat_map(|b| &b.methods)
-                    .for_each(&mut take);
-            }
+            Item::Class(c) => c.methods.iter().for_each(&mut take),
             Item::Interface(i) => i.default_methods.iter().for_each(&mut take),
             Item::ImplementsFor(imp) => imp.methods.iter().for_each(&mut take),
             Item::Enum(_) | Item::TypeAlias(_) | Item::Let(_) => {}
@@ -297,12 +291,7 @@ fn normalize_item(text: &str, rowan: &mut Item, typed: &Item) {
     }
     match (rowan, typed) {
         (Item::Function(a), Item::Function(b)) => function(text, a, b),
-        (Item::Class(a), Item::Class(b)) => {
-            functions(text, &mut a.methods, &b.methods);
-            for (a, b) in a.implements.iter_mut().zip(&b.implements) {
-                functions(text, &mut a.methods, &b.methods);
-            }
-        }
+        (Item::Class(a), Item::Class(b)) => functions(text, &mut a.methods, &b.methods),
         (Item::Interface(a), Item::Interface(b)) => {
             functions(text, &mut a.default_methods, &b.default_methods);
         }
@@ -826,7 +815,15 @@ fn typed_items_match_rowan() {
         if file_pending && !file_differs {
             unexpected_passes.push(format!("{label} (whole file)"));
         }
-        if rowan_env != typed_env && !pending_for("env") {
+        // The typed lowering walks a declaration's members in source order,
+        // the rowan one kind by kind, so environment references are compared
+        // as a multiset.
+        let sorted = |env: &[EnvVarRef]| -> Vec<String> {
+            let mut env: Vec<String> = env.iter().map(|e| format!("{e:?}")).collect();
+            env.sort();
+            env
+        };
+        if sorted(&rowan_env) != sorted(&typed_env) && !pending_for("env") {
             differing += 1;
             writeln!(
                 report,

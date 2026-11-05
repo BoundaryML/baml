@@ -1402,18 +1402,17 @@ fn impl_block_location(
     block: baml_compiler2_hir::loc::ImplLoc<'_>,
     claimed: ClaimedMention,
 ) -> ImplLocation {
-    use baml_compiler2_hir::item_data::ImplSubjectData;
     let data = baml_compiler2_hir::item_data::impl_block_data(db, block);
     let file = block.file(db);
     let source_map = baml_compiler2_hir::item_data::impl_block_source_map(db, block);
     let claimed_mention = match claimed {
         ClaimedMention::InterfaceHead => Some(source_map.type_refs.span(data.interface_target)),
-        ClaimedMention::ForTarget => match &data.subject {
-            ImplSubjectData::Free { for_target, .. } => {
-                Some(source_map.type_refs.span(*for_target))
+        ClaimedMention::ForTarget => match data.origin {
+            baml_compiler2_ast::ImplOrigin::OutOfBody => {
+                Some(source_map.type_refs.span(data.for_target))
             }
             // An in-body block names its class implicitly: no mention to claim.
-            ImplSubjectData::InClass { .. } => None,
+            baml_compiler2_ast::ImplOrigin::InBody => None,
         },
     };
     ImplLocation {

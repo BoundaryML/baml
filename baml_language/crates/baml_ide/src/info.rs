@@ -1095,10 +1095,7 @@ fn generic_type_parameter_info_at(
             continue;
         }
         let data = item_data::impl_block_data(db, *impl_loc);
-        let item_data::ImplSubjectData::Free { generics, .. } = &data.subject else {
-            continue;
-        };
-        if let Some(declared) = generics.iter().find(|param| &param.name == name) {
+        if let Some(declared) = data.generics.iter().find(|param| &param.name == name) {
             let subject = baml_compiler2_hir_ty::impls::impl_facts(db, *impl_loc)
                 .resolved()
                 .map_or_else(

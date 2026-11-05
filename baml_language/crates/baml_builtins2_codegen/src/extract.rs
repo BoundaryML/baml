@@ -186,6 +186,7 @@ fn extract_scoped(
                 Item::Class(class_def) => {
                     extract_from_class(
                         class_def,
+                        &items,
                         &namespace_prefix,
                         &cst_root,
                         &path,
@@ -208,7 +209,13 @@ fn extract_scoped(
                         &mut io_builtins,
                     );
                 }
-                Item::ImplementsFor(impl_def) => {
+                // A block for a class of this file is extracted with the class
+                // (its natives are the class's, receiver and all).
+                Item::ImplementsFor(impl_def)
+                    if !items.iter().any(
+                        |item| matches!(item, Item::Class(class) if impl_def.is_for_class(class)),
+                    ) =>
+                {
                     extract_from_implements_for(
                         impl_def,
                         &items,
@@ -219,6 +226,7 @@ fn extract_scoped(
                         &mut io_builtins,
                     );
                 }
+                Item::ImplementsFor(_) => {}
                 _ => {}
             }
         }
@@ -252,6 +260,7 @@ fn extract_scoped(
 /// Extract `$rust_function` and `$rust_io_function` methods from a class definition.
 fn extract_from_class(
     class_def: &ClassDef,
+    items: &[Item],
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
     source_file: &str,
@@ -274,13 +283,22 @@ fn extract_from_class(
     // renders the separate `<(target as iface)>` DISPLAY spelling); a direct
     // method is just `{ns}.{Class}.{method}`.
     let direct = class_def.methods.iter().map(|m| (m, None));
-    let in_impl = class_def.implements.iter().flat_map(|b| {
-        // The interface `TypeExpr`'s `Display` is the exact form MIR keys
-        // on, with a written `root.` spelled as the package — through the
-        // same function MIR uses, so the two cannot drift.
-        let iface = native_key_spelling(package_of(namespace_prefix), &b.target.to_string());
-        b.methods.iter().map(move |m| (m, Some(iface.clone())))
-    });
+    let in_impl = items
+        .iter()
+        .filter_map(|item| match item {
+            Item::ImplementsFor(b) if b.is_for_class(class_def) => Some(b),
+            _ => None,
+        })
+        .flat_map(|b| {
+            // The interface `TypeExpr`'s `Display` is the exact form MIR keys
+            // on, with a written `root.` spelled as the package — through the
+            // same function MIR uses, so the two cannot drift.
+            let iface = native_key_spelling(
+                package_of(namespace_prefix),
+                &b.interface_target.to_string(),
+            );
+            b.methods.iter().map(move |m| (m, Some(iface.clone())))
+        });
     for (method, iface_qualifier) in direct.chain(in_impl) {
         let Some(pipeline) = extract_builtin_pipeline(method) else {
             continue;

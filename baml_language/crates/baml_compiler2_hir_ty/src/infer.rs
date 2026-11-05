@@ -10313,21 +10313,31 @@ impl<'db> InferenceContext<'db> {
     /// If `name` is a FIELD declared by an interface this class
     /// implements, the class field backing it (`field as class_field`
     /// link, else the same name). `None` when no implemented interface
-    /// declares it.
+    /// declares it. The class's impls are enumerated like every other
+    /// receiver's, through the impl registry.
     fn constructor_interface_field_link(
         &self,
         class: baml_compiler2_hir::loc::ClassLoc<'db>,
         name: &baml_type::Name,
     ) -> Option<baml_type::Name> {
         let db = self.db;
-        let data = baml_compiler2_hir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
         let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
-        for block in &data.implements {
+        let self_ty = crate::lower::class_self_ty(db, class);
+        for resolved in crate::impls::impls_for_type(db, pkg.root, &self_ty) {
+            // Field links are source data (an interface with fields is
+            // implemented in-body, so the block is in this compilation).
+            let crate::impls::ResolvedImplFacts::Source {
+                block: impl_loc, ..
+            } = resolved.facts
+            else {
+                continue;
+            };
+            let block = baml_compiler2_hir::item_data::impl_block_data(db, impl_loc);
             let Some(interface) = crate::interfaces::resolve_ref_to_interface(
                 db,
-                &data.type_refs,
-                block.target,
+                &block.type_refs,
+                block.interface_target,
                 pkg_items,
                 &pkg.namespace_path,
             ) else {
