@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 // Shared asset loaders for the Open Graph / link-preview image renderer.
 //
-// Fonts and the lamb badge are read from disk relative to the project root.
+// Fonts and images are read from disk relative to the project root.
 // They live under `components/og/` (not `public/`, whose files are not bundled
 // into serverless functions) and are force-included for the `/api/og` route
 // via `outputFileTracingIncludes` in next.config so they survive on Vercel.
@@ -12,8 +12,8 @@ import { join } from 'node:path';
 export interface OgFont {
   name: string;
   data: Buffer;
-  weight: 400 | 500 | 600;
-  style: 'normal' | 'italic';
+  weight: 400 | 500;
+  style: 'normal';
 }
 
 const OG_DIR = join(process.cwd(), 'components', 'og');
@@ -26,48 +26,20 @@ export function ogFonts(): OgFont[] {
   if (!fonts) {
     fonts = [
       {
-        data: read('fonts', 'InstrumentSerif-Regular.ttf'),
-        name: 'Instrument Serif',
-        style: 'normal',
-        weight: 400,
-      },
-      {
-        data: read('fonts', 'InstrumentSerif-Italic.ttf'),
-        name: 'Instrument Serif',
-        style: 'italic',
-        weight: 400,
-      },
-      {
-        data: read('fonts', 'IBMPlexMono-Regular.ttf'),
-        name: 'IBM Plex Mono',
-        style: 'normal',
-        weight: 400,
-      },
-      {
-        data: read('fonts', 'IBMPlexMono-Medium.ttf'),
-        name: 'IBM Plex Mono',
+        data: read('fonts', 'Lexend-Medium.ttf'),
+        name: 'Lexend',
         style: 'normal',
         weight: 500,
       },
       {
-        data: read('fonts', 'IBMPlexMono-SemiBold.ttf'),
-        name: 'IBM Plex Mono',
+        data: read('fonts', 'Geist-Regular.ttf'),
+        name: 'Geist',
         style: 'normal',
-        weight: 600,
+        weight: 400,
       },
     ];
   }
   return fonts;
-}
-
-let lamb: string | null = null;
-
-/** The ink lamb mark as a base64 data URI (rendered inside the cream badge). */
-export function lambDataUri(): string {
-  if (!lamb) {
-    lamb = `data:image/png;base64,${read('lamb-mark.png').toString('base64')}`;
-  }
-  return lamb;
 }
 
 const imgCache = new Map<string, string>();
@@ -88,6 +60,16 @@ export function podcastHosts(): { src: string; handle: string }[] {
     { handle: '@vaibcode', src: imageDataUri('host-vaibcode.jpg') },
     { handle: '@dexhorthy', src: imageDataUri('host-dexhorthy.jpg') },
   ];
+}
+
+/** The white Boundary logo, as a data URI. */
+export function boundaryLogo(): string {
+  return imageDataUri('boundary-logo-white.png', 'image/png');
+}
+
+/** The painting beside most cards, as a data URI. */
+export function duskField(): string {
+  return imageDataUri('dusk-field.jpg');
 }
 
 /** The team photo, as a data URI (for the /who-are-we card). */

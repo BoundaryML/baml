@@ -141,7 +141,6 @@ export async function generateMetadata({
   // On-brand link-preview card (matches every other page).
   const ogImage = ogImagePath({
     description: episode.description,
-    eyebrow: 'ai that works',
     title: episode.title,
   });
 
@@ -234,7 +233,6 @@ export default async function EpisodePage({
         headline={`ai that works: ${episode.title}`}
         image={ogImagePath({
           description: episode.description,
-          eyebrow: 'ai that works',
           title: episode.title,
         })}
         url={`/podcast/${episode.slug}`}
