@@ -19,6 +19,26 @@ This package is generally consumed indirectly via the code generated
 by `baml-cli generate --target python` — direct use is reserved for
 runtime authors and bridge tests.
 
+## Package name and location
+
+The generated SDK never names its own package, so it imports under whatever
+name and location it is installed at. `package_name` in the generator section
+picks both: by default the SDK is `baml_sdk` in `output_dir`. A library that
+ships a generated SDK can nest it inside its own package, so it does not
+install a top-level `baml_sdk` that another library's SDK would overwrite:
+
+```toml
+[generator.python]
+output_type = "python/pydantic"
+naming_convention = "language"
+output_dir = "src"                     # the import root
+package_name = "my_app._generated"     # written to src/my_app/_generated
+```
+
+BAML creates missing parent directories but never writes or edits `my_app/__init__.py`. One process still holds one
+BAML program: two generated SDKs imported into the same process replace each
+other's program.
+
 ## Python callback execution
 
 Passing a Python callable to BAML uses the environment of the call that

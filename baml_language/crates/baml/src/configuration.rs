@@ -135,6 +135,7 @@ struct GeneratorShape {
     naming_convention: Option<String>,
     output_dir: Option<String>,
     sdk_import_path: Option<String>,
+    package_name: Option<String>,
     max_typed_union_arity: Option<i64>,
 }
 #[derive(serde::Deserialize)]

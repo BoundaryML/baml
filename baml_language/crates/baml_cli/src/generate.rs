@@ -25,6 +25,8 @@ use toml_edit::{DocumentMut, Item, Table, value};
 
 use crate::{commands::release_version, reporter::Reporter};
 
+mod package_name;
+
 #[derive(Debug, PartialEq, Eq)]
 struct GenerationPresentation {
     details: Vec<String>,
@@ -103,7 +105,8 @@ pub struct GenerateArgs {
     #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
-    /// Output directory override (takes precedence over generator config)
+    /// Write each SDK to exactly this directory, overriding both
+    /// `output_dir` and the directory `package_name` selects
     #[arg(
         long = "output-dir",
         alias = "output",
@@ -144,8 +147,13 @@ pub struct AddGeneratorArgs {
 struct GeneratorDef {
     name: String,
     output_type: OutputType,
-    /// Resolved output directory (absolute).
+    /// Resolved `output_dir` (absolute): the directory the SDK is placed under.
+    output_root: PathBuf,
+    /// Resolved SDK directory (absolute): `output_root` joined with the
+    /// directory `package_name` selects.
     output_dir: PathBuf,
+    /// `package_name` when the generator section sets it.
+    package_name: Option<String>,
     /// Required `naming_convention` from the generator section. No default
     /// is permitted — generators must spell out the policy explicitly.
     naming_convention: NamingConvention,
@@ -462,19 +470,31 @@ impl GenerateArgs {
 
         let mut total_files = 0;
 
-        for generator in &generators {
+        // `--output-dir` names the final directory as given; nothing derived
+        // from `package_name` is appended to it.
+        let destinations = generators
+            .iter()
+            .map(|generator| {
+                Ok(match &self.output {
+                    Some(requested) if requested.is_absolute() => requested.clone(),
+                    Some(requested) => std::env::current_dir()
+                        .context("failed to resolve the current directory for generated output")?
+                        .join(requested),
+                    None => generator.output_dir.clone(),
+                })
+            })
+            .collect::<Result<Vec<PathBuf>>>()?;
+        // A named SDK only installs where it cannot clobber hand-written code,
+        // wherever the destination came from. Every destination is checked
+        // before any generator writes, so a refusal leaves no partial run.
+        for (generator, output_dir) in generators.iter().zip(&destinations) {
+            if generator.package_name.is_some() {
+                package_name::ensure_claimable(&generator.name, output_dir)?;
+            }
+        }
+
+        for (generator, output_dir) in generators.iter().zip(destinations.iter().cloned()) {
             reporter.spin("Generating", &generator.name);
-            let requested_output = self
-                .output
-                .clone()
-                .unwrap_or_else(|| generator.output_dir.clone());
-            let output_dir = if requested_output.is_absolute() {
-                requested_output
-            } else {
-                std::env::current_dir()
-                    .context("failed to resolve the current directory for generated output")?
-                    .join(requested_output)
-            };
 
             if generator.output_type == OutputType::CSharp {
                 let report = sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
@@ -654,6 +674,19 @@ impl GenerateArgs {
             // above the spinner.
             if let Some(status) = presentation.status {
                 reporter.status("Generated", status);
+            }
+            if self.output.is_none()
+                && generator.package_name.is_some()
+                && let Some(previous) =
+                    package_name::superseded_default_output(&generator.output_root, &destinations)
+            {
+                reporter.warning(format!(
+                    "generator `{}` now writes to {}; the earlier output in {} is no longer \
+                     updated and can be deleted",
+                    generator.name,
+                    output_dir.display(),
+                    previous.display()
+                ));
             }
             total_files += count;
         }
@@ -836,17 +869,29 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             }
             sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY
         };
-        // `output_dir` is resolved relative to the project root and defaults
-        // to the project root, with the target-owned generated directory appended.
-        let raw_output_dir = generator.output_dir.as_deref().unwrap_or(".");
-        let generated_directory = output_type.map_or("baml_sdk", OutputType::generated_directory);
-        let output_dir = root.join(raw_output_dir).join(generated_directory);
+        let package_name = match (output_type, generator.package_name.as_ref()) {
+            (Some(output_type), Some(value)) => {
+                parse_package_name(name, output_type, value, &mut diags)
+            }
+            (_, None) => Ok(None),
+            // An unknown `output_type` already has its diagnostic.
+            (None, Some(_)) => Err(()),
+        };
 
         // Skip codegen for sections that failed validation; their
         // diagnostics block the run upstream.
-        let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention) else {
+        let (Some(output_type), Some(naming_convention), Ok(package_name)) =
+            (output_type, naming_convention, package_name)
+        else {
             continue;
         };
+        // `output_dir` is resolved relative to the project root and defaults
+        // to the project root; the SDK's own directory goes beneath it.
+        let output_root = root.join(generator.output_dir.as_deref().unwrap_or("."));
+        let output_dir = output_root.join(package_name::relative_directory(
+            output_type,
+            package_name.as_deref(),
+        ));
         if let NamingSupport::Only(required_naming_convention) = output_type.naming_support()
             && naming_convention != required_naming_convention
         {
@@ -880,7 +925,9 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         generators.push(GeneratorDef {
             name: name.clone(),
             output_type,
+            output_root,
             output_dir,
+            package_name,
             naming_convention,
             sdk_import_path,
             max_typed_union_arity,
@@ -888,6 +935,40 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
     }
 
     (generators, diags)
+}
+
+/// Validate an explicit `package_name` for `output_type`. `Err` means a
+/// diagnostic was pushed.
+fn parse_package_name(
+    generator_name: &str,
+    output_type: OutputType,
+    value: &Spanned<String>,
+    diags: &mut Vec<Diagnostic>,
+) -> Result<Option<String>, ()> {
+    let package_name = value.get_ref();
+    let (message, label) = match package_name::validate(output_type, package_name) {
+        Ok(()) => return Ok(Some(package_name.clone())),
+        Err(package_name::PackageNameError::Unsupported) => (
+            format!("`package_name` is not supported for output_type `{output_type}` yet"),
+            format!("remove `package_name` from generator `{generator_name}`"),
+        ),
+        Err(package_name::PackageNameError::Invalid(expected)) => (
+            format!("invalid `package_name` `{package_name}` on generator `{generator_name}`"),
+            expected.to_string(),
+        ),
+    };
+    diags.push(
+        Diagnostic::error(DiagnosticId::InvalidGeneratorPropertyValue, message)
+            .with_primary(
+                Span {
+                    file_id: manifest_file_id(),
+                    range: to_text_range(value.span()),
+                },
+                label,
+            )
+            .with_phase(DiagnosticPhase::Validation),
+    );
+    Err(())
 }
 
 fn parse_required_go_import_path(
@@ -1186,6 +1267,285 @@ naming_convention = "preserve-case"
             &directory.path().join("generated").join("baml_sdk")
         );
         assert_eq!(output_for("python"), &directory.path().join("baml_sdk"));
+    }
+
+    fn python_manifest(package_name: &str) -> String {
+        format!(
+            "[package]\nname = \"test\"\n\n[generator.py]\noutput_type = \"python/pydantic\"\nnaming_convention = \"language\"\noutput_dir = \"out\"\npackage_name = \"{package_name}\"\n"
+        )
+    }
+
+    #[test]
+    fn python_package_name_nests_the_sdk_under_output_dir() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            python_manifest("alien_sdk._generated"),
+        )
+        .unwrap();
+
+        let (generators, diagnostics) = discover_generators(directory.path());
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(
+            generators[0].package_name.as_deref(),
+            Some("alien_sdk._generated")
+        );
+        assert_eq!(generators[0].output_root, directory.path().join("out"));
+        assert_eq!(
+            generators[0].output_dir,
+            directory.path().join("out/alien_sdk/_generated")
+        );
+    }
+
+    #[test]
+    fn invalid_python_package_names_are_rejected_at_their_value() {
+        for (package_name, expected) in [
+            ("alien-sdk", "dotted Python import path"),
+            ("alien_sdk.class", "dotted Python import path"),
+            ("alien_sdk..x", "dotted Python import path"),
+            ("", "dotted Python import path"),
+            ("baml_bridge.sdk", "BAML Python runtime"),
+        ] {
+            let manifest = python_manifest(package_name);
+            let (generators, diagnostics) = discover_with_manifest(&manifest);
+            assert!(generators.is_empty(), "{package_name}");
+            assert_eq!(diagnostics.len(), 1, "{package_name}: {diagnostics:?}");
+            let diagnostic = &diagnostics[0];
+            assert_eq!(
+                diagnostic.id,
+                baml_db::baml_compiler_diagnostics::DiagnosticId::InvalidGeneratorPropertyValue
+            );
+            assert_eq!(
+                diagnostic.message,
+                format!("invalid `package_name` `{package_name}` on generator `py`")
+            );
+            assert!(
+                format!("{diagnostic:?}").contains(expected),
+                "{package_name}: {diagnostic:?}"
+            );
+            let value = format!("\"{package_name}\"");
+            let start = manifest.find(&value).unwrap();
+            assert_eq!(
+                diagnostic.primary_span().unwrap().range,
+                super::to_text_range(start..start + value.len())
+            );
+        }
+    }
+
+    #[test]
+    fn package_name_is_rejected_on_targets_that_cannot_rename_their_sdk() {
+        for &output_type in OutputType::all() {
+            if matches!(
+                output_type,
+                OutputType::PythonPydantic | OutputType::PythonPydanticV1
+            ) {
+                continue;
+            }
+            let sdk_import_path = if output_type == OutputType::Go {
+                "sdk_import_path = \"example.com/test/my_sdk\"\n"
+            } else {
+                ""
+            };
+            let naming_convention = output_type.naming_support().default_convention();
+            let (generators, diagnostics) = discover_with_manifest(&format!(
+                "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{naming_convention}\"\n{sdk_import_path}package_name = \"my_sdk\"\n"
+            ));
+            assert!(generators.is_empty(), "{output_type}");
+            assert_eq!(diagnostics.len(), 1, "{output_type}: {diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].message,
+                format!("`package_name` is not supported for output_type `{output_type}` yet")
+            );
+        }
+    }
+
+    fn generate_project(project: &std::path::Path) -> anyhow::Result<crate::ExitCode> {
+        GenerateArgs {
+            telemetry: Default::default(),
+            command: None,
+            compiler: Default::default(),
+            from: Some(project.to_path_buf()),
+            output: None,
+            show_all_skips: false,
+        }
+        .run_generate()
+    }
+
+    fn python_project(package_name: &str) -> tempfile::TempDir {
+        let project = tempfile::tempdir().unwrap();
+        fs::create_dir_all(project.path().join("baml_src")).unwrap();
+        fs::write(
+            project.path().join("baml_src/main.baml"),
+            "class Person {\n  name string\n}\n\nfunction Echo(p: Person) -> Person {\n  p\n}\n",
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("baml.toml"),
+            python_manifest(package_name),
+        )
+        .unwrap();
+        project
+    }
+
+    /// Every `.py`/`.pyi` file under `directory`, relative to it.
+    fn python_files(directory: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let mut files = Vec::new();
+        let mut pending = vec![directory.to_path_buf()];
+        while let Some(next) = pending.pop() {
+            for entry in fs::read_dir(next).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else if path
+                    .extension()
+                    .is_some_and(|extension| extension == "py" || extension == "pyi")
+                {
+                    files.push(path.strip_prefix(directory).unwrap().to_path_buf());
+                }
+            }
+        }
+        files
+    }
+
+    #[test]
+    fn python_sdk_generates_into_a_nested_package_without_naming_it() {
+        let project = python_project("pkg.sub");
+
+        let result = generate_project(project.path()).unwrap();
+
+        assert!(matches!(result, crate::ExitCode::Success));
+        let out = project.path().join("out");
+        let sdk = out.join("pkg/sub");
+        assert!(sdk.join("__init__.py").is_file());
+        assert!(sdk.join("_typemap.py").is_file());
+        // The application owns its parent packages.
+        assert!(!out.join("pkg/__init__.py").exists());
+        assert!(!out.join("pkg/.gitignore").exists());
+        assert!(!out.join("baml_sdk").exists());
+        let files = python_files(&sdk);
+        assert!(files.len() > 10, "{files:?}");
+        for file in files {
+            let content = fs::read_to_string(sdk.join(&file)).unwrap();
+            assert!(
+                !content.contains("baml_sdk"),
+                "{} names `baml_sdk`",
+                file.display()
+            );
+        }
+    }
+
+    #[test]
+    fn named_python_sdk_refuses_a_directory_of_hand_written_files() {
+        let project = python_project("alien_sdk");
+        let package = project.path().join("out/alien_sdk");
+        fs::create_dir_all(&package).unwrap();
+        fs::write(package.join("__init__.py"), "# hand-written\n").unwrap();
+
+        let error = generate_project(project.path()).unwrap_err().to_string();
+
+        assert!(error.contains("refusing to generate `py` into"), "{error}");
+        assert!(error.contains("alien_sdk"), "{error}");
+        assert_eq!(
+            fs::read_to_string(package.join("__init__.py")).unwrap(),
+            "# hand-written\n"
+        );
+        assert!(!package.join(".gitignore").exists());
+    }
+
+    #[test]
+    fn named_python_sdk_generates_into_a_fresh_clone_of_its_committed_gitignore() {
+        let project = python_project("alien_sdk._generated");
+        let package = project.path().join("out/alien_sdk/_generated");
+        fs::create_dir_all(&package).unwrap();
+        fs::write(
+            package.join(".gitignore"),
+            baml_sdkgen_types::GENERATED_GITIGNORE,
+        )
+        .unwrap();
+
+        let result = generate_project(project.path()).unwrap();
+
+        assert!(matches!(result, crate::ExitCode::Success));
+        assert!(package.join("__init__.py").is_file());
+    }
+
+    #[test]
+    fn a_refused_named_sdk_stops_the_run_before_any_generator_writes() {
+        let project = python_project("unused");
+        fs::write(
+            project.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n\
+             [generator.a]\noutput_type = \"python/pydantic\"\nnaming_convention = \"language\"\noutput_dir = \"out\"\npackage_name = \"first_sdk\"\n\n\
+             [generator.b]\noutput_type = \"python/pydantic\"\nnaming_convention = \"language\"\noutput_dir = \"out\"\npackage_name = \"alien_sdk\"\n",
+        )
+        .unwrap();
+        let package = project.path().join("out/alien_sdk");
+        fs::create_dir_all(&package).unwrap();
+        fs::write(package.join("__init__.py"), "# hand-written\n").unwrap();
+
+        let error = generate_project(project.path()).unwrap_err().to_string();
+
+        assert!(error.contains("refusing to generate `b` into"), "{error}");
+        assert!(!project.path().join("out/first_sdk").exists());
+    }
+
+    #[test]
+    fn named_python_sdk_refuses_hand_written_files_under_an_output_override() {
+        let project = python_project("alien_sdk._generated");
+        let package = project.path().join("elsewhere/alien_sdk");
+        fs::create_dir_all(&package).unwrap();
+        fs::write(package.join("__init__.py"), "# hand-written\n").unwrap();
+
+        let error = GenerateArgs {
+            telemetry: Default::default(),
+            command: None,
+            compiler: Default::default(),
+            from: Some(project.path().to_path_buf()),
+            output: Some(package.clone()),
+            show_all_skips: false,
+        }
+        .run_generate()
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("refusing to generate `py` into"), "{error}");
+        assert_eq!(
+            fs::read_to_string(package.join("__init__.py")).unwrap(),
+            "# hand-written\n"
+        );
+        assert!(!package.join(".gitignore").exists());
+    }
+
+    #[test]
+    fn named_python_sdk_regenerates_its_own_output_and_keeps_the_superseded_default() {
+        let project = python_project("alien_sdk._generated");
+        // Output of an earlier run without `package_name`.
+        let previous = project.path().join("out/baml_sdk");
+        baml_sdkgen_types::write_generated_output(
+            &previous,
+            vec![baml_sdkgen_types::GeneratedOutputFile::new(
+                "__init__.py",
+                "x = 1\n",
+            )],
+        )
+        .unwrap();
+
+        for _ in 0..2 {
+            let result = generate_project(project.path()).unwrap();
+            assert!(matches!(result, crate::ExitCode::Success));
+        }
+
+        assert!(
+            project
+                .path()
+                .join("out/alien_sdk/_generated/__init__.py")
+                .is_file()
+        );
+        assert_eq!(
+            fs::read_to_string(previous.join("__init__.py")).unwrap(),
+            "x = 1\n"
+        );
     }
 
     #[test]
