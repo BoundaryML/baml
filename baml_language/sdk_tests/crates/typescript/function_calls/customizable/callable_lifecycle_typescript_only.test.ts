@@ -31,7 +31,7 @@ describe.runIf(isTestRuntime("node"))(
         seen.push(value);
         return value + 1;
       });
-      expect(() => forward(1)).toThrow(/host callables.*async/i);
+      expect(() => forward.callSync(1)).toThrow(/host callables.*async/i);
       expect(seen).toEqual([]);
       expect(await baml.call_int_callback(forward, 2)).toBe(3);
       expect(seen).toEqual([2]);
@@ -57,7 +57,7 @@ describe.runIf(isTestRuntime("node"))(
       const add = baml.make_adder_sync(10);
       expect(baml.call_int_callback_sync(add, 1)).toBe(11);
       expect(await baml.call_int_callback(add, 2)).toBe(12);
-      expect(add(3)).toBe(13);
+      expect(add.callSync(3)).toBe(13);
       expect(baml.call_int_callback_sync(add, 4)).toBe(14);
     });
 

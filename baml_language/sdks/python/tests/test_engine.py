@@ -615,14 +615,14 @@ class TestCallFunctionSync:
         rt = make_runtime(EXPR_FUNCS_BAML)
         add_ten = call_function_sync(rt, "MakeAdder", {"offset": 10}).result()
         assert callable(add_ten)
-        assert add_ten(5) == 15
-        assert add_ten(value=7) == 17
+        assert add_ten.call_sync(5) == 15
+        assert add_ten.call_sync(value=7) == 17
 
     def test_returned_closure_is_reusable_and_retains_captures(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
         next_value = call_function_sync(rt, "MakeCounter", {"start": 40}).result()
-        assert next_value() == 41
-        assert next_value() == 42
+        assert next_value.call_sync() == 41
+        assert next_value.call_sync() == 42
 
     def test_missing_argument_raises(self):
         """A missing required argument is the error the engine threw. This
@@ -667,6 +667,13 @@ class TestCallFunctionAsync:
         rt = make_runtime(EXPR_FUNCS_BAML)
         result = await call_function(rt,"AddNumbers", {"a": 100, "b": 200})
         assert result.result() == 300
+
+    @pytest.mark.asyncio
+    async def test_returned_closure_is_awaited_async(self):
+        rt = make_runtime(EXPR_FUNCS_BAML)
+        add_ten = (await call_function(rt, "MakeAdder", {"offset": 10})).result()
+        assert await add_ten(5) == 15
+        assert await add_ten(value=7) == 17
 
     @pytest.mark.asyncio
     async def test_identity_string_async(self):

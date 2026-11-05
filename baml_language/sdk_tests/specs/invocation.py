@@ -114,8 +114,8 @@ async def methods_accept_controls_async():
 
 async def returned_callable_accepts_controls():
     add = baml.make_adder(3)
-    assert add(4, _baml={}) == 7
-    assert await add.call_async(4, _baml={}) == 7
+    assert add.call_sync(4, _baml={}) == 7
+    assert await add(4, _baml={}) == 7
 
 
 def dynamic_call_accepts_controls():

@@ -95,8 +95,8 @@ async def test_methods_accept_controls_async():
 
 async def test_returned_callable_accepts_controls():
     add = baml.make_adder_sync(3)
-    assert add(4, _baml={}) == 7
-    assert await add.call_async(4, _baml={}) == 7
+    assert add.call_sync(4, _baml={}) == 7
+    assert await add(4, _baml={}) == 7
 
 
 def test_dynamic_call_accepts_controls():
@@ -382,7 +382,7 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
         assert trace.current_cancel_token() is not None
         assert trace.current_context_sync().metadata == {"request": "C", "keep": 7}
         try:
-            return await forward.call_async(value)
+            return await forward(value)
         finally:
             assert trace.current_cancel_token() is not None
             assert trace.current_context_sync().metadata == {"request": "C", "keep": 7}
@@ -554,7 +554,7 @@ def test_legacy_controls_rejected():
 def test_specialized_callable_rejects_type_bindings():
     add = baml.make_adder_sync(3)
     with pytest.raises(TypeError):
-        add(4, _types={"T": int})  # type: ignore[call-arg]
+        add.call_sync(4, _types={"T": int})  # type: ignore[call-arg]
     with pytest.raises(TypeError):
         invoke_sync(add, {"value": 4}, _types={"T": int})
 

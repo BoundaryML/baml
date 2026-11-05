@@ -177,7 +177,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             // before the user's callback runs.
             let mut translated_params = Vec::new();
             for (idx, p) in params.iter().enumerate() {
-                let t = translate_ty(&p.ty, ctx);
+                // BAML makes the values it passes to a host callback, so a
+                // function-typed argument is a BAML closure (async, with
+                // `callSync`), typed like a returned function.
+                let t = translate_return_ty(&p.ty, ctx);
                 imports.extend(t.imports);
                 let arg_name = p
                     .name
@@ -217,8 +220,18 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
                     opt_fields.join("; ")
                 ));
             }
+            // A host callback may be `async`: the bridge awaits the Promise it
+            // returns (and a closure BAML returned is itself Promise-returning).
+            let ret_expr = if matches!(ret.as_ref(), Ty::Function { .. }) {
+                format!("({})", ret_t.expr)
+            } else {
+                ret_t.expr
+            };
             TranslatedType {
-                expr: format!("({}) => {}", positional.join(", "), ret_t.expr),
+                expr: format!(
+                    "({}) => {ret_expr} | Promise<{ret_expr}>",
+                    positional.join(", ")
+                ),
                 imports,
             }
         }
@@ -344,7 +357,7 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
             let args = positional.join(", ");
             TranslatedType {
                 expr: format!(
-                    "{{ ({args}): {}; callAsync({args}): Promise<{}> }}",
+                    "{{ ({args}): Promise<{}>; callSync({args}): {} }}",
                     result.expr, result.expr
                 ),
                 imports,
@@ -352,7 +365,11 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
         }
         Ty::List(inner) => {
             let mut result = translate_return_ty(inner, ctx);
-            result.expr = format!("({})[]", result.expr);
+            if matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. }) {
+                result.expr = format!("({})[]", result.expr);
+            } else {
+                result.expr = format!("{}[]", result.expr);
+            }
             result
         }
         Ty::Map { key, value, .. } => {
@@ -481,7 +498,52 @@ mod tests {
             .collect();
         let translated = translate_return_ty(&callable(params, boxed(Ty::Int)), &ctx(&[]));
         assert!(translated.expr.contains("default_: number, new_: number, arguments_: number, eval_: number, $opts_: number, $opts__: number, $opts?:"));
-        assert!(translated.expr.contains("callAsync("));
+        assert!(translated.expr.contains("callSync("));
+    }
+
+    #[test]
+    fn returned_callables_are_async_and_host_callbacks_may_be() {
+        // A function BAML returns: `f(x)` is a Promise; `f.callSync(x)` blocks.
+        let adder = callable(
+            vec![baml_sdkgen_types::CallableParam {
+                name: Some(BaseName::new("x")),
+                ty: Ty::Int,
+                mode: CodegenFunctionParamMode::Required,
+            }],
+            boxed(Ty::Int),
+        );
+        let returned = translate_return_ty(&adder, &ctx(&[]));
+        assert!(
+            returned.expr.starts_with("{ (x: number, $opts?:"),
+            "{}",
+            returned.expr
+        );
+        assert!(
+            returned
+                .expr
+                .contains("): Promise<number>; callSync(x: number, $opts?:"),
+            "{}",
+            returned.expr
+        );
+        assert!(returned.expr.ends_with("): number }"), "{}", returned.expr);
+
+        // A host callback may return the value or a Promise of it, and a
+        // function BAML passes to it is a BAML closure, typed as above.
+        let hof = callable(
+            vec![baml_sdkgen_types::CallableParam {
+                name: Some(BaseName::new("f")),
+                ty: adder,
+                mode: CodegenFunctionParamMode::Required,
+            }],
+            boxed(Ty::Int),
+        );
+        let callback = translate_ty(&hof, &ctx(&[])).expr;
+        assert!(callback.starts_with("(f: { (x: number"), "{callback}");
+        assert!(callback.contains("callSync(x: number"), "{callback}");
+        assert!(
+            callback.ends_with(") => number | Promise<number>"),
+            "{callback}"
+        );
     }
 
     #[test]
@@ -492,7 +554,7 @@ mod tests {
         };
         let translated = translate_return_ty(&ty, &ctx(&[]));
         assert!(translated.expr.contains("]?: { ("));
-        assert!(translated.expr.contains("callAsync("));
+        assert!(translated.expr.contains("callSync("));
     }
 
     /// Forces this test file to be updated whenever a `Ty` variant is added.
@@ -747,7 +809,7 @@ mod tests {
                 label: "list_callback",
                 ty: list(boxed(callable(Vec::new(), boxed(Ty::Bool)))),
                 ctx: ctx(&[]),
-                expected_expr: "(() => boolean)[]",
+                expected_expr: "(() => boolean | Promise<boolean>)[]",
                 expected_imports: &[],
             },
             Case {
@@ -778,7 +840,7 @@ mod tests {
                 label: "nullable_callback",
                 ty: union(vec![callable(Vec::new(), boxed(Ty::Bool)), Ty::Null]),
                 ctx: ctx(&[]),
-                expected_expr: "(() => boolean) | null",
+                expected_expr: "(() => boolean | Promise<boolean>) | null",
                 expected_imports: &[],
             },
             // ── Name refs (same / cross leaf) ──
@@ -909,7 +971,7 @@ mod tests {
                 label: "callable_zero",
                 ty: callable(vec![], boxed(Ty::Bool)),
                 ctx: ctx(&[]),
-                expected_expr: "() => boolean",
+                expected_expr: "() => boolean | Promise<boolean>",
                 expected_imports: &[],
             },
             Case {
@@ -919,14 +981,14 @@ mod tests {
                     boxed(Ty::Bool),
                 ),
                 ctx: ctx(&[]),
-                expected_expr: "(arg0: number, arg1: string) => boolean",
+                expected_expr: "(arg0: number, arg1: string) => boolean | Promise<boolean>",
                 expected_imports: &[],
             },
             Case {
                 label: "callable_optional_only",
                 ty: callable(vec![optional_callable_param("x", Ty::Int)], boxed(Ty::Bool)),
                 ctx: ctx(&[]),
-                expected_expr: "($opts?: { x?: number | undefined } | undefined) => boolean",
+                expected_expr: "($opts?: { x?: number | undefined } | undefined) => boolean | Promise<boolean>",
                 expected_imports: &[],
             },
             Case {
@@ -943,7 +1005,7 @@ mod tests {
                     boxed(Ty::String),
                 ),
                 ctx: ctx(&[]),
-                expected_expr: "(x: number, $opts?: { y?: number | undefined } | undefined) => string",
+                expected_expr: "(x: number, $opts?: { y?: number | undefined } | undefined) => string | Promise<string>",
                 expected_imports: &[],
             },
             Case {
@@ -953,7 +1015,7 @@ mod tests {
                     boxed(union(vec![Ty::String, Ty::Null])),
                 ),
                 ctx: ctx(&[]),
-                expected_expr: "(arg0: number[]) => string | null",
+                expected_expr: "(arg0: number[]) => string | null | Promise<string | null>",
                 expected_imports: &[],
             },
         ];

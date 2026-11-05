@@ -19,8 +19,8 @@ Calling a synchronous entry from a running loop remains synchronous.
 
 No promise that an async callback runs in the caller's exact asyncio Task.
 No promise that callback writes to ContextVars mutate the awaiting task.
-Returned BAML callables retain their synchronous __call__ interface and offer
-an explicit call_async entry; async factories do not change __call__ semantics.
+Returned BAML callables are async under __call__ (await f(x)), like generated
+functions, and offer a blocking call_sync(x); the factory's form does not matter.
 Spawned workers initialize their own SDK/runtime. Live handles do not transfer
 process authority. Fork with an already initialized runtime, cross-process
 ancestry, custom awaitables, and generators still need separate policy choices.
@@ -462,25 +462,25 @@ async def test_same_async_callback_recurses_through_baml():
 def test_baml_returns_callable_that_is_reused_after_factory_returns():
     add = baml.make_adder(10)
     assert callable(add)
-    assert add(5) == 15
-    assert add(value=7) == 17
+    assert add.call_sync(5) == 15
+    assert add.call_sync(value=7) == 17
     assert baml.call_int_callback(add, 2) == 12
 
 
 @pytest.mark.asyncio
 async def test_async_baml_factory_returns_ordinary_callable():
     add = await baml.make_adder_async(10)
-    assert add(5) == 15
+    assert await add(5) == 15
     assert await baml.call_int_callback_async(add, 7) == 17
 
 
 def test_returned_baml_callable_preserves_state_between_calls():
     first = baml.make_counter(40)
     second = baml.make_counter(100)
-    assert first() == 41
-    assert second() == 101
-    assert first() == 42
-    assert second() == 102
+    assert first.call_sync() == 41
+    assert second.call_sync() == 101
+    assert first.call_sync() == 42
+    assert second.call_sync() == 102
 
 
 def test_baml_invokes_callback_returned_by_python_factory():
@@ -524,12 +524,12 @@ def test_callback_returned_inside_container_is_invokable():
 
 def test_returned_baml_callable_preserves_argument_binding_and_structured_result():
     pair = baml.make_pair_builder(30)
-    assert pair(12, "Ada") == baml.Person(name="Ada", age=42)
-    assert pair(delta=5, label="Grace") == baml.Person(name="Grace", age=35)
+    assert pair.call_sync(12, "Ada") == baml.Person(name="Ada", age=42)
+    assert pair.call_sync(delta=5, label="Grace") == baml.Person(name="Grace", age=35)
     with pytest.raises(TypeError):
-        pair(12, delta=12, label="Ada")
+        pair.call_sync(12, delta=12, label="Ada")
     with pytest.raises(TypeError):
-        pair(12, "Ada", extra=1)
+        pair.call_sync(12, "Ada", extra=1)
 
 
 def test_returned_baml_closure_retains_host_callback_after_factory_returns():
@@ -541,8 +541,8 @@ def test_returned_baml_closure_retains_host_callback_after_factory_returns():
 
     forward = baml.make_callback_forwarder(callback)
     assert calls == []  # Receiving/registering a callback never executes it.
-    assert forward(6) == 7
-    assert forward(7) == 8
+    assert forward.call_sync(6) == 7
+    assert forward.call_sync(7) == 8
     assert baml.call_int_callback(forward, 8) == 9
     assert calls == [6, 7, 8]
 
@@ -579,9 +579,9 @@ def test_retained_host_callback_preserves_error_and_remains_reusable():
 
     forward = baml.make_callback_forwarder(callback)
     with pytest.raises(ValueError) as caught:
-        forward(1)
+        forward.call_sync(1)
     assert caught.value is failure
-    assert forward(2) == 2
+    assert forward.call_sync(2) == 2
 
 
 # PYTHON FORMS: Ordinary callable shapes; no SDK decorators involved.
@@ -869,11 +869,11 @@ def test_reused_pool_worker_does_not_reuse_previous_call_context():
 def test_returned_baml_callable_can_be_called_from_other_threads():
     add = baml.make_adder(10)
     with ThreadPoolExecutor(max_workers=2) as pool:
-        first = pool.submit(add, 1)
-        second = pool.submit(add, 2)
+        first = pool.submit(add.call_sync, 1)
+        second = pool.submit(add.call_sync, 2)
         assert first.result() == 11
         assert second.result() == 12
-    assert add(3) == 13
+    assert add.call_sync(3) == 13
 
 
 def test_two_application_loops_on_two_threads_share_callback_without_rerouting():
@@ -1076,7 +1076,7 @@ def process_sync_job(value):
         return item + 1
 
     add = baml.make_adder(10)
-    return baml.call_int_callback(callback, value), add(value)
+    return baml.call_int_callback(callback, value), add.call_sync(value)
 
 
 def process_async_job(value):

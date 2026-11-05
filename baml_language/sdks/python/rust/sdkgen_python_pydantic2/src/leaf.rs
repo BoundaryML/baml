@@ -2843,7 +2843,7 @@ pub(crate) fn render_leaf_body_pyi(
             }
             append_baml_kwarg(&mut sig);
             let ret = crate::translate_ty::translate_return_ty(ret, &return_ctx);
-            writeln!(out, "\nclass {name}(typing.Protocol):\n    def _to_pyhandle(self) -> _BamlPyHandle: ...\n    def __call__({sig}) -> {ret}: ...\n    async def call_async({sig}) -> {ret}: ...").unwrap();
+            writeln!(out, "\nclass {name}(typing.Protocol):\n    def _to_pyhandle(self) -> _BamlPyHandle: ...\n    async def __call__({sig}) -> {ret}: ...\n    def call_sync({sig}) -> {ret}: ...").unwrap();
         }
     }
 

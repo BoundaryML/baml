@@ -2600,6 +2600,40 @@ mod tests {
     }
 
     #[test]
+    fn returned_closure_protocol_is_async_with_a_sync_twin() {
+        // A function BAML returns is called like a generated function:
+        // `await f(x)`, with the blocking `f.call_sync(x)`.
+        let mut pool: SymbolPool = HashMap::new();
+        pool.insert(
+            cg_name("user", &["lorem"], "make_adder"),
+            zero_arg_func(
+                "make_adder",
+                Ty::Function {
+                    params: vec![baml_sdkgen_types::CallableParam {
+                        name: Some(BaseName::new("x")),
+                        ty: Ty::Int,
+                        mode: baml_sdkgen_types::CodegenFunctionParamMode::Required,
+                    }]
+                    .into(),
+                    ret: Box::new(Ty::Int),
+                    throws: Box::new(Ty::Never),
+                },
+                "x.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains(
+                "    async def __call__(self, x: int, *, _baml: _BamlOptions | None = None) -> int: ...\n    def call_sync(self, x: int, *, _baml: _BamlOptions | None = None) -> int: ..."
+            ),
+            "{pyi}"
+        );
+        assert!(!pyi.contains("call_async"), "{pyi}");
+    }
+
+    #[test]
     fn helper_names_are_reserved_against_baml_symbols() {
         // A BAML function named like a generated temp (`_baml_callable`)
         // is renamed instead of being clobbered by the namespace import.

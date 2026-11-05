@@ -81,8 +81,8 @@ export async function methods_accept_controls_async() {
 
 export async function returned_callable_accepts_controls() {
   const add = baml.make_adder(3);
-  assert.equal(add(4, { $baml: {} }), 7);
-  assert.equal(await add.callAsync(4, { $baml: {} }), 7);
+  assert.equal(add.callSync(4, { $baml: {} }), 7);
+  assert.equal(await add(4, { $baml: {} }), 7);
 }
 
 export function dynamic_call_accepts_controls() {

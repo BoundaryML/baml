@@ -82,22 +82,22 @@ fn test_host_callables_int_return_callable_round_trip() {
 #[test]
 fn test_baml_closure_is_a_native_callable_with_host_language_arguments() {
     let add_ten = make_adder_sync(10).unwrap();
-    assert_eq!(add_ten.call((5,)).unwrap(), 15);
-    assert_eq!(add_ten.call((7,)).unwrap(), 17);
+    assert_eq!(add_ten.call_sync((5,)).unwrap(), 15);
+    assert_eq!(add_ten.call_sync((7,)).unwrap(), 17);
 }
 
 #[test]
 fn test_baml_closure_decodes_multiple_args_and_structured_return_values() {
     let build = make_pair_builder_sync(30).unwrap();
     assert_eq!(
-        build.call((12, "Ada".to_string())).unwrap(),
+        build.call_sync((12, "Ada".to_string())).unwrap(),
         Person {
             name: "Ada".to_string(),
             age: 42,
         }
     );
     assert_eq!(
-        build.call((5, "Grace".to_string())).unwrap(),
+        build.call_sync((5, "Grace".to_string())).unwrap(),
         Person {
             name: "Grace".to_string(),
             age: 35,
@@ -108,8 +108,8 @@ fn test_baml_closure_decodes_multiple_args_and_structured_return_values() {
 #[test]
 fn test_baml_closure_is_reusable_and_retains_mutable_captures() {
     let next_value = make_counter_sync(40).unwrap();
-    assert_eq!(next_value.call(()).unwrap(), 41);
-    assert_eq!(next_value.call(()).unwrap(), 42);
+    assert_eq!(next_value.call_sync(()).unwrap(), 41);
+    assert_eq!(next_value.call_sync(()).unwrap(), 42);
 }
 
 #[test]
@@ -118,8 +118,10 @@ fn test_host_callable_hof_receives_a_baml_closure() {
     // callback's declared parameter type, a `BamlFunction`, and each call
     // runs back into BAML. Calling it twice shows the handle outlives a call.
     let cb = |f: baml_bridge::BamlFunction<(i64,), i64, std::convert::Infallible>| {
-        let first = f.call((41,)).expect("the BAML closure computes `x + 1`");
-        let second = f.call((1,)).expect("the BAML closure is reusable");
+        let first = f
+            .call_sync((41,))
+            .expect("the BAML closure computes `x + 1`");
+        let second = f.call_sync((1,)).expect("the BAML closure is reusable");
         first * 100 + second * 2
     };
     assert_eq!(hof_sync(cb).unwrap(), 4204);
@@ -181,7 +183,7 @@ fn test_host_callable_void_signatures() {
     };
     assert_eq!(value.downcast_ref::<ValueError>(), Some(&raised));
 
-    make_void_callback_sync().unwrap().call(()).unwrap();
+    make_void_callback_sync().unwrap().call_sync(()).unwrap();
 
     let forwarded = {
         let seen = Arc::clone(&seen);
@@ -191,8 +193,8 @@ fn test_host_callable_void_signatures() {
         }
     };
     let forward = make_void_forwarder_sync(forwarded).unwrap();
-    forward.call((5, "five".to_string())).unwrap();
-    forward.call((6, "six".to_string())).unwrap();
+    forward.call_sync((5, "five".to_string())).unwrap();
+    forward.call_sync((6, "six".to_string())).unwrap();
 
     assert_eq!(
         *seen.lock().unwrap(),

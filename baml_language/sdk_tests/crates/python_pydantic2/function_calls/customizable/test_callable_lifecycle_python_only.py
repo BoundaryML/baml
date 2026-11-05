@@ -32,13 +32,13 @@ async def test_closure_call_async_uses_invoking_loop_and_context_python_only():
 
     forward = await baml.make_callback_forwarder(callback)
     request.set("coroutine creation")
-    pending = forward.call_async(1)
+    pending = forward(1)
     assert seen == []
     request.set("first execution")
     assert await pending == 1
     request.set("second execution")
-    assert await forward.call_async(value=2) == 2
-    unused = forward.call_async(3)
+    assert await forward(value=2) == 2
+    unused = forward(3)
     unused.close()
     assert seen == ["first execution", "second execution"]
 
@@ -61,7 +61,7 @@ def test_closure_call_async_can_be_reused_after_creation_loop_closes_python_only
 
     async def invoke(label, value):
         request.set(label)
-        return await forward.call_async(value)
+        return await forward(value)
 
     assert asyncio.run(invoke("first", 1)) == 1
     assert asyncio.run(invoke("second", 2)) == 2
@@ -73,13 +73,13 @@ def test_closure_call_async_can_be_reused_after_creation_loop_closes_python_only
 @pytest.mark.asyncio
 async def test_closure_call_async_preserves_binding_and_exception_identity_python_only():
     build = baml.make_pair_builder_sync(10)
-    assert await build.call_async(delta=2, label="Ada") == baml.Person(
+    assert await build(delta=2, label="Ada") == baml.Person(
         name="Ada", age=12
     )
     with pytest.raises(TypeError, match="multiple values"):
-        await build.call_async(2, delta=3, label="Ada")
+        await build(2, delta=3, label="Ada")
     with pytest.raises(TypeError, match="unexpected keyword"):
-        await build.call_async(2, "Ada", unknown=3)
+        await build(2, "Ada", unknown=3)
 
     failure = ValueError("retained callback failed")
 
@@ -90,9 +90,9 @@ async def test_closure_call_async_preserves_binding_and_exception_identity_pytho
 
     forward = await baml.make_callback_forwarder(callback)
     with pytest.raises(ValueError) as caught:
-        await forward.call_async(1)
+        await forward(1)
     assert caught.value is failure
-    assert await forward.call_async(2) == 2
+    assert await forward(2) == 2
 
 
 # SDK_PARITY_LINT(skip): Python closure async entry cancellation delivery
@@ -108,7 +108,7 @@ async def test_closure_call_async_cancels_its_retained_callback_python_only():
             exited.set()
 
     forward = await baml.make_callback_forwarder(callback)
-    call = asyncio.create_task(forward.call_async(1))
+    call = asyncio.create_task(forward(1))
     try:
         await asyncio.wait_for(entered.wait(), 3)
         call.cancel()

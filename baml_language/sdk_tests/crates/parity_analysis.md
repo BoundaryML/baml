@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 984. IDs with complete required parity: 235. Required gaps: 5143.
+Distinct exact test IDs: 984. IDs with complete required parity: 235. Required gaps: 5140.
 
-Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2613 (baseline: 2610). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5143). Present declarations: 2616 (baseline: 2613). Newly missing required pairs: 0. Resolved baseline gaps: 3. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -13,9 +13,9 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
 | python_pydantic2 | 457 / 457 | 100.0% |
-| typescript_node | 192 / 457 | 42.0% |
-| typescript_web_chromium | 168 / 457 | 36.8% |
-| typescript_web_cloudflare_workers | 168 / 457 | 36.8% |
+| typescript_node | 193 / 457 | 42.2% |
+| typescript_web_chromium | 169 / 457 | 37.0% |
+| typescript_web_cloudflare_workers | 169 / 457 | 37.0% |
 | cpp | 138 / 457 | 30.2% |
 | csharp | 0 / 457 | 0.0% |
 | rust | 235 / 457 | 51.4% |
@@ -331,7 +331,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_adopts_a_promise_from_a_separate_browser_realm | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_callables_async_callable_future_completing_exceptionally_round_trips_original | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/host_callables_async_callable_returning_future_is_awaited_by_bridge | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/host_callables_async_callable_runs_to_completion | y | - | - | - | - | - | y | - | y | y | all |  |
+| function_calls/host_callables_async_callable_runs_to_completion | y | y | y | y | - | - | y | - | y | y | all |  |
 | function_calls/host_callables_awaits_a_promise_returning_callback | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_baml_error_panicked_with_is_thrown_on | - | - | - | - | - | - | - | y | - | - | go | Go's completion classification of a BAML error a callback forwards by panicking with it |
 | function_calls/host_callables_call_repeatedly_invokes_callback_n_times | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -1012,5 +1012,9 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 
 ## Baseline comparison
 
-No required coverage pairs changed.
+### Resolved baseline gaps
+
+- `function_calls/host_callables_async_callable_runs_to_completion` in `typescript_node`
+- `function_calls/host_callables_async_callable_runs_to_completion` in `typescript_web_chromium`
+- `function_calls/host_callables_async_callable_runs_to_completion` in `typescript_web_cloudflare_workers`
 
