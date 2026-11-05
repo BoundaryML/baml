@@ -1541,6 +1541,7 @@ dependencies = [
  "baml_test_support",
  "baml_type",
  "baml_version",
+ "bcs_api",
  "bex_events",
  "bex_project",
  "bridge_ctypes",

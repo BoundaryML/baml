@@ -1,5 +1,7 @@
 # Telemetry
 
+For runtime traces from CLI runs/tests and ordinary generated SDKs, set `BAML_TELEMETRY=off` before starting the process to disable recording and cloud uploads, even when logged in. See [runtime trace configuration](baml_language/ENV_VARS.md#runtime-traces) for publisher binding policies.
+
 The BAML CLI and toolchain wrappers collect anonymous telemetry about general usage. Participation in this usage-analytics program is optional, and you may opt out if you would not like to share it.
 
 The usage-analytics description and assurances below apply to CLI/wrapper usage events. BCS runtime recording is a separate path, including project/SDK recording and recording enabled by release builds of the BAML-native wrapper. It can contain caller-provided trace and context data. Its automatic environment metadata, including the explicit `AI_AGENT` property and its collection limits, is described in [BCS environment metadata](#bcs-environment-metadata).
