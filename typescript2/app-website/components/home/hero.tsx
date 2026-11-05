@@ -12,6 +12,7 @@ import { Button } from './ui';
 const DEFAULT_STYLE = DIAGRAM_STYLES.findIndex((s) => s.id === 'glass');
 const SHOW_STYLES = false;
 
+/** The homepage hero: the headline, the subtitle and buttons, and the toolchain diagram under them. */
 export default function Hero() {
   const [styleIndex, setStyleIndex] = useState(DEFAULT_STYLE);
   const style = DIAGRAM_STYLES[styleIndex];
