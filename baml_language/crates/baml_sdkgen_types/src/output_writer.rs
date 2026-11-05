@@ -266,6 +266,17 @@ pub fn write_generated_output(
     write_generated_output_with_rename(output_directory, files, |from, to| fs::rename(from, to))
 }
 
+/// Whether `directory` carries the ownership marker that every completed
+/// [`write_generated_output`] leaves at its root. A missing directory, or a
+/// marker that is not a regular file with the expected contents, answers
+/// `false`.
+pub fn is_generated_output_directory(directory: &Path) -> Result<bool, OutputWriterError> {
+    regular_file_matches(
+        &directory.join(OWNERSHIP_MARKER_FILE),
+        OWNERSHIP_MARKER_CONTENT,
+    )
+}
+
 fn write_generated_output_with_rename(
     output_directory: &Path,
     files: Vec<GeneratedOutputFile>,

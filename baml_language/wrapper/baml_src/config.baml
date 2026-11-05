@@ -323,6 +323,7 @@ class GeneratorShape {
     naming_convention: string?,
     output_dir: string?,
     sdk_import_path: string?,
+    package_name: string?,
     max_typed_union_arity: int?,
 }
 

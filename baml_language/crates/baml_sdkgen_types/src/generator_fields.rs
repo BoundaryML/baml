@@ -3,6 +3,10 @@
 //! New backends or policies extend the enums here and the dispatch in
 //! `baml-cli generate`.
 
+/// Name of the generated SDK, and of its directory under `output_dir`, when a
+/// generator omits `package_name`.
+pub const DEFAULT_PACKAGE_NAME: &str = "baml_sdk";
+
 /// Code-generation target. Surfaces as `output_type = "python/pydantic"`.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display, strum::VariantArray,
@@ -60,11 +64,6 @@ impl OutputType {
             Self::Cpp => "cpp",
             Self::CSharp => "csharp",
         }
-    }
-
-    /// Conventional generated directory for this target.
-    pub const fn generated_directory(self) -> &'static str {
-        "baml_sdk"
     }
 
     /// The naming conventions this generator implements.

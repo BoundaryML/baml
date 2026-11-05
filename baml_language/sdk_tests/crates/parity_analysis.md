@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 986. IDs with complete required parity: 237. Required gaps: 5140.
+Distinct exact test IDs: 988. IDs with complete required parity: 239. Required gaps: 5140.
 
-Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2618 (baseline: 2616). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2620 (baseline: 2618). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 457 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 459 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 457 / 457 | 100.0% |
-| typescript_node | 193 / 457 | 42.2% |
-| typescript_web_chromium | 169 / 457 | 37.0% |
-| typescript_web_cloudflare_workers | 169 / 457 | 37.0% |
-| cpp | 138 / 457 | 30.2% |
-| csharp | 0 / 457 | 0.0% |
-| rust | 235 / 457 | 51.4% |
-| go | 21 / 457 | 4.6% |
-| java | 307 / 457 | 67.2% |
-| swift | 191 / 457 | 41.8% |
+| python_pydantic2 | 459 / 459 | 100.0% |
+| typescript_node | 193 / 459 | 42.0% |
+| typescript_web_chromium | 169 / 459 | 36.8% |
+| typescript_web_cloudflare_workers | 169 / 459 | 36.8% |
+| cpp | 138 / 459 | 30.1% |
+| csharp | 0 / 459 | 0.0% |
+| rust | 235 / 459 | 51.2% |
+| go | 21 / 459 | 4.6% |
+| java | 307 / 459 | 66.9% |
+| swift | 191 / 459 | 41.6% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -987,6 +987,8 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | type_shapes/routing_round_trip_root_foo | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/routing_round_trip_root_foo_from_ab | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/routing_round_trip_thing_from_ab | y | y | y | y | y | - | y | - | y | y | all |  |
+| type_shapes/sdk_works_nested_in_an_application_package_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python packages nest by import path; other SDKs name their package at generation |
+| type_shapes/sdk_works_when_copied_under_another_name_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python packages nest by import path; other SDKs name their package at generation |
 | type_shapes/supported_namespaces_reachable | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/symbol_collisions_round_trip_deep | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/symbol_collisions_round_trip_fizz_buzz_foo_bar | y | y | y | y | y | - | y | - | y | y | all |  |

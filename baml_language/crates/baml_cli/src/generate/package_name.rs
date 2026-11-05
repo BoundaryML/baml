@@ -1,0 +1,282 @@
+//! `package_name` in `[generator.<name>]`: the name of the generated SDK, in
+//! the target language's terms. It also picks the directory under
+//! `output_dir` that the SDK occupies.
+//!
+//! A configurable directory makes the output writer's ownership semantics
+//! riskier than with the fixed `baml_sdk`: the writer overwrites colliding
+//! files and git-ignores its whole directory, so a mistyped name could land on
+//! hand-written code. An explicitly named SDK therefore only installs into a
+//! directory that is missing, empty, or already owned by `baml generate`.
+
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
+
+use anyhow::{Context, Result};
+use baml_sdkgen_types::{DEFAULT_PACKAGE_NAME, OutputType, is_generated_output_directory};
+
+/// Why a target refuses a `package_name`.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum PackageNameError {
+    /// The target cannot rename its generated SDK yet.
+    Unsupported,
+    /// The value is not a name the target accepts; the payload says what is.
+    Invalid(&'static str),
+}
+
+/// Check `name` against `output_type`'s naming rules.
+pub(super) fn validate(output_type: OutputType, name: &str) -> Result<(), PackageNameError> {
+    match output_type {
+        OutputType::PythonPydantic | OutputType::PythonPydanticV1 => validate_python(name),
+        OutputType::TypescriptNode
+        | OutputType::TypescriptWeb
+        | OutputType::Swift
+        | OutputType::Go
+        | OutputType::Rust
+        | OutputType::Java
+        | OutputType::Cpp
+        | OutputType::CSharp => Err(PackageNameError::Unsupported),
+    }
+}
+
+/// The SDK's directory relative to `output_dir`. A Python import path nests
+/// one directory per segment, so `output_dir` is the import root.
+pub(super) fn relative_directory(output_type: OutputType, package_name: Option<&str>) -> PathBuf {
+    let name = package_name.unwrap_or(DEFAULT_PACKAGE_NAME);
+    match output_type {
+        OutputType::PythonPydantic | OutputType::PythonPydanticV1 => name.split('.').collect(),
+        _ => PathBuf::from(name),
+    }
+}
+
+/// Refuse to install `generator`'s SDK into `directory` when it holds files
+/// that `baml generate` did not write there.
+pub(super) fn ensure_claimable(generator: &str, directory: &Path) -> Result<()> {
+    let mut entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {}", directory.display()));
+        }
+    };
+    if entries.next().is_none() || is_generated_output_directory(directory)? {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "refusing to generate `{generator}` into {}: the directory is not empty and was not \
+         created by `baml generate`. Generating would overwrite files there and git-ignore the \
+         whole directory. Set `package_name` to a name that does not collide with your own code, \
+         or empty the directory first.",
+        directory.display()
+    )
+}
+
+/// Output an earlier `baml generate` left at the default location, now that
+/// `package_name` installs the SDK at `output_dir` instead.
+pub(super) fn superseded_default_output(output_root: &Path, output_dir: &Path) -> Option<PathBuf> {
+    let previous = output_root.join(DEFAULT_PACKAGE_NAME);
+    (!output_dir.starts_with(&previous)
+        && is_generated_output_directory(&previous).unwrap_or(false))
+    .then_some(previous)
+}
+
+fn validate_python(name: &str) -> Result<(), PackageNameError> {
+    if !name
+        .split('.')
+        .all(|segment| is_ascii_identifier(segment) && !PYTHON_KEYWORDS.contains(&segment))
+    {
+        return Err(PackageNameError::Invalid(
+            "expected a dotted Python import path such as `my_app._generated`; each segment must \
+             be an ASCII identifier that is not a Python keyword",
+        ));
+    }
+    if name.split('.').next() == Some("baml_bridge") {
+        return Err(PackageNameError::Invalid(
+            "`baml_bridge` is the BAML Python runtime; choose a package outside it",
+        ));
+    }
+    Ok(())
+}
+
+/// `[A-Za-z_][A-Za-z0-9_]*`.
+fn is_ascii_identifier(segment: &str) -> bool {
+    let mut chars = segment.chars();
+    chars
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Hard keywords; soft keywords such as `match` and `type` are valid module
+/// names.
+const PYTHON_KEYWORDS: &[&str] = &[
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
+    "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
+    "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
+    "with", "yield",
+];
+
+#[cfg(test)]
+mod tests {
+    use std::{fs, path::PathBuf};
+
+    use baml_sdkgen_types::{GeneratedOutputFile, OutputType, write_generated_output};
+
+    use super::{
+        PackageNameError, ensure_claimable, relative_directory, superseded_default_output, validate,
+    };
+
+    #[test]
+    fn python_accepts_dotted_import_paths() {
+        for output_type in [OutputType::PythonPydantic, OutputType::PythonPydanticV1] {
+            for valid in [
+                "alien_sdk",
+                "alien_sdk._generated",
+                "_a.B9.c_",
+                "match.type",
+            ] {
+                assert_eq!(validate(output_type, valid), Ok(()), "{valid}");
+            }
+        }
+    }
+
+    #[test]
+    fn python_rejects_malformed_paths_keywords_and_the_runtime_package() {
+        for invalid in [
+            "",
+            ".",
+            "a.",
+            ".a",
+            "a..b",
+            "9a",
+            "a-b",
+            "a/b",
+            "a b",
+            "pàckage",
+            "class",
+            "a.import",
+            "None",
+            "baml_bridge",
+            "baml_bridge.generated",
+        ] {
+            assert!(
+                matches!(
+                    validate(OutputType::PythonPydantic, invalid),
+                    Err(PackageNameError::Invalid(_))
+                ),
+                "accepted {invalid:?}"
+            );
+        }
+        // Only the top-level package belongs to the runtime.
+        assert_eq!(
+            validate(OutputType::PythonPydantic, "my_app.baml_bridge"),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn targets_without_package_name_support_reject_it() {
+        for &output_type in OutputType::all() {
+            if matches!(
+                output_type,
+                OutputType::PythonPydantic | OutputType::PythonPydanticV1
+            ) {
+                continue;
+            }
+            assert_eq!(
+                validate(output_type, "baml_sdk"),
+                Err(PackageNameError::Unsupported),
+                "{output_type}"
+            );
+        }
+    }
+
+    #[test]
+    fn directories_default_to_baml_sdk_and_nest_python_import_paths() {
+        for &output_type in OutputType::all() {
+            assert_eq!(
+                relative_directory(output_type, None),
+                PathBuf::from("baml_sdk")
+            );
+        }
+        assert_eq!(
+            relative_directory(OutputType::PythonPydantic, Some("alien_sdk._generated")),
+            PathBuf::from("alien_sdk").join("_generated")
+        );
+        assert_eq!(
+            relative_directory(OutputType::PythonPydanticV1, Some("pkg")),
+            PathBuf::from("pkg")
+        );
+    }
+
+    #[test]
+    fn guard_allows_missing_empty_and_previously_generated_directories() {
+        let directory = tempfile::tempdir().unwrap();
+        let missing = directory.path().join("missing");
+        ensure_claimable("py", &missing).unwrap();
+
+        let empty = directory.path().join("empty");
+        fs::create_dir(&empty).unwrap();
+        ensure_claimable("py", &empty).unwrap();
+
+        let owned = directory.path().join("owned");
+        write_generated_output(
+            &owned,
+            vec![GeneratedOutputFile::new("__init__.py", "x = 1\n")],
+        )
+        .unwrap();
+        ensure_claimable("py", &owned).unwrap();
+    }
+
+    #[test]
+    fn guard_refuses_a_directory_of_hand_written_files() {
+        let directory = tempfile::tempdir().unwrap();
+        let package = directory.path().join("alien_sdk");
+        fs::create_dir(&package).unwrap();
+        fs::write(package.join("__init__.py"), "# mine\n").unwrap();
+
+        let error = ensure_claimable("py", &package).unwrap_err().to_string();
+
+        assert!(error.contains("refusing to generate `py` into"), "{error}");
+        assert!(error.contains(&package.display().to_string()), "{error}");
+        assert!(error.contains("Set `package_name`"), "{error}");
+        assert_eq!(
+            fs::read_to_string(package.join("__init__.py")).unwrap(),
+            "# mine\n"
+        );
+    }
+
+    #[test]
+    fn superseded_output_requires_an_owned_default_directory_outside_the_new_one() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let renamed = root.join("alien_sdk").join("_generated");
+        assert_eq!(superseded_default_output(root, &renamed), None);
+
+        // Hand-written files named `baml_sdk` are not ours to point at.
+        fs::create_dir(root.join("baml_sdk")).unwrap();
+        fs::write(root.join("baml_sdk").join("notes.txt"), "mine").unwrap();
+        assert_eq!(superseded_default_output(root, &renamed), None);
+        fs::remove_dir_all(root.join("baml_sdk")).unwrap();
+
+        write_generated_output(
+            &root.join("baml_sdk"),
+            vec![GeneratedOutputFile::new("__init__.py", "x = 1\n")],
+        )
+        .unwrap();
+        assert_eq!(
+            superseded_default_output(root, &renamed),
+            Some(root.join("baml_sdk"))
+        );
+        // Never suggest deleting the directory the SDK now lives in.
+        assert_eq!(
+            superseded_default_output(root, &root.join("baml_sdk")),
+            None
+        );
+        assert_eq!(
+            superseded_default_output(root, &root.join("baml_sdk").join("inner")),
+            None
+        );
+    }
+}
