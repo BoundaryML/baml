@@ -525,9 +525,10 @@ body > footer::before {
    are the typography plugin's own variables. */
 .blog-prose {
   --muted: #222222;
-  --tw-prose-body: var(--ink-2);
+  /* Halfway between ink-2 and ink: a little whiter than the homepage's body copy, for long reading. */
+  --tw-prose-body: color-mix(in srgb, var(--ink-2), var(--ink));
   --tw-prose-headings: var(--head);
-  --tw-prose-lead: var(--ink-2);
+  --tw-prose-lead: color-mix(in srgb, var(--ink-2), var(--ink));
   --tw-prose-links: var(--head);
   --tw-prose-bold: var(--head);
   --tw-prose-counters: #828280;
