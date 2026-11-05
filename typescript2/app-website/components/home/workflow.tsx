@@ -459,25 +459,33 @@ function useClock(frame: RefObject<HTMLElement | null>, playing: boolean) {
     const sync = () => setStill(reduce.matches);
     sync();
     reduce.addEventListener('change', sync);
-    let visible = false;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        visible = entry.isIntersecting;
-      },
-      { threshold: 0.3 },
-    );
-    observer.observe(el);
-    let last = performance.now();
-    let id = requestAnimationFrame(function tick(now) {
-      const dt = Math.min(now - last, 100);
+    // The frame loop runs only while the frame is on screen.
+    let id = 0;
+    let last = 0;
+    const tick = (now: number) => {
+      const dt = last ? Math.min(now - last, 100) : 0;
       last = now;
-      if (visible && live.current && !reduce.matches) {
+      if (live.current && !reduce.matches) {
         clock.current += dt;
         if (clock.current >= END + HOLD) clock.current = 0;
         setT(Math.min(clock.current, END));
       }
       id = requestAnimationFrame(tick);
-    });
+    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // It starts once 30% of the frame is in view, and stops once none is.
+        if (entry.intersectionRatio >= 0.3 && !id) {
+          last = 0;
+          id = requestAnimationFrame(tick);
+        } else if (!entry.isIntersecting && id) {
+          cancelAnimationFrame(id);
+          id = 0;
+        }
+      },
+      { threshold: [0, 0.3] },
+    );
+    observer.observe(el);
     return () => {
       cancelAnimationFrame(id);
       observer.disconnect();
