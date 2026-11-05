@@ -3,7 +3,7 @@
 import lambWhite from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
 import Image from 'next/image';
 import { useState } from 'react';
-import { Code, proseLines } from './code';
+import { Code, type LineMark, proseLines } from './code';
 import { JEV_MODE } from './jev-mode';
 import { Phase } from './phase';
 
@@ -37,26 +37,34 @@ const AGENT = [
   '}',
 ];
 
-// More of the language, one tab each. Every example builds on triage.baml's classify and Label, and
+// More of the language, one tab each. Each tab highlights its `focus` lines, the ones the example is
+// there to show. Every example builds on triage.baml's classify and Label, and
 // each one passes baml check and is laid out as baml fmt writes it. S3Client in the Tests tab is a
 // stand-in: the standard library has no S3 client, so it was checked against a stub.
 const EXAMPLES = [
-  { lines: AGENT, name: 'Agents' },
   {
+    focus: ['    tools: [classify, lookup_customer, search_tickets]'],
+    lines: AGENT,
+    name: 'Agents',
+  },
+  {
+    focus: ['        spawn { classify(t) }', '    await baml.future.all(jobs)'],
     lines: [
       '// Classify every ticket at once. Each spawn runs on a green thread.',
       'function triage_all(tickets: string[]) -> Label[] {',
       '    let jobs = tickets.map((t) -> {',
       '        spawn { classify(t) }',
       '    });',
-      '    jobs.map((job) -> {',
-      '        await job',
-      '    })',
+      '    await baml.future.all(jobs)',
       '}',
     ],
     name: 'Green threads',
   },
   {
+    focus: [
+      '        Unroutable => "triage-queue",',
+      '        ai.errors.Failure => "retry-queue",',
+    ],
     lines: [
       'class Unroutable {',
       '    label: Label,',
@@ -82,6 +90,7 @@ const EXAMPLES = [
     name: 'Typed errors',
   },
   {
+    focus: ['    match (reflect.Type.of<T>().as_class()) {'],
     lines: [
       'class Order {',
       '    id: int,',
@@ -108,6 +117,7 @@ const EXAMPLES = [
     name: 'Reflection',
   },
   {
+    focus: ['        test c.ticket {'],
     lines: [
       '// A test sits in the same file as the code it tests.',
       'test "sarcasm is billing" {',
@@ -133,7 +143,12 @@ const EXAMPLES = [
     name: 'Tests',
   },
   // Far longer than the rest, so it scrolls inside the panel instead of setting its height.
-  { lines: JEV_MODE, name: 'Jev-mode', scroll: true },
+  {
+    focus: ['    if (email.feels("urgent")) {'],
+    lines: JEV_MODE,
+    name: 'Jev-mode',
+    scroll: true,
+  },
 ];
 
 // What BAML takes from each language, one line each in the page's ruled list. The language is named in
@@ -218,6 +233,16 @@ export default function Language() {
 
 /** The code panel, with a tab per example. Every example is drawn in the same cell, and only the chosen
  *  one is visible, so the panel keeps the height of the longest and doesn't jump between tabs. */
+/** The marks for an example's focus lines. */
+function focusMarks(
+  lines: string[],
+  focus: string[],
+): Record<number, LineMark> {
+  return Object.fromEntries(
+    focus.map((line) => [lines.indexOf(line), 'running' as const]),
+  );
+}
+
 function Examples() {
   const [shown, setShown] = useState(0);
   return (
@@ -246,7 +271,12 @@ function Examples() {
               // A scrolling region takes focus so the keyboard can scroll it.
               tabIndex={i === shown ? 0 : -1}
             >
-              <Code lines={e.lines} prose={[...proseLines(e.lines)]} wrap />
+              <Code
+                lines={e.lines}
+                marks={focusMarks(e.lines, e.focus)}
+                prose={[...proseLines(e.lines)]}
+                wrap
+              />
             </section>
           ) : (
             <div
@@ -254,7 +284,12 @@ function Examples() {
               className={`col-start-1 row-start-1 ${i === shown ? '' : 'invisible'}`}
               key={e.name}
             >
-              <Code lines={e.lines} prose={[...proseLines(e.lines)]} wrap />
+              <Code
+                lines={e.lines}
+                marks={focusMarks(e.lines, e.focus)}
+                prose={[...proseLines(e.lines)]}
+                wrap
+              />
             </div>
           ),
         )}
