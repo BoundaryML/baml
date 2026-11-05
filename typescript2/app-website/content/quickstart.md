@@ -132,6 +132,12 @@ If you do not want editor integration, launch the playground:
 baml playground
 ```
 
+## Running BAML in production
+
+Boundary's cloud traces every BAML call and adds dashboards, alerts, and experiments on top. It is in early access. To use it, book a call with the founders and they will set it up with you:
+
+https://calendly.com/boundary-founders/boundary-unified-stack-set-up
+
 ## Keeping BAML updated
 
 The top-level `baml` wrapper is a version manager, so it rarely needs updating.
@@ -152,8 +158,6 @@ After changing project toolchain versions, run `baml agent install` again if the
 
 ## Getting help
 
-- [Explore the language](https://boundaryml.com/explore.md)
-- [See how `baml describe` works](https://boundaryml.com/explore.md#baml-describe-ast-aware-discovery)
 - [Open the demo repository](https://github.com/boundaryml/baml-demos)
 - [Join the BAML Discord](https://boundaryml.com/discord)
 - [Book a free 45-minute onboarding session](https://boundaryml.com/eap)

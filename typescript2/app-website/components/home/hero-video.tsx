@@ -22,25 +22,30 @@ import { HIGHLIGHT, RED } from './story';
 const W = 1200;
 const H = 720;
 
+/** `v` held between `lo` and `hi`, 0 and 1 by default. */
 export const clamp = (v: number, lo = 0, hi = 1) =>
   Math.min(hi, Math.max(lo, v));
+/** The part of `text` typed by time `t`, when typing starts at `at` and takes `ms`. */
 export const typed = (text: string, t: number, at: number, ms = 500) =>
   text.slice(0, Math.round(clamp((t - at) / ms) * text.length));
 const lastAt = <T extends { at: number }>(list: T[], t: number) =>
   list.reduce((found, item) => (item.at <= t ? item : found), list[0]);
+/** Whether `t` falls in [from, to). */
 export const within = (
   t: number,
   from: number,
   to = Number.POSITIVE_INFINITY,
 ) => t >= from && t < to;
 
-/** The video's clock: milliseconds into the loop, and a way to jump. Holds at `hold` under reduced motion. */
-function useVideoClock(total: number, hold: number) {
+/** The video's clock: milliseconds into the loop, and a way to jump. Holds at `hold` under reduced
+ *  motion, and doesn't run when `run` is false. */
+function useVideoClock(total: number, hold: number, run = true) {
   const [t, setT] = useState(0);
   const start = useRef(0);
   const still = useRef(false);
 
   useEffect(() => {
+    if (!run) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       still.current = true;
       setT(hold);
@@ -52,7 +57,7 @@ function useVideoClock(total: number, hold: number) {
       frame = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(frame);
-  }, [hold, total]);
+  }, [hold, run, total]);
 
   const seek = useCallback((ms: number) => {
     if (still.current) setT(ms);
@@ -112,23 +117,30 @@ export type Script = {
 const TOP = 24;
 const TALL = 604;
 
-function Window({
+/** A window at a fixed position in the frame: a title bar with three dots and a title, over its
+ *  content. */
+export function Window({
   children,
+  className = 'border-white/12',
   height,
   title,
   w,
   x,
+  y = TOP,
 }: {
   children: ReactNode;
+  // The border colour, and anything else that sets one window apart from another.
+  className?: string;
   height: number;
   title: string;
   w: number;
   x: number;
+  y?: number;
 }) {
   return (
     <section
-      className="absolute flex flex-col rounded-xl overflow-hidden border border-white/12 bg-[#0b0b0c]"
-      style={{ height, left: x, top: TOP, width: w }}
+      className={`absolute flex flex-col rounded-xl overflow-hidden border bg-[#0b0b0c] ${className}`}
+      style={{ height, left: x, top: y, width: w }}
     >
       <div className="relative h-9 shrink-0 flex items-center px-3.5 border-b border-white/[0.08] bg-[#111113]">
         <span className="flex gap-1.5">
@@ -180,6 +192,7 @@ function Hint({ text, tone }: { text: string; tone?: Tone }) {
   );
 }
 
+/** An alarm clock icon, red and pinging while `firing` and green once resolved. */
 export function Alarm({ firing }: { firing: boolean }) {
   return (
     <span className="relative grid place-items-center size-4">
@@ -241,7 +254,8 @@ function Marked({
   return <>{pieces}</>;
 }
 
-function Editor({ deco, lines }: { deco: Deco; lines: string[] }) {
+/** The editor's lines with line numbers, tinted, marked, and annotated as `deco` describes. */
+export function Editor({ deco, lines }: { deco: Deco; lines: string[] }) {
   const prose = proseLines(lines);
   return (
     <div className="flex-1 min-h-0 overflow-hidden py-3 font-mono text-[12.5px] leading-[22px] text-[#BDBDC4]">
@@ -298,9 +312,10 @@ const OUT_TONE = {
   pass: 'text-white/70',
 };
 
-// The lines start at the top of the window. Once they fill it, the newest line stays at the bottom and the
-// oldest scroll off the top: the inner column is at least as tall as the window, and sits at its bottom.
-function Terminal({ entries, t }: { entries: Entry[]; t: number }) {
+/** The terminal's entries up to time `t`. The lines start at the top of the window. Once they fill it,
+ *  the newest line stays at the bottom and the oldest scroll off the top: the inner column is at least
+ *  as tall as the window, and sits at its bottom. */
+export function Terminal({ entries, t }: { entries: Entry[]; t: number }) {
   const shown = entries.filter((e) => e.at <= t);
   return (
     <div className="flex-1 min-h-0 overflow-hidden flex flex-col justify-end px-4 py-3 font-mono text-[12.5px] leading-[21px]">
@@ -441,6 +456,7 @@ const SARCASTIC = [
   'Sure, I will just wait another week.',
 ];
 
+/** The sarcastic inputs behind the alert, each labelled other, one more every 200 ms after `since`. */
 export function Inputs({ since }: { since: number }) {
   return (
     <div>
@@ -465,13 +481,18 @@ export function Player({
   below,
   rail,
   script,
+  time,
 }: {
   below?: (t: number) => ReactNode;
   rail?: (t: number, seek: (t: number) => void) => ReactNode;
   script: Script;
+  // Where the video is, when something outside it sets the time, such as scrolling. The video's own
+  // clock stops while this is set.
+  time?: number;
 }) {
   const { captions, chapters, total } = script;
-  const [t, seek] = useVideoClock(total, script.hold);
+  const [clock, seek] = useVideoClock(total, script.hold, time === undefined);
+  const t = time ?? clock;
   const frame = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(0);
   const tall = script.height ?? TALL;
@@ -761,6 +782,7 @@ const LOOP: Script = {
   total: 34000,
 };
 
+/** Version 22: the player running the loop from writing a function to fixing it from production. */
 export default function HeroVideo() {
   return <Player script={LOOP} />;
 }
@@ -907,6 +929,7 @@ function codeDeco(t: number): Deco {
   return deco;
 }
 
+/** The alert on classify as a terminal line, firing at 3.1% or resolved at 0.3%. */
 export function AlertRow({ resolved }: { resolved?: boolean }) {
   return (
     <p className="flex items-center gap-2.5">
@@ -1003,6 +1026,7 @@ const CODE: Script = {
   total: 38000,
 };
 
+/** Version 24: the player running the script where the code lights up with each query. */
 export function HeroVideoCode() {
   return <Player script={CODE} />;
 }

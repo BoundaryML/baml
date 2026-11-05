@@ -76,7 +76,8 @@ const EXAMPLES = [
       '    match (reflect.Type.of<T>().as_class()) {',
       '        let c: reflect.Class => {',
       '            c.fields().map((f) -> {',
-      '                f.name + ": " + f.type.to_string()',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: this is BAML source, whose own template string uses ${}.
+      '                `${f.name}: ${f.type}`',
       '            })',
       '        },',
       '        null => [],',
@@ -118,15 +119,14 @@ const EXAMPLES = [
 
 const POINTS = [
   {
-    body: 'Unions, generics, and interfaces, in a syntax TypeScript developers already read.',
+    body: 'If you can read TypeScript, you can read BAML. With unions, generics, and interfaces.',
     title: 'Syntax like TypeScript.',
   },
   {
     body: (
       <>
-        Types hold at runtime, with no <Cmd>any</Cmd> and no unchecked casts.
-        Errors are part of a function's type, and pattern matching is
-        exhaustive.
+        Types exist at runtime. There's no <Cmd>any</Cmd>. No unchecked casts.
+        Thrown errors are statically analyzed. Pattern matching is exhaustive.
       </>
     ),
     title: 'A type system like Rust.',
@@ -134,33 +134,25 @@ const POINTS = [
   {
     body: (
       <>
-        <Cmd>baml check</Cmd> type-checks 60,000 lines in about 1.4 seconds, and
-        green threads run work concurrently with <Cmd>spawn</Cmd> and{' '}
-        <Cmd>await</Cmd>.
+        <Cmd>baml check</Cmd> type-checks 60,000 lines in about 1.4 seconds (vs
+        Go&rsquo;s 1.2 seconds).
       </>
     ),
     title: 'Compiles as fast as Go.',
   },
   {
-    body: 'Declare a model call like any other function, with typed arguments and a typed result. Declare a test anywhere, like in Rust.',
-    title: 'AI functions built in.',
-  },
-  {
     body: (
       <>
         <Cmd>baml describe</Cmd> finds code by its structure,{' '}
-        <Cmd>baml run</Cmd> runs any function from the command line, and{' '}
-        <Cmd>baml test</Cmd> runs the tests.
+        <Cmd>baml run</Cmd> runs any function from the command line, and a
+        built-in <Cmd>baml test</Cmd>.
       </>
     ),
     title: 'Tools for agents.',
   },
-  {
-    body: 'Generate an SDK and move one function at a time.',
-    title: 'Use it from Python or TypeScript.',
-  },
 ];
 
+/** Section 4, Build: the code panel of language examples beside the points about the language. */
 export default function Language() {
   return (
     <Phase
