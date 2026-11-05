@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 from pathlib import Path
+import re
 
 from baml_release_platforms import load_wrapper_targets
 
@@ -96,12 +97,24 @@ def render_formula(version: str, shas: dict[str, str]) -> str:
   end
 
   test do
+    ENV["DO_NOT_TRACK"] = "1"
+    ENV["BAML_TELEMETRY"] = "off"
+    ENV["BAML_WRAPPER_BCS_TELEMETRY"] = "off"
+    ENV["BOUNDARY_API_KEY"] = "local"
     ENV["BAML_HOME"] = (testpath/"baml-home").to_s
     ENV["HOME"] = testpath.to_s
-    ENV.delete "BAML_TOOLCHAIN"
+    # Version reporting delegates to the selected CLI. Keep this wrapper-only
+    # test independent of published language toolchains and network access.
+    (testpath/"baml-cli").write <<~SH
+      #!/bin/sh
+      echo "Homebrew CLI fixture"
+    SH
+    (testpath/"baml-cli").chmod 0755
+    ENV["BAML_TOOLCHAIN"] = (testpath/"baml-cli").to_s
 
-    assert_match "baml wrapper {version}",
-                 shell_output("#{{bin}}/baml --version")
+    version_output = shell_output("#{{bin}}/baml --version")
+    assert_match "baml wrapper {version}", version_output
+    assert_match "Homebrew CLI fixture", version_output
     assert_match "installed toolchains: (none)",
                  shell_output("#{{bin}}/baml toolchain list")
     assert_match "self-update is disabled in this build",
@@ -121,7 +134,10 @@ def aur_srcinfo(pkgname: str, pkgdesc: str, version: str, arch_lines: list[str])
         "\tarch = x86_64",
         "\tarch = aarch64",
         "\tlicense = Apache-2.0",
+        "\toptions = !strip",
     ]
+    if pkgname == "baml":
+        lines.extend(["\toptions = !lto", "\toptions = !debug"])
     lines.extend(arch_lines)
     lines.extend(
         [
@@ -141,7 +157,10 @@ def main() -> None:
     parser.add_argument("--version", required=True)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--source-sha256", default="SKIP")
+    parser.add_argument("--source-commit", required=True)
     args = parser.parse_args()
+    if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", args.source_commit):
+        parser.error("--source-commit must be a full lowercase Git commit id")
 
     args.out.mkdir(parents=True, exist_ok=True)
     shas = {
@@ -160,6 +179,7 @@ def main() -> None:
         .replace("__VERSION__", pkgver)
         .replace("__VERSION_ORIG__", args.version)
         .replace("__SHA256__", args.source_sha256)
+        .replace("__SOURCE_COMMIT__", args.source_commit)
     )
     aur_bin = (
         Path("packaging/aur/baml-bin/PKGBUILD")
@@ -199,6 +219,7 @@ def main() -> None:
                 "\tmakedepends = cargo",
                 "\tmakedepends = cmake",
                 "\tmakedepends = gcc",
+                "\tmakedepends = python",
                 f"\tsource = baml-{pkgver}.tar.gz::https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-{args.version}.tar.gz",
                 f"\tsha256sums = {args.source_sha256}",
             ],

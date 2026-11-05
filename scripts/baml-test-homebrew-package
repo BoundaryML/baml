@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""Install and test the generated formula using the exact local release archives."""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import subprocess
+
+
+TAP = "boundaryml/baml-release-dryrun"
+NAME = "baml-release-dry-run"
+FORMULA = f"{TAP}/{NAME}"
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--formula", type=Path, required=True)
+    parser.add_argument("--wrapper-dir", type=Path, required=True)
+    args = parser.parse_args()
+    environment = dict(os.environ, HOMEBREW_NO_AUTO_UPDATE="1", HOMEBREW_NO_INSTALL_CLEANUP="1", HOMEBREW_NO_ANALYTICS="1", DO_NOT_TRACK="1", BAML_TELEMETRY="off")
+
+    def run(*command, capture=False, check=True):
+        return subprocess.run(command, env=environment, check=check, capture_output=capture, text=True)
+
+    taps = run("brew", "tap", capture=True).stdout.splitlines()
+    if TAP in taps:
+        parser.error(f"refusing to replace the existing tap {TAP}")
+    if run("brew", "list", "--formula", "--versions", NAME, capture=True, check=False).returncode == 0:
+        parser.error(f"refusing to replace the existing formula {NAME}")
+
+    formula = args.formula.read_text()
+    formula = formula.replace("class Baml < Formula", "class BamlReleaseDryRun < Formula", 1)
+    formula = formula.replace("class BamlReleaseDryRun < Formula\n", 'class BamlReleaseDryRun < Formula\n  keg_only "Release verification only"\n', 1)
+    replacements = 0
+    for archive in args.wrapper_dir.resolve().glob("*.tar.gz"):
+        for line in formula.splitlines():
+            if line.strip().startswith('url "https://') and line.endswith(f'/{archive.name}"'):
+                indentation = line[:len(line) - len(line.lstrip())]
+                formula = formula.replace(line, f'{indentation}url "{archive.as_uri()}"')
+                replacements += 1
+    if replacements != 4:
+        parser.error(f"expected four platform archive URLs, found {replacements}")
+
+    created = False
+    try:
+        run("brew", "tap-new", "--no-git", TAP)
+        created = True
+        tap = Path(run("brew", "--repository", TAP, capture=True).stdout.strip())
+        (tap / "Formula" / f"{NAME}.rb").write_text(formula)
+        run("git", "-C", str(tap), "init", "--initial-branch=main")
+        run("git", "-C", str(tap), "add", ".")
+        run("git", "-C", str(tap), "-c", "user.name=boundaryml-release-bot", "-c", "user.email=boundaryml-release-bot@users.noreply.github.com", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "-m", "Local wrapper release verification")
+        # A separate formula name and no links preserve any installed baml.
+        run("brew", "install", "--build-from-source", "--skip-link", FORMULA)
+        run("brew", "test", FORMULA)
+        run("brew", "linkage", "--test", FORMULA)
+    finally:
+        if created:
+            if run("brew", "list", "--formula", "--versions", NAME, capture=True, check=False).returncode == 0:
+                run("brew", "uninstall", "--force", FORMULA)
+            run("brew", "untap", TAP)
+
+
+if __name__ == "__main__":
+    main()
