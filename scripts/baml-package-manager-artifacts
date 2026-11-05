@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 from pathlib import Path
+import re
 
 from baml_release_platforms import load_wrapper_targets
 
@@ -145,7 +146,10 @@ def main() -> None:
     parser.add_argument("--version", required=True)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--source-sha256", default="SKIP")
+    parser.add_argument("--source-commit", required=True)
     args = parser.parse_args()
+    if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", args.source_commit):
+        parser.error("--source-commit must be a full lowercase Git commit id")
 
     args.out.mkdir(parents=True, exist_ok=True)
     shas = {
@@ -164,6 +168,7 @@ def main() -> None:
         .replace("__VERSION__", pkgver)
         .replace("__VERSION_ORIG__", args.version)
         .replace("__SHA256__", args.source_sha256)
+        .replace("__SOURCE_COMMIT__", args.source_commit)
     )
     aur_bin = (
         Path("packaging/aur/baml-bin/PKGBUILD")

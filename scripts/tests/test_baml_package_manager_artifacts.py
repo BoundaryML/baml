@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = ROOT / "scripts" / "baml-package-manager-artifacts"
 VERSION = "1.2.3"
 SOURCE_SHA256 = "a" * 64
+SOURCE_COMMIT = "b" * 40
 
 
 class PackageManagerArtifactsTest(unittest.TestCase):
@@ -51,6 +53,8 @@ class PackageManagerArtifactsTest(unittest.TestCase):
                     VERSION,
                     "--source-sha256",
                     SOURCE_SHA256,
+                    "--source-commit",
+                    SOURCE_COMMIT,
                     "--out",
                     output,
                 ],
@@ -100,6 +104,7 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             self.assertIn(f"--version {VERSION}", aur_source)
             self.assertIn("makedepends = python", (output / "aur/baml/.SRCINFO").read_text())
             self.assertIn(SOURCE_SHA256, aur_source)
+            self.assertIn(f"export BAML_GIT_SHA={SOURCE_COMMIT}", aur_source)
 
             aur_bin = (output / "aur/baml-bin/PKGBUILD").read_text()
             self.assertIn(f"baml-wrapper-no-self-update-{VERSION}", aur_bin)
@@ -110,6 +115,45 @@ class PackageManagerArtifactsTest(unittest.TestCase):
                 archive_shas["x86_64-unknown-linux-gnu"], aur_bin
             )
             self.assertNotIn("windows-msvc", aur_bin)
+
+    def test_source_archive_build_uses_the_release_commit_without_git_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            recipe = root / "PKGBUILD"
+            recipe.write_text(
+                (ROOT / "packaging/aur/baml/PKGBUILD").read_text()
+                .replace("__VERSION_ORIG__", VERSION)
+                .replace("__VERSION__", VERSION)
+                .replace("__SOURCE_COMMIT__", SOURCE_COMMIT)
+                .replace("__SHA256__", SOURCE_SHA256)
+            )
+            (root / f"baml-baml-wrapper-{VERSION}/baml_language").mkdir(parents=True)
+            result = subprocess.run(
+                ["bash", "-c", '''
+set -euo pipefail
+source "$1"
+cargo() { printf 'cargo %s commit=%s toolchain=%s target=%s\n' "$*" "$BAML_GIT_SHA" "$RUSTUP_TOOLCHAIN" "$CARGO_TARGET_DIR"; }
+python() { printf 'python %s commit=%s\n' "$*" "$BAML_GIT_SHA"; }
+build
+''', "test-pkgbuild", str(recipe)],
+                cwd=root, env={**os.environ, "BAML_GIT_SHA": "unrelated-ambient-commit"},
+                check=True, capture_output=True, text=True,
+            )
+            self.assertIn(f"cargo build --release --frozen --bin baml-cli --bin baml-pack-host commit={SOURCE_COMMIT} toolchain=stable target=target", result.stdout)
+            self.assertIn(f"python wrapper/build --cli target/release/baml-cli --pack-host target/release/baml-pack-host --version {VERSION} --no-self-update --output target/release/baml commit={SOURCE_COMMIT}", result.stdout)
+
+    def test_rejects_an_invalid_source_commit_before_generating_packages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root / "output"
+            result = subprocess.run(
+                [GENERATOR, "--wrapper-dir", root, "--version", VERSION,
+                 "--out", output, "--source-commit", "not-a-commit"],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--source-commit must be a full lowercase Git commit id", result.stderr)
+            self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

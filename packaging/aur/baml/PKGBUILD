@@ -22,6 +22,8 @@ build() {
     cd "baml-baml-wrapper-__VERSION_ORIG__/baml_language"
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
+    # GitHub source archives have no .git metadata; compiler and host must agree.
+    export BAML_GIT_SHA=__SOURCE_COMMIT__
     cargo build --release --frozen --bin baml-cli --bin baml-pack-host
     python wrapper/build \
         --cli target/release/baml-cli \

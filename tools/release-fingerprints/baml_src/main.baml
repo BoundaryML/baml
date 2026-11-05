@@ -235,10 +235,8 @@ function artifact_problems(dir: string, expectation: Fingerprinted, commit: stri
 
 /// Checks every artifact in `artifacts` (one subdirectory each, as
 /// `actions/download-artifact` lays them out) against `commit`, and exits
-/// non-zero on any problem. `allow_missing` names one fingerprinted family
-/// whose build the release deliberately ran as a no-op; it is still checked
-/// when present.
-function check(artifacts: string, commit: string, allow_missing: string = "") -> null {
+/// non-zero on any problem. Every fingerprinted family must be present.
+function check(artifacts: string, commit: string) -> null {
     if (!is_commit_id(commit)) {
         baml.io.eprintln(`--commit must be a full lowercase Git commit id, got "${commit}"`);
         baml.sys.exit(2);
@@ -287,7 +285,7 @@ function check(artifacts: string, commit: string, allow_missing: string = "") ->
     for (let family in all_families) {
         match (family.expectation) {
             Fingerprinted => {
-                if (!seen.includes(family.name) && family.name != allow_missing) {
+                if (!seen.includes(family.name)) {
                     problems.push(`no ${family.name} artifact was downloaded`);
                 }
             },
@@ -348,4 +346,24 @@ test "every artifact name belongs to exactly one family" {
             .length(),
         0,
     );
+}
+
+test "published wrappers require fingerprints and Rust references stay separate" {
+    for (let family in families()) {
+        if (family.contains("wrapper-baml")) {
+            match (family.expectation) {
+                Fingerprinted => {},
+                Unfingerprinted => assert.is_true(false),
+            }
+        }
+        if (family.contains("rust-wrapper-x86_64-unknown-linux-gnu")) {
+            assert.is_true(!family.contains("wrapper-baml"));
+            match (family.expectation) {
+                Unfingerprinted => {},
+                Fingerprinted => assert.is_true(false),
+            }
+        }
+        assert.is_true(!family.contains("baml-wrapper-candidates"));
+        assert.is_true(!family.contains("wrapper-x86_64-unknown-linux-gnu"));
+    }
 }

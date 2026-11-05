@@ -76,7 +76,7 @@ jobs:
             --version "$WRAPPER_VERSION"
       - uses: actions/upload-artifact@v7
         with:
-          # Only these packed BAML archives enter the publishers' wrapper-* glob.
+          # Publishers download this exact artifact; Rust references stay separate.
           name: wrapper-baml
           path: |
             wrapper-dist/*.tar.gz

@@ -2,7 +2,7 @@
 name = "baml-wrapper"
 
 [boundary]
-project = "boundaryml/baml-wrapper"
+project = "boundary/baml-wrapper"
 
 [pack]
 http_bodies = false
