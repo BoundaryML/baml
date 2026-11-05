@@ -555,6 +555,10 @@ impl BexStr {
         self.byte_slice(byte_start..byte_end)
     }
 
+    // The searches compare bytes with `memchr::memmem` (SIMD). In valid UTF-8,
+    // a match of a valid UTF-8 needle always starts on a char boundary, so a
+    // byte match is a `str` match.
+
     /// Finds `needle` and returns its char index, or `None`.
     pub fn char_find(&self, needle: &str) -> Option<usize> {
         self.char_find_from(needle, 0)
@@ -569,14 +573,14 @@ impl BexStr {
             return None;
         }
         let byte_start = self.char_to_byte(start);
-        let relative = self.as_str()[byte_start..].find(needle)?;
+        let relative = memchr::memmem::find(&self.as_bytes()[byte_start..], needle.as_bytes())?;
         Some(self.byte_to_char_from((byte_start, start), byte_start + relative))
     }
 
     /// Finds the *last* occurrence of `needle` and returns the char index of
     /// its start, or `None`.
     pub fn char_rfind(&self, needle: &str) -> Option<usize> {
-        let byte_idx = self.as_str().rfind(needle)?;
+        let byte_idx = memchr::memmem::rfind(self.as_bytes(), needle.as_bytes())?;
         Some(self.byte_to_char(byte_idx))
     }
 
