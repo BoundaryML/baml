@@ -132,6 +132,10 @@ export function SkillResultsChart({
   const { log, name, values } = definition;
   return (
     <figure className="not-prose my-5">
+      <figcaption className="mb-2 text-sm font-medium text-ink">
+        {name} of the worst function, {log ? 'median' : 'mean'} of 10 runs
+        {log && ', log scale'}
+      </figcaption>
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
         {TASKS.map((task) => {
           const data: Point[] = values[task].map((value, index) => ({
