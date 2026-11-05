@@ -52,6 +52,16 @@ async fn metadata_top_n_renders_only_selected_values_and_preserves_order() {
     let sorted = sql(&mut index, &format!("{projection} ORDER BY name LIMIT 1"));
     assert_eq!(sorted.rows[0][0], json!("ann"));
     assert!(!sorted.translated_sql.contains("AS NOT MATERIALIZED"));
+    let alias_filtered = sql(
+        &mut index,
+        &format!("{projection} AND name = 'bob' ORDER BY span_id LIMIT 1"),
+    );
+    assert_eq!(alias_filtered.rows[0][0], json!("bob"));
+    assert!(
+        !alias_filtered
+            .translated_sql
+            .contains("AS NOT MATERIALIZED")
+    );
 }
 
 /// The blob for a queried CAS ID, through the reader's own layout, so the

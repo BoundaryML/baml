@@ -1,5 +1,5 @@
 //! Generate isolated multi-project query benchmark data, never a user's store.
-//! Usage: `global_store_fixture NEW_DIRECTORY RECORDINGS CALLS_PER_RECORDING [VALUE_BYTES]`.
+//! Usage: `global_store_fixture NEW_DIRECTORY RECORDINGS CALLS_PER_RECORDING [VALUE_BYTES] [shuffled|ordered]`.
 //! Follow with `query_bench NEW_DIRECTORY ITERATIONS SQL...` or CLI queries.
 //! Each run has a distinct process/recording ID, one root future, N completed
 //! functions, one network span and two context slots per span. Twenty project
@@ -16,8 +16,8 @@ use prost::Message as _;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(
-        (4..=5).contains(&args.len()),
-        "NEW_DIRECTORY RECORDINGS CALLS_PER_RECORDING [VALUE_BYTES]"
+        (4..=6).contains(&args.len()),
+        "NEW_DIRECTORY RECORDINGS CALLS_PER_RECORDING [VALUE_BYTES] [shuffled|ordered]"
     );
     let project = Path::new(&args[1]);
     // Refuse existing directories, so reruns cannot overwrite recordings or
@@ -28,6 +28,8 @@ fn main() {
     let value_bytes: usize = args
         .get(4)
         .map_or(0, |arg| arg.parse().expect("VALUE_BYTES"));
+    let order = args.get(5).map_or("shuffled", String::as_str);
+    assert!(matches!(order, "shuffled" | "ordered"));
     assert!(recordings > 0 && calls > 0);
     assert!(value_bytes <= 32 * 1024);
     let layout = SourceLayout::for_project(project);
@@ -36,7 +38,16 @@ fn main() {
     let mut cas_bytes = 0;
     let mut cas_blobs = 0;
     for run in 1..=recordings {
-        let id = u128::from(run).to_be_bytes();
+        // Real recording IDs are random. An odd multiplier permutes IDs
+        // deterministically, separating physical and chronological order.
+        // Ordered IDs exercise the sorter's worst case: each next function
+        // row displaces an older row from the top-N heap.
+        let id = if order == "ordered" {
+            u128::from(run)
+        } else {
+            u128::from(run).wrapping_mul(0x9e37_79b9_7f4a_7c15_d1b5_4a32_d192_ed03)
+        }
+        .to_be_bytes();
         let group = run % 20;
         let ns = 1_700_000_000_000_000_000 + run * 1_000_000;
         let output = (value_bytes > 0).then(|| {
@@ -182,6 +193,7 @@ fn main() {
             "recording_bytes": bytes,
             "cas_bytes": cas_bytes,
             "cas_blobs": cas_blobs,
+            "id_order": order,
         })
     );
 }

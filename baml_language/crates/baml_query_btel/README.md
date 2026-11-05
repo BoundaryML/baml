@@ -20,7 +20,7 @@ target/release/examples/global_store_fixture /tmp/btel-global-example 5000 200 1
 target/release/examples/query_bench /tmp/btel-global-example 5 'SELECT count(*) FROM spans' "SELECT * FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL ORDER BY start_time DESC LIMIT 20" 'SELECT * FROM spans ORDER BY start_time DESC LIMIT 20' "SELECT * FROM spans WHERE span_type = 'network_span' ORDER BY start_time DESC LIMIT 20"
 ```
 
-The fixture command refuses an existing destination directory. It creates 20 project identities in a single store, one process and recording per run, one BTEL file per recording, 200 completed function spans plus one root future and one network span per run, and one distinct captured output per run shared by its function calls. The final argument controls the output string size; omit it or use zero for metadata-only data. No model or network is used. All files and the derived index are below the supplied temporary directory; the user's real store is never opened.
+The fixture command refuses an existing destination directory. It creates 20 project identities in a single store, one process and recording per run, one BTEL file per recording, 200 completed function spans plus one root future and one network span per run, and one distinct captured output per run shared by its function calls. The optional fourth argument controls the output string size; omit it or use zero for metadata-only data. The optional fifth argument is `shuffled` (the default) or `ordered`, controlling whether recording IDs are permuted independently of timestamps or increase with them. No model or network is used. All files and the derived index are below the supplied temporary directory; the user's real store is never opened.
 
 The benchmark reports first-refresh work, translated SQL, query plans, first query timings, and repeated refresh-and-query timings. Every unchanged repeat asserts zero files decoded, zero bytes read by reconciliation, zero reconciliation transactions, and identical result rows. Query value metrics independently report CAS reads and value evaluations. The command's wall time excludes printing its final JSON report, as opposed to CLI timing, which also includes startup, view creation, and serializing recording extents.
 
@@ -30,7 +30,16 @@ For before/after comparisons, build `query_bench` at the baseline and changed re
 
 Measured on an Apple M3 Max (14 cores), macOS, Rust 1.98.0, release builds, with warm filesystem caches and other compilation work running on the machine. Baseline: `c3ff351043`. This is a constructed reproduction of the scaling problem, not a measurement of the user's private store or its reported 46-second query.
 
-The fixture above contains 5,000 runs across 20 projects, 1,010,000 completed spans, 51,932,500 BTEL bytes, 5,000 CAS blobs totaling 5,373,893 bytes, and a 232,087,552-byte SQLite index. The table gives median SQL execution time from three baseline and five changed unchanged-store repetitions on a reused connection; it excludes refresh and final report serialization. Every corresponding result row and result order was identical.
+Both measured fixtures contain 5,000 runs across 20 projects, 1,010,000 completed spans, 51,932,500 BTEL bytes, 5,000 CAS blobs totaling 5,373,893 bytes, and approximately 232 MB of SQLite index data. The first table uses shuffled recording IDs, resembling real random IDs, and three unchanged-store repetitions per binary on a reused connection; it excludes refresh and final report serialization. Every corresponding result row and result order was identical.
+
+| Query | Baseline SQL | Changed SQL | Baseline → changed value evaluations | Baseline → changed CAS loads |
+| --- | ---: | ---: | ---: | ---: |
+| Count all spans | 2,432 ms | 976 ms | 0 → 0 | 0 → 0 |
+| Latest 20 root futures, all columns | 561 ms | 28 ms | 792 → 120 | 0 → 0 |
+| Latest 20 spans, all columns | 7,608 ms | 5,894 ms | 11,200 → 160 | 7 → 1 |
+| Latest 20 network spans, all columns | 577 ms | 23 ms | 1,056 → 160 | 0 → 0 |
+
+An ordered-ID stress case has the same file/row/value shape, but increasing IDs align physical row order with increasing timestamps. Every next function becomes a top-N candidate, making discarded-row rendering particularly expensive. Reproduce it with a new fixture directory and a final `ordered` argument. Medians below use three baseline and five changed repetitions:
 
 | Query | Baseline SQL | Changed SQL | Baseline → changed value evaluations | Baseline → changed CAS loads |
 | --- | ---: | ---: | ---: | ---: |
@@ -39,7 +48,7 @@ The fixture above contains 5,000 runs across 20 projects, 1,010,000 completed sp
 | Latest 20 spans, all columns | 10,038 ms | 6,734 ms | 8,000,000 → 160 | 5,000 → 1 |
 | Latest 20 network spans, all columns | 582 ms | 28 ms | 40,000 → 160 | 0 → 0 |
 
-Baseline first indexing took 6.69 seconds and decoded all 5,000 files. The changed binary upgraded a copy of that existing index in 236 ms, with no schema rebuild, no files decoded, and no recording bytes read. Repeated refresh costs remained proportional to discovering/checking the 5,000 files (roughly 0.1–0.2 seconds on this machine); total refresh-and-query medians were 1,391 ms, 191 ms, 6,884 ms, and 152 ms respectively. Captured outputs here are only about 1 KiB each: the eliminated blob reads and renders can matter much more for large values, while the remaining global metadata scan is still visible in the latest-span timing.
+In the ordered-ID case, baseline first indexing took 6.69 seconds and decoded all 5,000 files. The changed binary upgraded a copy of that existing index in 236 ms, with no schema rebuild, no files decoded, and no recording bytes read. Repeated refresh costs remained proportional to discovering/checking the 5,000 files (roughly 0.1–0.2 seconds on this machine); total refresh-and-query medians were 1,391 ms, 191 ms, 6,884 ms, and 152 ms respectively. A separate interleaved check (three fresh processes per binary/query, independent indexes, identical result-row hashes) measured harness wall-time medians of 2,732 → 1,340 ms for counts, 812 → 229 ms for roots, 11,181 → 7,808 ms for latest spans, and 790 → 197 ms for network spans. This includes opening, view creation, and refresh, but not the CLI wrapper or full extent serialization. Captured outputs here are only about 1 KiB each: the eliminated blob reads and renders can matter much more for large values, while the remaining global metadata scan is still visible in the latest-span timing.
 
 ## Regression coverage
 
