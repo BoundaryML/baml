@@ -50,12 +50,12 @@ const nextConfig = {
     return [
       {
         source: '/changelog',
-        destination: '/blog?tags=release',
+        destination: '/blog?tags=release#blog-all',
         permanent: true,
       },
       {
         source: '/changelog.md',
-        destination: '/blog?tags=release',
+        destination: '/blog?tags=release#blog-all',
         permanent: true,
       },
       {

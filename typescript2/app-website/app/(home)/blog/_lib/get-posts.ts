@@ -24,7 +24,10 @@ export interface Post {
     image?: string;
   };
   author?: Author;
+  /** Shown in the index's "Start here" row. */
   featured?: boolean;
+  /** Outdated: kept at its URL but left off the index, the feed, and "Read next". */
+  archived?: boolean;
   readingTime?: string;
   firstImage?: string | null;
 }
