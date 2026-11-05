@@ -28,14 +28,19 @@ pub mod baml {
 
     /// `s.at(i)`
     pub fn at(s: &BexStr, i: i64) -> Option<BexStr> {
-        resolve_index(i, s.char_len()).map(|i| s.char_slice(i..i + 1))
+        match usize::try_from(i) {
+            Ok(i) => s.char_get(i),
+            Err(_) => resolve_index(i, s.char_len()).and_then(|i| s.char_get(i)),
+        }
     }
 
     /// `s.code_point_at(i)`
     pub fn code_point_at(s: &BexStr, i: i64) -> Option<i64> {
-        resolve_index(i, s.char_len())
-            .and_then(|i| s.char_at(i))
-            .map(|c| i64::from(u32::from(c)))
+        let i = match usize::try_from(i) {
+            Ok(i) => i,
+            Err(_) => resolve_index(i, s.char_len())?,
+        };
+        s.char_at(i).map(|c| i64::from(u32::from(c)))
     }
 
     /// `s.slice(start, end)`
