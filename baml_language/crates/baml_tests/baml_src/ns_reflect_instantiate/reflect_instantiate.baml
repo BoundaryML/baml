@@ -298,7 +298,8 @@ test "instantiate takes an empty list typed as the field" {
 // no `catch` sees.
 
 function native_handle() -> unknown {
-    ai.internal.build_output_format(string.type())._data
+    let path = `/tmp/baml_reflect_instantiate_${baml.time.Instant.now().to_timestamp_milliseconds()}_${int.random(0, 1000000000)}.lock`;
+    baml.fs.lock(path, 0)._handle
 }
 
 function handle_into(ty: reflect.Type, fields: map<string, unknown>) -> string {
@@ -475,6 +476,16 @@ test "instantiate rejects a class that a class literal cannot build" {
     assert.equal(
         instantiate_non_class(reflect.Type.of<baml.fs.Lock>()),
         "reflect.Class.instantiate cannot build `baml.fs.Lock`: its field `_handle` holds state that only the class's own functions create",
+    );
+    // `@@rust_type` classes that cross by a form of their own, not by
+    // reference.
+    assert.equal(
+        instantiate_non_class(reflect.Type.of<ai.Prompt>()),
+        "reflect.Class.instantiate cannot build `ai.Prompt`: its state is the runtime's own, which only the class's own functions create",
+    );
+    assert.equal(
+        instantiate_non_class(reflect.Type.of<baml.host.Value>()),
+        "reflect.Class.instantiate cannot build `baml.host.Value`: its state is the runtime's own, which only the class's own functions create",
     )
 }
 

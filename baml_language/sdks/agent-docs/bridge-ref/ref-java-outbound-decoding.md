@@ -409,13 +409,12 @@ decides the kind — this is the piece the task calls out as **type-directed
 (field 2, repeated `BamlOutboundMapEntry`) and `type_args` (field 3, repeated
 `BamlTy`), then:
 
-1. **media special-case:** if `isMediaFqn(fqn)` and the field map contains
-   `_data`, return `fields.get("_data")` — the nested handle decode already built
-   the media wrapper (`:811-813`; `isMediaFqn` `:909-914`). Mirrors Python's
-   `_decode_class` media short-circuit.
-2. `instance = TypeRegistry.constructClass(fqn, fields)`; if `null` (unregistered
-   FQN) return the field `Map` (`:814-817`).
-3. `bindReifiedTypeArgs(instance, typeArgBytes)` (`:818`).
+1. `instance = TypeRegistry.constructClass(fqn, fields)`; if `null` (unregistered
+   FQN) return the field `Map`.
+2. `bindReifiedTypeArgs(instance, typeArgBytes)`.
+
+A media value never arrives as a `class_value`: it rides its own arm
+(`media_value`, or a media `handle_value`).
 
 ```java
 Object instance = TypeRegistry.constructClass(fqn, fields);
@@ -431,11 +430,11 @@ return instance;
 > marshalling wire fields into declaration order recorded at registration
 > (`ClassEntry.instantiate`, `TypeRegistry.java:474-489`). Python calls
 > `cls.model_validate(field_dict)` (keyword, Pydantic-validated) and injects
-> handle-backed private fields (`_handle`/`_data`/`_body`) into
+> handle-backed private (`_`-prefixed) fields into
 > `__pydantic_private__`. Java generated classes are immutable value classes
 > with no private-field bag, so there is **no private-field injection step**; a
-> handle-backed field is just an ordinary constructor argument (or the whole
-> media class is unwrapped in step 1). A field absent from the wire is passed as
+> handle-backed field is just an ordinary constructor argument. A field absent
+> from the wire is passed as
 > `null` (`TypeRegistry.java:477-482`).
 
 > ⚠ **Deviation from Python — unregistered FQN fallback:** both bridges degrade
@@ -629,9 +628,9 @@ registration is idempotent (first registration of an FQN wins,
 > when present.
 
 The runtime-owned media stdlib classes (`baml.media.Image` / `Audio` / `Video`
-/ `Pdf`) are **never registered** in `TypeRegistry`; they are matched by FQN
-constant instead (`isMediaFqn`, `ProtoReader.java:909-914`, using `Image.FQN`
-etc.). This is the Java analog of Python's `_MEDIA_PYO3_TYPES` reverse overrides.
+/ `Pdf`) are **never registered** in `TypeRegistry`; a media value decodes from
+its own wire arm (`media_value` or a media `handle_value`) straight to the
+wrapper. This is the Java analog of Python's `_MEDIA_PYO3_TYPES` reverse overrides.
 
 For outbound class values, `decodeClass` first decodes all fields into a
 `LinkedHashMap`, then resolves `class_value.name` (a bare FQN string) through the
@@ -639,8 +638,6 @@ registry:
 
 - **Unresolved FQN** → the decoded field `Map` (preserves thrown stdlib/user
   error payloads; `ProtoReader.java:815-816`).
-- **Media stdlib FQN** with a `_data` field → the already-built media wrapper
-  (`:811-813`).
 - **Otherwise** → `constructClass` reifies the generated value class, and
   `bindReifiedTypeArgs` retains any wire `type_args` in the side-table
   (`:814-818`).

@@ -65,7 +65,8 @@ _PROTO_MEDIA_TYPES = {
 
 
 class _PortablePromptAst:
-    """Owned wire copy stored in the generated ``ai.Prompt._data`` slot."""
+    """Owned wire copy of a rendered prompt, held by a generated ``ai.Prompt``
+    instance as its ``_data`` private attribute."""
 
     __slots__ = ("_value",)
 
@@ -607,7 +608,8 @@ def _decode_media(media) -> Any:
 
 
 def _decode_prompt_ast(prompt_ast, type_map: TypeLookup) -> Any:
-    """Reconstruct the generated ``ai.Prompt`` wrapper around owned data."""
+    """Build the generated ``ai.Prompt``, a field-less model, holding an owned
+    copy of the prompt as its ``_data`` private attribute."""
     cls = type_map.get_class("ai.Prompt")
     portable = _PortablePromptAst(prompt_ast)
     if cls is None:
@@ -615,17 +617,6 @@ def _decode_prompt_ast(prompt_ast, type_map: TypeLookup) -> Any:
     if not issubclass(cls, BaseModel):
         raise BamlError("The generated ai.Prompt host type is not a Pydantic model")
 
-    if any(
-        (field.serialization_alias or field.alias or name) == "_data"
-        for name, field in cls.model_fields.items()
-    ):
-        # The generated annotation is the VM-side ``$rust_type`` proxy, while
-        # this host-owned value deliberately carries a portable AST instead.
-        # Construction must therefore bypass Pydantic validation.
-        return cls.model_construct(_data=portable)
-
-    # Compatibility with generated Prompt models that represented ``_data``
-    # as a Pydantic private attribute.
     instance = cls.model_validate({})
     if instance.__pydantic_private__ is None:
         instance.__pydantic_private__ = {}
@@ -656,15 +647,6 @@ def _decode_class(
     cls = type_map.get_class(class_value.name)
     if cls is None:
         return BamlClassInstance(class_value.name, field_dict)
-
-    # Media stdlib classes (`baml.media.*`) are PyO3 types wrapping a
-    # `BamlPyHandle`. The engine emits them as
-    # `class_value { name: "baml.media.Pdf", fields: { _data: handle_value }}`;
-    # the inner `_data` decode already constructed a fresh `BamlPdf` via
-    # `_decode_handle` → `cls._from_pyhandle(...)`. Unwrap and return it
-    # directly — `BamlPdf` is not a Pydantic model.
-    if cls in _MEDIA_PYO3_TYPES and "_data" in field_dict:
-        return field_dict["_data"]
 
     parameterized = _parameterize_tys(cls, class_value.type_args, type_map)
     if not issubclass(cls, BaseModel):

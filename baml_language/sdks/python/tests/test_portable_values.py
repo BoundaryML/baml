@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import pydantic
 
 from baml_bridge.baml_py import BamlImage, _encode_inbound
@@ -11,8 +9,9 @@ from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
 
 
 class _Prompt(pydantic.BaseModel):
+    """The generated `ai.Prompt`'s shape: a model with no fields."""
+
     model_config = pydantic.ConfigDict(populate_by_name=True)
-    field_data: Any = pydantic.Field(alias="_data")
 
 
 def _prompt_typemap() -> BamlTypeMap:

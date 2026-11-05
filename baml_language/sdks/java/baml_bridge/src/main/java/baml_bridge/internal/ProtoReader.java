@@ -162,9 +162,6 @@ public final class ProtoReader {
     private static final int ADT_TAGGED_HEAP_HANDLE = 14;
     private static final int ADT_FUNCTION_SPEC = 17;
 
-    // The single field name a handle-backed media class carries on the wire.
-    private static final String MEDIA_DATA_FIELD = "_data";
-
     // BamlTy oneof (baml_type.proto) — used to tokenize a union's self_type into
     // the arm-token signature the TypeRegistry keys on. Unlisted variants fall to
     // an unmatchable "?" token, which forces the bare-inner fallback.
@@ -1033,11 +1030,6 @@ public final class ProtoReader {
                 default -> r.skipField(wire);
             }
         }
-        // A media stdlib class wraps its engine handle in a `_data` field; the
-        // inner decode already reified the media wrapper, so unwrap and return it.
-        if (isMediaFqn(fqn) && fields.containsKey(MEDIA_DATA_FIELD)) {
-            return fields.get(MEDIA_DATA_FIELD);
-        }
         Object instance = TypeRegistry.constructClass(fqn, fields);
         if (instance == null) {
             return fields;
@@ -1141,21 +1133,6 @@ public final class ProtoReader {
             case ADT_FUNCTION_SPEC -> baml_bridge.BamlFunctionSpec.fromHandle(handle);
             default -> handle;
         };
-    }
-
-    /**
-     * Whether {@code fqn} names one of the handle-backed media stdlib classes.
-     * The engine wraps a media value as {@code class_value(baml.media.X, {_data})}
-     * whose {@code _data} field is a media {@code handle_value}; the wrapper is
-     * unwrapped to that decoded field (see {@link #decodeClass}), mirroring
-     * {@code bridge_python}'s {@code _decode_class} media special-case. These
-     * FQNs are runtime-owned and never registered in the {@link TypeRegistry}.
-     */
-    private static boolean isMediaFqn(String fqn) {
-        return Image.FQN.equals(fqn)
-                || Audio.FQN.equals(fqn)
-                || Video.FQN.equals(fqn)
-                || Pdf.FQN.equals(fqn);
     }
 
     // ========================================================================
@@ -1436,11 +1413,6 @@ public final class ProtoReader {
             }
             byte[] vb = vals.get(i);
             fields.put(keys.get(i), vb == null ? null : decodeWithDesc(vb, fieldDesc, lenient));
-        }
-        // Defensive parity with the wire-driven path: a media stdlib class
-        // (never registered, so normally unreachable here) unwraps its `_data`.
-        if (isMediaFqn(fqn) && fields.containsKey(MEDIA_DATA_FIELD)) {
-            return fields.get(MEDIA_DATA_FIELD);
         }
         Object instance = TypeRegistry.constructClass(fqn, fields);
         if (instance == null) {

@@ -85,11 +85,23 @@ pub enum RustPayloadKind {
     TlsKeys,
     /// A `baml.host.Value`: a host's own value, held by its reference.
     HostValue,
+    /// A `baml.media.Image`'s content.
+    Image,
+    /// A `baml.media.Audio`'s content.
+    Audio,
+    /// A `baml.media.Pdf`'s content.
+    Pdf,
+    /// A `baml.media.Video`'s content.
+    Video,
+    /// An `ai.Prompt`: a rendered, provider-neutral prompt.
+    Prompt,
+    /// An `ai.OutputFormat`: an output type's schema, ready to render.
+    OutputFormat,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 34] = [
+    pub const ALL: [Self; 40] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -124,6 +136,12 @@ impl RustPayloadKind {
         Self::HttpServer,
         Self::TlsKeys,
         Self::HostValue,
+        Self::Image,
+        Self::Audio,
+        Self::Pdf,
+        Self::Video,
+        Self::Prompt,
+        Self::OutputFormat,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -161,6 +179,12 @@ impl RustPayloadKind {
         "HttpServer",
         "TlsKeys",
         "HostValue",
+        "Image",
+        "Audio",
+        "Pdf",
+        "Video",
+        "Prompt",
+        "OutputFormat",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -202,6 +226,12 @@ impl RustPayloadKind {
             Self::HttpServer => Some("HttpServer"),
             Self::TlsKeys => Some("TlsKeys"),
             Self::HostValue => Some("HostValue"),
+            Self::Image => Some("Image"),
+            Self::Audio => Some("Audio"),
+            Self::Pdf => Some("Pdf"),
+            Self::Video => Some("Video"),
+            Self::Prompt => Some("Prompt"),
+            Self::OutputFormat => Some("OutputFormat"),
         }
     }
 

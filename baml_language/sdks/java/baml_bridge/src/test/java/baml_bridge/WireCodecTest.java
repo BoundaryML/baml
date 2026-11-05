@@ -14,7 +14,6 @@ import baml_bridge.internal.ProtoWriter;
 import baml_bridge.internal.WireDepth;
 import baml_bridge.internal.WireWriter;
 import baml_sdk.baml.media.Image;
-import baml_sdk.baml.media.Pdf;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -1838,27 +1837,6 @@ class WireCodecTest {
         assertEquals("baml.media.Image", img.bamlFqn());
         assertEquals(4242L, img.bamlHandle().key());
         assertEquals(ADT_MEDIA_IMAGE, img.bamlHandle().handleType());
-    }
-
-    /** class_value(baml.media.Pdf, {_data: handle_value}) unwraps to the Pdf. */
-    @Test
-    void decode_media_class_wrapper_unwraps_to_media() {
-        WireWriter dataVal = new WireWriter();
-        dataVal.writeMessage(OV_HANDLE, handleMsg(77L, ADT_MEDIA_PDF)); // _data value
-        WireWriter dataEntry = new WireWriter();
-        dataEntry.writeString(1, "_data"); // BamlOutboundMapEntry.key = 1
-        dataEntry.writeMessage(2, dataVal.toByteArray()); // value = 2
-
-        WireWriter cls = new WireWriter();
-        cls.writeString(1, "baml.media.Pdf"); // BamlValueClass.name = 1
-        cls.writeMessage(2, dataEntry.toByteArray()); // fields = 2
-
-        WireWriter ov = new WireWriter();
-        ov.writeMessage(OV_CLASS, cls.toByteArray());
-
-        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ov.toByteArray()));
-        Pdf pdf = assertInstanceOf(Pdf.class, decoded);
-        assertEquals(77L, pdf.bamlHandle().key());
     }
 
     /** A non-media handle type keeps the bare-BamlHandle fallback. */

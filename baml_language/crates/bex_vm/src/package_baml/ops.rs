@@ -647,8 +647,29 @@ impl EqualsDriver {
                         bex_vm_types::RustPayload::SpanId(x),
                         bex_vm_types::RustPayload::SpanId(y),
                     ) => step(x == y),
-                    // Every other kind's state is equal only by identity, and
-                    // `pa != pb` here.
+                    // Immutable data compares by value: the same media, the
+                    // same rendered prompt, the same pattern in the same
+                    // dialect, the same record read at the same place.
+                    (bex_vm_types::RustPayload::Image(x), bex_vm_types::RustPayload::Image(y))
+                    | (bex_vm_types::RustPayload::Audio(x), bex_vm_types::RustPayload::Audio(y))
+                    | (bex_vm_types::RustPayload::Pdf(x), bex_vm_types::RustPayload::Pdf(y))
+                    | (bex_vm_types::RustPayload::Video(x), bex_vm_types::RustPayload::Video(y)) => {
+                        step(x == y)
+                    }
+                    (
+                        bex_vm_types::RustPayload::Prompt(x),
+                        bex_vm_types::RustPayload::Prompt(y),
+                    ) => step(x == y),
+                    (bex_vm_types::RustPayload::Regex(x), bex_vm_types::RustPayload::Regex(y)) => {
+                        step(x == y)
+                    }
+                    (
+                        bex_vm_types::RustPayload::CsvRecord(x),
+                        bex_vm_types::RustPayload::CsvRecord(y),
+                    ) => step(x == y),
+                    // Every other kind has no value apart from its identity
+                    // (mutable state, a key, a live resource), and `pa != pb`
+                    // here.
                     (
                         bex_vm_types::RustPayload::Foreign(_)
                         | bex_vm_types::RustPayload::DefaultHasher(_)
@@ -666,6 +687,7 @@ impl EqualsDriver {
                         | bex_vm_types::RustPayload::ReservedSpan(_)
                         | bex_vm_types::RustPayload::File(_)
                         | bex_vm_types::RustPayload::Glob(_)
+                        | bex_vm_types::RustPayload::OutputFormat(_)
                         | bex_vm_types::RustPayload::TcpStream(_)
                         | bex_vm_types::RustPayload::TcpListener(_)
                         | bex_vm_types::RustPayload::UdpSocket(_)
@@ -683,7 +705,12 @@ impl EqualsDriver {
                         | bex_vm_types::RustPayload::SseStream(_)
                         | bex_vm_types::RustPayload::HttpServer(_)
                         | bex_vm_types::RustPayload::TlsKeys(_)
-                        | bex_vm_types::RustPayload::HostValue(_),
+                        | bex_vm_types::RustPayload::HostValue(_)
+                        | bex_vm_types::RustPayload::Image(_)
+                        | bex_vm_types::RustPayload::Audio(_)
+                        | bex_vm_types::RustPayload::Pdf(_)
+                        | bex_vm_types::RustPayload::Video(_)
+                        | bex_vm_types::RustPayload::Prompt(_),
                         _,
                     ) => Cmp::NotEqual,
                 }

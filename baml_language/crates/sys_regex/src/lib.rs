@@ -131,6 +131,16 @@ pub struct Program {
     backtracking: bool,
 }
 
+/// Two programs are the same regex when they compile the same pattern in the
+/// same dialect; the compiled engines are a function of those two.
+impl PartialEq for Program {
+    fn eq(&self, other: &Self) -> bool {
+        self.pattern == other.pattern && self.backtracking == other.backtracking
+    }
+}
+
+impl Eq for Program {}
+
 #[expect(
     clippy::missing_fields_in_debug,
     reason = "neither engine's compiled program has a readable representation"

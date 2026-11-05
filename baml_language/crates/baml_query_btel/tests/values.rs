@@ -381,12 +381,13 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
     let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
     assert_eq!(large.len(), 4, "{sizes:?}");
     assert_eq!(small.len(), 5, "{sizes:?}");
-    // The list names its element class, whose definition is stored once.
+    // A media value is captured by its content, which names its kind: no
+    // class definition is recorded for it.
     let definitions: Vec<_> = blobs(project.path())
         .into_iter()
         .filter_map(|(_, members)| members)
         .collect();
-    assert_eq!(definitions, vec![vec!["baml.media.Image".to_owned()]]);
+    assert!(definitions.is_empty(), "{definitions:?}");
     assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
 
     let mut index = index(project.path());
@@ -405,7 +406,7 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
     );
     let descriptor = json!({"$media": "image", "mime": "image/png", "base64_len": (32 << 10) + 1});
     for row in &result.rows {
-        assert_eq!(row[0]["_data"], descriptor, "{}", row[0]);
+        assert_eq!(row[0], descriptor);
         assert_eq!((&row[1], &row[2]), (&json!(1), &json!(0)));
     }
     assert_eq!(result.rows.len(), 2);

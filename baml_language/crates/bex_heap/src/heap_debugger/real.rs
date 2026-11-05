@@ -353,6 +353,15 @@ impl BexHeap {
                     "rust instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}"
                 );
                 match &instance.payload {
+                    bex_vm_types::RustPayload::InterfaceWitness(witness) => {
+                        let interface_idx = witness.interface_ptr;
+                        self.debug_assert_valid_index(interface_idx);
+                        let interface_obj = unsafe { self.get_object(interface_idx) };
+                        assert!(
+                            matches!(interface_obj, Object::Interface(_)),
+                            "interface witness interface_ptr not Interface: obj_idx={idx:?} interface_idx={interface_idx:?}"
+                        );
+                    }
                     // None of these kinds holds heap references.
                     bex_vm_types::RustPayload::Foreign(_)
                     | bex_vm_types::RustPayload::DefaultHasher(_)
@@ -364,30 +373,35 @@ impl BexHeap {
                     | bex_vm_types::RustPayload::Regex(_)
                     | bex_vm_types::RustPayload::CsvRecord(_)
                     | bex_vm_types::RustPayload::Limit(_)
-| bex_vm_types::RustPayload::CancelToken(_)
-| bex_vm_types::RustPayload::SpanId(_)
-| bex_vm_types::RustPayload::TraceOptions(_)
-| bex_vm_types::RustPayload::ReservedSpan(_)
-| bex_vm_types::RustPayload::File(_)
-| bex_vm_types::RustPayload::Glob(_)
-| bex_vm_types::RustPayload::TcpStream(_)
-| bex_vm_types::RustPayload::TcpListener(_)
-| bex_vm_types::RustPayload::UdpSocket(_)
-| bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
-| bex_vm_types::RustPayload::ChaCha20(_)
-| bex_vm_types::RustPayload::InterfaceWitness(_)
-| bex_vm_types::RustPayload::CsvReader(_)
-| bex_vm_types::RustPayload::CsvWriter(_)
-| bex_vm_types::RustPayload::ClassBuilder(_)
-| bex_vm_types::RustPayload::ChildProcess(_)
-| bex_vm_types::RustPayload::ReadPipe(_)
-| bex_vm_types::RustPayload::WritePipe(_)
-| bex_vm_types::RustPayload::WebSocket(_)
-| bex_vm_types::RustPayload::HttpBody(_)
-| bex_vm_types::RustPayload::SseStream(_)
-| bex_vm_types::RustPayload::HttpServer(_)
-| bex_vm_types::RustPayload::TlsKeys(_)
-| bex_vm_types::RustPayload::HostValue(_) => {}
+                    | bex_vm_types::RustPayload::CancelToken(_)
+                    | bex_vm_types::RustPayload::SpanId(_)
+                    | bex_vm_types::RustPayload::TraceOptions(_)
+                    | bex_vm_types::RustPayload::ReservedSpan(_)
+                    | bex_vm_types::RustPayload::File(_)
+                    | bex_vm_types::RustPayload::Glob(_)
+                    | bex_vm_types::RustPayload::OutputFormat(_)
+                    | bex_vm_types::RustPayload::TcpStream(_)
+                    | bex_vm_types::RustPayload::TcpListener(_)
+                    | bex_vm_types::RustPayload::UdpSocket(_)
+                    | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
+                    | bex_vm_types::RustPayload::ChaCha20(_)
+                    | bex_vm_types::RustPayload::CsvReader(_)
+                    | bex_vm_types::RustPayload::CsvWriter(_)
+                    | bex_vm_types::RustPayload::ClassBuilder(_)
+                    | bex_vm_types::RustPayload::ChildProcess(_)
+                    | bex_vm_types::RustPayload::ReadPipe(_)
+                    | bex_vm_types::RustPayload::WritePipe(_)
+                    | bex_vm_types::RustPayload::WebSocket(_)
+                    | bex_vm_types::RustPayload::HttpBody(_)
+                    | bex_vm_types::RustPayload::SseStream(_)
+                    | bex_vm_types::RustPayload::HttpServer(_)
+                    | bex_vm_types::RustPayload::TlsKeys(_)
+                    | bex_vm_types::RustPayload::HostValue(_)
+                    | bex_vm_types::RustPayload::Image(_)
+                    | bex_vm_types::RustPayload::Audio(_)
+                    | bex_vm_types::RustPayload::Pdf(_)
+                    | bex_vm_types::RustPayload::Video(_)
+                    | bex_vm_types::RustPayload::Prompt(_) => {}
                 }
             }
             Object::Function(_)
@@ -404,7 +418,6 @@ impl BexHeap {
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
-
             | Object::Type(_)
             | Object::Float(_)
             // `HostClosure` carries no heap references.

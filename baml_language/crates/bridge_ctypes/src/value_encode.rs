@@ -154,9 +154,6 @@ pub fn external_to_outbound(
             Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
         }
         BexExternalValue::RustData(arc) => {
-            if let Some(converted) = bex_project::try_convert_rust_data(arc) {
-                return external_to_outbound(&converted, options);
-            }
             let table_value = CffiHandleTableEntry::RustData(arc.clone());
             let ht = table_value.handle_type();
             let key = options.table.insert(table_value);
@@ -337,15 +334,10 @@ pub(crate) fn artifact_safe_external_to_outbound(
         BexExternalValue::Uint8Array(bytes) => {
             Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
         }
-        BexExternalValue::RustData(arc) => {
-            if let Some(converted) = bex_project::try_convert_rust_data(arc) {
-                return artifact_safe_external_to_outbound(&converted);
-            }
-            Some(artifact_safe_omission(
-                "hostOwnedValue",
-                "host-owned rust data",
-            ))
-        }
+        BexExternalValue::RustData(_) => Some(artifact_safe_omission(
+            "hostOwnedValue",
+            "host-owned rust data",
+        )),
         // A lane type crossing out: a declared head by name, an anonymous
         // one by its label, which the host can display but never state back.
         BexExternalValue::Adt(BexExternalAdt::Type(rt)) => {
@@ -747,33 +739,6 @@ mod tests {
         );
 
         assert_eq!(encoded.selected_option_index, Some(0));
-    }
-
-    #[test]
-    fn rust_data_prompt_ast_converts_to_handle() {
-        let prompt = Arc::new(PromptAst::Simple(Arc::new(PromptAstSimple::String(
-            "hello".to_string(),
-        ))));
-        let value = BexExternalValue::RustData(prompt);
-        let options = CffiHandleTableOptions::for_in_process();
-        let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
-        assert_eq!(handle.handle_type, BamlHandleType::AdtPromptAst as i32);
-    }
-
-    #[test]
-    fn rust_data_media_value_converts_to_handle() {
-        let media = Arc::new(MediaValue::new(
-            bex_project::MediaKind::Image,
-            MediaContent::Url {
-                url: "https://example.com/img.png".to_string(),
-                base64_data: None,
-            },
-            Some("image/png".to_string()),
-        ));
-        let value = BexExternalValue::RustData(media);
-        let options = CffiHandleTableOptions::for_in_process();
-        let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
-        assert_eq!(handle.handle_type, BamlHandleType::AdtMediaImage as i32);
     }
 
     #[test]

@@ -121,6 +121,21 @@ pub mod payload {
     /// A `baml.host.Value`: the host's reference to its own value, which
     /// every holder shares.
     pub type HostValue = Arc<bex_resource_types::HostValueArc>;
+    /// A media value's content, immutable and shared: a `baml.media.Image`'s
+    /// (and `Audio`'s, `Pdf`'s, `Video`'s), whose kind its class names.
+    pub type Media = Arc<crate::MediaValue>;
+    /// A `baml.media.Image`'s content.
+    pub type Image = Media;
+    /// A `baml.media.Audio`'s content.
+    pub type Audio = Media;
+    /// A `baml.media.Pdf`'s content.
+    pub type Pdf = Media;
+    /// A `baml.media.Video`'s content.
+    pub type Video = Media;
+    /// An `ai.Prompt`'s rendered prompt, immutable and shared.
+    pub type Prompt = Arc<crate::PromptAst>;
+    /// An `ai.OutputFormat`: the platform's schema of an output type.
+    pub type OutputFormat = Arc<dyn crate::resource::OutputFormatResource>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -169,6 +184,12 @@ pub enum RustPayload {
     HttpServer(payload::HttpServer),
     TlsKeys(payload::TlsKeys),
     HostValue(payload::HostValue),
+    Image(payload::Media),
+    Audio(payload::Media),
+    Pdf(payload::Media),
+    Video(payload::Media),
+    Prompt(payload::Prompt),
+    OutputFormat(payload::OutputFormat),
 }
 
 impl RustPayload {
@@ -209,6 +230,12 @@ impl RustPayload {
             Self::HttpServer(_) => RustPayloadKind::HttpServer,
             Self::TlsKeys(_) => RustPayloadKind::TlsKeys,
             Self::HostValue(_) => RustPayloadKind::HostValue,
+            Self::Image(_) => RustPayloadKind::Image,
+            Self::Audio(_) => RustPayloadKind::Audio,
+            Self::Pdf(_) => RustPayloadKind::Pdf,
+            Self::Video(_) => RustPayloadKind::Video,
+            Self::Prompt(_) => RustPayloadKind::Prompt,
+            Self::OutputFormat(_) => RustPayloadKind::OutputFormat,
         }
     }
 
@@ -227,6 +254,7 @@ impl RustPayload {
             Self::WebSocket(resource) => resource.network(),
             Self::HttpBody(resource) => resource.network(),
             Self::SseStream(resource) => resource.network(),
+            Self::OutputFormat(resource) => resource.network(),
             Self::Foreign(_)
             | Self::DefaultHasher(_)
             | Self::Sha256(_)
@@ -249,7 +277,72 @@ impl RustPayload {
             | Self::ClassBuilder(_)
             | Self::HttpServer(_)
             | Self::TlsKeys(_)
-            | Self::HostValue(_) => None,
+            | Self::HostValue(_)
+            | Self::Image(_)
+            | Self::Audio(_)
+            | Self::Pdf(_)
+            | Self::Video(_)
+            | Self::Prompt(_) => None,
+        }
+    }
+}
+
+impl RustPayload {
+    /// The payload of a media value, under the variant its kind names.
+    pub fn media(value: payload::Media) -> Self {
+        match value.kind {
+            baml_base::MediaKind::Image => Self::Image(value),
+            baml_base::MediaKind::Audio => Self::Audio(value),
+            baml_base::MediaKind::Pdf => Self::Pdf(value),
+            baml_base::MediaKind::Video => Self::Video(value),
+            baml_base::MediaKind::Generic => {
+                unreachable!("a media value is built with a kind of its own, never `Generic`")
+            }
+        }
+    }
+
+    /// The media value this payload holds, if it is one.
+    pub fn as_media(&self) -> Option<&payload::Media> {
+        match self {
+            Self::Image(media) | Self::Audio(media) | Self::Pdf(media) | Self::Video(media) => {
+                Some(media)
+            }
+            Self::Foreign(_)
+            | Self::DefaultHasher(_)
+            | Self::Sha256(_)
+            | Self::Aes256GcmSiv(_)
+            | Self::Aes128GcmSiv(_)
+            | Self::ChaCha20Poly1305(_)
+            | Self::XChaCha20Poly1305(_)
+            | Self::Regex(_)
+            | Self::CsvRecord(_)
+            | Self::Limit(_)
+            | Self::CancelToken(_)
+            | Self::SpanId(_)
+            | Self::TraceOptions(_)
+            | Self::ReservedSpan(_)
+            | Self::File(_)
+            | Self::Glob(_)
+            | Self::TcpStream(_)
+            | Self::TcpListener(_)
+            | Self::UdpSocket(_)
+            | Self::Xoshiro256PlusPlus(_)
+            | Self::ChaCha20(_)
+            | Self::InterfaceWitness(_)
+            | Self::CsvReader(_)
+            | Self::CsvWriter(_)
+            | Self::ClassBuilder(_)
+            | Self::ChildProcess(_)
+            | Self::ReadPipe(_)
+            | Self::WritePipe(_)
+            | Self::WebSocket(_)
+            | Self::HttpBody(_)
+            | Self::SseStream(_)
+            | Self::HttpServer(_)
+            | Self::TlsKeys(_)
+            | Self::HostValue(_)
+            | Self::Prompt(_)
+            | Self::OutputFormat(_) => None,
         }
     }
 }
@@ -295,6 +388,11 @@ impl RustPayload {
             Self::HttpServer(_) => TypeId::of::<payload::HttpServer>(),
             Self::TlsKeys(_) => TypeId::of::<payload::TlsKeys>(),
             Self::HostValue(_) => TypeId::of::<payload::HostValue>(),
+            Self::Image(_) | Self::Audio(_) | Self::Pdf(_) | Self::Video(_) => {
+                TypeId::of::<payload::Media>()
+            }
+            Self::Prompt(_) => TypeId::of::<payload::Prompt>(),
+            Self::OutputFormat(_) => TypeId::of::<payload::OutputFormat>(),
         }
     }
 }
@@ -323,18 +421,26 @@ impl RustInstance {
 
 impl RustInstance {
     /// Whether `class` (the declaration at [`Self::class`]) can have this
-    /// instance: the class is tagged with the payload's own kind, and the
-    /// instance is built at as many type arguments as the class declares.
-    /// Checked wherever an instance enters the heap.
+    /// instance: the class is tagged with the payload's own kind, the instance
+    /// is built at as many type arguments as the class declares, and a media
+    /// payload holds media of its variant's kind. Checked wherever an instance
+    /// enters the heap.
     #[must_use]
     pub fn fits(&self, class: &crate::Class) -> bool {
-        matches!(class.body, crate::ClassBody::RustType(kind) if kind == self.payload.kind())
+        let media_fits = self.payload.as_media().is_none_or(|media| {
+            baml_type::ClassCrossing::of_kind(self.payload.kind())
+                == baml_type::ClassCrossing::Media(media.kind)
+        });
+        media_fits
+            && matches!(class.body, crate::ClassBody::RustType(kind) if kind == self.payload.kind())
             && self.class_type_args.len() == class.generic_param_count
     }
 }
 
+/// The payload's kind: an address would make messages that print an instance
+/// differ from run to run.
 impl std::fmt::Display for RustInstance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<rust instance of {:p}>", self.class.as_ptr())
+        write!(f, "<rust instance holding {:?}>", self.payload.kind())
     }
 }

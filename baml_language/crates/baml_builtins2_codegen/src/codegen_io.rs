@@ -188,17 +188,19 @@ fn build_io_namespace_tree<'a>(
 /// dot-split once an impl-block class segment embeds a dotted interface
 /// target (`baml.io.Read$for$File`).
 fn io_namespace_prefixes(io_builtins: &[NativeBuiltin]) -> BTreeSet<String> {
-    io_builtins
-        .iter()
-        .map(|b| {
-            let package = io_package_name(b);
-            if b.namespace.is_empty() {
-                package.to_string()
-            } else {
-                format!("{package}.{}", b.namespace)
-            }
-        })
-        .collect()
+    io_builtins.iter().map(io_scope).collect()
+}
+
+/// The dotted namespace `builtin` is declared in, which its signature's type
+/// paths are written in: `baml.fs` for `baml.fs.File.read`, `ai` for
+/// `ai.OutputFormat._render`.
+fn io_scope(builtin: &NativeBuiltin) -> String {
+    let package = io_package_name(builtin);
+    if builtin.namespace.is_empty() {
+        package.to_string()
+    } else {
+        format!("{package}.{}", builtin.namespace)
+    }
 }
 
 /// Filter class defs to those in IO-relevant namespaces.
@@ -217,13 +219,17 @@ fn filter_io_class_defs<'a>(
 fn build_class_ns_map(io_class_defs: &[&NativeClassDef]) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     for cd in io_class_defs {
-        let ns = cd
-            .namespace_prefix
-            .strip_prefix("baml.")
-            .unwrap_or(&cd.namespace_prefix);
-        map.insert(cd.name.clone(), ns.to_string());
+        map.insert(cd.name.clone(), class_ns_segment(cd).to_string());
     }
     map
+}
+
+/// The namespace segment the IO structs of the class `cd` live under:
+/// `fs` for `baml.fs.File`.
+fn class_ns_segment(cd: &NativeClassDef) -> &str {
+    cd.namespace_prefix
+        .strip_prefix("baml.")
+        .unwrap_or(&cd.namespace_prefix)
 }
 
 /// Group IO class defs by namespace segment.
@@ -232,11 +238,9 @@ fn group_class_defs_by_ns<'a>(
 ) -> BTreeMap<String, Vec<&'a NativeClassDef>> {
     let mut map: BTreeMap<String, Vec<&NativeClassDef>> = BTreeMap::new();
     for cd in io_class_defs {
-        let ns = cd
-            .namespace_prefix
-            .strip_prefix("baml.")
-            .unwrap_or(&cd.namespace_prefix);
-        map.entry(ns.to_string()).or_default().push(cd);
+        map.entry(class_ns_segment(cd).to_string())
+            .or_default()
+            .push(cd);
     }
     map
 }
@@ -290,6 +294,7 @@ fn owned_rust_type(
         BamlType::Uint8Array => quote! { Vec<u8> },
         BamlType::Generic(_)
         | BamlType::Media(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_) => {
             quote! { BexExternalValue }
@@ -563,14 +568,15 @@ fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
         BamlType::RustType => {
             quote! { baml_type::RealizedTy::RustType }
         }
-        // `Named` is a lossy catch-all: the type parser discards a class's
-        // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
-        // unions/unresolved types through it (`Named("union")`,
-        // `Named("unknown")`). Reconstructing a `RuntimeTy::class(name)` here
-        // would both drop generics and fabricate a class for the placeholder
-        // names, so this static-`BamlType` path cannot recover a named type — the
+        // `Named` is lossy: the type parser discards a class's generic
+        // arguments (`Box<int>` → `Named("Box")`) and also funnels the types it
+        // has no form for through placeholder names (`Named("unknown")`,
+        // `Named("function")`). Reconstructing a `RuntimeTy::class(name)` here
+        // would both drop generics and fabricate a class for the placeholders,
+        // so this static-`BamlType` path cannot recover a named type — the
         // complete type lives only on the runtime value's stored `element_ty`.
         BamlType::Named(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
         | BamlType::Generic(_) => {
@@ -686,6 +692,7 @@ fn clean_rust_type(
         BamlType::Uint8Array => quote! { Vec<u8> },
         BamlType::Generic(_)
         | BamlType::Media(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_) => {
             quote! { BexExternalValue }
@@ -771,7 +778,10 @@ fn glue_extract_expr(
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
-            quote! { (#conv)? }
+            quote! {{
+                let __converted: Result<_, AccessError> = #conv;
+                __converted?
+            }}
         }
         _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
     }
@@ -1112,6 +1122,7 @@ fn mentions_runtime_built_ty(
         | BamlType::Uint8Array
         | BamlType::Generic(_)
         | BamlType::Media(_)
+        | BamlType::Enum(_)
         | BamlType::RustType
         | BamlType::StringLiteral(_) => false,
         BamlType::Union(members) => members
@@ -1125,38 +1136,73 @@ fn mentions_runtime_built_ty(
 /// types emitted beside the traits for the rest — an enum for a union and a
 /// struct for a plain data class.
 struct ResourceVocab<'a> {
-    /// Every tagged class with a kind of its own, by bare name.
+    /// Every tagged class with a kind of its own, by dotted path.
     tagged: BTreeMap<String, baml_base::RustPayloadKind>,
-    /// Every class with fields, by bare name: what a plain struct mirrors.
+    /// Every class with fields, by dotted path: what a plain struct mirrors.
     plain: BTreeMap<String, &'a NativeClassDef>,
 }
 
 /// The items a resource signature needs emitted, each once.
 #[derive(Default)]
 struct ResourceItems {
-    emitted: BTreeSet<String>,
+    /// Each emitted item's Rust name, and the declaration it stands for.
+    emitted: BTreeMap<String, String>,
     items: Vec<TokenStream>,
+}
+
+impl ResourceItems {
+    /// Whether the item named `ident`, standing for `decl`, is still to emit.
+    /// The items share one module, so two declarations may not share a name.
+    fn claim(&mut self, ident: &syn::Ident, decl: &str) -> bool {
+        match self.emitted.entry(ident.to_string()) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(decl.to_string());
+                true
+            }
+            std::collections::btree_map::Entry::Occupied(entry) => {
+                assert!(
+                    entry.get() == decl,
+                    "the resource items `{}` and `{decl}` are both named `{ident}`",
+                    entry.get()
+                );
+                false
+            }
+        }
+    }
+}
+
+/// The dotted path of the stdlib class `cd`: `baml.fs.File`.
+fn class_path(cd: &NativeClassDef) -> String {
+    format!("{}.{}", cd.namespace_prefix, cd.name)
+}
+
+/// The dotted path a type path written in the namespace `scope` names.
+fn resolve_written(written: &str, scope: &str) -> String {
+    let package = scope.split('.').next().unwrap_or(scope);
+    crate::extract::written_path(written, package, scope)
 }
 
 impl<'a> ResourceVocab<'a> {
     fn new(class_defs: &'a [NativeClassDef]) -> Self {
         let tagged = class_defs
             .iter()
-            .filter_map(|cd| Some((cd.name.clone(), tagged_kind(cd)?)))
+            .filter_map(|cd| Some((class_path(cd), tagged_kind(cd)?)))
             .collect();
         let plain = class_defs
             .iter()
             .filter(|cd| matches!(cd.body, crate::types::NativeClassBody::Fields(_)))
-            .map(|cd| (cd.name.clone(), cd))
+            .map(|cd| (class_path(cd), cd))
             .collect();
         Self { tagged, plain }
     }
 
-    /// The Rust type for `ty`, registering in `items` what it needs emitted.
-    /// `named` names the enum a union becomes; `doc` says where it is used.
+    /// The Rust type for `ty`, written in the namespace `scope`, registering
+    /// in `items` what it needs emitted. `named` names the enum a union
+    /// becomes; `doc` says where it is used.
     fn ty(
         &self,
         ty: &BamlType,
+        scope: &str,
         named: &dyn Fn() -> syn::Ident,
         doc: &dyn Fn() -> String,
         path: &str,
@@ -1171,29 +1217,44 @@ impl<'a> ResourceVocab<'a> {
             BamlType::String => quote! { String },
             BamlType::Uint8Array => quote! { Vec<u8> },
             BamlType::Optional(inner) => {
-                let inner = self.ty(inner, named, doc, path, items);
+                let inner = self.ty(inner, scope, named, doc, path, items);
                 quote! { Option<#inner> }
             }
             BamlType::List(inner) => {
-                let inner = self.ty(inner, named, doc, path, items);
+                let inner = self.ty(inner, scope, named, doc, path, items);
                 quote! { Vec<#inner> }
             }
             BamlType::Union(members) => {
                 let ident = named();
-                if items.emitted.insert(ident.to_string()) {
-                    let item = self.union_item(&ident, members, &doc(), path, items);
+                let doc = doc();
+                if items.claim(&ident, &doc) {
+                    let item = self.union_item(&ident, members, scope, &doc, path, items);
                     items.items.push(item);
                 }
                 quote! { #ident }
             }
-            BamlType::Named(name) if self.tagged.contains_key(name.as_str()) => {
-                let spelling = format_ident!("{}", resource_spelling(self.tagged[name.as_str()]));
-                quote! { crate::payload::#spelling }
+            BamlType::Enum(enm) => {
+                let ident = resource_enum_ident(enm);
+                if items.claim(&ident, &enm.path) {
+                    items.items.push(enum_item(&ident, enm));
+                }
+                quote! { #ident }
             }
-            BamlType::Named(name) if self.plain.contains_key(name.as_str()) => {
-                let ident = rust_class_type_ident(name);
-                if items.emitted.insert(ident.to_string()) {
-                    let item = self.struct_item(self.plain[name.as_str()], path, items);
+            BamlType::Named(written) => {
+                let class = resolve_written(written, scope);
+                if let Some(&kind) = self.tagged.get(&class) {
+                    let spelling = format_ident!("{}", resource_spelling(kind));
+                    return quote! { crate::payload::#spelling };
+                }
+                let Some(&cd) = self.plain.get(&class) else {
+                    panic!(
+                        "`{path}`: a resource operation cannot state `{written}` yet; give the \
+                         type a resource-trait form"
+                    )
+                };
+                let ident = rust_class_type_ident(&cd.name);
+                if items.claim(&ident, &class) {
+                    let item = self.struct_item(cd, path, items);
                     items.items.push(item);
                 }
                 quote! { #ident }
@@ -1202,7 +1263,6 @@ impl<'a> ResourceVocab<'a> {
             | BamlType::Map(..)
             | BamlType::Generic(_)
             | BamlType::Media(_)
-            | BamlType::Named(_)
             | BamlType::RustType => panic!(
                 "`{path}`: a resource operation cannot state `{ty:?}` yet; give the type a \
                  resource-trait form"
@@ -1216,6 +1276,7 @@ impl<'a> ResourceVocab<'a> {
         &self,
         ident: &syn::Ident,
         members: &[BamlType],
+        scope: &str,
         doc: &str,
         path: &str,
         items: &mut ResourceItems,
@@ -1245,19 +1306,31 @@ impl<'a> ResourceVocab<'a> {
                 }
             };
         }
-        let doc = format!(" {doc}: one of its member types.");
+        check_union_members(members, path);
+        let doc = format!(" {doc}: one of its members.");
         let variants: Vec<TokenStream> = members
             .iter()
             .map(|member| {
                 let variant = union_variant(member, path);
-                let ty = self.ty(
-                    member,
-                    &|| panic!("`{path}`: a union member of a resource operation is a union"),
-                    &|| unreachable!("a nested union is refused above"),
-                    path,
-                    items,
-                );
-                quote! { #variant(#ty) }
+                match member {
+                    // A member that is one value is a variant with no data.
+                    BamlType::Null | BamlType::StringLiteral(_) => quote! { #variant },
+                    _ => {
+                        let ty = self.ty(
+                            member,
+                            scope,
+                            &|| {
+                                panic!(
+                                    "`{path}`: a union member of a resource operation is a union"
+                                )
+                            },
+                            &|| unreachable!("a nested union is refused above"),
+                            path,
+                            items,
+                        );
+                        quote! { #variant(#ty) }
+                    }
+                }
             })
             .collect();
         quote! {
@@ -1283,6 +1356,7 @@ impl<'a> ResourceVocab<'a> {
                 let field_ident = rust_field_ident(&field.name);
                 let ty = self.ty(
                     &field.field_type,
+                    &cd.namespace_prefix,
                     &|| format_ident!("{}{}", ident, pascal_case_key(&field.name)),
                     &|| format!("`{}` of `{class}`", field.name),
                     path,
@@ -1299,19 +1373,25 @@ impl<'a> ResourceVocab<'a> {
         }
     }
 
-    /// Every plain data class a resource signature states, by bare name.
-    fn plain_classes_of(&self, ty: &BamlType, out: &mut BTreeSet<String>) {
+    /// Every plain data class a resource signature written in the namespace
+    /// `scope` states, by dotted path.
+    fn plain_classes_of(&self, ty: &BamlType, scope: &str, out: &mut BTreeSet<String>) {
         match ty {
-            BamlType::Optional(inner) | BamlType::List(inner) => self.plain_classes_of(inner, out),
+            BamlType::Optional(inner) | BamlType::List(inner) => {
+                self.plain_classes_of(inner, scope, out);
+            }
             BamlType::Union(members) => {
                 for member in members {
-                    self.plain_classes_of(member, out);
+                    self.plain_classes_of(member, scope, out);
                 }
             }
-            BamlType::Named(name) if self.plain.contains_key(name.as_str()) => {
-                if out.insert(name.clone()) {
-                    for field in self.plain[name.as_str()].fields() {
-                        self.plain_classes_of(&field.field_type, out);
+            BamlType::Named(written) => {
+                let class = resolve_written(written, scope);
+                if let Some(&cd) = self.plain.get(&class)
+                    && out.insert(class)
+                {
+                    for field in cd.fields() {
+                        self.plain_classes_of(&field.field_type, &cd.namespace_prefix, out);
                     }
                 }
             }
@@ -1326,24 +1406,25 @@ impl<'a> ResourceVocab<'a> {
             | BamlType::Map(..)
             | BamlType::Generic(_)
             | BamlType::Media(_)
-            | BamlType::Named(_)
+            | BamlType::Enum(_)
             | BamlType::RustType => {}
         }
     }
 }
 
-/// The plain data classes the resource traits state, which the glue converts
-/// to and from their owned structs.
+/// The plain data classes the resource traits state, by dotted path, which
+/// the glue converts to and from their owned structs.
 fn resource_plain_classes(
     io_builtins: &[NativeBuiltin],
     vocab: &ResourceVocab,
 ) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for op in io_builtins.iter().filter(|op| resource_kind(op).is_some()) {
+        let scope = io_scope(op);
         for param in &op.params {
-            vocab.plain_classes_of(&param.ty, &mut out);
+            vocab.plain_classes_of(&param.ty, &scope, &mut out);
         }
-        vocab.plain_classes_of(&op.return_type, &mut out);
+        vocab.plain_classes_of(&op.return_type, &scope, &mut out);
     }
     out
 }
@@ -1366,11 +1447,90 @@ fn union_variant(ty: &BamlType, path: &str) -> syn::Ident {
         BamlType::Int => format_ident!("Int"),
         BamlType::Float => format_ident!("Float"),
         BamlType::Bool => format_ident!("Bool"),
+        BamlType::Null => format_ident!("Null"),
         BamlType::Uint8Array => format_ident!("Uint8Array"),
+        BamlType::StringLiteral(choice) => resource_choice_variant(choice),
+        BamlType::List(inner) => format_ident!("{}List", union_variant(inner, path)),
+        BamlType::Enum(enm) => resource_enum_ident(enm),
         BamlType::Named(name) => rust_class_type_ident(name),
-        _ => panic!("`{path}`: a resource union member `{ty:?}` has no variant"),
+        BamlType::Bigint
+        | BamlType::Map(..)
+        | BamlType::Optional(_)
+        | BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::RustType
+        | BamlType::Union(_) => panic!("`{path}`: a resource union member `{ty:?}` has no variant"),
     }
 }
+
+/// Refuse a union whose members the glue cannot tell apart, or whose enum
+/// would name two variants alike. The glue tries the members in order and
+/// tells them apart by the kind of value alone, so:
+/// - `string` and a string literal would both read a string;
+/// - two lists, or two enums, would both read their kind of value.
+fn check_union_members(members: &[BamlType], path: &str) {
+    let mut variants = BTreeSet::new();
+    for member in members {
+        let variant = union_variant(member, path).to_string();
+        assert!(
+            variants.insert(variant.clone()),
+            "`{path}`: two members of a resource union are both the variant `{variant}`"
+        );
+    }
+    let count = |is: fn(&BamlType) -> bool| members.iter().filter(|m| is(m)).count();
+    assert!(
+        count(|m| matches!(m, BamlType::String)) == 0
+            || count(|m| matches!(m, BamlType::StringLiteral(_))) == 0,
+        "`{path}`: a resource union holds both `string` and a string literal"
+    );
+    assert!(
+        count(|m| matches!(m, BamlType::List(_))) <= 1,
+        "`{path}`: a resource union holds two lists"
+    );
+    assert!(
+        count(|m| matches!(m, BamlType::Enum(_))) <= 1,
+        "`{path}`: a resource union holds two enums"
+    );
+}
+
+/// The Rust enum standing for the stdlib enum `enm`.
+fn resource_enum_ident(enm: &crate::types::NativeEnum) -> syn::Ident {
+    format_ident!("{}", enm.name())
+}
+
+/// The Rust enum standing for the stdlib enum `enm`, variant for variant.
+fn enum_item(ident: &syn::Ident, enm: &crate::types::NativeEnum) -> TokenStream {
+    let doc = format!(" A `{}`.", enm.path);
+    let variants: Vec<syn::Ident> = enm
+        .variants
+        .iter()
+        .map(|variant| format_ident!("{variant}"))
+        .collect();
+    let names = &enm.variants;
+    let count = variants.len();
+    quote! {
+        #[doc = #doc]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum #ident { #(#variants),* }
+
+        impl #ident {
+            pub const ALL: [Self; #count] = [#(Self::#variants),*];
+
+            /// The name of this variant.
+            pub const fn name(self) -> &'static str {
+                match self { #(Self::#variants => #names),* }
+            }
+
+            /// The variant named `name`.
+            pub fn from_name(name: &str) -> Option<Self> {
+                Self::ALL.into_iter().find(|variant| variant.name() == name)
+            }
+        }
+    }
+}
+
+/// Clippy's default `too_many_arguments` threshold, past which it lints.
+const CLIPPY_TOO_MANY_ARGUMENTS: usize = 7;
 
 /// The resource trait of every kind whose class has operations, and the
 /// types their signatures state. Emitted into `bex_vm_types`, beside the
@@ -1399,6 +1559,7 @@ pub fn generate_resource_traits(
         );
         let mut methods = Vec::new();
         for op in ops {
+            let scope = io_scope(op);
             assert!(
                 io_method_name(op) != "measure",
                 "`{}` is named as the resource trait's own `measure`",
@@ -1418,6 +1579,7 @@ pub fn generate_resource_traits(
                     let param_ident = format_ident!("{}", param.name);
                     let param_ty = vocab.ty(
                         &param.ty,
+                        &scope,
                         &|| resource_union_ident(kind, op, &param.name),
                         &|| format!("`{}` of `{class}.{method}`", param.name),
                         &op.path,
@@ -1428,14 +1590,19 @@ pub fn generate_resource_traits(
                 .collect();
             let ret = vocab.ty(
                 &op.return_type,
+                &scope,
                 &|| resource_union_ident(kind, op, "output"),
                 &|| format!("The result of `{class}.{method}`"),
                 &op.path,
                 &mut items,
             );
             let doc = format!(" `{class}.{method}`.");
+            // The method takes what its BAML signature does, and the receiver.
+            let many_arguments = (op.params.len() + 1 > CLIPPY_TOO_MANY_ARGUMENTS)
+                .then(|| quote! { #[expect(clippy::too_many_arguments)] });
             methods.push(quote! {
                 #[doc = #doc]
+                #many_arguments
                 fn #method_ident(self: std::sync::Arc<Self> #(, #params)*) -> crate::OpOutput<#ret>;
             });
         }
@@ -1496,7 +1663,7 @@ pub fn generate_io_structs(io_builtins: &[NativeBuiltin], class_defs: &[NativeCl
     let view_mod = emit_view_module(&io_class_defs, &class_ns_map, &class_defs_by_ns, &paths);
     let owned_mod = emit_owned_module(&io_class_defs, &class_ns_map, &class_defs_by_ns, &paths);
     let resource_conversions =
-        emit_resource_conversions(io_builtins, class_defs, &class_ns_map, &paths);
+        emit_resource_conversions(io_builtins, class_defs, &io_class_defs, &paths);
 
     let tokens = quote! {
         #view_mod
@@ -1513,20 +1680,22 @@ pub fn generate_io_structs(io_builtins: &[NativeBuiltin], class_defs: &[NativeCl
 fn emit_resource_conversions(
     io_builtins: &[NativeBuiltin],
     class_defs: &[NativeClassDef],
-    class_ns_map: &BTreeMap<String, String>,
+    io_class_defs: &[&NativeClassDef],
     paths: &CodegenPaths,
 ) -> TokenStream {
     let vocab = ResourceVocab::new(class_defs);
     let conversions = resource_plain_classes(io_builtins, &vocab)
         .into_iter()
-        .map(|name| {
-            let cd = vocab.plain[name.as_str()];
-            let ns = class_ns_map.get(name.as_str()).unwrap_or_else(|| {
-                panic!("the plain class `{name}` a resource states is in no sys-op namespace")
-            });
+        .map(|class| {
+            let cd = vocab.plain[class.as_str()];
+            assert!(
+                io_class_defs.iter().any(|io| std::ptr::eq(*io, cd)),
+                "the plain class `{class}` a resource states is in no sys-op namespace"
+            );
             let owned = &paths.owned;
-            let ns_ident = format_ident!("{ns}");
-            let ident = rust_class_type_ident(&name);
+            let ns_ident = format_ident!("{}", class_ns_segment(cd));
+            let name = &cd.name;
+            let ident = rust_class_type_ident(name);
             let fields: Vec<syn::Ident> = cd
                 .fields()
                 .iter()
@@ -1574,6 +1743,7 @@ fn plain_value(ty: &BamlType) -> bool {
         | BamlType::Media(_)
         | BamlType::Named(_)
         | BamlType::RustType
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_) => false,
     }
@@ -1613,9 +1783,11 @@ pub fn generate_io_traits(
     let ns_traits = emit_namespace_traits(&tree, &class_ns_map, &runtime_built, &paths);
     let root_trait = emit_root_trait(&tree);
     let sys_ops = emit_sys_ops_struct(io_builtins);
+    let glue_error = emit_glue_error();
 
     let tokens = quote! {
         #struct_mods
+        #glue_error
         #class_traits
         #ns_traits
         #root_trait
@@ -1623,6 +1795,38 @@ pub fn generate_io_traits(
     };
 
     crate::format_tokens(&tokens)
+}
+
+/// Why a sys-op's glue could not read its arguments: a value of another
+/// shape than the operation takes, which BAML can catch, or a heap that
+/// breaks the runtime's own invariants.
+fn emit_glue_error() -> TokenStream {
+    quote! {
+        enum __GlueError {
+            Access(AccessError),
+            Internal(bex_vm_types::errors::VmInternalError),
+        }
+
+        impl From<AccessError> for __GlueError {
+            fn from(error: AccessError) -> Self {
+                Self::Access(error)
+            }
+        }
+
+        impl __GlueError {
+            fn into_op_error(self, op: SysOp) -> OpError {
+                match self {
+                    Self::Access(error) => OpError::new(
+                        op,
+                        bex_vm_types::errors::VmBamlError::AccessError {
+                            message: error.to_string(),
+                        },
+                    ),
+                    Self::Internal(error) => OpError::new(op, error),
+                }
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -2624,7 +2828,7 @@ fn emit_glue_method(
                 #receiver_extraction
                 #(#param_extractions)*
                 #(#type_arg_extractions)*
-                Ok::<_, AccessError>((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*))
+                Ok::<_, __GlueError>((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*))
             })();
 
             match __extraction {
@@ -2632,10 +2836,7 @@ fn emit_glue_method(
                     #(#type_arg_bind_stmts)*
                     #into_result
                 }
-                Err(e) => SysOpResult::Ready(Err(OpError::new(
-                    SysOp::#variant_ident,
-                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
-                ))),
+                Err(e) => SysOpResult::Ready(Err(e.into_op_error(SysOp::#variant_ident))),
             }
         }
     }
@@ -2662,10 +2863,13 @@ fn tagged_arg_expr(
             match #arg.as_rust_payload(heap.as_ref(), permit)? {
                 bex_vm_types::RustPayload::#spelling(state) => state,
                 __other => {
-                    return Err(AccessError::TypeMismatch {
-                        expected: #path,
-                        actual: format!("{:?}", __other.kind()),
-                    });
+                    return Err(__GlueError::Internal(
+                        bex_vm_types::errors::VmInternalError::RustPayloadMismatch {
+                            class: #name,
+                            expected: baml_base::RustPayloadKind::#spelling,
+                            got: __other.kind(),
+                        },
+                    ));
                 }
             }
         }
@@ -2736,6 +2940,62 @@ fn resource_extract_expr(
                 .map(|member| {
                     let variant = union_variant(member, path);
                     match member {
+                        BamlType::Null => quote! {
+                            if #arg.is_null() {
+                                bex_vm_types::resource::#ident::#variant
+                            }
+                        },
+                        BamlType::Bool => quote! {
+                            if let Ok(__member) = #arg.as_bool() {
+                                bex_vm_types::resource::#ident::#variant(__member)
+                            }
+                        },
+                        BamlType::Int => quote! {
+                            if let Ok(__member) = #arg.as_int() {
+                                bex_vm_types::resource::#ident::#variant(__member)
+                            }
+                        },
+                        BamlType::StringLiteral(choice) => quote! {
+                            if #arg
+                                .as_string(heap.as_ref(), permit)
+                                .is_ok_and(|__member| __member.as_str() == #choice)
+                            {
+                                bex_vm_types::resource::#ident::#variant
+                            }
+                        },
+                        BamlType::Enum(enm) => {
+                            let enum_ident = resource_enum_ident(enm);
+                            let enum_path = &enm.path;
+                            quote! {
+                                if let Ok(__member) = #arg.as_variant_name(heap.as_ref(), permit) {
+                                    bex_vm_types::resource::#ident::#variant(
+                                        bex_vm_types::resource::#enum_ident::from_name(&__member)
+                                            .ok_or_else(|| AccessError::TypeMismatch {
+                                                expected: #enum_path,
+                                                actual: __member,
+                                            })?,
+                                    )
+                                }
+                            }
+                        }
+                        BamlType::List(_) => {
+                            let conv = external_to_typed_expr(
+                                &quote! { __member },
+                                member,
+                                class_ns_map,
+                                paths,
+                            );
+                            quote! {
+                                if let Ok(__member @ BexExternalValue::Array { .. }) =
+                                    #arg.as_owned_but_very_slow(heap.as_ref(), permit)
+                                {
+                                    bex_vm_types::resource::#ident::#variant({
+                                        let __converted: Result<_, AccessError> = #conv;
+                                        __converted?
+                                    })
+                                }
+                            }
+                        }
                         BamlType::String => quote! {
                             if let Ok(__member) = #arg.as_string(heap.as_ref(), permit) {
                                 bex_vm_types::resource::#ident::#variant(__member.to_string())
@@ -2765,9 +3025,20 @@ fn resource_extract_expr(
                     return Err(AccessError::TypeMismatch {
                         expected: #expected,
                         actual: #arg.type_name(),
-                    });
+                    }
+                    .into());
                 }
             }
+        }
+        BamlType::Enum(enm) => {
+            let enum_ident = resource_enum_ident(enm);
+            let enum_path = &enm.path;
+            quote! {{
+                let __name = #arg.as_variant_name(heap.as_ref(), permit)?;
+                bex_vm_types::resource::#enum_ident::from_name(&__name).ok_or_else(|| {
+                    AccessError::TypeMismatch { expected: #enum_path, actual: __name }
+                })?
+            }}
         }
         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
             let view = plain_view(name);
@@ -2908,22 +3179,22 @@ fn emit_resource_glue(
                 let __receiver = match __arg_self.as_rust_payload(heap.as_ref(), permit)? {
                     bex_vm_types::RustPayload::#spelling(resource) => resource,
                     __other => {
-                        return Err(AccessError::TypeMismatch {
-                            expected: #class,
-                            actual: format!("{__other:?}"),
-                        });
+                        return Err(__GlueError::Internal(
+                            bex_vm_types::errors::VmInternalError::RustPayloadMismatch {
+                                class: #class,
+                                expected: baml_base::RustPayloadKind::#spelling,
+                                got: __other.kind(),
+                            },
+                        ));
                     }
                 };
                 #(#param_extractions)*
-                Ok::<_, AccessError>((__receiver #(, #param_idents)*))
+                Ok::<_, __GlueError>((__receiver #(, #param_idents)*))
             })();
 
             match __extraction {
                 Ok((__receiver #(, #param_idents)*)) => #into_result,
-                Err(e) => SysOpResult::Ready(Err(OpError::new(
-                    SysOp::#variant_ident,
-                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
-                ))),
+                Err(e) => SysOpResult::Ready(Err(e.into_op_error(SysOp::#variant_ident))),
             }
         }
     }
@@ -3296,9 +3567,9 @@ fn emit_free_fn_glue(
 
     let extraction_return = if all_extracted_idents.len() == 1 {
         let id = &all_extracted_idents[0];
-        quote! { Ok::<_, AccessError>(#id) }
+        quote! { Ok::<_, __GlueError>(#id) }
     } else {
-        quote! { Ok::<_, AccessError>((#(#all_extracted_idents),*)) }
+        quote! { Ok::<_, __GlueError>((#(#all_extracted_idents),*)) }
     };
 
     let call_expr = quote! {
@@ -3338,10 +3609,7 @@ fn emit_free_fn_glue(
                     #(#type_arg_bind_stmts)*
                     #into_result
                 }
-                Err(e) => SysOpResult::Ready(Err(OpError::new(
-                    SysOp::#variant_ident,
-                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
-                ))),
+                Err(e) => SysOpResult::Ready(Err(e.into_op_error(SysOp::#variant_ident))),
             }
         }
     }

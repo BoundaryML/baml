@@ -226,6 +226,9 @@ impl Object {
                     crate::RustPayload::Glob(glob) => {
                         meter.shared(glob, |meter| glob.measure(meter));
                     }
+                    crate::RustPayload::OutputFormat(schema) => {
+                        meter.shared(schema, |meter| schema.measure(meter));
+                    }
                     crate::RustPayload::TcpStream(stream) => {
                         meter.shared(stream, |meter| stream.measure(meter));
                     }
@@ -272,6 +275,17 @@ impl Object {
                     }
                     // The value itself lives in the host.
                     crate::RustPayload::HostValue(_) => {}
+                    crate::RustPayload::Image(media)
+                    | crate::RustPayload::Audio(media)
+                    | crate::RustPayload::Pdf(media)
+                    | crate::RustPayload::Video(media) => {
+                        meter.shared(media, |meter| crate::BexRustData::measure(&**media, meter));
+                    }
+                    crate::RustPayload::Prompt(prompt) => {
+                        meter.shared(prompt, |meter| {
+                            crate::BexRustData::measure(&**prompt, meter);
+                        });
+                    }
                     crate::RustPayload::ClassBuilder(state) => {
                         meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
                     }

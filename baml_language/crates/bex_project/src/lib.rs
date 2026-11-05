@@ -34,7 +34,6 @@ pub use bex_external_types::{
     HostException, HostKey, HostOutcome, HostReleaseFn, HostValueArc, HostValueKind, MediaKind,
     RuntimeTy, TaggedHeapHandleKind, TraceControl, WeakHeapRef, WireFunctionParamTy, WireHead,
     WireTy, host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
-    try_convert_rust_data,
 };
 pub use bex_vm_types::{
     BexRustData, HeapPtr, MediaContent, MediaValue, Meter, Program, PromptAst, PromptAstSimple,

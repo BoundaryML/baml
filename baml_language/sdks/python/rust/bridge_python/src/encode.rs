@@ -514,7 +514,7 @@ impl<'py> PyValue<'_, 'py> {
     }
 
     /// The `_PortablePromptAst` this object is or carries: itself, or the
-    /// `_data` of the generated `ai.Prompt` shell.
+    /// `_data` private attribute of a generated `ai.Prompt`.
     fn prompt_data(&self) -> PyResult<Option<Bound<'py, PyAny>>> {
         if self.is_a(&self.cx.prompt_ast) {
             return Ok(Some(self.obj.clone()));
@@ -528,11 +528,6 @@ impl<'py> PyValue<'_, 'py> {
             && data.is_instance(&self.cx.prompt_ast)?
         {
             return Ok(Some(data));
-        }
-        for (wire_name, value) in self.model_fields()? {
-            if wire_name == "_data" && value.is_instance(&self.cx.prompt_ast)? {
-                return Ok(Some(value));
-            }
         }
         Ok(None)
     }
