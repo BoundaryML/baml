@@ -2298,9 +2298,34 @@ jobs:
             --content-type application/json \
             --cache-control "public, max-age=300"
 
+  dry-run-homebrew:
+    name: Verify Homebrew dry-run package
+    needs: [plan, all-builds, dry-run-artifacts]
+    if: ${{ needs.plan.outputs.dry_run == 'true' }}
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: wrapper-baml
+          path: dist/wrapper
+      - uses: actions/download-artifact@v8
+        with:
+          name: dry-run-release-files
+          path: dry-run
+      - name: Install, test, and check linkage of the real package
+        run: |
+          python3 scripts/baml-test-homebrew-package \
+            --formula dry-run/package-manager/homebrew/Formula/baml.rb \
+            --wrapper-dir dist/wrapper
+
   dry-run-summary:
     name: Dry-run summary
-    needs: [plan, all-builds, dry-run-artifacts]
+    needs: [plan, all-builds, dry-run-artifacts, dry-run-homebrew]
     if: ${{ needs.plan.outputs.dry_run == 'true' }}
     runs-on: ubuntu-latest
     steps:

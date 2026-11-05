@@ -81,6 +81,9 @@ class PackageManagerArtifactsTest(unittest.TestCase):
                 f'assert_match "baml wrapper {VERSION}"', formula
             )
             self.assertIn('shell_output("#{bin}/baml --version")', formula)
+            self.assertIn('ENV["BAML_TOOLCHAIN"] = (testpath/"baml-cli").to_s', formula)
+            self.assertIn('assert_match "Homebrew CLI fixture", version_output', formula)
+            self.assertNotIn('ENV.delete "BAML_TOOLCHAIN"', formula)
             self.assertIn('assert_match "installed toolchains: (none)"', formula)
             self.assertIn('shell_output("#{bin}/baml toolchain list")', formula)
             self.assertIn("self-update is disabled in this build", formula)
