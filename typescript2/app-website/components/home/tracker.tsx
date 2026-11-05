@@ -74,7 +74,9 @@ const GRID =
   'grid grid-cols-[52px_repeat(2,minmax(0,1fr))_14px_repeat(4,minmax(0,1fr))] md:grid-cols-[132px_repeat(2,minmax(0,1fr))_48px_repeat(4,minmax(0,1fr))] gap-x-1 md:gap-x-2 items-center';
 const ROW = 'h-11 md:h-14';
 
+/** `n` held between 0 and 1. */
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
+/** Quadratic ease in and out over 0 to 1. */
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
 /** The grid column a stage sits in: past the name column, and past the deploy line after Test. */
@@ -276,6 +278,7 @@ function BamlBar({
   );
 }
 
+/** A build or test command in a stage's cell, shown on wide screens only. `lit` gives it the accent. */
 function Command({ children, lit }: { children: string; lit?: boolean }) {
   return (
     <span
@@ -286,6 +289,8 @@ function Command({ children, lit }: { children: string; lit?: boolean }) {
   );
 }
 
+/** The v4 hero diagram in the given /diagram-styles style, played as a looping lap from build to
+ *  production. */
 export default function Tracker({ style }: { style: string }) {
   const t = useLap();
   // How many stages the lap has filled, in stage widths.
@@ -406,20 +411,23 @@ export default function Tracker({ style }: { style: string }) {
                         <Command>{lang.test.command}</Command>
                       </Card>
                     ) : (
-                      // No test tool of its own: a dashed cell, like the products past the line.
+                      // No test tool of its own: a dashed cell, like the products past the line. On a
+                      // phone it stays, empty, so every language row has a build and a test cell.
                       <div
-                        className={`${ROW} hidden md:flex items-center justify-center gap-2.5 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) text-[12.5px] text-center text-(--ds-ink)/80`}
+                        className={`${ROW} flex items-center justify-center gap-2.5 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) text-[12.5px] text-center text-(--ds-ink)/80 *:max-md:hidden`}
                         style={{
                           gridColumn: column(1),
                           gridRow: i + 1,
                           ...('own' in lang.test ? { color: MUTED } : {}),
                         }}
                       >
-                        {'own' in lang.test
-                          ? 'Bring your own'
-                          : lang.test.marks.map((m) => (
-                              <MarkTile key={m.name} mark={m} size={18} />
-                            ))}
+                        {'own' in lang.test ? (
+                          <span>Bring your own</span>
+                        ) : (
+                          lang.test.marks.map((m) => (
+                            <MarkTile key={m.name} mark={m} size={18} />
+                          ))
+                        )}
                       </div>
                     )}
                   </Fragment>
@@ -518,6 +526,8 @@ export default function Tracker({ style }: { style: string }) {
                       clipPath: back
                         ? 'inset(0 -2px -2px 0)'
                         : 'inset(0 -2px -2px 100%)',
+                      // A fully clipped border still left a sliver of its right edge under the bar.
+                      opacity: back ? 1 : 0,
                       transition: back
                         ? 'clip-path 1400ms cubic-bezier(0.65,0,0.35,1)'
                         : 'none',

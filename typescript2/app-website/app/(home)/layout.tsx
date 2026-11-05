@@ -1,40 +1,15 @@
 import appleIcon from '@boundaryml/brand/logo/favicon/boundary/apple-touch-icon.png';
 import favicon32 from '@boundaryml/brand/logo/favicon/boundary/favicon-32.png';
 import type { Metadata, Viewport } from 'next';
-import localFont from 'next/font/local';
 import { OG_SITE, SITE_URL, TWITTER_HANDLE } from '@/app/_lib/metadata';
+import { SiteStructuredData } from '@/components/structured-data';
 import { AnalyticsProvider } from '@/context/analytics';
+import { FONT_VARIABLES } from './fonts';
 import './globals.css';
 
-// Root layout for the homepage and the blog. They follow the brand package's BAML lane (Clover purple
-// on a dark theme) and load ./globals.css. The BAML pages (app/(baml)) have their own root layout, so
-// moving between the two groups is a full page load.
-
-// Every face is self-hosted from ./fonts, so the build needs no network access.
-const geist = localFont({
-  display: 'swap',
-  src: './fonts/Geist.woff2',
-  variable: '--font-geist',
-  weight: '100 900',
-});
-const lexend = localFont({
-  display: 'swap',
-  src: './fonts/Lexend.woff2',
-  variable: '--font-lexend',
-  weight: '100 900',
-});
-const jetbrainsMono = localFont({
-  display: 'swap',
-  src: './fonts/JetBrainsMono.woff2',
-  variable: '--font-jetbrains-mono',
-  weight: '100 800',
-});
-// Geist Pixel Square, the brand's caption face.
-const geistPixel = localFont({
-  display: 'swap',
-  src: './fonts/GeistPixel-Square.otf',
-  variable: '--font-geist-pixel',
-});
+// The site's root layout. Every page follows the brand package's BAML lane (Clover purple on a dark
+// theme) and loads ./globals.css. Pages other than the homepage and the blog use PageShell
+// (components/home/page-shell.tsx) for the homepage's nav and footer.
 
 const TITLE = 'Boundary | The unified software stack for agents';
 const DESCRIPTION =
@@ -65,6 +40,8 @@ export const viewport: Viewport = {
   themeColor: '#0a0a0a',
 };
 
+/** The root layout: the document with the site's fonts, structured data, and analytics around every
+ *  page. */
 export default function RootLayout({
   children,
 }: {
@@ -72,13 +49,14 @@ export default function RootLayout({
 }) {
   return (
     <html
-      className={`${geist.variable} ${lexend.variable} ${jetbrainsMono.variable} ${geistPixel.variable} antialiased`}
+      className={`${FONT_VARIABLES} antialiased`}
       // These pages are dark only, so the theme is fixed here rather than chosen before paint.
       data-theme="dark"
       id="top"
       lang="en"
     >
       <body className="min-h-full flex flex-col">
+        <SiteStructuredData />
         <AnalyticsProvider>{children}</AnalyticsProvider>
         {/* Page grid rails; drawn in globals.css (.grid-rails). Purely visual. */}
         <div aria-hidden className="grid-rails">

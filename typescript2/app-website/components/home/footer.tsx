@@ -16,7 +16,6 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
     links: [
       ['Source code', LINKS.github],
-      ['Demo projects', LINKS.demos],
       ['Discord', LINKS.discord],
     ],
     title: 'Open source',
@@ -27,7 +26,8 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
   },
 ];
 
-// The page is always dark, so the footer carries the white Boundary wordmark.
+/** The site footer: link columns and the Boundary wordmark. The page is always dark, so the footer
+ *  carries the white Boundary wordmark. */
 export default function Footer() {
   return (
     <footer {...section('footer')} className="bg-footer text-footer-ink">

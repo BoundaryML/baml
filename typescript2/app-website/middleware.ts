@@ -1,9 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-// `/` is the Boundary homepage, which has no Markdown version; index.md is
-// BAML's landing page, now at /what-is-baml.
+// `/` is the Boundary homepage, which has no Markdown version; /index.md is
+// BAML's introduction in Markdown, for agents.
 const ROUTES = new Map<string, { alternate: string; slug: string }>([
-  ['/what-is-baml', { alternate: '/index.md', slug: 'index' }],
   ['/index.md', { alternate: '/index.md', slug: 'index' }],
   ['/quickstart', { alternate: '/quickstart.md', slug: 'quickstart' }],
   ['/quickstart.md', { alternate: '/quickstart.md', slug: 'quickstart' }],
@@ -13,6 +12,7 @@ const ROUTES = new Map<string, { alternate: string; slug: string }>([
   ['/pricing.md', { alternate: '/pricing.md', slug: 'pricing' }],
 ]);
 
+/** Whether the request should get the Markdown version of a page rather than the HTML. */
 function acceptsMarkdown(request: NextRequest) {
   if (request.nextUrl.pathname.endsWith('.md')) return true;
 
@@ -25,6 +25,10 @@ function acceptsMarkdown(request: NextRequest) {
   return accept === '' || accept === '*/*';
 }
 
+/**
+ * Serves the Markdown version of a curated route to clients that ask for it,
+ * and marks the HTML version as varying on Accept with a Markdown alternate.
+ */
 export function middleware(request: NextRequest) {
   const route = ROUTES.get(request.nextUrl.pathname);
   if (!route) return NextResponse.next();

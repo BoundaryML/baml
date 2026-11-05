@@ -1,0 +1,306 @@
+/* The "Try BAML" install unit on /quickstart. In the
+   homepage's BAML lane: every colour is a theme variable from app/(home)/globals.css, Clover is the
+   only accent, and the small labels are the brand's caption face (Geist Pixel Square). */
+
+.unit {
+  max-width: 560px;
+  overflow: hidden;
+  font-family: inherit;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+}
+
+.head {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--ink) 3%, var(--raised));
+  border-bottom: 1px solid var(--rule);
+}
+.tab {
+  padding: 4px 13px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--body);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  transition:
+    color 130ms ease,
+    background 130ms ease;
+}
+.tab:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.tab[aria-selected="true"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.tab[aria-selected="true"]:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.copyBtn {
+  padding: 3px 9px;
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: var(--body);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.copyBtn:hover {
+  color: var(--ink);
+}
+
+.body {
+  min-height: 236px;
+  padding: 0.85rem 0.95rem 0.95rem;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--ink);
+}
+/* Compact variant (top of /explore): drops the tabbed header and the tall
+   min-height so it reads as a quick install pointer, not the full unit. */
+.compact .body {
+  min-height: 0;
+}
+
+.opt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  margin: 15px 0 4px;
+}
+.opt:first-child {
+  margin-top: 0;
+}
+.optCap,
+.optLabel {
+  font-family: var(--font-geist-pixel);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: -0.02em;
+}
+.optCap {
+  margin-right: 0.15rem;
+}
+.optLabel {
+  margin: 15px 0 4px;
+}
+.optBtn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 3px 9px;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: var(--body);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+.optBtn svg {
+  width: 11px;
+  height: 11px;
+}
+.optBtn:hover {
+  color: var(--ink);
+}
+.optBtn[aria-selected="true"] {
+  color: var(--accent);
+  background: var(--ground);
+  border-color: var(--rule);
+}
+.optBtn[aria-selected="true"] svg {
+  color: var(--accent);
+}
+.optBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* host-language logos in the "call from" row, sized to match the inline svgs */
+.optBtn .logo {
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+}
+
+/* Footer on the compact unit: where to go once BAML runs. */
+.next {
+  padding: 7px 0.95rem 8px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--body);
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--ink) 3%, var(--raised));
+  border-top: 1px solid var(--rule);
+}
+.next a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.next a:hover {
+  text-decoration: underline;
+}
+
+.row {
+  font-family: var(--font-mono);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.sh {
+  color: var(--accent);
+}
+.cmt {
+  color: var(--muted);
+}
+
+/* Terminal output under a command. Indented to the width of the `$ ` prompt so
+   it reads as a reply rather than another thing to run. */
+.out {
+  padding-left: 2ch;
+  color: var(--muted);
+}
+
+.sect {
+  position: relative;
+}
+.sectCopy {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  padding: 3px 4px;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--raised);
+  border: 0;
+  border-radius: 6px;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
+}
+.sectCopy svg {
+  width: 13px;
+  height: 13px;
+}
+.sect:hover .sectCopy,
+.sectCopy:focus-visible {
+  opacity: 1;
+}
+.sectCopy:hover {
+  color: var(--accent);
+}
+.sectCopy.ok {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.agentPane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: flex-start;
+}
+.promptLead {
+  font-family: var(--font-geist-pixel);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: -0.02em;
+}
+.promptWrap {
+  position: relative;
+  max-height: 150px;
+  overflow: hidden;
+  transition: max-height 220ms ease;
+}
+.promptWrap.expanded {
+  max-height: 1200px;
+}
+.promptWrap:not(.expanded)::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 46px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(to bottom, transparent, var(--raised));
+}
+.promptBox {
+  font-size: 12.5px;
+  line-height: 1.66;
+  color: var(--ink);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.bin {
+  color: var(--accent);
+}
+.agentActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.agentCopy {
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  transition:
+    background 130ms ease,
+    color 130ms ease;
+}
+.agentCopy:hover {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+.agentCopy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.agentExpand {
+  padding: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--body);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+.agentExpand:hover {
+  color: var(--ink);
+}
+.agentExpand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promptWrap,
+  .sectCopy,
+  .optBtn,
+  .agentCopy {
+    transition: none;
+  }
+}

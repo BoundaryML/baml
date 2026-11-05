@@ -58,16 +58,15 @@ const nextConfig = {
         destination: '/blog?tags=release',
         permanent: true,
       },
-      // `/` is the Boundary homepage (app/(home)); BAML's landing page is
-      // /what-is-baml, and the BAML links below fold into it.
+      // `/` is the Boundary homepage, and the old BAML landing links fold into it.
       {
         source: '/explore',
-        destination: '/what-is-baml',
+        destination: '/',
         permanent: false,
       },
       {
         source: '/built-with-baml',
-        destination: '/what-is-baml',
+        destination: '/',
         permanent: true,
       },
       {
@@ -77,7 +76,7 @@ const nextConfig = {
       },
       {
         source: '/learn6',
-        destination: '/what-is-baml',
+        destination: '/',
         permanent: true,
       },
       {
@@ -111,21 +110,36 @@ const nextConfig = {
       // Retired pages fold into their live successors.
       {
         source: '/thesis',
-        destination: '/explore',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/what-is-baml',
+        destination: '/',
         permanent: true,
       },
       {
         source: '/baml',
-        destination: '/what-is-baml',
+        destination: '/',
         permanent: true,
       },
       {
         source: '/baml-intro',
-        destination: '/what-is-baml',
+        destination: '/',
         permanent: true,
       },
       {
         source: '/solutions',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/atb',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/explore-legacy',
         destination: '/',
         permanent: true,
       },
