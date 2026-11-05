@@ -72,18 +72,27 @@ fn classify_file(
     file: baml_base::SourceFile,
     function: &str,
 ) -> Vec<(String, bool)> {
+    classify_file_at_opt(db, file, function, OptLevel::Two)
+}
+
+fn classify_file_at_opt(
+    db: &baml_db::ProjectDatabase,
+    file: baml_base::SourceFile,
+    function: &str,
+    opt: OptLevel,
+) -> Vec<(String, bool)> {
     assert_no_diagnostic_errors(db);
     let loc = *file_functions(db, file)
         .iter()
         .find(|&&loc| function_data(db, loc).name.as_str() == function)
         .unwrap_or_else(|| panic!("no function `{function}`"));
-    let mir = lower_function(db, loc, OptLevel::Two)
+    let mir = lower_function(db, loc, opt)
         .as_ref()
         .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("`{function}` must lower to bytecode")
     };
-    let facts = escape::analyze(db, file.source_root(db), body, mir.arity, OptLevel::Two);
+    let facts = escape::analyze(db, file.source_root(db), body, mir.arity, opt);
     let mut seen = std::collections::HashSet::new();
     body.locals
         .iter()
@@ -1438,4 +1447,321 @@ function observed(xs: int[]) -> int {
     ));
     assert!(!bytecode.contains("array_iter_next"), "{bytecode}");
     assert!(bytecode.contains("virtual_call"), "{bytecode}");
+}
+
+#[test]
+fn awaited_objects_are_shared() {
+    assert_locality(
+        r#"
+function main() -> int {
+    let child = spawn { [42] };
+    let xs = await child;
+    xs[0]
+}
+"#,
+        "main",
+        &[("xs", false)],
+    );
+}
+
+#[test]
+fn global_objects_are_shared() {
+    assert_locality(
+        r#"
+const SHARED = [42];
+function main() -> int {
+    let xs = SHARED;
+    xs[0]
+}
+"#,
+        "main",
+        &[("xs", false)],
+    );
+}
+
+#[test]
+fn sysop_results_are_shared() {
+    assert_locality(
+        r#"
+function main() -> bool {
+    let glob = baml.glob.new("*");
+    glob.matches("file")
+}
+"#,
+        "main",
+        &[("glob", false)],
+    );
+}
+
+#[test]
+fn an_uncaptured_alias_of_a_captured_value_is_shared() {
+    assert_locality(
+        r#"
+function main() -> int {
+    let original = [1];
+    let captured = original;
+    let read = () -> int { captured[0] };
+    original[0] + read()
+}
+"#,
+        "main",
+        &[("original", false)],
+    );
+}
+
+#[test]
+fn an_explicit_spawn_plan_is_shared() {
+    assert_locality(
+        r#"
+function main() -> int {
+    let plan = baml.spawn.Plan<int, never> {
+        body: () -> int throws never { 1 },
+        name: null,
+        limits: [],
+        cancel_tokens: [],
+        root: false,
+    };
+    let child = baml.spawn.__spawn(plan);
+    await child
+}
+"#,
+        "main",
+        &[("plan", false)],
+    );
+}
+
+#[test]
+fn sysop_arguments_are_shared() {
+    // A sys-op receives its object arguments as heap handles.
+    assert_locality(
+        r#"
+function main() -> int {
+    let options = baml.glob.ScanOptions {
+        cwd: null,
+        dot: null,
+        absolute: null,
+        follow_symlinks: null,
+        throw_error_on_broken_symlink: null,
+        only_files: null,
+    };
+    let fresh = baml.glob.ScanOptions {
+        cwd: null,
+        dot: null,
+        absolute: null,
+        follow_symlinks: null,
+        throw_error_on_broken_symlink: null,
+        only_files: null,
+    };
+    options.dot = true;
+    fresh.dot = true;
+    let paths = baml.glob.new("*").scan(options);
+    paths.length()
+}
+"#,
+        "main",
+        &[("options", false), ("fresh", true)],
+    );
+}
+
+#[test]
+fn fields_of_a_finalized_instance_are_shared() {
+    // The collector runs `cleanup` in a VM of its own once the instance is
+    // garbage, while `main` may still hold the array.
+    assert_locality(
+        r#"
+class Resource {
+    log: int[],
+    function cleanup(self) -> void throws never { self.log.push(0); }
+}
+class Plain {
+    log: int[],
+}
+function main() -> int {
+    let held = [1];
+    let resource = Resource { log: held };
+    let kept = [2];
+    let plain = Plain { log: kept };
+    resource.log.push(3);
+    plain.log.push(4);
+    held[0] + kept[0]
+}
+"#,
+        "main",
+        &[
+            ("held", false),
+            ("kept", true),
+            ("resource", true),
+            ("plain", true),
+        ],
+    );
+}
+
+#[test]
+fn fields_of_a_finalized_instance_built_in_a_callee_are_shared() {
+    assert_locality(
+        r#"
+class Resource {
+    log: int[],
+    function cleanup(self) -> void throws never { self.log.push(0); }
+}
+function abandon(log: int[]) -> void throws never {
+    let resource = Resource { log };
+    resource.log.push(-1);
+}
+function main() -> int {
+    let log: int[] = [];
+    abandon(log);
+    log.push(1);
+    log[0]
+}
+"#,
+        "main",
+        &[("log", false)],
+    );
+}
+
+#[test]
+fn dependency_classes_may_finalize() {
+    // Whether a dependency's class has a finalizer must not depend on whether
+    // its source is mounted: assume it may.
+    let mut db = make_db();
+    db.dependency("dep");
+    db.file(
+        "<builtin>/dep/lib.baml",
+        r#"
+class Box {
+    items: int[],
+}
+"#,
+    );
+    let file = db.file(
+        "test.baml",
+        r#"
+function main() -> int {
+    let items = [1];
+    let boxed = dep.Box { items };
+    items.push(2);
+    boxed.items[0]
+}
+"#,
+    );
+    let actual = classify_file(&db, file, "main");
+    assert!(
+        actual
+            .iter()
+            .any(|(local, is_local)| local == "items" && !is_local),
+        "a dependency class may have a finalizer: {actual:?}"
+    );
+}
+
+#[test]
+fn review_late_publication_through_returned_alias() {
+    assert_locality(
+        r#"
+function identity(xs: int[]) -> int[] { xs }
+function publish(xs: int[]) -> void { let child = spawn { xs.push(9) }; }
+function main() -> int {
+    let xs = [1];
+    xs.push(2);
+    let alias = identity(xs);
+    publish(alias);
+    xs[0]
+}
+"#,
+        "main",
+        &[("xs", false), ("alias", false)],
+    );
+}
+
+#[test]
+fn review_map_callback_returns_shared_array() {
+    assert_locality(
+        r#"
+function main(shared: int[]) -> int {
+    let mapped = [1].map((n: int) -> int[] { shared });
+    let item = mapped[0];
+    item.push(2);
+    item[0]
+}
+"#,
+        "main",
+        &[("mapped", true), ("item", false)],
+    );
+}
+
+#[test]
+fn review_defer_publishes_array_after_local_access() {
+    assert_locality(
+        r#"
+function publish(xs: int[]) -> void { let child = spawn { xs.push(9) }; }
+function main() -> int {
+    let xs = [1];
+    defer { publish(xs); }
+    xs.push(2);
+    xs[0]
+}
+"#,
+        "main",
+        &[("xs", false)],
+    );
+}
+
+#[test]
+fn review_nested_container_mask_requires_shared_contents() {
+    let (locals, calls) = needs(
+        r#"
+function read(nested: int[][]) -> int { nested[0][0] }
+function main(shared: int[]) -> int {
+    let nested = [shared];
+    read(nested)
+}
+"#,
+        "main",
+    );
+    assert_eq!(
+        locals.iter().find(|(name, _)| name == "nested").unwrap().1,
+        0
+    );
+    assert!(calls.iter().any(|args| args == &[1]), "{calls:?}");
+}
+
+#[test]
+fn review_parameters_beyond_locality_mask_are_shared() {
+    let params = (0..65)
+        .map(|i| format!("p{i}: int[]"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!("function main({params}) -> int {{ p64[0] }}");
+    let (locals, _) = needs(&source, "main");
+    assert_eq!(
+        locals.iter().find(|(name, _)| name == "p63").unwrap().1,
+        1u64 << 63
+    );
+    assert_eq!(
+        locals.iter().find(|(name, _)| name == "p64").unwrap().1,
+        escape::NEVER
+    );
+}
+
+#[test]
+fn review_summary_invalidates_when_callee_starts_spawning() {
+    use salsa::Setter;
+    let mut db = make_db();
+    let source = r#"
+function helper(xs: int[]) -> int { xs.length() }
+function main() -> int { let xs = [1]; helper(xs); xs[0] }
+"#;
+    let file = db.file("test.baml", source);
+    for opt in [OptLevel::One, OptLevel::Two] {
+        let locals = classify_file_at_opt(&db, file, "main", opt);
+        assert!(locals.iter().find(|(name, _)| name == "xs").unwrap().1);
+    }
+    file.set_text(&mut db).to(source.replace(
+        "xs.length()",
+        "let child = spawn { xs.push(9) }; xs.length()",
+    ));
+    for opt in [OptLevel::One, OptLevel::Two] {
+        let locals = classify_file_at_opt(&db, file, "main", opt);
+        assert!(!locals.iter().find(|(name, _)| name == "xs").unwrap().1);
+    }
 }

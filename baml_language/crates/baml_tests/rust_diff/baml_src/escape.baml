@@ -276,3 +276,182 @@ function ArrayWalk() -> void {
         clearing.clear();
     }
 }
+
+// Ordered accesses: no overlapping lock holders are needed to expose a bad
+// locality proof. Also checks publication of fields initialized before spawn.
+class OracleFields {
+    left: int
+    right: int
+}
+function EscapePublishedField() -> void {
+    let value = OracleFields { left: 41, right: 0 };
+    value.left = 42;
+    let child = spawn { value.left };
+    let observed = await child;
+    value.right = observed;
+    baml.io.println(`published:${value.left}:${value.right}`);
+}
+
+// Stored into a container another task reads: each builtin that keeps its
+// argument must share it. The parent mutates the stored array directly while
+// the child mutates it through the container.
+function EscapePushContents() -> void {
+    let xs: int[] = [];
+    let outer: int[][] = [];
+    outer.push(xs);
+    let child = spawn { PushN(outer[0], 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        i += 1;
+    }
+    await child;
+    Report("push-contents", xs);
+}
+
+function EscapeMapSetContents() -> void {
+    let xs: int[] = [];
+    let outer: map<string, int[]> = {};
+    outer.set("x", xs);
+    let child = spawn { PushN(outer["x"], 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        i += 1;
+    }
+    await child;
+    Report("set-contents", xs);
+}
+
+function EscapeUnshiftContents() -> void {
+    let xs: int[] = [];
+    let outer: int[][] = [];
+    outer.unshift(xs);
+    let child = spawn { PushN(outer[0], 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        i += 1;
+    }
+    await child;
+    Report("unshift-contents", xs);
+}
+
+function EscapeInsertContents() -> void {
+    let xs: int[] = [];
+    let outer: int[][] = [];
+    outer.insert(xs, 0);
+    let child = spawn { PushN(outer[0], 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        i += 1;
+    }
+    await child;
+    Report("insert-contents", xs);
+}
+
+function EscapeAwaitResult() -> void {
+    let child = spawn { [42] };
+    let xs = await child;
+    baml.io.println(`await-result:${xs[0]}`);
+}
+
+const ORACLE_GLOBAL = [42];
+function EscapeGlobal() -> void {
+    let child = spawn { ORACLE_GLOBAL[0] };
+    let mine = ORACLE_GLOBAL[0];
+    let theirs = await child;
+    baml.io.println(`global:${mine}:${theirs}`);
+}
+
+// The original binding is not captured; only its alias becomes a cell.
+function EscapeCaptureAlias() -> void {
+    let original: int[] = [];
+    let captured = original;
+    let child = spawn { PushN(captured, 2000) };
+    PushN(original, 2000);
+    await child;
+    Report("capture-alias", original);
+}
+
+// Ordered handoffs must not be reported by the escape oracle.
+function EscapeOrderedReturn() -> void {
+    let child = spawn { MakeForEscapeHandoff() };
+    let xs = await child;
+    baml.io.println(`returned:${xs.length()}`);
+}
+function MakeForEscapeHandoff() -> int[] {
+    let xs = [1];
+    xs.push(2);
+    xs
+}
+function EscapeSessionHandoff() -> void {
+    let session = reflect.Session.new();
+    session.eval(`let xs = [1]; xs.push(2);`);
+    let n = session.eval<int>(`xs.length()`);
+    baml.io.println(`session:${n}`);
+}
+function EscapeOrderedSpawn() -> void {
+    let xs = MakeForEscapeHandoff();
+    let child = spawn { xs[0] };
+    baml.io.println(`spawned:${await child}`);
+}
+
+// One future, two awaiters: the parent and a later child both receive the
+// same array. An awaited value comes from another task, so neither may treat
+// it as its own; the parent touches it before the child starts mutating it.
+function EscapeAwaitShared() -> void {
+    let made = spawn { MakeForEscapeHandoff() };
+    let xs = await made;
+    xs.push(3);
+    let other = spawn { PushN(await made, 2000) };
+    PushN(xs, 2000);
+    await other;
+    Report("await-shared", xs);
+}
+
+// A thrown value comes back to the caller's caller as a caught value, which
+// is spawned with. The thrower's argument is the same array, so throwing it
+// must share it.
+function EscapeThrowCaught() -> void {
+    let xs: int[] = [];
+    let back = ThrowBack(xs);
+    let child = spawn { PushN(back, 2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("throw-caught", xs);
+}
+
+function ThrowBack(xs: int[]) -> int[] {
+    (Rethrown(xs)) catch (e) { _ => e }
+}
+
+function Rethrown(xs: int[]) -> int[] throws int[] {
+    throw xs
+}
+
+// A garbage instance's finalizer runs in a VM of its own, here during a
+// collection another task starts, while `main` still pushes to the array the
+// instance held.
+class FinalizedLog {
+    log: int[],
+
+    function cleanup(self) -> void throws never {
+        PushN(self.log, 2000);
+    }
+}
+
+function AbandonLog(log: int[]) -> void throws never {
+    let resource = FinalizedLog { log };
+    resource.log.push(-1);
+}
+
+function EscapeFinalizer() -> void {
+    let log: int[] = [];
+    AbandonLog(log);
+    let child = spawn { baml.sys.collect_garbage() };
+    PushN(log, 20000);
+    await child;
+    baml.io.println(`finalizer:${log.length() >= 20001}`);
+}
