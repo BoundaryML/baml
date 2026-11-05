@@ -9,14 +9,14 @@ import { LINKS, WRAP } from './ui';
 /* The bar on the homepage and the blog: the Boundary logo, a link to the blog, the GitHub mark with
    the repository's star count, the Discord mark, and the booking button. Both pages are dark only, so the logos are the white ones. On a phone the full logo leaves no
    room beside the link and the button, so the bar shows the gate alone, as the brand allows where the
-   wordmark won't fit. Both logos stay at the brand's 32px minimum height. The bar is on its own GPU
-   layer (transform-gpu): without it, browsers sometimes painted the page's animated drawings, which
-   have layers of their own, over the blurred bar while scrolling. */
+   wordmark won't fit. Both logos stay at the brand's 32px minimum height. The bar is the page's solid
+   ground, not a blur: a blurred bar let the page's animated drawings glitch through it while
+   scrolling. */
 export default function Nav({ current }: { current?: 'blog' }) {
   return (
     <header
       {...section('nav')}
-      className="sticky top-0 z-30 border-b border-rule bg-ground/85 backdrop-blur-md transform-gpu"
+      className="sticky top-0 z-30 border-b border-rule bg-ground"
     >
       <nav
         aria-label="Main"
