@@ -1,0 +1,105 @@
+# Sync the public GitHub Actions to their read-only mirror repos.
+#
+# Actions are edited in packaging/github-actions and consumed from the mirrors,
+# because a runner downloads the entire repository of every action it uses and
+# GitHub Marketplace only lists an action at the root of its own repository.
+# The mirrors must never be edited by hand:
+#
+#   packaging/github-actions/setup-baml  -> BoundaryML/setup-baml
+#   packaging/github-actions/baml-action -> BoundaryML/baml-action
+#
+# Every content change moves the mirror's major tag, so a merge to canary
+# reaches `@v1` consumers as soon as the tests pass. A breaking change needs a
+# new `major` below. baml-action pins setup-baml by commit in its action.yml, so
+# a setup-baml change reaches baml-action only when that pin is bumped.
+#
+# Auth: uses the shared GitHub token synced from Infisical's
+# gh-baml-language-release environment. The token needs Contents write access
+# to both mirrors, and Workflows write access for any change under a mirror's
+# .github/workflows.
+
+name: Sync GitHub Actions mirror
+
+on:
+  push:
+    branches: [canary]
+    paths:
+      - "packaging/github-actions/**"
+      - ".github/workflows/github-actions-ci.yml"
+      - ".github/workflows/sync-github-actions-mirror.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-github-actions-mirror
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test actions
+    uses: ./.github/workflows/github-actions-ci.yml
+    permissions:
+      contents: read
+      pull-requests: write
+
+  sync:
+    name: Sync to BoundaryML/${{ matrix.action }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        action: [setup-baml, baml-action]
+        major: [v1]
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Clone mirror
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
+          ACTION: ${{ matrix.action }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone --depth 50 "https://github.com/BoundaryML/${ACTION}.git" /tmp/mirror-repo
+
+      - name: Diff against mirror
+        id: diff
+        env:
+          ACTION: ${{ matrix.action }}
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude .git "packaging/github-actions/${ACTION}/" /tmp/mirror-repo/
+          if [ -n "$(git -C /tmp/mirror-repo status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git -C /tmp/mirror-repo status --porcelain
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Mirror already up to date."
+          fi
+
+      - name: Push and move major tag
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
+          MAJOR: ${{ matrix.major }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd /tmp/mirror-repo
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Sync from BoundaryML/baml@${SOURCE_SHA}"
+          git tag --force "${MAJOR}"
+          # --atomic: main must never advance without its tag, or the next run
+          # would see no content diff and leave the tag behind.
+          git push --atomic origin main "+refs/tags/${MAJOR}"
