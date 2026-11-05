@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { Code, proseLines } from './code';
 import { FIRST, source } from './hero-video';
-import { Cmd, Phase, Points } from './phase';
+import { Phase } from './phase';
 
 // Section 4, Build: the language, with the sample the rest of the page uses, and the two commands that
 // run before a deploy.
@@ -117,39 +117,14 @@ const EXAMPLES = [
   },
 ];
 
-const POINTS = [
-  {
-    body: 'If you can read TypeScript, you can read BAML. With unions, generics, and interfaces.',
-    title: 'Syntax like TypeScript.',
-  },
-  {
-    body: (
-      <>
-        Types exist at runtime. There's no <Cmd>any</Cmd>. No unchecked casts.
-        Thrown errors are statically analyzed. Pattern matching is exhaustive.
-      </>
-    ),
-    title: 'A type system like Rust.',
-  },
-  {
-    body: (
-      <>
-        <Cmd>baml check</Cmd> type-checks 60,000 lines in about 1.4 seconds (vs
-        Go&rsquo;s 1.2 seconds).
-      </>
-    ),
-    title: 'Compiles as fast as Go.',
-  },
-  {
-    body: (
-      <>
-        <Cmd>baml describe</Cmd> finds code by its structure,{' '}
-        <Cmd>baml run</Cmd> runs any function from the command line, and a
-        built-in <Cmd>baml test</Cmd>.
-      </>
-    ),
-    title: 'Tools for agents.',
-  },
+// One line each, as boundaryml.com put them before the Build, Deploy, Observe, and Improve sections.
+const CLAIMS = [
+  'A sound type system, like Rust',
+  'Fast compilation times, like Go',
+  'Low-cost telemetry, built into the runtime',
+  'Built-in AI capabilities',
+  'Fully integrated with Boundary Cloud (or bring your own)',
+  'Cross-compatible with Python, TypeScript, Rust, and more',
 ];
 
 /** Section 4, Build: the code panel of language examples beside the points about the language. */
@@ -175,7 +150,16 @@ export default function Language() {
     >
       <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-12 gap-y-10 items-start">
         <Examples />
-        <Points points={POINTS} />
+        <ul className="border-t border-rule">
+          {CLAIMS.map((line) => (
+            <li
+              className="v4-body text-head py-3.5 border-b border-rule"
+              key={line}
+            >
+              {line}
+            </li>
+          ))}
+        </ul>
       </div>
     </Phase>
   );
