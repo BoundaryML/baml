@@ -470,22 +470,31 @@ impl GenerateArgs {
 
         let mut total_files = 0;
 
-        for generator in &generators {
-            reporter.spin("Generating", &generator.name);
-            // `--output-dir` names the final directory as given; nothing
-            // derived from `package_name` is appended to it.
-            let output_dir = match &self.output {
-                Some(requested) if requested.is_absolute() => requested.clone(),
-                Some(requested) => std::env::current_dir()
-                    .context("failed to resolve the current directory for generated output")?
-                    .join(requested),
-                None => generator.output_dir.clone(),
-            };
-            // A named SDK only installs where it cannot clobber hand-written
-            // code, wherever the destination came from.
+        // `--output-dir` names the final directory as given; nothing derived
+        // from `package_name` is appended to it.
+        let destinations = generators
+            .iter()
+            .map(|generator| {
+                Ok(match &self.output {
+                    Some(requested) if requested.is_absolute() => requested.clone(),
+                    Some(requested) => std::env::current_dir()
+                        .context("failed to resolve the current directory for generated output")?
+                        .join(requested),
+                    None => generator.output_dir.clone(),
+                })
+            })
+            .collect::<Result<Vec<PathBuf>>>()?;
+        // A named SDK only installs where it cannot clobber hand-written code,
+        // wherever the destination came from. Every destination is checked
+        // before any generator writes, so a refusal leaves no partial run.
+        for (generator, output_dir) in generators.iter().zip(&destinations) {
             if generator.package_name.is_some() {
-                package_name::ensure_claimable(&generator.name, &output_dir)?;
+                package_name::ensure_claimable(&generator.name, output_dir)?;
             }
+        }
+
+        for (generator, output_dir) in generators.iter().zip(destinations) {
+            reporter.spin("Generating", &generator.name);
 
             if generator.output_type == OutputType::CSharp {
                 let report = sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
@@ -1442,6 +1451,43 @@ naming_convention = "preserve-case"
             "# hand-written\n"
         );
         assert!(!package.join(".gitignore").exists());
+    }
+
+    #[test]
+    fn named_python_sdk_generates_into_a_fresh_clone_of_its_committed_gitignore() {
+        let project = python_project("alien_sdk._generated");
+        let package = project.path().join("out/alien_sdk/_generated");
+        fs::create_dir_all(&package).unwrap();
+        fs::write(
+            package.join(".gitignore"),
+            baml_sdkgen_types::GENERATED_GITIGNORE,
+        )
+        .unwrap();
+
+        let result = generate_project(project.path()).unwrap();
+
+        assert!(matches!(result, crate::ExitCode::Success));
+        assert!(package.join("__init__.py").is_file());
+    }
+
+    #[test]
+    fn a_refused_named_sdk_stops_the_run_before_any_generator_writes() {
+        let project = python_project("unused");
+        fs::write(
+            project.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n\
+             [generator.a]\noutput_type = \"python/pydantic\"\nnaming_convention = \"language\"\noutput_dir = \"out\"\npackage_name = \"first_sdk\"\n\n\
+             [generator.b]\noutput_type = \"python/pydantic\"\nnaming_convention = \"language\"\noutput_dir = \"out\"\npackage_name = \"alien_sdk\"\n",
+        )
+        .unwrap();
+        let package = project.path().join("out/alien_sdk");
+        fs::create_dir_all(&package).unwrap();
+        fs::write(package.join("__init__.py"), "# hand-written\n").unwrap();
+
+        let error = generate_project(project.path()).unwrap_err().to_string();
+
+        assert!(error.contains("refusing to generate `b` into"), "{error}");
+        assert!(!project.path().join("out/first_sdk").exists());
     }
 
     #[test]

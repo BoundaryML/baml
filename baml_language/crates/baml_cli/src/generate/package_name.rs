@@ -15,7 +15,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use baml_sdkgen_types::{
-    DEFAULT_PACKAGE_NAME, OutputType, is_generated_output_directory, is_safe_portable_segment,
+    DEFAULT_PACKAGE_NAME, GENERATED_GITIGNORE, OutputType, is_generated_output_directory,
+    is_safe_portable_segment,
 };
 
 /// Why a target refuses a `package_name`.
@@ -52,8 +53,6 @@ pub(super) fn relative_directory(output_type: OutputType, package_name: Option<&
     }
 }
 
-/// Refuse to install `generator`'s SDK into `directory` when it holds files
-/// that `baml generate` did not write there.
 /// Entries that tools and operating systems leave behind; they hold no
 /// hand-written code, so they do not make a directory someone else's.
 const DISPOSABLE_ENTRIES: &[&str] = &["__pycache__", ".DS_Store", "Thumbs.db"];
@@ -70,12 +69,12 @@ pub(super) fn ensure_claimable(generator: &str, directory: &Path) -> Result<()> 
     };
     let mut foreign = None;
     for entry in entries {
-        let name = entry
-            .with_context(|| format!("failed to read {}", directory.display()))?
-            .file_name();
+        let entry = entry.with_context(|| format!("failed to read {}", directory.display()))?;
+        let name = entry.file_name();
         if !DISPOSABLE_ENTRIES
             .iter()
             .any(|disposable| name == *disposable)
+            && !is_generated_gitignore(&name, &entry.path())
         {
             foreign = Some(name);
             break;
@@ -95,6 +94,15 @@ pub(super) fn ensure_claimable(generator: &str, directory: &Path) -> Result<()> 
         directory.display(),
         foreign.to_string_lossy()
     )
+}
+
+/// The `.gitignore` `baml generate` writes into every SDK directory. It
+/// un-ignores itself so it can be committed, so a fresh clone of a project
+/// that commits it holds that file and nothing else.
+fn is_generated_gitignore(name: &std::ffi::OsStr, path: &Path) -> bool {
+    name == ".gitignore"
+        && path.is_file()
+        && fs::read(path).is_ok_and(|contents| contents == GENERATED_GITIGNORE.as_bytes())
 }
 
 /// Output an earlier `baml generate` left at the default location, now that
@@ -164,7 +172,9 @@ const PYTHON_KEYWORDS: &[&str] = &[
 mod tests {
     use std::{fs, path::PathBuf};
 
-    use baml_sdkgen_types::{GeneratedOutputFile, OutputType, write_generated_output};
+    use baml_sdkgen_types::{
+        GENERATED_GITIGNORE, GeneratedOutputFile, OutputType, write_generated_output,
+    };
 
     use super::{
         PackageNameError, ensure_claimable, relative_directory, superseded_default_output, validate,
@@ -285,6 +295,28 @@ mod tests {
         )
         .unwrap();
         ensure_claimable("py", &owned).unwrap();
+    }
+
+    #[test]
+    fn guard_allows_a_directory_holding_only_the_generated_gitignore() {
+        // A fresh clone of a project that commits the SDK's `.gitignore`.
+        let directory = tempfile::tempdir().unwrap();
+        let cloned = directory.path().join("cloned");
+        fs::create_dir(&cloned).unwrap();
+        fs::write(cloned.join(".gitignore"), GENERATED_GITIGNORE).unwrap();
+        ensure_claimable("py", &cloned).unwrap();
+    }
+
+    #[test]
+    fn guard_refuses_a_gitignore_baml_did_not_write() {
+        let directory = tempfile::tempdir().unwrap();
+        let package = directory.path().join("alien_sdk");
+        fs::create_dir(&package).unwrap();
+        fs::write(package.join(".gitignore"), "*.pyc\n").unwrap();
+
+        let error = ensure_claimable("py", &package).unwrap_err().to_string();
+
+        assert!(error.contains("already contains `.gitignore`"), "{error}");
     }
 
     #[test]
