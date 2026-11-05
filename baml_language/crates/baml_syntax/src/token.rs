@@ -855,6 +855,15 @@ impl Tokens {
         TextRange::new(self.starts[idx.index()], self.starts[idx.index() + 1])
     }
 
+    /// The text a run of tokens covers; an empty run is the empty range at
+    /// its start.
+    pub fn text_range(&self, span: crate::tree::TokenRange) -> TextRange {
+        TextRange::new(
+            self.starts[span.start().index()],
+            self.starts[span.end().index()],
+        )
+    }
+
     pub fn text<'s>(&self, source: &'s str, idx: TokenIdx) -> &'s str {
         &source[self.range(idx)]
     }

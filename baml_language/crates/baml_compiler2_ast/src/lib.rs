@@ -13,6 +13,7 @@ pub(crate) mod companions;
 pub mod docstring;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
+pub mod lower_tree;
 pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
 pub mod traverse;

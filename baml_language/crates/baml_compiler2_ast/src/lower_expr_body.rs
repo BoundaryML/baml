@@ -1525,46 +1525,46 @@ fn companion_param_call_args(
         .collect()
 }
 
-struct LoweringContext {
-    exprs: Arena<Expr>,
-    stmts: Arena<Stmt>,
-    patterns: Arena<Pattern>,
-    match_arms: Arena<MatchArm>,
-    catch_arms: Arena<CatchArm>,
-    type_annotations: Arena<TypeExpr>,
+pub(crate) struct LoweringContext {
+    pub(crate) exprs: Arena<Expr>,
+    pub(crate) stmts: Arena<Stmt>,
+    pub(crate) patterns: Arena<Pattern>,
+    pub(crate) match_arms: Arena<MatchArm>,
+    pub(crate) catch_arms: Arena<CatchArm>,
+    pub(crate) type_annotations: Arena<TypeExpr>,
     /// Parallel span storage
-    source_map: AstSourceMap,
+    pub(crate) source_map: AstSourceMap,
     /// When set, `TEST_EXPR_DEF` and `TESTSET_DEF` nodes encountered during block
     /// lowering are converted to `<var>.register_test(...)` / `<var>.register_test_set(...)`
     /// calls using this variable name. This supports dynamic test generation inside
     /// `for`/`if` blocks inside a testset body.
-    testset_collector_var: Option<Name>,
+    pub(crate) testset_collector_var: Option<Name>,
     /// Diagnostics accumulated during lowering.
-    diags: Vec<LoweringDiagnostic>,
+    pub(crate) diags: Vec<LoweringDiagnostic>,
     /// Environment variable references (`env.X`) found during lowering.
-    env_var_refs: Vec<EnvVarRef>,
+    pub(crate) env_var_refs: Vec<EnvVarRef>,
     /// Expressions that contain unwrapped `?.` operators and need an `OptionalChain` wrapper.
     /// Propagated up through chain-continuing nodes (`FieldAccess`, Index, Call, Optional*).
-    needs_chain_wrap: std::collections::HashSet<ExprId>,
+    pub(crate) needs_chain_wrap: std::collections::HashSet<ExprId>,
     /// Text ranges of `GENERIC_ARGS` nodes that an enclosing call has already
     /// consumed as call-site `type_args` (e.g. the `<int>` in `foo<int>(x)`).
     /// `lower_path_expr` skips wrapping these into an `Expr::GenericApply` so the
     /// args aren't double-counted. Only standalone, value-position `<...>` (e.g.
     /// `let f = foo<int>`) becomes a `GenericApply`.
-    consumed_generic_args: std::collections::HashSet<TextRange>,
+    pub(crate) consumed_generic_args: std::collections::HashSet<TextRange>,
     /// When set, every node allocated via `alloc_expr`/`alloc_stmt`/
     /// `alloc_pattern` is recorded as compiler-synthesized in the source map.
     /// Scoped on around desugarings (e.g. backtick-template elaboration) so the
     /// generated nodes are distinguishable from the user-written ones they wrap
     /// — see [`AstSourceMap::synthetic_exprs`]. Consumed by inlay hints.
-    synthesizing: bool,
+    pub(crate) synthesizing: bool,
     /// A file-scope binding's introducer keyword, which its caller checks
     /// itself: a global requires `const`. The body-level `const` warning
     /// skips this one token; a nested introducer, such as an alias chain's,
     /// still gets it.
-    file_scope_introducer: Option<TextRange>,
+    pub(crate) file_scope_introducer: Option<TextRange>,
     /// See [`ExprBody::tag_values`].
-    tag_values: Vec<ExprId>,
+    pub(crate) tag_values: Vec<ExprId>,
 }
 
 /// The elaborated form of a single `${…}` interpolation in an untagged
@@ -1579,7 +1579,7 @@ enum InterpPart {
 }
 
 impl LoweringContext {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             exprs: Arena::new(),
             stmts: Arena::new(),
@@ -1645,7 +1645,7 @@ impl LoweringContext {
         crate::lower_type_expr::lower_associated_type_binding(binding, &mut self.diags)
     }
 
-    fn warn_const_introducer(&mut self, span: TextRange) {
+    pub(crate) fn warn_const_introducer(&mut self, span: TextRange) {
         self.diags
             .push(LoweringDiagnostic::ConstBindingIntroducer { span });
     }
@@ -1677,7 +1677,7 @@ impl LoweringContext {
         }
     }
 
-    fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
+    pub(crate) fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
         let lambda_parameter_spans = match &expr {
             Expr::Lambda(lambda) => Some(
                 lambda
@@ -1699,7 +1699,7 @@ impl LoweringContext {
         id
     }
 
-    fn alloc_stmt(&mut self, stmt: Stmt, range: TextRange) -> StmtId {
+    pub(crate) fn alloc_stmt(&mut self, stmt: Stmt, range: TextRange) -> StmtId {
         let id = self.stmts.alloc(stmt);
         self.source_map.stmt_spans.alloc(range);
         if self.synthesizing {
@@ -1708,7 +1708,7 @@ impl LoweringContext {
         id
     }
 
-    fn alloc_pattern(&mut self, pattern: Pattern, range: TextRange) -> PatId {
+    pub(crate) fn alloc_pattern(&mut self, pattern: Pattern, range: TextRange) -> PatId {
         let id = self.patterns.alloc(pattern);
         self.source_map.pattern_spans.alloc(range);
         if self.synthesizing {
@@ -1717,19 +1717,19 @@ impl LoweringContext {
         id
     }
 
-    fn alloc_match_arm(&mut self, arm: MatchArm, range: TextRange) -> MatchArmId {
+    pub(crate) fn alloc_match_arm(&mut self, arm: MatchArm, range: TextRange) -> MatchArmId {
         let id = self.match_arms.alloc(arm);
         self.source_map.match_arm_spans.alloc(range);
         id
     }
 
-    fn alloc_catch_arm(&mut self, arm: CatchArm, range: TextRange) -> CatchArmId {
+    pub(crate) fn alloc_catch_arm(&mut self, arm: CatchArm, range: TextRange) -> CatchArmId {
         let id = self.catch_arms.alloc(arm);
         self.source_map.catch_arm_spans.alloc(range);
         id
     }
 
-    fn alloc_type_annot(&mut self, ty: TypeExpr, range: TextRange) -> TypeAnnotId {
+    pub(crate) fn alloc_type_annot(&mut self, ty: TypeExpr, range: TextRange) -> TypeAnnotId {
         let id = self.type_annotations.alloc(ty);
         self.source_map.type_annotation_spans.alloc(range);
         id
@@ -1803,7 +1803,7 @@ impl LoweringContext {
         body
     }
 
-    fn finish(
+    pub(crate) fn finish(
         self,
         root_expr: Option<ExprId>,
     ) -> (
@@ -2492,7 +2492,7 @@ impl LoweringContext {
     /// Whether `expr` denotes a storage location an assignment can write
     /// through. `Missing` counts as assignable so a syntax error already
     /// reported for the target does not cascade into a second diagnostic.
-    fn is_assignable_place(&self, expr: ExprId) -> bool {
+    pub(crate) fn is_assignable_place(&self, expr: ExprId) -> bool {
         match &self.exprs[expr] {
             Expr::Path(_)
             | Expr::MemberAccess { .. }
@@ -3661,7 +3661,7 @@ impl LoweringContext {
     // field has a `resolve` method — is completed with the provider table
     // too, which breaks that call. The recognition belongs after HIR has read
     // the path's head (`PathHead::Package` of the `ai` package).
-    fn complete_client_resolve_call(
+    pub(crate) fn complete_client_resolve_call(
         &mut self,
         callee: ExprId,
         mut args: Vec<CallArg>,
@@ -3684,7 +3684,7 @@ impl LoweringContext {
         args
     }
 
-    fn finalize_call_args(
+    pub(crate) fn finalize_call_args(
         lowered_args: Vec<(CallArg, Option<TextRange>)>,
     ) -> (Vec<CallArg>, Vec<(ExprId, TextRange)>) {
         let mut args = Vec::with_capacity(lowered_args.len());
@@ -3700,7 +3700,7 @@ impl LoweringContext {
         (args, label_spans)
     }
 
-    fn record_call_arg_label_spans(
+    pub(crate) fn record_call_arg_label_spans(
         &mut self,
         call_id: ExprId,
         label_spans: Vec<(ExprId, TextRange)>,
@@ -4315,7 +4315,7 @@ impl LoweringContext {
     /// already-lowered [`TemplateSegment`]s (reusing their `ExprId`s /
     /// `PatId`s), so the interpolation expressions are shared with the node's
     /// `segments` rather than re-lowered.
-    fn elaborate_default_segments(
+    pub(crate) fn elaborate_default_segments(
         &mut self,
         segments: &[TemplateSegment],
         span: TextRange,
@@ -4507,7 +4507,11 @@ impl LoweringContext {
     /// discarded: an `if` with no `else` whose branch produces a value is an
     /// error, not text that silently goes missing. `None` for an
     /// interpolation that has a value.
-    fn unit_interp_stmts(&mut self, inner: ExprId, span: TextRange) -> Option<Vec<StmtId>> {
+    pub(crate) fn unit_interp_stmts(
+        &mut self,
+        inner: ExprId,
+        span: TextRange,
+    ) -> Option<Vec<StmtId>> {
         let (stmts, tail) = self.unit_interp(inner)?;
         let mut stmts = stmts.to_vec();
         if let Some(t) = tail {
@@ -4841,7 +4845,11 @@ impl LoweringContext {
     /// empty range after the template so they land inside each `let`'s
     /// visibility window (mirrors the untagged accumulator in
     /// `elaborate_default_for`).
-    fn elaborate_tagged_body(&mut self, segments: &[TemplateSegment], span: TextRange) -> ExprId {
+    pub(crate) fn elaborate_tagged_body(
+        &mut self,
+        segments: &[TemplateSegment],
+        span: TextRange,
+    ) -> ExprId {
         let parts = Name::new(" __tt_parts");
         let values = Name::new(" __tt_values");
         let cur = Name::new(" __tt_cur");
@@ -6004,7 +6012,7 @@ impl LoweringContext {
     /// typing to `never`, defer replay/unwatch, defer-escape diagnostics) and
     /// makes the braceless form behave identically to the already-accepted
     /// braced arm.
-    fn lower_jump_expr(&mut self, node: &SyntaxNode, jump: Stmt) -> ExprId {
+    pub(crate) fn lower_jump_expr(&mut self, node: &SyntaxNode, jump: Stmt) -> ExprId {
         let span = node.span_range();
         let stmt = self.alloc_stmt(jump, span);
         self.alloc_expr(
@@ -6405,7 +6413,7 @@ impl LoweringContext {
     /// Extract the name expression from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
     ///
     /// The name can be a plain `STRING_LITERAL` or a `BINARY_EXPR` (e.g. `"check " + case`).
-    fn lower_test_name_expr(&mut self, node: &SyntaxNode, span: TextRange) -> ExprId {
+    pub(crate) fn lower_test_name_expr(&mut self, node: &SyntaxNode, span: TextRange) -> ExprId {
         // The name is the first expression child after the keyword (KW_TEST / KW_TESTSET),
         // before KW_WITH or BLOCK_EXPR. It can be any expression node.
         let name_element = node.children_with_tokens().find(|c| {
@@ -6453,7 +6461,7 @@ impl LoweringContext {
 }
 
 /// Strip string delimiters from raw token text, decoding escape sequences.
-fn strip_string_delimiters(text: &str) -> String {
+pub(crate) fn strip_string_delimiters(text: &str) -> String {
     let text = text.trim();
 
     if text.starts_with('"') && text.ends_with('"') && text.len() >= 2 {
@@ -6465,6 +6473,6 @@ fn strip_string_delimiters(text: &str) -> String {
 
 /// The verbatim body of a raw `r"..."` string literal's text, or `None` if
 /// the literal is unclosed (which is already a parse error).
-fn strip_raw_string_delimiters(text: &str) -> Option<&str> {
+pub(crate) fn strip_raw_string_delimiters(text: &str) -> Option<&str> {
     text.trim().strip_prefix("r\"")?.strip_suffix('"')
 }

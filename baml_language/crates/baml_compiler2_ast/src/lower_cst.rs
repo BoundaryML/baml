@@ -425,7 +425,7 @@ fn backtick_text_runs(node: &SyntaxNode) -> Vec<(text_size::TextSize, String)> {
 
 /// Check if a just-lowered type expression contains `TypeExprKind::Missing` at the root.
 /// If so, emit an `UnparseableType` diagnostic.
-fn check_missing_type(
+pub(crate) fn check_missing_type(
     type_expr: &crate::ast::TypeExpr,
     context: String,
     span: text_size::TextRange,
