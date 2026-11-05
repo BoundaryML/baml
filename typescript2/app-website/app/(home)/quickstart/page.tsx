@@ -104,11 +104,6 @@ const STEPS: Step[] = [
 
 const HANDY_LINKS = [
   {
-    href: '/#build',
-    title: 'Explore BAML',
-    value: 'see the language and code',
-  },
-  {
     external: true,
     href: 'https://github.com/boundaryml/baml-demos',
     title: 'Demo repo',
