@@ -30,7 +30,7 @@ const nextConfig = {
   // every serverless function with MODULE_NOT_FOUND on next/dist/compiled/
   // source-map. Force-include it in every function bundle.
   outputFileTracingIncludes: {
-    // /api/og reads brand fonts + the lamb mark from components/og via fs.
+    // /api/og reads brand fonts + images from components/og via fs.
     '/api/og': ['./components/og/**'],
     // /api/markdown-page serves the checked-in alternate representations.
     '/api/markdown-page': ['./content/*.md'],
