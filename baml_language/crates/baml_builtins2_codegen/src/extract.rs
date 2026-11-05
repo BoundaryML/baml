@@ -16,7 +16,7 @@ use baml_compiler2_ast::ast::{
 
 use crate::types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassBody, NativeClassDef, NativeClassField,
-    Param, Receiver, ReceiverType, VmUsage,
+    NativeEnum, Param, Receiver, ReceiverType, VmUsage,
 };
 
 /// Convert a byte offset in source text to a 1-based `(line, column)` pair.
@@ -119,12 +119,13 @@ fn extract_scoped(
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
+    let mut enums = PackageEnums::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL
-        .iter()
-        .filter(|f| f.package == package && keep_file(f))
-    {
+    // Every file of the package is read for the enums it declares, which a
+    // kept file's signatures may name; only a kept file's builtins and
+    // classes are extracted.
+    for builtin_file in baml_builtins2::ALL.iter().filter(|f| f.package == package) {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(
@@ -181,6 +182,20 @@ fn extract_scoped(
             format!("{}.{}", builtin_file.package, ns_path.join("."))
         };
 
+        for item in &items {
+            if let Item::Enum(enum_def) = item {
+                let path = format!("{namespace_prefix}.{}", enum_def.name);
+                let variants = enum_def
+                    .variants
+                    .iter()
+                    .map(|variant| variant.name.to_string())
+                    .collect();
+                enums.insert(path.clone(), NativeEnum { path, variants });
+            }
+        }
+        if !keep_file(builtin_file) {
+            continue;
+        }
         for item in &items {
             match item {
                 Item::Class(class_def) => {
@@ -246,7 +261,82 @@ fn extract_scoped(
         });
     }
 
+    for builtin in vm_builtins.iter_mut().chain(io_builtins.iter_mut()) {
+        let scope = if builtin.namespace.is_empty() {
+            package.to_string()
+        } else {
+            format!("{package}.{}", builtin.namespace)
+        };
+        for param in &mut builtin.params {
+            resolve_enums(&mut param.ty, package, &scope, &enums);
+        }
+        resolve_enums(&mut builtin.return_type, package, &scope, &enums);
+    }
+    for class_def in &mut class_defs {
+        if let NativeClassBody::Fields(fields) = &mut class_def.body {
+            for field in fields {
+                resolve_enums(
+                    &mut field.field_type,
+                    package,
+                    &class_def.namespace_prefix,
+                    &enums,
+                );
+            }
+        }
+    }
+
     Ok((vm_builtins, io_builtins, class_defs))
+}
+
+/// Every enum a package declares, by its dotted path.
+type PackageEnums = std::collections::BTreeMap<String, NativeEnum>;
+
+/// Turn each path in `ty` that names one of the package's `enums` into that
+/// enum. `scope` is the dotted namespace the type is written in.
+fn resolve_enums(ty: &mut BamlType, package: &str, scope: &str, enums: &PackageEnums) {
+    match ty {
+        BamlType::Named(written) => {
+            if let Some(enm) = enums.get(&written_path(written, package, scope)) {
+                *ty = BamlType::Enum(enm.clone());
+            }
+        }
+        BamlType::Optional(inner) | BamlType::List(inner) => {
+            resolve_enums(inner, package, scope, enums);
+        }
+        BamlType::Map(key, value) => {
+            resolve_enums(key, package, scope, enums);
+            resolve_enums(value, package, scope, enums);
+        }
+        BamlType::Union(members) => {
+            for member in members {
+                resolve_enums(member, package, scope, enums);
+            }
+        }
+        BamlType::String
+        | BamlType::Int
+        | BamlType::Bigint
+        | BamlType::Float
+        | BamlType::Bool
+        | BamlType::Null
+        | BamlType::Generic(_)
+        | BamlType::Uint8Array
+        | BamlType::Media(_)
+        | BamlType::Enum(_)
+        | BamlType::RustType
+        | BamlType::StringLiteral(_) => {}
+    }
+}
+
+/// The dotted path a type path written in `scope` names: a written `root.`
+/// is the package, and a bare name is in `scope`.
+pub(crate) fn written_path(written: &str, package: &str, scope: &str) -> String {
+    if let Some(rest) = written.strip_prefix("root.") {
+        format!("{package}.{rest}")
+    } else if written.contains('.') {
+        written.to_string()
+    } else {
+        format!("{scope}.{written}")
+    }
 }
 
 /// Extract `$rust_function` and `$rust_io_function` methods from a class definition.
@@ -1021,19 +1111,8 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
         .collect()
 }
 
-/// Convert a `TypeExpr` from the AST to a `BamlType`.
-///
-/// `generics` is the combined set of type parameter names in scope (class + method).
-#[allow(clippy::redundant_closure_for_method_calls)]
-/// A union that is not `T?`. One with no `null` member keeps its members, a
-/// string literal member as itself; one that also admits `null` is erased.
+/// A union that is not `T?`: its members, a string literal member as itself.
 fn union_type(variants: &[TypeExpr], member: &dyn Fn(&TypeExpr) -> BamlType) -> BamlType {
-    if variants
-        .iter()
-        .any(|variant| matches!(variant.kind, TypeExprKind::Null))
-    {
-        return BamlType::Named("union".to_string());
-    }
     BamlType::Union(
         variants
             .iter()
@@ -1047,6 +1126,10 @@ fn union_type(variants: &[TypeExpr], member: &dyn Fn(&TypeExpr) -> BamlType) -> 
     )
 }
 
+/// Convert a `TypeExpr` from the AST to a `BamlType`.
+///
+/// `generics` is the combined set of type parameter names in scope (class + method).
+#[allow(clippy::redundant_closure_for_method_calls)]
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match &ty.kind {
         TypeExprKind::Int => BamlType::Int,
@@ -1308,10 +1391,11 @@ mod tests {
             .find(|c| c.name == "Pdf")
             .expect("missing Pdf");
         assert_eq!(pdf.namespace_prefix, "baml.media");
-        assert_eq!(pdf.fields().len(), 1);
-        assert_eq!(pdf.fields()[0].name, "_data");
-        assert_eq!(pdf.fields()[0].index, 0);
-        assert!(matches!(pdf.fields()[0].field_type, BamlType::RustType));
+        assert!(pdf.fields().is_empty());
+        assert!(matches!(
+            pdf.body,
+            crate::types::NativeClassBody::RustType(baml_base::RustPayloadKind::Pdf)
+        ));
 
         assert!(
             class_defs.iter().any(|c| c.name == "Audio"),
@@ -1411,8 +1495,11 @@ mod tests {
             .find(|c| c.name == "Prompt")
             .expect("missing ai.Prompt");
         assert_eq!(prompt.namespace_prefix, "ai");
-        assert_eq!(prompt.fields().len(), 1);
-        assert!(matches!(prompt.fields()[0].field_type, BamlType::RustType));
+        assert!(prompt.fields().is_empty());
+        assert!(matches!(
+            prompt.body,
+            crate::types::NativeClassBody::RustType(baml_base::RustPayloadKind::Prompt)
+        ));
     }
 
     #[test]
@@ -1557,10 +1644,15 @@ mod tests {
 
         assert_eq!(deep_copy.vm_usage, VmUsage::MutRef);
 
-        // `//baml:vm` on a non-container receiver: `Array`/`Map` methods default to
-        // `Ref` without the directive, so a media method is what actually pins the
-        // directive being read.
-        assert_eq!(pdf_url.vm_usage, VmUsage::Ref);
+        // `Array`/`Map` methods default to `Ref` without the directive, so a free
+        // function is what pins `//baml:vm` being read; a media accessor reads
+        // its payload and needs no VM.
+        let to_string_primitive = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml._to_string_primitive")
+            .expect("missing baml._to_string_primitive");
+        assert_eq!(to_string_primitive.vm_usage, VmUsage::Ref);
+        assert_eq!(pdf_url.vm_usage, VmUsage::None);
 
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);

@@ -173,9 +173,9 @@ function         baml.json.path                   <builtin>/baml/ns_json/json.ba
 function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:406
 function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:489
 class            baml.media.Pdf                   <builtin>/baml/ns_media/media.baml:5
-class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:85
-class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:165
-class            baml.media.Image                 <builtin>/baml/ns_media/media.baml:245
+class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:81
+class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:157
+class            baml.media.Image                 <builtin>/baml/ns_media/media.baml:233
 class            baml.net.TcpStream               <builtin>/baml/ns_net/net.baml:5
 class            baml.net.TcpListener             <builtin>/baml/ns_net/net.baml:68
 class            baml.net.UdpSocket               <builtin>/baml/ns_net/net.baml:89

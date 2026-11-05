@@ -5,8 +5,6 @@
 /// Opaque handle to a prebuilt output-format schema. This supports the
 /// standalone `prompt` tag's parameterized output-format rendering.
 class OutputFormat {
-    _data: $rust_type,
-
     function _render(
         self,
         prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
@@ -21,6 +19,8 @@ class OutputFormat {
     ) -> string throws never {
         $rust_io_function
     }
+
+    @@rust_type("OutputFormat")
 }
 
 /// A typed chat-role marker produced by `${role("system")}` in a prompt.

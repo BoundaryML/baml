@@ -231,6 +231,15 @@ pub enum VmInternalError {
         got: ::core::any::TypeId,
     },
 
+    /// A `@@rust_type` instance holds a payload of another kind than its
+    /// class declares, which [`crate::RustInstance::fits`] rules out.
+    #[error("a `{class}` instance holds a {got:?} payload, not a {expected:?} one")]
+    RustPayloadMismatch {
+        class: &'static str,
+        expected: baml_base::RustPayloadKind,
+        got: baml_base::RustPayloadKind,
+    },
+
     #[error("cannot apply binary operation: {left} {op} {right}")]
     CannotApplyBinOp { left: Type, right: Type, op: BinOp },
 

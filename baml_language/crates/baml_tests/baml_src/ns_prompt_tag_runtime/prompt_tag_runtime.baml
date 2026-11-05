@@ -171,7 +171,7 @@ function pt_media_string_interp_fn() -> string {
 test "ordinary_string_interpolation_keeps_media_tostring_behavior" {
     assert.equal(
         pt_media_string_interp_fn(),
-        "Image Image { _data: <rust_data> }"
+        "Image Image"
     )
 }
 

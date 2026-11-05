@@ -323,11 +323,7 @@ impl PromptAssembly {
         }
         .merge_adjacent();
 
-        let prompt_ast_class = vm.lang_object(crate::lang_items::AI_PROMPT);
-        let data = Value::object(vm.alloc_rust_data(ast));
-        NativeCallResult::Done(Value::object(
-            vm.alloc_instance(prompt_ast_class, vec![data]),
-        ))
+        NativeCallResult::Done(vm.alloc_prompt(ast))
     }
 
     fn dispatch_next(self, vm: &mut BexVm) -> NativeCallResult {
@@ -383,22 +379,17 @@ impl Continuation for PromptAssembly {
 }
 
 impl BamlClassPrompt for PackageAiImpl {
-    fn text(vm: &BexVm, prompt: &ai_view::Prompt<'_>) -> bex_str::BexStr {
-        let data = prompt.instance.load_field(0);
-        let prompt = vm
-            .as_rust_data::<PromptAst>(&data)
-            .expect("ai.Prompt._data must contain bex_vm_types::PromptAst");
-        bex_str::BexStr::from(prompt.render_text())
+    fn text(prompt: &ai_view::Prompt<'_>) -> bex_str::BexStr {
+        bex_str::BexStr::from(prompt.payload().render_text())
     }
 
     fn messages(vm: &mut BexVm, prompt: &Value) -> Vec<Value> {
         let messages = {
             let instance = vm
-                .as_instance(prompt)
+                .as_rust_instance(prompt)
                 .expect("ai.Prompt.messages receiver must be an ai.Prompt instance");
-            let data = instance.load_field(0);
-            vm.as_rust_data::<PromptAst>(&data)
-                .expect("ai.Prompt._data must contain bex_vm_types::PromptAst")
+            ai_view::Prompt { instance }
+                .payload()
                 .to_structured_messages()
         };
         let message_class = vm.lang_object(crate::lang_items::AI_PROMPT_MESSAGE);
@@ -434,15 +425,7 @@ fn prompt_metadata_value(vm: &mut BexVm, metadata: serde_json::Value) -> Value {
 fn prompt_content_values(vm: &mut BexVm, content: &PromptAstSimple) -> Vec<Value> {
     match content {
         PromptAstSimple::String(text) => vec![Value::object(vm.alloc_string(text.clone()))],
-        PromptAstSimple::Media(media) => {
-            let wrapper = media
-                .kind
-                .wrapper_class()
-                .unwrap_or_else(|| panic!("generic media cannot inhabit a concrete prompt part"));
-            let class = vm.lang_object(wrapper);
-            let data = Value::object(vm.alloc_rust_data(media.clone()));
-            vec![Value::object(vm.alloc_instance(class, vec![data]))]
-        }
+        PromptAstSimple::Media(media) => vec![vm.alloc_media(media.clone())],
         PromptAstSimple::CacheDelimiter(args) => {
             let class = vm.lang_object(crate::lang_items::AI_CACHE_DELIMITER);
             let args = super::json::serde_to_value(vm, args);

@@ -10,10 +10,7 @@
 
 use std::{
     cell::UnsafeCell,
-    sync::{
-        Arc, RwLock,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::{Arc, RwLock},
 };
 
 use baml_base::MediaKind;
@@ -22,7 +19,6 @@ use bex_str::BexStr;
 // Do not clone. Only clone as `Arc<MediaValue>`.
 #[derive(Debug)]
 pub struct MediaValue {
-    pub random_id: usize,
     pub kind: MediaKind,
     mime_type: RwLock<Option<String>>,
     // `UnsafeCell` because `MediaContent` is mutated through
@@ -39,9 +35,35 @@ pub struct MediaValue {
 #[allow(unsafe_code)]
 unsafe impl Sync for MediaValue {}
 
+/// A media value is its value: its kind, its MIME type, and its content as
+/// BAML reads it (a URL, or base64 data with the name it was read under). The
+/// base64 a URL's content is fetched into later is a cache of the URL, not
+/// part of the value, so fetching never changes what a value equals.
 impl PartialEq for MediaValue {
     fn eq(&self, other: &Self) -> bool {
-        self.random_id == other.random_id
+        std::ptr::eq(self, other)
+            || (self.kind == other.kind
+                && self.mime_type() == other.mime_type()
+                && self.read_content(|mine| {
+                    other.read_content(|theirs| match (mine, theirs) {
+                        (
+                            MediaContent::Url { url: mine, .. },
+                            MediaContent::Url { url: theirs, .. },
+                        ) => mine == theirs,
+                        (MediaContent::Url { .. }, MediaContent::Base64 { .. }) => false,
+                        (
+                            MediaContent::Base64 {
+                                base64_data: mine,
+                                name: my_name,
+                            },
+                            MediaContent::Base64 {
+                                base64_data: theirs,
+                                name: their_name,
+                            },
+                        ) => mine == theirs && my_name == their_name,
+                        (MediaContent::Base64 { .. }, MediaContent::Url { .. }) => false,
+                    })
+                }))
     }
 }
 
@@ -49,17 +71,22 @@ impl Eq for MediaValue {}
 
 impl std::hash::Hash for MediaValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.random_id.hash(state);
+        self.kind.hash(state);
+        self.mime_type().hash(state);
+        self.read_content(|content| match content {
+            MediaContent::Url { url, .. } => url.hash(state),
+            MediaContent::Base64 { base64_data, name } => {
+                base64_data.hash(state);
+                name.hash(state);
+            }
+        });
     }
 }
-
-static GLOBAL_MEDIA_VALUE_ID: AtomicUsize = AtomicUsize::new(0);
 
 impl MediaValue {
     pub fn new(kind: MediaKind, content: MediaContent, mime_type: Option<String>) -> Self {
         Self {
             content_rw_lock: RwLock::new(()),
-            random_id: GLOBAL_MEDIA_VALUE_ID.fetch_add(1, Ordering::Relaxed),
             kind,
             content: UnsafeCell::new(content),
             mime_type: RwLock::new(mime_type),

@@ -181,8 +181,9 @@ impl HashDriver {
                                 bytes.extend_from_slice(&(variant.index as u64).to_le_bytes());
                                 bytes
                             }
-                            // Equal only by identity, and an identity moves with
-                            // the collector, so no kind hashes.
+                            // A `@@rust_type` class hashes only through an
+                            // explicit implementation (the checker refuses a
+                            // structural hash of one), so no kind hashes here.
                             Object::RustInstance(instance) => match &instance.payload {
                                 bex_vm_types::RustPayload::Foreign(_)
                                 | bex_vm_types::RustPayload::DefaultHasher(_)
@@ -200,6 +201,7 @@ impl HashDriver {
                                 | bex_vm_types::RustPayload::ReservedSpan(_)
                                 | bex_vm_types::RustPayload::File(_)
                                 | bex_vm_types::RustPayload::Glob(_)
+                                | bex_vm_types::RustPayload::OutputFormat(_)
                                 | bex_vm_types::RustPayload::TcpStream(_)
                                 | bex_vm_types::RustPayload::TcpListener(_)
                                 | bex_vm_types::RustPayload::UdpSocket(_)
@@ -217,7 +219,12 @@ impl HashDriver {
                                 | bex_vm_types::RustPayload::SseStream(_)
                                 | bex_vm_types::RustPayload::HttpServer(_)
                                 | bex_vm_types::RustPayload::TlsKeys(_)
-                                | bex_vm_types::RustPayload::HostValue(_) => {
+                                | bex_vm_types::RustPayload::HostValue(_)
+                                | bex_vm_types::RustPayload::Image(_)
+                                | bex_vm_types::RustPayload::Audio(_)
+                                | bex_vm_types::RustPayload::Pdf(_)
+                                | bex_vm_types::RustPayload::Video(_)
+                                | bex_vm_types::RustPayload::Prompt(_) => {
                                     return panic("Value does not support structural hashing");
                                 }
                             },

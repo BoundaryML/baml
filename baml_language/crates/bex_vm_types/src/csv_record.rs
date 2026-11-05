@@ -48,13 +48,16 @@ impl CsvHeader {
 }
 
 /// One cell of a record, with whether its text was quoted.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct CsvCell {
     pub text: String,
     pub quoted: bool,
 }
 
 /// One parsed record and where it was read.
+///
+/// Equal records are equal values: the same cells under the same header names
+/// and null spellings, read at the same position (`Record.position` reads it).
 #[derive(Debug)]
 pub struct CsvRecord {
     pub cells: Vec<CsvCell>,
@@ -64,6 +67,23 @@ pub struct CsvRecord {
     pub line: i64,
     pub record: i64,
 }
+
+impl PartialEq for CsvRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.cells == other.cells
+            && match (&self.header, &other.header) {
+                (Some(mine), Some(theirs)) => mine.names == theirs.names,
+                (Some(_), None) | (None, Some(_)) => false,
+                (None, None) => true,
+            }
+            && self.null_values == other.null_values
+            && self.byte == other.byte
+            && self.line == other.line
+            && self.record == other.record
+    }
+}
+
+impl Eq for CsvRecord {}
 
 impl CsvRecord {
     /// Report the cells, and the header and null spellings shared with the

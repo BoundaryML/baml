@@ -11,7 +11,7 @@ use bex_vm_types::{PanicClass, types::ErrorClass};
 
 pub const AI_CACHE_DELIMITER: LangItem = lang_item!(Ai: CacheDelimiter);
 pub const AI_FUNCTION_SPEC: LangItem = BoundaryClass::FunctionSpec.item();
-pub const AI_PROMPT: LangItem = BoundaryClass::Prompt.item();
+pub const AI_PROMPT: LangItem = lang_item!(Ai: Prompt);
 pub const AI_PROMPT_MESSAGE: LangItem = lang_item!(Ai: PromptMessage);
 pub const AI_ROLE: LangItem = lang_item!(Ai: Role);
 pub const AI_STREAM_STREAM: LangItem = BoundaryClass::Stream.item();

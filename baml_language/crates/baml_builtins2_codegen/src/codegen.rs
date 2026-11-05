@@ -780,6 +780,7 @@ fn copy_field_type(ty: &BamlType) -> String {
         | BamlType::Optional(_)
         | BamlType::Generic(_)
         | BamlType::Named(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
         | BamlType::Media(_) => "bex_vm_types::Value".to_string(),
@@ -1532,26 +1533,6 @@ fn emit_immut_receiver_extraction_indented(
             )
             .unwrap();
         }
-        cls if is_media_class(cls) => {
-            if needs_owned {
-                // `//baml:mut_vm` media methods: pass the raw `Value` copy so the
-                // `vm` borrow is released before the mutable-vm call.  The view
-                // struct (`view::media::Cls`) holds `&Instance` which borrows `vm`
-                // and cannot coexist with `&mut BexVm`.
-                writeln!(out, "{indent}let {name} = &args[{idx}];").unwrap();
-            } else {
-                writeln!(
-                    out,
-                    "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
-                )
-                .unwrap();
-                writeln!(
-                    out,
-                    "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
-                )
-                .unwrap();
-            }
-        }
         // Other instance-backed receivers (e.g. `time.Instant`): wrap the heap
         // instance in its `view::<ns>::<Class>` struct. `needs_owned` (set for
         // `//baml:mut_vm` methods) falls through to the raw `&Value` path below,
@@ -1728,14 +1709,6 @@ fn receiver_immut_extraction_expr(
         // Bigint is heap-allocated behind an Arc; always clone the Arc so the
         // trait method receives an owned `Arc<BigInt>` regardless of needs_owned.
         "Bigint" => format!("vm.as_bigint({val})?.clone()"),
-        name if is_media_class(name) => {
-            let kind = media_kind_expr(&recv.class_name);
-            if needs_owned {
-                format!("vm.as_media({val}, {kind})?.clone()")
-            } else {
-                format!("vm.as_media({val}, {kind})?")
-            }
-        }
         _ => {
             if needs_owned {
                 format!("{val}.clone()")
@@ -1854,6 +1827,7 @@ fn extraction_expr(
             }
         }
         BamlType::Named(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
         | BamlType::Null
@@ -1884,11 +1858,6 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
                     }
                 };
                 args.push(arg);
-            } else if needs_owned && is_media_class(recv.builtin_name()) {
-                // For `//baml:mut_vm` media methods the extraction emits
-                // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
-                // it is already the `&Value` the trait method expects.
-                args.push(name);
             } else if recv.instance_backed && !needs_owned {
                 // Instance-backed receiver extracted as a `view::<ns>::<Class>`
                 // value; the trait method takes it by reference.
@@ -1976,6 +1945,7 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
         }
         BamlType::Generic(_)
         | BamlType::Named(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
         | BamlType::RustType => name.to_string(),
@@ -2046,6 +2016,7 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
         | BamlType::Null
         | BamlType::Generic(_)
         | BamlType::Named(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
         | BamlType::Media(_)
@@ -2165,9 +2136,10 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
         // both drop generics and fabricate a class for the placeholders, so
         // this static-`BamlType` path cannot recover a named type — the
         // complete type lives only on the runtime value's stored `element_ty`.
-        BamlType::Named(_) | BamlType::Union(_) | BamlType::StringLiteral(_) => {
-            "baml_type::RealizedTy::unknown()".to_string()
-        }
+        BamlType::Named(_)
+        | BamlType::Enum(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_) => "baml_type::RealizedTy::unknown()".to_string(),
     }
 }
 
@@ -2225,6 +2197,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
         }
         BamlType::Generic(_)
         | BamlType::Named(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
         | BamlType::Media(_)
@@ -2274,6 +2247,7 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
         BamlType::Uint8Array => "&[u8]".to_string(),
         BamlType::Generic(_)
         | BamlType::Named(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
         | BamlType::RustType => "&Value".to_string(),
@@ -2307,6 +2281,7 @@ fn baml_type_to_output(ty: &BamlType) -> String {
         BamlType::Uint8Array => "Vec<u8>".to_string(),
         BamlType::Generic(_)
         | BamlType::Named(_)
+        | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
         | BamlType::Media(_)
@@ -2392,27 +2367,10 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
         // Bigint is heap-allocated; the glue extracts and clones the Arc so the
         // trait method receives an owned `Arc<num_bigint::BigInt>`.
         "Bigint" => "std::sync::Arc<num_bigint::BigInt>".to_string(),
-        name if is_media_class(name) => {
-            // For `//baml:mut_vm` methods the view struct cannot coexist with
-            // `&mut BexVm` (split-borrow).  Use the raw `Value` instead so the
-            // trait impl can extract / clone what it needs from `vm` before the
-            // mutable allocation calls.
-            if matches!(vm_usage, VmUsage::MutRef) {
-                "&Value".to_string()
-            } else {
-                match name {
-                    "Pdf" => "&view::media::Pdf<'_>".to_string(),
-                    "Audio" => "&view::media::Audio<'_>".to_string(),
-                    "Video" => "&view::media::Video<'_>".to_string(),
-                    "Image" => "&view::media::Image<'_>".to_string(),
-                    _ => "&Value".to_string(),
-                }
-            }
-        }
-        // Other instance-backed classes (e.g. `time.Instant`) are passed as a
-        // borrowed `view::<ns>::<Class>` for typed field access. As with media,
-        // `//baml:mut_vm` methods fall back to the `Copy` `&Value` because the
-        // view's `&Instance` borrow can't coexist with `&mut BexVm`. Opaque
+        // Instance-backed classes (e.g. `time.Instant`, a media value) are
+        // passed as a borrowed `view::<ns>::<Class>` for typed field or payload
+        // access. `//baml:mut_vm` methods fall back to the `Copy` `&Value`
+        // because the view's borrow can't coexist with `&mut BexVm`. Opaque
         // classes and primitives stay type-erased.
         _ if recv.instance_backed && !matches!(vm_usage, VmUsage::MutRef) => {
             format!("&{}<'_>", receiver_view_path(recv))
@@ -2433,7 +2391,6 @@ fn receiver_baml_type(recv: &Receiver) -> BamlType {
         "Int" => BamlType::Int,
         "Bigint" => BamlType::Bigint,
         "Float" => BamlType::Float,
-        "Pdf" | "Audio" | "Video" | "Image" => BamlType::Named(recv.class_name.clone()),
         _ => BamlType::Named(recv.class_name.clone()),
     }
 }
@@ -2785,14 +2742,14 @@ mod tests {
             output.contains("pub struct Pdf<'a>"),
             "missing Pdf view struct:\n{output}"
         );
+        // A tagged class's view holds its instance and reads its own payload.
         assert!(
-            output.contains("pub instance: &'a Instance"),
-            "Pdf view should hold &Instance:\n{output}"
+            output.contains("pub instance: &'a bex_vm_types::RustInstance"),
+            "Pdf view should hold &RustInstance:\n{output}"
         );
-        // _data accessor downcasts to any payload type.
         assert!(
-            output.contains("fn _data<'v, T: bex_vm_types::BexRustData>"),
-            "Pdf._data should be generic downcast accessor:\n{output}"
+            output.contains("pub fn payload(&self) -> &'a bex_vm_types::payload::Pdf"),
+            "Pdf view should read its Pdf payload:\n{output}"
         );
     }
 
@@ -2801,10 +2758,10 @@ mod tests {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
-        // copy::media::Pdf should have _data: Arc<dyn bex_vm_types::BexRustData>
+        // A tagged class's copy holds its payload.
         assert!(
-            output.contains("Arc<dyn bex_vm_types::BexRustData>"),
-            "copy struct should have Arc<dyn Any> field:\n{output}"
+            output.contains("pub payload: bex_vm_types::payload::Pdf"),
+            "copy struct should hold the Pdf payload:\n{output}"
         );
         // to_value method
         assert!(

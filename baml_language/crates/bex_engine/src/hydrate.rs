@@ -584,7 +584,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         )
                     })?
                     .ptr();
-                self.wrapper_instance(class, media.clone())?
+                self.rust_instance(class, bex_vm_types::RustPayload::media(media.clone()))
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt)) => {
                 let class = self
@@ -592,7 +592,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     .lang_head(bex_vm::lang_items::AI_PROMPT)
                     .ok_or_else(|| self.malformed("the program declares no `ai.Prompt`"))?
                     .ptr();
-                self.wrapper_instance(class, prompt.clone())?
+                self.rust_instance(class, bex_vm_types::RustPayload::Prompt(prompt.clone()))
             }
             BexExternalValue::Adt(BexExternalAdt::Type(reflected)) => {
                 // A reflected type names its declarations; an anonymous one has
@@ -861,37 +861,19 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         Ok(Value::object(ptr))
     }
 
-    /// An instance of the standard library's wrapper class `class` around
-    /// `payload`, which its one `_data` field holds as opaque data.
-    fn wrapper_instance(
-        &mut self,
-        class: HeapPtr,
-        payload: std::sync::Arc<dyn bex_vm_types::BexRustData>,
-    ) -> Result<Value, Refusal> {
-        {
-            let Object::Class(declared) = self.vm().get_object(class) else {
-                return Err(self.malformed("a media or prompt wrapper is not a class"));
-            };
-            let fields: Vec<&str> = declared
-                .declared_fields()
-                .iter()
-                .map(|f| f.name.as_str())
-                .collect();
-            if fields != [bex_external_types::MEDIA_WRAPPER_DATA_FIELD] {
-                return Err(self.malformed(format!(
-                    "wrapper class `{}` does not hold one `{}` field",
-                    declared.name(),
-                    bex_external_types::MEDIA_WRAPPER_DATA_FIELD
-                )));
-            }
-        }
-        let data = Value::object(self.holder.holder_mut().tlab_mut().alloc_rust_data(payload));
-        Ok(Value::object(
+    /// An instance of the standard library's `@@rust_type` class `class`
+    /// around `payload`.
+    fn rust_instance(&mut self, class: HeapPtr, payload: bex_vm_types::RustPayload) -> Value {
+        Value::object(
             self.holder
                 .holder_mut()
                 .tlab_mut()
-                .alloc_instance_with_type_args(class, Box::new([]), vec![data]),
-        ))
+                .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                    class,
+                    Box::new([]),
+                    payload,
+                ))),
+        )
     }
 }
 

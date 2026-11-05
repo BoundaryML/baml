@@ -2,11 +2,9 @@
 // A class literal could only copy a handle out of another value, which would
 // relabel what the handle means, so the literal itself is refused.
 
-// A handle moved across classes would hand a lock's functions an output
-// format's schema.
-function cross_class_handle() -> baml.fs.Lock {
-    let format = ai.internal.build_output_format(string.type());
-    baml.fs.Lock { _handle: format._data }
+// A handle copied into a second lock would let two locks release one.
+function copied_handle(lock: baml.fs.Lock) -> baml.fs.Lock {
+    baml.fs.Lock { _handle: lock._handle }
 }
 
 // A spread is the same literal.

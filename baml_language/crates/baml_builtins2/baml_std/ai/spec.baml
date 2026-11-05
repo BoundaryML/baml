@@ -81,10 +81,7 @@ class PromptMessage {
 /// prompt into messages and media remains structural until a provider lowers
 /// it to its wire format.
 class Prompt {
-    _data: $rust_type,
-
     /// Render the prompt as readable text. Message roles are emitted as headers.
-    //baml:vm
     function text(self) -> string throws never {
         $rust_function
     }
@@ -100,6 +97,8 @@ class Prompt {
             self.text()
         }
     }
+
+    @@rust_type("Prompt")
 }
 
 /// Standalone tagged prompt constructor. The returned closure renders a

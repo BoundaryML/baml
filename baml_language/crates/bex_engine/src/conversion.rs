@@ -572,50 +572,15 @@ impl BexEngine {
                         bex_external_types::TaggedHeapHandleKind::FunctionSpec,
                         ty()?,
                     )),
-                    // A media value and a rendered prompt cross as the
-                    // payload their wrapper holds; a host builds a fresh
-                    // wrapper around it.
-                    form @ (ClassCrossing::Media(_) | ClassCrossing::Prompt) => {
-                        let payload = class
-                            .declared_fields()
-                            .iter()
-                            .position(|field| {
-                                field.name == bex_external_types::MEDIA_WRAPPER_DATA_FIELD
-                            })
-                            .and_then(|slot| instance.fields[slot].load().as_object_ptr())
-                            .and_then(|data| match unsafe { data.get() } {
-                                Object::RustData(arc) => {
-                                    bex_external_types::try_convert_rust_data(arc)
-                                }
-                                _ => None,
-                            });
-                        match (form, payload) {
-                            (
-                                ClassCrossing::Media(kind),
-                                Some(BexExternalValue::Adt(BexExternalAdt::Media(media))),
-                            ) if media.kind == kind => {
-                                Ok(BexExternalValue::Adt(BexExternalAdt::Media(media)))
-                            }
-                            (
-                                ClassCrossing::Prompt,
-                                Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt))),
-                            ) => Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt))),
-                            _ => Err(EngineError::VmInternalError(
-                                bex_vm::errors::VmInternalError::BridgeFailure {
-                                    message: format!(
-                                        "an instance of `{}` does not hold its payload",
-                                        class.name()
-                                    ),
-                                },
-                            )),
-                        }
-                    }
-                    // Only a `@@rust_type` class holds a host's value, and
-                    // its instances are `RustInstance`s.
-                    ClassCrossing::HostValue => Err(EngineError::VmInternalError(
+                    // A media value, a rendered prompt and a host's value are
+                    // `@@rust_type` classes, whose instances are
+                    // `RustInstance`s.
+                    crossing @ (ClassCrossing::Media(_)
+                    | ClassCrossing::Prompt
+                    | ClassCrossing::HostValue) => Err(EngineError::VmInternalError(
                         bex_vm::errors::VmInternalError::BridgeFailure {
                             message: format!(
-                                "`{}` crosses as a host's value but has fields",
+                                "`{}` crosses as {crossing:?} but has fields",
                                 class.name()
                             ),
                         },
@@ -714,8 +679,7 @@ impl BexEngine {
                 self.to_statement(&type_value.ty)?,
             ))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
-            Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
-                .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
+            Object::RustData(arc) => Ok(BexExternalValue::RustData(arc.clone())),
             Object::RustInstance(instance) => self.rust_instance_reference(ptr, instance),
             Object::HostClosure(_) => Err(EngineError::CannotConvert {
                 type_name: "host_closure".to_string(),
@@ -749,20 +713,39 @@ impl BexEngine {
             bex_vm_types::TypeHead::new(instance.class, class.type_tag),
             instance.class_type_args.clone(),
         ))?;
+        let not_its_payload = || {
+            EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure {
+                message: format!(
+                    "an instance of `{}` holds {:?}, which is not what it crosses as",
+                    class.name(),
+                    instance.payload.kind()
+                ),
+            })
+        };
         let kind = match class.crossing() {
+            // A media value and a rendered prompt cross as themselves; a host
+            // builds a fresh instance around one it sends.
+            ClassCrossing::Media(kind) => {
+                return match instance.payload.as_media() {
+                    Some(media) if media.kind == kind => Ok(BexExternalValue::Adt(
+                        BexExternalAdt::Media(std::sync::Arc::clone(media)),
+                    )),
+                    _ => Err(not_its_payload()),
+                };
+            }
+            ClassCrossing::Prompt => {
+                let bex_vm_types::RustPayload::Prompt(prompt) = &instance.payload else {
+                    return Err(not_its_payload());
+                };
+                return Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(
+                    std::sync::Arc::clone(prompt),
+                )));
+            }
             // A host's own value crosses as the host's reference to it, which
             // the host resolves back to its own object.
             ClassCrossing::HostValue => {
                 let bex_vm_types::RustPayload::HostValue(host) = &instance.payload else {
-                    return Err(EngineError::VmInternalError(
-                        bex_vm::errors::VmInternalError::BridgeFailure {
-                            message: format!(
-                                "an instance of `{}` holds {:?}, not a host's value",
-                                class.name(),
-                                instance.payload.kind()
-                            ),
-                        },
-                    ));
+                    return Err(not_its_payload());
                 };
                 return Ok(BexExternalValue::HostValue(std::sync::Arc::clone(host)));
             }
@@ -775,10 +758,9 @@ impl BexEngine {
                 ),
             ClassCrossing::Stream => bex_external_types::TaggedHeapHandleKind::Stream,
             ClassCrossing::FunctionSpec => bex_external_types::TaggedHeapHandleKind::FunctionSpec,
-            // The compiler never gives a `@@rust_type` class a crossing that
-            // reads an instance's contents.
-            crossing
-            @ (ClassCrossing::Fields | ClassCrossing::Media(_) | ClassCrossing::Prompt) => {
+            // The compiler never gives a `@@rust_type` class a crossing by
+            // its fields.
+            crossing @ ClassCrossing::Fields => {
                 return Err(EngineError::VmInternalError(
                     bex_vm::errors::VmInternalError::BridgeFailure {
                         message: format!(

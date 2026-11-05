@@ -49,6 +49,23 @@ impl Scratch {
     pub(super) fn shaper(&mut self) -> &mut Shaper {
         &mut self.shaper
     }
+    /// The one object a piece of runtime state captures as, keyed by the
+    /// identity of what it shares: made by `make` the first time it is met.
+    fn rust_object(
+        &mut self,
+        leaves: &mut Leaves<'_>,
+        identity: usize,
+        make: impl FnOnce(&mut Leaves<'_>, &[(String, String)]) -> SnapshotObject,
+    ) -> Option<ObjectId> {
+        if let Some(id) = self.rust_seen.get(&identity) {
+            return Some(*id);
+        }
+        let object = make(leaves, &self.rewrites);
+        let id = leaves.object(object)?;
+        self.rust_seen.insert(identity, id);
+        Some(id)
+    }
+
     /// The value as the capture holds it. An object gets its identity here
     /// and its content later, so that what it holds can name it.
     fn add(&mut self, leaves: &mut Leaves<'_>, value: Value, depth: usize) -> SnapshotValue {
@@ -96,24 +113,33 @@ impl Scratch {
                     None => SnapshotValue::Truncated(Limit::Bytes),
                 }
             }
+            // Runtime data holds keys and cipher state, and stays opaque.
             Object::RustData(data) => {
                 let identity = std::sync::Arc::as_ptr(data).cast::<()>() as usize;
-                let id = if let Some(id) = self.rust_seen.get(&identity) {
-                    *id
-                } else {
-                    // Media is the one host value captured by content. Others
-                    // hold keys and cipher state, and stay opaque.
-                    let object = match data.downcast_ref::<MediaValue>() {
-                        Some(value) => media(leaves, &self.rewrites, value),
-                        None => SnapshotObject::NonSnapshotableValue {},
-                    };
-                    let Some(id) = leaves.object(object) else {
-                        return SnapshotValue::Truncated(Limit::Objects);
-                    };
-                    self.rust_seen.insert(identity, id);
-                    id
-                };
-                SnapshotValue::Object(id)
+                match self.rust_object(leaves, identity, |_, _| {
+                    SnapshotObject::NonSnapshotableValue {}
+                }) {
+                    Some(id) => SnapshotValue::Object(id),
+                    None => return SnapshotValue::Truncated(Limit::Objects),
+                }
+            }
+            // Media is the one runtime value captured by content: one object
+            // per media value, however many instances share it.
+            Object::RustInstance(bex_vm_types::RustInstance {
+                payload:
+                    bex_vm_types::RustPayload::Image(value)
+                    | bex_vm_types::RustPayload::Audio(value)
+                    | bex_vm_types::RustPayload::Pdf(value)
+                    | bex_vm_types::RustPayload::Video(value),
+                ..
+            }) => {
+                let identity = std::sync::Arc::as_ptr(value).cast::<()>() as usize;
+                match self.rust_object(leaves, identity, |leaves, rewrites| {
+                    media(leaves, rewrites, value)
+                }) {
+                    Some(id) => SnapshotValue::Object(id),
+                    None => return SnapshotValue::Truncated(Limit::Objects),
+                }
             }
             _ => {
                 let Some(slot) = leaves.reserve() else {
@@ -226,6 +252,7 @@ impl Scratch {
                                 | bex_vm_types::RustPayload::ReservedSpan(_)
                                 | bex_vm_types::RustPayload::File(_)
                                 | bex_vm_types::RustPayload::Glob(_)
+                                | bex_vm_types::RustPayload::OutputFormat(_)
                                 | bex_vm_types::RustPayload::TcpStream(_)
                                 | bex_vm_types::RustPayload::TcpListener(_)
                                 | bex_vm_types::RustPayload::UdpSocket(_)
@@ -243,7 +270,12 @@ impl Scratch {
                                 | bex_vm_types::RustPayload::SseStream(_)
                                 | bex_vm_types::RustPayload::HttpServer(_)
                                 | bex_vm_types::RustPayload::TlsKeys(_)
-                                | bex_vm_types::RustPayload::HostValue(_) => {}
+                                | bex_vm_types::RustPayload::HostValue(_)
+                                | bex_vm_types::RustPayload::Image(_)
+                                | bex_vm_types::RustPayload::Audio(_)
+                                | bex_vm_types::RustPayload::Pdf(_)
+                                | bex_vm_types::RustPayload::Video(_)
+                                | bex_vm_types::RustPayload::Prompt(_) => {}
                             }
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
                                 if instance.class_type_args.is_empty() {
@@ -578,6 +610,34 @@ mod tests {
     fn ty() -> RealizedTy {
         RealizedTy::Null
     }
+    /// A media value as the VM holds one: an instance of a wrapper class
+    /// around it. The capture reads only the payload, so the class is bare.
+    fn media_instance(vm: &mut crate::BexVm, media: Arc<MediaValue>) -> Value {
+        let class = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Media(media.kind),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Media")),
+            body: bex_vm_types::ClassBody::RustType(match media.kind {
+                baml_base::MediaKind::Image => baml_base::RustPayloadKind::Image,
+                baml_base::MediaKind::Audio => baml_base::RustPayloadKind::Audio,
+                baml_base::MediaKind::Pdf => baml_base::RustPayloadKind::Pdf,
+                baml_base::MediaKind::Video => baml_base::RustPayloadKind::Video,
+                baml_base::MediaKind::Generic => unreachable!("a test media value has a kind"),
+            }),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            type_tag: baml_type::typetag::TypeTag::from_i64(300),
+            stream_done: false,
+            cleanup: None,
+            methods: indexmap::IndexMap::new(),
+            generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        })));
+        vm.alloc_rust_instance(class, Box::new([]), bex_vm_types::RustPayload::media(media))
+    }
+
     fn capture(values: &[Value]) -> Snapshot {
         let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         // SAFETY: all test values remain live; fixtures do not collect during capture.
@@ -685,7 +745,7 @@ mod tests {
             panic!("expected a heap-backed payload, got {payload:?}")
         };
         let stored = Arc::clone(stored);
-        let sources: [Arc<dyn bex_vm_types::BexRustData>; 3] = [
+        let sources: [Arc<MediaValue>; 3] = [
             // Content that was read from a file: only its name is kept.
             MediaValue::from_file_content(
                 baml_type::MediaKind::Image,
@@ -708,7 +768,7 @@ mod tests {
         // Two host wrappers of one media value are one captured object.
         let values: Vec<_> = [&sources[0], &sources[1], &sources[2], &sources[2]]
             .into_iter()
-            .map(|source| Value::object(vm.tlab.alloc_rust_data(Arc::clone(source))))
+            .map(|source| media_instance(&mut vm, Arc::clone(source)))
             .collect();
         drop(sources);
         let snapshot = capture(&values);
@@ -833,12 +893,12 @@ mod tests {
             Value::object(vm.tlab.alloc_uint8array(vec![7; length]))
         };
         let image = |vm: &mut crate::BexVm, length: usize| {
-            let media: Arc<dyn bex_vm_types::BexRustData> = MediaValue::from_base64(
+            let media = MediaValue::from_base64(
                 baml_type::MediaKind::Image,
                 bex_str::BexStr::from("A".repeat(length)),
                 None,
             );
-            Value::object(vm.tlab.alloc_rust_data(media))
+            media_instance(vm, media)
         };
         // Each kind at the limit, then just over it.
         let values = [
@@ -1252,12 +1312,11 @@ mod tests {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let raw = "https://example.test/report.pdf?key=secret";
         let clean = "https://example.test/report.pdf?key=sha256:0123";
-        let media: Arc<dyn bex_vm_types::BexRustData> =
-            MediaValue::from_url(baml_type::MediaKind::Pdf, raw, None);
+        let media = MediaValue::from_url(baml_type::MediaKind::Pdf, raw, None);
         let message = format!("GET {raw} failed");
         let values = [
             Value::object(vm.tlab.alloc_string(message.as_str())),
-            Value::object(vm.tlab.alloc_rust_data(media)),
+            media_instance(&mut vm, media),
         ];
         let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         let mut scratch = Scratch {

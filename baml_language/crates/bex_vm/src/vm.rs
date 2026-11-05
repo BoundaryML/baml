@@ -4462,26 +4462,14 @@ impl BexVm {
             Object::Uint8Array(_) => ConcreteRealizedTy::Uint8Array,
             Object::Instance(inst) => match self.get_object(inst.class) {
                 Object::Class(class) => {
-                    // Media values are `Object::Instance`s of the std media classes
-                    // (`baml.media.{Image,Audio,Video,Pdf}`), but their concrete
-                    // type is the `image`/`audio`/… primitive
-                    // (`ConcreteRealizedTy::Media`) — which is how the impl registry
-                    // keys `implement I for image`. Return that, not the class.
-                    if let Some(kind) = self
-                        .stdlib_heads
-                        .media_kind(bex_vm_types::TypeHead::new(inst.class, class.type_tag))
-                    {
-                        ConcreteRealizedTy::Media(kind)
-                    } else {
-                        debug_assert_eq!(inst.class_type_args.len(), class.generic_param_count);
-                        // A generic instance's stored `class_type_args` are already
-                        // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
-                        // `ConcreteRealizedTy::Class` argument list.
-                        ConcreteRealizedTy::Class(
-                            bex_vm_types::TypeHead::new(inst.class, class.type_tag),
-                            inst.class_type_args.clone(),
-                        )
-                    }
+                    debug_assert_eq!(inst.class_type_args.len(), class.generic_param_count);
+                    // A generic instance's stored `class_type_args` are already
+                    // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
+                    // `ConcreteRealizedTy::Class` argument list.
+                    ConcreteRealizedTy::Class(
+                        bex_vm_types::TypeHead::new(inst.class, class.type_tag),
+                        inst.class_type_args.clone(),
+                    )
                 }
                 other => unreachable!(
                     "Instance.class must point to a Class, found {:?}",
@@ -4499,6 +4487,18 @@ impl BexVm {
             },
             // A `@@rust_type` class's instance is the class at its realized
             // type arguments, exactly as a plain instance is.
+            // A media value is an instance of a std media class
+            // (`baml.media.{Image,Audio,Video,Pdf}`), but its concrete type is
+            // the `image`/`audio`/… primitive (`ConcreteRealizedTy::Media`) —
+            // which is how the impl registry keys `implement I for image`.
+            Object::RustInstance(bex_vm_types::RustInstance {
+                payload:
+                    bex_vm_types::RustPayload::Image(media)
+                    | bex_vm_types::RustPayload::Audio(media)
+                    | bex_vm_types::RustPayload::Pdf(media)
+                    | bex_vm_types::RustPayload::Video(media),
+                ..
+            }) => ConcreteRealizedTy::Media(media.kind),
             Object::RustInstance(instance) => match self.get_object(instance.class) {
                 Object::Class(class) => {
                     debug_assert_eq!(instance.class_type_args.len(), class.generic_param_count);
@@ -5968,6 +5968,7 @@ impl BexVm {
             | bex_vm_types::RustPayload::ReservedSpan(_)
             | bex_vm_types::RustPayload::File(_)
             | bex_vm_types::RustPayload::Glob(_)
+            | bex_vm_types::RustPayload::OutputFormat(_)
             | bex_vm_types::RustPayload::TcpStream(_)
             | bex_vm_types::RustPayload::TcpListener(_)
             | bex_vm_types::RustPayload::UdpSocket(_)
@@ -5985,7 +5986,12 @@ impl BexVm {
             | bex_vm_types::RustPayload::SseStream(_)
             | bex_vm_types::RustPayload::HttpServer(_)
             | bex_vm_types::RustPayload::TlsKeys(_)
-            | bex_vm_types::RustPayload::HostValue(_) => Err(mismatch()),
+            | bex_vm_types::RustPayload::HostValue(_)
+            | bex_vm_types::RustPayload::Image(_)
+            | bex_vm_types::RustPayload::Audio(_)
+            | bex_vm_types::RustPayload::Pdf(_)
+            | bex_vm_types::RustPayload::Video(_)
+            | bex_vm_types::RustPayload::Prompt(_) => Err(mismatch()),
         }
     }
 
@@ -6052,6 +6058,26 @@ impl BexVm {
                     class_type_args,
                     payload,
                 ))),
+        )
+    }
+
+    /// A media value, as an instance of its kind's wrapper class
+    /// (`baml.media.Image`, …).
+    pub fn alloc_media(&mut self, media: bex_vm_types::payload::Media) -> Value {
+        let wrapper = media.kind.wrapper_class().unwrap_or_else(|| {
+            unreachable!("a media value is built with a kind of its own, never `Generic`")
+        });
+        let class = self.lang_object(wrapper);
+        self.alloc_rust_instance(class, Box::new([]), bex_vm_types::RustPayload::media(media))
+    }
+
+    /// A rendered prompt, as an `ai.Prompt`.
+    pub fn alloc_prompt(&mut self, prompt: bex_vm_types::payload::Prompt) -> Value {
+        let class = self.lang_object(crate::lang_items::AI_PROMPT);
+        self.alloc_rust_instance(
+            class,
+            Box::new([]),
+            bex_vm_types::RustPayload::Prompt(prompt),
         )
     }
 

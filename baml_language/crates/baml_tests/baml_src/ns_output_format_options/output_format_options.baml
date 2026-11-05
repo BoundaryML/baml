@@ -89,3 +89,11 @@ test "output format distinguishes omitted options from explicit null" {
     assert.contains(without_prefixes, "\nFirst")
     assert.is_true(without_prefixes.includes("\n- First") == false)
 }
+
+test "output format renders explicit defaults as omitted ones" {
+    let defaults = of_context().output_format()
+    assert.equal(of_context().output_format(map_style = "object"), defaults)
+    assert.equal(of_context().output_format(render_null_as = null), defaults)
+    assert.equal(of_context().output_format(quote_class_fields = false), defaults)
+    assert.equal(of_context().output_format(hoist_classes = "auto"), defaults)
+}

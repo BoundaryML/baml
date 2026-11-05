@@ -261,9 +261,9 @@ fn has_to_json_override(vm: &BexVm, value: Value) -> Result<bool, VmInternalErro
 /// recorded and *not* descended into — its `to_json` owns its whole subtree.
 /// Matches the walk's order (array elements, then map values, then the
 /// instance fields `options` writes) so the two stay index-aligned. A media
-/// instance is a leaf, as the walk writes its tagged form without descending
-/// into its opaque `_data` field. A container met again inside itself is not
-/// descended into again: the walk refuses it.
+/// instance is a leaf: the walk writes its tagged form from its payload. A
+/// container met again inside itself is not descended into again: the walk
+/// refuses it.
 fn collect(
     vm: &BexVm,
     value: Value,
@@ -315,19 +315,12 @@ fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
             .map(|(_, value)| value)
             .collect(),
         Object::Instance(instance) => match vm.get_object(instance.class) {
-            Object::Class(class)
-                if vm
-                    .stdlib_heads()
-                    .media_kind(TypeHead::new(instance.class, class.type_tag))
-                    .is_none() =>
-            {
-                instance
-                    .field_values()
-                    .zip(class.instance_fields())
-                    .filter(|(value, field)| options.writes_field(field, *value))
-                    .map(|(value, _)| value)
-                    .collect()
-            }
+            Object::Class(class) => instance
+                .field_values()
+                .zip(class.instance_fields())
+                .filter(|(value, field)| options.writes_field(field, *value))
+                .map(|(value, _)| value)
+                .collect(),
             _ => Vec::new(),
         },
         _ => Vec::new(),
@@ -504,6 +497,8 @@ enum Shape {
     Array(Vec<Value>),
     Map,
     Instance(HeapPtr),
+    /// A media value, written in its tagged form.
+    Media(baml_type::MediaKind),
     Variant(HeapPtr, usize),
     /// No JSON form: the message, and the `SerializationError.reason` tag.
     Unserializable(&'static str, &'static str),
@@ -685,11 +680,15 @@ impl Walker<'_, '_> {
             Object::Future(_) => {
                 Shape::Unserializable("a future has no JSON form (await it first)", "future")
             }
-            // Its state lives in the runtime, which gives it no form outside.
-            Object::RustInstance(_) => Shape::Unserializable(
-                "a value whose state lives in the runtime has no JSON form",
-                "unserializable",
-            ),
+            // A media value writes its tagged form; any other state lives in
+            // the runtime, which gives it no form outside.
+            Object::RustInstance(instance) => match instance.payload.as_media() {
+                Some(media) => Shape::Media(media.kind),
+                None => Shape::Unserializable(
+                    "a value whose state lives in the runtime has no JSON form",
+                    "unserializable",
+                ),
+            },
             _ => Shape::Unserializable("value has no json representation", "unserializable"),
         };
         match shape {
@@ -698,7 +697,8 @@ impl Walker<'_, '_> {
             Shape::Bigint => sink.bigint(vm, value),
             Shape::Array(values) => self.open_array(vm, ptr, values, false, sink)?,
             Shape::Map => self.open_map(vm, ptr, false, sink)?,
-            Shape::Instance(class) => self.open_instance(vm, value, ptr, class, sink)?,
+            Shape::Instance(class) => self.open_instance(vm, ptr, class, sink)?,
+            Shape::Media(kind) => self.write_media(vm, value, kind, sink)?,
             Shape::Variant(enm, index) => {
                 let name = match vm.get_object(enm) {
                     Object::Enum(e) => match e.variants.get(index) {
@@ -863,50 +863,41 @@ impl Walker<'_, '_> {
     fn open_instance(
         &mut self,
         vm: &mut BexVm,
-        value: Value,
         ptr: HeapPtr,
         class: HeapPtr,
         sink: &mut impl Sink,
     ) -> Result<(), Stopped> {
-        let (head, plan) = match vm.get_object(class) {
-            Object::Class(declaration) => (
-                TypeHead::new(class, declaration.type_tag),
-                (!self.plans.contains_key(&class)).then(|| {
-                    let keys: Vec<String> = declaration
+        let plan = match vm.get_object(class) {
+            Object::Class(declaration) => (!self.plans.contains_key(&class)).then(|| {
+                let keys: Vec<String> = declaration
+                    .instance_fields()
+                    .iter()
+                    .map(|field| {
+                        self.options
+                            .naming
+                            .key(&field.name, field.alias.as_deref())
+                            .to_owned()
+                    })
+                    .collect();
+                let shared_keys =
+                    declaration
                         .instance_fields()
                         .iter()
-                        .map(|field| {
-                            self.options
-                                .naming
-                                .key(&field.name, field.alias.as_deref())
-                                .to_owned()
-                        })
-                        .collect();
-                    let shared_keys =
-                        declaration
-                            .instance_fields()
-                            .iter()
-                            .enumerate()
-                            .any(|(i, field)| {
-                                self.options.naming.shows(field.skip)
-                                    && declaration.instance_fields()[..i].iter().enumerate().any(
-                                        |(j, other)| {
-                                            self.options.naming.shows(other.skip)
-                                                && keys[i] == keys[j]
-                                        },
-                                    )
-                            });
-                    WritePlan { keys, shared_keys }
-                }),
-            ),
+                        .enumerate()
+                        .any(|(i, field)| {
+                            self.options.naming.shows(field.skip)
+                                && declaration.instance_fields()[..i].iter().enumerate().any(
+                                    |(j, other)| {
+                                        self.options.naming.shows(other.skip) && keys[i] == keys[j]
+                                    },
+                                )
+                        });
+                WritePlan { keys, shared_keys }
+            }),
             _ => {
                 return Err(self.refuse(vm, "instance class pointer is not a class", "class"));
             }
         };
-        // Media instances write their tagged form, not a field map.
-        if let Some(kind) = vm.stdlib_heads().media_kind(head) {
-            return self.write_media(vm, value, kind, sink);
-        }
         if let Some(plan) = plan {
             self.plans.insert(class, plan);
         }

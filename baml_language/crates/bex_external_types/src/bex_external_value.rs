@@ -495,13 +495,6 @@ impl BexExternalAdt {
     }
 }
 
-/// Field of the stdlib media and prompt wrapper classes (`baml.media.*`,
-/// `ai.Prompt`) that holds the Rust-backed payload. The wrapper layout is
-/// private to the stdlib: the engine flattens a wrapper instance to its
-/// payload on the way out and builds one around a payload on the way in, so
-/// no host ever names this field.
-pub const MEDIA_WRAPPER_DATA_FIELD: &str = "_data";
-
 impl BexExternalValue {
     /// Construct a union value (`A | B | ...`) with metadata.
     ///
@@ -875,44 +868,59 @@ impl AsBexExternalValue for Vec<u8> {
     }
 }
 
-/// Trait for opaque Rust data stored in `Object::RustData` that knows how to
-/// convert itself to a [`BexExternalValue`].
-///
-/// Implement this for any type that is stored as `RustData` on the VM heap and
-/// needs to survive the VM-to-external conversion boundary (e.g. `PromptAst`,
-/// `MediaValue`).
-pub trait ToBexExternalValue: bex_vm_types::BexRustData {
-    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
-}
-
-impl ToBexExternalValue for bex_vm_types::PromptAst {
-    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
+/// The value a `@@rust_type` instance's payload stands for on its own,
+/// copied out of the VM: a media value, a rendered prompt, or a host's value.
+/// `None` for state that has no form outside the VM.
+pub fn payload_value(payload: &bex_vm_types::RustPayload) -> Option<BexExternalValue> {
+    use bex_vm_types::RustPayload;
+    match payload {
+        RustPayload::Image(media)
+        | RustPayload::Audio(media)
+        | RustPayload::Pdf(media)
+        | RustPayload::Video(media) => Some(BexExternalValue::Adt(BexExternalAdt::Media(
+            std::sync::Arc::clone(media),
+        ))),
+        RustPayload::Prompt(prompt) => Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(
+            std::sync::Arc::clone(prompt),
+        ))),
+        RustPayload::HostValue(host) => {
+            Some(BexExternalValue::HostValue(std::sync::Arc::clone(host)))
+        }
+        RustPayload::Foreign(_)
+        | RustPayload::DefaultHasher(_)
+        | RustPayload::Sha256(_)
+        | RustPayload::Aes256GcmSiv(_)
+        | RustPayload::Aes128GcmSiv(_)
+        | RustPayload::ChaCha20Poly1305(_)
+        | RustPayload::XChaCha20Poly1305(_)
+        | RustPayload::Regex(_)
+        | RustPayload::CsvRecord(_)
+        | RustPayload::Limit(_)
+        | RustPayload::CancelToken(_)
+        | RustPayload::SpanId(_)
+        | RustPayload::TraceOptions(_)
+        | RustPayload::ReservedSpan(_)
+        | RustPayload::File(_)
+        | RustPayload::Glob(_)
+        | RustPayload::OutputFormat(_)
+        | RustPayload::TcpStream(_)
+        | RustPayload::TcpListener(_)
+        | RustPayload::UdpSocket(_)
+        | RustPayload::Xoshiro256PlusPlus(_)
+        | RustPayload::ChaCha20(_)
+        | RustPayload::InterfaceWitness(_)
+        | RustPayload::CsvReader(_)
+        | RustPayload::CsvWriter(_)
+        | RustPayload::ClassBuilder(_)
+        | RustPayload::ChildProcess(_)
+        | RustPayload::ReadPipe(_)
+        | RustPayload::WritePipe(_)
+        | RustPayload::WebSocket(_)
+        | RustPayload::HttpBody(_)
+        | RustPayload::SseStream(_)
+        | RustPayload::HttpServer(_)
+        | RustPayload::TlsKeys(_) => None,
     }
-}
-
-impl ToBexExternalValue for bex_vm_types::MediaValue {
-    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
-        BexExternalValue::Adt(BexExternalAdt::Media(self))
-    }
-}
-
-/// Try to convert the payload of an `Object::RustData` to a
-/// [`BexExternalValue`] by attempting downcast to known [`ToBexExternalValue`]
-/// implementors.
-///
-/// Returns `None` if the concrete type is not recognised.
-pub fn try_convert_rust_data(
-    arc: &std::sync::Arc<dyn bex_vm_types::BexRustData>,
-) -> Option<BexExternalValue> {
-    use bex_vm_types::RustDataArc;
-    if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::PromptAst>() {
-        return Some(typed.to_bex_external_value());
-    }
-    if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::MediaValue>() {
-        return Some(typed.to_bex_external_value());
-    }
-    None
 }
 
 #[cfg(test)]
@@ -971,7 +979,7 @@ mod render_readable_tests {
         }
     }
 
-    /// A rendered-prompt handle (`ai.Prompt`'s `_data`) renders as its
+    /// A rendered prompt (an `ai.Prompt`'s payload) renders as its
     /// readable prompt text, not the `Adt(PromptAst(Message { .. }))` Rust
     /// `Debug` dump. This is the B-627 repro for the CLI value print.
     #[test]

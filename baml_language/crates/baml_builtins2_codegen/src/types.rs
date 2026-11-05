@@ -176,12 +176,30 @@ pub enum BamlType {
     Named(String),
     /// A `$rust_type` field — opaque Rust-managed state.
     RustType,
-    /// A union with no `null` member (`"start" | "end"`, `string | ScanOptions`),
-    /// its members in declaration order. Wherever no typed enum stands for
-    /// it, it is erased.
+    /// A stdlib enum, resolved from the path naming it.
+    Enum(NativeEnum),
+    /// A union that is not `T?` (`"start" | "end"`, `string | ScanOptions`,
+    /// `string | null | Default`), its members in declaration order. Wherever
+    /// no typed enum stands for it, it is erased.
     Union(Vec<BamlType>),
     /// A string literal member of a [`Self::Union`].
     StringLiteral(String),
+}
+
+/// A stdlib enum a builtin's signature names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeEnum {
+    /// Its dotted path: `ai.internal.OutputFormatDefault`.
+    pub path: String,
+    /// Its variants, in declaration order.
+    pub variants: Vec<String>,
+}
+
+impl NativeEnum {
+    /// Its bare name: `OutputFormatDefault`.
+    pub fn name(&self) -> &str {
+        self.path.rsplit('.').next().unwrap_or(&self.path)
+    }
 }
 
 /// A single field of a builtin class.

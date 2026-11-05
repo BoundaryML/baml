@@ -363,6 +363,45 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    /// The name of an enum variant, within its enum.
+    pub fn as_variant_name(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'a>,
+    ) -> Result<String, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Variant { variant_name, .. }) => {
+                Ok(variant_name.clone())
+            }
+            other => other.as_object("variant", heap, permit, |ptr| {
+                // SAFETY: `as_object` resolved `ptr` under `permit`.
+                let obj = unsafe { ptr.get() };
+                let Object::Variant(variant) = obj else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: "variant",
+                        actual: obj.to_string(),
+                    });
+                };
+                // SAFETY: a live variant keeps its enum alive, under `permit`.
+                let enum_obj = unsafe { variant.enm.get() };
+                let Object::Enum(enm) = enum_obj else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: "enum",
+                        actual: enum_obj.to_string(),
+                    });
+                };
+                let declared =
+                    enm.variants
+                        .get(variant.index)
+                        .ok_or_else(|| AccessError::TypeMismatch {
+                            expected: "a variant its enum declares",
+                            actual: obj.to_string(),
+                        })?;
+                Ok(declared.name.clone())
+            }),
+        }
+    }
+
     #[allow(clippy::wrong_self_convention)]
     fn as_class(
         self,
@@ -827,11 +866,16 @@ fn convert_object(
         ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
-        Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
-            .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
-        // Its state has no form outside the VM, and a bare handle would lose
-        // the class it is an instance of.
-        Object::RustInstance(..) => unconvertible("rust instance"),
+        Object::RustData(data) => Ok(BexExternalValue::RustData(data.clone())),
+        // A media value, a rendered prompt or a host's value is a value of its
+        // own; other state has no form outside the VM, and a bare handle
+        // would lose the class it is an instance of.
+        Object::RustInstance(instance) => {
+            match bex_external_types::payload_value(&instance.payload) {
+                Some(value) => Ok(value),
+                None => unconvertible("rust instance"),
+            }
+        }
         Object::Float(f) => Ok(BexExternalValue::Float(*f)),
         Object::Closure(_) => unconvertible("closure"),
         Object::BoundMethod(_) => unconvertible("bound_method"),

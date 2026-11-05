@@ -166,6 +166,7 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::ReservedSpan(_)
                         | crate::RustPayload::File(_)
                         | crate::RustPayload::Glob(_)
+                        | crate::RustPayload::OutputFormat(_)
                         | crate::RustPayload::TcpStream(_)
                         | crate::RustPayload::TcpListener(_)
                         | crate::RustPayload::UdpSocket(_)
@@ -177,12 +178,17 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::ChildProcess(_)
                         | crate::RustPayload::ReadPipe(_)
                         | crate::RustPayload::WritePipe(_)
-| crate::RustPayload::WebSocket(_)
-| crate::RustPayload::HttpBody(_)
-| crate::RustPayload::SseStream(_)
-| crate::RustPayload::HttpServer(_)
-| crate::RustPayload::TlsKeys(_)
-| crate::RustPayload::HostValue(_) => {}
+                        | crate::RustPayload::WebSocket(_)
+                        | crate::RustPayload::HttpBody(_)
+                        | crate::RustPayload::SseStream(_)
+                        | crate::RustPayload::HttpServer(_)
+                        | crate::RustPayload::TlsKeys(_)
+                        | crate::RustPayload::HostValue(_)
+                        | crate::RustPayload::Image(_)
+                        | crate::RustPayload::Audio(_)
+                        | crate::RustPayload::Pdf(_)
+                        | crate::RustPayload::Video(_)
+                        | crate::RustPayload::Prompt(_) => {}
                     }
                 }
                 Object::Closure(closure) => {

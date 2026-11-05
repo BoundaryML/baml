@@ -130,8 +130,8 @@ def test_media_round_trip_media_or_image_class():
 def test_host_created_media_round_trips_through_optional_list():
     image = Image.from_base64(PNG_B64, "image/png")
 
-    # The engine must reconstruct the stdlib Image wrapper, not expose its
-    # private rust-data payload directly, before BAML dispatches this method.
+    # The engine must build a `baml.media.Image` instance from the host's
+    # media value before BAML dispatches this method.
     assert image_mime_type(x=image) == "image/png"
 
     nonempty = round_trip_optional_image_list(x=[image])

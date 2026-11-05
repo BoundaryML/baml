@@ -543,20 +543,16 @@ fn render_supported_class(
         ClassCrossing::Opaque => Ok(render_opaque_class(class, key, &methods)),
         ClassCrossing::Fields => Ok(render_class(class, key, &fields, &methods, None)),
         ClassCrossing::Media(kind) => {
-            // A media wrapper is the media type itself on the wire: it holds
-            // exactly its `$rust_type` payload.
-            let [data] = fields.as_slice() else {
-                return Err("a media class must hold exactly its `$rust_type` payload".into());
-            };
-            if !data.is_rust {
-                return Err("a media class must hold exactly its `$rust_type` payload".into());
-            }
+            // A media class is the media type itself on the wire. It declares
+            // no fields; the struct stores the engine's handle to its media.
+            debug_assert!(fields.is_empty(), "a media class stores only its media");
+            let data = media_handle_field(ctx);
             Ok(render_class(
                 class,
                 key,
-                &fields,
+                std::slice::from_ref(&data),
                 &methods,
-                Some((kind, data)),
+                Some((kind, &data)),
             ))
         }
         ClassCrossing::Stream
@@ -568,16 +564,33 @@ fn render_supported_class(
     }
 }
 
+/// The one field of a media struct, `_data`: the engine's handle to the media.
+fn media_handle_field(ctx: &TranslateCtx) -> RenderedField {
+    let handle = Ty::RustType;
+    RenderedField {
+        name: "_data".to_string(),
+        ty: translate_ty(&handle, ctx)
+            .unwrap_or_else(|| unreachable!("a handle is always representable")),
+        boxed: false,
+        doc: Some("The engine's handle to the media.".to_string()),
+        is_rust: true,
+        slot: slot_expr(&handle, ctx, &|_| {
+            unreachable!("a handle names no type variable")
+        })
+        .unwrap_or_else(|| unreachable!("a handle always has a slot")),
+    }
+}
+
 /// The declared fields the generated Swift type of `class` stores, which
 /// decide whether the class is emitted. An opaque class stores none: it holds
-/// the engine's instance, whose fields are the runtime's own.
+/// the engine's instance, whose fields are the runtime's own. A media class
+/// declares none: its struct stores its media's handle ([`media_handle_field`]).
 fn stored_fields(class: &Class) -> &[ClassProperty] {
     match class.crossing {
-        ClassCrossing::Opaque => &[],
+        ClassCrossing::Opaque | ClassCrossing::Media(_) => &[],
         ClassCrossing::Fields
         | ClassCrossing::Stream
         | ClassCrossing::FunctionSpec
-        | ClassCrossing::Media(_)
         | ClassCrossing::Prompt
         | ClassCrossing::HostValue => &class.properties,
     }
