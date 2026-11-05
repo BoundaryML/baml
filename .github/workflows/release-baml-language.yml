@@ -417,6 +417,8 @@ jobs:
     uses: ./.github/workflows/build2-baml-wrapper.reusable.yaml
     secrets:
       BAML_WRAPPER_BOUNDARY_API_KEY: ${{ secrets.BAML_WRAPPER_BOUNDARY_API_KEY }}
+      BAML_WRAPPER_BCS_PROJECT: ${{ secrets.BAML_WRAPPER_BCS_PROJECT }}
+      BAML_WRAPPER_BCS_ENVIRONMENT: ${{ secrets.BAML_WRAPPER_BCS_ENVIRONMENT }}
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}

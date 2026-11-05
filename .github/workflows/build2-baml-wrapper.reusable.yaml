@@ -19,6 +19,12 @@ on:
       BAML_WRAPPER_BOUNDARY_API_KEY:
         description: BCS telemetry API key to embed in the packed wrapper
         required: true
+      BAML_WRAPPER_BCS_PROJECT:
+        description: Owning organization/project asserted when embedding the telemetry key
+        required: true
+      BAML_WRAPPER_BCS_ENVIRONMENT:
+        description: Environment the embedded telemetry key must exclusively write to
+        required: true
 permissions:
   contents: read
 defaults:
@@ -68,8 +74,8 @@ jobs:
         env:
           WRAPPER_VERSION: ${{ inputs.wrapper_version }}
           BAML_WRAPPER_BOUNDARY_API_KEY: ${{ secrets.BAML_WRAPPER_BOUNDARY_API_KEY }}
-          BAML_WRAPPER_BCS_PROJECT: ${{ vars.BAML_WRAPPER_BCS_PROJECT }}
-          BAML_WRAPPER_BCS_ENVIRONMENT: ${{ vars.BAML_WRAPPER_BCS_ENVIRONMENT }}
+          BAML_WRAPPER_BCS_PROJECT: ${{ secrets.BAML_WRAPPER_BCS_PROJECT }}
+          BAML_WRAPPER_BCS_ENVIRONMENT: ${{ secrets.BAML_WRAPPER_BCS_ENVIRONMENT }}
         run: |
           set -euo pipefail
           python - <<'PY'
