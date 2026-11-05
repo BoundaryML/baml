@@ -178,31 +178,28 @@ function Trait({
   );
 }
 
-/** "BAML has the:" over the ruled list of what it takes from TypeScript, Rust, Go, and Python. */
+/** The ruled list of what BAML takes from TypeScript, Rust, Go, and Python. */
 function Parts() {
   return (
-    <div>
-      <p className="v4-body text-ink-2 mb-3">BAML has the:</p>
-      <ul className="border-t border-rule">
-        {PARTS.map((part) => (
-          <li
-            className="v4-body text-head py-3.5 border-b border-rule"
-            key={part.name}
-          >
-            <Trait color={part.color} text={part.traits[0]} /> and{' '}
-            <Trait
-              color={part.color}
-              struck={part.struck}
-              text={part.traits[1]}
-            />{' '}
-            of{' '}
-            <strong className="font-semibold" style={{ color: part.color }}>
-              {part.name}
-            </strong>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul className="border-t border-rule">
+      {PARTS.map((part) => (
+        <li
+          className="v4-body text-head py-3.5 border-b border-rule"
+          key={part.name}
+        >
+          <Trait color={part.color} text={part.traits[0]} /> and{' '}
+          <Trait
+            color={part.color}
+            struck={part.struck}
+            text={part.traits[1]}
+          />{' '}
+          of{' '}
+          <strong className="font-semibold" style={{ color: part.color }}>
+            {part.name}
+          </strong>
+        </li>
+      ))}
+    </ul>
   );
 }
 
