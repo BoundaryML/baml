@@ -28,26 +28,28 @@ export const PRODUCTS: Mark[][] = [
 
 type Test = { command: string } | { marks: Mark[] } | { own: true };
 
-// `year` is when each language first appeared, shown faintly under its name.
+// Each language is named, with no logo, since C's logo is just the letter again. `short` is the name
+// on a phone, where the column is narrow. `year` is when the language first appeared, shown faintly
+// under its name.
 const LANGUAGES: {
   build: string;
-  mark: Mark;
   name: string;
+  short: string;
   test: Test;
   year: number;
 }[] = [
-  { build: 'cc', mark: MARKS.c, name: 'C', test: { own: true }, year: 1972 },
+  { build: 'cc', name: 'C', short: 'C', test: { own: true }, year: 1972 },
   {
     build: 'tsc',
-    mark: MARKS.typescript,
     name: 'TypeScript',
+    short: 'TS',
     test: { marks: [MARKS.jest, MARKS.vitest, MARKS.mocha] },
     year: 2012,
   },
   {
     build: 'go build',
-    mark: MARKS.go,
     name: 'Go',
+    short: 'Go',
     test: { command: 'go test' },
     year: 2009,
   },
@@ -383,7 +385,9 @@ export default function Tracker({ style }: { style: string }) {
                       className="flex items-center gap-2 min-w-0 text-(--ds-ink)/80"
                       style={{ gridColumn: 1, gridRow: i + 1 }}
                     >
-                      <MarkTile mark={lang.mark} size={18} />
+                      <span className="md:hidden text-[14px]">
+                        {lang.short}
+                      </span>
                       <span className="hidden md:flex flex-col min-w-0 leading-tight">
                         <span className="text-[15px] truncate">
                           {lang.name}
