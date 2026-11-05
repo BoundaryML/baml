@@ -1,4 +1,4 @@
-//! Bounded reader for CAS blob formats 3, 4 and 5 with identity verification.
+//! Bounded reader for CAS blob formats 3 to 6 with identity verification.
 //!
 //! Decoding produces an owned graph: object references stay numbered, so
 //! shared objects and cycles are preserved rather than expanded. Every length
@@ -20,7 +20,10 @@
 //! values use. A definition group's blob (root tag 2) holds no objects, and
 //! its child table is exactly the groups its field types name.
 //!
-//! Formats 3 to 5 are read. Earlier formats are rejected by version:
+//! Format 6 adds the redacted value: a value the producer withheld, with a
+//! reason a reader may not know yet (see `tags::ValueTag::Redacted`).
+//!
+//! Formats 3 to 6 are read. Earlier formats are rejected by version:
 //! format 1 types carry attributes that no longer exist, and format 2 numbers
 //! objects in capture discovery order and hashes a whole capture as one graph.
 //! Their blobs live under separate `cas/v1` and `cas/v2` directories that the
@@ -154,6 +157,20 @@ pub enum DecodedValue {
         child: ChildIndex,
         node: NodeId,
     },
+    /// A value the producer withheld, and why (format 6).
+    Redacted(Redaction),
+}
+
+/// Why a captured value was redacted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Redaction {
+    /// Its field or parameter is declared redacted.
+    Declared,
+    /// It matched the secret pattern with this rule ID.
+    Pattern(Arc<str>),
+    /// A reason this reader does not know, by its tag. A newer producer may
+    /// add reasons without a format change.
+    Unknown { kind: u8 },
 }
 
 /// Map keys and values, in captured order.
@@ -471,6 +488,31 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
 
 fn invalid(reason: String) -> BlobError {
     BlobError::Invalid(reason)
+}
+
+/// A redacted value's reason, from its body: a reason tag, then what that
+/// reason carries. A tag this reader does not know is kept, not refused.
+fn redaction(body: &[u8]) -> Result<Redaction, BlobError> {
+    let Some((&kind, rest)) = body.split_first() else {
+        return Err(invalid("a redacted value has no reason".into()));
+    };
+    match kind {
+        k if k == tags::RedactionTag::Declared as u8 => {
+            if !rest.is_empty() {
+                return Err(invalid("a declared redaction carries bytes".into()));
+            }
+            Ok(Redaction::Declared)
+        }
+        k if k == tags::RedactionTag::Pattern as u8 => {
+            let rule = std::str::from_utf8(rest)
+                .map_err(|_| invalid("redaction rule ID is not UTF-8".into()))?;
+            if rule.is_empty() {
+                return Err(invalid("redaction rule ID is empty".into()));
+            }
+            Ok(Redaction::Pattern(rule.into()))
+        }
+        kind => Ok(Redaction::Unknown { kind }),
+    }
 }
 
 struct Reader<'a, 'scope> {
@@ -952,6 +994,16 @@ impl<'a> Reader<'a, '_> {
                     node: NodeId(node),
                 }
             }
+            tag if tag == tags::ValueTag::Redacted as u8 && self.version >= 6 => {
+                // The body hashes as its raw bytes, whatever its reason, so a
+                // reader verifies a blob whose reason it does not know.
+                let len = self.u32()?;
+                let body = self.take(len as usize)?;
+                self.charge(body.len())?;
+                h.number(u64::from(len));
+                h.absorb(body);
+                DecodedValue::Redacted(redaction(body)?)
+            }
             other => return Err(invalid(format!("value tag {other}"))),
         })
     }
@@ -1353,9 +1405,8 @@ impl<'a> Reader<'a, '_> {
             | DecodedValue::Type(_)
             | DecodedValue::Enum { .. }
             | DecodedValue::Truncated(_)
-            | DecodedValue::ExternalNode { .. } => {
-                Err(invalid("media content is not a string".into()))
-            }
+            | DecodedValue::ExternalNode { .. }
+            | DecodedValue::Redacted(_) => Err(invalid("media content is not a string".into())),
         }
     }
 }
@@ -1469,7 +1520,8 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
         | DecodedValue::Type(_)
         | DecodedValue::Truncated(_)
         | DecodedValue::External(_)
-        | DecodedValue::ExternalNode { .. } => Ok(()),
+        | DecodedValue::ExternalNode { .. }
+        | DecodedValue::Redacted(_) => Ok(()),
     };
     match &snapshot.root {
         DecodedRoot::Value(value) => check_value(value)?,

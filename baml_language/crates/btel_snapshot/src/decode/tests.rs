@@ -26,9 +26,13 @@ fn encode(snapshot: &Snapshot) -> Vec<u8> {
 }
 /// A hand-built header: zero ID, the given child IDs, and an object count.
 fn header(children: &[[u8; 16]], objects: u32) -> Vec<u8> {
+    header_at(crate::BLOB_VERSION, children, objects)
+}
+/// [`header`] for format `version`.
+fn header_at(version: u32, children: &[[u8; 16]], objects: u32) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&crate::BLOB_MAGIC);
-    bytes.extend_from_slice(&crate::BLOB_VERSION.to_le_bytes());
+    bytes.extend_from_slice(&version.to_le_bytes());
     bytes.extend_from_slice(&[0; 16]);
     bytes.extend_from_slice(&u32::try_from(children.len()).unwrap().to_le_bytes());
     for child in children {
@@ -253,8 +257,14 @@ fn malformed_blobs_fail_without_panicking() {
     magic[0] = b'X';
     assert_eq!(decode(&magic), Err(BlobError::Magic));
     // Earlier formats (attribute-carrying types; discovery-order numbering)
-    // and any later one are rejected by version, before their content is read.
-    for other in [1, 2, crate::BLOB_VERSION + 1] {
+    // and any after the newest readable one are rejected by version, before
+    // their content is read.
+    let newest = btel_settings::snapshot::READABLE_BLOB_VERSIONS
+        .iter()
+        .max()
+        .copied()
+        .unwrap_or_else(|| unreachable!("some format is readable"));
+    for other in [1, 2, newest + 1] {
         let mut version = bytes.clone();
         version[8..12].copy_from_slice(&other.to_le_bytes());
         assert_eq!(decode(&version), Err(BlobError::Version(other)));
@@ -792,4 +802,90 @@ fn malformed_media_is_rejected() {
         decode(&blob(&base64(2, &string("ab")))),
         Err(BlobError::IdMismatch { .. })
     ));
+}
+
+/// A hand-built blob with the ID its content hashes to.
+fn seal(mut bytes: Vec<u8>) -> Vec<u8> {
+    let Err(BlobError::IdMismatch { computed, .. }) = decode(&bytes) else {
+        panic!("a hand-built blob decodes to an ID mismatch")
+    };
+    bytes[12..28].copy_from_slice(computed.as_bytes());
+    bytes
+}
+
+/// A value root holding a redacted value with `body`, in format `version`.
+fn redacted_root(version: u32, body: &[u8]) -> Vec<u8> {
+    let mut bytes = header_at(version, &[], 0);
+    bytes.extend_from_slice(&[0, 13]);
+    bytes.extend_from_slice(&u32::try_from(body.len()).unwrap().to_le_bytes());
+    bytes.extend_from_slice(body);
+    bytes
+}
+
+fn redaction_of(bytes: &[u8]) -> Redaction {
+    match decode(bytes).unwrap().root {
+        DecodedRoot::Value(DecodedValue::Redacted(reason)) => reason,
+        other => panic!("not a redacted root: {other:?}"),
+    }
+}
+
+#[test]
+fn redactions_decode_from_format_6_with_their_reason() {
+    assert_eq!(
+        redaction_of(&seal(redacted_root(6, &[0]))),
+        Redaction::Declared
+    );
+    let mut pattern = vec![1];
+    pattern.extend_from_slice(b"openai-api-key");
+    assert_eq!(
+        redaction_of(&seal(redacted_root(6, &pattern))),
+        Redaction::Pattern("openai-api-key".into())
+    );
+    // A reason this reader does not know is kept, with whatever it carries
+    // skipped, and its blob still verifies.
+    assert_eq!(
+        redaction_of(&seal(redacted_root(6, &[7, 1, 2, 3]))),
+        Redaction::Unknown { kind: 7 }
+    );
+}
+
+#[test]
+fn redactions_are_refused_before_format_6() {
+    assert!(invalid_because(&redacted_root(5, &[0]), "value tag 13"));
+}
+
+#[test]
+fn malformed_redactions_are_rejected() {
+    assert!(invalid_because(&redacted_root(6, &[]), "has no reason"));
+    assert!(invalid_because(&redacted_root(6, &[0, 0]), "carries bytes"));
+    assert!(invalid_because(&redacted_root(6, &[1]), "rule ID is empty"));
+    assert!(invalid_because(&redacted_root(6, &[1, 0xff]), "not UTF-8"));
+    // A body longer than the input is rejected before it is read.
+    let mut long = redacted_root(6, &[0]);
+    long.truncate(long.len() - 5);
+    long.extend_from_slice(&u32::MAX.to_le_bytes());
+    assert_eq!(decode(&long), Err(BlobError::Truncated));
+}
+
+#[test]
+fn a_redaction_body_is_part_of_the_blob_id() {
+    let mut sealed = seal(redacted_root(6, b"\x01openai-api-key"));
+    let last = sealed.len() - 1;
+    sealed[last] = b'x';
+    assert!(matches!(decode(&sealed), Err(BlobError::IdMismatch { .. })));
+}
+
+#[test]
+fn format_6_reads_format_5_content_under_its_own_ids() {
+    let null_root = |version| {
+        let mut bytes = header_at(version, &[], 0);
+        bytes.extend_from_slice(&[0, 0]);
+        seal(bytes)
+    };
+    let (v5, v6) = (
+        decode(&null_root(5)).unwrap(),
+        decode(&null_root(6)).unwrap(),
+    );
+    assert_eq!(v5.root, v6.root);
+    assert_ne!(v5.id, v6.id);
 }
