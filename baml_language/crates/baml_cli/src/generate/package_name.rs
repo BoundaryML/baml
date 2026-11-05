@@ -14,7 +14,9 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use baml_sdkgen_types::{DEFAULT_PACKAGE_NAME, OutputType, is_generated_output_directory};
+use baml_sdkgen_types::{
+    DEFAULT_PACKAGE_NAME, OutputType, is_generated_output_directory, is_safe_portable_segment,
+};
 
 /// Why a target refuses a `package_name`.
 #[derive(Debug, PartialEq, Eq)]
@@ -52,23 +54,46 @@ pub(super) fn relative_directory(output_type: OutputType, package_name: Option<&
 
 /// Refuse to install `generator`'s SDK into `directory` when it holds files
 /// that `baml generate` did not write there.
+/// Entries that tools and operating systems leave behind; they hold no
+/// hand-written code, so they do not make a directory someone else's.
+const DISPOSABLE_ENTRIES: &[&str] = &["__pycache__", ".DS_Store", "Thumbs.db"];
+
+/// Refuse to install `generator`'s SDK into `directory` when it holds files
+/// that `baml generate` did not write there.
 pub(super) fn ensure_claimable(generator: &str, directory: &Path) -> Result<()> {
-    let mut entries = match fs::read_dir(directory) {
+    let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(error) => {
             return Err(error).with_context(|| format!("failed to read {}", directory.display()));
         }
     };
-    if entries.next().is_none() || is_generated_output_directory(directory)? {
+    let mut foreign = None;
+    for entry in entries {
+        let name = entry
+            .with_context(|| format!("failed to read {}", directory.display()))?
+            .file_name();
+        if !DISPOSABLE_ENTRIES
+            .iter()
+            .any(|disposable| name == *disposable)
+        {
+            foreign = Some(name);
+            break;
+        }
+    }
+    let Some(foreign) = foreign else {
+        return Ok(());
+    };
+    if is_generated_output_directory(directory)? {
         return Ok(());
     }
     anyhow::bail!(
-        "refusing to generate `{generator}` into {}: the directory is not empty and was not \
-         created by `baml generate`. Generating would overwrite files there and git-ignore the \
-         whole directory. Set `package_name` to a name that does not collide with your own code, \
-         or empty the directory first.",
-        directory.display()
+        "refusing to generate `{generator}` into {}: it already contains `{}`, and `baml \
+         generate` did not create the directory. Generating would overwrite files there and \
+         git-ignore the whole directory. Set `package_name` to a name that does not collide with \
+         your own code, or empty the directory first.",
+        directory.display(),
+        foreign.to_string_lossy()
     )
 }
 
@@ -82,22 +107,40 @@ pub(super) fn superseded_default_output(output_root: &Path, output_dir: &Path) -
 }
 
 fn validate_python(name: &str) -> Result<(), PackageNameError> {
-    if !name
-        .split('.')
-        .all(|segment| is_ascii_identifier(segment) && !PYTHON_KEYWORDS.contains(&segment))
-    {
+    if !name.split('.').all(|segment| {
+        is_ascii_identifier(segment)
+            && !PYTHON_KEYWORDS.contains(&segment)
+            && is_safe_portable_segment(segment)
+    }) {
         return Err(PackageNameError::Invalid(
             "expected a dotted Python import path such as `my_app._generated`; each segment must \
-             be an ASCII identifier that is not a Python keyword",
+             be an ASCII identifier that is not a Python keyword or a reserved Windows file name",
         ));
     }
-    if name.split('.').next() == Some("baml_bridge") {
+    if name
+        .split('.')
+        .next()
+        .is_some_and(|top| PYTHON_RUNTIME_PACKAGES.contains(&top))
+    {
         return Err(PackageNameError::Invalid(
-            "`baml_bridge` is the BAML Python runtime; choose a package outside it",
+            "the top-level package would shadow the BAML Python runtime or one of its \
+             dependencies (`baml_bridge`, `google`, `pydantic`, `pydantic_core`, \
+             `typing_extensions`); choose a package outside them",
         ));
     }
     Ok(())
 }
+
+/// Top-level packages the BAML Python runtime imports: `baml_bridge` itself
+/// and its dependencies (`google` is protobuf's). A generated SDK with one of
+/// these names would shadow it and fail to import.
+const PYTHON_RUNTIME_PACKAGES: &[&str] = &[
+    "baml_bridge",
+    "google",
+    "pydantic",
+    "pydantic_core",
+    "typing_extensions",
+];
 
 /// `[A-Za-z_][A-Za-z0-9_]*`.
 fn is_ascii_identifier(segment: &str) -> bool {
@@ -159,6 +202,13 @@ mod tests {
             "None",
             "baml_bridge",
             "baml_bridge.generated",
+            "pydantic",
+            "pydantic_core.sdk",
+            "typing_extensions",
+            "google.sdk",
+            "con.sdk",
+            "my_app.aux",
+            "my_app.COM1",
         ] {
             assert!(
                 matches!(
@@ -168,11 +218,14 @@ mod tests {
                 "accepted {invalid:?}"
             );
         }
-        // Only the top-level package belongs to the runtime.
-        assert_eq!(
-            validate(OutputType::PythonPydantic, "my_app.baml_bridge"),
-            Ok(())
-        );
+        // Only top-level packages shadow the runtime.
+        for nested in ["my_app.baml_bridge", "my_app.pydantic", "my_app.google"] {
+            assert_eq!(
+                validate(OutputType::PythonPydantic, nested),
+                Ok(()),
+                "{nested}"
+            );
+        }
     }
 
     #[test]
@@ -220,6 +273,11 @@ mod tests {
         fs::create_dir(&empty).unwrap();
         ensure_claimable("py", &empty).unwrap();
 
+        let leftovers = directory.path().join("leftovers");
+        fs::create_dir_all(leftovers.join("__pycache__")).unwrap();
+        fs::write(leftovers.join(".DS_Store"), "").unwrap();
+        ensure_claimable("py", &leftovers).unwrap();
+
         let owned = directory.path().join("owned");
         write_generated_output(
             &owned,
@@ -240,6 +298,7 @@ mod tests {
 
         assert!(error.contains("refusing to generate `py` into"), "{error}");
         assert!(error.contains(&package.display().to_string()), "{error}");
+        assert!(error.contains("already contains `__init__.py`"), "{error}");
         assert!(error.contains("Set `package_name`"), "{error}");
         assert_eq!(
             fs::read_to_string(package.join("__init__.py")).unwrap(),

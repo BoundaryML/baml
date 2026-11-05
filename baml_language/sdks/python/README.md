@@ -35,7 +35,7 @@ output_dir = "src"                     # the import root
 package_name = "my_app._generated"     # written to src/my_app/_generated
 ```
 
-BAML does not create or edit `my_app/__init__.py`. One process still holds one
+BAML creates missing parent directories but never writes or edits `my_app/__init__.py`. One process still holds one
 BAML program: two generated SDKs imported into the same process replace each
 other's program.
 

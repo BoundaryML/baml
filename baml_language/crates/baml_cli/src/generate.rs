@@ -481,8 +481,9 @@ impl GenerateArgs {
                     .join(requested),
                 None => generator.output_dir.clone(),
             };
-            let named_output_dir = self.output.is_none() && generator.package_name.is_some();
-            if named_output_dir {
+            // A named SDK only installs where it cannot clobber hand-written
+            // code, wherever the destination came from.
+            if generator.package_name.is_some() {
                 package_name::ensure_claimable(&generator.name, &output_dir)?;
             }
 
@@ -665,7 +666,8 @@ impl GenerateArgs {
             if let Some(status) = presentation.status {
                 reporter.status("Generated", status);
             }
-            if named_output_dir
+            if self.output.is_none()
+                && generator.package_name.is_some()
                 && let Some(previous) =
                     package_name::superseded_default_output(&generator.output_root, &output_dir)
             {
@@ -1435,6 +1437,33 @@ naming_convention = "preserve-case"
 
         assert!(error.contains("refusing to generate `py` into"), "{error}");
         assert!(error.contains("alien_sdk"), "{error}");
+        assert_eq!(
+            fs::read_to_string(package.join("__init__.py")).unwrap(),
+            "# hand-written\n"
+        );
+        assert!(!package.join(".gitignore").exists());
+    }
+
+    #[test]
+    fn named_python_sdk_refuses_hand_written_files_under_an_output_override() {
+        let project = python_project("alien_sdk._generated");
+        let package = project.path().join("elsewhere/alien_sdk");
+        fs::create_dir_all(&package).unwrap();
+        fs::write(package.join("__init__.py"), "# hand-written\n").unwrap();
+
+        let error = GenerateArgs {
+            telemetry: Default::default(),
+            command: None,
+            compiler: Default::default(),
+            from: Some(project.path().to_path_buf()),
+            output: Some(package.clone()),
+            show_all_skips: false,
+        }
+        .run_generate()
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("refusing to generate `py` into"), "{error}");
         assert_eq!(
             fs::read_to_string(package.join("__init__.py")).unwrap(),
             "# hand-written\n"

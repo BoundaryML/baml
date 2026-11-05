@@ -518,7 +518,9 @@ fn validate_relative_path(path: &Path) -> Result<String, OutputWriterError> {
     Ok(segments.join("/"))
 }
 
-fn is_safe_portable_segment(segment: &str) -> bool {
+/// Whether `segment` is a file or directory name every supported platform
+/// accepts (no reserved Windows device names, separators or trailing dots).
+pub fn is_safe_portable_segment(segment: &str) -> bool {
     if segment.is_empty()
         || segment.ends_with([' ', '.'])
         || segment
