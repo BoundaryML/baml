@@ -417,7 +417,9 @@ export default function Deploy() {
           className="xl:relative"
           style={{ gridColumn: 6, gridRow: '1 / -1' }}
         >
-          <div className="xl:absolute xl:inset-x-0 xl:bottom-1/2">
+          {/* The link's line is its last pixel, so its bottom sits 1px below the middle: the line then
+              covers the same pixel row as the lines beside the lake, which start at the middle. */}
+          <div className="xl:absolute xl:inset-x-0 xl:bottom-[calc(50%-1px)]">
             <Link across label="SQL" />
           </div>
         </div>
