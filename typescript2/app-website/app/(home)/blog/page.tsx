@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { OG_SITE } from '@/app/_lib/metadata';
 import { section } from '@/components/home/analytics';
+import { PostArt } from './_lib/art';
 import { formatPostDate, isoPostDate } from './_lib/format';
 import { getPosts, type Post } from './_lib/get-posts';
 import { BLOG_WRAP, BlogShell } from './_lib/shell';
@@ -193,14 +194,10 @@ function Lead({ post }: { post: Post }) {
             {post.readingTime && <span>{post.readingTime}</span>}
           </span>
         </span>
-        {/* The post's first image, or its share card when it has none. */}
-        {/* biome-ignore lint/performance/noImgElement: a post's first image is any file from its body, with no known size. */}
-        <img
-          alt=""
-          className="w-full aspect-[1200/630] object-cover rounded-2xl border border-rule bg-raised"
-          src={
-            post.firstImage ?? `/api/og?slug=${encodeURIComponent(post.slug)}`
-          }
+        <PostArt
+          className="rounded-2xl border border-rule"
+          id="lead"
+          post={post}
         />
       </Link>
     </section>
@@ -225,6 +222,9 @@ function StartHere({ posts }: { posts: Post[] }) {
               className="group flex h-full flex-col gap-3 rounded-xl border border-rule bg-raised p-5 transition-colors hover:border-clover/50"
               href={`/blog/${p.slug}`}
             >
+              <span className="-mx-5 -mt-5 mb-1 block overflow-hidden rounded-t-xl border-b border-rule">
+                <PostArt id={`start-${p.slug}`} post={p} />
+              </span>
               <span className="v4-caption text-muted">{topicLabel(p)}</span>
               <span className="font-display font-medium text-[19px] leading-[1.25] tracking-[-0.02em] text-head group-hover:text-clover transition-colors">
                 {p.title}
