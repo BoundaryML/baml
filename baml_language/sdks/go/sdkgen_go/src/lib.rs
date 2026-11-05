@@ -58,13 +58,16 @@ pub const DEFAULT_MAX_TYPED_UNION_ARITY: usize = 3;
 /// Whether `name` can be the SDK root's package clause: a lowercase Go
 /// identifier (`[a-z][a-z0-9_]*`) that is neither a keyword nor a name the
 /// generated code reserves for its own imports. Subpackages import the root
-/// under this name, so it must not collide with those.
+/// under this name, so it must not collide with those. It is also the root's
+/// directory, so it cannot be one the `go` tool treats specially
+/// (`internal`, `vendor`, `testdata`).
 pub fn is_valid_package_name(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(|first| first.is_ascii_lowercase())
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
         && !names::is_go_keyword(name)
         && !rendering::is_protected_go_identifier(name)
+        && !packages::is_special_go_directory(name)
 }
 
 /// Whether the class `name` crosses as a rendered prompt (`ai.Prompt`): its
@@ -6152,6 +6155,9 @@ mod tests {
             "main",
             "context",
             "baml_go",
+            "internal",
+            "vendor",
+            "testdata",
         ] {
             assert!(!is_valid_package_name(invalid), "{invalid}");
         }

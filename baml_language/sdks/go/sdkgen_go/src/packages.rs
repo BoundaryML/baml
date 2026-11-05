@@ -158,7 +158,9 @@ fn project_package_name(name: &Name) -> String {
     result
 }
 
-fn is_special_go_directory(value: &str) -> bool {
+/// Directory names the `go` tool treats specially: `internal` restricts
+/// importers, and `vendor` and `testdata` are skipped by `./...` patterns.
+pub(crate) fn is_special_go_directory(value: &str) -> bool {
     matches!(value, "internal" | "vendor" | "testdata")
 }
 

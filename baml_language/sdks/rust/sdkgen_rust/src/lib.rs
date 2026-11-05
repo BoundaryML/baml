@@ -86,6 +86,11 @@ const RESERVED_CRATE_NAMES: &[&str] = &[
     "serde",
 ];
 
+/// Keywords `syn` accepts as identifiers but newer editions reserve. The
+/// crate's edition is configurable (default 2024, where `gen` is reserved),
+/// and the name must work for consumers on any edition.
+const NEWER_EDITION_KEYWORDS: &[&str] = &["gen"];
+
 /// Whether `name` can name a generated SDK crate (its Cargo package and
 /// library): `[a-z_][a-z0-9_]*`, not a Rust keyword, and not a crate the SDK
 /// itself depends on.
@@ -97,6 +102,7 @@ pub fn is_valid_crate_name(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
         // syn refuses keywords (and `_`) in identifier position.
         && syn::parse_str::<proc_macro2::Ident>(name).is_ok()
+        && !NEWER_EDITION_KEYWORDS.contains(&name)
         && !RESERVED_CRATE_NAMES.contains(&name)
 }
 
@@ -2650,6 +2656,7 @@ mod tests {
             "crate",
             "self",
             "async",
+            "gen",
             "std",
             "core",
             "alloc",

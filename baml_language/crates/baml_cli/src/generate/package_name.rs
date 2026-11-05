@@ -34,8 +34,8 @@ pub(super) fn validate(output_type: OutputType, name: &str) -> Result<(), Packag
         OutputType::PythonPydantic | OutputType::PythonPydanticV1 => return validate_python(name),
         OutputType::Go => (
             sdkgen_go::is_valid_package_name(name),
-            "expected a Go package name (`[a-z][a-z0-9_]*`) that is not a Go keyword or a name \
-             the generated code imports under",
+            "expected a Go package name (`[a-z][a-z0-9_]*`) that is not a Go keyword, a name \
+             the generated code imports under, or `internal`, `vendor` or `testdata`",
         ),
         OutputType::Rust => (
             sdkgen_rust::is_valid_crate_name(name),

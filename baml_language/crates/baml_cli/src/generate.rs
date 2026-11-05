@@ -938,12 +938,17 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             generator.sdk_import_path.as_ref(),
         ) && !go_import_path_names_package(import_path, package_name)
         {
+            // Suggest keeping the module prefix and renaming the last segment.
+            let expected = match import_path.rsplit_once('/') {
+                Some((prefix, _)) => format!("{prefix}/{package_name}"),
+                None => format!("example.com/{package_name}"),
+            };
             diags.push(
                 Diagnostic::error(
                     DiagnosticId::InvalidGeneratorPropertyValue,
                     format!(
                         "Go generator `{name}` sets `package_name = \"{package_name}\"`, so \
-                         `sdk_import_path` must end in `/{package_name}`"
+                         `sdk_import_path` must end in `/{package_name}`, e.g. `{expected}`"
                     ),
                 )
                 .with_primary(
@@ -951,7 +956,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
                         file_id: manifest_file_id(),
                         range: to_text_range(value.span()),
                     },
-                    format!("expected `.../{package_name}`"),
+                    format!("expected `{expected}`"),
                 )
                 .with_phase(DiagnosticPhase::Validation),
             );
@@ -1445,7 +1450,7 @@ naming_convention = "preserve-case"
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(
             diagnostics[0].message,
-            "Go generator `client` sets `package_name = \"alien_api\"`, so `sdk_import_path` must end in `/alien_api`"
+            "Go generator `client` sets `package_name = \"alien_api\"`, so `sdk_import_path` must end in `/alien_api`, e.g. `example.com/test/alien_api`"
         );
         let value = "\"example.com/test/baml_sdk\"";
         let start = manifest.find(value).unwrap();
