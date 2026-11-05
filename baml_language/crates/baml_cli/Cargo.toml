@@ -87,8 +87,8 @@ skip-integ-tests = [  ]
 
 [dev-dependencies]
 baml_test_support = { workspace = true }
-bridge_cffi = { workspace = true }
 baml_tests = { workspace = true }
+bridge_cffi = { workspace = true }
 btel_bcs = { workspace = true }
 btel_file = { workspace = true }
 btel_recorder = { workspace = true }

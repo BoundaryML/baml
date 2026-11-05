@@ -74,6 +74,26 @@ fn no_project_uses_home() {
     );
 }
 
+#[test]
+fn an_unwritable_selected_store_does_not_redirect_recordings() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("baml.toml"),
+        "[tracing]\nstore = 'blocked'\n",
+    )
+    .unwrap();
+    // A regular file blocks directory creation on every platform, including
+    // privileged test runners for which read-only permissions do not suffice.
+    std::fs::write(dir.path().join("blocked"), "not a directory").unwrap();
+    let (runtime, delivery) =
+        TelemetryRecording::project_files(dir.path(), RecordingConfig::default())
+            .start(None, Arc::default(), &Context::default())
+            .unwrap();
+    assert!(delivery.is_none(), "must not open a different store");
+    assert!(runtime.finish().is_err());
+    assert!(!dir.path().join(".baml").exists());
+}
+
 /// Starts real recordings in child processes whose working directory is a
 /// project, since the destination depends on process-wide state.
 #[test]
