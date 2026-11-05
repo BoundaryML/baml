@@ -44,12 +44,13 @@ export default function Statement() {
                   , with a virtual machine that makes it run anywhere,
                 </p>
                 <p>
-                  a compiler that knows which errors you're hitting in
-                  production,
+                  one that allows us to profile every function at barely any
+                  cost,
                 </p>
+                <p>a compiler that knows about your errors in production,</p>
                 <p>
-                  and a data lake that stores every call in a structured way,
-                  even with the types you declared.
+                  and a data lake to query your program data: profiles, spans,
+                  logs, traces, and blobs.
                 </p>
               </div>
             </div>
