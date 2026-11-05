@@ -452,7 +452,10 @@ function useClock(frame: RefObject<HTMLElement | null>, playing: boolean) {
   // The clock itself, past END during the hold, so a seek and the frame loop share one value.
   const clock = useRef(0);
   const live = useRef(playing);
-  live.current = playing;
+  // Set once the render commits, so an abandoned render can't start or stop the clock.
+  useEffect(() => {
+    live.current = playing;
+  }, [playing]);
 
   useEffect(() => {
     const el = frame.current;

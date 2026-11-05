@@ -185,7 +185,7 @@ const TONE: Record<string, string> = {
 /** The Python sample: an app calling a BAML function like any other Python function. */
 function Python() {
   return (
-    <pre className="h-full -mx-2 overflow-hidden font-mono [font-variant-ligatures:none] text-[12px] md:text-[12.5px] leading-[1.65] text-body">
+    <pre className="h-full -mx-2 overflow-x-auto overflow-y-hidden font-mono [font-variant-ligatures:none] text-[12px] md:text-[12.5px] leading-[1.65] text-body">
       {PY.map((runs, i) => (
         <span
           className={`block min-h-[1lh] px-2 rounded-[3px] whitespace-pre ${FOCUS.has(i) ? 'bg-clover/12' : ''}`}
