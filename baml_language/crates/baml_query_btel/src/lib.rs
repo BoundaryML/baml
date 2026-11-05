@@ -27,10 +27,8 @@ mod usage;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use btel_reader::{
-    cas::{CasLimits, CasStore},
-    layout::SourceLayout,
-};
+use btel_reader::cas::{CasLimits, CasStore};
+pub use btel_reader::layout::SourceLayout;
 pub use ingest::{RefreshMetrics, RefreshOptions};
 pub use query::{Budgets, Outcome, QueryRequest, QueryResult, Status};
 use rusqlite::Connection;

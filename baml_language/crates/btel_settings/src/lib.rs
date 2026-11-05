@@ -77,6 +77,8 @@ pub mod encoding;
 pub mod identity;
 pub mod layout;
 pub mod local_files;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod local_store;
 pub mod mode;
 pub mod network;
 pub mod overage;

@@ -78,6 +78,13 @@ function fail() -> int { assert.is_true(false); 0 }
 testset "smoke" { test "ok" { assert.is_true(true) } }
 "#,
     );
+    // Explicit project tracing keeps the CLI in its project while BAML_HOME
+    // isolates toolchain/auth state and packed-program recordings.
+    std::fs::write(
+        project.join("baml.toml"),
+        "[package]\nname = 'test'\n[tracing]\nstore = '.baml'\n",
+    )
+    .unwrap();
     let home = home(temp.path());
     let nested = project.join("baml_src/nested");
     std::fs::create_dir(&nested).unwrap();

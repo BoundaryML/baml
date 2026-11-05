@@ -83,8 +83,10 @@ pub struct TestProfileManifest {
 /// Top-level keys owned outside the compiler's manifest model, preserved in
 /// [`BamlToml::unknown`].
 /// The wrapper reads `toolchain` to choose the executable; the CLI's cloud
-/// configuration reads `boundary`. Matching is by top-level key name.
-const KNOWN_UNHANDLED_TOP_LEVEL_KEYS: &[&str] = &["toolchain", "boundary", "pack", "bridge"];
+/// configuration reads `boundary`; runtime trace-store settings read `tracing`.
+/// Matching is by top-level key name.
+const KNOWN_UNHANDLED_TOP_LEVEL_KEYS: &[&str] =
+    &["toolchain", "boundary", "pack", "bridge", "tracing"];
 
 #[derive(Debug, Deserialize)]
 pub struct Package {
@@ -377,6 +379,12 @@ mod tests {
             "toolchain must not warn, got: {warns:?}"
         );
         assert!(warns.iter().any(|w| w.contains("nmae")), "got: {warns:?}");
+    }
+
+    #[test]
+    fn tracing_settings_are_owned_by_the_runtime() {
+        let manifest = parse("[package]\nname = 'app'\n[tracing]\nstore = '.baml'\n").unwrap();
+        assert!(unknown_field_warnings(&manifest).is_empty());
     }
 
     #[test]

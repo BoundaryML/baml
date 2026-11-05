@@ -37,7 +37,7 @@ pub(crate) fn create_engine_with_context(
                     boundary.api_url.as_deref(),
                 )
                 .unwrap_or_else(|| {
-                    TelemetryRecording::local_files(
+                    TelemetryRecording::project_files(
                         project_root,
                         btel_settings::publisher::RecordingConfig::default(),
                     )

@@ -30,8 +30,8 @@ fn project_enclosing_cwd_precedes_home() {
     let home = dir.path().join("home");
 
     assert_eq!(
-        user_file_roots(None, Some(&nested), Some(home.clone())),
-        vec![project(&root), btel(&home.join(".baml"))]
+        user_file_roots(None, Some(&nested), Some(home)).unwrap(),
+        project(&root)
     );
 }
 
@@ -42,8 +42,8 @@ fn baml_home_overrides_project() {
     let baml_home = dir.path().join("state");
 
     assert_eq!(
-        user_file_roots(Some(baml_home.clone().into()), Some(dir.path()), None),
-        vec![btel(&baml_home)]
+        user_file_roots(Some(baml_home.clone().into()), Some(dir.path()), None).unwrap(),
+        btel(&baml_home)
     );
 }
 
@@ -54,8 +54,8 @@ fn empty_baml_home_is_unset() {
     let home = dir.path().join("home");
 
     assert_eq!(
-        user_file_roots(Some("".into()), Some(dir.path()), Some(home.clone())),
-        vec![project(dir.path()), btel(&home.join(".baml"))]
+        user_file_roots(Some("".into()), Some(dir.path()), Some(home)).unwrap(),
+        project(dir.path())
     );
 }
 
@@ -65,12 +65,12 @@ fn no_project_uses_home() {
     let home = dir.path().join("home");
 
     assert_eq!(
-        user_file_roots(None, Some(dir.path()), Some(home.clone())),
-        vec![btel(&home.join(".baml"))]
+        user_file_roots(None, Some(dir.path()), Some(home.clone())).unwrap(),
+        btel(&home.join(".baml"))
     );
     assert_eq!(
-        user_file_roots(None, None, Some(home.clone())),
-        vec![btel(&home.join(".baml"))]
+        user_file_roots(None, None, Some(home.clone())).unwrap(),
+        btel(&home.join(".baml"))
     );
 }
 
@@ -139,25 +139,10 @@ fn recording_starts_in_cwd_project() {
     // Packed programs keep recording to the user store.
     run(&fallback, true);
 
-    // An unwritable project store falls back to the user store.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        let readonly = std::fs::Permissions::from_mode(0o555);
-        std::fs::set_permissions(&recordings, readonly).unwrap();
-        let writable = std::fs::File::create(recordings.join("probe")).is_ok();
-        if !writable {
-            run(&fallback, false);
-        }
-        std::fs::set_permissions(&recordings, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-        // So does a writable project store whose CAS is not.
-        let cas = root.join(".baml/btel/cas");
-        std::fs::create_dir_all(&cas).unwrap();
-        std::fs::set_permissions(&cas, std::fs::Permissions::from_mode(0o555)).unwrap();
-        if !writable {
-            run(&fallback, false);
-        }
-        std::fs::set_permissions(&cas, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    // An explicit project store is shared even when BAML_HOME is set.
+    std::fs::write(root.join("baml.toml"), "[tracing]\nstore = 'custom'\n").unwrap();
+    let custom = root.join("custom/btel/recordings");
+    std::fs::create_dir_all(&custom).unwrap();
+    run(&custom, false);
+    run(&fallback, true);
 }

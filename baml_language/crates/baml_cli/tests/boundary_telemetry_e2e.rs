@@ -379,7 +379,9 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
     let server = MockServer::start().await;
     let output = execute_case(temp.path(), &server.uri(), "local", &["run", "main"]);
     assert!(output.status.success(), "{output:?}");
-    assert!(temp.path().join(RECORDINGS).exists());
+    // Local writers and readers now honor this fixture's BAML_HOME.
+    assert!(temp.path().join("home/btel/recordings").exists());
+    assert!(!temp.path().join(RECORDINGS).exists());
     let output = execute_case(
         temp.path(),
         &server.uri(),
