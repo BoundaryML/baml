@@ -64,7 +64,7 @@ To keep traces locally instead, set `BOUNDARY_API_KEY=local` and leave recording
 
 When recording is enabled, an explicit API key or saved login still selects cloud delivery. `BAML_TELEMETRY=medium`/`high` controls recording detail, not the destination. Runtime traces and CLI usage analytics are separate: use `DO_NOT_TRACK=1` or `baml telemetry disable` for usage analytics.
 
-Publisher-owned artifacts can explicitly freeze or rename the recording variable. `[bridge.env_var_names] BAML_TELEMETRY = false` freezes a generated SDK's recording level, and a string names its accepted variable. Bridges built with `--embed-telemetry`, and packed programs, keep their baked recording level unless the publisher explicitly binds a recording variable. For those artifacts, use the publisher's declared control; see [artifact telemetry policy](crates/bcs_api/README.md#embedded-telemetry-in-artifacts).
+Publisher-owned artifacts can explicitly freeze or rename the recording variable. `[bridge.env_var_names] BAML_TELEMETRY = false` freezes a generated SDK's recording level, and a string names its accepted variable. An explicit destination binding that reuses the `BAML_TELEMETRY` name also takes precedence over the implicit recording switch. Bridges built with `--embed-telemetry`, and packed programs, keep their baked recording level unless the publisher explicitly binds a recording variable. For those artifacts, use the publisher's declared control; see [artifact telemetry policy](crates/bcs_api/README.md#embedded-telemetry-in-artifacts).
 
 ## Bridges
 
