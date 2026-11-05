@@ -162,5 +162,7 @@
 /* The hero headline also scales with the screen's height, so a short window keeps room for the
    diagram. */
 .hero-title {
-  font-size: clamp(40px, min(6vw, 9vh), 80px);
+  /* The floor drops below 40px on phones narrower than 400px, so "hyper-observable", which never
+     breaks, still fits on one line at 320px. */
+  font-size: clamp(min(40px, 10vw), min(6vw, 9vh), 80px);
 }
