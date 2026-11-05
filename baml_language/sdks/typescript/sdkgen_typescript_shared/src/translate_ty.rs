@@ -46,6 +46,9 @@ impl TranslatedType {
     }
 }
 
+/// Translate a host-provided value type and collect its cross-leaf imports.
+/// Host callbacks accept immediate or Promise results, independently of their
+/// throws contract; callable arguments supplied by BAML use closure types.
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
     match ty {
         Ty::Int => TranslatedType::bare("number"),
@@ -222,6 +225,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             }
             // A host callback may be `async`: the bridge awaits the Promise it
             // returns (and a closure BAML returned is itself Promise-returning).
+            // `throws` describes the error channel, independently of whether
+            // the successful result is immediate or awaited. In particular,
+            // `throws never` must not remove Promise support or widen `ret`.
             let ret_expr = if matches!(ret.as_ref(), Ty::Function { .. }) {
                 format!("({})", ret_t.expr)
             } else {
@@ -499,6 +505,45 @@ mod tests {
         let translated = translate_return_ty(&callable(params, boxed(Ty::Int)), &ctx(&[]));
         assert!(translated.expr.contains("default_: number, new_: number, arguments_: number, eval_: number, $opts_: number, $opts__: number, $opts?:"));
         assert!(translated.expr.contains("callSync("));
+    }
+
+    /// Every throws shape keeps the same successful callback result contract.
+    #[test]
+    fn callback_promise_support_is_independent_of_throws() {
+        for throws in [
+            Ty::Never,
+            Ty::Unknown,
+            class_ty(name("user", &["errors"], "CallbackError"), Vec::new()),
+            union(vec![Ty::String, Ty::Int]),
+        ] {
+            let ty = Ty::Function {
+                params: vec![callable_param(Ty::String)].into(),
+                ret: Box::new(Ty::String),
+                throws: Box::new(throws),
+            };
+            let translated = translate_ty(&ty, &ctx(&[]));
+            assert_eq!(
+                translated.expr,
+                "(arg0: string) => string | Promise<string>"
+            );
+            assert!(translated.imports.is_empty());
+        }
+    }
+
+    /// Factories await their own result separately from each nested callback.
+    #[test]
+    fn nested_host_callbacks_keep_promises_at_each_return_boundary() {
+        let callback = callable(vec![callable_param(Ty::String)], Box::new(Ty::String));
+        let factory = callable(Vec::new(), Box::new(callback.clone()));
+        assert_eq!(
+            translate_ty(&factory, &ctx(&[])).expr,
+            "() => ((arg0: string) => string | Promise<string>) | Promise<((arg0: string) => string | Promise<string>)>"
+        );
+        let list_factory = callable(Vec::new(), Box::new(list(Box::new(callback))));
+        assert_eq!(
+            translate_ty(&list_factory, &ctx(&[])).expr,
+            "() => ((arg0: string) => string | Promise<string>)[] | Promise<((arg0: string) => string | Promise<string>)[]>"
+        );
     }
 
     #[test]

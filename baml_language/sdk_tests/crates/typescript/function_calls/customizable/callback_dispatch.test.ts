@@ -2,7 +2,6 @@ import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 /** Shared callable dispatch contracts. Names/assertions match every SDK port.
  * Use the language's supported entry/callback forms; do not require a
  * particular thread, event loop, or context carrier in these shared cases.
- * Casts only admit Promise results omitted by current generated callback types.
  */
 import "./baml_sdk/index.js";
 import { BamlAbortError } from "@boundaryml/baml-bridge";
@@ -29,7 +28,7 @@ describe("callback_dispatch", () => {
     };
     expect(
       await baml.call_int_callback(
-        callback as unknown as (value: number) => number,
+        callback,
         6,
       ),
     ).toBe(7);
@@ -51,7 +50,7 @@ describe("callback_dispatch", () => {
     try {
       const calls = [0, 1, 2, 3].map((value) =>
         baml.call_int_callback(
-          callback as unknown as (value: number) => number,
+          callback,
           value,
         ),
       );
@@ -108,7 +107,7 @@ describe("callback_dispatch", () => {
         return value + 1;
       };
       const pending = baml.call_int_callback(
-        callback as unknown as (value: number) => number, 6, { $baml: { cancel: ctx } },
+        callback, 6, { $baml: { cancel: ctx } },
       );
       try {
         await entered;

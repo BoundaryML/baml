@@ -3,6 +3,7 @@ import "./baml_sdk/index.js";
 import { BamlAbortError, BamlError, BamlPanic, initializeRuntimeFromBlob } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import { BYTECODE } from "./baml_sdk/_inlinedbaml.js";
+import { callback_probe } from "./baml_sdk/index.js";
 import {
   FloatSize,
   Person,
@@ -40,6 +41,18 @@ import {
 import { isTestRuntime } from "./test_runtime.js";
 
 describe("function_calls — generated SDK host callables", () => {
+  // SDK_PARITY_LINT(skip): TypeScript callback typing regression for explicit throws never
+  it("host_callables_throws_never_accepts_sync_and_async_callbacks_typescript_only", async () => {
+    await expect(callback_probe(value => value)).resolves.toBe("native callback");
+    const calls: string[] = [];
+    await expect(callback_probe(async value => {
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      calls.push(value);
+      return value;
+    })).resolves.toBe("native callback");
+    expect(calls).toEqual(["native callback"]);
+  });
+
   it("host_callables_simple_sync_callable_returns_string", async () => {
     const cb = (x: number) => `got ${x}`;
 
@@ -235,7 +248,7 @@ describe("function_calls — generated SDK host callables", () => {
 
   it("host_callables_preserves_a_rejected_promise_reason_by_identity", async () => {
     const thrown = { reason: "rejected Promise" };
-    const callback = ((_value: number) => Promise.reject(thrown)) as unknown as (value: number) => string;
+    const callback = (_value: number) => Promise.reject(thrown);
 
     await expect(call_with_throwing_propagating(callback, 1)).rejects.toBe(thrown);
   });
@@ -243,27 +256,34 @@ describe("function_calls — generated SDK host callables", () => {
   it("host_callables_round_trips_a_typed_baml_error_through_typed_catch_and_propagation", async () => {
     const typedValue = new ValidationError({ code: 422, message: "invalid profile", fields: ["name"] });
     const callback = (): string => { throw new BamlError("validation failed", { value: typedValue }); };
+    const asyncCallback = async (): Promise<string> => {
+      await Promise.resolve();
+      return callback();
+    };
 
-    await expect(call_with_typed_throws(callback, 1)).resolves.toBe("caught: invalid profile");
-    try {
-      await call_with_typed_throws_propagating(callback, 1);
-      expect.unreachable("the typed throw unexpectedly resolved");
-    } catch (caught) {
-      expect(caught).toBeInstanceOf(BamlError);
-      expect((caught as BamlError).value).toBeInstanceOf(ValidationError);
-      expect((caught as BamlError).value).toEqual(typedValue);
+    for (const cb of [callback, asyncCallback]) {
+      await expect(call_with_typed_throws(cb, 1)).resolves.toBe("caught: invalid profile");
+      try {
+        await call_with_typed_throws_propagating(cb, 1);
+        expect.unreachable("the typed throw unexpectedly resolved");
+      } catch (caught) {
+        expect(caught).toBeInstanceOf(BamlError);
+        expect((caught as BamlError).value).toBeInstanceOf(ValidationError);
+        expect((caught as BamlError).value).toEqual(typedValue);
+      }
     }
   });
 
   it("host_callables_surfaces_a_wrong_callback_return_type_as_host_contract_violation", async () => {
-    const callback = ((_value: number) => "not an int") as unknown as (value: number) => number;
-
-    try {
-      await call_int_callback(callback, 1);
-      expect.unreachable("the wrong-type callback unexpectedly resolved");
-    } catch (caught) {
-      expect(caught).toBeInstanceOf(BamlPanic);
-      expect((caught as BamlPanic).className).toBe("baml.panics.HostContractViolation");
+    for (const callback of [() => "not an int", async () => "not an int"]) {
+      try {
+        // @ts-expect-error deliberately violate the callback return contract
+        await call_int_callback(callback, 1);
+        expect.unreachable("the wrong-type callback unexpectedly resolved");
+      } catch (caught) {
+        expect(caught).toBeInstanceOf(BamlPanic);
+        expect((caught as BamlPanic).className).toBe("baml.panics.HostContractViolation");
+      }
     }
   });
 
@@ -289,7 +309,7 @@ describe("function_calls — generated SDK host callables", () => {
     try {
       const ForeignPromise = iframe.contentWindow?.Promise;
       if (ForeignPromise === undefined) throw new Error("iframe Promise realm unavailable");
-      const callback = ((value: number) => new ForeignPromise<string>((resolve: (result: string) => void) => resolve(`foreign-${value}`))) as unknown as (value: number) => string;
+      const callback = (value: number) => new ForeignPromise<string>(resolve => resolve(`foreign-${value}`));
       await expect(call_with_callback(callback, 9)).resolves.toBe("foreign-9");
     } finally {
       iframe.remove();
@@ -299,21 +319,31 @@ describe("function_calls — generated SDK host callables", () => {
   it("host_callables_returns_and_invokes_a_nested_host_callable", async () => {
     const factory = () => (value: number) => `nested-${value}`;
     await expect(call_returned_callback(factory, 6)).resolves.toBe("nested-6");
+    const asyncFactory = async () => async (value: number) => {
+      await Promise.resolve();
+      return `nested-${value}`;
+    };
+    await expect(call_returned_callback(asyncFactory, 6)).resolves.toBe("nested-6");
   });
 
   it("host_callables_returns_and_invokes_a_host_callable_nested_in_a_list", async () => {
     const factory = () => [(value: number) => `nested-list-${value}`];
     await expect(call_returned_callback_in_list(factory, 7)).resolves.toBe("nested-list-7");
+    const asyncFactory = async () => [async (value: number) => {
+      await Promise.resolve();
+      return `nested-list-${value}`;
+    }];
+    await expect(call_returned_callback_in_list(asyncFactory, 7)).resolves.toBe("nested-list-7");
   });
 
   it("host_callables_completes_a_pending_host_call_after_runtime_replacement", async () => {
     let resolveResult!: (value: string) => void;
     let dispatched!: () => void;
     const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
-    const callback = ((_value: number) => new Promise<string>((resolve) => {
+    const callback = (_value: number) => new Promise<string>((resolve) => {
       resolveResult = resolve;
       dispatched();
-    })) as unknown as (value: number) => string;
+    });
 
     const pending = call_with_callback(callback, 9);
     await wasDispatched;
@@ -327,10 +357,10 @@ describe("function_calls — generated SDK host callables", () => {
     let settle!: (value: string) => void;
     let dispatched!: () => void;
     const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
-    const callback = ((_value: number) => new Promise<string>((resolve) => {
+    const callback = (_value: number) => new Promise<string>((resolve) => {
       settle = resolve;
       dispatched();
-    })) as unknown as (value: number) => string;
+    });
 
     const pending = call_with_callback(callback, 10, { $baml: { cancel: ctx } });
     await wasDispatched;
@@ -346,10 +376,10 @@ describe("function_calls — generated SDK host callables", () => {
     let settle!: (value: string) => void;
     let dispatched!: () => void;
     const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
-    const callback = ((_value: number) => new Promise<string>((resolve) => {
+    const callback = (_value: number) => new Promise<string>((resolve) => {
       settle = resolve;
       dispatched();
-    })) as unknown as (value: number) => string;
+    });
 
     const pending = call_with_callback(callback, 12, { $baml: { cancel: ctx } });
     await wasDispatched;
@@ -388,7 +418,7 @@ describe("function_calls — generated SDK host callables", () => {
     };
 
     await expect(
-      call_with_callback(cb as unknown as (arg0: number) => string, 4),
+      call_with_callback(cb, 4),
     ).resolves.toBe("async-4");
   });
 
