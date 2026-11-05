@@ -291,15 +291,13 @@ test "instantiate takes an empty list typed as the field" {
     assert.equal(post_without_tags().tags.length(), 0)
 }
 
-// ─── instantiate: native handles ─────────────────────────────────────────────
+// ─── instantiate: Rust-backed instances ──────────────────────────────────────
 
-// A native handle has no BAML type, so it fits only a field of type `unknown`.
-// In a typed field it would break the first use of that field, with an error
-// no `catch` sees.
+// An instance whose state Rust holds is of its own class, so it fits a field
+// that admits that class: here, only a field of type `unknown`.
 
-function native_handle() -> unknown {
-    let path = `/tmp/baml_reflect_instantiate_${baml.time.Instant.now().to_timestamp_milliseconds()}_${int.random(0, 1000000000)}.lock`;
-    baml.fs.lock(path, 0)._handle
+function rust_backed() -> unknown {
+    baml.hash.DefaultHasher.new()
 }
 
 function handle_into(ty: reflect.Type, fields: map<string, unknown>) -> string {
@@ -312,36 +310,36 @@ function handle_into(ty: reflect.Type, fields: map<string, unknown>) -> string {
     "built"
 }
 
-test "instantiate rejects a native handle for a string field" {
+test "instantiate rejects a Rust-backed instance for a string field" {
     assert.equal(
-        handle_into(reflect.Type.of<Labeled>(), { "name": native_handle(), "secret": "s" }),
-        "reflect.Class.instantiate: field `reflect_instantiate.Labeled.name` expects `string`, got `$rust_type`",
+        handle_into(reflect.Type.of<Labeled>(), { "name": rust_backed(), "secret": "s" }),
+        "reflect.Class.instantiate: field `reflect_instantiate.Labeled.name` expects `string`, got `baml.hash.DefaultHasher`",
     )
 }
 
-test "instantiate rejects a native handle for a class field" {
+test "instantiate rejects a Rust-backed instance for a class field" {
     assert.equal(
-        handle_into(reflect.Type.of<Outer>(), { "inner": native_handle() }),
-        "reflect.Class.instantiate: field `reflect_instantiate.Outer.inner` expects `reflect_instantiate.Inner`, got `$rust_type`",
+        handle_into(reflect.Type.of<Outer>(), { "inner": rust_backed() }),
+        "reflect.Class.instantiate: field `reflect_instantiate.Outer.inner` expects `reflect_instantiate.Inner`, got `baml.hash.DefaultHasher`",
     )
 }
 
-test "instantiate rejects a native handle for a json field" {
+test "instantiate rejects a Rust-backed instance for a json field" {
     assert.equal(
-        handle_into(reflect.Type.of<Loose>(), { "required": 1, "data": native_handle() }),
-        "reflect.Class.instantiate: field `reflect_instantiate.Loose.data` expects `baml.json.json`, got `$rust_type`",
+        handle_into(reflect.Type.of<Loose>(), { "required": 1, "data": rust_backed() }),
+        "reflect.Class.instantiate: field `reflect_instantiate.Loose.data` expects `baml.json.json`, got `baml.hash.DefaultHasher`",
     )
 }
 
-function handle_kept() -> bool {
-    let handle = native_handle();
-    let built = reflect.Class.instantiate<Loose>({ "required": 1, "anything": handle });
-    // `==` compares native handles by reference.
-    built.anything == handle
+function instance_kept() -> bool {
+    let instance = rust_backed();
+    let built = reflect.Class.instantiate<Loose>({ "required": 1, "anything": instance });
+    // `==` compares Rust-backed instances by reference.
+    built.anything == instance
 }
 
-test "instantiate stores a native handle in an unknown field as given" {
-    assert.is_true(handle_kept())
+test "instantiate stores a Rust-backed instance in an unknown field as given" {
+    assert.is_true(instance_kept())
 }
 
 // ─── instantiate: missing fields, unknown keys, alias and skip ───────────────
@@ -472,10 +470,6 @@ test "instantiate rejects a class that a class literal cannot build" {
     assert.equal(
         instantiate_non_class(reflect.Type.of<baml.hash.DefaultHasher>()),
         "reflect.Class.instantiate cannot build `baml.hash.DefaultHasher`: its state is the runtime's own, which only the class's own functions create",
-    );
-    assert.equal(
-        instantiate_non_class(reflect.Type.of<baml.fs.Lock>()),
-        "reflect.Class.instantiate cannot build `baml.fs.Lock`: its field `_handle` holds state that only the class's own functions create",
     );
     // `@@rust_type` classes that cross by a form of their own, not by
     // reference.

@@ -1,6 +1,4 @@
-//! What a host holds of the runtime's own. An instance that keeps runtime data
-//! in a `$rust_type` field crosses by its fields, with that data as a payload
-//! the host passes back as it received it. An instance of a `@@rust_type`
+//! What a host holds of the runtime's own. An instance of a `@@rust_type`
 //! class and a standard-library capability (`reflect.Package`) cross as an
 //! opaque reference to the engine's instance, which a host holds, passes back
 //! as that same instance, and never builds.
@@ -195,30 +193,28 @@ fn assert_hasher_reference(value: &BexExternalValue) {
     assert_eq!(*ty, default_hasher_ty());
 }
 
-/// An instance holding runtime data in a field crosses by its fields, the
-/// data among them as a payload the engine issued, and works when it comes
-/// back.
+/// A `baml.fs.Lock` is a lock the runtime holds, so it crosses as a reference,
+/// and the lock passed back is the one that was taken.
 #[tokio::test]
-async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
+async fn a_lock_crosses_as_a_reference_to_the_held_lock() {
     let engine = engine();
     let dir = tempfile::tempdir().unwrap();
     let path = string(&dir.path().join("lock").to_string_lossy());
     let lock = call(&engine, "lock", vec![path.clone()]).await.unwrap();
-    let BexExternalValue::Instance {
-        class_name, fields, ..
-    } = &lock
-    else {
-        panic!("a baml.fs.Lock crosses by its fields, got {lock:?}");
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = &lock else {
+        panic!("a lock crosses as a live reference, got {lock:?}");
     };
-    assert_eq!(class_name, "baml.fs.Lock");
-    assert!(
-        matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
-        "its handle is a payload: {fields:?}"
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.fs.Lock")),
+            Box::new([]),
+        )
     );
     // Negative control: while the lock is held, the path cannot be locked.
     assert!(call(&engine, "lock", vec![path.clone()]).await.is_err());
-    // The payload is the engine's own: passed back, it is the lock that was
-    // taken, and closing it frees the path.
+    // Passed back, it is the lock that was taken: closing it frees the path.
     call(&engine, "release", vec![lock]).await.unwrap();
     let again = call(&engine, "lock", vec![path]).await.unwrap();
     call(&engine, "release", vec![again]).await.unwrap();

@@ -164,21 +164,9 @@ fn parse_argument(
                 return None;
             };
             if !choices.contains(&text.as_str()) {
-                let listed = if choices.is_empty() {
-                    "it takes no argument yet".to_string()
-                } else {
-                    format!(
-                        "one of {}",
-                        choices
-                            .iter()
-                            .map(|choice| format!("`\"{choice}\"`"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                };
                 diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
                     diagnostic_id: DiagnosticId::InvalidAttributeArg,
-                    message: format!("`{spelled}` does not accept `\"{text}\"`: {listed}"),
+                    message: format!("`{spelled}` has no choice `\"{text}\"`"),
                     span: arg.span,
                 });
                 return None;

@@ -1,19 +1,12 @@
-// A class that holds `$rust_type` state is created only by its own functions.
-// A class literal could only copy a handle out of another value, which would
-// relabel what the handle means, so the literal itself is refused.
+// A class whose state Rust holds is created only by its own functions, so a
+// literal of one is refused.
 
-// A handle copied into a second lock would let two locks release one.
-function copied_handle(lock: baml.fs.Lock) -> baml.fs.Lock {
-    baml.fs.Lock { _handle: lock._handle }
-}
-
-// A spread is the same literal.
+// A spread would copy one.
 function spread_copy(limit: baml.spawn.Limit) -> baml.spawn.Limit throws never {
     baml.spawn.Limit { ...limit }
 }
 
-// A `@@rust_type` class is the same rule with no field to copy: only its own
-// functions create one.
+// An empty literal would make one from nothing.
 function tagged_literal() -> baml.hash.DefaultHasher throws never {
     baml.hash.DefaultHasher {}
 }

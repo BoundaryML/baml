@@ -229,6 +229,9 @@ impl Object {
                     crate::RustPayload::OutputFormat(schema) => {
                         meter.shared(schema, |meter| schema.measure(meter));
                     }
+                    crate::RustPayload::Lock(lock) => {
+                        meter.shared(lock, |meter| lock.measure(meter));
+                    }
                     crate::RustPayload::TcpStream(stream) => {
                         meter.shared(stream, |meter| stream.measure(meter));
                     }

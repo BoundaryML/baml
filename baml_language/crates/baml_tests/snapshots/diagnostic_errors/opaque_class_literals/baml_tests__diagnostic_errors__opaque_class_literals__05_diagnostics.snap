@@ -4,24 +4,16 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0173
 
-  × class `baml.fs.Lock` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
-   ╭─[opaque_class_literals.baml:7:5]
- 7 │     baml.fs.Lock { _handle: lock._handle }
-   ·     ──────────────────────────────────────
+  × class `baml.spawn.Limit` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
+   ╭─[opaque_class_literals.baml:6:5]
+ 6 │     baml.spawn.Limit { ...limit }
+   ·     ─────────────────────────────
    ╰────
 
   [type] E0173
 
-  × class `baml.spawn.Limit` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
-    ╭─[opaque_class_literals.baml:12:5]
- 12 │     baml.spawn.Limit { ...limit }
-    ·     ─────────────────────────────
-    ╰────
-
-  [type] E0173
-
   × class `baml.hash.DefaultHasher` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
-    ╭─[opaque_class_literals.baml:18:5]
- 18 │     baml.hash.DefaultHasher {}
+    ╭─[opaque_class_literals.baml:11:5]
+ 11 │     baml.hash.DefaultHasher {}
     ·     ──────────────────────────
     ╰────
