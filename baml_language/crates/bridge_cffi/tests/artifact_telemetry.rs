@@ -11,7 +11,8 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
     const SCENARIO: &str = "BAML_TEST_ARTIFACT_SCENARIO";
     let Some(scenario) = baml_env::raw_var(SCENARIO) else {
         // Separate processes isolate both environment variables and the bridge singleton.
-        for scenario in ["fixed", "custom_off"] {
+        for scenario in ["fixed", "custom_off", "custom_on"] {
+            let home = tempfile::tempdir().unwrap();
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
@@ -19,9 +20,17 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
                     "--nocapture",
                 ])
                 .env(SCENARIO, scenario)
+                .env("BAML_HOME", home.path())
                 .env("BOUNDARY_API_KEY", "local")
-                .env("BAML_TELEMETRY", "invalid")
-                .env("ACME_TELEMETRY", "off")
+                .env("BAML_TELEMETRY", "off")
+                .env(
+                    "ACME_TELEMETRY",
+                    if scenario == "custom_off" {
+                        "off"
+                    } else {
+                        "medium"
+                    },
+                )
                 .output()
                 .unwrap();
             assert!(
@@ -29,10 +38,22 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
                 "{scenario}: {}",
                 String::from_utf8_lossy(&output.stderr)
             );
+            let recorded =
+                std::fs::read_dir(home.path().join("btel/recordings")).map_or(0, Iterator::count);
+            assert_eq!(
+                recorded,
+                usize::from(scenario != "custom_off"),
+                "{scenario}"
+            );
         }
         return;
     };
-    run_generated_main((scenario != "fixed").then(|| "ACME_TELEMETRY".into())).await;
+    run_generated_main(if scenario == "fixed" {
+        "[bridge.env_var_names]\nBAML_TELEMETRY = false"
+    } else {
+        "[bridge.env_var_names]\nBAML_TELEMETRY = \"ACME_TELEMETRY\""
+    })
+    .await;
 }
 
 /// Telemetry settings never stop a generated SDK from loading, and it prints nothing
@@ -42,7 +63,7 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
 async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
     const SCENARIO: &str = "BAML_TEST_UNUSABLE_TELEMETRY";
     if baml_env::raw_var(SCENARIO).is_some() {
-        run_generated_main(Some("ACME_TELEMETRY".into())).await;
+        run_generated_main("[bridge.env_var_names]\nBAML_TELEMETRY = \"ACME_TELEMETRY\"").await;
         return;
     }
     let server = wiremock::MockServer::start().await;
@@ -98,7 +119,7 @@ async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
 }
 
 /// Load `function main() -> int { 7 }` as a generated SDK does and run it.
-async fn run_generated_main(recording_level_envvar: Option<String>) {
+async fn run_generated_main(original_manifest: &str) {
     bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
         language: bridge_cffi::BridgeLanguage::Python,
         bridge_runtime_name: "baml-bridge-test".into(),
@@ -109,10 +130,12 @@ async fn run_generated_main(recording_level_envvar: Option<String>) {
     let program = baml_test_support::compile_source("function main() -> int { 7 }");
     let artifact = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
     let bytecode = baml_artifact::encode_embedded(&artifact);
-    let policy = btel_settings::artifact::ArtifactTelemetry {
-        recording_level_envvar,
-        ..Default::default()
-    };
+    let mut manifest: toml::Table = original_manifest.parse().unwrap();
+    let policy = btel_settings::artifact::ArtifactTelemetry::from_manifest(
+        &toml::Value::Table(manifest.clone()),
+        btel_settings::artifact::ArtifactKind::Bridge,
+    )
+    .unwrap();
     let mut metadata = toml::Table::new();
     metadata.insert("metadata_version".into(), 1.into());
     metadata.insert(
@@ -123,11 +146,8 @@ async fn run_generated_main(recording_level_envvar: Option<String>) {
         )])),
     );
     metadata.insert("telemetry".into(), toml::Value::try_from(&policy).unwrap());
-    let manifest = toml::to_string(&toml::Table::from_iter([(
-        "__baml_codegen".into(),
-        toml::Value::Table(metadata),
-    )]))
-    .unwrap();
+    manifest.insert("__baml_codegen".into(), toml::Value::Table(metadata));
+    let manifest = toml::to_string(&manifest).unwrap();
     let runtime =
         bridge_cffi::initialize_runtime_from_blob(bytecode.as_bytes(), Some(&manifest)).unwrap();
     let args = CallFunctionArgs {
@@ -145,6 +165,76 @@ async fn run_generated_main(recording_level_envvar: Option<String>) {
     };
     assert_eq!(value.value, Some(baml_outbound_value::Value::IntValue(7)));
     runtime.shutdown(None).await;
+}
+
+/// The ordinary generated SDK path must honor the host switch even when cloud
+/// credentials are present. Enabling recording must still select those credentials.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ordinary_bridge_honors_telemetry_off_with_cloud_credentials() {
+    const SCENARIO: &str = "BAML_TEST_BRIDGE_RECORDING_SWITCH";
+    if let Some(scenario) = baml_env::raw_var(SCENARIO) {
+        if scenario == "saved_login" {
+            let endpoint = bcs_api::Endpoint::from_env().unwrap();
+            bcs_api::Store::new(&endpoint)
+                .unwrap()
+                .write(&bcs_api::StoredSession {
+                    refresh_token: bcs_api::Secret::new("bdry_session_bridge_test".into()),
+                    caller: bcs_api::auth::Caller {
+                        user_id: "test-user".into(),
+                        email: "test@example.invalid".into(),
+                    },
+                })
+                .unwrap();
+        }
+        run_generated_main("").await;
+        return;
+    }
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+    for scenario in ["api_key", "saved_login"] {
+        for level in ["off", "0", "false", "no", "medium"] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(401))
+                .mount(&server)
+                .await;
+            let home = tempfile::tempdir().unwrap();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "ordinary_bridge_honors_telemetry_off_with_cloud_credentials",
+                    "--nocapture",
+                ])
+                .env(SCENARIO, scenario)
+                .env("BAML_HOME", home.path())
+                .env("BAML_TELEMETRY", level)
+                .env("BOUNDARY_API_URL", server.uri())
+                .env("BOUNDARY_PROJECT", "acme/app")
+                .env_remove("BOUNDARY_API_KEY")
+                .envs(
+                    (scenario == "api_key")
+                        .then_some(("BOUNDARY_API_KEY", "bdry_secret_bridge_test")),
+                )
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{scenario}/{level}: {output:?}");
+            let requests = server.received_requests().await.unwrap();
+            assert_eq!(requests.is_empty(), level != "medium", "{scenario}/{level}");
+            for request in requests {
+                assert_eq!(
+                    request.headers["authorization"],
+                    if scenario == "api_key" {
+                        "Bearer bdry_secret_bridge_test"
+                    } else {
+                        "Bearer bdry_session_bridge_test"
+                    }
+                );
+            }
+            assert!(!home.path().join("btel").exists(), "{scenario}/{level}");
+            if level != "medium" {
+                assert!(output.stderr.is_empty(), "{scenario}/{level}: {output:?}");
+            }
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -169,6 +259,7 @@ async fn bridge_embedded_ingestion_respects_bindings() {
                 ])
                 .env(SCENARIO, scenario)
                 .env("BOUNDARY_API_URL", server.uri())
+                .env("BAML_TELEMETRY", "off")
                 .env("BOUNDARY_API_KEY", "bdry_secret_ambient_ignored")
                 .env("BOUNDARY_PROJECT", "ambient/ignored")
                 .env("ACME_KEY", "bdry_secret_customer")

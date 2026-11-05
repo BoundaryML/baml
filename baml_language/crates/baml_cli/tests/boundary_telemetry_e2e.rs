@@ -290,6 +290,72 @@ fn fixture(source: &str) -> tempfile::TempDir {
     temp
 }
 
+/// Runtime recording is opt-out even when the user has logged in. Exercise both
+/// commands against a live loopback server so an upload or heartbeat is observable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn telemetry_off_prevents_cloud_requests_for_run_and_test() {
+    use sha2::Digest as _;
+
+    let temp = fixture(
+        "function main() -> int { 7 }\ntestset \"smoke\" { test \"ok\" { assert.is_true(true) } }\n",
+    );
+    let home = temp.path().join("home");
+    let server = MockServer::start().await;
+    let endpoint = bcs_api::Endpoint::parse(&server.uri()).unwrap();
+    let file = home.join("login/cache").join(format!(
+        "{}.json",
+        hex::encode(sha2::Sha256::digest(endpoint.as_str().as_bytes()))
+    ));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        file,
+        serde_json::to_vec(&bcs_api::StoredSession {
+            refresh_token: bcs_api::Secret::new("bdry_session_cli_test".into()),
+            caller: bcs_api::auth::Caller {
+                user_id: "test-user".into(),
+                email: "test@example.invalid".into(),
+            },
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    common::share_build_cache(&home);
+    for credential in [None, Some(KEY)] {
+        for level in ["off", "0", "false", "no"] {
+            for args in [&["run", "main"][..], &["test"][..]] {
+                let output = Command::new(common::baml_cli())
+                    .args(args)
+                    .current_dir(temp.path())
+                    .env("BAML_HOME", &home)
+                    .env("BAML_TELEMETRY", level)
+                    .env("BOUNDARY_API_URL", server.uri())
+                    .env("BOUNDARY_PROJECT", "acme/app")
+                    .env_remove("BOUNDARY_API_KEY")
+                    .envs(credential.map(|key| ("BOUNDARY_API_KEY", key)))
+                    .env("BAML_CLI_ALLOW_DIRECT", "1")
+                    .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+                    .env("DO_NOT_TRACK", "1")
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "{credential:?}/{level}/{args:?}: {output:?}"
+                );
+                assert!(
+                    !String::from_utf8_lossy(&output.stderr).contains("warning: Boundary"),
+                    "{output:?}"
+                );
+                assert!(
+                    server.received_requests().await.unwrap().is_empty(),
+                    "{credential:?}/{level}/{args:?}"
+                );
+                assert!(!temp.path().join(RECORDINGS).exists());
+                assert!(!home.join("btel").exists());
+            }
+        }
+    }
+}
+
 /// A late initial refusal must preserve a result already printed by the command.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_rejection_warns_even_if_execution_finishes_before_authorization() {
