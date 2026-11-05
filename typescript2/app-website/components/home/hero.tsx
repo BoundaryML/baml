@@ -23,12 +23,12 @@ export default function Hero() {
       aria-labelledby="hero-title"
       className="relative"
     >
-      <div className="v3-wrap mx-auto px-(--frame-pad) pt-12 md:pt-20 pb-10 md:pb-14">
-        <h1 className="v4-h1 max-w-[13em]" id="hero-title">
+      <div className="v3-wrap mx-auto px-(--frame-pad) hero-top pb-10 md:pb-14">
+        <h1 className="v4-h1 hero-title max-w-[13em]" id="hero-title">
           The unified software stack for agents
         </h1>
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6 mt-5 md:mt-7">
-          <p className="max-w-[36rem] v4-body text-ink-2">
+          <p className="grow basis-[26rem] max-w-[36rem] v4-body text-ink-2">
             BAML is a language with a vertically integrated toolchain that helps
             agents ship faster. Test and trace code, query data, build alerts,
             and replace 10+ separate tools.
@@ -42,7 +42,7 @@ export default function Hero() {
         </div>
 
         {/* The style button floats on the diagram's top edge when it's shown. */}
-        <div className="relative mt-12 md:mt-16">
+        <div className="relative hero-diagram">
           {SHOW_STYLES && (
             <button
               className="focus-ring absolute right-5 md:right-8 top-0 z-10 -translate-y-1/2 rounded-full border border-rule bg-ground px-3 py-1.5 text-[13px] text-body hover:text-ink transition-colors"

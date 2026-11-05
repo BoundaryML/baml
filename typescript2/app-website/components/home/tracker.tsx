@@ -3,7 +3,13 @@
 import bamlMark from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
 import bamlWhite from '@boundaryml/brand/logo/svg/baml-primary-white.svg';
 import Image from 'next/image';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Card, Frame } from './kit';
 import { MarkTile } from './mark';
 import { MARKS, type Mark } from './marks';
@@ -74,7 +80,8 @@ const SWEEP_MS = 1400;
 const MUTED = 'rgb(from var(--ds-ink) r g b / 0.55)';
 const GRID =
   'grid grid-cols-[52px_repeat(2,minmax(0,1fr))_14px_repeat(4,minmax(0,1fr))] md:grid-cols-[132px_repeat(2,minmax(0,1fr))_48px_repeat(4,minmax(0,1fr))] gap-x-1 md:gap-x-2 items-center';
-const ROW = 'h-11 md:h-14';
+// Row and padding sizes are variables set by .tracker in home.css, which shrinks them on short screens.
+const ROW = 'h-(--tracker-row)';
 
 /** `n` held between 0 and 1. */
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
@@ -102,62 +109,86 @@ function useLap() {
   return t;
 }
 
-/** A card that fills from the left as the lap reaches its stage. */
-function Fill({ fill, lit }: { fill: number; lit?: boolean }) {
+/** A card that fills from the left as the lap reaches its stage, or from the top in the phone's
+ *  vertical diagram. */
+function Fill({ fill, vertical }: { fill: number; vertical?: boolean }) {
   return (
     <span
       aria-hidden
-      className="absolute inset-0 origin-left"
+      className={`absolute inset-0 ${vertical ? 'origin-top' : 'origin-left'}`}
       style={{
-        background: lit
-          ? 'rgb(from var(--ds-accent) r g b / 0.35)'
-          : 'rgb(from var(--ds-ink) r g b / 0.12)',
-        transform: `scaleX(${fill})`,
+        background: 'rgb(from var(--ds-ink) r g b / 0.12)',
+        transform: vertical ? `scaleY(${fill})` : `scaleX(${fill})`,
       }}
     />
   );
 }
 
-/** The outline of BAML's bar, `w` by `h`, pinched between `a` and `b` (the deploy gap) to a neck 24%
- *  of its height. Its outer corners take the style's card radius `r`. */
-function barPath(w: number, h: number, a: number, b: number, r: number) {
+/** The outline of BAML's bar, `w` long and `h` thick, pinched between `a` and `b` (the deploy gap) to
+ *  a neck 24% of its thickness. Its outer corners take the style's card radius `r`. It runs left to
+ *  right, or top to bottom when `vertical`: the same outline with x and y swapped, which mirrors it, so
+ *  its corner arcs turn the other way. */
+function barPath(
+  w: number,
+  h: number,
+  a: number,
+  b: number,
+  r: number,
+  vertical = false,
+) {
   const t = h * 0.38;
   const s = Math.min(12, (b - a) / 4);
+  /** The point `x` along the bar and `y` across it, in the drawing's coordinates. */
+  const pt = (x: number, y: number) => (vertical ? `${y} ${x}` : `${x} ${y}`);
+  const arc = (x: number, y: number) =>
+    `A ${r} ${r} 0 0 ${vertical ? 0 : 1} ${pt(x, y)}`;
   return [
-    `M ${r} 0`,
-    `L ${a - s} 0`,
-    `C ${a} 0 ${a} ${t} ${a + s} ${t}`,
-    `L ${b - s} ${t}`,
-    `C ${b} ${t} ${b} 0 ${b + s} 0`,
-    `L ${w - r} 0`,
-    `A ${r} ${r} 0 0 1 ${w} ${r}`,
-    `L ${w} ${h - r}`,
-    `A ${r} ${r} 0 0 1 ${w - r} ${h}`,
-    `L ${b + s} ${h}`,
-    `C ${b} ${h} ${b} ${h - t} ${b - s} ${h - t}`,
-    `L ${a + s} ${h - t}`,
-    `C ${a} ${h - t} ${a} ${h} ${a - s} ${h}`,
-    `L ${r} ${h}`,
-    `A ${r} ${r} 0 0 1 0 ${h - r}`,
-    `L 0 ${r}`,
-    `A ${r} ${r} 0 0 1 ${r} 0`,
+    `M ${pt(r, 0)}`,
+    `L ${pt(a - s, 0)}`,
+    `C ${pt(a, 0)} ${pt(a, t)} ${pt(a + s, t)}`,
+    `L ${pt(b - s, t)}`,
+    `C ${pt(b, t)} ${pt(b, 0)} ${pt(b + s, 0)}`,
+    `L ${pt(w - r, 0)}`,
+    arc(w, r),
+    `L ${pt(w, h - r)}`,
+    arc(w - r, h),
+    `L ${pt(b + s, h)}`,
+    `C ${pt(b, h)} ${pt(b, h - t)} ${pt(b - s, h - t)}`,
+    `L ${pt(a + s, h - t)}`,
+    `C ${pt(a, h - t)} ${pt(a, h)} ${pt(a - s, h)}`,
+    `L ${pt(r, h)}`,
+    arc(0, h - r),
+    `L ${pt(0, r)}`,
+    arc(r, 0),
     'Z',
   ].join(' ');
 }
 
-type Shape = { a: number; b: number; d: string; h: number; w: number };
+type Shape = {
+  a: number;
+  b: number;
+  d: string;
+  h: number;
+  len: number;
+  w: number;
+};
 
-/** BAML's bar, from Build to Feature flags in one piece. It is measured against its row's grid so its
- *  neck sits exactly over the deploy gap. Until it is measured it draws as a plain card. It is keyed by
- *  the diagram style, so a style with a different card radius measures it again. */
+/** BAML's bar, from Build to Feature flags in one piece. It is measured against its grid so its neck
+ *  sits exactly over the deploy gap: across the columns, or down the rows when `vertical` (the phone's
+ *  diagram, where `style` places it in its column). Until it is measured it draws as a plain card. It is
+ *  keyed by the diagram style, so a style with a different card radius measures it again. */
 function BamlBar({
   full,
   p,
+  style,
   sweep,
+  vertical = false,
 }: {
   full: boolean;
   p: number;
+  style?: CSSProperties;
   sweep: number;
+  vertical?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shape, setShape] = useState<Shape | null>(null);
@@ -168,52 +199,55 @@ function BamlBar({
     if (!bar || !grid) return;
     const measure = () => {
       const css = getComputedStyle(grid);
-      const cols = css.gridTemplateColumns.split(' ').map(Number.parseFloat);
-      const gap = Number.parseFloat(css.columnGap) || 0;
+      const tracks = (vertical ? css.gridTemplateRows : css.gridTemplateColumns)
+        .split(' ')
+        .map(Number.parseFloat);
+      const gap = Number.parseFloat(vertical ? css.rowGap : css.columnGap) || 0;
       const w = bar.clientWidth;
       const h = bar.clientHeight;
+      const [len, thick] = vertical ? [h, w] : [w, h];
       const r = Math.min(
-        h / 2,
+        thick / 2,
         Number.parseFloat(
           getComputedStyle(bar).getPropertyValue('--ds-card-radius'),
         ) || 0,
       );
-      // The bar starts at the first stage column; the neck runs from the end of Test to the start
+      // The bar starts at the first stage's track; the neck runs from the end of Test to the start
       // of Trace, gaps included.
-      const a = cols[1] + gap + cols[2];
-      const b = a + gap + cols[3] + gap;
-      setShape({ a, b, d: barPath(w, h, a, b, r), h, w });
+      const a = tracks[1] + gap + tracks[2];
+      const b = a + gap + tracks[3] + gap;
+      setShape({ a, b, d: barPath(len, thick, a, b, r, vertical), h, len, w });
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(grid);
     return () => observer.disconnect();
-  }, []);
+  }, [vertical]);
 
-  // Where the fill has reached, in pixels: each side moves at its own stages' pace, and the neck fills
-  // quickly in between.
+  // Where the fill has reached, as a share of the bar's length: each side moves at its own stages'
+  // pace, and the neck fills quickly in between.
   const at = (() => {
-    if (!shape) return p / STAGES.length;
-    const { a, b, w } = shape;
+    if (!shape?.len) return p / STAGES.length;
+    const { a, b, len } = shape;
     const n = BEFORE.length;
     const x =
       p <= n
         ? (p / n) * a
         : p <= n + 0.2
           ? a + ((p - n) / 0.2) * (b - a)
-          : b + ((p - n - 0.2) / (AFTER.length - 0.2)) * (w - b);
-    return clamp(x / w);
+          : b + ((p - n - 0.2) / (AFTER.length - 0.2)) * (len - b);
+    return clamp(x / len);
   })();
 
   const inner = (
     <>
       <span
         aria-hidden
-        className="absolute inset-0 origin-left"
+        className={`absolute inset-0 ${vertical ? 'origin-top' : 'origin-left'}`}
         style={{
           // The fill brightens a step when the whole bar is full.
           background: `rgb(from var(--ds-accent) r g b / ${full ? 0.42 : 0.3})`,
-          transform: `scaleX(${at})`,
+          transform: vertical ? `scaleY(${at})` : `scaleX(${at})`,
           transition: 'background-color 400ms',
         }}
       />
@@ -222,14 +256,15 @@ function BamlBar({
         className="absolute inset-0 pointer-events-none"
         style={{
           opacity: sweep > 0 && sweep < 1 ? 1 : 0,
-          transform: `translateX(${-18 + sweep * 118}%)`,
+          transform: vertical
+            ? `translateY(${-18 + sweep * 118}%)`
+            : `translateX(${-18 + sweep * 118}%)`,
         }}
       >
         <span
-          className="absolute inset-y-0 left-0 w-[18%]"
+          className={`absolute left-0 top-0 ${vertical ? 'inset-x-0 h-[18%]' : 'inset-y-0 w-[18%]'}`}
           style={{
-            background:
-              'linear-gradient(90deg, transparent, rgb(from var(--ds-accent-ink) r g b / 0.4), transparent)',
+            background: `linear-gradient(${vertical ? 180 : 90}deg, transparent, rgb(from var(--ds-accent-ink) r g b / 0.4), transparent)`,
             filter: 'blur(4px)',
           }}
         />
@@ -239,16 +274,17 @@ function BamlBar({
 
   return (
     <div
-      className={`relative ${ROW}`}
+      className={vertical ? 'relative self-stretch' : `relative ${ROW}`}
       ref={ref}
-      style={{ gridColumn: '2 / -1' }}
+      style={style ?? { gridColumn: '2 / -1' }}
     >
-      {shape ? (
+      {shape?.len ? (
         <>
           <div
             className="absolute inset-0 overflow-hidden"
+            // No backdrop blur: Chrome blurs the whole box behind a path clip, which showed as square
+            // corners. The frame under the bar is blurred already.
             style={{
-              backdropFilter: 'var(--ds-blur, none)',
               background: 'var(--ds-card)',
               clipPath: `path('${shape.d}')`,
             }}
@@ -293,6 +329,199 @@ function Command({ children, lit }: { children: string; lit?: boolean }) {
   );
 }
 
+/** The lap's state at one moment, shared by the wide diagram and the phone's. */
+type Lap = {
+  back: boolean;
+  deployed: boolean;
+  full: boolean;
+  handed: boolean;
+  lineColor: string;
+  p: number;
+  shown: (i: number) => boolean;
+  style: string;
+  sweep: number;
+};
+
+// The phone's diagram turns the wide one on its side: stages run down the rows, the languages and
+// BAML across the columns. The columns are the stage names, the three languages, BAML, and a narrow
+// one for the line back from feature flags to build. The rows are the column heads, Build and Test,
+// the deploy line, then the four stages past it; `column` numbers them the same way.
+const VGRID =
+  'grid grid-cols-[68px_repeat(3,minmax(0,1fr))_92px_12px] grid-rows-[32px_repeat(2,36px)_20px_repeat(4,36px)] gap-1.5';
+
+/** The hero diagram on a phone, with BAML's bar filling from the top down. */
+function Vertical({
+  back,
+  deployed,
+  full,
+  handed,
+  lineColor,
+  p,
+  shown,
+  style,
+  sweep,
+}: Lap) {
+  const deployRow = column(BEFORE.length) - 1;
+  return (
+    <div className="sm:hidden">
+      <div className={`${VGRID} relative`}>
+        {LANGUAGES.map((lang, i) => (
+          <span
+            className="self-center text-center text-[13px] text-(--ds-ink)/80"
+            key={lang.name}
+            style={{ gridColumn: i + 2, gridRow: 1 }}
+          >
+            {lang.short}
+          </span>
+        ))}
+        <span
+          className="self-center justify-self-center"
+          style={{ gridColumn: 5, gridRow: 1 }}
+        >
+          <Image
+            alt="BAML"
+            className="h-8 w-auto"
+            height={32}
+            src={bamlMark}
+            width={27}
+          />
+        </span>
+
+        {STAGES.map((s, i) => (
+          <span
+            className="self-center text-[12px] leading-tight transition-opacity duration-500"
+            key={s}
+            style={{
+              color: MUTED,
+              gridColumn: 1,
+              gridRow: column(i),
+              opacity: i < BEFORE.length || shown(i - BEFORE.length) ? 1 : 0,
+            }}
+          >
+            {s}
+          </span>
+        ))}
+
+        {/* The deploy line, across the languages and through BAML's neck. */}
+        <span
+          className="self-center font-mono text-[11px] transition-colors duration-500"
+          style={{
+            color: deployed ? 'var(--ds-accent-ink)' : MUTED,
+            gridColumn: 1,
+            gridRow: deployRow,
+          }}
+        >
+          deploy
+        </span>
+        <span
+          aria-hidden
+          className="self-center h-0 border-t-2 border-dashed transition-[border-color] duration-500"
+          style={{
+            borderColor: lineColor,
+            gridColumn: '2 / 6',
+            gridRow: deployRow,
+          }}
+        />
+
+        {LANGUAGES.map((lang, i) => (
+          <Fragment key={lang.name}>
+            <Card
+              className="relative overflow-hidden"
+              style={{ gridColumn: i + 2, gridRow: column(0) }}
+            >
+              <Fill fill={clamp(p)} vertical />
+            </Card>
+            {'command' in lang.test ? (
+              <Card
+                className="relative overflow-hidden"
+                style={{ gridColumn: i + 2, gridRow: column(1) }}
+              >
+                <Fill fill={clamp(p - 1)} vertical />
+              </Card>
+            ) : (
+              // No test tool of its own: a dashed cell, like the products past the line.
+              <span
+                className="rounded-(--ds-card-radius) border border-dashed border-(--ds-line)"
+                style={{ gridColumn: i + 2, gridRow: column(1) }}
+              />
+            )}
+          </Fragment>
+        ))}
+
+        {PRODUCTS.map((marks, i) => (
+          <div
+            className="flex items-center justify-center gap-1.5 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) text-(--ds-ink)/75 transition-opacity duration-500"
+            key={AFTER[i]}
+            style={{
+              gridColumn: '2 / 5',
+              gridRow: column(BEFORE.length + i),
+              opacity: shown(i) ? 1 : 0,
+            }}
+          >
+            {marks.map((m) => (
+              <MarkTile key={m.name} mark={m} size={16} />
+            ))}
+          </div>
+        ))}
+
+        <BamlBar
+          full={full}
+          key={style}
+          p={p}
+          style={{ gridColumn: 5, gridRow: `${column(0)} / -1` }}
+          sweep={sweep}
+          vertical
+        />
+        {BAML.map((command, i) => (
+          <span
+            className="self-center text-center font-mono text-[10px] text-(--ds-accent-ink) whitespace-nowrap pointer-events-none transition-opacity duration-300"
+            key={command}
+            style={{
+              gridColumn: 5,
+              gridRow: column(i),
+              opacity: clamp(p - i) > 0.4 ? 1 : 0.35,
+            }}
+          >
+            {command}
+          </span>
+        ))}
+
+        {/* BAML's line runs back up from feature flags to build. */}
+        <span
+          aria-hidden
+          className="relative"
+          style={{ gridColumn: 6, gridRow: `${column(0)} / -1` }}
+        >
+          <span
+            className="absolute inset-y-[18px] -left-1.5 right-0.5 rounded-r-[10px] border border-l-0 border-(--ds-accent)"
+            style={{
+              clipPath: back
+                ? 'inset(-2px -2px -2px 0)'
+                : 'inset(100% -2px -2px 0)',
+              opacity: back ? 1 : 0,
+              transition: back
+                ? 'clip-path 1400ms cubic-bezier(0.65,0,0.35,1)'
+                : 'none',
+            }}
+          />
+          <span
+            className="absolute right-0.5 top-1/2 translate-x-1/2 -translate-y-1/2 rotate-180 py-2 bg-(--ds-ground) text-[11px] text-(--ds-accent-ink) [writing-mode:vertical-rl] transition-opacity duration-500"
+            style={{ opacity: back ? 1 : 0 }}
+          >
+            Improve
+          </span>
+        </span>
+      </div>
+      <p
+        className="mt-3 text-[11.5px] transition-opacity duration-500"
+        style={{ color: MUTED, opacity: handed ? 1 : 0 }}
+      >
+        Each logo past deploy is a separate product with its own SDK.
+      </p>
+    </div>
+  );
+}
+
 /** The v4 hero diagram in the given /diagram-styles style, played as a looping lap from build to
  *  production. */
 export default function Tracker({ style }: { style: string }) {
@@ -312,15 +541,28 @@ export default function Tracker({ style }: { style: string }) {
     : 'rgb(from var(--ds-ink) r g b / 0.45)';
 
   return (
-    <div className={`ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3`}>
+    <div
+      className={`tracker ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3`}
+    >
       <Frame label="Where each toolchain reaches. C builds with cc and leaves testing to you. TypeScript builds with tsc and tests with Jest, Vitest, or Mocha. Go builds and tests with go build and go test. Past deploy, each of them hands tracing, dashboards, alerts, and feature flags to 11 separate products. BAML covers every stage itself, and a line runs from production back to build, labelled Improve.">
-        <div className="relative p-3 md:p-6 lg:p-8">
-          <div className="relative">
+        <div className="relative p-(--tracker-pad)">
+          <Vertical
+            back={back}
+            deployed={deployed}
+            full={full}
+            handed={handed}
+            lineColor={lineColor}
+            p={p}
+            shown={shown}
+            style={style}
+            sweep={sweep}
+          />
+          <div className="relative hidden sm:block">
             {/* The deploy line, drawn once from under its label to the bottom of BAML's row, in the gap
                 column, so it runs through every row without touching the cells on either side. */}
             <div
               aria-hidden
-              className={`${GRID} absolute inset-x-0 top-6 md:top-7 bottom-[calc(2.25rem+6px)] md:bottom-[calc(3rem+8px)] pointer-events-none`}
+              className={`${GRID} absolute inset-x-0 top-(--tracker-head) bottom-[calc(var(--tracker-ret)+6px)] md:bottom-[calc(var(--tracker-ret)+8px)] pointer-events-none`}
             >
               <span
                 className="justify-self-center self-stretch w-0 border-l-2 border-dashed transition-[border-color] duration-500"
@@ -332,7 +574,7 @@ export default function Tracker({ style }: { style: string }) {
               />
             </div>
 
-            <div className={`${GRID} h-6 md:h-7`}>
+            <div className={`${GRID} h-(--tracker-head)`}>
               <span
                 className="justify-self-center font-mono text-[11px] md:text-[13px] whitespace-nowrap transition-colors duration-500"
                 style={{
@@ -469,7 +711,7 @@ export default function Tracker({ style }: { style: string }) {
                 </p>
               </div>
 
-              <div className={`${GRID}`}>
+              <div className={`${GRID} tracker-caption`}>
                 <p
                   className="hidden md:block text-center text-[12.5px] md:text-[13px] pt-0.5 transition-opacity duration-500"
                   style={{
@@ -521,7 +763,7 @@ export default function Tracker({ style }: { style: string }) {
               </div>
 
               {/* BAML's row runs back from feature flags to build. */}
-              <div aria-hidden className={`${GRID} h-9 md:h-12`}>
+              <div aria-hidden className={`${GRID} h-(--tracker-ret)`}>
                 <div
                   className="relative self-start h-[70%] mx-[4%]"
                   style={{ gridColumn: '2 / -1' }}

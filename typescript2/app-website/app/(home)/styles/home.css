@@ -85,3 +85,82 @@
   --ds-card-shadow: none;
   --ds-lit-shadow: none;
 }
+
+/* The hero diagram's sizes (components/home/tracker.tsx): its padding, its deploy label's row, its rows, and the return line
+   under BAML's bar. On a screen shorter than 900px they shrink so the whole diagram, BAML's bar
+   included, sits nearer the fold. Plain CSS, so the short-screen sizes reliably win over the
+   breakpoints'. */
+.tracker {
+  --tracker-head: 1.5rem;
+  --tracker-pad: 0.75rem;
+  --tracker-row: 2.75rem;
+  --tracker-ret: 2.25rem;
+}
+@media (min-width: 48rem) {
+  .tracker {
+    --tracker-head: 1.75rem;
+    --tracker-pad: 1.5rem;
+    --tracker-row: 3.5rem;
+    --tracker-ret: 3rem;
+  }
+}
+@media (min-width: 64rem) {
+  .tracker {
+    --tracker-pad: 2rem;
+  }
+}
+@media (min-width: 48rem) and (max-height: 900px) {
+  .tracker {
+    --tracker-pad: 1rem;
+    --tracker-row: 2.75rem;
+    --tracker-ret: 2.25rem;
+  }
+}
+
+/* The hero's own spacing above and below its copy, trimmed on short screens for the same reason. */
+.hero-top {
+  padding-top: 3rem;
+}
+.hero-diagram {
+  margin-top: 3rem;
+}
+@media (min-width: 48rem) {
+  .hero-top {
+    padding-top: 5rem;
+  }
+  .hero-diagram {
+    margin-top: 4rem;
+  }
+}
+@media (min-width: 48rem) and (max-height: 900px) {
+  .hero-top {
+    padding-top: 2.5rem;
+  }
+  .hero-diagram {
+    margin-top: 2.5rem;
+  }
+}
+@media (min-width: 48rem) and (max-height: 700px) {
+  .tracker {
+    --tracker-head: 1.25rem;
+    --tracker-pad: 0.75rem;
+    --tracker-row: 2.5rem;
+    --tracker-ret: 2rem;
+  }
+  .hero-top {
+    padding-top: 1.5rem;
+  }
+  .hero-diagram {
+    margin-top: 1.75rem;
+  }
+  /* The logos already say it. */
+  .tracker-caption {
+    display: none;
+  }
+}
+
+/* The hero headline also scales with the screen's height, so a short window keeps room for the
+   diagram. */
+.hero-title {
+  font-size: clamp(40px, min(6vw, 9vh), 80px);
+}
