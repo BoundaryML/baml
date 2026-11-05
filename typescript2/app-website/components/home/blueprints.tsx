@@ -162,7 +162,8 @@ export default function Blueprints({ progress }: { progress: number }) {
   const stackShown = layers[0] > 0;
 
   return (
-    <figure className="v4-blueprint-sheet grid rounded-2xl overflow-hidden border border-rule">
+    // `isolate` keeps the drawings' animated layers inside the sheet, so none paints over the nav.
+    <figure className="v4-blueprint-sheet isolate grid rounded-2xl overflow-hidden border border-rule">
       {ENGINES.map((e, k) => {
         const q = (e.to > e.from ? ramp(progress, e.from, e.to) : 1) * out;
         return (
