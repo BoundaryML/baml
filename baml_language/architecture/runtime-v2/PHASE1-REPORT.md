@@ -1240,3 +1240,42 @@ CARGO_TARGET_DIR="$PWD/target" cargo clippy --manifest-path baml_language/Cargo.
 ```
 
 Final validation logs: `target/phase1/json-stream-{regressions,backend-tests,final-clippy,backend-clippy,final-differential}.log`.
+
+## Telemetry aggregate transport checkpoint (incomplete producer job)
+
+The processor now accepts `TimingRecord::AggregateDeltas`, an owned boxed batch
+of per-path/reentry `AggregateDelta` values, alongside existing per-invocation
+completions. `AggregateDelta` lives in `btel_records` and remains re-exported by
+`btel_processor`; publishers retain the same type and behavior. Batches pass
+through the existing combining cache and publication path. The timing record
+still fits its existing 32-byte budget. No durable BTEL format changes.
+
+The mixed-input regression compares processor output from individual samples
+against pre-combined samples with identical clocks, including ordinary and
+recursive nodes, all four outcomes, self-await, chunk boundaries, a legacy
+completion and a function span. The totals are identical, including durations.
+The shared checked merge rejects different nodes and overflow in each sum so a
+producer can flush the old delta without losing a sample.
+
+This is only the Open 4.a transport prerequisite. The compiler/runtime v2
+producer is **not implemented** by this checkpoint: non-off levels still fail
+with the existing diagnostic. Workload BTEL parity (normal and stressed), the
+direct differential script, the five-round performance matrix, medium/off
+ratios and the Richards medium profile remain **unverified/not run**. No gate
+result or performance claim follows from these processor unit tests. Medium's
+contract/default and the decision-8 gate have not changed.
+
+Checkpoint validation commands (run from this worktree):
+
+```sh
+CARGO_TARGET_DIR="$PWD/target" cargo test --manifest-path baml_language/Cargo.toml \
+  -p btel_records -p btel_processor -p bex_vm
+CARGO_TARGET_DIR="$PWD/target" cargo clippy --manifest-path baml_language/Cargo.toml \
+  -p btel_records -p btel_processor -p bex_vm --all-targets --no-deps -- -D warnings
+```
+
+Both commands passed for this checkpoint; the VM suite retains one existing
+ignored test. The final aggregate-only rerun also passed after strengthening
+the regression to transfer multiple nodes in one batch. Local logs:
+`target-telemetry-tests.log`, `target-telemetry-aggregate-tests.log`, and
+`target-telemetry-clippy.log`.

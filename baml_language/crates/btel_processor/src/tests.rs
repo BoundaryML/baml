@@ -1170,3 +1170,86 @@ fn callback_panic_recycles_input_and_never_replays<const DETACHED: bool>() {
             .is::<TransportFailed>()
     );
 }
+
+/// Producer-side combining and processor-side combining must publish the same
+/// population, including reentries, mixed outcomes and chunk boundaries.
+#[test]
+fn precombined_deltas_match_invocations_and_mix_with_spans() {
+    fn run(precombine: bool) -> Vec<AggregateDelta> {
+        let pool = ChunkPool::new(config(16, 1)).unwrap();
+        let mut processor = Processor::with_publisher(
+            pool.bind_consumer().unwrap(),
+            nz(8),
+            RecordingPublisher::default(),
+        );
+        let mut producer = pool.register_producer().unwrap();
+        let thread_id = allocate_telemetry_id();
+        let path = CallPathId::new_non_root(7).unwrap();
+        producer.write_timing(TimingRecord::ThreadSelected { thread_id });
+        let mut batch = Vec::new();
+        for reentry in [false, true] {
+            let mut combined = None::<AggregateDelta>;
+            for outcome in [
+                InvocationOutcome::Ok,
+                InvocationOutcome::Errored,
+                InvocationOutcome::Cancelled,
+                InvocationOutcome::Panicked,
+            ] {
+                let await_time = AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(3));
+                if precombine {
+                    let sample = AggregateDelta {
+                        node: CallPathNodeId::new(path, reentry),
+                        count: 1,
+                        total_duration: ClockDuration::from_ticks(10),
+                        total_self_await: await_time,
+                        errored: u64::from(outcome.is_error()),
+                        cancelled: u64::from(outcome == InvocationOutcome::Cancelled),
+                        panicked: u64::from(outcome == InvocationOutcome::Panicked),
+                    };
+                    combined = Some(combined.map_or(sample, |c| c.checked_merge(sample).unwrap()));
+                } else {
+                    producer.write_timing(TimingRecord::FunctionTimingCompletion {
+                        call_path: path,
+                        entered_at: ClockInstant::from_ticks(10),
+                        exited_at: ClockInstant::from_ticks(20),
+                        await_time,
+                        outcome,
+                        reentry,
+                    });
+                }
+            }
+            if let Some(delta) = combined {
+                batch.push(delta);
+            }
+            producer.seal();
+            processor.process_available();
+        }
+        if precombine {
+            producer.write_timing(TimingRecord::AggregateDeltas(batch.into_boxed_slice()));
+        }
+        // A legacy timing sample and an identified span share the population.
+        producer.write_timing(timing());
+        producer.write_span(SpanRecord::ThreadSelected { thread_id });
+        producer.write_span(SpanRecord::FunctionSpanCompletionOk {
+            id: allocate_telemetry_id(),
+            parent_id: thread_id,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(20),
+            exited_at: ClockInstant::from_ticks(25),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
+        });
+        producer.seal();
+        processor.process_available();
+        processor.flush();
+        let mut deltas = std::mem::take(&mut processor.processing.publisher.deltas);
+        deltas.sort_by_key(|delta| delta.node.get());
+        deltas
+    }
+    let expected = run(false);
+    assert_eq!(run(true), expected);
+    assert_eq!(expected.iter().map(|d| d.count).sum::<u64>(), 10);
+    assert_eq!(expected.iter().map(|d| d.errored).sum::<u64>(), 4);
+    assert_eq!(expected.iter().map(|d| d.cancelled).sum::<u64>(), 2);
+    assert_eq!(expected.iter().map(|d| d.panicked).sum::<u64>(), 2);
+}
