@@ -16,7 +16,7 @@ pub use tokio_util::sync::CancellationToken;
 mod roots;
 mod slice_clock;
 mod tasks;
-pub use roots::{IntegrationRoots, RootSource};
+pub use roots::{IntegrationRoot, IntegrationRoots, RootSource};
 
 /// Placeholder boundary values; unlike `Value`, these contain no heap addresses.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -411,6 +411,7 @@ struct Core {
     host_gate: std::sync::Arc<std::sync::Mutex<Option<mpsc::Sender<Message>>>>,
     heap: Rc<RefCell<dyn LoopHeap>>,
     running_base: Option<usize>,
+    integration_slots: Vec<Weak<Cell<usize>>>,
 }
 /// !Send and !Sync: construction, execution, GC and destruction belong to one thread.
 /// ```compile_fail
@@ -555,6 +556,7 @@ impl TaskLoop {
                 errors: Rc::default(),
                 heap,
                 running_base: None,
+                integration_slots: Vec::new(),
             })),
             rx,
         }

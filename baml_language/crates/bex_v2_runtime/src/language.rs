@@ -622,3 +622,86 @@ mod list_tests {
         assert!(instance.stats().collections > 0);
     }
 }
+
+/// A caught error whose language value remains a precise, loop-owned root.
+/// The compiler keeps this guard for the entire handler/rethrow lifetime.
+/// Frames and display strings are owned Rust data and contain no heap pointers.
+pub struct CaughtError {
+    error: Box<Error>,
+    root: bex_v2_loop::IntegrationRoot,
+}
+impl CaughtError {
+    /// # Safety
+    /// Called inside the owning runtime's root task, before another managed
+    /// allocation can invalidate the incoming error's value.
+    pub unsafe fn new(error: Box<Error>) -> Self {
+        let roots = crate::ROOTS.get();
+        assert!(!roots.is_null(), "catch outside a runtime root task");
+        let root = unsafe { (&*roots).root(error.value) };
+        Self { error, root }
+    }
+    pub fn value(&self) -> usize {
+        self.root.get()
+    }
+    pub fn error(&self) -> &Error {
+        &self.error
+    }
+    /// Transfer the error to its caller. As with any Result error, the caller
+    /// must root it before performing another managed allocation.
+    pub fn rethrow(self) -> Box<Error> {
+        self.error
+    }
+}
+
+#[cfg(test)]
+mod caught_tests {
+    use super::*;
+    static DESCRIPTORS: &[Descriptor] = &[
+        STRING_DESC,
+        OVERFLOW_DESC,
+        SHIFT_DESC,
+        CANCEL_DESC,
+        STACK_DESC,
+        ALLOC_DESC,
+    ];
+    static SOURCE: Source = Source {
+        file: "catch.baml",
+        function: "user.raise",
+        lines: &[7],
+    };
+    #[test]
+    fn caught_error_remains_rooted_and_rethrow_preserves_value_and_trace() {
+        fn entry() -> R<i64> {
+            let error = add(Int63::MAX.get(), 1).unwrap_err().at(&SOURCE, 0);
+            let caught = unsafe { CaughtError::new(error) };
+            for _ in 0..100 {
+                unsafe { crate::try_alloc(0, 32) }?;
+                unsafe { crate::safepoint() }.unwrap();
+            }
+            unsafe {
+                let object = caught.value() as *const MessagePanic;
+                assert_eq!((*object).header.desc, 1);
+                let string = (*object).message as *const u8;
+                let len = string.add(8).cast::<usize>().read();
+                assert_eq!(
+                    std::slice::from_raw_parts(string.add(16), len),
+                    caught.error().message.as_bytes()
+                );
+            }
+            let pointer = caught.value();
+            let error = caught.rethrow();
+            assert_eq!(error.value, pointer);
+            assert_eq!(error.frames.len(), 1);
+            assert_eq!(error.frames[0].line, 7);
+            Err(error)
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[false, false, false, true, true, true, true, true, true],
+        );
+        instance.set_stress(true);
+        let error = unsafe { instance.run_baml(entry) }.unwrap_err();
+        assert_eq!(error.class, "baml.panics.IntegerOverflow");
+        assert!(instance.stats().collections >= 100);
+    }
+}

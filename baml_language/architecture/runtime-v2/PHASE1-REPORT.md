@@ -464,3 +464,49 @@ PHASE1_JOBS=10 uv run --no-project python \
 No new interface deviation is requested in M2. M3's rooted caught errors,
 container growth, string/JSON builtins and specialized decoder remain pending;
 the overall phase-1 gate is still NO-GO.
+
+## M3 preparation checkpoint: caught-error roots (M3 incomplete)
+
+M2 is committed as `2f25d5b908`; allocation failure as `4c3723d094`.
+This checkpoint adds the root lifetime needed before admitting catches. It does
+**not** admit agent-loop or claim its correctness/performance row.
+
+`IntegrationRoots::root` registers a precise slot with the task loop and returns
+an owning lease. Dropping a lease releases the root without borrowing the loop,
+which matters during fiber unwinding. Expired registrations are pruned when a
+new lease is made. The loop remains the sole RootSource; TaskCx does not
+implement it. `bex_v2_runtime::CaughtError` keeps an error's language value rooted
+while Rust owns the boxed error, and transfers the original value/trace on
+rethrow. No catch code is emitted yet.
+
+The new loop test verifies precise enumeration, release during a borrowed loop,
+and repeated lease reuse. The runtime test retains an actual IntegerOverflow
+value through 100 forced collecting safepoints, checks its message object, and
+checks that rethrow preserves value identity and the source trace. Debug and
+release pass: loop 2 unit + 29 integration + 2 ownership doctests; runtime 6
+unit tests. Strict all-target clippy passes for both crates.
+
+```sh
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_loop -p bex_v2_runtime
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_loop -p bex_v2_runtime --release
+cargo clippy --manifest-path baml_language/Cargo.toml -p bex_v2_loop -p bex_v2_runtime \
+  --all-targets --no-deps -- -D warnings
+```
+
+Still required for M3: string and growing-container representations and builtins,
+union/coalesce/type-test emission, proven array index-walk reuse, unwind edges
+and typed catches, and the typed JSON decoder with exact interpreter failure
+ordering/messages. The interpreter decoder's fast text path falls back to
+parse-plus-structural decode: syntax errors precede schema errors, duplicate
+keys use the last value, field failures follow declaration order, and union
+candidates are ranked by matching keys before aggregated error reporting.
+A simple serde derive would not satisfy this contract. There is no VM fallback
+and no new requested deviation from INTERFACES. The three-workload gate remains
+NO-GO until these pieces and the agent-loop row are verified.
+
+After the root-lease change, freshly rebuilt trees and Richards packs again
+return `3222190` and `1161046400`, respectively, both normally and with
+`BAML_GC_STRESS=1`. Agent-loop still fails pack with
+`unsupported in runtime v2: list element`. Benchmark rows above belong to their
+named completed checkpoints; this preparation checkpoint adds no agent-loop
+measurement and does not substitute correctness timings for benchmark trials.
