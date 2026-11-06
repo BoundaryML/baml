@@ -2,24 +2,28 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod language;
 use bex_v2_heap::{Descriptor, Heap, RootSource};
 use bex_v2_loop::{Config, TaskCx, TaskLoop, Value};
+pub use language::*;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
-struct Roots<'a>(&'a dyn bex_v2_loop::RootSource);
+struct Roots<'a>(&'a bex_v2_loop::IntegrationRoots);
 impl RootSource for Roots<'_> {
     fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize)) {
-        self.0.conservative_ranges(visit);
+        self.0.with_roots(|roots| roots.conservative_ranges(visit));
     }
     fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
-        self.0.precise_roots(visit);
+        self.0.with_roots(|roots| roots.precise_roots(visit));
     }
 }
 
 thread_local! {
+    static STACK_LIMIT: Cell<usize> = const { Cell::new(0) };
+    static ROOTS: Cell<*const bex_v2_loop::IntegrationRoots> = const { Cell::new(std::ptr::null()) };
     static HEAP: Cell<*mut Heap> = const { Cell::new(std::ptr::null_mut()) };
     static TASK: Cell<*mut TaskCx<'static>> = const { Cell::new(std::ptr::null_mut()) };
 }
@@ -41,7 +45,9 @@ pub unsafe fn alloc(desc: u32, bytes: usize) -> *mut u8 {
             );
             // SAFETY: the scoped binding owns this heap exclusively on its thread.
             // Allocation visits roots synchronously and never resumes another task.
-            unsafe { (&mut *heap.get()).alloc(desc, bytes, &Roots(&*task.get())) }
+            unsafe {
+                ROOTS.with(|roots| (&mut *heap.get()).alloc(desc, bytes, &Roots(&*roots.get())))
+            }
         })
     })
 }
@@ -61,7 +67,7 @@ pub unsafe fn safepoint() -> Result<(), bex_v2_loop::Err> {
             // SAFETY: scoped TLS pointers remain valid throughout this root call.
             unsafe {
                 (&mut *task.get()).poll()?;
-                (&mut *heap.get()).safepoint(&Roots(&*task.get()));
+                ROOTS.with(|roots| (&mut *heap.get()).safepoint(&Roots(&*roots.get())));
             }
             Ok(())
         })
@@ -112,23 +118,53 @@ impl Instance {
         &mut self,
         entry: fn() -> Result<i64, bex_v2_loop::Err>,
     ) -> Result<i64, bex_v2_loop::Err> {
+        unsafe { self.execute(entry) }.and_then(|result| result)
+    }
+    /// Execute generated BAML and preserve its language error.
+    ///
+    /// # Safety
+    /// The entry must uphold the same rooting contract as `run`. A returned
+    /// error's managed `value` is unrooted: inspect it only while this instance
+    /// remains alive and before any further managed allocation.
+    pub unsafe fn run_baml(&mut self, entry: fn() -> R<i64>) -> R<i64> {
+        unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
+    }
+    unsafe fn execute<E: 'static>(
+        &mut self,
+        entry: fn() -> Result<i64, E>,
+    ) -> Result<Result<i64, E>, bex_v2_loop::Err> {
+        let result = Rc::new(RefCell::new(None));
+        let output = result.clone();
         let heap = &mut self.heap as *mut Heap;
+        let roots = self.tasks.integration_roots();
         let future = self.tasks.spawn(move |cx| {
-            struct Binding(*mut Heap, *mut TaskCx<'static>);
+            struct Binding(
+                *mut Heap,
+                *mut TaskCx<'static>,
+                *const bex_v2_loop::IntegrationRoots,
+                usize,
+            );
             impl Drop for Binding {
                 fn drop(&mut self) {
                     HEAP.set(self.0);
                     TASK.set(self.1);
+                    ROOTS.set(self.2);
+                    STACK_LIMIT.set(self.3);
                 }
             }
             let previous_heap = HEAP.replace(heap);
             // Erase the borrowed task lifetime only inside this scoped binding.
             let current: *mut TaskCx<'_> = cx;
             let previous_task = TASK.replace(current.cast::<TaskCx<'static>>());
-            let _binding = Binding(previous_heap, previous_task);
-            entry().map(Value::int)
+            let previous_roots = ROOTS.replace(&roots);
+            let previous_limit = STACK_LIMIT.replace(roots.stack_limit(cx.id()));
+            let _binding = Binding(previous_heap, previous_task, previous_roots, previous_limit);
+            *output.borrow_mut() = Some(entry());
+            Ok(Value::int(0))
         });
-        self.tasks.run_until(&future).map(|value| value.as_int())
+        self.tasks.run_until(&future)?;
+        let result = result.borrow_mut().take().expect("root task completed");
+        Ok(result)
     }
 
     pub fn stats(&self) -> bex_v2_heap::Stats {

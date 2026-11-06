@@ -16,7 +16,7 @@ pub use tokio_util::sync::CancellationToken;
 mod roots;
 mod slice_clock;
 mod tasks;
-pub use roots::RootSource;
+pub use roots::{IntegrationRoots, RootSource};
 
 /// Placeholder boundary values; unlike `Value`, these contain no heap addresses.
 #[derive(Clone, Debug, PartialEq, Eq)]

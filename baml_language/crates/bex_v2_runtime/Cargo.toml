@@ -6,6 +6,9 @@ license.workspace = true
 
 [dependencies]
 baml_env.workspace = true
+baml_type.workspace = true
+bex_vm_types.workspace = true
+serde_json.workspace = true
 bex_v2_heap = { path = "../bex_v2_heap" }
 bex_v2_loop = { path = "../bex_v2_loop" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }

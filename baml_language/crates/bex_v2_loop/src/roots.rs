@@ -15,12 +15,22 @@ impl RootSource for TaskLoop {
         self.core.borrow().precise_roots(visit);
     }
 }
-impl RootSource for TaskCx<'_> {
-    fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize)) {
-        self.core.borrow().conservative_ranges(visit);
+/// Loop-owned synchronous root access for runtime integration. The task context
+/// is deliberately not a RootSource. Root ranges cannot escape the callback.
+pub struct IntegrationRoots(Rc<RefCell<Core>>);
+impl IntegrationRoots {
+    /// Stack bound for a task owned by this loop, for generated-code guards.
+    pub fn stack_limit(&self, task: usize) -> usize {
+        self.0.borrow().tasks[&task].stack_limit
     }
-    fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
-        self.core.borrow().precise_roots(visit);
+
+    pub fn with_roots<R>(&self, visit: impl FnOnce(&dyn RootSource) -> R) -> R {
+        visit(&*self.0.borrow())
+    }
+}
+impl TaskLoop {
+    pub fn integration_roots(&self) -> IntegrationRoots {
+        IntegrationRoots(self.core.clone())
     }
 }
 impl RootSource for Core {

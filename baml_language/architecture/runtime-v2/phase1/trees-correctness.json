@@ -1,0 +1,30 @@
+[
+  {
+    "backend": "bytecode",
+    "stress": "0",
+    "status": 0,
+    "stdout": "3222190\n",
+    "stderr": ""
+  },
+  {
+    "backend": "bytecode",
+    "stress": "1",
+    "status": 0,
+    "stdout": "3222190\n",
+    "stderr": ""
+  },
+  {
+    "backend": "v2",
+    "stress": "0",
+    "status": 0,
+    "stdout": "3222190\n",
+    "stderr": ""
+  },
+  {
+    "backend": "v2",
+    "stress": "1",
+    "status": 0,
+    "stdout": "3222190\n",
+    "stderr": ""
+  }
+]

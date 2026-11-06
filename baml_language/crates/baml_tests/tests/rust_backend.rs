@@ -799,3 +799,44 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
         }
     }
 }
+
+#[test]
+fn v2_trees_and_fail_closed_admission() {
+    fn emit(source: &str) -> Result<String, String> {
+        let db = baml_test_support::setup_multi_file_db(&[("v2.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, function)| function.name() == "main")
+            .unwrap();
+        baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+    }
+    let trees = emit(include_str!(
+        "../../../tools/speedtest/workloads/memory/binary-trees-14/main.baml"
+    ))
+    .unwrap();
+    assert!(trees.contains("size:24,ptr_slots:(8,2)"));
+    assert!(trees.contains("rt::observe("));
+    assert!(trees.contains("rt::shl("));
+    assert!(trees.contains("rt::Source"));
+    assert!(trees.contains("bex_v2_heap::write_ptr("));
+    assert!(!trees.contains("BexVm"));
+    for source in [
+        "function main() -> string { \"hello\" }",
+        "function main() -> int { let a = [1, 2]; a[0] }",
+        "class C { x: int? } function main() -> int { let c = C { x: 1 }; c.x ?? 0 }",
+        "const X = 1; function main() -> int { X }",
+    ] {
+        assert!(
+            emit(source)
+                .unwrap_err()
+                .contains("unsupported in runtime v2"),
+            "{source}"
+        );
+    }
+}
