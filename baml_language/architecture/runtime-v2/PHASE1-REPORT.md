@@ -744,3 +744,44 @@ the spike's enum layout.
 The added admission regression test also passes strict clippy:
 `cargo clippy --manifest-path baml_language/Cargo.toml -p baml_tests
 --test rust_backend --no-deps -- -D warnings`.
+
+## M3 sub-step: growing-list emitter integration
+
+The emitter now plans and emits `string[]` and `string[][]`, including class
+fields, stable list objects and separately traced buffers. Initializers, indexing,
+`Array.push`, `Array.join`, and length work through typed runtime calls. The
+builtin generator validates the actual stdlib declarations before emitting the
+adapters. Required primitive type arguments are proven from `LoadType`
+definitions and erased at pack time; dynamic type values and unrelated generic
+calls remain unsupported. Indexed mutation of growing lists is still rejected
+explicitly because this workload uses `push` instead.
+
+`phase1/lists.baml` grows a string list through an alias, retains it in a class
+and nested list, indexes from the end and joins Unicode strings. Its v2 pack
+matches bytecode stdout (**6836**), empty stderr and exit status 0, normally and
+with GC stress. Evidence: `phase1/lists-correctness.json`. No interpreter fallback
+is linked into that pack. The fixture exercises indexed access, not the pending
+index-walk iteration lowering.
+
+Codegen's 37 tests and compiler's 10 tests pass. Existing native backend target:
+13 passed, one existing ignored test, including a new growing-list admission
+and unsupported-mutation regression. Strict codegen/compiler all-target clippy
+passes. There is no new workload timing claim; the latest complete Richards and
+trees gate remains above, and agent-loop is still pending.
+
+```sh
+export CARGO_TARGET_DIR="$PWD/target" BAML_CLI_ALLOW_DIRECT=1
+cargo build --manifest-path baml_language/Cargo.toml -p baml_cli
+target/debug/baml-cli --agent-skill-check off --no-progress --color never \
+  pack --rust --runtime v2 --rust-workspace "$PWD/baml_language" \
+  --rust-build-dir "$PWD/target/phase1/lists-v2-build" \
+  --file baml_language/architecture/runtime-v2/phase1/lists.baml main \
+  -o target/phase1/lists-v2
+uv run --no-project python \
+  baml_language/architecture/runtime-v2/phase1/check_fixture.py lists 6836
+cargo test --manifest-path baml_language/Cargo.toml \
+  -p baml_builtins2_codegen -p baml_compiler2_rust
+cargo test --manifest-path baml_language/Cargo.toml -p baml_tests --test rust_backend
+cargo clippy --manifest-path baml_language/Cargo.toml \
+  -p baml_builtins2_codegen -p baml_compiler2_rust --all-targets --no-deps -- -D warnings
+```

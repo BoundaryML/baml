@@ -4,7 +4,14 @@
 use crate::{BamlType, BuiltinPipeline, NativeBuiltin, ReceiverType};
 
 pub fn supports_v2(path: &str) -> bool {
-    matches!(path, "baml.String.char_count" | "baml.String.slice")
+    matches!(
+        path,
+        "baml.String.char_count"
+            | "baml.String.slice"
+            | "baml.Array.push"
+            | "baml.Array.join"
+            | "baml.Array.length"
+    )
 }
 
 /// Generate only requested adapters, checked against extracted stdlib declarations.
@@ -22,6 +29,50 @@ pub fn generate_v2(
             .iter()
             .find(|d| d.path == *path)
             .ok_or_else(|| format!("runtime v2 builtin declaration missing: {path}"))?;
+        if path.starts_with("baml.Array.") {
+            let (params, ret, receiver, yielding, body) = match path.as_str() {
+                "baml.Array.push" => (
+                    vec![BamlType::Generic("T".into())],
+                    BamlType::Int,
+                    ReceiverType::MutSelf,
+                    false,
+                    "#[inline(always)] fn v2_array_push<T:rt::lists::Slot>(cx:&mut rt::strings::Cx,list:rt::lists::List<T>,value:T)->rt::R<i64>{list.push(cx,value)}\n",
+                ),
+                "baml.Array.length" => (
+                    vec![],
+                    BamlType::Int,
+                    ReceiverType::RefSelf,
+                    false,
+                    "#[inline(always)] fn v2_array_length<T:rt::lists::Slot>(cx:&rt::strings::Cx,list:rt::lists::List<T>)->i64{list.len(cx)}\n",
+                ),
+                "baml.Array.join" => (
+                    vec![BamlType::String],
+                    BamlType::String,
+                    ReceiverType::RefSelf,
+                    true,
+                    "#[inline(always)] fn v2_array_join(cx:&mut rt::strings::Cx,list:rt::lists::List<rt::strings::Str>,separator:rt::strings::Str)->rt::R<rt::strings::Str>{rt::lists::join(cx,list,separator)}\n",
+                ),
+                _ => unreachable!(),
+            };
+            if declaration.pipeline != BuiltinPipeline::Vm
+                || declaration.generics != ["T"]
+                || declaration.return_type != ret
+                || declaration.params.iter().map(|p| &p.ty).ne(params.iter())
+                || declaration.may_yield != yielding
+                || declaration.fallible
+                || declaration.throws.as_ref().is_none_or(|t| !t.is_empty())
+                || declaration
+                    .receiver
+                    .as_ref()
+                    .is_none_or(|r| r.builtin_name() != "Array" || r.receiver_type != receiver)
+            {
+                return Err(format!(
+                    "unsupported in runtime v2: changed builtin signature {path}"
+                ));
+            }
+            output.push_str(body);
+            continue;
+        }
         let count = path == "baml.String.char_count";
         let expected_params = if count {
             vec![]
@@ -72,7 +123,14 @@ mod tests {
     #[test]
     fn actual_declarations_and_signature_drift() {
         let (mut declarations, _, _) = crate::extract_native_builtins().unwrap();
-        let requested = ["baml.String.char_count".into(), "baml.String.slice".into()].into();
+        let requested = [
+            "baml.String.char_count".into(),
+            "baml.String.slice".into(),
+            "baml.Array.push".into(),
+            "baml.Array.join".into(),
+            "baml.Array.length".into(),
+        ]
+        .into();
         let source = generate_v2(&declarations, &requested).unwrap();
         syn::parse_file(&source).unwrap();
         let slice = declarations

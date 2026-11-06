@@ -27,6 +27,9 @@ enum Repr {
     Str,
     Ptr(usize),
     ListInt,
+    ListStr,
+    ListListStr,
+    Type(u8),
     ListPtr(usize),
     Dyn(usize),
     Null,
@@ -47,10 +50,25 @@ impl Repr {
             _ => "0",
         }
     }
+    fn growing(self) -> bool {
+        matches!(self, Self::ListStr | Self::ListListStr)
+    }
+    fn slot(self) -> Gen<&'static str> {
+        match self {
+            Self::Str => Ok("rt::strings::Str"),
+            Self::ListStr => Ok("rt::lists::List<rt::strings::Str>"),
+            _ => Err(no("growing list element")),
+        }
+    }
     fn pointer(self) -> bool {
         matches!(
             self,
-            Self::Str | Self::Ptr(_) | Self::ListInt | Self::ListPtr(_)
+            Self::Str
+                | Self::Ptr(_)
+                | Self::ListInt
+                | Self::ListPtr(_)
+                | Self::ListStr
+                | Self::ListListStr
         )
     }
 }
@@ -146,8 +164,12 @@ impl Plan<'_> {
                 self.lists.insert(repr);
                 self.add(c)?;
             }
-            Repr::ListInt => {
+            Repr::ListInt | Repr::ListStr => {
                 self.lists.insert(repr);
+            }
+            Repr::ListListStr => {
+                self.lists.insert(repr);
+                self.record(Repr::ListStr)?;
             }
             Repr::Dyn(i) => {
                 let classes: Vec<_> = self.implementors(i)?.iter().map(|(c, _)| *c).collect();
@@ -163,7 +185,54 @@ impl Plan<'_> {
     // MIR may reuse a method-valued temporary for its extracted receiver.
     // Infer only copy-assigned storage, and require every definition to agree.
     // Actual function values, cycles, parameters and call results stay rejected.
+    fn type_code(ty: &baml_compiler2_mir::TyTemplate) -> Gen<u8> {
+        use baml_compiler2_mir::TyTemplate as T;
+        match ty {
+            T::Int => Ok(0),
+            T::String => Ok(1),
+            T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),
+            _ => Err(no(format!("type argument {ty:?}"))),
+        }
+    }
     fn local_repr(&self, body: &MirFunctionBody<'_>, i: usize, depth: usize) -> Gen<Repr> {
+        let definitions: Vec<_> = body
+            .blocks
+            .iter()
+            .flat_map(|b| &b.statements)
+            .filter_map(|s| match &s.kind {
+                StatementKind::Assign {
+                    destination: Place::Local(l),
+                    value,
+                } if l.0 == i => Some(value),
+                _ => None,
+            })
+            .collect();
+        if definitions.iter().any(|v| matches!(v, Rvalue::LoadType(_))) {
+            if i == 0
+                || body.locals[i].name.is_some()
+                || body.blocks.iter().any(|b| {
+                    b.terminator
+                        .as_ref()
+                        .and_then(crate::analysis::continuation)
+                        .is_some_and(|(p, _)| matches!(p,Place::Local(l) if l.0 == i))
+                })
+            {
+                return Err(no("runtime type value"));
+            }
+
+            let mut code = None;
+            for value in definitions {
+                let Rvalue::LoadType(ty) = value else {
+                    return Err(no("dynamic type storage"));
+                };
+                let next = Self::type_code(ty)?;
+                if code.is_some_and(|c| c != next) {
+                    return Err(no("dynamic type argument"));
+                }
+                code = Some(next);
+            }
+            return Ok(Repr::Type(code.unwrap()));
+        }
         if !matches!(body.locals[i].ty, RuntimeTy::Function { .. }) {
             return self.repr(&body.locals[i].ty);
         }
@@ -230,6 +299,8 @@ impl Plan<'_> {
             RuntimeTy::Null => Repr::Null,
             RuntimeTy::List(element) => match element.as_ref() {
                 RuntimeTy::Int => Repr::ListInt,
+                RuntimeTy::String => Repr::ListStr,
+                RuntimeTy::List(t) if matches!(t.as_ref(), RuntimeTy::String) => Repr::ListListStr,
                 RuntimeTy::Union(_) => match self.repr(element)? {
                     Repr::Ptr(c) => Repr::ListPtr(c),
                     _ => return Err(no("list element")),
@@ -280,6 +351,8 @@ impl Plan<'_> {
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             T::List(element) => match element.as_ref() {
                 T::Int => Repr::ListInt,
+                T::String => Repr::ListStr,
+                T::List(t) if matches!(t.as_ref(), T::String) => Repr::ListListStr,
                 T::Union(_) => match self.field_repr(element)? {
                     Repr::Ptr(c) => Repr::ListPtr(c),
                     _ => return Err(no("list field element")),
@@ -440,7 +513,7 @@ pub fn compile_v2(
             match &block.terminator {
                 Some(Terminator::Call {
                     callee: Operand::Constant(Constant::Function(f)),
-                    ntypeargs: 0,
+                    ntypeargs,
                     has_trace: false,
                     ..
                 }) => {
@@ -451,6 +524,8 @@ pub fn compile_v2(
                     let name = plan.index.display(callee);
                     if baml_builtins2_codegen::supports_v2(name) {
                         builtins.insert(name.to_owned());
+                    } else if *ntypeargs != 0 {
+                        return Err(no("generic user call"));
                     } else if name != "baml.ops.equals_equals" {
                         calls.entry(object).or_default().insert(callee);
                         queue.push_back(callee);
@@ -509,9 +584,17 @@ pub fn compile_v2(
     let lists: BTreeMap<_, _> = plan
         .lists
         .iter()
-        .enumerate()
-        .map(|(i, r)| (*r, i + descriptors.len() + rt_descriptors()))
+        .scan(descriptors.len() + rt_descriptors(), |next, r| {
+            let id = *next;
+            *next += if r.growing() { 2 } else { 1 };
+            Some((*r, id))
+        })
         .collect();
+    let after_lists = lists
+        .iter()
+        .map(|(repr, id)| id + if repr.growing() { 2 } else { 1 })
+        .max()
+        .unwrap_or(rt_descriptors() + descriptors.len());
     out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,\n");
     for (&object, layout) in &plan.layouts {
         let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
@@ -536,12 +619,15 @@ pub fn compile_v2(
                     },
                     match layout.fields[i] {
                         Repr::Ptr(c) => descriptors[&c] + 3,
-                        r @ (Repr::ListInt | Repr::ListPtr(_)) => lists[&r] + 3,
-                        Repr::Dyn(i) => rt_descriptors() + descriptors.len() + lists.len() + i + 3,
+                        r @ (Repr::ListInt
+                        | Repr::ListPtr(_)
+                        | Repr::ListStr
+                        | Repr::ListListStr) => lists[&r] + 3,
+                        Repr::Dyn(i) => after_lists + i + 3,
                         Repr::Str => 3,
                         Repr::Int => 0,
                         Repr::Bool => 1,
-                        Repr::Null => unreachable!("null fields are rejected"),
+                        Repr::Null | Repr::Type(_) => unreachable!("null/type fields are rejected"),
                     }
                 )
             })
@@ -550,6 +636,17 @@ pub fn compile_v2(
         writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
+        if repr.growing() {
+            let slot = Emitter::element(*repr)?.slot()?;
+            writeln!(
+                &mut out,
+                "rt::lists::descriptor({}),rt::lists::buffer_descriptor::<{slot}>({}),",
+                desc + 3,
+                desc + 4
+            )
+            .unwrap();
+            continue;
+        }
         let elem = if *repr == Repr::ListInt {
             "Scalar"
         } else {
@@ -679,6 +776,8 @@ impl Emitter<'_, '_> {
     fn element(repr: Repr) -> Gen<Repr> {
         match repr {
             Repr::ListInt => Ok(Repr::Int),
+            Repr::ListStr => Ok(Repr::Str),
+            Repr::ListListStr => Ok(Repr::ListStr),
             Repr::ListPtr(c) => Ok(Repr::Ptr(c)),
             _ => Err(no("indexed non-list")),
         }
@@ -713,6 +812,10 @@ impl Emitter<'_, '_> {
                 let element = Self::element(repr)?;
                 if self.local(index.0)? != Repr::Int {
                     return Err(no("non-int list index"));
+                }
+                if repr.growing() {
+                    let slot = element.slot()?;
+                    return Ok((self.fallible(&format!("rt::lists::List::<{slot}>::from_raw({base}).get(&rt::strings::Cx::current(),l{}).map(|v|v.as_raw())", index.0)), element));
                 }
                 let slot = self.fallible(&format!("rt::list_slot({base},l{})", index.0));
                 Ok((format!("*({slot} as *const {})", element.rust()), element))
@@ -761,7 +864,10 @@ impl Emitter<'_, '_> {
                 index,
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
-                let (obj, _) = self.place(base)?;
+                let (obj, repr) = self.place(base)?;
+                if repr.growing() {
+                    return Err(no("growing list indexed assignment"));
+                }
                 let slot = self.fallible(&format!("rt::list_slot(object,l{})", index.0));
                 let write = if repr.pointer() {
                     "bex_v2_heap::write_ptr(object as *mut u8,slot.cast(),value);".to_owned()
@@ -777,6 +883,23 @@ impl Emitter<'_, '_> {
     }
     fn value(&self, r: &Rvalue<'_>, expected: Repr) -> Gen<(String, Repr)> {
         match r {
+            Rvalue::Len(place) => {
+                let (value, repr) = self.place(place)?;
+                let element = Self::element(repr)?;
+                let expr = if repr.growing() {
+                    format!(
+                        "rt::lists::List::<{}>::from_raw({value}).len(&rt::strings::Cx::current())",
+                        element.slot()?
+                    )
+                } else {
+                    format!(
+                        "*(({} + 8) as *const i64)",
+                        self.fallible(&format!("rt::nonnull({value})"))
+                    )
+                };
+                Ok((expr, Repr::Int))
+            }
+            Rvalue::LoadType(ty) => Ok(("0usize".into(), Repr::Type(Plan::type_code(ty)?))),
             Rvalue::Use(o) => self.operand(o),
             Rvalue::Aggregate {
                 kind: AggregateKind::Array,
@@ -792,6 +915,21 @@ impl Emitter<'_, '_> {
                 for (i, v) in fields.iter().enumerate() {
                     let v = self.coerce(self.operand(v)?, element)?;
                     write!(&mut code, "let a{i}={v};").unwrap();
+                }
+                if expected.growing() {
+                    let slot = element.slot()?;
+                    let new = self.fallible(&format!(
+                        "rt::lists::List::<{slot}>::new(&mut rt::strings::Cx::current(),{desc})"
+                    ));
+                    write!(&mut code, "let p={new};").unwrap();
+                    for i in 0..fields.len() {
+                        let push = self.fallible(&format!(
+                            "p.push(&mut rt::strings::Cx::current(),<{slot}>::from_raw(a{i}))"
+                        ));
+                        write!(&mut code, "{push};").unwrap();
+                    }
+                    code.push_str("p.as_raw()}");
+                    return Ok((code, expected));
                 }
                 let alloc =
                     self.fallible(&format!("rt::try_alloc({desc},{})", 16 + fields.len() * 8));
@@ -1103,6 +1241,7 @@ impl Emitter<'_, '_> {
             Terminator::Call {
                 callee: Operand::Constant(Constant::Function(f)),
                 args,
+                ntypeargs,
                 argument_layout,
                 ..
             } => {
@@ -1111,7 +1250,11 @@ impl Emitter<'_, '_> {
                     .index
                     .function(self.db, *f)
                     .ok_or_else(|| no("call"))?;
-                let mut values = args
+                let types = args[..*ntypeargs]
+                    .iter()
+                    .map(|a| self.operand(a).map(|v| v.1))
+                    .collect::<Gen<Vec<_>>>()?;
+                let mut values = args[*ntypeargs..]
                     .iter()
                     .map(|a| self.operand(a))
                     .collect::<Gen<Vec<_>>>()?;
@@ -1126,7 +1269,30 @@ impl Emitter<'_, '_> {
                         .collect::<Gen<_>>()?;
                 }
                 let name = self.plan.index.display(c);
-                let expression = if name == "baml.String.char_count" {
+                let expression = if matches!(
+                    name,
+                    "baml.Array.push" | "baml.Array.join" | "baml.Array.length"
+                ) {
+                    let repr = values.first().ok_or_else(|| no("list receiver"))?.1;
+                    if !repr.growing() {
+                        return Err(no("growing list builtin receiver"));
+                    }
+                    let element = Self::element(repr)?;
+                    let code = if element == Repr::Str { 1 } else { 2 };
+                    if types != [Repr::Type(code)] {
+                        return Err(no("list builtin type arguments"));
+                    }
+                    let slot = element.slot()?;
+                    let list = format!("rt::lists::List::<{slot}>::from_raw({})", values[0].0);
+                    match name {
+                        "baml.Array.length" if values.len() == 1 => (format!("v2_array_length(&rt::strings::Cx::current(),{list})"), Repr::Int),
+                        "baml.Array.push" if values.len() == 2 && values[1].1 == element => (self.fallible(&format!("v2_array_push(&mut rt::strings::Cx::current(),{list},<{slot}>::from_raw({}))",values[1].0)), Repr::Int),
+                        "baml.Array.join" if values.len() == 2 && element == Repr::Str && values[1].1 == Repr::Str => (self.fallible(&format!("v2_array_join(&mut rt::strings::Cx::current(),{list},rt::strings::Str::from_raw({})).map(|s|s.as_raw())",values[1].0)), Repr::Str),
+                        _ => return Err(no("list builtin arguments")),
+                    }
+                } else if !types.is_empty() {
+                    return Err(no("generic call"));
+                } else if name == "baml.String.char_count" {
                     if values.len() != 1 || values[0].1 != Repr::Str {
                         return Err(no("String.char_count arguments"));
                     }

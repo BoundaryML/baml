@@ -907,3 +907,39 @@ fn v2_string_receiver_storage_and_function_value_rejection() {
         assert_eq!(before, fingerprint(&program));
     }
 }
+
+#[test]
+fn v2_growing_lists_and_fail_closed_mutation() {
+    for (source, accepted) in [
+        (
+            include_str!("../../../architecture/runtime-v2/phase1/lists.baml"),
+            true,
+        ),
+        (
+            "function main() -> int { let xs: string[] = [\"a\"]; xs[0] = \"b\"; xs.length() }",
+            false,
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("lists.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let before = fingerprint(&program);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if accepted {
+            let source = result.unwrap();
+            assert!(source.contains("rt::lists::buffer_descriptor::<rt::strings::Str>"));
+            assert!(source.contains("fn v2_array_push"));
+        } else {
+            assert!(result.unwrap_err().contains("unsupported in runtime v2"));
+        }
+        assert_eq!(before, fingerprint(&program));
+    }
+}
