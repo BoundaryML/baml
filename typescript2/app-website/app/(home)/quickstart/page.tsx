@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { createMetadata } from '@/app/_lib/metadata';
 import { DiscordCard } from '@/components/community-cards';
@@ -109,12 +110,20 @@ const HANDY_LINKS = [
     title: 'Demo repo',
     value: 'github.com/boundaryml/baml-demos',
   },
-  {
-    href: '/eap',
-    title: 'Live onboarding',
-    value: 'join a free session with the team',
-  },
 ];
+
+// The smallest workflow that runs baml-action on pull requests. The action's README has the rest.
+const WORKFLOW = `name: BAML
+on: [pull_request]
+permissions:
+  contents: read
+  pull-requests: write # for the code health comment
+jobs:
+  baml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: BoundaryML/baml-action@v1`;
 
 const H2 =
   'font-display font-medium text-[24px] leading-[1.2] tracking-[-0.02em] text-head';
@@ -184,6 +193,42 @@ export default function QuickstartPage() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      <section
+        {...section('quickstart_ci')}
+        aria-labelledby="ci"
+        className={`${PAGE_WRAP} pb-12 md:pb-16`}
+      >
+        <div className="max-w-[45rem] flex flex-col gap-4">
+          <h2 className={H2} id="ci">
+            Install the BAML code quality action
+          </h2>
+          <p className={BODY}>
+            <a
+              className="underline underline-offset-4 hover:text-ink"
+              href="https://github.com/BoundaryML/baml-action"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <Cmd>BoundaryML/baml-action</Cmd>
+            </a>{' '}
+            checks, format-checks, and tests your project on each pull request,
+            then comments with how its code quality compares to the base branch.
+          </p>
+          <pre className="overflow-x-auto rounded-xl border border-rule bg-raised px-4 py-3.5 font-mono text-[13.5px] leading-[1.6] text-ink">
+            <span className="text-muted"># .github/workflows/baml.yml</span>
+            {`\n${WORKFLOW}`}
+          </pre>
+          <Image
+            alt="A baml-action comment on a pull request. One function, shipping_cost, got better: cognitive complexity went from 12 to 0, cyclomatic from 8 to 1, NPath from 36 to 1, and nesting from 3 to 0."
+            className="h-auto w-full rounded-xl border border-rule"
+            height={1018}
+            sizes="(min-width: 768px) 720px, 100vw"
+            src="/blog/teaching-agents-to-write-maintainable-code/baml-action-comment.png"
+            width={1600}
+          />
         </div>
       </section>
 

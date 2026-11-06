@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Button, LINKS } from '@/components/home/ui';
 import { ArticleStructuredData } from '@/components/structured-data';
 import { checkArt } from '../_lib/art';
 import { formatPostDate, isoPostDate } from '../_lib/format';
@@ -134,6 +135,14 @@ export default async function BlogPost({ params }: BlogPostPageProps) {
                 </span>
                 <h1 className="v4-h2">{post.title}</h1>
                 <p className="v4-body text-body">{post.description}</p>
+                {post.quickstart && (
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+                    <Button href={LINKS.quickstart}>BAML quickstart</Button>
+                    <span className="text-[15px] leading-[1.5] text-body">
+                      Install the toolchain and give your agent the BAML skill.
+                    </span>
+                  </div>
+                )}
                 {post.archived && (
                   <p className="border-l-2 border-rule pl-4 text-[15px] leading-[1.5] text-body">
                     This is an older post, kept for reference. BAML has changed
