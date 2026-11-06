@@ -137,7 +137,7 @@ def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
 
-__version__ = "0.24.0"
+__version__ = "0.25.0"
 
 
 # ---------------------------------------------------------------------------
