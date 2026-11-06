@@ -81,6 +81,13 @@ class WireSettings {
     @@json.omit_nulls
 }
 
+// A union member reached through an alias keeps its tag.
+type WireDefaultAlias = WireDefault
+
+class WireAliased {
+    network: WireDefaultAlias | WireOther,
+}
+
 class WireConfig {
     id: string,
     kind: string?,

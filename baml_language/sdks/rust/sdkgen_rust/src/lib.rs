@@ -3080,8 +3080,8 @@ mod tests {
             "serde(rename=\"vpc_id\")",
             "serde(default,skip_serializing_if=\"::std::option::Option::is_none\")",
             // A literal is checked.
-            "serde(deserialize_with=\"__baml_literal_Vpc_type\")",
-            "fn__baml_literal_Vpc_type",
+            "serde(deserialize_with=\"__baml_literal_3_Vpc_type\")",
+            "fn__baml_literal_3_Vpc_type",
             // `@json.flatten` reads with serde and writes declared keys first.
             "serde(flatten)",
             "letdeclared:&[&str]=&[\"id\",\"network\"];",

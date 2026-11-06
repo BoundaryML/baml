@@ -32,7 +32,7 @@ pub fn class_errors<'db>(
         if !attrs.json_flatten && !attrs.json_fallback {
             continue;
         }
-        if !is_json_object(db, ty) {
+        if !is_json_object(db, ty, &mut Vec::new()) {
             errors.push((
                 source_map.field_name_spans[index],
                 TirTypeError::JsonRestFieldType {
@@ -122,14 +122,21 @@ fn rest_attribute(attrs: &ClassFieldAttrs) -> &'static str {
     }
 }
 
-/// Whether `ty` is `map<string, json>`.
-fn is_json_object(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> bool {
+/// Whether `ty` is `map<string, json>`. An alias met again while unfolding
+/// is a cycle, which holds no map.
+fn is_json_object(db: &dyn baml_compiler2_hir::Db, ty: &Ty, unfolding: &mut Vec<DeclName>) -> bool {
     match ty {
         Ty::Map { key, value } => matches!(**key, Ty::String) && is_json(db, value),
         Ty::TypeAlias(head) => {
-            !crate::impls::is_json_alias(db, head)
-                && crate::layout::alias_ref_of(db, head)
-                    .is_some_and(|alias| is_json_object(db, &crate::layout::alias_value(db, alias)))
+            if crate::impls::is_json_alias(db, head) || unfolding.contains(head) {
+                return false;
+            }
+            unfolding.push(head.clone());
+            let is_object = crate::layout::alias_ref_of(db, head).is_some_and(|alias| {
+                is_json_object(db, &crate::layout::alias_value(db, alias), unfolding)
+            });
+            unfolding.pop();
+            is_object
         }
         _ => false,
     }
@@ -224,7 +231,7 @@ fn fallback_class(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> Option<Name> {
 /// declared in another package is taken at its word.
 fn is_tagged(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> bool {
     match ty {
-        Ty::Map { .. } => false,
+        Ty::Map { .. } | Ty::Unknown => false,
         ty if is_json(db, ty) => false,
         Ty::Class(head, _) => match crate::layout::class_ref_of(db, head) {
             Some(DeclRef::Source(class)) => crate::lower::resolve_class_fields(db, class)

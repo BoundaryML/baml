@@ -154,11 +154,7 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                         .map(Self::#variant)
                         .map_err(<__D::Error as ::serde::de::Error>::custom)
                 };
-                let tag = match ty {
-                    Ty::Class(class, _) => ctx.analysis.json_tag(class),
-                    _ => None,
-                };
-                match tag {
+                match ctx.analysis.json_tag(ty) {
                     Some(tag) if tag.fallback => fallback_arm = Some(read_arm),
                     Some(tag) if !tag.literals.is_empty() => {
                         let matches = tag

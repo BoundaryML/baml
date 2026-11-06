@@ -261,6 +261,16 @@ pub(crate) struct SerializedMember<'a> {
     pub(crate) skip: bool,
 }
 
+/// A member's JSON key where it isn't its declared name: its `@json.rename`,
+/// else, under aliased names, its `@alias`.
+pub(crate) fn json_key<'a>(
+    rename: Option<&'a str>,
+    alias: Option<&'a str>,
+    aliased: bool,
+) -> Option<&'a str> {
+    rename.or(alias.filter(|_| aliased))
+}
+
 /// Reject a class or enum whose members don't all serialize to distinct
 /// JSON keys.
 ///

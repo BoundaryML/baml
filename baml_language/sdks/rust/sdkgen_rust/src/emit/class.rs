@@ -608,7 +608,11 @@ fn literal_value(literal: &baml_base::Literal) -> Option<TokenStream> {
         }
         baml_base::Literal::Int(value) => Some(quote! { #value }),
         baml_base::Literal::Bool(value) => Some(quote! { #value }),
-        baml_base::Literal::Float(_) | baml_base::Literal::Bigint(_) => None,
+        baml_base::Literal::Float(value) => {
+            let value = value.parse::<f64>().ok()?;
+            Some(quote! { #value })
+        }
+        baml_base::Literal::Bigint(_) => None,
     }
 }
 
@@ -631,7 +635,8 @@ fn literal_check(
         }
         baml_base::Literal::Float(_) | baml_base::Literal::Bigint(_) => return None,
     };
-    let path = format!("__baml_literal_{class}_{field}");
+    // The length keeps `A_b` + `c` and `A` + `b_c` apart.
+    let path = format!("__baml_literal_{}_{class}_{field}", class.len());
     let function = idents::ident(&path);
     let message = format!("`{class}.{field}` holds another value than its literal");
     let check = quote! {

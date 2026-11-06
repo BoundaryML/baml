@@ -141,6 +141,18 @@ stream.must_exist:
   details: |
     A class field normally has a default the partial parse uses before the field arrives, `""` for a string. `@stream.must_exist` makes that default `never`, and a class with any `never` field has no partial parse, so nothing is produced for `Invoice` until `currency` is present. Reach for it when a partial object missing that field would mislead. Applies to class fields only. Takes no arguments, at most once per declaration.
 
+json:
+  summary: "An untyped JSON value, and the `@json` attributes that set a class's JSON shape."
+  syntax: |
+    class Network {
+      vpcId string @json.rename("vpc_id")
+      extra map<string, json> @json.flatten
+
+      @@json.omit_nulls
+    }
+  details: |
+    `json` is `baml.json.json`: `null`, a bool, a number, a string, a list or a map. Reach an arm with `match`, or decode it with `baml.json.to<T>`. To shape a class's JSON, use `@json.rename`, `@json.flatten`, `@json.fallback` and `@@json.omit_nulls`. Prefer them to a `baml.ToJson` or `baml.FromJson` override: they need no code, and generated `serde` impls follow them. A class can't have both.
+
 json.rename:
   summary: "Sets a field's JSON key, or an enum variant's JSON string. Takes the key."
   syntax: |

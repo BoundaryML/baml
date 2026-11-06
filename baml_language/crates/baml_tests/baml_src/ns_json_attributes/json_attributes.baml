@@ -51,6 +51,20 @@ class Both {
     value: string @alias("shown") @json.rename("wire"),
 }
 
+class Plain2 {
+    id: string,
+}
+
+class FlattenFirst {
+    extra: map<string, json> @json.flatten,
+    id: string @json.rename("extra"),
+}
+
+class FlattenLast {
+    id: string @json.rename("extra"),
+    extra: map<string, json> @json.flatten,
+}
+
 class Binding {
     region: json,
     bucket: json?,
@@ -107,6 +121,17 @@ testset "json attributes" {
     test "omit nulls is the class's own" {
         assert.equal(out(Plain { a: null }), `{"a":null}`);
         assert.equal(out(Settings { network: null, name: "x" }), `{"name":"x"}`);
+    }
+    test "a flattened class in a union is not skipped" {
+        let c = baml.json.decode<Config | Plain2>(`{"id":"i","type":"t","a":1}`);
+        match (c) {
+            let c: Config => { assert.equal(c.extra.length(), 1); }
+            let p: Plain2 => { assert.equal(p.id, "not this member"); }
+        }
+    }
+    test "a flatten field shares no key with a renamed field" {
+        assert.equal(out(FlattenFirst { extra: {"a": 1}, id: "i" }), `{"a":1,"extra":"i"}`);
+        assert.equal(out(FlattenLast { id: "i", extra: {"a": 1} }), `{"extra":"i","a":1}`);
     }
     test "null in a json field is a value" {
         assert.equal(out(Binding { region: null, bucket: null }), `{"region":null}`);

@@ -1385,21 +1385,29 @@ impl<'db> SemanticIndexBuilder<'db> {
             SerializedKeyContainer::Class,
             &mut self.diagnostics,
         );
+        // JSON's keys, under declared names and under aliased ones. A field
+        // holding the object's keys has no key of its own.
         if field_attrs.iter().any(|attrs| attrs.json_rename.is_some()) {
-            crate::attrs::check_serialized_keys(
-                c.fields
-                    .iter()
-                    .zip(&field_attrs)
-                    .filter(|(_, attrs)| !attrs.json_flatten)
-                    .map(|(f, attrs)| crate::attrs::SerializedMember {
-                        name: &f.name,
-                        name_span: f.name_span,
-                        alias: attrs.json_rename.as_deref(),
-                        skip: false,
-                    }),
-                SerializedKeyContainer::Class,
-                &mut self.diagnostics,
-            );
+            for aliased in [false, true] {
+                crate::attrs::check_serialized_keys(
+                    c.fields
+                        .iter()
+                        .zip(&field_attrs)
+                        .filter(|(_, attrs)| !attrs.json_flatten && !attrs.json_fallback)
+                        .map(|(f, attrs)| crate::attrs::SerializedMember {
+                            name: &f.name,
+                            name_span: f.name_span,
+                            alias: crate::attrs::json_key(
+                                attrs.json_rename.as_deref(),
+                                attrs.schema.alias.as_deref(),
+                                aliased,
+                            ),
+                            skip: aliased && attrs.skip,
+                        }),
+                    SerializedKeyContainer::Class,
+                    &mut self.diagnostics,
+                );
+            }
         }
         let local_id = self.item_tree.alloc_class(c, attrs, field_attrs);
         let loc = ClassLoc::new(self.db, self.file, local_id);
@@ -1705,18 +1713,24 @@ impl<'db> SemanticIndexBuilder<'db> {
             .iter()
             .any(|attrs| attrs.json_rename.is_some())
         {
-            crate::attrs::check_serialized_keys(
-                e.variants.iter().zip(&variant_attrs).map(|(v, attrs)| {
-                    crate::attrs::SerializedMember {
-                        name: &v.name,
-                        name_span: v.name_span,
-                        alias: attrs.json_rename.as_deref(),
-                        skip: false,
-                    }
-                }),
-                SerializedKeyContainer::Enum,
-                &mut self.diagnostics,
-            );
+            for aliased in [false, true] {
+                crate::attrs::check_serialized_keys(
+                    e.variants.iter().zip(&variant_attrs).map(|(v, attrs)| {
+                        crate::attrs::SerializedMember {
+                            name: &v.name,
+                            name_span: v.name_span,
+                            alias: crate::attrs::json_key(
+                                attrs.json_rename.as_deref(),
+                                attrs.schema.alias.as_deref(),
+                                aliased,
+                            ),
+                            skip: aliased && attrs.skip,
+                        }
+                    }),
+                    SerializedKeyContainer::Enum,
+                    &mut self.diagnostics,
+                );
+            }
         }
         let local_id = self.item_tree.alloc_enum(e, attrs, variant_attrs);
         let loc = EnumLoc::new(self.db, self.file, local_id);

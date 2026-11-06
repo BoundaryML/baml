@@ -94,7 +94,8 @@ pub struct Class {
     /// reference (a capability) or carried as its own wire value (media, a
     /// prompt), and never built by a host.
     pub crossing: baml_type::ClassCrossing,
-    /// `@@json.omit_nulls`: fields holding `null` are not written.
+    /// `@@json.omit_nulls`: optional fields holding `null` are not written. A
+    /// `json` field keeps its `null`.
     pub json_omit_nulls: bool,
     /// Static methods on this class. Source-declaration order is
     /// preserved by the pool builder; the emitter sorts at fan-out

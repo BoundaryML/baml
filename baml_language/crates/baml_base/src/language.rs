@@ -164,7 +164,8 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         repeatable: false,
         positions: &[AttributePosition::ClassField],
     },
-    // The class's fields holding `null` are left out when it is written.
+    // The class's optional fields holding `null` are left out when it is
+    // written. A `json` field keeps its `null`, which is a value there.
     SchemaAttributeSpec {
         name: "json.omit_nulls",
         arguments: SchemaAttributeArguments::None,

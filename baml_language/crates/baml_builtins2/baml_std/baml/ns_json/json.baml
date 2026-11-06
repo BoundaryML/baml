@@ -7,6 +7,9 @@
 /// outside the `int` range instead.
 ///
 /// Reach an arm with `match`, or hand the value to `to<T>`.
+///
+/// A class's own JSON shape is set with the `@json` attributes: `@json.rename`,
+/// `@json.flatten`, `@json.fallback` and `@@json.omit_nulls`.
 type json = null | bool | int | bigint | float | string | json[] | map<string, json>;
 
 /// Which names a class's fields and an enum's variants go by in JSON.

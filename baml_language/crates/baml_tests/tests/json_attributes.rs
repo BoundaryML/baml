@@ -84,6 +84,20 @@ fn a_map_beside_a_fallback_is_an_error() {
 }
 
 #[test]
+fn unknown_beside_a_fallback_is_an_error() {
+    let source = format!("{TAGGED}class Holder {{ value: Known | unknown | Other }}");
+    assert_error(&source, "`unknown` has no literal field to match on");
+}
+
+#[test]
+fn a_flatten_alias_cycle_is_an_error_not_a_hang() {
+    assert_error(
+        "type A = B\ntype B = A\nclass C { x: A @json.flatten }",
+        "`@json.flatten` needs a `map<string, json>` field",
+    );
+}
+
+#[test]
 fn a_second_fallback_member_is_an_error() {
     let source = format!(
         "{TAGGED}class Another {{ kind: \"x\", raw: map<string, json> @json.fallback }}\ntype Thing = Other | Another"
@@ -179,6 +193,34 @@ fn two_fields_cannot_share_a_json_key() {
     assert_error(
         r#"enum E { A @json.rename("k") B @json.rename("k") }"#,
         "duplicate serialized key `k`",
+    );
+    // Under aliased names `a` and `b` go by one key.
+    assert_error(
+        r#"class A { a: string @alias("x"), b: string @json.rename("x") }"#,
+        "duplicate serialized key `x`",
+    );
+    assert_error(
+        r#"enum E { A @alias("x") B @json.rename("x") }"#,
+        "duplicate serialized key `x`",
+    );
+}
+
+#[test]
+fn a_field_holding_the_objects_keys_shares_no_key() {
+    assert_eq!(
+        errors(
+            r#"
+class A {
+    raw: map<string, json> @json.fallback,
+    other: "x" @json.rename("raw"),
+}
+class B {
+    extra: map<string, json> @json.flatten,
+    id: string @json.rename("extra"),
+}
+"#
+        ),
+        Vec::<String>::new()
     );
 }
 

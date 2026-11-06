@@ -58,7 +58,8 @@ pub struct ClassAttrs {
     /// `@@stream.done`: while streaming, an instance is never surfaced until
     /// the whole object is complete.
     pub stream_done: bool,
-    /// `@@json.omit_nulls`: the class's fields holding `null` are not written.
+    /// `@@json.omit_nulls`: the class's optional fields holding `null` are not
+    /// written. A `json` field keeps its `null`.
     pub json_omit_nulls: bool,
 }
 

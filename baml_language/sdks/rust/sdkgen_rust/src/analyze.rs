@@ -92,9 +92,20 @@ impl Analysis {
         self.serde.contains(name)
     }
 
-    /// What the class `name`'s literal fields say about a JSON object.
-    pub(crate) fn json_tag(&self, name: &Name) -> Option<&JsonTag> {
-        self.json_tags.get(name)
+    /// What the class `ty` names, through any chain of aliases, says about a
+    /// JSON object by its literal fields.
+    pub(crate) fn json_tag(&self, ty: &Ty) -> Option<&JsonTag> {
+        let mut seen = HashSet::new();
+        let mut current = ty;
+        loop {
+            match current {
+                Ty::Class(name, _) => return self.json_tags.get(name),
+                Ty::TypeAlias(alias) if seen.insert(alias) => {
+                    current = self.alias_body(alias)?;
+                }
+                _ => return None,
+            }
+        }
     }
 
     /// Whether the Rust type for `ty` implements serde's traits under the

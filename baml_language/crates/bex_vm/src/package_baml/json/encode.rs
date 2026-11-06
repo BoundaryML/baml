@@ -882,14 +882,16 @@ impl Walker<'_, '_> {
                                 .to_owned()
                         })
                         .collect();
+                    // A `@json.flatten` field has no key of its own.
+                    let keyed = |field: &bex_vm_types::ClassField| {
+                        self.options.naming.shows(field.skip) && !field.json_flatten
+                    };
                     let shared_keys = declaration.fields.iter().enumerate().any(|(i, field)| {
-                        self.options.naming.shows(field.skip)
+                        keyed(field)
                             && declaration.fields[..i]
                                 .iter()
                                 .enumerate()
-                                .any(|(j, other)| {
-                                    self.options.naming.shows(other.skip) && keys[i] == keys[j]
-                                })
+                                .any(|(j, other)| keyed(other) && keys[i] == keys[j])
                     });
                     WritePlan { keys, shared_keys }
                 }),
@@ -935,7 +937,10 @@ impl Walker<'_, '_> {
                     unreachable!("instance children are fields")
                 };
                 let seen = unique.iter_mut().find(|(seen, _)| {
-                    matches!(seen, Some(Slot::Field(_, i)) if plan.keys[*i] == plan.keys[index])
+                    matches!(seen, Some(Slot::Field(_, i))
+                        if plan.keys[*i] == plan.keys[index]
+                            && !declaration.fields[*i].json_flatten
+                            && !declaration.fields[index].json_flatten)
                 });
                 match seen {
                     Some(entry) => entry.1 = value,

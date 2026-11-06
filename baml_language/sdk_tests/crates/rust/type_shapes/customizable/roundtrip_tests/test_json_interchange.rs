@@ -12,8 +12,8 @@ use baml_bridge::{
     serde_json::{self, json},
 };
 use baml_sdk::json_interchange::{
-    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, WireConfig, WireDefault,
-    WireSettings, from_json_sync, to_json_sync,
+    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, WireAliased, WireConfig,
+    WireDefault, WireSettings, from_json_sync, to_json_sync,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -343,6 +343,13 @@ fn test_json_interchange_flattened_keys_are_kept_and_a_declared_field_wins() {
         serde_json::from_str::<serde_json::Value>(&written_by_baml).unwrap(),
         expected
     );
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_a_member_behind_an_alias_keeps_its_tag() {
+    assert_reads_and_writes_agree::<WireAliased>(r#"{"network":{"type":"use-default"}}"#);
+    assert_reads_and_writes_agree::<WireAliased>(r#"{"network":{"type":"future"}}"#);
 }
 
 // SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
