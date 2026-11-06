@@ -51,6 +51,7 @@ pub mod pattern_overlap;
 mod primitive;
 mod realized_ty;
 mod runtime_ty;
+pub mod sequence;
 pub mod simplify_sap;
 mod structural_interface;
 pub mod template;

@@ -24,6 +24,7 @@ fn no(what: impl std::fmt::Display) -> String {
 enum Repr {
     Int,
     Bool,
+    Str,
     Ptr(usize),
     ListInt,
     ListPtr(usize),
@@ -47,7 +48,10 @@ impl Repr {
         }
     }
     fn pointer(self) -> bool {
-        matches!(self, Self::Ptr(_) | Self::ListInt | Self::ListPtr(_))
+        matches!(
+            self,
+            Self::Str | Self::Ptr(_) | Self::ListInt | Self::ListPtr(_)
+        )
     }
 }
 struct Layout {
@@ -58,6 +62,7 @@ struct Layout {
     tagged: usize,
 }
 struct Plan<'a> {
+    lang: baml_base::LangRoots,
     index: ProgramIndex<'a>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
@@ -155,10 +160,73 @@ impl Plan<'_> {
         Ok(())
     }
 
+    // MIR may reuse a method-valued temporary for its extracted receiver.
+    // Infer only copy-assigned storage, and require every definition to agree.
+    // Actual function values, cycles, parameters and call results stay rejected.
+    fn local_repr(&self, body: &MirFunctionBody<'_>, i: usize, depth: usize) -> Gen<Repr> {
+        if !matches!(body.locals[i].ty, RuntimeTy::Function { .. }) {
+            return self.repr(&body.locals[i].ty);
+        }
+        if depth >= body.locals.len() || i == 0 || body.locals[i].name.is_some() {
+            return Err(no("function-valued local"));
+        }
+        let mut inferred = None;
+        for block in &body.blocks {
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    destination: Place::Local(dst),
+                    value,
+                } = &statement.kind
+                    && dst.0 == i
+                {
+                    let Rvalue::Use(Operand::Copy(place) | Operand::Move(place)) = value else {
+                        return Err(no("function-valued local definition"));
+                    };
+                    let repr = self.storage_repr(body, place, depth + 1)?;
+                    if inferred.is_some_and(|previous| previous != repr) {
+                        return Err(no("inconsistent receiver storage"));
+                    }
+                    inferred = Some(repr);
+                }
+            }
+            if matches!(&block.terminator,
+                Some(Terminator::Call { destination: Place::Local(dst), .. }
+                    | Terminator::VirtualCall { destination: Place::Local(dst), .. }) if dst.0 == i)
+            {
+                return Err(no("function-valued call result"));
+            }
+        }
+        inferred.ok_or_else(|| no("unresolved function-valued storage"))
+    }
+    fn storage_repr(&self, body: &MirFunctionBody<'_>, place: &Place, depth: usize) -> Gen<Repr> {
+        match place {
+            Place::Local(local) => self.local_repr(body, local.0, depth),
+            Place::Field { base, field } => {
+                let Repr::Ptr(class) = self.storage_repr(body, base, depth)? else {
+                    return Err(no("receiver field on non-class"));
+                };
+                let Object::Class(class) =
+                    &self.program.objects[bex_vm_types::ObjectIndex::from_raw(class)]
+                else {
+                    return Err(no("receiver class"));
+                };
+                self.field_repr(
+                    &class
+                        .fields
+                        .get(*field)
+                        .ok_or_else(|| no("receiver field"))?
+                        .field_type,
+                )
+            }
+            _ => Err(no("receiver storage place")),
+        }
+    }
+
     fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
+            RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Null => Repr::Null,
             RuntimeTy::List(element) => match element.as_ref() {
                 RuntimeTy::Int => Repr::ListInt,
@@ -174,6 +242,13 @@ impl Plan<'_> {
                         .interface_at(head)
                         .ok_or_else(|| no("interface"))?,
                 )
+            }
+            RuntimeTy::Class(head, args)
+                if args.is_empty()
+                    && head.builtin_primitive(self.lang)
+                        == Some(baml_type::PrimitiveType::String) =>
+            {
+                Repr::Str
             }
             RuntimeTy::Class(head, args) if args.is_empty() => Repr::Ptr(
                 self.index
@@ -202,6 +277,7 @@ impl Plan<'_> {
         Ok(match ty {
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
+            T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             T::List(element) => match element.as_ref() {
                 T::Int => Repr::ListInt,
                 T::Union(_) => match self.field_repr(element)? {
@@ -306,6 +382,7 @@ pub fn compile_v2(
     entry: usize,
 ) -> Gen<String> {
     let mut plan = Plan {
+        lang: baml_compiler2_hir::package::lang_roots(db),
         index: ProgramIndex::new(db, root, program),
         program,
         layouts: BTreeMap::new(),
@@ -333,6 +410,7 @@ pub fn compile_v2(
     let mut queue = VecDeque::from([entry]);
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
+    let mut builtins = BTreeSet::new();
     while let Some(object) = queue.pop_front() {
         if !reached.insert(object) {
             continue;
@@ -349,11 +427,11 @@ pub fn compile_v2(
         if body.locals.len() > 1024 {
             return Err(no("more than 1024 locals in one body"));
         }
-        for local in &body.locals {
+        for (i, local) in body.locals.iter().enumerate() {
             if local.is_captured {
                 return Err(no("captured local"));
             }
-            plan.record(plan.repr(&local.ty)?)?;
+            plan.record(plan.local_repr(body, i, 0)?)?;
         }
         for block in &body.blocks {
             if block.unwind.is_some() || block.landing.is_some() || block.shielded {
@@ -370,7 +448,10 @@ pub fn compile_v2(
                         .index
                         .function(db, *f)
                         .ok_or_else(|| no("unlinked call"))?;
-                    if plan.index.display(callee) != "baml.ops.equals_equals" {
+                    let name = plan.index.display(callee);
+                    if baml_builtins2_codegen::supports_v2(name) {
+                        builtins.insert(name.to_owned());
+                    } else if name != "baml.ops.equals_equals" {
                         calls.entry(object).or_default().insert(callee);
                         queue.push_back(callee);
                     }
@@ -412,6 +493,13 @@ pub fn compile_v2(
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse bex_v2_runtime::{self as rt, R};\nuse bex_v2_heap::{Descriptor,Kind,Field,SlotKind};\n",
     );
+    if !builtins.is_empty() {
+        let (declarations, _, _) = baml_builtins2_codegen::extract_native_builtins().map_err(no)?;
+        out.push_str(&baml_builtins2_codegen::generate_v2(
+            &declarations,
+            &builtins,
+        )?);
+    }
     let descriptors: BTreeMap<_, _> = plan
         .layouts
         .keys()
@@ -450,6 +538,7 @@ pub fn compile_v2(
                         Repr::Ptr(c) => descriptors[&c] + 3,
                         r @ (Repr::ListInt | Repr::ListPtr(_)) => lists[&r] + 3,
                         Repr::Dyn(i) => rt_descriptors() + descriptors.len() + lists.len() + i + 3,
+                        Repr::Str => 3,
                         Repr::Int => 0,
                         Repr::Bool => 1,
                         Repr::Null => unreachable!("null fields are rejected"),
@@ -548,7 +637,7 @@ struct Emitter<'a, 'db> {
 }
 impl Emitter<'_, '_> {
     fn local(&self, i: usize) -> Gen<Repr> {
-        self.plan.repr(&self.body.locals[i].ty)
+        self.plan.local_repr(self.body, i, 0)
     }
     fn mark(&mut self, pc: Option<usize>) {
         if let Some(pc) = pc {
@@ -636,6 +725,13 @@ impl Emitter<'_, '_> {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
+            Operand::Constant(Constant::String(text)) => Ok((
+                self.fallible(&format!(
+                    "rt::strings::Cx::current().string({:?}).map(|s|s.as_raw())",
+                    text.as_str()
+                )),
+                Repr::Str,
+            )),
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),
             Operand::Constant(_) => Err(no(format!("operand {o:?}"))),
         }
@@ -725,9 +821,23 @@ impl Emitter<'_, '_> {
                 code.push_str("p as usize}");
                 Ok((code, expected))
             }
+            Rvalue::ConcatStrings(parts) => {
+                let values = parts
+                    .iter()
+                    .map(|part| {
+                        let value = self.coerce(self.operand(part)?, Repr::Str)?;
+                        Ok(format!("rt::strings::Str::from_raw({value})"))
+                    })
+                    .collect::<Gen<Vec<_>>>()?
+                    .join(",");
+                Ok((self.fallible(&format!("rt::strings::concat(&mut rt::strings::Cx::current(),&[{values}]).map(|s|s.as_raw())")), Repr::Str))
+            }
             Rvalue::BinaryOp { op, left, right } => {
                 let (l, lt) = self.operand(left)?;
                 let (r, rt) = self.operand(right)?;
+                if *op == BinOp::Add && lt == Repr::Str && rt == Repr::Str {
+                    return Ok((self.fallible(&format!("rt::strings::concat(&mut rt::strings::Cx::current(),&[rt::strings::Str::from_raw({l}),rt::strings::Str::from_raw({r})]).map(|s|s.as_raw())")), Repr::Str));
+                }
                 if lt != Repr::Int || rt != Repr::Int {
                     return Err(no("non-integer binary operation"));
                 }
@@ -952,6 +1062,13 @@ impl Emitter<'_, '_> {
                             .assign(destination, self.value(value, self.place(destination)?.1)?)?,
                     );
                 }
+                StatementKind::Intrinsic {
+                    op:
+                        baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(
+                            baml_compiler2_mir::BuiltinTraceHook::Hidden,
+                        ),
+                    args,
+                } if args.is_empty() => {} // Hidden observation branch is in the prologue.
                 StatementKind::Nop => {}
                 _ => return Err(no(format!("statement {:?}", s.kind))),
             }
@@ -998,7 +1115,38 @@ impl Emitter<'_, '_> {
                     .iter()
                     .map(|a| self.operand(a))
                     .collect::<Gen<Vec<_>>>()?;
-                let expression = if self.plan.index.display(c) == "baml.ops.equals_equals" {
+                if let Some(layout) = argument_layout {
+                    let mapping = layout.map_to(&info.argument_layout()).map_err(no)?;
+                    values = mapping
+                        .into_iter()
+                        .map(|i| {
+                            i.map(|i| values[i].clone())
+                                .ok_or_else(|| no("omitted argument"))
+                        })
+                        .collect::<Gen<_>>()?;
+                }
+                let name = self.plan.index.display(c);
+                let expression = if name == "baml.String.char_count" {
+                    if values.len() != 1 || values[0].1 != Repr::Str {
+                        return Err(no("String.char_count arguments"));
+                    }
+                    (
+                        format!(
+                            "v2_string_char_count(&rt::strings::Cx::current(),rt::strings::Str::from_raw({}))",
+                            values[0].0
+                        ),
+                        Repr::Int,
+                    )
+                } else if name == "baml.String.slice" {
+                    if values.len() != 3
+                        || values[0].1 != Repr::Str
+                        || values[1].1 != Repr::Int
+                        || values[2].1 != Repr::Int
+                    {
+                        return Err(no("String.slice arguments"));
+                    }
+                    (self.fallible(&format!("v2_string_slice(&mut rt::strings::Cx::current(),rt::strings::Str::from_raw({}),{},{}).map(|s|s.as_raw())", values[0].0,values[1].0,values[2].0)),Repr::Str)
+                } else if name == "baml.ops.equals_equals" {
                     if values.len() != 2 || !values.iter().any(|(_, r)| *r == Repr::Null) {
                         return Err(no("equality other than null test"));
                     }
@@ -1007,16 +1155,6 @@ impl Emitter<'_, '_> {
                     }
                     (format!("({}=={})", values[0].0, values[1].0), Repr::Bool)
                 } else {
-                    if let Some(layout) = argument_layout {
-                        let mapping = layout.map_to(&info.argument_layout()).map_err(no)?;
-                        values = mapping
-                            .into_iter()
-                            .map(|i| {
-                                i.map(|i| values[i].clone())
-                                    .ok_or_else(|| no("omitted argument"))
-                            })
-                            .collect::<Gen<_>>()?;
-                    }
                     let mir = self.all[&c];
                     let MirFunctionKind::Bytecode(body) = &mir.kind else {
                         return Err(no("builtin"));

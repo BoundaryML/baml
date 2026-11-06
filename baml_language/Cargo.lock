@@ -1411,6 +1411,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_env",
  "baml_type",
+ "bex_str",
  "bex_v2_heap",
  "bex_v2_loop",
  "bex_vm_types",

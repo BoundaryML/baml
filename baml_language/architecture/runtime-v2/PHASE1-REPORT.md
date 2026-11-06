@@ -639,3 +639,65 @@ exit status in both modes, demonstrating retention of the caller/callee source
 frames. Evidence: `phase1/checkpoint-trees-correctness.json` and the refreshed
 `phase1/richards-correctness.json`. The final guard-specific release tests and
 clippy also passed.
+
+## M3 checkpoint: flat strings and typed builtin glue
+
+M3 is **not complete**. This checkpoint adds managed flat strings, class string
+fields, concatenation, and `String.length`/`char_count`/`slice` emission. The
+stdlib's BAML `length` body is compiled, including its Hidden observation branch.
+`baml_builtins2_codegen::generate_v2` now emits the implemented typed adapters,
+validates their extracted stdlib signatures, and rejects unsupported requests.
+Interpreter glue is unchanged. The current adapter set is deliberately limited
+to `char_count` and `slice`; this is not a claim that all of §3 is finished.
+
+Slicing reuses `BexStr::char_slice` and the exact signed/clamped slice-bound
+helper, moved unchanged from `bex_vm` into `baml_type::sequence`. Runtime tests
+cover Unicode scalars, extreme positive/negative bounds, concatenation and
+integer formatting across 81 stressed collections. Generated calls use the
+existing argument-layout mapping, including reordered named arguments.
+
+MIR's extracted builtin receivers can occupy function-typed temporaries. V2
+now infers only unnamed, copy-assigned receiver storage whose definitions all
+agree; actual function values, call-produced function values, and ambiguous or
+cyclic storage remain unsupported. Builtin companion `baml.String` is resolved
+by its language-root identity to the primitive representation, not by a
+user-spoofable short name.
+
+`phase1/strings.baml` packs to a standalone v2 executable and returns **340**,
+matching bytecode stdout, stderr and exit status normally and with v2 GC stress.
+Only the CLI formatting warning is normalized. Evidence and reproduction:
+`phase1/strings-correctness.json` and `phase1/check_strings.py`. The bytecode
+stress environment does not imply every-allocation interpreter collection.
+
+Validation: codegen 37, compiler 10, baml_type 253 unit + 2 integration,
+runtime 8, and VM 179 unit tests pass. Native backend regression target:
+12 passed, one existing ignored test. This includes new fail-closed tests for
+function values and an unsupported string builtin, and unchanged bytecode
+fingerprints. Strict all-target clippy passes for codegen, compiler, runtime,
+baml_type and VM.
+
+```sh
+export CARGO_TARGET_DIR="$PWD/target" BAML_CLI_ALLOW_DIRECT=1
+cargo build --manifest-path baml_language/Cargo.toml -p baml_cli
+target/debug/baml-cli --agent-skill-check off --no-progress --color never \
+  pack --rust --runtime v2 --rust-workspace "$PWD/baml_language" \
+  --rust-build-dir "$PWD/target/phase1/strings-v2-build" \
+  --file baml_language/architecture/runtime-v2/phase1/strings.baml main \
+  -o target/phase1/strings-v2
+uv run --no-project python baml_language/architecture/runtime-v2/phase1/check_strings.py
+cargo test --manifest-path baml_language/Cargo.toml \
+  -p baml_builtins2_codegen -p baml_compiler2_rust -p baml_type -p bex_v2_runtime
+cargo test --manifest-path baml_language/Cargo.toml -p bex_vm --lib
+cargo test --manifest-path baml_language/Cargo.toml -p baml_tests --test rust_backend
+cargo clippy --manifest-path baml_language/Cargo.toml \
+  -p baml_builtins2_codegen -p baml_compiler2_rust -p baml_type \
+  -p bex_v2_runtime -p bex_vm --all-targets --no-deps -- -D warnings
+```
+
+No new gate timing is claimed for this component fixture. The Richards/trees
+gate and before/after profile above remain the latest complete measurements.
+Still required for agent-loop: growing typed lists, ordered string/int maps,
+tagged unions and optional scalars, proven index-walk iteration, remaining
+builtin specializations, exact typed JSON decoding, typed catch/rethrow emission,
+and the complete normal/stress differential and interleaved benchmark row.
+No new INTERFACES decision is requested at this checkpoint.

@@ -870,3 +870,40 @@ fn allocation_failure_constructor_matches_interpreter_exception() {
     assert_eq!(format!("baml.{}", class.path), "baml.panics.AllocFailure");
     assert_eq!(message.as_str(), "Allocation of 16 bytes failed");
 }
+
+#[test]
+fn v2_string_receiver_storage_and_function_value_rejection() {
+    for (source, accepted) in [
+        (
+            include_str!("../../../architecture/runtime-v2/phase1/strings.baml"),
+            true,
+        ),
+        (
+            "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
+            false,
+        ),
+        ("function main() -> int { \"x\".trim().length() }", false),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let before = fingerprint(&program);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, function)| function.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if accepted {
+            let source = result.unwrap();
+            assert!(source.contains("fn v2_string_slice("));
+            assert!(source.contains("fn v2_string_char_count("));
+        } else {
+            assert!(result.unwrap_err().contains("unsupported in runtime v2"));
+        }
+        assert_eq!(before, fingerprint(&program));
+    }
+}
