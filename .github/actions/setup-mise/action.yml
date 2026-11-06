@@ -49,6 +49,19 @@ inputs:
       under 1 s.
     required: false
     default: "true"
+  mise_dir:
+    description: |
+      A mise data directory that already holds mise (`bin/mise`) and the tools.
+      When set, it becomes MISE_DATA_DIR for this step and every later step of
+      the job, so mise-action finds the mise binary there instead of
+      downloading it, and `mise install` finds the tools already installed.
+      Empty (the default) keeps mise's own default directory.
+
+      Pair it with `cache: "false"`: with the cache on, a different directory
+      gives a different cache version, so the restore misses and canary saves
+      the whole directory.
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -67,6 +80,16 @@ runs:
     - name: Install cargo-binstall
       if: ${{ inputs.install_args == '' || contains(inputs.install_args, 'cargo:') }}
       uses: cargo-bins/cargo-binstall@main
+
+    # Written to $GITHUB_ENV, not to this step's env alone: later steps also
+    # run `mise` (`mise which`, `mise exec`), and they must see the same
+    # directory as mise-action.
+    - name: Use the pre-installed mise data directory
+      if: ${{ inputs.mise_dir != '' }}
+      shell: bash
+      env:
+        MISE_DIR: ${{ inputs.mise_dir }}
+      run: echo "MISE_DATA_DIR=${MISE_DIR}" >> "$GITHUB_ENV"
 
     - name: Install mise
       uses: jdx/mise-action@v4.2.4
