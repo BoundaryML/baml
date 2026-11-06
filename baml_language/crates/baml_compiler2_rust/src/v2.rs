@@ -32,6 +32,9 @@ enum Repr {
     Type(u8),
     ListPtr(usize),
     Dyn(usize),
+    Tagged,
+    MapStrInt,
+    Iter,
     Null,
 }
 impl Repr {
@@ -39,14 +42,14 @@ impl Repr {
         match self {
             Self::Int => "i64",
             Self::Bool => "bool",
-            Self::Dyn(_) => "rt::Dyn",
+            Self::Dyn(_) | Self::Tagged => "rt::Dyn",
             _ => "usize",
         }
     }
     fn zero(self) -> &'static str {
         match self {
             Self::Bool => "false",
-            Self::Dyn(_) => "rt::Dyn{tag:2,payload:0}",
+            Self::Dyn(_) | Self::Tagged => "rt::Dyn{tag:2,payload:0}",
             _ => "0",
         }
     }
@@ -69,6 +72,7 @@ impl Repr {
                 | Self::ListPtr(_)
                 | Self::ListStr
                 | Self::ListListStr
+                | Self::MapStrInt
         )
     }
 }
@@ -85,6 +89,7 @@ struct Plan<'a> {
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
+    json_classes: Vec<usize>,
 }
 impl Plan<'_> {
     fn class_tag(&self, tag: baml_type::typetag::TypeTag) -> Gen<usize> {
@@ -157,12 +162,36 @@ impl Plan<'_> {
             })
             .collect()
     }
+    fn record_ty(&mut self, ty: &RuntimeTy) -> Gen<()> {
+        if let RuntimeTy::Union(members) = ty {
+            for member in members {
+                self.record_ty(member)?;
+            }
+        } else if !matches!(ty, RuntimeTy::Function { .. }) {
+            self.record(self.repr(ty)?)?;
+        }
+        Ok(())
+    }
+    fn record_field_ty(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
+        if let bex_vm_types::RuntimeTy::Union(members) = ty {
+            for member in members {
+                self.record_field_ty(member)?;
+            }
+        } else {
+            self.record(self.field_repr(ty)?)?;
+        }
+        Ok(())
+    }
     fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
             Repr::Ptr(c) => self.add(c)?,
             Repr::ListPtr(c) => {
                 self.lists.insert(repr);
                 self.add(c)?;
+            }
+            Repr::MapStrInt => {
+                self.lists.insert(repr);
+                self.record(Repr::ListInt)?;
             }
             Repr::ListInt | Repr::ListStr => {
                 self.lists.insert(repr);
@@ -191,6 +220,13 @@ impl Plan<'_> {
             T::Int => Ok(0),
             T::String => Ok(1),
             T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),
+            T::Union(members)
+                if members
+                    .iter()
+                    .all(|m| matches!(m,T::Class(_,args) if args.is_empty())) =>
+            {
+                Ok(3)
+            }
             _ => Err(no(format!("type argument {ty:?}"))),
         }
     }
@@ -296,6 +332,13 @@ impl Plan<'_> {
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
+            RuntimeTy::Unknown => Repr::Tagged,
+            RuntimeTy::Map { key, value }
+                if matches!(key.as_ref(), RuntimeTy::String)
+                    && matches!(value.as_ref(), RuntimeTy::Int) =>
+            {
+                Repr::MapStrInt
+            }
             RuntimeTy::Null => Repr::Null,
             RuntimeTy::List(element) => match element.as_ref() {
                 RuntimeTy::Int => Repr::ListInt,
@@ -335,10 +378,13 @@ impl Plan<'_> {
                     .find(|m| !matches!(m, RuntimeTy::Null))
                     .unwrap();
                 let repr = self.repr(member)?;
-                if !repr.pointer() {
-                    return Err(no("optional scalar"));
+                if repr.pointer() { repr } else { Repr::Tagged }
+            }
+            RuntimeTy::Union(members) => {
+                for member in members {
+                    self.repr(member)?;
                 }
-                repr
+                Repr::Tagged
             }
             _ => return Err(no(format!("type {ty:?}"))),
         })
@@ -346,9 +392,15 @@ impl Plan<'_> {
     fn field_repr(&self, ty: &bex_vm_types::RuntimeTy) -> Gen<Repr> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
+            T::Null => Repr::Null,
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
+            T::Map { key, value }
+                if matches!(key.as_ref(), T::String) && matches!(value.as_ref(), T::Int) =>
+            {
+                Repr::MapStrInt
+            }
             T::List(element) => match element.as_ref() {
                 T::Int => Repr::ListInt,
                 T::String => Repr::ListStr,
@@ -385,10 +437,13 @@ impl Plan<'_> {
             }
             T::Union(m) if m.len() == 2 && m.iter().any(|t| matches!(t, T::Null)) => {
                 let repr = self.field_repr(m.iter().find(|t| !matches!(t, T::Null)).unwrap())?;
-                if !repr.pointer() {
-                    return Err(no("optional scalar field"));
+                if repr.pointer() { repr } else { Repr::Tagged }
+            }
+            T::Union(members) => {
+                for member in members {
+                    self.field_repr(member)?;
                 }
-                repr
+                Repr::Tagged
             }
             _ => return Err(no(format!("field type {ty:?}"))),
         })
@@ -410,13 +465,16 @@ impl Plan<'_> {
             .iter()
             .map(|f| self.field_repr(&f.field_type))
             .collect::<Gen<Vec<_>>>()?;
+        if fields.contains(&Repr::Null) {
+            return Err(no("null-only field"));
+        }
         let mut offsets = vec![0; fields.len()];
         let mut offset = 8;
         for group in 0..3 {
             for (i, repr) in fields.iter().enumerate() {
                 let g = if repr.pointer() {
                     0
-                } else if matches!(repr, Repr::Dyn(_)) {
+                } else if matches!(repr, Repr::Dyn(_) | Repr::Tagged) {
                     1
                 } else {
                     2
@@ -428,16 +486,23 @@ impl Plan<'_> {
             }
         }
         let children = fields.clone();
+        let field_types: Vec<_> = class.fields.iter().map(|f| f.field_type.clone()).collect();
         self.layouts.insert(
             object,
             Layout {
                 pointers: fields.iter().filter(|r| r.pointer()).count(),
-                tagged: fields.iter().filter(|r| matches!(r, Repr::Dyn(_))).count(),
+                tagged: fields
+                    .iter()
+                    .filter(|r| matches!(r, Repr::Dyn(_) | Repr::Tagged))
+                    .count(),
                 fields,
                 offsets,
                 bytes: offset,
             },
         );
+        for ty in &field_types {
+            self.record_field_ty(ty)?;
+        }
         for child in children {
             self.record(child)?;
         }
@@ -460,6 +525,7 @@ pub fn compile_v2(
         program,
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
+        json_classes: Vec::new(),
     };
     let mut all = BTreeMap::new();
     for &file in world_files(db, root) {
@@ -484,6 +550,7 @@ pub fn compile_v2(
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
+    let mut json_decode = None;
     while let Some(object) = queue.pop_front() {
         if !reached.insert(object) {
             continue;
@@ -500,15 +567,56 @@ pub fn compile_v2(
         if body.locals.len() > 1024 {
             return Err(no("more than 1024 locals in one body"));
         }
+        for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+            if let StatementKind::Assign {
+                value: Rvalue::LoadType(baml_compiler2_mir::TyTemplate::Union(members)),
+                ..
+            } = &statement.kind
+            {
+                let classes = members
+                    .iter()
+                    .map(|m| match m {
+                        baml_compiler2_mir::TyTemplate::Class(head, args) if args.is_empty() => {
+                            plan.index
+                                .class_at(head)
+                                .map(|c| c.0)
+                                .ok_or_else(|| no("JSON class"))
+                        }
+                        _ => Err(no("JSON union member")),
+                    })
+                    .collect::<Gen<Vec<_>>>()?;
+                if !plan.json_classes.is_empty() && plan.json_classes != classes {
+                    return Err(no("multiple JSON schema specializations"));
+                }
+                for &c in &classes {
+                    plan.add(c)?;
+                }
+                plan.json_classes = classes;
+            }
+        }
+        let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
             if local.is_captured {
                 return Err(no("captured local"));
             }
-            plan.record(plan.local_repr(body, i, 0)?)?;
+            if iters.contains(&i) {
+                continue;
+            }
+            let repr = plan.local_repr(body, i, 0)?;
+            if !matches!(repr, Repr::Type(_)) {
+                plan.record_ty(&local.ty)?;
+            }
+            plan.record(repr)?;
         }
         for block in &body.blocks {
-            if block.unwind.is_some() || block.landing.is_some() || block.shielded {
-                return Err(no("catch/defer"));
+            if block.shielded {
+                return Err(no("defer/shielding"));
+            }
+            if let Some(term) = &block.terminator
+                && (crate::analysis::array_iter_walk(db, body, mir.arity, term, &iters).is_some()
+                    || crate::analysis::array_next_call(db, term, &iters).is_some())
+            {
+                continue;
             }
             match &block.terminator {
                 Some(Terminator::Call {
@@ -522,7 +630,9 @@ pub fn compile_v2(
                         .function(db, *f)
                         .ok_or_else(|| no("unlinked call"))?;
                     let name = plan.index.display(callee);
-                    if baml_builtins2_codegen::supports_v2(name) {
+                    if name == "baml.json.decode" {
+                        json_decode = Some(callee);
+                    } else if baml_builtins2_codegen::supports_v2(name) {
                         builtins.insert(name.to_owned());
                     } else if *ntypeargs != 0 {
                         return Err(no("generic user call"));
@@ -552,7 +662,9 @@ pub fn compile_v2(
                     Terminator::Goto { .. }
                     | Terminator::Branch { .. }
                     | Terminator::ShortCircuit { .. }
-                    | Terminator::Return,
+                    | Terminator::Return
+                    | Terminator::Throw { .. }
+                    | Terminator::Rethrow { .. },
                 ) => {}
                 other => return Err(no(format!("terminator {other:?}"))),
             }
@@ -586,16 +698,30 @@ pub fn compile_v2(
         .iter()
         .scan(descriptors.len() + rt_descriptors(), |next, r| {
             let id = *next;
-            *next += if r.growing() { 2 } else { 1 };
+            *next += if *r == Repr::MapStrInt {
+                3
+            } else if r.growing() {
+                2
+            } else {
+                1
+            };
             Some((*r, id))
         })
         .collect();
     let after_lists = lists
         .iter()
-        .map(|(repr, id)| id + if repr.growing() { 2 } else { 1 })
+        .map(|(repr, id)| {
+            id + if *repr == Repr::MapStrInt {
+                3
+            } else if repr.growing() {
+                2
+            } else {
+                1
+            }
+        })
         .max()
         .unwrap_or(rt_descriptors() + descriptors.len());
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,\n");
     for (&object, layout) in &plan.layouts {
         let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
         else {
@@ -612,7 +738,7 @@ pub fn compile_v2(
                     layout.offsets[i],
                     if layout.fields[i].pointer() {
                         "Pointer"
-                    } else if matches!(layout.fields[i], Repr::Dyn(_)) {
+                    } else if matches!(layout.fields[i], Repr::Dyn(_) | Repr::Tagged) {
                         "Tagged"
                     } else {
                         "Scalar"
@@ -622,12 +748,15 @@ pub fn compile_v2(
                         r @ (Repr::ListInt
                         | Repr::ListPtr(_)
                         | Repr::ListStr
-                        | Repr::ListListStr) => lists[&r] + 3,
-                        Repr::Dyn(i) => after_lists + i + 3,
+                        | Repr::ListListStr
+                        | Repr::MapStrInt) => lists[&r] + 3,
+                        Repr::Tagged => after_lists + 3,
+                        Repr::Dyn(i) => after_lists + i + 4,
                         Repr::Str => 3,
                         Repr::Int => 0,
                         Repr::Bool => 1,
-                        Repr::Null | Repr::Type(_) => unreachable!("null/type fields are rejected"),
+                        Repr::Iter | Repr::Null | Repr::Type(_) =>
+                            unreachable!("null/type fields are rejected"),
                     }
                 )
             })
@@ -636,6 +765,12 @@ pub fn compile_v2(
         writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
+        if *repr == Repr::MapStrInt {
+            for i in 0..3 {
+                writeln!(&mut out, "rt::maps::descriptors({desc})[{i}],").unwrap();
+            }
+            continue;
+        }
         if repr.growing() {
             let slot = Emitter::element(*repr)?.slot()?;
             writeln!(
@@ -677,6 +812,94 @@ pub fn compile_v2(
         }
         out.push_str("}\n");
     }
+    if let Some(callee) = json_decode {
+        if plan.json_classes.is_empty() {
+            return Err(no("missing JSON specialization"));
+        }
+        out.push_str("static JSON_SCHEMA:&[rt::json::Schema]=&[\n");
+        for c in &plan.json_classes {
+            let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(*c)]
+            else {
+                unreachable!()
+            };
+            for package in &program.packages {
+                for rules in package.impl_rules.values() {
+                    for rule in rules {
+                        if matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if head.tag()==class.type_tag)
+                        {
+                            return Err(no("JSON class with custom interface implementations"));
+                        }
+                    }
+                }
+            }
+            let name = class.path.to_string();
+            let layout = &plan.layouts[c];
+            write!(
+                &mut out,
+                "rt::json::Schema{{name:{name:?},desc:{},bytes:{},fields:&[",
+                descriptors[c], layout.bytes
+            )
+            .unwrap();
+            for (i, field) in class.fields.iter().enumerate() {
+                use bex_vm_types::RuntimeTy as T;
+                let ty = match &field.field_type {
+                    T::String => "rt::json::Ty::String".into(),
+                    T::Int => "rt::json::Ty::Int".into(),
+                    T::Literal(baml_type::Literal::String(value), _) => {
+                        format!("rt::json::Ty::Literal({:?})", value.as_str())
+                    }
+                    T::Union(m)
+                        if m.len() == 2
+                            && m.iter().any(|t| matches!(t, T::Null))
+                            && m.iter().any(|t| matches!(t, T::Int)) =>
+                    {
+                        "rt::json::Ty::OptionalInt".into()
+                    }
+                    T::Union(m) => {
+                        let members = m
+                            .iter()
+                            .map(|t| match t {
+                                T::Literal(baml_type::Literal::String(value), _) => {
+                                    Ok(format!("{:?}", value.as_str()))
+                                }
+                                _ => Err(no("JSON field union")),
+                            })
+                            .collect::<Gen<Vec<_>>>()?;
+                        format!("rt::json::Ty::Literals(&[{}])", members.join(","))
+                    }
+                    _ => return Err(no("JSON field type")),
+                };
+                write!(
+                    &mut out,
+                    "rt::json::SchemaField{{name:{:?},offset:{},ty:{ty}}},",
+                    field.name, layout.offsets[i]
+                )
+                .unwrap();
+            }
+            out.push_str("]},\n");
+        }
+        out.push_str("];\n");
+        let mir = all[&callee];
+        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+            return Err(no("JSON wrapper body"));
+        };
+        let mut line = None;
+        for block in &body.blocks {
+            if let Some(Terminator::Call {
+                callee: Operand::Constant(Constant::Function(f)),
+                ..
+            }) = &block.terminator
+                && let Some((target, _)) = plan.index.function(db, *f)
+                && plan.index.display(target) == "baml.json._decode"
+            {
+                line = plan.index.positions(callee).block_pcs[block.id.0]
+                    .terminator
+                    .map(|pc| plan.index.positions(callee).source_line_for_pc(pc));
+            }
+        }
+        let line = line.ok_or_else(|| no("JSON wrapper source line"))?;
+        writeln!(&mut out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}]}};unsafe fn f{callee}(s:usize)->R<rt::Dyn>{{unsafe{{rt::observe(&O{callee});rt::check_stack().map_err(|e|e.at(&S{callee},0))?;rt::json::decode(&mut rt::strings::Cx::current(),rt::strings::Str::from_raw(s),JSON_SCHEMA)}}}}",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
+    }
     // Bound forced inlining by the same total-local budget as a single body.
     // Recursive SCCs retain real frames and the normal per-entry stack guard.
     let small_program = reached
@@ -692,6 +915,16 @@ pub fn compile_v2(
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
             unreachable!()
         };
+        let iters = crate::analysis::array_iterators(db, body, mir.arity);
+        let iter_arrays = body
+            .blocks
+            .iter()
+            .filter_map(|b| {
+                b.terminator
+                    .as_ref()
+                    .and_then(|t| crate::analysis::array_iter_walk(db, body, mir.arity, t, &iters))
+            })
+            .collect();
         let mut emitter = Emitter {
             db,
             plan: &plan,
@@ -700,6 +933,11 @@ pub fn compile_v2(
             descriptors: &descriptors,
             lists: &lists,
             all: &all,
+            iters,
+            iter_arrays,
+            arity: mir.arity,
+            block: 0,
+            unwind_jumps: Vec::new(),
             sites: Vec::new(),
             site: 0,
         };
@@ -707,8 +945,12 @@ pub fn compile_v2(
     }
     // Resolve once at startup. Opaque initialization keeps the observation
     // load/branch real under LTO without imposing an opaque call on every entry.
-    let mut observation_init = String::new();
-    for id in &reached {
+    let mut observation_init = if builtins.is_empty() {
+        String::new()
+    } else {
+        "init_builtin_observation();".to_owned()
+    };
+    for id in reached.iter().chain(json_decode.as_ref()) {
         write!(
             &mut observation_init,
             "O{id}.store(std::hint::black_box(0),std::sync::atomic::Ordering::Relaxed);"
@@ -719,7 +961,7 @@ pub fn compile_v2(
     Ok(out)
 }
 fn rt_descriptors() -> usize {
-    7
+    10
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -729,11 +971,27 @@ struct Emitter<'a, 'db> {
     descriptors: &'a BTreeMap<usize, usize>,
     lists: &'a BTreeMap<Repr, usize>,
     all: &'a BTreeMap<usize, &'db MirFunction<'db>>,
+    iters: BTreeSet<usize>,
+    iter_arrays: BTreeMap<usize, usize>,
+    arity: usize,
+    block: usize,
+    unwind_jumps: Vec<String>,
     sites: Vec<usize>,
     site: usize,
 }
 impl Emitter<'_, '_> {
     fn local(&self, i: usize) -> Gen<Repr> {
+        if self
+            .body
+            .blocks
+            .iter()
+            .any(|b| b.landing.is_some_and(|l| l.error_local.0 == i))
+        {
+            return Ok(Repr::Tagged);
+        }
+        if self.iters.contains(&i) {
+            return Ok(Repr::Iter);
+        }
         self.plan.local_repr(self.body, i, 0)
     }
     fn mark(&mut self, pc: Option<usize>) {
@@ -747,16 +1005,74 @@ impl Emitter<'_, '_> {
             );
         }
     }
+    fn raise(&self, error: &str) -> String {
+        if let Some(handler) = self.body.blocks[self.block].unwind {
+            let landing = self.body.blocks[handler.0]
+                .landing
+                .expect("verified handler landing");
+            format!(
+                "{{let error={error};if error.value==0{{return Err(error);}}let rooted=rt::CaughtError::new(error);let p=rooted.value();l{}=rt::Dyn{{tag:(*(p as *const bex_v2_heap::Header)).desc as u64+3,payload:p as u64}};caught{}=Some(rooted);{}}}",
+                landing.error_local.0, handler.0, self.unwind_jumps[self.block]
+            )
+        } else {
+            format!("return Err({error});")
+        }
+    }
     fn fallible(&self, code: &str) -> String {
+        let error = format!("e.at(&S{},{})", self.object, self.site);
         format!(
-            "({code}).map_err(|e|e.at(&S{},{}))?",
-            self.object, self.site
+            "match ({code}){{Ok(v)=>v,Err(e)=>{{{}}}}}",
+            self.raise(&error)
         )
+    }
+    fn tag(&self, repr: Repr) -> Gen<usize> {
+        match repr {
+            Repr::Int => Ok(0),
+            Repr::Bool => Ok(1),
+            Repr::Null => Ok(2),
+            Repr::Str => Ok(3),
+            Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
+            r @ (Repr::ListInt
+            | Repr::ListStr
+            | Repr::ListListStr
+            | Repr::ListPtr(_)
+            | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
+            _ => Err(no("static tag")),
+        }
+    }
+    fn null_test(&self, value: &(String, Repr)) -> Gen<String> {
+        Ok(if value.1 == Repr::Tagged {
+            format!("({}).tag==2", value.0)
+        } else if value.1.pointer() || value.1 == Repr::Null {
+            format!("({})==0", value.0)
+        } else {
+            "false".into()
+        })
     }
     fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
         let (value, source) = value;
         if source == target || (source == Repr::Null && target.pointer()) {
             return Ok(value);
+        }
+        if target == Repr::Tagged {
+            let tag = self.tag(source)?;
+            let test = if source.pointer() {
+                "if v==0 {2} else {TAG}".replace("TAG", &tag.to_string())
+            } else {
+                tag.to_string()
+            };
+            return Ok(format!(
+                "{{let v={value};rt::Dyn{{tag:{test},payload:v as u64}}}}"
+            ));
+        }
+        if source == Repr::Tagged {
+            let tag = self.tag(target)?;
+            let bits = self.fallible(&format!("rt::untag({value},{tag},{})", target.pointer()));
+            return Ok(if target == Repr::Bool {
+                format!("({bits}!=0)")
+            } else {
+                format!("({bits} as {})", target.rust())
+            });
         }
         if let (Repr::Ptr(c), Repr::Dyn(i)) = (source, target) {
             if self
@@ -787,6 +1103,30 @@ impl Emitter<'_, '_> {
             Place::Local(l) => Ok((format!("l{}", l.0), self.local(l.0)?)),
             Place::Field { base, field } => {
                 let (base, repr) = self.place(base)?;
+                if repr == Repr::Tagged {
+                    let mut expression = format!("{{let value={base};match value.tag{{");
+                    for (&class, layout) in &self.plan.layouts {
+                        let Some(&field_repr) = layout.fields.get(*field) else {
+                            continue;
+                        };
+                        let raw = format!("(*(value.payload as *const C{class})).f{field}");
+                        let raw = if field_repr == Repr::Bool {
+                            format!("({raw}!=0)")
+                        } else {
+                            raw
+                        };
+                        let tagged = self.coerce((raw, field_repr), Repr::Tagged)?;
+                        write!(
+                            &mut expression,
+                            "{}=>{tagged},",
+                            self.descriptors[&class] + 3
+                        )
+                        .unwrap();
+                    }
+                    let fail=self.fallible("Err::<rt::Dyn,_>(rt::Error::internal(\"invalid typed field access\".into()))");
+                    write!(&mut expression, "_=>{fail}}}}}").unwrap();
+                    return Ok((expression, Repr::Tagged));
+                }
                 let Repr::Ptr(c) = repr else {
                     return Err(no("field on non-class"));
                 };
@@ -852,7 +1192,7 @@ impl Emitter<'_, '_> {
                 let slot = format!("&raw mut (*(object as *mut C{c})).f{field}");
                 let write = if repr.pointer() {
                     format!("bex_v2_heap::write_ptr(object as *mut u8,{slot},value);")
-                } else if matches!(repr, Repr::Dyn(_)) {
+                } else if matches!(repr, Repr::Dyn(_) | Repr::Tagged) {
                     format!("rt::write_dyn(object as *mut u8,{slot},value);")
                 } else {
                     format!("({slot}).write(value as _);")
@@ -883,6 +1223,77 @@ impl Emitter<'_, '_> {
     }
     fn value(&self, r: &Rvalue<'_>, expected: Repr) -> Gen<(String, Repr)> {
         match r {
+            Rvalue::IsTypeTag {
+                operand: Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)),
+                tag,
+            } if *tag == baml_type::typetag::PANIC => {
+                let handler = self
+                    .body
+                    .blocks
+                    .iter()
+                    .find(|b| b.landing.is_some_and(|l| l.error_local == *local))
+                    .ok_or_else(|| no("panic test outside catch"))?
+                    .id
+                    .0;
+                Ok((
+                    format!(
+                        "caught{handler}.as_ref().expect(\"missing caught error\").error().class.starts_with(\"baml.panics.\")"
+                    ),
+                    Repr::Bool,
+                ))
+            }
+            Rvalue::IsType { operand, test } => {
+                let value = self.coerce(self.operand(operand)?, Repr::Tagged)?;
+                if let baml_compiler2_mir::TypeTest::Template(
+                    baml_compiler2_mir::TyTemplate::Literal(baml_type::Literal::String(literal), _),
+                ) = test
+                {
+                    return Ok((
+                        format!(
+                            "{{let v={value};v.tag==3 && rt::strings::Str::from_raw(v.payload as usize).as_str(&rt::strings::Cx::current())=={:?}}}",
+                            literal.as_str()
+                        ),
+                        Repr::Bool,
+                    ));
+                }
+                let tag = match test {
+                    baml_compiler2_mir::TypeTest::Class { class, args } if args.is_empty() => {
+                        let head = baml_compiler2_hir_ty::layout::class_head(self.db, *class);
+                        if Some(head.root()) == self.plan.lang.get(baml_base::LangPackage::Baml)
+                            && head
+                                .namespace()
+                                .as_slice()
+                                .iter()
+                                .map(|n| n.as_str())
+                                .eq(["iter"])
+                            && head.name().as_str() == "Done"
+                        {
+                            "u64::MAX".to_owned()
+                        } else {
+                            let (c, _) = self
+                                .plan
+                                .index
+                                .class(self.db, *class)
+                                .ok_or_else(|| no("type-test class"))?;
+                            self.descriptors
+                                .get(&c)
+                                .ok_or_else(|| no("unplanned type-test class"))?
+                                .checked_add(3)
+                                .unwrap()
+                                .to_string()
+                        }
+                    }
+                    _ => return Err(no("type test")),
+                };
+                Ok((format!("({value}).tag=={tag}"), Repr::Bool))
+            }
+            Rvalue::Map(_, _, entries) if expected == Repr::MapStrInt => {
+                if !entries.is_empty() {
+                    return Err(no("nonempty map literal"));
+                }
+                let desc = self.lists[&Repr::MapStrInt];
+                Ok((self.fallible(&format!("rt::maps::StringIntMap::new(&mut rt::strings::Cx::current(),{desc}).map(|m|m.as_raw())")),Repr::MapStrInt))
+            }
             Rvalue::Len(place) => {
                 let (value, repr) = self.place(place)?;
                 let element = Self::element(repr)?;
@@ -983,6 +1394,8 @@ impl Emitter<'_, '_> {
                     BinOp::Add => Some("add"),
                     BinOp::Sub => Some("sub"),
                     BinOp::Mul => Some("mul"),
+                    BinOp::Div => Some("div"),
+                    BinOp::Mod => Some("rem"),
                     BinOp::Shl => Some("shl"),
                     BinOp::Shr => Some("shr"),
                     _ => None,
@@ -1048,7 +1461,7 @@ impl Emitter<'_, '_> {
                             "bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f{i}).cast(),a{i});"
                         )
                         .unwrap();
-                    } else if matches!(t, Repr::Dyn(_)) {
+                    } else if matches!(t, Repr::Dyn(_) | Repr::Tagged) {
                         write!(
                             &mut init,
                             "rt::write_dyn(p.cast(),&raw mut (*p).f{i},a{i});"
@@ -1067,7 +1480,12 @@ impl Emitter<'_, '_> {
     fn function(&mut self, arity: usize, inline: bool) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
-            unwinds: vec![None; self.body.blocks.len()],
+            unwinds: self
+                .body
+                .blocks
+                .iter()
+                .map(|b| b.unwind.map(|h| h.0))
+                .collect(),
             flows: self
                 .body
                 .blocks
@@ -1088,12 +1506,31 @@ impl Emitter<'_, '_> {
                         then_block: join.0,
                         else_block: eval_rhs.0,
                     }),
-                    Terminator::Return => Ok(Flow::Exit),
+                    Terminator::Return | Terminator::Throw { .. } | Terminator::Rethrow { .. } => {
+                        Ok(Flow::Exit)
+                    }
                     _ => Err(no("control flow")),
                 })
                 .collect::<Gen<_>>()?,
         };
         let structured = structurize(&cfg).map_err(no)?;
+        self.unwind_jumps = structured
+            .unwind_jumps
+            .iter()
+            .map(|jumps| {
+                jumps
+                    .iter()
+                    .map(|jump| match jump {
+                        Stmt::Break(l) => Ok(format!("break 'b{l};")),
+                        Stmt::BreakLoop(l) => Ok(format!("break 'l{l};")),
+                        Stmt::Continue(l) => Ok(format!("continue 'l{l};")),
+                        _ => Err(no("unwind jump shape")),
+                    })
+                    .collect::<Gen<Vec<_>>>()
+                    .map(|s| s.join(""))
+            })
+            .collect::<Gen<_>>()?;
+
         let positions = self.plan.index.positions(self.object);
         if positions.block_pcs.len() != self.body.blocks.len() {
             return Err(no("missing/mismatched MIR source positions"));
@@ -1117,7 +1554,19 @@ impl Emitter<'_, '_> {
             let t = self.local(i)?;
             writeln!(&mut code, "let mut l{i}:{}={};", t.rust(), t.zero()).unwrap();
         }
+        for iter in &self.iters {
+            writeln!(&mut code, "let mut iter_index{iter}=0i64;").unwrap();
+        }
         for b in &self.body.blocks {
+            if b.landing.is_some() {
+                writeln!(
+                    &mut code,
+                    "let mut caught{}:Option<rt::CaughtError>=None;",
+                    b.id.0
+                )
+                .unwrap();
+            }
+
             if matches!(
                 b.terminator,
                 Some(Terminator::Branch { .. } | Terminator::ShortCircuit { .. })
@@ -1179,6 +1628,7 @@ impl Emitter<'_, '_> {
         Ok(out)
     }
     fn leaf(&mut self, b: usize, headers: &BTreeSet<usize>) -> Gen<String> {
+        self.block = b;
         let block = &self.body.blocks[b];
         let pcs = &self.plan.index.positions(self.object).block_pcs[b];
         self.mark(pcs.start);
@@ -1212,7 +1662,93 @@ impl Emitter<'_, '_> {
             }
         }
         self.mark(pcs.terminator);
-        match block.terminator.as_ref().unwrap() {
+        let term = block.terminator.as_ref().unwrap();
+        if let Some((iter, array)) =
+            crate::analysis::array_iter_walk(self.db, self.body, self.arity, term, &self.iters)
+        {
+            writeln!(&mut out, "l{iter}=l{array};iter_index{iter}=0;").unwrap();
+            return Ok(out);
+        }
+        if let Some(iter) = crate::analysis::array_next_call(self.db, term, &self.iters) {
+            let array = self.iter_arrays[&iter];
+            let repr = self.local(array)?;
+            let element = Self::element(repr)?;
+            let (len, get) = if repr.growing() {
+                let slot = element.slot()?;
+                let list = format!("rt::lists::List::<{slot}>::from_raw(l{iter})");
+                (format!("{list}.len(&rt::strings::Cx::current())"),self.fallible(&format!("{list}.get(&rt::strings::Cx::current(),iter_index{iter}).map(|v|v.as_raw())")))
+            } else {
+                (
+                    format!("*((l{iter}+8) as *const i64)"),
+                    format!(
+                        "*((l{iter}+16+iter_index{iter} as usize*8) as *const {})",
+                        element.rust()
+                    ),
+                )
+            };
+            let value = self.coerce((get, element), Repr::Tagged)?;
+            let (destination, _) = crate::analysis::continuation(term).unwrap();
+            let expr = format!(
+                "if iter_index{iter}>={len}{{rt::Dyn{{tag:u64::MAX,payload:0}}}}else{{let value={value};iter_index{iter}+=1;value}}"
+            );
+            out.push_str(&self.assign(destination, (expr, Repr::Tagged))?);
+            return Ok(out);
+        }
+        match term {
+            Terminator::Throw { value } => {
+                let (value, Repr::Ptr(c)) = self.operand(value)? else {
+                    return Err(no("non-class throw"));
+                };
+                let Object::Class(class) =
+                    &self.plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
+                else {
+                    unreachable!()
+                };
+                if self.plan.layouts[&c].fields.iter().any(|r| *r != Repr::Int) {
+                    return Err(no("throw class with non-int fields"));
+                }
+                let package = self
+                    .plan
+                    .program
+                    .packages
+                    .iter()
+                    .find(|p| p.objects.contains(&(c as u32)))
+                    .ok_or_else(|| no("throw class package"))?;
+                let name = format!("{}.{}", package.name, class.path);
+                let fields = class
+                    .fields
+                    .iter()
+                    .map(|f| format!("{}: {{}}", f.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let display = format!("{name} {{{{{fields}}}}}");
+                let values = (0..class.fields.len())
+                    .map(|i| format!("(*(p as *const C{c})).f{i}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let error = format!(
+                    "Box::new(rt::Error{{value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
+                    self.object, self.site
+                );
+                writeln!(&mut out, "{{let p={value};{}}}", self.raise(&error)).unwrap();
+            }
+            Terminator::Rethrow {
+                context: Operand::Copy(Place::Local(context)) | Operand::Move(Place::Local(context)),
+                ..
+            } => {
+                let handler = self
+                    .body
+                    .blocks
+                    .iter()
+                    .find(|b| b.landing.is_some_and(|l| l.context_local == *context))
+                    .ok_or_else(|| no("rethrow context"))?
+                    .id
+                    .0;
+                out.push_str(&self.raise(&format!(
+                    "caught{handler}.take().expect(\"missing caught error\").rethrow()"
+                )));
+            }
+
             Terminator::ShortCircuit {
                 operand,
                 kind,
@@ -1220,6 +1756,12 @@ impl Emitter<'_, '_> {
                 ..
             } => {
                 let (v, t) = self.operand(operand)?;
+                if matches!(kind, baml_compiler2_mir::ShortCircuitKind::Coalesce) {
+                    let short = format!("!({})", self.null_test(&(v.clone(), t))?);
+                    let store = self.assign(destination, (v, t))?;
+                    writeln!(&mut out, "c{b}={short};if c{b}{{{store}}}").unwrap();
+                    return Ok(out);
+                }
                 if t != Repr::Bool {
                     return Err(no("non-boolean short circuit"));
                 }
@@ -1250,6 +1792,22 @@ impl Emitter<'_, '_> {
                     .index
                     .function(self.db, *f)
                     .ok_or_else(|| no("call"))?;
+                if self.plan.index.display(c) == "baml.json.decode" {
+                    if *ntypeargs != 1
+                        || args.len() != 3
+                        || self.operand(&args[0])?.1 != Repr::Type(3)
+                        || !matches!(args[2], Operand::Constant(Constant::OmittedArg))
+                    {
+                        return Err(no("JSON decode specialization/naming"));
+                    }
+                    let text = self.coerce(self.operand(&args[1])?, Repr::Str)?;
+                    let (destination, _) = crate::analysis::continuation(term).unwrap();
+                    out.push_str(&self.assign(
+                        destination,
+                        (self.fallible(&format!("f{c}({text})")), Repr::Tagged),
+                    )?);
+                    return Ok(out);
+                }
                 let types = args[..*ntypeargs]
                     .iter()
                     .map(|a| self.operand(a).map(|v| v.1))
@@ -1290,6 +1848,43 @@ impl Emitter<'_, '_> {
                         "baml.Array.join" if values.len() == 2 && element == Repr::Str && values[1].1 == Repr::Str => (self.fallible(&format!("v2_array_join(&mut rt::strings::Cx::current(),{list},rt::strings::Str::from_raw({})).map(|s|s.as_raw())",values[1].0)), Repr::Str),
                         _ => return Err(no("list builtin arguments")),
                     }
+                } else if matches!(name, "baml.Map.set" | "baml.Map.values") {
+                    if !(types == [Repr::Type(1), Repr::Type(0)]
+                        || (types.is_empty() && name == "baml.Map.set"))
+                        || values.first().is_none_or(|v| v.1 != Repr::MapStrInt)
+                    {
+                        return Err(no("map builtin arguments"));
+                    }
+                    let map = format!("rt::maps::StringIntMap::from_raw({})", values[0].0);
+                    if name == "baml.Map.set"
+                        && values.len() == 3
+                        && values[1].1 == Repr::Str
+                        && values[2].1 == Repr::Int
+                    {
+                        (self.fallible(&format!("v2_map_set(&mut rt::strings::Cx::current(),{map},rt::strings::Str::from_raw({}),{})",values[1].0,values[2].0)),Repr::Tagged)
+                    } else if name == "baml.Map.values" && values.len() == 1 {
+                        (
+                            self.fallible(&format!(
+                                "v2_map_values(&mut rt::strings::Cx::current(),{map},{})",
+                                self.lists[&Repr::ListInt]
+                            )),
+                            Repr::ListInt,
+                        )
+                    } else {
+                        return Err(no("map builtin signature"));
+                    }
+                } else if name == "baml._to_string_default"
+                    && types == [Repr::Type(0)]
+                    && values.len() == 1
+                    && values[0].1 == Repr::Int
+                {
+                    (self.fallible(&format!("v2_int_to_string(&mut rt::strings::Cx::current(),{}).map(|s|s.as_raw())",values[0].0)),Repr::Str)
+                } else if name == "baml.String.to_code_points"
+                    && types.is_empty()
+                    && values.len() == 1
+                    && values[0].1 == Repr::Str
+                {
+                    (self.fallible(&format!("v2_code_points(&mut rt::strings::Cx::current(),rt::strings::Str::from_raw({}),{})",values[0].0,self.lists[&Repr::ListInt])),Repr::ListInt)
                 } else if !types.is_empty() {
                     return Err(no("generic call"));
                 } else if name == "baml.String.char_count" {
@@ -1313,13 +1908,25 @@ impl Emitter<'_, '_> {
                     }
                     (self.fallible(&format!("v2_string_slice(&mut rt::strings::Cx::current(),rt::strings::Str::from_raw({}),{},{}).map(|s|s.as_raw())", values[0].0,values[1].0,values[2].0)),Repr::Str)
                 } else if name == "baml.ops.equals_equals" {
-                    if values.len() != 2 || !values.iter().any(|(_, r)| *r == Repr::Null) {
-                        return Err(no("equality other than null test"));
+                    if values.len() != 2 {
+                        return Err(no("equality arity"));
                     }
-                    if !values.iter().all(|(_, r)| r.pointer() || *r == Repr::Null) {
-                        return Err(no("non-pointer null test"));
+                    if let Some(other) = values.iter().find(|v| v.1 != Repr::Null)
+                        && values.iter().any(|v| v.1 == Repr::Null)
+                    {
+                        (self.null_test(other)?, Repr::Bool)
+                    } else if values.iter().any(|v| v.1 == Repr::Str) {
+                        let a = self.coerce(values[0].clone(), Repr::Tagged)?;
+                        let b = self.coerce(values[1].clone(), Repr::Tagged)?;
+                        (
+                            format!(
+                                "{{let a={a};let b={b};a.tag==3 && b.tag==3 && rt::strings::Str::from_raw(a.payload as usize).as_str(&rt::strings::Cx::current())==rt::strings::Str::from_raw(b.payload as usize).as_str(&rt::strings::Cx::current())}}"
+                            ),
+                            Repr::Bool,
+                        )
+                    } else {
+                        return Err(no("equality other than primitive string or null test"));
                     }
-                    (format!("({}=={})", values[0].0, values[1].0), Repr::Bool)
                 } else {
                     let mir = self.all[&c];
                     let MirFunctionKind::Bytecode(body) = &mir.kind else {

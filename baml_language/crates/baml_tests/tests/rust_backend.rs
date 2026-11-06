@@ -943,3 +943,49 @@ fn v2_growing_lists_and_fail_closed_mutation() {
         assert_eq!(before, fingerprint(&program));
     }
 }
+
+#[test]
+fn v2_agent_maps_iteration_catch_and_json_admission() {
+    for (source, accepted) in [
+        (
+            include_str!("../../../architecture/runtime-v2/phase1/maps.baml"),
+            true,
+        ),
+        (
+            include_str!("../../../architecture/runtime-v2/phase1/catches.baml"),
+            true,
+        ),
+        (
+            include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
+            true,
+        ),
+        (
+            "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
+            false,
+        ),
+        (
+            "function main() -> int { let m: map<string,string> = {}; m[\"a\"] = \"b\"; 0 }",
+            false,
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("agent.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let before = fingerprint(&program);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if accepted {
+            result.unwrap();
+        } else {
+            assert!(result.unwrap_err().contains("unsupported in runtime v2"));
+        }
+        assert_eq!(before, fingerprint(&program));
+    }
+}

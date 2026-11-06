@@ -870,3 +870,29 @@ cargo clippy --manifest-path baml_language/Cargo.toml -p bex_v2_heap -p bex_v2_r
 
 Map emission and the rest of M3 continue next; this checkpoint adds no workload
 benchmark result and does not mark agent-loop complete.
+
+### M3 integration checkpoint — maps, tagged slots, iteration and catch
+
+The generated agent-loop executable now returns **592308425**, equal to CLI
+bytecode, both normally and with v2 every-allocation GC stress. The typed
+catch/rethrow/index-walk fixture returns **23** in both modes; the map fixture
+returns **1050**. Recorded fixture comparisons normalize only the CLI's source
+formatting warning. The initial full-workload stress run found a real planner
+bug: a map-valued class field was marked scalar. Map handles now participate in
+pointer layout and barriers, and the same full stress run passes.
+
+The emitter now handles string/int maps, nullable pointer optionals, tagged
+scalar optionals and unions, literal-string tests, existing array index-walk
+lowering, typed catch routing through stackifier unwind jumps, and rethrows via
+loop-owned caught-error roots. Builtin adapters include map set/values, integer
+formatting and code points, with observation-word branches. JSON syntax scanning
+is shared with the interpreter in `bex_vm_types`; the v2 flat-class decoder
+allocates typed classes directly. Scanner/runtime/codegen tests pass; precise
+JSON error differential probes and full backend regression checks are still in
+progress. In particular, the first error probe identified display-name and
+wrapper-tail-frame differences; fixes are being verified before M3 completion.
+
+Commands and evidence: `phase1/check_fixture.py catches 23`,
+`phase1/check_fixture.py maps 1050`, `target/phase1/m3-integration-tests.log`,
+`target/phase1/m3-vm-json-tests.log`, `target/phase1/m3-agent-repack.log`,
+`target/phase1/agent-{bytecode,stress}.stdout`. No new benchmark claim yet.

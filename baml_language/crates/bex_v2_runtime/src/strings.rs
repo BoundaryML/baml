@@ -105,6 +105,23 @@ pub fn code_points(cx: &Cx, value: Str) -> Vec<i64> {
         .collect()
 }
 
+/// # Safety
+/// `desc` is the fixed int-list descriptor, and the returned list obeys Cx rooting.
+pub unsafe fn to_code_points(cx: &mut Cx, value: Str, desc: u32) -> R<usize> {
+    let values = code_points(cx, value);
+    let bytes = values
+        .len()
+        .checked_mul(8)
+        .and_then(|n| n.checked_add(16))
+        .ok_or_else(|| allocation_failure(usize::MAX))?;
+    let ptr = unsafe { crate::try_alloc(desc, bytes) }?;
+    unsafe {
+        ptr.add(8).cast::<usize>().write(values.len());
+        std::ptr::copy_nonoverlapping(values.as_ptr(), ptr.add(16).cast(), values.len());
+    }
+    Ok(ptr as usize)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -18,6 +18,7 @@ pub mod head_walk;
 pub mod heap_ptr;
 pub mod identity;
 pub mod indexable;
+pub mod json_text;
 pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;

@@ -6,7 +6,11 @@ use crate::{BamlType, BuiltinPipeline, NativeBuiltin, ReceiverType};
 pub fn supports_v2(path: &str) -> bool {
     matches!(
         path,
-        "baml.String.char_count"
+        "baml._to_string_default"
+            | "baml.String.to_code_points"
+            | "baml.Map.set"
+            | "baml.Map.values"
+            | "baml.String.char_count"
             | "baml.String.slice"
             | "baml.Array.push"
             | "baml.Array.join"
@@ -29,6 +33,82 @@ pub fn generate_v2(
             .iter()
             .find(|d| d.path == *path)
             .ok_or_else(|| format!("runtime v2 builtin declaration missing: {path}"))?;
+        if path == "baml._to_string_default" || path == "baml.String.to_code_points" {
+            let integer = path == "baml._to_string_default";
+            let params = if integer {
+                vec![BamlType::Generic("T".into())]
+            } else {
+                vec![]
+            };
+            let ret = if integer {
+                BamlType::String
+            } else {
+                BamlType::List(Box::new(BamlType::Int))
+            };
+            if declaration.pipeline != BuiltinPipeline::Vm
+                || declaration.params.iter().map(|p| &p.ty).ne(params.iter())
+                || declaration.return_type != ret
+                || declaration.generics != if integer { vec!["T"] } else { vec![] }
+                || declaration.may_yield != integer
+                || declaration.fallible
+                || declaration.throws.as_ref().is_none_or(|t| !t.is_empty())
+                || (integer && declaration.receiver.is_some())
+                || (!integer
+                    && declaration.receiver.as_ref().is_none_or(|r| {
+                        r.builtin_name() != "String" || r.receiver_type != ReceiverType::RefSelf
+                    }))
+            {
+                return Err(format!(
+                    "unsupported in runtime v2: changed builtin signature {path}"
+                ));
+            }
+            output.push_str(if integer {
+                "#[inline(always)] fn v2_int_to_string(cx:&mut rt::strings::Cx,value:i64)->rt::R<rt::strings::Str>{rt::strings::integer_to_string(cx,value)}\n"
+            }else{
+                "#[inline(always)] unsafe fn v2_code_points(cx:&mut rt::strings::Cx,value:rt::strings::Str,desc:u32)->rt::R<usize>{unsafe{rt::strings::to_code_points(cx,value,desc)}}\n"
+            });
+            continue;
+        }
+        if path.starts_with("baml.Map.") {
+            let set = path == "baml.Map.set";
+            let params = if set {
+                vec![BamlType::Generic("K".into()), BamlType::Generic("V".into())]
+            } else {
+                vec![]
+            };
+            let ret = if set {
+                BamlType::Optional(Box::new(BamlType::Generic("V".into())))
+            } else {
+                BamlType::List(Box::new(BamlType::Generic("V".into())))
+            };
+            if declaration.pipeline != BuiltinPipeline::Vm
+                || declaration.generics != ["K", "V"]
+                || declaration.params.iter().map(|p| &p.ty).ne(params.iter())
+                || declaration.return_type != ret
+                || declaration.may_yield != set
+                || declaration.fallible
+                || declaration.throws.as_ref().is_none_or(|t| !t.is_empty())
+                || declaration.receiver.as_ref().is_none_or(|r| {
+                    r.builtin_name() != "Map"
+                        || r.receiver_type
+                            != if set {
+                                ReceiverType::MutSelf
+                            } else {
+                                ReceiverType::RefSelf
+                            }
+                })
+            {
+                return Err(format!(
+                    "unsupported in runtime v2: changed builtin signature {path}"
+                ));
+            }
+            output.push_str(if set {
+                "#[inline(always)] fn v2_map_set(cx:&mut rt::strings::Cx,map:rt::maps::StringIntMap,key:rt::strings::Str,value:i64)->rt::R<rt::Dyn>{map.set(cx,key,value)}\n"
+            } else {
+                "#[inline(always)] unsafe fn v2_map_values(cx:&mut rt::strings::Cx,map:rt::maps::StringIntMap,desc:u32)->rt::R<usize>{unsafe{map.values(cx,desc)}}\n"
+            });
+            continue;
+        }
         if path.starts_with("baml.Array.") {
             let (params, ret, receiver, yielding, body) = match path.as_str() {
                 "baml.Array.push" => (
@@ -114,7 +194,25 @@ pub fn generate_v2(
             output.push_str("#[inline(always)] fn v2_string_slice(cx: &mut rt::strings::Cx, value: rt::strings::Str, start:i64, end:i64) -> rt::R<rt::strings::Str> { rt::strings::slice(cx,value,start,end) }\n");
         }
     }
-    Ok(output)
+    let mut syntax = syn::parse_file(&output).map_err(|e| e.to_string())?;
+    let mut init = Vec::new();
+    let mut words = Vec::new();
+    for item in &mut syntax.items {
+        if let syn::Item::Fn(function) = item {
+            let word =
+                quote::format_ident!("OBS_{}", function.sig.ident.to_string().to_uppercase());
+            function
+                .block
+                .stmts
+                .insert(0, syn::parse_quote!(rt::observe(&#word);));
+            words.push(quote::quote!(static #word:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);));
+            init.push(quote::quote!(#word.store(std::hint::black_box(0),std::sync::atomic::Ordering::Relaxed);));
+        }
+    }
+    Ok(prettyplease::unparse(
+        &syn::parse2(quote::quote!(#(#words)* #syntax fn init_builtin_observation(){#(#init)*}))
+            .map_err(|e| e.to_string())?,
+    ))
 }
 
 #[cfg(test)]
@@ -129,6 +227,10 @@ mod tests {
             "baml.Array.push".into(),
             "baml.Array.join".into(),
             "baml.Array.length".into(),
+            "baml.Map.set".into(),
+            "baml._to_string_default".into(),
+            "baml.String.to_code_points".into(),
+            "baml.Map.values".into(),
         ]
         .into();
         let source = generate_v2(&declarations, &requested).unwrap();

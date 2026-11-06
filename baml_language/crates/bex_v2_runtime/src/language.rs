@@ -743,3 +743,77 @@ mod stack_guard_tests {
         assert_eq!(unsafe { instance.run_baml(recover) }.unwrap(), 1);
     }
 }
+
+/// Checked narrowing of a tagged slot. MIR's typed branches establish success;
+/// a mismatched tag is an internal compiler error, never pointer reinterpretation.
+#[inline(always)]
+pub fn untag(value: Dyn, tag: u64, nullable: bool) -> R<u64> {
+    if value.tag == tag || (nullable && value.tag == 2) {
+        Ok(value.payload)
+    } else {
+        Err(Error::internal(format!(
+            "invalid typed narrowing: {} to {tag}",
+            value.tag
+        )))
+    }
+}
+
+pub const DIV_DESC: Descriptor = Descriptor {
+    kind: Kind::Class,
+    size: 24,
+    ptr_slots: (0, 0),
+    tagged_slots: (8, 1),
+    elem: None,
+    type_id: 12,
+    fields: &[Field {
+        name: "dividend",
+        offset: 8,
+        slot: SlotKind::Tagged,
+        type_id: 0,
+    }],
+    finalizer: None,
+};
+#[cold]
+fn division_zero(left: i64) -> Box<Error> {
+    let p = match unsafe { crate::try_alloc(9, 24) } {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    unsafe {
+        write_dyn(
+            p,
+            p.add(8).cast(),
+            Dyn {
+                tag: 0,
+                payload: left as u64,
+            },
+        );
+    }
+    Box::new(Error {
+        value: p as usize,
+        class: "baml.panics.DivisionByZero",
+        message: format!("division by zero: {left} / 0"),
+        frames: vec![],
+        display_value: Some(format!("baml.panics.DivisionByZero {{dividend: {left}}}")),
+    })
+}
+#[inline(always)]
+pub fn div(l: i64, r: i64) -> R<i64> {
+    if r == 0 {
+        return Err(division_zero(l));
+    }
+    let v = l / r;
+    if Int63::new(v).is_some() {
+        Ok(v)
+    } else {
+        Err(overflow(l, '/', r))
+    }
+}
+#[inline(always)]
+pub fn rem(l: i64, r: i64) -> R<i64> {
+    if r == 0 {
+        Err(division_zero(l))
+    } else {
+        Ok(l % r)
+    }
+}
