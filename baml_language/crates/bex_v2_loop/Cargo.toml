@@ -1,0 +1,11 @@
+[package]
+name = "bex_v2_loop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+corosensei = { path = "vendor/corosensei" }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync", "macros"] }
+tokio-util = { workspace = true, features = ["rt"] }
+libc.workspace = true

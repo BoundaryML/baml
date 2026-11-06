@@ -1377,6 +1377,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_v2_loop"
+version = "0.0.0-beta"
+dependencies = [
+ "corosensei 0.3.4",
+ "libc",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "bex_vm"
 version = "0.0.0-beta"
 dependencies = [
@@ -1403,7 +1413,7 @@ dependencies = [
  "btel_types",
  "chacha20poly1305",
  "console",
- "corosensei",
+ "corosensei 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "forked_google_cloud_auth",
  "getrandom 0.2.17",
  "indexmap",
@@ -2341,6 +2351,17 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "corosensei"
+version = "0.3.4"
+dependencies = [
+ "autocfg",
+ "cfg-if",
+ "libc",
+ "scopeguard",
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "corosensei"
@@ -6913,6 +6934,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]
