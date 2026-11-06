@@ -596,7 +596,6 @@ class TurnStream {
                 },
             };
         }
-        baml.sys.panic("unreachable")
     }
 
     /// Drain the stream and return the completed turn. Safe to call at any
@@ -791,7 +790,6 @@ class Stream<T> {
                 },
             }
         }
-        baml.sys.panic("unreachable")
     }
 
     /// Drain and return the cached final value, or rethrow the cached error.
