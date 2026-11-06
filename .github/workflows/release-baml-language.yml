@@ -1948,18 +1948,9 @@ jobs:
           export BAML_HOME="$RUNNER_TEMP/developer-docs-baml"
           scripts/install.sh --version "$VERSION" --no-modify-path
           baml_binary="$BAML_HOME/bin/baml"
-          # Wrapper 0.3+ prints `baml wrapper X` and passes --version through to
-          # the toolchain (`baml-cli X`); wrapper 0.2 printed `baml toolchain X`.
-          version_output="$("$baml_binary" --version)"
-          printf '%s\n' "$version_output"
-          actual_version="$(sed -n \
-            -e 's/^baml-cli \([^ ]*\).*/\1/p' \
-            -e 's/^baml toolchain \(baml-cli \)\{0,1\}\([^ ]*\).*/\2/p' \
-            <<<"$version_output")"
-          if [[ "$actual_version" != "$VERSION" ]]; then
-            echo "::error::installed BAML toolchain is $actual_version, expected $VERSION"
-            exit 1
-          fi
+          # Printed for the log. populate-generated-content.ts --expect-version
+          # checks it, before publishing anything.
+          "$baml_binary" --version
           echo "BAML_BINARY=$baml_binary" >> "$GITHUB_ENV"
           echo "BAML_HOME=$BAML_HOME" >> "$GITHUB_ENV"
       - name: Validate canonical documentation snippets
@@ -1979,6 +1970,7 @@ jobs:
             --baml-bin "$BAML_BINARY" \
             --source-commit "$SOURCE_SHA" \
             --released-at "$RELEASED_AT" \
+            --expect-version "$VERSION" \
             --organization boundaryml \
             --database developer-docs \
             --branch main \
@@ -2363,9 +2355,74 @@ jobs:
             --wrapper-dir dist/wrapper \
             --version "$WRAPPER_VERSION"
 
+  dry-run-developer-docs:
+    name: Generate developer documentation (dry run)
+    # publish-developer-docs runs only after publishing, so without this a dry
+    # run never exercises it; 0.25.1 first failed there. This runs the same
+    # snippet validation and content generation against this run's own wrapper
+    # and toolchain, and writes nothing.
+    needs: [plan, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node2
+      - uses: actions/download-artifact@v8
+        with:
+          name: toolchain-x86_64-unknown-linux-gnu
+          path: dist/toolchain
+      - uses: actions/download-artifact@v8
+        with:
+          name: wrapper-baml
+          path: dist/wrapper
+      - name: Install this run's wrapper and toolchain
+        env:
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          baml_home="$RUNNER_TEMP/developer-docs-baml"
+          toolchain="$RUNNER_TEMP/developer-docs-toolchain"
+          mkdir -p "$baml_home" "$toolchain"
+          tar -xzf "dist/wrapper/baml-wrapper-$WRAPPER_VERSION-x86_64-unknown-linux-gnu.tar.gz" -C "$baml_home"
+          tar -xzf dist/toolchain/*.tar.gz -C "$toolchain"
+          # A path selector runs this exact baml-cli; nothing is downloaded.
+          export BAML_HOME="$baml_home" BAML_TOOLCHAIN="$toolchain/bin/baml-cli"
+          "$baml_home/bin/baml" --version
+          {
+            echo "BAML_BINARY=$baml_home/bin/baml"
+            echo "BAML_HOME=$BAML_HOME"
+            echo "BAML_TOOLCHAIN=$BAML_TOOLCHAIN"
+            echo "BAML_TELEMETRY=off"
+          } >> "$GITHUB_ENV"
+      - name: Validate canonical documentation snippets
+        working-directory: typescript2/app-developer-docs
+        run: pnpm exec tsx scripts/validate-snippets.ts
+      - name: Generate the documentation release without publishing
+        working-directory: typescript2/app-developer-docs
+        env:
+          RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/populate-generated-content.ts \
+            --baml-bin "$BAML_BINARY" \
+            --source-commit "$SOURCE_SHA" \
+            --released-at "$RELEASED_AT" \
+            --expect-version "$VERSION" \
+            --organization boundaryml \
+            --database developer-docs \
+            --branch main \
+            --dry-run
+
   dry-run-summary:
     name: Dry-run summary
-    needs: [plan, all-builds, dry-run-artifacts, dry-run-homebrew, dry-run-aur]
+    needs: [plan, all-builds, dry-run-artifacts, dry-run-homebrew, dry-run-aur, dry-run-developer-docs]
     if: ${{ needs.plan.outputs.dry_run == 'true' }}
     runs-on: ubuntu-latest
     steps:
