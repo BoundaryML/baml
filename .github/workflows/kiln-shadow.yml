@@ -504,7 +504,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           # Temporarily omit Hawk while its CI check is disabled.
           # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
           install_args: "sccache cargo:prek python uv node clang-format"
@@ -752,7 +751,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "node npm:pnpm protoc protoc-gen-go"
 
       # Separate step so if fetch is slow, build is fast.
@@ -877,7 +875,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "ast-grep"
 
       - name: "Install Rust toolchain"
@@ -953,7 +950,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
 
       - name: "Verify sccache"
@@ -1080,7 +1076,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv cargo:cargo-nextest"
 
       - name: "Verify sccache"
@@ -1228,7 +1223,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv cargo:cargo-nextest"
 
       - name: "Verify sccache"
@@ -1373,7 +1367,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
 
       - name: "Verify sccache"
@@ -1509,7 +1502,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
 
       - name: "Verify sccache"
@@ -1621,7 +1613,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
 
       - name: "Verify sccache"
@@ -1755,7 +1746,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: ${{ matrix.install-args }}
 
       - name: "Install Ruby"
@@ -2110,7 +2100,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
 
       - name: "Verify sccache"
@@ -2263,7 +2252,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
 
       - name: "Verify sccache"
@@ -2372,7 +2360,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
 
       - name: "Verify sccache"
@@ -2510,7 +2497,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "node github:rustwasm/wasm-pack"
 
       - name: "Run wasm tests (bridge_wasm)"
@@ -2572,7 +2558,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "github:rustwasm/wasm-pack"
 
       # Path-mapped imports from app-vscode-webview resolve into pkg-playground/wasm
@@ -2648,7 +2633,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
@@ -2719,7 +2703,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
