@@ -1,0 +1,83 @@
+[package]
+name = "corosensei"
+version = "0.3.4"
+authors = ["Amanieu d'Antras <amanieu@gmail.com>"]
+description = "A fast and safe implementation of stackful coroutines"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Amanieu/corosensei"
+readme = "README.md"
+keywords = ["coroutine", "stack", "fiber", "generator"]
+categories = ["data-structures", "no-std", "concurrency"]
+exclude = [".github", "ci"]
+edition = "2021"
+rust-version = "1.59.0"
+
+[dependencies]
+cfg-if = "1.0.0"
+scopeguard = { version = "1.2.0", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2.159", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59.0", features = [
+    "Win32_Foundation",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Kernel",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_System_SystemInformation",
+], optional = true }
+
+[build-dependencies]
+autocfg = "1.1.0"
+
+[dev-dependencies]
+backtrace = "0.3.69"
+criterion = "0.5.1"
+
+# criterion-cycles-per-byte only supports x86.
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dev-dependencies]
+criterion-cycles-per-byte = "0.6.1"
+
+[features]
+default = ["default-stack", "unwind"]
+
+# Provide a DefaultStack implementation. Requires std.
+default-stack = ["libc", "windows-sys"]
+
+# Support propagating panics from coroutines back up to their callers. This
+# feature also allows coroutines to be safely unwound when they are suspended.
+unwind = []
+
+# Use the may_unwind feature of inline assembly for unwinding. This is more
+# efficient but is only available on nightly Rust.
+asm-unwind = ["unwind"]
+
+# Support for running under sanitizers
+sanitizer = []
+
+# Build docs for all supported targets.
+[package.metadata.docs.rs]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "i686-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "armv7-unknown-linux-gnueabihf",
+    "riscv64gc-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "i686-pc-windows-msvc",
+]
+
+[[bench]]
+name = "coroutine"
+harness = false
+
+# We want debug symbols on release binaries by default. We can always strip them
+# out later if necessary.
+[profile.release]
+debug = true
+[profile.bench]
+debug = true
