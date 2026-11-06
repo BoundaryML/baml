@@ -8,12 +8,9 @@
 //! A media value is a URL or base64 content. A file is read before its value
 //! is built: nothing holds a path to read later, and nothing here reads one.
 
-use std::{
-    cell::UnsafeCell,
-    sync::{
-        Arc, RwLock,
-        atomic::{AtomicUsize, Ordering},
-    },
+use std::sync::{
+    Arc, RwLock,
+    atomic::{AtomicUsize, Ordering},
 };
 
 use baml_base::MediaKind;
@@ -25,19 +22,8 @@ pub struct MediaValue {
     pub random_id: usize,
     pub kind: MediaKind,
     mime_type: RwLock<Option<String>>,
-    // `UnsafeCell` because `MediaContent` is mutated through
-    // `write_content`. Access is guarded by `content_rw_lock`; the
-    // `unsafe Sync` impl below promises that.
-    content: UnsafeCell<MediaContent>,
-    content_rw_lock: RwLock<()>,
+    content: MediaContent,
 }
-
-// `UnsafeCell` is not `Sync`; we make `MediaValue` `Sync` manually
-// because every access to `content` goes through the explicit
-// `read_content` / `write_content` methods, which serialize via
-// `content_rw_lock`.
-#[allow(unsafe_code)]
-unsafe impl Sync for MediaValue {}
 
 impl PartialEq for MediaValue {
     fn eq(&self, other: &Self) -> bool {
@@ -58,10 +44,9 @@ static GLOBAL_MEDIA_VALUE_ID: AtomicUsize = AtomicUsize::new(0);
 impl MediaValue {
     pub fn new(kind: MediaKind, content: MediaContent, mime_type: Option<String>) -> Self {
         Self {
-            content_rw_lock: RwLock::new(()),
             random_id: GLOBAL_MEDIA_VALUE_ID.fetch_add(1, Ordering::Relaxed),
             kind,
-            content: UnsafeCell::new(content),
+            content,
             mime_type: RwLock::new(mime_type),
         }
     }
@@ -156,17 +141,7 @@ impl MediaValue {
     }
 
     pub fn read_content<T>(&self, f: impl FnOnce(&MediaContent) -> T) -> T {
-        let _guard = self.content_rw_lock.read().unwrap();
-        #[allow(unsafe_code)]
-        let content = unsafe { &*self.content.get() };
-        f(content)
-    }
-
-    pub fn write_content<T>(&self, f: impl FnOnce(&mut MediaContent) -> T) -> T {
-        let _guard = self.content_rw_lock.write().unwrap();
-        #[allow(unsafe_code)]
-        let content = unsafe { &mut *self.content.get() };
-        f(content)
+        f(&self.content)
     }
 }
 
@@ -293,8 +268,7 @@ impl std::fmt::Display for MediaContent {
 
 impl crate::BexRustData for MediaValue {
     fn measure(&self, meter: &mut crate::Meter) {
-        // The content lock has no writer once the value is built, so a read
-        // cannot block. The MIME type is a few bytes and is not counted.
+        // The MIME type is a few bytes and is not counted.
         self.read_content(|content| match content {
             MediaContent::Url { url, base64_data } => {
                 meter.bytes(url.capacity());

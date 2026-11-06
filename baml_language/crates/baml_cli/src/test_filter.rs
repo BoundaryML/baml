@@ -1,15 +1,3 @@
-/// A single layer of `baml test` selectors.
-///
-/// Selectors are matched against the complete canonical test id (for example
-/// `root.payments::integration::declined_card`). A selector without `*` is a
-/// substring filter; a selector containing `*` is an anchored glob. Repeated
-/// includes are ORed, repeated excludes are ORed, and exclusions win.
-#[derive(Debug, Clone, Default)]
-pub struct TestFilter {
-    pub include: Vec<String>,
-    pub exclude: Vec<String>,
-}
-
 /// Selector match against a canonical test id.
 ///
 /// Plain selectors are case-sensitive substring filters. A selector containing
@@ -46,39 +34,43 @@ pub(crate) fn glob_match(subject: &str, pattern: &str) -> bool {
     true
 }
 
-impl TestFilter {
-    pub fn new<'a>(
-        include: impl Iterator<Item = &'a str>,
-        exclude: impl Iterator<Item = &'a str>,
-    ) -> Self {
-        Self {
-            include: include.map(str::to_owned).collect(),
-            exclude: exclude.map(str::to_owned).collect(),
-        }
+/// Whether one layer of `baml test` selectors selects `canonical_id`.
+///
+/// Selectors are matched against the complete canonical test id (for example
+/// `root.payments::integration::declined_card`). A selector without `*` is a
+/// substring filter; a selector containing `*` is an anchored glob. Repeated
+/// includes are ORed, repeated excludes are ORed, and exclusions win.
+pub(crate) fn includes_patterns(
+    canonical_id: &str,
+    include: &[String],
+    exclude: &[String],
+) -> bool {
+    if exclude.iter().any(|p| glob_match(canonical_id, p)) {
+        return false;
     }
-
-    pub fn includes_id(&self, canonical_id: &str) -> bool {
-        Self::includes_patterns(canonical_id, &self.include, &self.exclude)
-    }
-
-    pub(crate) fn includes_patterns(
-        canonical_id: &str,
-        include: &[String],
-        exclude: &[String],
-    ) -> bool {
-        if exclude.iter().any(|p| glob_match(canonical_id, p)) {
-            return false;
-        }
-        include.is_empty() || include.iter().any(|p| glob_match(canonical_id, p))
-    }
+    include.is_empty() || include.iter().any(|p| glob_match(canonical_id, p))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn filter(include: &[&str], exclude: &[&str]) -> TestFilter {
-        TestFilter::new(include.iter().copied(), exclude.iter().copied())
+    struct Filter {
+        include: Vec<String>,
+        exclude: Vec<String>,
+    }
+
+    impl Filter {
+        fn includes_id(&self, canonical_id: &str) -> bool {
+            includes_patterns(canonical_id, &self.include, &self.exclude)
+        }
+    }
+
+    fn filter(include: &[&str], exclude: &[&str]) -> Filter {
+        Filter {
+            include: include.iter().map(|s| (*s).to_owned()).collect(),
+            exclude: exclude.iter().map(|s| (*s).to_owned()).collect(),
+        }
     }
 
     #[test]

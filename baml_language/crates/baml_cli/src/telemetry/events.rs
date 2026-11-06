@@ -10,7 +10,7 @@
 //! 2. Add its name to the `event_names_snapshot` test at the bottom and a
 //!    bullet to `TELEMETRY.md`'s "What is being collected?" section, in
 //!    the same commit.
-//! 3. Fire it from anywhere: `crate::telemetry::record(TelemetryEvent::my_event(...))`.
+//! 3. Fire it from anywhere: `Telemetry::global().record(TelemetryEvent::my_event(...))`.
 //!    Delivery, crash-safety, opt-out, and retries are handled for you.
 
 use serde::Serialize;

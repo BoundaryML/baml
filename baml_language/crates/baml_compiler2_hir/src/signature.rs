@@ -320,51 +320,6 @@ pub fn elaborate_function_signature_parts(
     }
 }
 
-fn elaborated_function_signature_with_source_map<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-) -> (Arc<ElaboratedFunctionSignature>, SignatureSourceMap) {
-    let file = function.file(db);
-    let item_tree = crate::file_item_tree(db, file);
-    let func_data = &item_tree[function.id(db)];
-
-    let params: Vec<_> = func_data.params.iter().map(signature_param).collect();
-
-    let return_type = func_data.return_type.clone().map(SignatureTypeExpr::new);
-    let throws = func_data.throws.clone().map(SignatureTypeExpr::new);
-    let reserved_effect_param_names: Vec<Name> = item_tree
-        .enclosing_type_generic_params(function.id(db))
-        .iter()
-        .map(|param| param.name.clone())
-        .collect();
-    let signature = Arc::new(elaborate_function_signature_parts(
-        func_data.name.clone(),
-        func_data
-            .generic_params
-            .iter()
-            .map(|param| param.name.clone())
-            .collect(),
-        &reserved_effect_param_names,
-        params,
-        return_type,
-        throws,
-    ));
-
-    let source_map = SignatureSourceMap {
-        param_spans: func_data.params.iter().map(|p| p.span).collect(),
-        param_name_spans: func_data.params.iter().map(|p| p.name_span).collect(),
-        param_type_spans: func_data
-            .params
-            .iter()
-            .map(|p| p.type_expr.as_ref().map(|te| te.span))
-            .collect(),
-        return_type_span: func_data.return_type.as_ref().map(|te| te.span),
-        throws_type_span: func_data.throws.as_ref().map(|te| te.span),
-    };
-
-    (signature, source_map)
-}
-
 /// Salsa query: semantic function signature.
 ///
 /// Cached independently of the source map. Its written types keep their spans
@@ -420,19 +375,29 @@ pub fn elaborated_function_signature<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
 ) -> Arc<ElaboratedFunctionSignature> {
-    let (signature, _) = elaborated_function_signature_with_source_map(db, function);
-    signature
-}
+    let file = function.file(db);
+    let item_tree = crate::file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
 
-/// Salsa query: source map for the elaborated callable signature.
-///
-/// The elaboration rewrites types but does not change source spans, so this is
-/// intentionally parallel to `function_signature_source_map`.
-#[salsa::tracked(returns(clone))]
-pub fn elaborated_function_signature_source_map<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-) -> SignatureSourceMap {
-    let (_, source_map) = elaborated_function_signature_with_source_map(db, function);
-    source_map
+    let params: Vec<_> = func_data.params.iter().map(signature_param).collect();
+
+    let return_type = func_data.return_type.clone().map(SignatureTypeExpr::new);
+    let throws = func_data.throws.clone().map(SignatureTypeExpr::new);
+    let reserved_effect_param_names: Vec<Name> = item_tree
+        .enclosing_type_generic_params(function.id(db))
+        .iter()
+        .map(|param| param.name.clone())
+        .collect();
+    Arc::new(elaborate_function_signature_parts(
+        func_data.name.clone(),
+        func_data
+            .generic_params
+            .iter()
+            .map(|param| param.name.clone())
+            .collect(),
+        &reserved_effect_param_names,
+        params,
+        return_type,
+        throws,
+    ))
 }

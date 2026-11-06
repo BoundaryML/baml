@@ -65,22 +65,12 @@ pub enum DiagnosticId {
 
     // HIR diagnostics (E0012-E0027)
     DuplicateField,
-    DuplicateVariant,
-    DuplicateMethod,
     DuplicateBinding,
     RefutablePatternInLet,
-    /// `if let` pattern that always matches — the `else` branch is dead.
-    IrrefutablePatternInIfLet,
     /// `let … else` whose else block has a non-`!` type. The else must
     /// diverge (return / throw / break / continue / panic / infinite loop)
     /// so that fall-through past the binding is unreachable.
     LetElseMustDiverge,
-    /// `let … else` pattern that covers every value — the else branch is
-    /// dead. Suggest replacing with a plain `let` binding.
-    IrrefutablePatternInLetElse,
-    /// `while let` pattern that always matches — the loop never exits via
-    /// pattern failure. Suggest a plain `while`/`loop`.
-    IrrefutablePatternInWhileLet,
     DuplicateAttribute,
     UnknownAttribute,
     InvalidAttributeContext,
@@ -89,91 +79,31 @@ pub enum DiagnosticId {
     GeneratorBlockUnsupported,
     MissingGeneratorProperty,
     InvalidGeneratorPropertyValue,
-    ReservedFieldName,
-    FieldNameMatchesTypeName,
-    InvalidClientResponseType,
-    HttpConfigNotBlock,
-    UnknownHttpConfigField,
-    NegativeTimeout,
-    MissingProvider,
-    UnknownClientProperty,
-    /// `remap_roles` must be a map.
-    RemapRolesNotMap,
-    /// `remap_role` values must be strings.
-    RemapRoleValueNotString,
-    /// Invalid role not in `allowed_roles` list.
-    RemapRoleNotAllowed,
-    /// `allowed_roles` must not be empty.
-    AllowedRolesEmpty,
-    /// `allowed_roles` values must be strings.
-    AllowedRoleNotString,
-    /// Unknown provider in client definition.
-    UnknownProvider,
-    /// Missing required client option(s).
-    MissingClientOptions,
-    /// Composite client has empty strategy.
-    EmptyStrategy,
-    /// Unknown retry policy reference.
-    UnknownRetryPolicy,
-    /// Strategy array element is not a valid client name.
-    InvalidStrategyElement,
 
-    // Pattern matching errors (E0062-E0066)
+    // Pattern matching errors (E0062-E0063)
     NonExhaustiveMatch,
     UnreachableArm,
-    NonExhaustiveCatch,
-    UnreachableCatchArm,
-    UnknownEnumVariant,
 
     // Control-flow diagnostics (E0146)
     UnreachableCode,
 
-    // Syntax errors (E0028-E0031)
-    MissingSemicolon,
-    MissingConditionParens,
-    UnmatchedDelimiter,
-
     // Return expression errors (E0029)
     MissingReturnExpression,
-
-    // Constraint attribute errors (E0032)
-    InvalidConstraintSyntax,
 
     // Attribute value errors (E0037-E0038)
     InvalidAttributeArg,
     UnexpectedAttributeArg,
 
-    // Type literal errors (E0033)
-    UnsupportedFloatLiteral,
-
     // Integer literal out of `int` (i63) range (E0139)
     IntegerLiteralOutOfRange,
-
-    // Map type errors (E0039)
-    InvalidMapArity,
-
-    // Test diagnostics (E0034-E0036, E0088)
-    UnknownTestProperty,
-    MissingTestProperty,
-    TestFieldAttribute,
-    UnknownFunctionInTest,
-
-    // Reserved prefix diagnostics
-    ReservedStreamPrefix,
 
     // Cycle detection diagnostics (E0068-E0069)
     AliasCycle,
     ClassCycle,
 
-    // Catch binding errors (E0093)
-    InvalidCatchBindingType,
-
     // Throws contract errors (E0096-E0097)
     ThrowsContractViolation,
     ThrowsContractExtraneous,
-
-    // VIR lowering errors (E0089)
-    LoweringError,
 
     // Removed feature errors (E0098) — shared by all removed-syntax
     // diagnostics (`instanceof`, legacy BEP-066 TypeBuilder syntax, ...).
@@ -185,8 +115,6 @@ pub enum DiagnosticId {
     // Lowering diagnostics (E0101-E0105)
     MissingName,
     UnparseableType,
-    MissingConfigBlock,
-    MissingConfigKey,
     MalformedAttribute,
 
     // String literal escape errors (E0109): an unknown or malformed escape
@@ -201,18 +129,12 @@ pub enum DiagnosticId {
     WildcardTypeNotAllowed,
 
     // Interface diagnostics (BEP-044)
-    /// `implements I {}` references an interface that does not exist.
-    UnknownInterface,
     /// A class is missing the body of a required interface method.
     MissingInterfaceMethod,
-    /// A class implements the same interface in two blocks.
-    DuplicateImplementsBlock,
     /// A method declared in an `implements` block does not exist on the target interface.
     UnknownInterfaceMember,
     /// A class field's type does not match the interface field it satisfies.
     InterfaceFieldTypeMismatch,
-    /// Two interfaces contribute conflicting types for the same field.
-    ConflictingInterfaceFieldTypes,
     /// An interface's `extends` chain forms a cycle.
     InterfaceExtendsCycle,
     /// `extends Foo` references a type that is not an interface.
@@ -229,22 +151,9 @@ pub enum DiagnosticId {
     /// same name — unqualified calls would be ambiguous (BEP-044
     /// §"Method Disambiguation").
     AmbiguousInterfaceMethod,
-    /// An interface's `extends` list inherits conflicting types for the same
-    /// field from two parent interfaces.
-    InterfaceExtendsFieldConflict,
-    /// `default.method()` references a required method that has no default body.
-    DefaultOnRequiredMethod,
-    /// Bare `default` used as a value rather than `default.method(...)`.
-    BareDefaultKeyword,
     /// An out-of-body `implements<T> …` declares a generic parameter not
     /// determined by the implementor (`for`) type — an unconstrained/phantom param.
     UnconstrainedImplTypeParam,
-    /// `Self` used in an interface FIELD type (only valid in method signatures).
-    SelfInInterfaceField,
-    /// Bare `Self` used in an associated type's DEFAULT. `Self` is universal, so it
-    /// cannot be resolved where the interface is used as an interface-existential
-    /// type (the implementor is hidden).
-    SelfInAssociatedTypeDefault,
     /// An `implements … for <target>` whose `for` target is not a single concrete
     /// type — a union, optional, interface ("dyn"), or `unknown`. Interfaces can
     /// only be implemented for a concrete type (or a concrete type constructor
@@ -296,13 +205,6 @@ pub enum DiagnosticId {
     /// A class declares a `cleanup` method whose signature is not the reserved
     /// magic-finalizer shape `cleanup(self) -> void` (BEP-042).
     CleanupMagicMethodSignature,
-
-    // Aliasing lints (E0148)
-    /// `baml.Array.filled(n, value)` was called with a mutable literal (`[]`,
-    /// `{}`, or a class-instance literal). Every slot aliases the *same* object
-    /// reference, so mutating one slot mutates all of them (Linear B-548). This
-    /// is a lint (warning), not a type error.
-    ArrayFilledAliasing,
 
     // Function-type throws requirement (E0151)
     /// A function type in a position where its error type cannot be inferred
@@ -384,17 +286,6 @@ pub enum DiagnosticId {
     /// A condition whose static type decides the branch (always truthy /
     /// always falsy) - B-1563 truthiness.
     ConditionAlwaysConstant,
-    /// Retired (E0168): `unreflect(value)` written anywhere other than as the
-    /// whole right-hand side of a body-level `type T = …;` binding. Nothing
-    /// produces it since `let type T = value;` replaced both spellings (their
-    /// removal reports E0098); the variant stays so later variants keep their
-    /// cached discriminants.
-    RuntimeTypeMustBeNamed,
-    /// `reflect.Function.specialize` was given type arguments the
-    /// callable cannot accept: the wrong number of them, one that fails a
-    /// declared interface bound, or any at all for a callable with nothing
-    /// left to bind.
-    ReflectSpecializationFailed,
     /// An ordinary inference variable remained unresolved at writeback (E0155).
     TypeMustBeKnown,
     /// A builtin type spelling was written with type arguments or
@@ -488,95 +379,41 @@ impl DiagnosticId {
 
             // HIR diagnostics
             DiagnosticId::DuplicateField => "E0012",
-            DiagnosticId::DuplicateVariant => "E0013",
-            DiagnosticId::DuplicateMethod => "E0093",
             DiagnosticId::DuplicateBinding => "E0094",
             DiagnosticId::RefutablePatternInLet => "E0111",
-            DiagnosticId::IrrefutablePatternInIfLet => "E0112",
             DiagnosticId::LetElseMustDiverge => "E0113",
-            DiagnosticId::IrrefutablePatternInLetElse => "E0114",
-            DiagnosticId::IrrefutablePatternInWhileLet => "E0137",
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",
             DiagnosticId::GeneratorBlockUnsupported => "E0017",
             DiagnosticId::MissingGeneratorProperty => "E0018",
             DiagnosticId::InvalidGeneratorPropertyValue => "E0019",
-            DiagnosticId::ReservedFieldName => "E0020",
-            DiagnosticId::FieldNameMatchesTypeName => "E0021",
-            DiagnosticId::InvalidClientResponseType => "E0022",
-            DiagnosticId::HttpConfigNotBlock => "E0023",
-            DiagnosticId::UnknownHttpConfigField => "E0024",
-            DiagnosticId::NegativeTimeout => "E0025",
-            DiagnosticId::MissingProvider => "E0026",
-            DiagnosticId::UnknownClientProperty => "E0027",
-            DiagnosticId::RemapRolesNotMap
-            | DiagnosticId::RemapRoleValueNotString
-            | DiagnosticId::RemapRoleNotAllowed
-            | DiagnosticId::AllowedRolesEmpty
-            | DiagnosticId::AllowedRoleNotString => "E0044",
-            DiagnosticId::UnknownProvider => "E0102",
-            DiagnosticId::MissingClientOptions => "E0101",
-            DiagnosticId::EmptyStrategy => "E0090",
-            DiagnosticId::UnknownRetryPolicy => "E0091",
-            DiagnosticId::InvalidStrategyElement => "E0092",
 
             // Pattern matching errors
             DiagnosticId::NonExhaustiveMatch => "E0062",
             DiagnosticId::UnreachableArm => "E0063",
-            DiagnosticId::NonExhaustiveCatch => "E0094",
-            DiagnosticId::UnreachableCatchArm => "E0095",
-            DiagnosticId::UnknownEnumVariant => "E0064",
 
             // Control-flow diagnostics
             DiagnosticId::UnreachableCode => "E0146",
 
-            // Syntax errors
-            DiagnosticId::MissingSemicolon => "E0028",
-            DiagnosticId::MissingConditionParens => "E0030",
-            DiagnosticId::UnmatchedDelimiter => "E0031",
-
             // Return expression errors
             DiagnosticId::MissingReturnExpression => "E0029",
-
-            // Constraint attribute errors
-            DiagnosticId::InvalidConstraintSyntax => "E0032",
 
             // Attribute value errors
             DiagnosticId::InvalidAttributeArg => "E0037",
             DiagnosticId::UnexpectedAttributeArg => "E0038",
 
-            // Type literal errors
-            DiagnosticId::UnsupportedFloatLiteral => "E0033",
             // E0139 is the orphan-rule code (`ImplViolatesOrphanRule`, BEP-044); this
             // literal error previously collided with it — moved to the next free code.
             DiagnosticId::IntegerLiteralOutOfRange => "E0150",
-
-            // Map type errors
-            DiagnosticId::InvalidMapArity => "E0039",
-
-            // Test diagnostics
-            DiagnosticId::UnknownTestProperty => "E0034",
-            DiagnosticId::MissingTestProperty => "E0035",
-            DiagnosticId::TestFieldAttribute => "E0036",
-            DiagnosticId::UnknownFunctionInTest => "E0088",
 
             // Cycle detection diagnostics
             DiagnosticId::AliasCycle => "E0068",
             DiagnosticId::ClassCycle => "E0069",
 
-            // Reserved prefix errors
-            DiagnosticId::ReservedStreamPrefix => "E0100",
-
-            // Catch binding errors
-            DiagnosticId::InvalidCatchBindingType => "E0093",
-
             // Throws contract errors
             DiagnosticId::ThrowsContractViolation => "E0096",
             DiagnosticId::ThrowsContractExtraneous => "E0097",
-
-            // VIR lowering errors
-            DiagnosticId::LoweringError => "E0089",
 
             // Removed feature errors
             DiagnosticId::RemovedFeature => "E0098",
@@ -586,8 +423,6 @@ impl DiagnosticId {
             // Lowering diagnostics
             DiagnosticId::MissingName => "E0107",
             DiagnosticId::UnparseableType => "E0108",
-            DiagnosticId::MissingConfigBlock => "E0103",
-            DiagnosticId::MissingConfigKey => "E0104",
             DiagnosticId::MalformedAttribute => "E0105",
 
             // String literal escape errors
@@ -596,18 +431,13 @@ impl DiagnosticId {
             DiagnosticId::WildcardTypeNotAllowed => "E0147",
 
             // Interface diagnostics
-            DiagnosticId::UnknownInterface => "E0112",
             DiagnosticId::MissingInterfaceMethod => "E0113",
-            DiagnosticId::DuplicateImplementsBlock => "E0114",
             DiagnosticId::UnknownInterfaceMember => "E0115",
             DiagnosticId::InterfaceFieldTypeMismatch => "E0116",
-            DiagnosticId::ConflictingInterfaceFieldTypes => "E0117",
             DiagnosticId::InterfaceExtendsCycle => "E0118",
             DiagnosticId::NotAnInterface => "E0119",
             DiagnosticId::InterfaceMethodSignatureMismatch => "E0120",
             DiagnosticId::AmbiguousInterfaceMethod => "E0121",
-            DiagnosticId::InterfaceExtendsFieldConflict => "E0122",
-            DiagnosticId::DefaultOnRequiredMethod => "E0123",
             DiagnosticId::MissingInterfaceField => "E0124",
             DiagnosticId::MissingRequiredInterface => "E0125",
             DiagnosticId::OutOfBodyImplementsFieldInterface => "E0126",
@@ -618,14 +448,10 @@ impl DiagnosticId {
             DiagnosticId::AmbiguousInterfaceField => "E0131",
             DiagnosticId::OverlappingImplements => "E0132",
             DiagnosticId::InterfaceRequiresNonInterface => "E0133",
-            DiagnosticId::BareDefaultKeyword => "E0134",
             DiagnosticId::UnconstrainedImplTypeParam => "E0135",
-            DiagnosticId::SelfInInterfaceField => "E0136",
-            // E0137 is taken by `IrrefutablePatternInWhileLet`; use the next free code.
             DiagnosticId::ImplTargetNotConcrete => "E0138",
             DiagnosticId::ImplViolatesOrphanRule => "E0139",
             DiagnosticId::ToStringMustImplementInterface => "E0140",
-            DiagnosticId::SelfInAssociatedTypeDefault => "E0157",
             DiagnosticId::DeferControlFlowEscape => "E0141",
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
@@ -638,9 +464,6 @@ impl DiagnosticId {
             DiagnosticId::ConditionAlwaysConstant => "E0167",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
-
-            // Aliasing lints
-            DiagnosticId::ArrayFilledAliasing => "E0148",
 
             // Serialized-key collision
             DiagnosticId::DuplicateFieldAlias => "E0149",
@@ -663,8 +486,6 @@ impl DiagnosticId {
             DiagnosticId::UnspecializedReflectedGeneric => "E0165",
             DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
             // E0167 is owned by the always-constant-condition lint in #4498.
-            DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
-            DiagnosticId::ReflectSpecializationFailed => "E0169",
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
             DiagnosticId::InvalidRegexPattern => "E0174",
             DiagnosticId::AmbiguousUnion => "E0175",
@@ -963,7 +784,6 @@ mod tests {
             DiagnosticId::UnexpectedEof,
             DiagnosticId::UnexpectedToken,
             DiagnosticId::DuplicateName,
-            DiagnosticId::LoweringError,
             DiagnosticId::RemovedFeature,
             DiagnosticId::NamespaceNameCollision,
         ];
@@ -989,7 +809,7 @@ mod tests {
         // new variants are appended.
         assert_eq!(
             borsh::to_vec(&DiagnosticId::ScopedTypeEscapesBlock).unwrap(),
-            vec![139]
+            vec![87]
         );
         assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
         assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);
@@ -1025,25 +845,7 @@ mod tests {
         // a formality - a new id takes a fresh code.
         const SHARED: &[(&str, &[&str])] = &[
             ("E0010", &["UnexpectedToken", "InvalidSyntax"]),
-            // One error to a reader: the role-remapping config is invalid.
-            (
-                "E0044",
-                &[
-                    "RemapRolesNotMap",
-                    "RemapRoleValueNotString",
-                    "RemapRoleNotAllowed",
-                    "AllowedRolesEmpty",
-                    "AllowedRoleNotString",
-                ],
-            ),
-            ("E0093", &["DuplicateMethod", "InvalidCatchBindingType"]),
-            ("E0094", &["DuplicateBinding", "NonExhaustiveCatch"]),
-            ("E0112", &["IrrefutablePatternInIfLet", "UnknownInterface"]),
             ("E0113", &["LetElseMustDiverge", "MissingInterfaceMethod"]),
-            (
-                "E0114",
-                &["IrrefutablePatternInLetElse", "DuplicateImplementsBlock"],
-            ),
             (
                 "E0153",
                 &[

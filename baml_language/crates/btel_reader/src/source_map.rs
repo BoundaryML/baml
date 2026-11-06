@@ -1,68 +1,9 @@
-//! Recorded PCs to source locations, using only the recording's own maps.
+//! Recorded PC-to-source maps, validated and encoded for the index.
 //!
 //! A map belongs to one function's executed code. It never comes from the
 //! current workspace: a line is what the recorded program had, even if the
-//! file changed since. Every PC that cannot be placed says why.
+//! file changed since.
 use btel_recorder::proto;
-
-/// A resolved location: a half-open byte range in the function's own file.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Site {
-    pub line: u32,
-    pub start: u32,
-    pub end: u32,
-}
-
-/// Why a PC has no resolved site, or that it has one.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SiteState {
-    Resolved,
-    /// The recording has no PC for this site (an entry call from the host).
-    NoCaller,
-    /// The PC's function is referenced but its definition is not indexed.
-    FunctionUnresolved,
-    /// The producer could not look the function up.
-    FunctionUnavailable,
-    /// Two different definitions were recorded for the function.
-    FunctionConflicted,
-    /// The definition has no map: an older recording, or no compact code.
-    NoSourceMap,
-    InvalidSourceMap,
-    /// The definition has no source file to point into.
-    NoSourceFile,
-    /// The VM saturated a PC that did not fit the wire field.
-    SentinelPc,
-    PcOutOfRange,
-    /// The PC lies before the first mapped instruction.
-    UnmappedPc,
-    /// The mapped span belongs to another compiler file than the function's.
-    ForeignFile,
-    /// No PC was recorded for this site.
-    NoPc,
-    /// The frame's function has no telemetry identity to look a map up by.
-    NoFunction,
-}
-
-impl SiteState {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Resolved => "resolved",
-            Self::NoCaller => "no_caller",
-            Self::FunctionUnresolved => "function_unresolved",
-            Self::FunctionUnavailable => "function_unavailable",
-            Self::FunctionConflicted => "function_conflicted",
-            Self::NoSourceMap => "no_source_map",
-            Self::InvalidSourceMap => "invalid_source_map",
-            Self::NoSourceFile => "no_source_file",
-            Self::SentinelPc => "sentinel_pc",
-            Self::PcOutOfRange => "pc_out_of_range",
-            Self::UnmappedPc => "unmapped_pc",
-            Self::ForeignFile => "foreign_file",
-            Self::NoPc => "no_pc",
-            Self::NoFunction => "no_function",
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Entry {
@@ -140,28 +81,6 @@ impl SourceMap {
         })
     }
 
-    /// The source range covering `pc`, or why there is none.
-    pub fn resolve(&self, pc: u32) -> Result<Site, SiteState> {
-        if pc == u32::MAX {
-            return Err(SiteState::SentinelPc);
-        }
-        if pc >= self.code_bytes {
-            return Err(SiteState::PcOutOfRange);
-        }
-        let index = self.entries.partition_point(|entry| entry.pc <= pc);
-        let Some(entry) = index.checked_sub(1).map(|i| self.entries[i]) else {
-            return Err(SiteState::UnmappedPc);
-        };
-        if self.own_file != Some(entry.file_id) {
-            return Err(SiteState::ForeignFile);
-        }
-        Ok(Site {
-            line: entry.line,
-            start: entry.start,
-            end: entry.end,
-        })
-    }
-
     /// Stable storage encoding for an index: little-endian u32 fields.
     pub fn encode(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(12 + self.entries.len() * 20);
@@ -174,40 +93,6 @@ impl SourceMap {
             }
         }
         out
-    }
-
-    pub fn decode(bytes: &[u8]) -> Option<Self> {
-        let word = |at: usize| -> Option<u32> {
-            Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?))
-        };
-        let code_bytes = word(0)?;
-        let file = word(4)?;
-        let own_file = match *bytes.get(8)? {
-            0 => None,
-            1 => Some(file),
-            _ => return None,
-        };
-        let body = bytes.get(9..)?;
-        if !body.len().is_multiple_of(20) {
-            return None;
-        }
-        let entries = (0..body.len() / 20)
-            .map(|i| {
-                let at = 9 + i * 20;
-                Some(Entry {
-                    pc: word(at)?,
-                    file_id: word(at + 4)?,
-                    start: word(at + 8)?,
-                    end: word(at + 12)?,
-                    line: word(at + 16)?,
-                })
-            })
-            .collect::<Option<Vec<_>>>()?;
-        Some(Self {
-            code_bytes,
-            own_file,
-            entries,
-        })
     }
 }
 
@@ -226,30 +111,6 @@ mod tests {
             pc,
             file_id,
         }
-    }
-
-    #[test]
-    fn resolves_byte_offsets_and_explains_every_miss() {
-        let map = SourceMap::from_wire(&wire(vec![0, 7, 12], vec![], 20), Some(3)).unwrap();
-        assert_eq!(map.resolve(0).unwrap().line, 1);
-        assert_eq!(
-            map.resolve(8),
-            Ok(Site {
-                line: 2,
-                start: 10,
-                end: 15
-            })
-        );
-        assert_eq!(map.resolve(19).unwrap().line, 3);
-        assert_eq!(map.resolve(20), Err(SiteState::PcOutOfRange));
-        assert_eq!(map.resolve(u32::MAX), Err(SiteState::SentinelPc));
-        let late = SourceMap::from_wire(&wire(vec![4], vec![], 9), Some(3)).unwrap();
-        assert_eq!(late.resolve(2), Err(SiteState::UnmappedPc));
-        let foreign = SourceMap::from_wire(&wire(vec![0, 4], vec![3, 9], 9), Some(3)).unwrap();
-        assert_eq!(foreign.resolve(1).unwrap().line, 1);
-        assert_eq!(foreign.resolve(5), Err(SiteState::ForeignFile));
-        assert_eq!(SourceMap::decode(&map.encode()), Some(map));
-        assert_eq!(SourceMap::decode(&foreign.encode()), Some(foreign));
     }
 
     #[test]
@@ -278,6 +139,5 @@ mod tests {
             SourceMap::from_wire(&wire(vec![0], vec![], 20), None),
             Err(InvalidMap::Lengths)
         );
-        assert_eq!(SourceMap::decode(&[1, 2, 3]), None);
     }
 }

@@ -16,7 +16,7 @@ Examples:
 
   Add a workspace root:
     baml lsp --workspace ./my-project")]
-pub struct LanguageServerArgs {
+pub(crate) struct LanguageServerArgs {
     /// Workspace root to discover BAML projects from when running the LSP
     /// outside an editor client. May be passed more than once.
     #[clap(long, value_name = "PATH", help_heading = "Workspace options")]
@@ -24,7 +24,7 @@ pub struct LanguageServerArgs {
 }
 
 impl LanguageServerArgs {
-    pub fn run(&self) -> Result<()> {
+    pub(crate) fn run(&self) -> Result<()> {
         run_server(self.workspace.clone())?;
         Ok(())
     }

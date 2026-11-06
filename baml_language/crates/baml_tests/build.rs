@@ -103,10 +103,7 @@ fn generate_speedtest_benches(manifest_dir: &str) {
                 Path::new(&out_dir).join("speedtest_profiling_sources.rs"),
                 "// speedtest workloads unavailable at build time.\n\
                  pub const PROF_SRC_COMPUTE_PURE_CALL_1M: &str = \"\";\n\
-                 pub const PROF_SRC_COMPUTE_ARRAY_BUILD_SUM_100K: &str = \"\";\n\
-                 pub const PROF_SRC_COMPUTE_FIB32_RECURSIVE: &str = \"\";\n\
-                 pub const PROF_SRC_CONCURRENCY_SPAWN_AWAIT_X10K: &str = \"\";\n\
-                 pub const PROF_SRC_STRING_CONCAT_LOOP_10K: &str = \"\";\n",
+                 pub const PROF_SRC_CONCURRENCY_SPAWN_AWAIT_X10K: &str = \"\";\n",
             )
             .unwrap();
             return;
@@ -162,16 +159,9 @@ fn generate_speedtest_benches(manifest_dir: &str) {
     write_formatted_code(&dest_path, benches, header);
 
     // Also emit the small fixed subset consumed by the `call_overhead`
-    // bench target: same single source of truth, but only the workloads chosen
-    // to characterize tracing cost (per-call ring pairs, allocation-heavy
-    // loops, the known ring-overflow reproducer, and a string baseline).
-    let subset = [
-        "compute::pure call 1m",
-        "compute::array build sum 100k",
-        "compute::fib32 recursive",
-        "concurrency::spawn await x10k",
-        "string::concat loop 10k",
-    ];
+    // bench target: same single source of truth, but only the workloads it
+    // benches.
+    let subset = ["compute::pure call 1m", "concurrency::spawn await x10k"];
     let prof_consts: TokenStream = subset
         .iter()
         .map(|name| {
@@ -463,12 +453,6 @@ fn discover_projects(projects_dir: &Path) -> Vec<TestProject> {
             }
 
             let name = path.file_name().unwrap().to_str().unwrap().to_string();
-
-            // parser_stress remains excluded (it would only appear if
-            // someone moved it into a tier directory by mistake)
-            if name == "parser_stress" {
-                continue;
-            }
 
             let files = discover_baml_files(&path);
 

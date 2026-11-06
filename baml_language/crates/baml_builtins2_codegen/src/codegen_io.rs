@@ -933,9 +933,6 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         pub fn sys_op_for_path(path: &str) -> Option<SysOp> {
             match path {
                 #(#path_to_variant_arms,)*
-                // Legacy aliases (baml_builtins paths)
-                "env.get" | "env.get_or_panic" => Some(SysOp::BamlEnvGet),
-                "baml.http.Response.ok" => Some(SysOp::BamlHttpResponseText),
                 _ => None,
             }
         }

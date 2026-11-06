@@ -758,9 +758,6 @@ pub enum EngineError {
     #[error("Type mismatch: {message}")]
     TypeMismatch { message: String },
 
-    #[error("Schema inconsistency: {message}")]
-    SchemaInconsistency { message: String },
-
     #[cfg(feature = "heap_debug")]
     #[error("Snapshot not possible for type: {type_name}")]
     CannotSnapshot { type_name: String },
@@ -4097,22 +4094,6 @@ impl BexEngine {
         .and_then(|result| result.value)
     }
 
-    pub async fn call_callable_with_outcome(
-        self: &Arc<Self>,
-        handle: bex_external_types::Handle,
-        args: Vec<BexExternalValue>,
-        call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexCallResult, EngineError> {
-        self.call_callable_with_outcome_impl(
-            handle,
-            CallableArgs::Positional(args),
-            call_ctx,
-            copy_objects,
-        )
-        .await
-    }
-
     /// Invoke a host-returned callable using ordered required arguments and
     /// named supplied optionals, matching the cross-SDK callable convention.
     pub async fn call_callable_named(
@@ -4816,13 +4797,6 @@ impl BexEngine {
         sys_types::resolve_name(&self.resolved_function_names, name)
             .found()
             .map(|(k, _)| k)
-    }
-
-    /// Get the return type for a function by dereferencing its heap object.
-    pub fn function_return_type(&self, name: &str) -> Option<RuntimeTy> {
-        let resolved = self.resolve_function_name(name)?;
-        let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
-        Self::function_return_type_of(*ptr).and_then(|ty| named_ty(&ty).ok())
     }
 
     fn function_return_type_of(function: HeapPtr) -> Option<bex_vm_types::RuntimeTy> {
@@ -8098,50 +8072,6 @@ mod concurrent_tests {
         assert!(!engine.heap.should_gc());
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
         engine.shutdown().await;
-    }
-
-    /// Test that demonstrates concurrent `call_function` is safe.
-    /// This test verifies that:
-    /// 1. Multiple concurrent calls complete successfully
-    /// 2. Each call gets its own VM with its own TLAB
-    /// 3. No data races occur during parallel execution
-    #[tokio::test]
-    async fn test_concurrent_calls_safe() {
-        // Note: This requires a test BAML program to be available
-        // Skip if test infrastructure not set up
-        if !baml_env::has_var("BAML_TEST_CONCURRENT") {
-            return;
-        }
-
-        // This test is a placeholder demonstrating the concurrent execution pattern.
-        // In a real implementation, you would:
-        // 1. Compile a test BAML program to bytecode
-        // 2. Create a BexEngine from the bytecode
-        // 3. Wrap it in Arc and spawn concurrent calls
-        // 4. Verify all calls complete successfully
-        //
-        // Example (when test infrastructure is ready):
-        // ```
-        // let engine = /* create test engine */;
-        // let engine = Arc::new(engine);
-        //
-        // // Spawn 10 concurrent calls
-        // let mut handles = vec![];
-        // for i in 0..10 {
-        //     let engine = Arc::clone(&engine);
-        //     handles.push(tokio::spawn(async move {
-        //         // Each call should succeed independently
-        //         let args = vec![ExternalValue::Int(i)];
-        //         engine.call_function("identity", &args).await
-        //     }));
-        // }
-        //
-        // // All should complete successfully
-        // for handle in handles {
-        //     let result = handle.await.expect("task panicked");
-        //     assert!(result.is_ok(), "concurrent call failed: {:?}", result);
-        // }
-        // ```
     }
 }
 

@@ -27,7 +27,7 @@ use crate::{
     error::LspError,
     mutation::SourceMutation,
     paths,
-    position_codec::{PositionCodec, PositionCodecError},
+    position_codec::PositionCodec,
     state::{Applied, GlobalState, OpenDocument, SessionKey},
 };
 
@@ -224,13 +224,11 @@ pub(super) fn did_change(
                 text.clone_from(&change.text);
             }
             Some(range) => {
-                let codec = PositionCodec::new(&text, encoding);
-                let start = codec.position_to_offset(range.start)?;
-                let end = codec.position_to_offset(range.end)?;
-                if start > end {
-                    return Err(PositionCodecError::MalformedRange.into());
-                }
-                text.replace_range(usize::from(start)..usize::from(end), &change.text);
+                let range = PositionCodec::new(&text, encoding).range_to_byte_range(range)?;
+                text.replace_range(
+                    usize::from(range.start())..usize::from(range.end()),
+                    &change.text,
+                );
             }
         }
     }

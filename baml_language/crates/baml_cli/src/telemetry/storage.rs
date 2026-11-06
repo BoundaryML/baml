@@ -106,7 +106,7 @@ impl Telemetry {
     /// the rotation timer (relevant only for long-running commands like
     /// `baml lsp`; short commands exit long before the first tick).
     ///
-    /// This is what makes `crate::telemetry::record(...)` a one-liner
+    /// This is what makes `Telemetry::global().record(...)` a one-liner
     /// anywhere in the crate: no loading, no guard-passing.
     pub(crate) fn global() -> &'static Telemetry {
         static GLOBAL: OnceLock<Telemetry> = OnceLock::new();
@@ -334,13 +334,6 @@ impl InvocationGuard {
         Self {
             telemetry: Some(telemetry),
         }
-    }
-
-    /// A guard that owns no telemetry state. Used when we short-circuit
-    /// on opt-out before ever loading the config.
-    #[allow(dead_code)]
-    pub(crate) const fn noop() -> Self {
-        Self { telemetry: None }
     }
 }
 

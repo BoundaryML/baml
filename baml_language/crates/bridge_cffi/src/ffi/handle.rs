@@ -129,43 +129,6 @@ pub unsafe extern "C" fn baml_handle_release(key: u64) -> BamlCffiStatus {
 }
 
 /// # Safety
-/// `out_key` and `out_handle_type` must be either null or valid for writing
-/// one value of their pointee type.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __testonly_seed_generic_media(
-    out_key: *mut u64,
-    out_handle_type: *mut i32,
-) -> BamlCffiStatus {
-    if out_key.is_null() || out_handle_type.is_null() {
-        return BamlCffiStatus::UnexpectedNullptr;
-    }
-    write_handle_parts(
-        handle_cffi::seed_generic_media_handle(),
-        out_key,
-        out_handle_type,
-    )
-}
-
-/// # Safety
-/// `out_key` and `out_handle_type` must be either null or valid for writing
-/// one value of their pointee type.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __testonly_seed_heap_handle(
-    slab_key: u64,
-    out_key: *mut u64,
-    out_handle_type: *mut i32,
-) -> BamlCffiStatus {
-    if out_key.is_null() || out_handle_type.is_null() {
-        return BamlCffiStatus::UnexpectedNullptr;
-    }
-    write_handle_parts(
-        handle_cffi::seed_heap_handle(slab_key),
-        out_key,
-        out_handle_type,
-    )
-}
-
-/// # Safety
 /// `url` and `mime_type_or_null`, when non-null, must point to valid
 /// NUL-terminated C strings. `out_key` and `out_handle_type` must be either
 /// null or valid for writing one value of their pointee type.
@@ -389,21 +352,6 @@ mod tests {
     fn clone_reports_unexpected_nullptr_for_null_out_key() {
         assert_eq!(
             unsafe { baml_handle_clone(1, ptr::null_mut()) },
-            BamlCffiStatus::UnexpectedNullptr
-        );
-    }
-
-    #[test]
-    fn seed_reports_unexpected_nullptr_for_null_out_pointers() {
-        let mut key = 0;
-        let mut handle_type = 0;
-
-        assert_eq!(
-            unsafe { __testonly_seed_generic_media(ptr::null_mut(), &mut handle_type) },
-            BamlCffiStatus::UnexpectedNullptr
-        );
-        assert_eq!(
-            unsafe { __testonly_seed_generic_media(&mut key, ptr::null_mut()) },
             BamlCffiStatus::UnexpectedNullptr
         );
     }

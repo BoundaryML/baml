@@ -205,7 +205,6 @@ impl CodeQualityArgs {
         let reporter = Reporter::new();
         let session = ProjectSession::open(self.from.as_deref(), CacheUse::Off)?;
         if session.is_empty() {
-            reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
                 session.root().display()

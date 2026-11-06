@@ -226,10 +226,6 @@ impl Fetcher {
         extract_binary_from_archive(&archive, &url, binary_name)
     }
 
-    pub fn install_to_toolchain_root(&self, root: &Path) -> Result<PathBuf, FetchError> {
-        self.install_to_toolchain_root_with_force(root, false)
-    }
-
     /// Stage and validate replacements before moving the usable installation.
     /// The install lock covers both publication and rollback.
     pub fn install_to_toolchain_root_with_force(
@@ -400,36 +396,12 @@ pub fn validate_release_target_triple(target: &str) -> Result<&str> {
     }
 }
 
-pub fn release_archive_filename(product: Product, version: &str, target: &str) -> String {
-    let ext = if target.ends_with("windows-msvc") {
-        "zip"
-    } else {
-        "tar.gz"
-    };
-    format!("{}-{version}-{target}.{ext}", product.tag_prefix())
-}
-
 pub fn validate_sha256(hash: &str) -> Result<String> {
     if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
         Ok(hash.to_ascii_lowercase())
     } else {
         anyhow::bail!("invalid SHA-256 checksum `{hash}`")
     }
-}
-
-pub fn verify_release_archive_checksum_text(
-    archive_bytes: &[u8],
-    archive_url: &str,
-    checksum_text: &str,
-) -> Result<(), FetchError> {
-    let archive_name = archive_url.rsplit('/').next().unwrap_or(archive_url);
-    let expected = parse_release_checksum(checksum_text, archive_name).map_err(|_| {
-        FetchError::BinaryNotInArchive {
-            name: archive_name.to_string(),
-        }
-    })?;
-    let got = format!("{:x}", Sha256::digest(archive_bytes));
-    compare_sha256(archive_url, &expected, &got)
 }
 
 pub fn verify_sha256(
@@ -968,38 +940,6 @@ mod tests {
     #[test]
     fn baml_home_uses_relative_directory_when_no_home_is_available() {
         assert_eq!(baml_env::baml_home_from(None, None), PathBuf::from(".baml"));
-    }
-
-    #[test]
-    fn test_release_archive_filename_uses_platform_extension() {
-        assert_eq!(
-            release_archive_filename(
-                Product::Toolchain,
-                "1.2.3-nightly.20260602.a",
-                "x86_64-unknown-linux-gnu"
-            ),
-            "baml-language-1.2.3-nightly.20260602.a-x86_64-unknown-linux-gnu.tar.gz"
-        );
-        assert_eq!(
-            release_archive_filename(Product::Wrapper, "0.1.0", "aarch64-pc-windows-msvc"),
-            "baml-wrapper-0.1.0-aarch64-pc-windows-msvc.zip"
-        );
-    }
-
-    #[test]
-    fn test_verify_release_archive_checksum_text() {
-        let archive_name = "baml-language-1.2.3-nightly.20260602.a-x86_64-unknown-linux-gnu.tar.gz";
-        let archive_url = format!("https://example.com/releases/{archive_name}");
-        let archive_bytes = b"fake archive bytes";
-        let digest = format!("{:x}", Sha256::digest(archive_bytes));
-        let checksum_text = format!("{digest}  {archive_name}\n");
-
-        verify_release_archive_checksum_text(archive_bytes, &archive_url, &checksum_text).unwrap();
-
-        let err =
-            verify_release_archive_checksum_text(b"different bytes", &archive_url, &checksum_text)
-                .unwrap_err();
-        assert!(format!("{err}").contains("sha256 mismatch"));
     }
 
     #[test]

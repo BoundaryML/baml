@@ -24,7 +24,7 @@ use std::{path::Path, sync::Arc};
 
 use baml_db::ProjectDatabase;
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_vm::debug::{BytecodeFormat, display_program};
+use bex_vm::debug::display_program;
 use bex_vm_types::{Function, Object, Program};
 pub use indexmap::IndexMap;
 #[cfg(test)]
@@ -131,7 +131,7 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
         })
         .collect();
     functions.sort_by(|(a, _), (b, _)| a.cmp(b));
-    display_program(&functions, BytecodeFormat::Textual)
+    display_program(&functions)
 }
 
 /// Build the pool into an (unsealed) heap and bind every head, so rendered
@@ -242,7 +242,7 @@ pub fn display_user_functions_bound(program: &Program) -> String {
         })
         .collect();
     functions.sort_by(|(a, _), (b, _)| a.cmp(b));
-    display_program(&functions, BytecodeFormat::Textual)
+    display_program(&functions)
 }
 
 /// Resolve a user-provided entry name to the fully-qualified name used in the program.
@@ -438,15 +438,6 @@ pub fn db_with_root(root: &Path) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.workspace(root);
     db
-}
-
-/// Like `run_test` but at `OptLevel::Two` (includes MIR constant folding).
-pub async fn run_test_mir_optimized(
-    source: &str,
-    entry: &str,
-    args: IndexMap<&str, BexExternalValue>,
-) -> TestOutput {
-    run_test(source, entry, args, OptLevel::Two).await
 }
 
 #[cfg(test)]

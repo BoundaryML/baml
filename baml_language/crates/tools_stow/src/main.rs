@@ -186,11 +186,6 @@ impl Config {
         Err(ConfigError::NotFound)
     }
 
-    /// Check if a stow.toml file already exists
-    pub fn config_exists(workspace_root: &Path) -> bool {
-        workspace_root.join("stow.toml").exists()
-    }
-
     /// Normalize config by converting legacy flat format to namespace format
     fn normalize(mut self) -> Self {
         // If legacy fields are set and namespaces is empty, convert to namespace format
@@ -398,8 +393,6 @@ enum Command {
 #[derive(Debug)]
 struct ValidationError {
     crate_name: String,
-    #[allow(dead_code)]
-    file_path: PathBuf,
     message: String,
 }
 
@@ -838,7 +831,6 @@ fn check_no_nested_crates(
                         .unwrap_or_default()
                         .to_string_lossy()
                         .into(),
-                    file_path: crate_dir.join("Cargo.toml"),
                     message: format!(
                         "Nested crate detected at '{}'. All crates must be directly under {}/",
                         relative.display(),
@@ -855,7 +847,6 @@ fn check_no_nested_crates(
 fn check_crate_name_matches_folder(
     folder_name: &str,
     doc: &DocumentMut,
-    cargo_path: &Path,
     config: &Config,
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
@@ -872,7 +863,6 @@ fn check_crate_name_matches_folder(
                 if !has_exception {
                     errors.push(ValidationError {
                         crate_name: folder_name.to_string(),
-                        file_path: cargo_path.to_path_buf(),
                         message: format!(
                             "Crate name '{name}' does not match folder name '{folder_name}'"
                         ),
@@ -890,7 +880,6 @@ const AUTO_ALLOWED_SUFFIXES: &[&str] = &["types", "test", "tests"];
 fn check_crate_naming_convention(
     folder_name: &str,
     doc: &DocumentMut,
-    cargo_path: &Path,
     config: &Config,
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
@@ -917,7 +906,6 @@ fn check_crate_naming_convention(
         let ns_names: Vec<_> = config.namespaces.iter().map(|ns| &ns.name).collect();
         errors.push(ValidationError {
             crate_name: crate_name.to_string(),
-            file_path: cargo_path.to_path_buf(),
             message: format!(
                 "Crate name must start with a known namespace prefix. Known namespaces: {ns_names:?}, got '{crate_name}'"
             ),
@@ -945,7 +933,6 @@ fn check_crate_naming_convention(
             if !simple_lowercase && !approved_prefix {
                 errors.push(ValidationError {
                     crate_name: crate_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
                     message: format!(
                         "Crate suffix '{word}' should be a simple lowercase word or an approved prefix",
                     ),
@@ -966,7 +953,6 @@ fn check_crate_naming_convention(
                 if !prefix_approved {
                     errors.push(ValidationError {
                         crate_name: crate_name.to_string(),
-                        file_path: cargo_path.to_path_buf(),
                         message: format!(
                             "Crate name '{}' has unapproved prefix '{}'. Approved for {}: {:?}",
                             crate_name, first, namespace.name, namespace.approved_prefixes
@@ -986,7 +972,6 @@ fn check_crate_naming_convention(
             if !prefix_approved || !suffix_allowed {
                 errors.push(ValidationError {
                     crate_name: crate_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
                     message: format!(
                         "Crate name '{crate_name}' has unapproved structure. Expected {ns}_<word>, {ns}_<approved>_<word>, or ending in _types/_test/_tests",
                         ns = namespace.name
@@ -997,7 +982,6 @@ fn check_crate_naming_convention(
         _ => {
             errors.push(ValidationError {
                 crate_name: crate_name.to_string(),
-                file_path: cargo_path.to_path_buf(),
                 message: format!(
                     "Crate name '{crate_name}' has too many underscore-separated parts"
                 ),
@@ -1011,7 +995,6 @@ fn check_crate_naming_convention(
 fn check_test_crate_has_prefix(
     crate_name: &str,
     all_crate_names: &HashSet<String>,
-    cargo_path: &Path,
     config: &Config,
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
@@ -1032,7 +1015,6 @@ fn check_test_crate_has_prefix(
             if !all_crate_names.contains(prefix_crate) {
                 errors.push(ValidationError {
                     crate_name: crate_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
                     message: format!(
                         "Test crate '{crate_name}' requires corresponding crate '{prefix_crate}' which was not found"
                     ),
@@ -1055,11 +1037,7 @@ fn is_workspace_dependency(item: &Item) -> bool {
     false
 }
 
-fn check_workspace_dependencies(
-    crate_name: &str,
-    doc: &DocumentMut,
-    cargo_path: &Path,
-) -> Vec<ValidationError> {
+fn check_workspace_dependencies(crate_name: &str, doc: &DocumentMut) -> Vec<ValidationError> {
     let mut errors = Vec::new();
     let dep_sections = ["dependencies", "dev-dependencies", "build-dependencies"];
 
@@ -1069,7 +1047,6 @@ fn check_workspace_dependencies(
                 if !is_workspace_dependency(dep_value) {
                     errors.push(ValidationError {
                         crate_name: crate_name.to_string(),
-                        file_path: cargo_path.to_path_buf(),
                         message: format!(
                             "Dependency '{dep_name}' in [{section}] must use '{{ workspace = true }}' format"
                         ),
@@ -1089,7 +1066,6 @@ fn check_workspace_dependencies(
                             if !is_workspace_dependency(dep_value) {
                                 errors.push(ValidationError {
                                     crate_name: crate_name.to_string(),
-                                    file_path: cargo_path.to_path_buf(),
                                     message: format!(
                                         "Dependency '{dep_name}' in [target.'{target_name}'.{section}] must use '{{ workspace = true }}' format"
                                     ),
@@ -1108,7 +1084,6 @@ fn check_workspace_dependencies(
 fn check_dependency_restrictions(
     crate_name: &str,
     doc: &DocumentMut,
-    cargo_path: &Path,
     config: &Config,
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
@@ -1142,7 +1117,6 @@ fn check_dependency_restrictions(
             if rule.matches_dependency(dep_name) && !rule.is_allowed(crate_name, config) {
                 errors.push(ValidationError {
                     crate_name: crate_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
                     message: format!(
                         "Crate '{}' is not allowed to use '{}' (found in [{}]). {}",
                         crate_name, dep_name, section, rule.reason
@@ -1158,7 +1132,6 @@ fn check_dependency_restrictions(
 fn check_dependencies_sorted(
     crate_name: &str,
     doc: &DocumentMut,
-    cargo_path: &Path,
     config: &Config,
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
@@ -1206,7 +1179,6 @@ fn check_dependencies_sorted(
                 if has_grouping_issue {
                     errors.push(ValidationError {
                         crate_name: crate_name.to_string(),
-                        file_path: cargo_path.to_path_buf(),
                         message: format!(
                             "Dependencies in [{section}] have internal deps interleaved with external deps. Internal deps should come first."
                         ),
@@ -1214,7 +1186,6 @@ fn check_dependencies_sorted(
                 } else {
                     errors.push(ValidationError {
                         crate_name: crate_name.to_string(),
-                        file_path: cargo_path.to_path_buf(),
                         message: format!(
                             "Dependencies in [{section}] are not sorted. Expected internal first (sorted), then external (sorted)."
                         ),
@@ -2744,36 +2715,30 @@ fn main() {
         all_errors.extend(check_crate_name_matches_folder(
             &crate_info.folder_name,
             &crate_info.doc,
-            &crate_info.cargo_path,
             &config,
         ));
         all_errors.extend(check_crate_naming_convention(
             &crate_info.folder_name,
             &crate_info.doc,
-            &crate_info.cargo_path,
             &config,
         ));
         all_errors.extend(check_test_crate_has_prefix(
             &crate_info.crate_name,
             &all_crate_names,
-            &crate_info.cargo_path,
             &config,
         ));
         all_errors.extend(check_workspace_dependencies(
             &crate_info.crate_name,
             &crate_info.doc,
-            &crate_info.cargo_path,
         ));
         all_errors.extend(check_dependency_restrictions(
             &crate_info.crate_name,
             &crate_info.doc,
-            &crate_info.cargo_path,
             &config,
         ));
         all_errors.extend(check_dependencies_sorted(
             &crate_info.crate_name,
             &crate_info.doc,
-            &crate_info.cargo_path,
             &config,
         ));
     }
@@ -2790,7 +2755,6 @@ fn main() {
         if !used_workspace_deps.contains(dep_name) {
             all_errors.push(ValidationError {
                 crate_name: "workspace".to_string(),
-                file_path: workspace_cargo.clone(),
                 message: format!("Workspace dependency '{dep_name}' is not used by any crate"),
             });
         }

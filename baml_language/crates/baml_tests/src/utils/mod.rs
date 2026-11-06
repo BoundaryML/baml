@@ -81,15 +81,6 @@ pub fn assert_diagnostic_spans_exclude_trivia(
     );
 }
 
-/// Metrics for measuring node reuse in incremental parsing
-#[derive(Debug)]
-pub struct ReuseMetrics {
-    pub total_old_nodes: usize,
-    pub total_new_nodes: usize,
-    pub reused_nodes: usize,
-    pub reuse_percentage: f64,
-}
-
 /// Verify the parse tree can reconstruct the original source exactly
 pub fn assert_tree_is_lossless(tree: &SyntaxNode, original: &str) {
     let reconstructed = tree.to_string();
@@ -134,52 +125,16 @@ pub fn insert_char(source: &str, pos: usize, ch: char) -> String {
     result
 }
 
-/// Delete a character at the given position
-pub fn delete_char(source: &str, pos: usize) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = source.chars().collect();
-
-    for (i, &c) in chars.iter().enumerate() {
-        if i != pos {
-            result.push(c);
-        }
-    }
-
-    result
-}
-
-/// Replace a character at the given position
-pub fn replace_char(source: &str, pos: usize, ch: char) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = source.chars().collect();
-
-    for (i, &c) in chars.iter().enumerate() {
-        if i == pos {
-            result.push(ch);
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_string_edit_functions() {
+    fn test_insert_char() {
         let source = "hello world";
 
         assert_eq!(insert_char(source, 0, 'X'), "Xhello world");
         assert_eq!(insert_char(source, 5, 'X'), "helloX world");
         assert_eq!(insert_char(source, 11, 'X'), "hello worldX");
-
-        assert_eq!(delete_char(source, 0), "ello world");
-        assert_eq!(delete_char(source, 5), "helloworld");
-
-        assert_eq!(replace_char(source, 0, 'X'), "Xello world");
-        assert_eq!(replace_char(source, 6, 'X'), "hello Xorld");
     }
 }

@@ -2195,11 +2195,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::GenericClassDestructureRequiresTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::RestSubPatternNotBinding => DiagnosticId::TypeMismatch,
         TirTypeError::RefutablePatternInLet { .. } => DiagnosticId::RefutablePatternInLet,
-        TirTypeError::IrrefutablePatternInIfLet => DiagnosticId::IrrefutablePatternInIfLet,
         TirTypeError::LetElseMustDiverge { .. } => DiagnosticId::LetElseMustDiverge,
-        TirTypeError::IrrefutablePatternInLetElse => DiagnosticId::IrrefutablePatternInLetElse,
-        TirTypeError::IrrefutablePatternInWhileLet => DiagnosticId::IrrefutablePatternInWhileLet,
-        TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::DeferControlFlowEscape { .. } => DiagnosticId::DeferControlFlowEscape,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
@@ -2212,7 +2208,6 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::ConflictingTypeArguments { .. } => DiagnosticId::UnknownType,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
         TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericFunctionValueNotSpecialized { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
         TirTypeError::ScopedTypeEscapesBlock { .. } => DiagnosticId::ScopedTypeEscapesBlock,
@@ -2220,9 +2215,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::CallSiteBuiltinValue { .. } => DiagnosticId::CallSiteBuiltinValue,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
-        TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,
-        TirTypeError::SuggestNullCoalesce { .. } => DiagnosticId::InvalidOperator,
-        TirTypeError::NullCoalesceWithNull { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::TaggedTagNotAFunction { .. } => DiagnosticId::NotCallable,
         TirTypeError::TaggedTagNotMarked { .. } | TirTypeError::TaggedTagBadBodyParam { .. } => {
@@ -2238,13 +2230,10 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::NoSuchField
         }
         TirTypeError::InvalidInterfaceUpcastTarget { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::InterfaceMemberRequiresReceiver { .. } => DiagnosticId::NoSuchField,
         TirTypeError::InvalidSelfCallThroughInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::SelflessMethodNeedsConcreteSelf { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::SelflessInstanceMember { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ErasedSelfMethodValue { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::DefaultOnRequiredMethod { .. } => DiagnosticId::DefaultOnRequiredMethod,
-        TirTypeError::BareDefaultKeyword => DiagnosticId::BareDefaultKeyword,
         TirTypeError::TypeDoesNotImplementInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::BlanketBoundNotSatisfied { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
@@ -2264,15 +2253,10 @@ fn tir_type_error_to_diagnostic_id(
         // Generic-parameter / associated-type declaration hygiene.
         TirTypeError::TypeParamShadowed { .. }
         | TirTypeError::TypeParamShadowedImplParam { .. }
-        | TirTypeError::DuplicateGenericParam { .. }
-        | TirTypeError::DuplicateAssociatedType { .. }
-        | TirTypeError::AssociatedTypeConflictsWithGenericParam { .. } => {
-            DiagnosticId::DuplicateField
-        }
+        | TirTypeError::DuplicateGenericParam { .. } => DiagnosticId::DuplicateField,
         // Generic type-argument constraints.
         TirTypeError::BoundedTypeArgNotConcrete { .. }
-        | TirTypeError::MissingAssociatedTypeBindings { .. }
-        | TirTypeError::AmbiguousInterfacePatternBindings { .. } => DiagnosticId::TypeMismatch,
+        | TirTypeError::MissingAssociatedTypeBindings { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::InterfaceProjectionBase { .. } => DiagnosticId::InterfaceProjectionBase,
         // `$init` effect rules.
         TirTypeError::InitIoNotAllowed { .. } => DiagnosticId::InitIoNotAllowed,
@@ -2311,10 +2295,6 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::DuplicateInterfaceFieldLink { .. } => {
             DiagnosticId::DuplicateInterfaceFieldLink
-        }
-        TirTypeError::SelfInInterfaceField { .. } => DiagnosticId::SelfInInterfaceField,
-        TirTypeError::SelfInAssociatedTypeDefault { .. } => {
-            DiagnosticId::SelfInAssociatedTypeDefault
         }
         TirTypeError::InterfaceRequiresNonInterface { .. } => {
             DiagnosticId::InterfaceRequiresNonInterface

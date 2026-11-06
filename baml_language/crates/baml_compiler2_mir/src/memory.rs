@@ -311,13 +311,6 @@ pub fn place_cell(place: &Place) -> Option<CellId> {
     }
 }
 
-/// Whether evaluating an rvalue reads through a cell anywhere.
-pub fn rvalue_reads_cell(rvalue: &Rvalue<'_>) -> bool {
-    let mut reads = false;
-    walk_rvalue_places(rvalue, &mut |place| reads |= place_cell(place).is_some());
-    reads
-}
-
 /// The cells a body shares with the tasks it spawns: every cell a spawned
 /// closure captures, and every cell a closure stored in one of those cells
 /// captures in turn (a spawned body that calls a captured closure reaches

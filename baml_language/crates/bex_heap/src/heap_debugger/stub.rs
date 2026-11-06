@@ -46,10 +46,6 @@ impl HeapDebuggerState {
     pub(crate) fn bump_epoch(&self) -> u32 {
         0
     }
-
-    pub(crate) fn epoch(&self) -> u32 {
-        0
-    }
 }
 
 impl BexHeap {
@@ -80,11 +76,6 @@ impl BexHeap {
     #[inline]
     pub(crate) fn bump_epoch(&self) -> u32 {
         self.debug_state().bump_epoch()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn heap_epoch(&self) -> u32 {
-        self.debug_state().epoch()
     }
 
     pub(crate) fn placeholder_object(&self) -> Object {

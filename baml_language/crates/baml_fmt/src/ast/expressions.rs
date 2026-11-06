@@ -5258,12 +5258,6 @@ impl FunctionArrow {
         }
     }
 
-    /// Returns true if the source used `=>` instead of the canonical `->`.
-    #[must_use]
-    pub fn is_fat_arrow(&self) -> bool {
-        matches!(self, FunctionArrow::FatArrow(_))
-    }
-
     /// Print trivia between the source arrow and the next canonical element.
     /// The arrow spelling may be synthesized, but its source span still owns
     /// comments that must survive normalization.

@@ -267,12 +267,6 @@ fn initialize_runtime_from_blob_inner(
     }
 }
 
-/// Destroy the process-wide BAML runtime after its spawned work settles.
-#[unsafe(no_mangle)]
-pub extern "C" fn destroy_baml_runtime(_runtime: *const libc::c_void) {
-    crate::free_buffer(shutdown_runtime());
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn shutdown_runtime() -> Buffer {
     let result = std::panic::catch_unwind(shutdown_runtime_on_fresh_thread);
@@ -294,16 +288,6 @@ fn shutdown_runtime_on_fresh_thread() -> Result<(), String> {
     })
     .join()
     .map_err(|_| "panic while shutting down BAML runtime".to_string())?
-}
-
-/// Invoke the BAML CLI.
-/// Currently returns 1 (error) as CLI is not implemented for bridge.
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[unsafe(no_mangle)]
-pub extern "C" fn invoke_runtime_cli(_args: *const *const libc::c_char) -> libc::c_int {
-    // TODO: Implement CLI invocation if needed
-    eprintln!("invoke_runtime_cli not implemented in bridge_cffi");
-    1
 }
 
 #[cfg(test)]

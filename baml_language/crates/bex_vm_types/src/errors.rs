@@ -211,9 +211,6 @@ pub enum VmInternalError {
     #[error("invalid structured log envelope: {0}")]
     InvalidLogEvent(&'static str),
 
-    #[error("unexpected empty eval stack")]
-    UnexpectedEmptyStack,
-
     #[error("not enough items on stack: {0}")]
     NotEnoughItemsOnStack(usize),
 
@@ -240,9 +237,6 @@ pub enum VmInternalError {
     #[error("cannot apply unary operation: {op} {value}")]
     CannotApplyUnaryOp { op: UnaryOp, value: Type },
 
-    #[error("jump offset overflowed instruction pointer")]
-    InvalidJump,
-
     #[error("missing native function: {name}")]
     MissingNativeFunction { name: String },
     /// Schema-aligned parsing produced a value its target's declarations
@@ -252,9 +246,6 @@ pub enum VmInternalError {
 
     #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
     UnexpectedConstantKind,
-
-    #[error("invalid compact opcode byte: {0}")]
-    InvalidOpcode(u8),
 
     /// `StoreGlobal` was executed outside of an `$init` function. Globals are
     /// frozen post-`$init` (shared as `Arc<[Value]>` across VMs) and any
@@ -500,14 +491,6 @@ impl VmRustFnError {
         Self::Thrown {
             value,
             throw_kind: ThrowKind::Fresh,
-        }
-    }
-
-    #[must_use]
-    pub const fn thrown_rethrow(value: Value) -> Self {
-        Self::Thrown {
-            value,
-            throw_kind: ThrowKind::Rethrow,
         }
     }
 }

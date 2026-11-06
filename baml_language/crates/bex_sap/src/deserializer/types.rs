@@ -1,14 +1,11 @@
 use std::{borrow::Cow, collections::HashSet};
 
-use serde_json::json;
-
 use super::{
-    coercer::ParsingError,
     deserialize_flags::{DeserializerConditions, Flag},
     score::WithScore,
 };
 use crate::{
-    baml_value::{BamlValue, BamlValueWithMeta, ValueWithMeta},
+    baml_value::{BamlValue, ValueWithMeta},
     sap_model::{TyResolvedRef, TypeIdent, TypeName},
 };
 
@@ -130,27 +127,6 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
 
     pub fn conditions(&self) -> &DeserializerConditions<'s, 'v, 't, N> {
         &self.meta.flags
-    }
-}
-
-impl<'s, 'v, 't, N: TypeIdent> From<BamlValueWithFlags<'s, 'v, 't, N>>
-    for BamlValueWithMeta<'s, 'v, 't, Vec<Flag<'s, 'v, 't, N>>, N>
-{
-    fn from(baml_value: BamlValueWithFlags<'s, 'v, 't, N>) -> Self {
-        baml_value.map_meta(|meta| meta.flags.flags)
-    }
-}
-
-pub trait ParsingErrorToUiJson {
-    fn to_ui_json(&self) -> serde_json::Value;
-}
-
-impl ParsingErrorToUiJson for ParsingError {
-    fn to_ui_json(&self) -> serde_json::Value {
-        json!({
-            crate::deserializer::coercer::scope_text(&self.scope): self.reason,
-            "causes": self.causes.iter().map(ParsingErrorToUiJson::to_ui_json).collect::<Vec<_>>(),
-        })
     }
 }
 

@@ -127,35 +127,3 @@ macro_rules! test_partial_none_deserializer {
         }
     };
 }
-
-/// Tests partial deserialization that is expected to fail.
-#[allow(unused_macros)]
-macro_rules! test_partial_failing_deserializer {
-    ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr) => {
-        #[test]
-        fn $name() {
-            let target_ty: $crate::sap_model::Ty<'_, &str> = $target_ty;
-            let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
-
-            let parsed =
-                $crate::jsonish::parse($raw_string, ::core::default::Default::default(), false)
-                    .expect("jsonish::parse failed");
-            let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
-
-            let target_ty = db.resolve(&target_ty).unwrap();
-            let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
-            match result {
-                Ok(Some(v)) => {
-                    let json = ::serde_json::to_value(&v).unwrap();
-                    panic!("Parsing should have failed, got: {json}");
-                }
-                Ok(None) => {
-                    panic!("Parsing should have failed, got: None");
-                }
-                Err(_) => {
-                    // Expected: parsing failed
-                }
-            }
-        }
-    };
-}

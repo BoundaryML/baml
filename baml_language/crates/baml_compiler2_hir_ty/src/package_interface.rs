@@ -35,21 +35,6 @@ use crate::{
     render::{Spell, Viewpoint},
 };
 
-/// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
-/// packages, since process start. A warm compile that seeds the cached stdlib
-/// interface should leave this at zero; a cold compile bumps it up once per
-/// stdlib package. Exposed for the seeding tests — not part of any compile
-/// result.
-static STDLIB_HONEST_DERIVATIONS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-
-/// Number of stdlib `package_interface`s derived honestly (from source, not
-/// from a seed) since process start. Zero on a warm run whose stdlib interface
-/// seed served every stdlib package; one per stdlib package on a cold run.
-pub fn stdlib_honest_derivations() -> usize {
-    STDLIB_HONEST_DERIVATIONS.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 // ── Data types ─────────────────────────────────────────────────────────────
 
 /// Fully-resolved typed interface for a package.
@@ -2045,12 +2030,6 @@ pub fn package_interface(
             mark_precompiled_callables_linkable(&mut interface);
         }
         return interface;
-    }
-
-    // Honest derivation. Count stdlib-package derivations so a warm run can
-    // assert zero (the seed served every stdlib package).
-    if is_stdlib {
-        STDLIB_HONEST_DERIVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     fold_package_interface(db, pkg_id)

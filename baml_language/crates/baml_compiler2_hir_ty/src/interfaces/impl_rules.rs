@@ -1883,43 +1883,6 @@ pub fn type_implements_interface(
     false
 }
 
-/// Symbolic counterpart of [`get_implements_block`]: unlike membership, the
-/// caller reads the match's realized associated-type pins, so a UNIQUE
-/// matching block is required: several distinct matches return `None`.
-pub fn get_implements_block_symbolic<'db>(
-    db: &'db dyn baml_compiler2_hir::Db,
-    pkg_id: baml_base::SourceRoot,
-    concrete: &Ty,
-    interface: &baml_type::Interface,
-    aliases: &HashMap<DeclName, Ty>,
-    mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
-) -> Option<ResolvedImpl<'db>> {
-    let mut packages = vec![pkg_id];
-    packages.extend(baml_compiler2_hir::package::package_dependency_closure(
-        db, pkg_id,
-    ));
-    let mut found: Option<ResolvedImpl<'db>> = None;
-    for pkg in packages {
-        for &impl_loc in package_impl_locs(db, pkg) {
-            let Ok(data) = impl_data(db, impl_loc).as_ref() else {
-                continue;
-            };
-            let Some(bindings) = match_impl_head(db, data, concrete, interface, aliases) else {
-                continue;
-            };
-            if !impl_bounds_hold_symbolic(data, &bindings, &mut is_subtype) {
-                continue;
-            }
-            if found.is_some() {
-                // Coherence guarantees uniqueness only for realized inputs.
-                return None;
-            }
-            found = Some(ResolvedImpl { impl_loc, bindings });
-        }
-    }
-    found
-}
-
 /// [`get_implements_block`] with an explicit recursion budget.
 fn get_implements_block_within_depth<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
@@ -2201,32 +2164,6 @@ pub fn first_failing_impl_bound(
         }
     }
     None
-}
-
-impl<'db> ResolvedImpl<'db> {
-    /// The interface this impl provides at its resolved instantiation:
-    /// the declared interface with the impl's bindings substituted in.
-    pub fn implemented_interface(
-        &self,
-        db: &'db dyn baml_compiler2_hir::Db,
-    ) -> baml_type::Interface {
-        let data = impl_data(db, self.impl_loc)
-            .as_ref()
-            .unwrap_or_else(|_| unreachable!("a ResolvedImpl carries an impl_data-Ok impl"));
-        let name = interface_loc_qtn(db, data.interface)
-            .unwrap_or_else(|| unreachable!("an impl_data-Ok impl has a named interface target"));
-        let generics = data
-            .interface_args
-            .iter()
-            .map(|arg| substitute_ty(arg, &self.bindings))
-            .collect();
-        let associated_types = data
-            .associated_types
-            .iter()
-            .map(|(name, ty)| (name.clone(), substitute_ty(ty, &self.bindings)))
-            .collect();
-        baml_type::Interface::new(name, generics, associated_types)
-    }
 }
 
 #[cfg(test)]

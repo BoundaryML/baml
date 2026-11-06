@@ -103,7 +103,6 @@ fn visibility_to_wire(visibility: &RunVisibility) -> Value {
         RunVisibility::History => json!({ "kind": "history" }),
         RunVisibility::Scoped { scope_id } => json!({ "kind": "scoped", "scopeId": scope_id }),
         RunVisibility::Hidden => json!({ "kind": "hidden" }),
-        RunVisibility::DebugOnly => json!({ "kind": "debugOnly" }),
     }
 }
 
@@ -276,13 +275,6 @@ fn payload_body_to_wire(body: &PayloadBody) -> Value {
 
 fn payload_body_state_to_wire(state: &PayloadBodyState) -> Value {
     match state {
-        PayloadBodyState::InlineBytes => json!({ "kind": "inlineBytes" }),
-        PayloadBodyState::InlineJson => json!({ "kind": "inlineJson" }),
-        PayloadBodyState::RetainedByRef(reference) => {
-            json!({ "kind": "retainedByRef", "id": &reference.id })
-        }
-        PayloadBodyState::Truncated => json!({ "kind": "truncated" }),
-        PayloadBodyState::Compacted => json!({ "kind": "compacted" }),
         PayloadBodyState::OmittedByPolicy => json!({ "kind": "omittedByPolicy" }),
     }
 }

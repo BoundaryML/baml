@@ -48,7 +48,7 @@ struct Skill<'a> {
 }
 
 impl AgentArgs {
-    pub fn run(&self) -> Result<ExitCode> {
+    pub(crate) fn run(&self) -> Result<ExitCode> {
         match &self.command {
             AgentCommand::Install(args) => args.run(),
         }
@@ -56,7 +56,7 @@ impl AgentArgs {
 }
 
 impl AgentInstallArgs {
-    pub fn run(&self) -> Result<ExitCode> {
+    pub(crate) fn run(&self) -> Result<ExitCode> {
         let root = match &self.dir {
             Some(dir) => explicit_install_root(dir)?,
             None => detect_install_root()?,

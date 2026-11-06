@@ -123,29 +123,17 @@ pub enum LoweringError {
     /// An internal invariant was violated during lowering/decomposition/linking
     /// (a compiler bug), carrying a diagnostic message.
     Internal(String),
-    /// The incremental (dirty-only) reuse path cannot reuse the cached image for
-    /// this project. Raised in two cases: a caller-clean file is missing from
-    /// `prev_units` (a corrupt / stale cached image); or a dirty top-level `let`
-    /// initializer interns a generic-function value already owned by a clean file
-    /// (the design §9 R1 tail edge). Not a compiler fault: callers silently fall
-    /// back to a full compile, which is byte-identical.
-    ReuseUnsupported(String),
 }
 
 impl std::fmt::Display for LoweringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Internal(msg) => write!(f, "internal lowering error: {msg}"),
-            Self::ReuseUnsupported(msg) => {
-                write!(f, "per-file bytecode reuse unsupported: {msg}")
-            }
         }
     }
 }
 
 impl std::error::Error for LoweringError {}
-
-pub use bex_vm_types::Program as ProgramAlias;
 
 /// The conservative source-content identity of `root`'s program file set
 /// (profiling streams spec §2.3): any byte change in any project file, or a

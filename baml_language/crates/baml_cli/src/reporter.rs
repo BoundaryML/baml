@@ -105,14 +105,6 @@ impl Reporter {
         let line = format!("{} in {elapsed:#}", format_status(verb, msg.as_ref()));
         eprintln!("{line}");
     }
-
-    /// Preserve the old call shape for diagnostic/error paths.
-    pub fn abandon(&self) {}
-
-    /// Run `f` and return whatever it returns.
-    pub fn suspend<R>(&self, f: impl FnOnce() -> R) -> R {
-        f()
-    }
 }
 
 impl Default for Reporter {
@@ -155,17 +147,7 @@ pub fn print_anyhow_error(error: &anyhow::Error) {
 impl Reporter {
     /// Print an error through this reporter.
     pub fn error(&self, msg: impl std::fmt::Display) {
-        self.abandon();
         print_error(msg);
-    }
-
-    /// Print a fatal error and hand back the terminal exit code, so
-    /// command handlers can `return Ok(reporter.fatal(...))` instead of
-    /// printing through `eprintln!` and constructing the code by hand.
-    #[must_use]
-    pub fn fatal(&self, msg: impl std::fmt::Display) -> crate::ExitCode {
-        self.error(msg);
-        crate::ExitCode::Other
     }
 
     /// Print a warning. Mirrors the formatting of [`print_warning`].

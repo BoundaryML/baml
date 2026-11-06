@@ -173,19 +173,15 @@ pub enum SyntaxKind {
     LLM_FUNCTION_BODY,  // Function body with client/prompt
     EXPR_FUNCTION_BODY, // Function body with expressions/statements
     PROMPT_FIELD,
-    CLIENT_REFERENCE,
     CLIENT_FIELD, // 'client' field in LLM function
     TOOLS_FIELD,  // 'tools' field in LLM function (BEP: tools: [fn, ...])
-    DEFAULT_IMPL,
 
     // Class components
-    FIELD_LIST,
     FIELD,
 
     // Interface components
     METHOD_SIG,            // function name(params) -> ReturnType (no body)
     ASSOCIATED_TYPE_DECL,  // type Item [extends Bound] [= Default] in interface/implements
-    EXTENDS_CLAUSE,        // reserved legacy node; interfaces use `requires`
     REQUIRES_CLAUSE,       // requires I1, I2
     IMPLEMENTS_BLOCK,      // implements I { ... } inside a class
     IMPLEMENTS_TARGET,     // the interface name (path) in `implements I`
@@ -194,7 +190,6 @@ pub enum SyntaxKind {
     IMPLEMENTS_FOR_TARGET, // the `T` in `implements I for T`
 
     // Enum components
-    ENUM_VARIANT_LIST,
     ENUM_VARIANT,
 
     // Client components
@@ -207,17 +202,12 @@ pub enum SyntaxKind {
     CONFIG_BLOCK,
     CONFIG_ITEM,
     CONFIG_VALUE,
-    NESTED_CONFIG,
 
     // Type expressions
     /// A complete type expression. Unions contain alternating `TYPE_EXPR`
     /// operands and `PIPE` tokens; each operand owns its postfix modifiers.
     /// Standalone types contain their primary syntax and modifiers directly.
     TYPE_EXPR,
-    UNION_TYPE,
-    OPTIONAL_TYPE,
-    ARRAY_TYPE,
-    MAP_TYPE,
     TYPE_ARGS,
     STRING_LITERAL_TYPE, // "user" | "assistant"
     /// Callable type syntax: parameters, arrow, return annotation, and effects.
@@ -390,12 +380,6 @@ pub enum SyntaxKind {
     /// `await expr` — BEP-034 await expression.
     /// Structure: `KW_AWAIT expr`.
     AWAIT_EXPR,
-    /// `Future<T, E>` — explicit future type expression.
-    /// Structure: `WORD("Future") LESS type_expr COMMA type_expr GREATER`.
-    /// Parsed as a generic path type today; this kind exists for the
-    /// parser to mark the syntactic origin when the surface form should
-    /// resolve to a `Ty::Future`.
-    FUTURE_TYPE_EXPR,
     LAMBDA_EXPR,
     THROWS_CLAUSE,
     WHILE_STMT,

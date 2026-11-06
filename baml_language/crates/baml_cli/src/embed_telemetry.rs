@@ -8,14 +8,14 @@ use btel_settings::artifact::{
 use clap::Args;
 
 #[derive(Args, Clone, Debug, Default)]
-pub struct EmbedTelemetryArgs {
+pub(crate) struct EmbedTelemetryArgs {
     /// Verify exclusive write access to the configured environment and embed its API key.
     #[arg(long, help_heading = "Telemetry options")]
     pub embed_telemetry: bool,
 }
 
 impl EmbedTelemetryArgs {
-    pub fn apply(
+    pub(crate) fn apply(
         &self,
         policy: &mut ArtifactTelemetry,
         manifest: &toml::Value,

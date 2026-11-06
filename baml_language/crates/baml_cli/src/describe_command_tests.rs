@@ -1142,7 +1142,17 @@ fn control_describe_shallow_namespace_item_works() {
 
 // ── "Did you mean?" suggestion tests ────────────────────────────────────────
 
-use crate::describe_command::suggest_similar;
+fn suggest_similar(
+    db: &ProjectDatabase,
+    viewer: baml_db::SourceRoot,
+    name: &str,
+    limit: usize,
+) -> Vec<String> {
+    crate::describe_command::suggest_similar_kinded(db, viewer, name, limit)
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect()
+}
 
 /// Typo in an item name should suggest the correct spelling.
 #[test]

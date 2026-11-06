@@ -12,13 +12,6 @@ mod explicit_type_args;
 #[cfg(test)]
 mod inference;
 #[cfg(test)]
-// Archived tests for the superseded TIR PackageInterface API. Re-enabling
-// requires porting the fixtures and assertions to hir_ty; keeping the module
-// disconnected makes that separate repair explicit instead of compiling a
-// misleading stale contract.
-#[cfg(any())]
-mod package_interface;
-#[cfg(test)]
 mod phase3a;
 mod phase3a_recursion;
 #[cfg(test)]

@@ -92,7 +92,7 @@ Examples:
 
   Override the output directory:
     baml generate --output-dir ./generated")]
-pub struct GenerateArgs {
+pub(crate) struct GenerateArgs {
     #[command(flatten)]
     pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
     #[command(subcommand)]
@@ -123,13 +123,13 @@ pub struct GenerateArgs {
 }
 
 #[derive(Subcommand, Clone, Debug)]
-pub enum GenerateCommand {
+pub(crate) enum GenerateCommand {
     /// Add a client generator to baml.toml.
     Add(AddGeneratorArgs),
 }
 
 #[derive(Args, Clone, Debug)]
-pub struct AddGeneratorArgs {
+pub(crate) struct AddGeneratorArgs {
     #[arg(value_name = "OUTPUT_TYPE", value_parser = add_output_type_parser())]
     pub output_type: OutputType,
 
@@ -296,7 +296,7 @@ impl GenerateArgs {
         }
     }
 
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         if self.command.is_some() && self.telemetry.embed_telemetry {
             anyhow::bail!(
                 "`--embed-telemetry` applies to `baml generate`, which produces the SDK. Add the generator first, then run `baml generate --embed-telemetry`."
@@ -322,7 +322,6 @@ impl GenerateArgs {
             crate::project_session::CacheUse::ReadOnly,
         )?;
         if session.is_empty() {
-            reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
                 session.root().display()
@@ -337,9 +336,7 @@ impl GenerateArgs {
         let from = from
             .canonicalize()
             .with_context(|| format!("failed to resolve project root {}", from.display()))?;
-        // Compile-time diagnostics — same shape as run/pack: render the
-        // diagnostic block after abandoning the spinner so the colored
-        // source-snippet output doesn't fight with the lamb. No "Checking"
+        // Compile-time diagnostics — same shape as run/pack. No "Checking"
         // line here: the meaningful "Resolving" and "Compiling" phases below
         // carry the progress, and a "Checking N file(s)" would just duplicate
         // the "Compiling N file(s)" count.
@@ -354,7 +351,6 @@ impl GenerateArgs {
                 &db,
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
             );
-            reporter.abandon();
             eprintln!("{rendered}");
             return Ok(crate::ExitCode::Other);
         }
@@ -388,13 +384,11 @@ impl GenerateArgs {
                 &file_paths,
                 &crate::output::policy().diagnostic_render_config(),
             );
-            reporter.abandon();
             eprintln!("{rendered}");
             return Ok(crate::ExitCode::Other);
         }
 
         if generators.is_empty() {
-            reporter.abandon();
             crate::reporter::print_error("no `[generator.<name>]` sections found in baml.toml");
             #[allow(clippy::print_stderr)]
             {
@@ -703,7 +697,6 @@ impl GenerateArgs {
         }
 
         if total_files == 0 {
-            reporter.abandon();
             crate::reporter::print_error("no files generated (no supported generators found)");
             return Ok(crate::ExitCode::Other);
         }

@@ -164,8 +164,6 @@ ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
 ast_node!(HashStringLiteral, DEPRECATED_HASH_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
 ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
-ast_node!(BacktickText, BACKTICK_TEXT);
-ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(FunctionType, FUNCTION_TYPE);
@@ -635,30 +633,10 @@ impl AstNode for LetStmt {
     }
 }
 
-ast_node!(IfExpr, IF_EXPR);
-ast_node!(WhileStmt, WHILE_STMT);
-ast_node!(WhileLetStmt, WHILE_LET_STMT);
 ast_node!(BlockExpr, BLOCK_EXPR);
-ast_node!(ReturnStmt, RETURN_STMT);
-ast_node!(ThrowStmt, THROW_STMT);
-ast_node!(BreakStmt, BREAK_STMT);
-ast_node!(ContinueStmt, CONTINUE_STMT);
-ast_node!(DeferStmt, DEFER_STMT);
-ast_node!(PathExpr, PATH_EXPR);
-ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
-ast_node!(UpcastExpr, UPCAST_EXPR);
-ast_node!(QualifiedPathExpr, QUALIFIED_PATH_EXPR);
-ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
-ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
-ast_node!(MatchPattern, MATCH_PATTERN);
-ast_node!(MatchGuard, MATCH_GUARD);
-ast_node!(CatchExpr, CATCH_EXPR);
 ast_node!(CatchClause, CATCH_CLAUSE);
 ast_node!(CatchArm, CATCH_ARM);
-ast_node!(CatchPattern, CATCH_PATTERN);
-ast_node!(ThrowExpr, THROW_EXPR);
-ast_node!(ReturnExpr, RETURN_EXPR);
 ast_node!(ThrowsClause, THROWS_CLAUSE);
 
 // Implement accessor methods
@@ -2009,11 +1987,6 @@ impl RetryPolicyDef {
             })
             .nth(0)
     }
-
-    /// Get the config block.
-    pub fn config_block(&self) -> Option<ConfigBlock> {
-        self.syntax.children().find_map(ConfigBlock::cast)
-    }
 }
 
 impl ConfigBlock {
@@ -2035,23 +2008,6 @@ impl ConfigItem {
             .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_RETRY_POLICY))
     }
 
-    /// Get the config item value (WORD token inside `CONFIG_VALUE`, if present).
-    /// For simple `key value` patterns like `provider openai`.
-    /// The value is nested inside a `CONFIG_VALUE` node: `CONFIG_ITEM` { WORD "key", `CONFIG_VALUE` { WORD "value" } }
-    pub fn value_word(&self) -> Option<SyntaxToken> {
-        // Find the CONFIG_VALUE child node
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-            .and_then(|config_value| {
-                // Look for a WORD token inside CONFIG_VALUE
-                config_value
-                    .children_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .find(|token| token.kind() == SyntaxKind::WORD)
-            })
-    }
-
     /// Get the typed `ConfigValue` child, if present.
     pub fn config_value(&self) -> Option<ConfigValue> {
         self.syntax.children().find_map(ConfigValue::cast)
@@ -2062,111 +2018,6 @@ impl ConfigItem {
     /// Returns the unquoted text of the value.
     pub fn value_str(&self) -> Option<String> {
         self.config_value().and_then(|cv| cv.scalar_text())
-    }
-
-    /// Get a nested config block, if this item has one.
-    /// For items like `options { ... }` or `http { ... }`.
-    pub fn nested_block(&self) -> Option<ConfigBlock> {
-        self.syntax.children().find_map(ConfigBlock::cast)
-    }
-
-    /// Get the integer value if this is an integer literal.
-    pub fn value_int(&self) -> Option<i64> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-            .and_then(|config_value| {
-                config_value
-                    .descendants_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .find(|token| token.kind() == SyntaxKind::INTEGER_LITERAL)
-                    .and_then(|token| token.text().parse().ok())
-            })
-    }
-
-    /// Get the `CONFIG_VALUE` syntax node if present.
-    ///
-    /// This gives access to the raw syntax tree for examining expression structure.
-    pub fn config_value_node(&self) -> Option<SyntaxNode> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-    }
-
-    /// Get array elements, returning only those that are string literals.
-    ///
-    /// Returns `None` if this is not an array.
-    /// For each element, returns `Some(string_value)` if it's a string literal,
-    /// or `None` if it's some other type (number, identifier, etc.).
-    /// The `TextRange` is always returned for error reporting on non-string elements.
-    pub fn array_string_elements(&self) -> Option<Vec<(Option<String>, rowan::TextRange)>> {
-        let config_value = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)?;
-
-        let array_literal = config_value
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)?;
-
-        Some(
-            array_literal
-                .children()
-                .filter(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-                .map(|element| {
-                    // Check if this element contains a string literal
-                    let has_string_literal = element.descendants().any(|node| {
-                        matches!(
-                            node.kind(),
-                            SyntaxKind::STRING_LITERAL | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
-                        )
-                    });
-
-                    if has_string_literal {
-                        // Extract the string content (excluding quotes)
-                        let value: String = element
-                            .descendants_with_tokens()
-                            .filter_map(rowan::NodeOrToken::into_token)
-                            .filter(|token| {
-                                !matches!(
-                                    token.kind(),
-                                    SyntaxKind::WHITESPACE
-                                        | SyntaxKind::NEWLINE
-                                        | SyntaxKind::LINE_COMMENT
-                                        | SyntaxKind::BLOCK_COMMENT
-                                        | SyntaxKind::QUOTE
-                                        | SyntaxKind::L_BRACKET
-                                        | SyntaxKind::R_BRACKET
-                                        | SyntaxKind::COMMA
-                                )
-                            })
-                            .map(|token| token.text().to_string())
-                            .collect();
-                        (Some(value), element.text_range())
-                    } else {
-                        // Not a string literal - return None for the value
-                        (None, element.text_range())
-                    }
-                })
-                .collect(),
-        )
-    }
-
-    /// Check if this config item's key matches the given name.
-    ///
-    /// This is a convenience method to avoid the common pattern:
-    /// `item.key().map(|k| k.text() == "name").unwrap_or(false)`
-    ///
-    /// # Example
-    /// ```ignore
-    /// // Instead of:
-    /// block.items().find(|item| item.key().map(|k| k.text() == "provider").unwrap_or(false))
-    ///
-    /// // Use:
-    /// block.items().find(|item| item.matches_key("provider"))
-    /// ```
-    pub fn matches_key(&self, name: &str) -> bool {
-        self.key().is_some_and(|k| k.text() == name)
     }
 }
 

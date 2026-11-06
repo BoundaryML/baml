@@ -9,7 +9,7 @@ pub(crate) struct Boundary {
     pub api_url: Option<String>,
 }
 impl Boundary {
-    pub fn read(root: &Path) -> Result<Self> {
+    pub(crate) fn read(root: &Path) -> Result<Self> {
         let path = root.join("baml.toml");
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
@@ -31,7 +31,7 @@ impl Boundary {
             })
             .unwrap_or_else(|| Ok(Self::default()))
     }
-    pub fn endpoint(&self) -> bcs_api::error::Result<bcs_api::Endpoint> {
+    pub(crate) fn endpoint(&self) -> bcs_api::error::Result<bcs_api::Endpoint> {
         bcs_api::Endpoint::with_default(self.api_url.as_deref())
     }
 }

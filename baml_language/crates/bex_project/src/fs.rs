@@ -12,10 +12,6 @@ impl FsPath {
         Self(path)
     }
 
-    pub fn from_vfs(vfs_path: &vfs::VfsPath) -> Self {
-        Self(vfs_path.as_str().to_string())
-    }
-
     pub fn as_path(&self) -> &std::path::Path {
         std::path::Path::new(self.0.as_str())
     }

@@ -448,10 +448,6 @@ impl fmt::Display for Literal {
     }
 }
 
-/// Module identifier (for multi-file support)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ModuleId(u32);
-
 /// Severity level for diagnostics
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {

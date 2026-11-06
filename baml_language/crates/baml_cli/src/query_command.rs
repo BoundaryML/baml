@@ -18,7 +18,7 @@ use clap::{Parser, ValueEnum};
 use crate::project_load::find_project_root_from;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum QueryFormat {
+pub(crate) enum QueryFormat {
     Table,
     Json,
     Jsonl,
@@ -27,7 +27,7 @@ pub enum QueryFormat {
 /// Query local recordings with SQL. BAML values navigate with brackets:
 /// `SELECT output_value['items'][0]['name'] FROM spans WHERE input_args['customer']['age'] >= 30`.
 #[derive(Debug, Parser)]
-pub struct QueryArgs {
+pub(crate) struct QueryArgs {
     /// One read-only SELECT (`-` reads stdin). See `--schema` for relations.
     pub sql: Option<String>,
 
@@ -165,7 +165,7 @@ impl QueryArgs {
         crate::cloud_query::run(self, endpoint, credential, source, project, sql)
     }
 
-    pub fn run(&self) -> anyhow::Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> anyhow::Result<crate::ExitCode> {
         if self.schema {
             return self.print_schema();
         }

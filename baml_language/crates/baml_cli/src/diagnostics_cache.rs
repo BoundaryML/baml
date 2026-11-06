@@ -185,6 +185,7 @@ fn rehydrate_with(
 /// Project a live diagnostic into its rel-path-keyed cache form. `None` if any
 /// span can't be mapped to a tracked user file — the whole diagnostic is then
 /// uncacheable (its owner file is poisoned by the caller).
+#[cfg(test)]
 fn dehydrate(db: &ProjectDatabase, root: &Path, diag: &Diagnostic) -> Option<CachedDiagnostic> {
     dehydrate_with(diag, |span| dehydrate_span(db, root, span))
 }
@@ -202,13 +203,6 @@ fn rehydrate_span(db: &ProjectDatabase, root: &Path, span: &CachedSpan) -> Optio
         file_id,
         range: TextRange::new(TextSize::new(span.start), TextSize::new(span.end)),
     })
-}
-
-/// Rebuild a live diagnostic with current-process `FileId`s. `None` if any span
-/// no longer maps to a tracked file or is out of range — the caller degrades to
-/// a re-check.
-fn rehydrate(db: &ProjectDatabase, root: &Path, cached: &CachedDiagnostic) -> Option<Diagnostic> {
-    rehydrate_with(cached, |span| rehydrate_span(db, root, span))
 }
 
 /// Serialize a diagnostic set into the opaque blob, mapping every span through

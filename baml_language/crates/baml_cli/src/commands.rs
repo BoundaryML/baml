@@ -114,15 +114,6 @@ pub(crate) struct CompilerArgs {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum Commands {
-    // TODO: All other commands are disabled for now as they depend on baml_runtime
-    // #[command(about = "Initialize a new BAML project.")]
-    // Init(baml_runtime::cli::init::InitArgs),
-
-    // #[command(about = "Runs all generators in the baml_src directory")]
-    // Generate(baml_runtime::cli::generate::GenerateArgs),
-
-    // #[command(about = "Checks for errors and warnings in the baml_src directory")]
-    // Check(baml_runtime::cli::check::CheckArgs),
     #[command(about = "Check BAML source files for compiler errors")]
     Check(crate::check_command::CheckArgs),
 
@@ -134,11 +125,6 @@ pub(crate) enum Commands {
     #[command(about = "Query BTEL recordings with SQL")]
     Query(crate::query_command::QueryArgs),
 
-    // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
-    // Serve(baml_runtime::cli::serve::ServeArgs),
-
-    // #[command(about = "Starts a development server")]
-    // Dev(baml_runtime::cli::dev::DevArgs),
     #[command(
         subcommand,
         about = "Manage authentication",
@@ -159,14 +145,6 @@ pub(crate) enum Commands {
     #[command(about = "Format BAML source files", name = "fmt")]
     Format(crate::format::FormatArgs),
 
-    // #[command(about = "Run BAML tests")]
-    // Test(baml_runtime::cli::testing::TestArgs),
-
-    // #[command(about = "Print HIR from BAML files", hide = true)]
-    // DumpHIR(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
-
-    // #[command(about = "Print Bytecode from BAML files", hide = true)]
-    // DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
     #[command(about = "Generate client code from BAML definitions")]
     Generate(crate::generate::GenerateArgs),
 
@@ -227,11 +205,6 @@ pub(crate) enum Commands {
         hide = true
     )]
     FlushTelemetry(crate::telemetry_command::FlushTelemetryArgs),
-    // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
-    // Repl(baml_runtime::cli::repl::ReplArgs),
-
-    // #[command(about = "Optimize prompts using GEPA algorithm")]
-    // Optimize(baml_runtime::cli::optimize::OptimizeArgs),
 }
 
 impl RuntimeCli {
@@ -270,7 +243,7 @@ impl RuntimeCli {
     /// - Does not panic.
     ///
     /// This should be used for CLI invocations instead of `RuntimeCli::parse_from`.
-    pub fn parse_from_smart(argv: Vec<String>) -> Self {
+    pub(crate) fn parse_from_smart(argv: Vec<String>) -> Self {
         use clap::FromArgMatches;
 
         let mut command = RuntimeCli::command();
@@ -320,7 +293,7 @@ impl RuntimeCli {
         cli
     }
 
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         crate::reporter::init(self.global.quiet, self.global.verbose);
 
         // The detached telemetry flush child must run before (and without)

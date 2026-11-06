@@ -33,9 +33,6 @@ impl Outcome {
             Self::Closed => "closed",
         }
     }
-    pub fn from_thread(outcome: i32) -> Option<Self> {
-        Self::from_code(i64::from(outcome))
-    }
 }
 
 /// A validated completion's outcome and whether an announcement carries its
@@ -159,12 +156,6 @@ pub fn function_origin_label(origin: i32) -> Option<&'static str> {
         proto::FunctionOrigin::AutoDerive => "auto_derive",
         proto::FunctionOrigin::Unspecified => return None,
     })
-}
-
-/// Two definitions of the same function agree on everything the reader
-/// exposes. Metadata is immutable, so disagreement is a conflict to report.
-pub fn same_metadata(a: &proto::FunctionMetadata, b: &proto::FunctionMetadata) -> bool {
-    a == b
 }
 
 #[cfg(test)]

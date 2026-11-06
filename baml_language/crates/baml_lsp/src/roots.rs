@@ -85,19 +85,6 @@ impl RootsView {
         self.stdlib_dir.as_deref()
     }
 
-    /// Map a database path to the path a client can open.
-    ///
-    /// Stdlib files are stored under the virtual `<builtin>/<pkg>/…` prefix
-    /// (a wire contract the emitted bytecode shares); when the host has a
-    /// materialized copy of the stubs on disk, presentation swaps the prefix
-    /// for that directory. Everything else is returned unchanged.
-    pub fn to_presentation_path(&self, db_path: &Path) -> Option<PathBuf> {
-        match db_path.strip_prefix(BUILTIN_PREFIX) {
-            Ok(rest) => self.stdlib_dir.as_ref().map(|dir| dir.join(rest)),
-            Err(_) => Some(db_path.to_path_buf()),
-        }
-    }
-
     /// Map a client path back to database form: a path under the
     /// materialized stdlib directory becomes its virtual `<builtin>/…`
     /// spelling. Everything else is returned unchanged.

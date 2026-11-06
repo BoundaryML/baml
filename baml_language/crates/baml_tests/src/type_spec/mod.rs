@@ -9,7 +9,7 @@
 //! separately.
 //!
 //! Module map:
-//! - [`harness`]: annotation extraction, the `check_types` check, and the
+//! - [`harness`]: annotation extraction, the annotation check, and the
 //!   `check_infer`-style [`harness::render_infer`] dump
 //! - [`fixtures`]: directory-driven runner; a test is a `.baml` file under
 //!   `fixtures/` (must pass) or `fixtures/pending/` (must fail until its

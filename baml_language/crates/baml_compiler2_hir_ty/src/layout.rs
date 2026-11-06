@@ -24,7 +24,7 @@ use baml_type::{DeclName, Interface, ParamTy, Ty};
 
 use crate::extern_loc::{
     AliasRef, ClassRef, EnumRef, InterfaceRef, extern_alias_loc, extern_alias_row,
-    extern_class_loc, extern_class_row, extern_enum_loc, extern_enum_row, extern_interface_loc,
+    extern_class_loc, extern_class_row, extern_enum_row, extern_interface_loc,
     extern_interface_row, mounted_alias_loc, mounted_class_loc, mounted_enum_loc,
     mounted_interface_loc,
 };
@@ -226,24 +226,6 @@ pub fn package_classes(
         },
         |row| matches!(row, ExportedType::Class { .. }),
         extern_class_loc,
-    )
-}
-
-/// Every enum `root` declares.
-pub fn package_enums(
-    db: &dyn baml_compiler2_hir::Db,
-    root: SourceRoot,
-) -> impl Iterator<Item = EnumRef<'_>> + '_ {
-    use crate::package_interface::ExportedType;
-    package_declarations(
-        db,
-        root,
-        |def| match def {
-            Definition::Enum(enum_loc) => Some(enum_loc),
-            _ => None,
-        },
-        |row| matches!(row, ExportedType::Enum { .. }),
-        extern_enum_loc,
     )
 }
 
@@ -497,19 +479,6 @@ pub fn interface_method_names<'db>(
                 .map(|method| method.name.clone())
                 .collect()
         }
-    }
-}
-
-/// How many generic parameters `interface` declares (its frame minus `Self`).
-pub fn interface_generic_arity<'db>(
-    db: &'db dyn baml_compiler2_hir::Db,
-    interface: InterfaceRef<'db>,
-) -> usize {
-    match interface {
-        DeclRef::Source(interface) => baml_compiler2_hir::item_data::interface_data(db, interface)
-            .generic_params
-            .len(),
-        DeclRef::External(interface) => extern_interface_row(db, interface).generic_params.len(),
     }
 }
 

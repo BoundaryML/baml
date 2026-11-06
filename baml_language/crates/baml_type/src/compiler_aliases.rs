@@ -84,13 +84,6 @@ impl Definition {
         lang.is(self.package, name.root()) && self.matches_path(name)
     }
 
-    /// [`matches`](Self::matches) for a wire name.
-    pub fn matches_type_name(self, name: &TypeName) -> bool {
-        !name.is_local()
-            && name.package().as_str() == self.package.manifest_name()
-            && self.matches_path(name)
-    }
-
     fn matches_path<P>(self, name: &QualifiedTypeName<P>) -> bool {
         name.namespace()
             .iter()
@@ -440,15 +433,6 @@ pub fn by_definition(lang: LangRoots, name: &DeclName) -> Option<&'static Compil
     })
 }
 
-/// [`by_definition`] for a wire name.
-pub fn by_type_name(name: &TypeName) -> Option<&'static CompilerAlias> {
-    ALL.iter().find(|entry| {
-        entry
-            .definition
-            .is_some_and(|definition| definition.matches_type_name(name))
-    })
-}
-
 /// [`by_definition`] for a path inside a language package.
 pub fn by_definition_path(package: LangPackage, path: &[&str]) -> Option<&'static CompilerAlias> {
     ALL.iter().find(|entry| {
@@ -567,7 +551,6 @@ mod tests {
                 .decl_name(lang)
                 .expect("language package installed");
             assert_eq!(by_definition(lang, &head), Some(alias));
-            assert_eq!(by_type_name(&definition.type_name()), Some(alias));
             assert_eq!(
                 by_definition_path(
                     definition.package,
@@ -593,20 +576,10 @@ mod tests {
             "reflect.Class",
         ] {
             assert!(by_definition(lang, &decl(path)).is_none(), "{path}");
-            assert!(
-                by_type_name(&TypeName::from_dotted_path(path)).is_none(),
-                "{path}"
-            );
         }
         let image = AliasTarget::Primitive(PrimitiveType::Image);
         assert_eq!(
             by_definition(lang, &decl("baml.media.Image"))
-                .unwrap()
-                .target,
-            image
-        );
-        assert_eq!(
-            by_type_name(&TypeName::from_dotted_path("baml.media.Image"))
                 .unwrap()
                 .target,
             image

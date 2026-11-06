@@ -38,7 +38,7 @@ Examples:
 
   Search for something by what it does:
     baml describe --search 'read a file'")]
-pub struct DescribeArgs {
+pub(crate) struct DescribeArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
 
@@ -97,25 +97,13 @@ pub struct DescribeArgs {
 }
 
 /// Find FQNs across the packages `viewer` can name — its own and the ones it
-/// reaches by name — that are fuzzy-similar to `name`.
+/// reaches by name — that are fuzzy-similar to `name`, each paired with its
+/// definition kind (`None` for namespace/package paths) so callers can color
+/// the leaf by kind.
 ///
 /// Used to power "did you mean?" hints when a path doesn't resolve. Returns up
 /// to `limit` candidates sorted by Jaro-Winkler similarity (descending).
-pub fn suggest_similar(
-    db: &ProjectDatabase,
-    viewer: SourceRoot,
-    name: &str,
-    limit: usize,
-) -> Vec<String> {
-    suggest_similar_kinded(db, viewer, name, limit)
-        .into_iter()
-        .map(|(path, _)| path)
-        .collect()
-}
-
-/// Like [`suggest_similar`], but pairs each suggestion with its definition kind
-/// (`None` for namespace/package paths) so callers can color the leaf by kind.
-pub fn suggest_similar_kinded(
+pub(crate) fn suggest_similar_kinded(
     db: &ProjectDatabase,
     viewer: SourceRoot,
     name: &str,
@@ -231,7 +219,7 @@ fn print_did_you_mean(db: &ProjectDatabase, viewer: SourceRoot, name: &str) {
 /// - `"baml"` → `Package(baml)`
 /// - `"baml.env"` → `resolve_target(baml_pkg, "env")` → `Namespace`
 /// - `"foo.bar.Baz"` → `resolve_target(viewer, "foo.bar.Baz")` → `Item`
-pub fn dispatch<'db>(
+pub(crate) fn dispatch<'db>(
     db: &'db ProjectDatabase,
     viewer: SourceRoot,
     name: &str,
@@ -310,7 +298,7 @@ fn resolve_unqualified_builtin_member<'db>(
 
 impl DescribeArgs {
     /// Run the describe command and return the CLI exit code.
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         // Introspection never requires a `baml.toml`: with no project, we
         // fall back to a stdlib-only "default state" so `baml describe
         // baml.String` works anywhere. An empty user-file set is therefore
@@ -589,7 +577,7 @@ impl DescribeArgs {
 }
 
 /// Render keyword documentation to a writer.
-pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result<()> {
+pub(crate) fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result<()> {
     let painter = crate::paint::Painter::stdout();
     if let Some(doc) = baml_builtins2::language_topic(name) {
         writeln!(w, "{} — {}", painter.keyword(name), doc.summary)?;
@@ -649,7 +637,7 @@ const CONTAINER_SECTION_COST: usize = 3;
 const LIST_ENTRY_COST: usize = 1;
 
 /// Render a SymbolDescription to stdout with budget-based output.
-pub fn render_description(
+pub(crate) fn render_description(
     db: &ProjectDatabase,
     desc: &SymbolDescription,
     budget: usize,
@@ -659,7 +647,7 @@ pub fn render_description(
 }
 
 /// Render a SymbolDescription to a writer with budget-based output.
-pub fn write_description(
+pub(crate) fn write_description(
     w: &mut impl std::io::Write,
     db: &ProjectDatabase,
     desc: &SymbolDescription,
@@ -1578,7 +1566,7 @@ fn render_listing(entries: &[baml_ide::ListingEntry], project_root: &std::path::
 }
 
 /// Render a flat listing of entries to a writer.
-pub fn write_listing(
+pub(crate) fn write_listing(
     w: &mut impl std::io::Write,
     entries: &[baml_ide::ListingEntry],
     project_root: &std::path::Path,
@@ -1653,7 +1641,7 @@ fn listing_to_json(
 ///
 /// If the full body contains a `{` block but the shape doesn't end with one,
 /// appends ` { ... }`. Otherwise returns the shape as-is.
-pub fn shape_with_elision(shape: &str, full_body: &str) -> String {
+pub(crate) fn shape_with_elision(shape: &str, full_body: &str) -> String {
     let has_block = full_body.contains('{');
     let shape_already_has_block = shape.contains('{');
     if has_block && !shape_already_has_block {
@@ -1668,7 +1656,7 @@ pub fn shape_with_elision(shape: &str, full_body: &str) -> String {
 /// 2. Preserve `//# ...` annotated comment blocks and their following content
 /// 3. Show first `head_lines` and last `tail_lines` of the body
 /// 4. Insert "... skipped N lines ..." at the appropriate indentation
-pub fn truncate_body(body_lines: &[&str], available_lines: usize) -> Vec<String> {
+pub(crate) fn truncate_body(body_lines: &[&str], available_lines: usize) -> Vec<String> {
     if body_lines.len() <= available_lines {
         return body_lines.iter().map(|s| s.to_string()).collect();
     }

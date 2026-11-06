@@ -221,7 +221,10 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 26: appended `ConcatStrings` to the instruction/opcode sets, which
 /// joins a chain of string `+` in one step.
-pub const FORMAT_VERSION: u32 = 26;
+///
+/// Version 27: `DiagnosticId` dropped variants that were never constructed,
+/// shifting the borsh discriminants of the variants after them.
+pub const FORMAT_VERSION: u32 = 27;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

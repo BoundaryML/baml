@@ -789,7 +789,6 @@ pub fn history_run_matches_filter(run: &Run, filter: &RunFilter) -> bool {
             },
         ) => scope_id == run_scope,
         (RunVisibilityFilter::Scope { .. }, _) => false,
-        (RunVisibilityFilter::IncludeHidden, RunVisibility::DebugOnly) => false,
         (RunVisibilityFilter::IncludeHidden | RunVisibilityFilter::AllForDebug, _) => true,
     }
 }
