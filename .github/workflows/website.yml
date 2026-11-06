@@ -93,6 +93,22 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
+      # The fonts, share-card images, and post data the build imports are stored in Git LFS. Only
+      # those are pulled: public/ is copied into the build as is, and is most of the LFS weight.
+      - name: List the LFS files the build reads
+        id: lfs
+        run: |
+          set -euo pipefail
+          include="typescript2/app-website/app/**,typescript2/app-website/components/**,typescript2/app-website/lib/**"
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+          echo "key=$(git lfs ls-files --long --include="$include" | sha256sum | cut -c1-32)" >> "$GITHUB_OUTPUT"
+      - name: Restore LFS objects
+        uses: actions/cache@v6
+        with:
+          path: .git/lfs
+          key: website-lfs-${{ steps.lfs.outputs.key }}
+      - name: Pull LFS files
+        run: git lfs pull --include="${{ steps.lfs.outputs.include }}"
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node2
       - name: Install bridge_wasm from npm
