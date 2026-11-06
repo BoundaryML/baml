@@ -835,3 +835,38 @@ At this checkpoint the full heap tests pass (5 unit, 1 fiber, 16 integration,
 checks and native regression results are as recorded in the list sub-step.
 Strict all-target clippy passes for heap, codegen and compiler, and strict clippy
 for the touched `baml_tests --test rust_backend` target also passes.
+
+## M3 sub-step: approved inline elements and map runtime
+
+The headerless-entry question is resolved with the approved `Kind::InlineElement`.
+It is valid only when referenced by a list/map buffer's element descriptor,
+has element-relative pointer/tagged offsets (including zero), and cannot contain
+another variable element layout or a finalizer. Allocatable kinds retain header
+checks. Ordinary allocation rejects inline descriptors on the cold path before
+caching a layout; emergency allocation also rejects them. Thus the existing
+allocation fast path gains no extra check, and inline entries never get an
+object-start bit. INTERFACES §1.3 now records the contract.
+
+The old expected-rejection test was replaced by positive list tracing under GC
+stress, checks that interior element pointers resolve to the owning list rather
+than a new object, ordinary/emergency allocation rejection, and preservation of
+header validation for allocatable descriptors. The managed string/int map
+runtime now uses 16-byte inline entries with the string pointer at offset zero.
+Its stress test grows through several capacities, replaces an equal-content key
+without moving its insertion position, and verifies that `values()` snapshots
+survive later changes and collections. The phase-one map uses a linear key
+search over its insertion-ordered buffer; this is a performance choice, not a
+claim of constant-time lookup.
+
+Debug and release checks pass: heap 5 unit + 1 fiber + 18 integration + 2 doctests;
+runtime 11 tests. Strict all-target heap/runtime clippy passes. Commands:
+
+```sh
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_heap -p bex_v2_runtime
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_heap -p bex_v2_runtime --release
+cargo clippy --manifest-path baml_language/Cargo.toml -p bex_v2_heap -p bex_v2_runtime \
+  --all-targets --no-deps -- -D warnings
+```
+
+Map emission and the rest of M3 continue next; this checkpoint adds no workload
+benchmark result and does not mark agent-loop complete.

@@ -4,6 +4,7 @@
 //! No managed pointer may escape that call's owned result boundary.
 pub mod language;
 pub mod lists;
+pub mod maps;
 pub mod strings;
 use bex_v2_heap::{Descriptor, Heap, RootSource};
 use bex_v2_loop::{Config, TaskCx, TaskLoop, Value};

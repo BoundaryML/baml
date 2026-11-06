@@ -378,7 +378,7 @@ fn alignment_padding_is_not_an_interior_pointer() {
 fn inline_map_entry_descriptors_and_large_finalization() {
     static D: [Descriptor; 3] = [
         Descriptor {
-            kind: Kind::Class,
+            kind: Kind::InlineElement,
             size: 24,
             ptr_slots: (8, 1),
             tagged_slots: (0, 0),
@@ -502,36 +502,96 @@ fn large_refusal_retries_collection_without_spending_the_reserve() {
     }
 }
 
-/// Documents the M3 integration gap without relaxing heap-object validation.
-/// Replace this expected rejection with a tracing test once the inline-entry
-/// representation is decided; it is not a correctness claim for map support.
+static INLINE_LIST: [Descriptor; 3] = [
+    Descriptor {
+        kind: Kind::List,
+        size: 16,
+        ptr_slots: (0, 0),
+        tagged_slots: (0, 0),
+        elem: Some(Elements {
+            offset: 16,
+            layout: ElementLayout::Descriptor(1),
+        }),
+        type_id: 1,
+        fields: &[],
+        finalizer: None,
+    },
+    Descriptor {
+        kind: Kind::InlineElement,
+        size: 16,
+        ptr_slots: (0, 1),
+        tagged_slots: (0, 0),
+        elem: None,
+        type_id: 1,
+        fields: &[],
+        finalizer: None,
+    },
+    Descriptor {
+        kind: Kind::Class,
+        size: 16,
+        ptr_slots: (0, 0),
+        tagged_slots: (0, 0),
+        elem: None,
+        type_id: 1,
+        fields: &[],
+        finalizer: None,
+    },
+];
 #[test]
-#[should_panic(expected = "offset >= 8 && offset % 8 == 0")]
-fn headerless_map_entry_descriptor_is_currently_rejected() {
-    static DESCRIPTORS: [Descriptor; 2] = [
-        Descriptor {
-            kind: Kind::Map,
-            size: 16,
-            ptr_slots: (0, 0),
-            tagged_slots: (0, 0),
-            elem: Some(Elements {
-                offset: 16,
-                layout: ElementLayout::Descriptor(1),
-            }),
-            type_id: 0,
-            fields: &[],
-            finalizer: None,
-        },
-        Descriptor {
-            kind: Kind::Class,
-            size: 16,
-            ptr_slots: (0, 1),
-            tagged_slots: (0, 0),
-            elem: None,
-            type_id: 0,
-            fields: &[],
-            finalizer: None,
-        },
-    ];
-    let _ = Heap::new(&DESCRIPTORS, &[true]);
+fn headerless_list_elements_trace_without_object_starts() {
+    unsafe {
+        let mut h = Heap::new(&INLINE_LIST, &TYPES);
+        h.set_stress(true);
+        let mut roots = Roots::default();
+        let list = h.alloc(0, 16 + 64 * 16, &roots);
+        roots.precise.borrow_mut().push(list as usize);
+        for i in 0..64 {
+            let child = h.alloc(2, 16, &roots);
+            write_ptr(list, list.add(16 + i * 16).cast(), child as usize);
+            child.add(8).cast::<usize>().write(i);
+        }
+        // Only an interior conservative reference remains, to an element.
+        roots.precise.borrow_mut().clear();
+        roots.words.push(list.add(16 + 17 * 16) as usize);
+        h.collect(&roots);
+        for i in 0..64 {
+            let entry = list.add(16 + i * 16);
+            assert_eq!(h.object_start(entry as usize), Some(list as usize));
+            let child = entry.cast::<usize>().read();
+            assert_eq!(h.object_start(child), Some(child));
+            assert_eq!(((child + 8) as *const usize).read(), i);
+        }
+        roots.words.clear();
+        h.collect(&roots);
+        assert_eq!(h.object_start(list as usize), None);
+        assert_eq!(h.stats().live_bytes, 0);
+    }
+}
+#[test]
+fn inline_elements_cannot_enter_either_allocator() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    let mut h = Heap::new(&INLINE_LIST, &TYPES);
+    h.reserve_emergency().unwrap();
+    for _ in 0..2 {
+        assert!(
+            catch_unwind(AssertUnwindSafe(|| unsafe { h.try_alloc(1, 16, &NoRoots) })).is_err()
+        );
+        assert!(catch_unwind(AssertUnwindSafe(|| unsafe { h.alloc_emergency(1, 16) })).is_err());
+    }
+    assert_eq!(h.stats().allocated_since_gc, 0);
+}
+#[test]
+#[should_panic(expected = "pointer/tagged range overlaps object header")]
+fn allocatable_descriptors_still_require_headers() {
+    static D: [Descriptor; 1] = [Descriptor {
+        kind: Kind::Class,
+        size: 16,
+        ptr_slots: (0, 1),
+        tagged_slots: (0, 0),
+        elem: None,
+        type_id: 1,
+        fields: &[],
+        finalizer: None,
+    }];
+    let _ = Heap::new(&D, &TYPES);
 }

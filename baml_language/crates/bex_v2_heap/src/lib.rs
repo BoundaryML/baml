@@ -41,6 +41,8 @@ pub struct TaggedSlot {
 }
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
+    /// Headerless record, referenced only by a list/map element layout.
+    InlineElement,
     Class,
     List,
     Map,
@@ -316,9 +318,16 @@ pub struct Heap {
 }
 impl Heap {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
-        for d in descriptors {
+        for (id, d) in descriptors.iter().enumerate() {
             assert!((d.type_id as usize) < pointer_types.len());
             assert!(d.size > 0);
+            if matches!(d.kind, Kind::InlineElement) {
+                assert!(d.elem.is_none() && d.finalizer.is_none() && d.size % 8 == 0);
+                assert!(descriptors.iter().any(|parent| matches!(parent.kind, Kind::List | Kind::Map)
+                    && matches!(parent.elem, Some(Elements { layout: ElementLayout::Descriptor(entry), .. }) if entry as usize == id)),
+                    "inline element must belong to a list/map buffer");
+            }
+
             let bound = d.elem.map_or(d.size, |e| e.offset);
             Self::validate_ranges(d, bound);
             if let Some(e) = d.elem {
@@ -328,6 +337,8 @@ impl Heap {
                     ElementLayout::Tagged => 16,
                     ElementLayout::Descriptor(id) => {
                         let entry = &descriptors[id as usize];
+                        assert!(matches!(d.kind, Kind::List | Kind::Map));
+                        assert!(matches!(entry.kind, Kind::InlineElement));
                         assert!(entry.elem.is_none());
                         entry.size
                     }
@@ -372,7 +383,10 @@ impl Heap {
     fn validate_ranges(d: &Descriptor, bound: usize) {
         for ((offset, count), stride) in [(d.ptr_slots, 8usize), (d.tagged_slots, 16)] {
             if count != 0 {
-                assert!(offset >= 8 && offset % 8 == 0);
+                assert!(
+                    offset % 8 == 0 && (offset >= 8 || matches!(d.kind, Kind::InlineElement)),
+                    "pointer/tagged range overlaps object header"
+                );
                 assert!(
                     offset
                         .checked_add(count.checked_mul(stride).unwrap())
@@ -491,6 +505,10 @@ impl Heap {
         let failure = AllocFailure { bytes };
         let aligned = bytes.checked_add(15).ok_or(failure)? & !15;
         let d = &self.descriptors[desc as usize];
+        assert!(
+            !matches!(d.kind, Kind::InlineElement),
+            "inline elements cannot be allocated"
+        );
         assert!(d.finalizer.is_none() && (8..=LARGE_THRESHOLD).contains(&bytes));
         if let Some(e) = d.elem {
             assert!(bytes >= e.offset && (bytes - e.offset).is_multiple_of(d.size));
@@ -573,6 +591,10 @@ impl Heap {
     ) -> Result<*mut u8, AllocFailure> {
         self.settle_run();
         let d = &self.descriptors[desc as usize];
+        assert!(
+            !matches!(d.kind, Kind::InlineElement),
+            "inline elements cannot be allocated"
+        );
         assert!(bytes >= 8);
         if let Some(e) = d.elem {
             assert!(bytes >= e.offset && (bytes - e.offset).is_multiple_of(d.size));
