@@ -186,8 +186,8 @@ fn members_of(
     out: &mut Vec<Ty>,
 ) {
     match ty {
-        Ty::Union(members, ..) => {
-            for member in members.iter() {
+        Ty::Union(members) => {
+            for member in members {
                 members_of(db, member, unfolding, out);
             }
         }
