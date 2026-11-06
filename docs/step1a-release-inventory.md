@@ -1,97 +1,98 @@
-# BAML 0.23.0 release audit
+# BAML 0.24.0 release audit
 
-Prepared on 2026-10-25. The live canary manifest reports 0.22.2, released 2026-10-13.
+Prepared on 2026-11-05 (Pacific). These immutable boundaries apply to the inventory, effects, release post, and follow-up checklist.
 
-- Lower: `baml-language-0.22.2`, `01f5c412c73c213846ea8cb6ead89d303b053672`.
-- Upper: `origin/canary`, resolved once to `303930923cd3f2bfc68ebca79dee96f5779175a8`.
-- Range includes all 71 commits, across the entire repository.
-- Release metadata PR: https://github.com/BoundaryML/baml/pull/5411.
-- Exact upper-source compiler: published nightly `0.22.3-nightly.20261024.a` (its tag resolves to the upper SHA).
-- Release metadata changes do not change the compiler examples. If more product changes merge before the release, reconcile the range before publishing.
+- Lower: `baml-language-0.23.0`, `f0f0bb5135bba599c11a32cc4d631f2f66f1f96f`.
+- Upper: published `baml-language-0.24.0`, `dec4713a0e7c9699442bf5855b4f327063f769c5`.
+- Inventory: 84 commits/PRs across the entire repository, in chronological order.
+- Scope follows the user's just-published-release request: use the published tag rather than later `origin/canary` commits. At preparation, `origin/canary` was `853072242cf951cca227759a130b9cb91d60e9a0`; its 11 later commits are excluded, including `package_name` (#5532/#5533), BTELCAS v6 (#5543), and the Homebrew publication fix (#5546).
+- GitHub release: https://github.com/BoundaryML/baml/releases/tag/baml-language-0.24.0, published 2026-11-05T22:23:21Z. Paired wrapper: 0.3.0.
+- Publication is incomplete at audit time: https://github.com/BoundaryML/baml/actions/runs/42111122075 failed at Homebrew publishing. Go mirror publishing, manifest promotion, developer docs, and final artifact verification were skipped. The canary manifest still reports 0.23.0. This does not change the tagged source boundary. Recheck the checklist's publication gates before merging the public post or sending announcements.
+- `git fetch origin --tags` refreshed canary but reported two unrelated pre-existing v0 tag conflicts (`0.226.3`, `0.226.3-engine`); neither was overwritten. Both v1 release tags were resolved and checked against GitHub release metadata.
 
-## Full inventory
+## Full inventory and dispositions
 
-- `5fe78680b1b057142b2d69466ee4ed1f22b20c4c` feat(v1): add openai-decisions provider (#5200)
-- `5a99dfa0979641bec7b9543c26f53fe99ae53a6c` refactor(bex_str): unit-explicit names; add V8/Bun bench ports and workload benches (#5250)
-- `5dd71a42cd09a60194cd4c71cb7dac229c96d461` SAP should support generic types (#5252)
-- `bc180de2aaac613241bddd36c8fd2d92c3ccd466` fix: fail loudly when MIR lowering reaches an unresolved member (#5243)
-- `79a4a7e2f0c701ce766c15c3e9d8db1d68f60b25` Record a streamed LLM function as its own span (#5258)
-- `723a98e5d518eb07250bc5da88af885ba6df6171` feat: add image support to Claude Code client (#5225)
-- `ded7ade487be1215140303383ae6a7e2569fff19` fix(cffi): teach initialize_runtime to handle trailing slashes (#5223)
-- `3caf4c158491a83a16cf4e21f837b1cf30e2965d` fix: improve generics inference to handle a user-reported crash (#5038)
-- `03dea8e3c1350a2172e65d1fed1dce63edd9023d` fix(bex_str): deep ropes no longer overflow the stack; O(1) char indexing on ASCII text (#5253)
-- `e5b507c9177945b545e684f48562ae46eb1e00db` Eliminate the global `Spelling` table for packages (#5254)
-- `16d75a78f85252e22edfc4a11a610ef2b74b6ed9` fix: update rustls, h2, quinn-proto, webbrowser, anyhow to address RUSTSEC (#5271)
-- `e65864a1fb74afd97d7f3fa6f60cf5eaef479bd0` fix(generate): exclude tests and testsets from persisted bytecode (#5273)
-- `6e6878ae746fc1bc5d0e99c934431e97fa8caf5e` fix: correctly bundle licenses in every baml_sdk (#5275)
-- `21993d3759fb5ffe8c4e9827470f7780ea1dee68` fix(cli): fail open if Boundary is unreachable (#5280)
-- `00d304c74c77c2a5d192cd48266fe3e530b30bf3` ci: pause CodeTurtle workflow while staging is down (#5290)
-- `38f18aa8edece49f898872252574b49c219a2cbc` ci: install the prebuilt wasm-pack instead of compiling it (#5292)
-- `47499c22aea9822a48e352ce587bcda265dd1b45` chore: update sheep council tooling (#5295)
-- `ee7f68a7f82d275b74a5607ff98cf9c30c0c6cee` perf(bex_vm): derive the runtime package once per function switch (#5296)
-- `c84cbeba08a13d8319c8c62f8ba04fab28fc64f4` Rename reflect kind views to reflect.Class, reflect.Enum, ... (#5268)
-- `439fce6b4c96da98b1f0ca3623bc78fb70571f9a` Add a static type() method to every type (#5272)
-- `2d86152e44c2dd7ad13fd9b6f4399b918d79fc1d` Replace type T = unreflect(e) with let type T = e, with a bounded form (#5278)
-- `f544ba10f7987f436bb9624bfd9711c634d1babe` Make reflect lookups throw NotFound and add find_* variants (#5276)
-- `b4223ba77297424bf7856186a0a3c7a0b36bbf82` Accept reflect kind views anywhere a type is (#5277)
-- `68e17d373f73fe256e5c08e106697e1acd6f9bb2` Add reflect.Class.extends<I>(name, fields) (#5279)
-- `424287f23ce884cd9ac676000b8aeab12c0414e8` Add Builder.fields_from to copy a class's fields (#5269)
-- `1b7d2dade9c9f024d6b405bedc72feea90b0b646` Make reflect.class.Field.type non-null (#5270)
-- `456df424da0262f58b6c1875dcc984583837cecf` fix(release): re-enable AUR publishing (#5298)
-- `77e1e998f59739a82d7c8a53063e6ee14cddcf66` feat(release): submit winget manifest updates with komac (#5299)
-- `8afeb7e2cfc69cfc6b5c93932e57c819d5d49403` Follow up on the reflection stack reviews (#5297)
-- `292a922eeb68cc4675dc8daed614f9b4bd3cdd05` Add owned function spans and pass-through tracing for AI execution (#5282)
-- `13e20f5771467e61a1d8b257f4434b9379d80f7d` Model turns as a tree; requested and resolved models; usage on btel spans (#5261)
-- `f52b47fe584ca4a745fef219e7f62931a4e229c9` speedtest: workload directories, in-process drivers, KPI report (#5301)
-- `481d074234fce9df31ee0ab0da5f29c5d5fe1e4d` Deliver owned spans to BCS (#5310)
-- `648ad5ed10f543c129b51789c7d02e29b64f06f7` Highlight let type in the TextMate and tree-sitter grammars (#5316)
-- `1626277d2ed5f8197e90b790da9742c0c7a11b02` Accept BAML_CONTEXT in packed executables and baml run (#5319)
-- `1720f0d23b2817c4efb4153d8909e9bbd441a96f` fix: give catch, catch_all, catch_all_panics consistent semantics (#5317)
-- `a71490d0035025b641b78e02024a883cea05da3a` Name LLM function spans and entry futures after the function (#5335)
-- `990035bec18133ed9fcc61b17909eb438a3f8b69` fix: teach bridge functions to runtime-type-check the args they're called with (#5333)
-- `5e9826d29212b5ac4814d56c2b75fb0788695d8e` feat(compiler)!: strict string escapes and raw string literals (#5345)
-- `0f652d12da43fcb5f063143ae4cae99050faf404` sdkgen_rust: qualify clashing union variant names by namespace (#5320)
-- `c521d3c8555c7e460c91d07e803eacef2e7c49d9` chore(deps): bump CA trust stores for eMudhra intermediate CA compromise (#5356)
-- `1654df382a96f9e0671e7ab1b5fbf1229ef61a52` feat: global variables (top-level `const`) (#5325)
-- `def2a0e3ac75c53499f92bf38b311762b6adc417` feat(reflect): list and look up a package's globals (#5361)
-- `cac5dd04590fc506ed1eec38ae905898f05b32e2` docs(lessons): annotate a global with const and a local with let (#5364)
-- `6aa168edea177a8225071d607bc69114c6229c78` chore: fix feedback_auth_e2e flakiness (#5363)
-- `953c58d5106112662afa1cd4d6d904b97fd42736` fix(parser)!: sane parses for newline-delimited expressions (#5357)
-- `58970f8df7f006ecdea835d8cb16ff36b021a306` OpenAI native structured outputs option (#5371)
-- `40617e7b7c29ec0bddb7fdb72f869cccaf4da65d` Record class and enum definitions in telemetry (#5169)
-- `2ce48b88a97779a555b017e936bfc8f42641e0e4` fix: correctly resolve instance methods on aliases (#5358)
-- `2143382aad42d0bd4a70dcc0367890476f2f827b` fix: reject assignment to non-place targets like `[x, y] = [1, 2]` (#5020)
-- `907e84218fc5f37809ed70bb1bb2b23dc68e6621` fix(engine): accept class arguments that omit nullable fields (#5291)
-- `7d2b41e48f31051d2067cab96742aa674b920f6f` fix(sdk-typescript)!: make nullable class keys optional (#5377)
-- `a09a7199a57d491a4ea4239624d4f335af77da84` fix(btel): bound cloud telemetry delivery at shutdown (#5379)
-- `f6b65b385e28dcdf75ebc97bb542464db11837ea` fix(btel): send cloud telemetry through the environment's proxy (#5380)
-- `6b90032f74e559d699476594308bb670f5730762` fix(sdk): finish in-flight work and telemetry at exit in the Rust and TypeScript bridges (#5293)
-- `e373e39ac38b8840a31247fa3e6df1d82fbf8c4d` feat(sdk-rust): accept class arguments by reference (#5372)
-- `4da8e1d5964e4b9880a1cfc0d5f9b6927f7a8e37` fix(sys_native): reuse HTTP clients across requests (#5373)
-- `83c3abec28f5351f68440e559af8503a555f3341` fix(sdk-rust): box class cycles that pass through type aliases (#5374)
-- `51fb016a33276fcf13309f5199049ed87228eb96` fix(sdk-rust): map json to serde_json::Value instead of skipping it (#5287)
-- `921d3f15e1ac2bb163b417647be5195accdf0aad` feat(sdk-rust): optional serde impls on generated types (#5375)
-- `8e38c25ef89330e1f87e232e7b46febbf5cb05f5` feat(btel): add a publisher setting to keep HTTP bodies out of network spans (#5389)
-- `0c11e94620e31b9f3eb79e8f6832e00f5039a6c4` fix(btel): a bad level, empty key or bad URL no longer fails SDK load (#5388)
-- `1edc3aac44038d26a0a03adf0e03c5387e2352f4` Fix btel upload stalls (#5390)
-- `5d3d89e586f12a4abebcd0f192cbbea702cbbf69` fix(compiler): correctly parse complex union types (#5387)
-- `9dbb5f46d3db84132789cae1e98433c37537e2a4` fix: make ?. type checking work, when the scrutinee has nullable type (#5405)
-- `285cd380f94fbe3f8c2f4876ee17f0fa7ea4e85f` Drop union members that can't come from JSON instead of rejecting the type (#5398)
-- `7950b4de0bbe29d733910706cf25e4baf9acdcfa` One name per conversion in baml.json (#5399)
-- `590abae9beffed53bd16b67793dc321bed476972` Read and write JSON without an intermediate serde_json tree (#5402)
-- `dc510563660345c7f1b898a4f67b85908b3ad113` Decode JSON unions by best match, and other decode fixes (#5404)
-- `608d4bb4ee502708e817c2743a98d6c02ecdea43` Fix error sentinel erasure points (#5401)
-- `303930923cd3f2bfc68ebca79dee96f5779175a8` fix(vm): limit each BexThread stack to 10 MiB (#5386)
-
-## Exclusions after inspecting shipped effects
-
-- #5250: Internal BexStr naming and benchmark ports; no standalone shipped behavior.
-- #5258: Intermediate streamed wrapper span superseded by #5282; final release records the original function operation instead.
-- #5290: Internal review-workflow pause.
-- #5292: CI/release build setup installs prebuilt wasm-pack; no changed installed API or artifact content beyond enabling builds.
-- #5295: Internal council tooling.
-- #5296: Restores recursive VM performance regressed earlier in this range by #5254; no demonstrated release-level speedup over the lower boundary. Retain external PR in thank-you audit.
-- #5298: AUR wrapper publishing resumes on the next wrapper release; wrapper remains 0.2.5 in this language-only bump.
-- #5299: Winget submission runs on wrapper releases; no wrapper version bump in this release. Do not promise an accepted package update.
-- #5301: Internal benchmark harness/KPI reporting, not a shipped language feature. Retain external PR in thank-you audit.
-- #5363: Test-only mock keep-alive flake fix.
+- `7bce4770de994a0766e754901f376972bec4a601` [#5264](https://github.com/BoundaryML/baml/pull/5264) — feat(compiler): compile BAML MIR to Rust. Retained for user-effect review.
+- `8c4c6a155271a4804b92a45fa38f813a16289dbc` [#5412](https://github.com/BoundaryML/baml/pull/5412) — docs: BAML 0.23.0 canary changelog and contributor follow-ups. Excluded: Previous release notes; no new 0.24.0 behavior.
+- `27a1b2624f91c4f00dafbb43afaec77c38f3ef17` [#5417](https://github.com/BoundaryML/baml/pull/5417) — Make the LSP deadlock watchdog opt-in. Retained for user-effect review.
+- `5c9e2531cdc2c9e70d8f563c1536bc03170de0dd` [#5418](https://github.com/BoundaryML/baml/pull/5418) — Cache interface impl resolution across calls. Retained for user-effect review.
+- `e9e593a207b1a2f00e05d832f17c44c962a69097` [#5414](https://github.com/BoundaryML/baml/pull/5414) — Let a type choose what a model writes for it. Retained for user-effect review.
+- `74d6ab7bf8779c73068f366f16419861b2d3bd9e` [#5415](https://github.com/BoundaryML/baml/pull/5415) — Build class instances and enum values from reflection. Retained for user-effect review.
+- `166bbc07042699e5a21428524223ac88150e9238` [#5420](https://github.com/BoundaryML/baml/pull/5420) — Fix the flaky all_settled cancellation test and the race it guards. Retained for user-effect review.
+- `019a6cc2be572d552f1759fc52dd6fa06c6efb09` [#5385](https://github.com/BoundaryML/baml/pull/5385) — fix(emit): materialize bound methods in projection stores. Retained for user-effect review.
+- `3d20df898fbea29e24be06222aeee25ad48f8597` [#5429](https://github.com/BoundaryML/baml/pull/5429) — Take no locks on the allocation and write-barrier hot path, and scan only finalizable objects. Retained for user-effect review.
+- `63f9cb3a9e041d4581c6931dd32ec5346b1ce1db` [#5430](https://github.com/BoundaryML/baml/pull/5430) — Warn when the Go generator skips a symbol, and generate generic functions with defaulted or callback parameters. Retained for user-effect review.
+- `4dbe99aa6789fddc675dd07febaa9f24efcf2998` [#5431](https://github.com/BoundaryML/baml/pull/5431) — Use FxHashMap for the VM's per-op caches. Retained for user-effect review.
+- `ce992b882d79ea46d0c6de162db48480218c685a` [#5432](https://github.com/BoundaryML/baml/pull/5432) — Skip the generic to_string path for string and primitive interpolation holes. Retained for user-effect review.
+- `e9e94256c54771f81b08acd6b93e2259814eb283` [#5433](https://github.com/BoundaryML/baml/pull/5433) — Implement join natively. Retained for user-effect review.
+- `18ec299d068092b934a390b6040f156ac2de362f` [#5435](https://github.com/BoundaryML/baml/pull/5435) — fix(engine): close eMudhra and Brotli security gaps. Excluded: BAML v0 engine security patch only; v1 dependency graph unchanged.
+- `151d33cb591f17e4995c4237f00f279482a01dc3` [#5436](https://github.com/BoundaryML/baml/pull/5436) — Compare btel prepares by file sequence, not arrival order. Excluded: Test-only ordering correction; delivery already applies file sequence correctly.
+- `ecb640608f730191e07b9122cab99a521e7b178d` [#5437](https://github.com/BoundaryML/baml/pull/5437) — chore(engine): release 0.226.3. Excluded: BAML v0 release metadata/generated clients only.
+- `051e489cb06637765c8e22876191ddc5a16468f9` [#5359](https://github.com/BoundaryML/baml/pull/5359) — Bridge coercion rework. Retained for user-effect review.
+- `9574eda7142eabc9f9172df3089ce9f8a9ecfde7` [#5439](https://github.com/BoundaryML/baml/pull/5439) — fix(parser): better distinguish subtraction from negation. Retained for user-effect review.
+- `9bc29b9619a32b78d595533e907f50b3e2875043` [#5442](https://github.com/BoundaryML/baml/pull/5442) — ci: run rust_differential as its own job. Excluded: CI job split for Rust differential tests; no shipped implementation change.
+- `98502d28a8350c4e13298992648b6bda97081cc0` [#5440](https://github.com/BoundaryML/baml/pull/5440) — fix(ci): bootstrap Node before pnpm in engine release containers. Excluded: BAML v0 engine release-container bootstrap only.
+- `9ccbcebad4bd0081fcfce602bf5a2550836462f6` [#5423](https://github.com/BoundaryML/baml/pull/5423) — Cleanup & groundwork for heap hardening. Excluded: Heap-hardening groundwork/refactor. No measured release-level improvement or distinct public behavior established.
+- `1d4ee52e6aefbf7bc5207eb783786597daffd836` [#5424](https://github.com/BoundaryML/baml/pull/5424) — Add `baml codequality` command for code complexity metrics. Retained for user-effect review.
+- `9eb13097920e1e442ef0c9f8235d9a07a662c843` [#5446](https://github.com/BoundaryML/baml/pull/5446) — Compile-check every BAML example in the agent skills. Retained for user-effect review.
+- `bd1d44ccecfba655a5ec9a6a217f6e38a4432869` [#5449](https://github.com/BoundaryML/baml/pull/5449) — Put numbers first in the `baml codequality` list views. Retained for user-effect review.
+- `464388f729830d5ebee58ba0d345361e80e681cf` [#5448](https://github.com/BoundaryML/baml/pull/5448) — skill: reorganize baml-core and add the style guidelines. Retained for user-effect review.
+- `e27aceb1b466057fce5d2901d735482205520c8e` [#5452](https://github.com/BoundaryML/baml/pull/5452) — skill: check baml codequality as you go. Retained for user-effect review.
+- `94a92a92bca79852231c829115256ebf8bb07c73` [#5453](https://github.com/BoundaryML/baml/pull/5453) — Count NPath past u64 in `baml codequality`. Retained for user-effect review.
+- `654cb9b57bbd84a19225af3465afee06e2f78c6c` [#5455](https://github.com/BoundaryML/baml/pull/5455) — baml fmt --check. Retained for user-effect review.
+- `478fcc035721c623e79d1ba82cb9b2310c285e00` [#5466](https://github.com/BoundaryML/baml/pull/5466) — Stop rejecting multi-tick backtick strings whose content looks like code. Retained for user-effect review.
+- `1d771278eceab6a351ba2e6b0331559261dc55fe` [#5468](https://github.com/BoundaryML/baml/pull/5468) — ci: pin floating tool versions. Excluded: Build/release tool pinning; fixes publishing jobs, without a distinct installed v1 API or artifact behavior to announce.
+- `704908afe94161c75a9965889103181e2f8f5f24` [#5467](https://github.com/BoundaryML/baml/pull/5467) — Normalize CRLF source and keep a file's line ending when formatting. Retained for user-effect review.
+- `ae746e18f7aeabcdb79cafe6e3f67b3a35caaf13` [#5470](https://github.com/BoundaryML/baml/pull/5470) — Use aws-lc instead of ring in the pack host. Retained for user-effect review.
+- `59777c8a76477a69853e898eb211d542c0b054ab` [#5471](https://github.com/BoundaryML/baml/pull/5471) — Client adapters now provide streaming backlog in one batch. Retained for user-effect review.
+- `1ace85eae5155b89b1e7e98209d80381834caa39` [#5477](https://github.com/BoundaryML/baml/pull/5477) — Build a chain of string + in one step. Retained for user-effect review.
+- `119cea06229606e27b8ce3abc73b372ea7177b69` [#5478](https://github.com/BoundaryML/baml/pull/5478) — chore(typescript2): bump playwright to 1.64.1. Excluded: Playwright test-tool update only.
+- `ff8fddbef185b65d519b45ca8fbf09c1e5ba5623` [#5479](https://github.com/BoundaryML/baml/pull/5479) — perf(pack-host): stop linking stdlib source for package-name lookups. Retained for user-effect review.
+- `aa80f5197dd30da8955af5901c9e4608573a2819` [#5481](https://github.com/BoundaryML/baml/pull/5481) — "language" naming convention for rust and python. Retained for user-effect review.
+- `40445fcff5dc631345b553010f9dfad927269202` [#5480](https://github.com/BoundaryML/baml/pull/5480) — Hide --agent-skill-check and make the stale skill warning more urgent. Retained for user-effect review.
+- `2965d42280640b6173cf41f126d236bce4060693` [#5482](https://github.com/BoundaryML/baml/pull/5482) — fix(python): make pydantic a runtime dependency of baml_bridge. Retained for user-effect review.
+- `01b8eb8daaf1a335340c483b7294b1e1966f4154` [#5486](https://github.com/BoundaryML/baml/pull/5486) — Reject ai.Role interpolated into untagged strings. Retained for user-effect review.
+- `9ffcb63b87a7d6edf7c0009820729debf9581394` [#5485](https://github.com/BoundaryML/baml/pull/5485) — Record bridge traces in the cwd project so baml query --local finds them. Retained for user-effect review.
+- `4ef24545c25bc92df11279692aee01159396abe2` [#5487](https://github.com/BoundaryML/baml/pull/5487) — ci: pass /Brepro to lib.exe for MSVC static libs. Excluded: Build-cache/reproducibility settings only; no installed runtime fix.
+- `54374938bf7f2cd59aa8cdfad300234d86fc08b3` [#5489](https://github.com/BoundaryML/baml/pull/5489) — ci: keep MSVC /Brepro flags intact in Git Bash. Excluded: Build-shell correction for the preceding archiver flags; no installed runtime fix.
+- `4b1f509556521a41c506e272759da5379b2f80f7` [#5484](https://github.com/BoundaryML/baml/pull/5484) — chore: remove DataFusion and the retired baml_query crates. Excluded: Deletes already unused DataFusion/query/profiling code; shipping query uses SQLite and is unchanged.
+- `85da331a7d2881696dbb9e64d2d1782cc29993a0` [#5490](https://github.com/BoundaryML/baml/pull/5490) — ci: leave deterministic LLVM ARM64 archives flag-free. Excluded: Build-archiver correction for Windows ARM64; no installed runtime fix.
+- `ecd5f276597b978ba722e0513394afc7736a8057` [#5425](https://github.com/BoundaryML/baml/pull/5425) — chore: set up baml wrapper test harness. Excluded: Wrapper test harness only; behavior ships through the implementation PRs.
+- `b355d3369c2ec2106ea767b43b3af1bd518f4f66` [#5426](https://github.com/BoundaryML/baml/pull/5426) — fix: teach the rust-based baml wrapper to install-on-demand. Retained for user-effect review.
+- `591d6d1de2e96549d6c480652a069ff89786e700` [#5456](https://github.com/BoundaryML/baml/pull/5456) — fix(stdlib): improve subprocess management API, for the baml wrapper. Retained for user-effect review.
+- `75337011b96811c79bc60031d1cd958acdfd3788` [#5457](https://github.com/BoundaryML/baml/pull/5457) — fix(stdlib): augment fs, path, host, archive, toml APIs. Retained for user-effect review.
+- `0dc73a9de9b00ac3d693c9451921bd1703f1c010` [#5463](https://github.com/BoundaryML/baml/pull/5463) — feat: allow baml pack to use a locally built host binary. Retained for user-effect review.
+- `857c3f247b3d7afdc50bf469ee7c096bc702b930` [#5422](https://github.com/BoundaryML/baml/pull/5422) — fix: implement a baml-native wrapper. Retained for user-effect review.
+- `aae6e9179db3731170ac53243a476725aa155d04` [#5496](https://github.com/BoundaryML/baml/pull/5496) — Look up only a runtime class's own witnesses. Retained for user-effect review.
+- `261588e192b27feafbfb5193ee8dd43df558b593` [#5502](https://github.com/BoundaryML/baml/pull/5502) — stdlib docs: qualify static calls with baml. (TASK-198). Retained for user-effect review.
+- `b092354563ef7d4cc82d4ac4c354583f1ea4f1e9` [#5497](https://github.com/BoundaryML/baml/pull/5497) — Stop waking the idle-GC coordinator twice per call. Retained for user-effect review.
+- `ab5042f98b1cb9d5052a8925fd8178431417d96a` [#5500](https://github.com/BoundaryML/baml/pull/5500) — Run cleanup on Ctrl-C / SIGTERM. Retained for user-effect review.
+- `06e0854b7c7497212e035a7b94057714c2fd16d5` [#5494](https://github.com/BoundaryML/baml/pull/5494) — Redact credentials in google + aws errors. Retained for user-effect review.
+- `253082af8ea004ed3b2f1eeb6a69d244fa7b86b4` [#5509](https://github.com/BoundaryML/baml/pull/5509) — Stop the Rust bridge from turning on serde_json's arbitrary_precision and preserve_order. Retained for user-effect review.
+- `78b539244cbc095dec1d4ab624adc56e6d1d5ce0` [#5513](https://github.com/BoundaryML/baml/pull/5513) — Make the stack page the boundaryml.com homepage. Excluded: Website homepage redesign, independent of the language release.
+- `a59d79d430b9c99937ca4e852bb641c6efb16361` [#5491](https://github.com/BoundaryML/baml/pull/5491) — feat: point baml-in-baml bcs telemetry at prod. Retained for user-effect review.
+- `a2ff141306c34c9339455b4626f72fe0915c9160` [#5515](https://github.com/BoundaryML/baml/pull/5515) — fix(release): stop requiring BAML wrapper candidates on nightly releases. Excluded: Nightly release orchestration gate only; no 0.24.0 toolchain behavior.
+- `8df529f9d19f80167f84be1a36b643ae3e05874b` [#5514](https://github.com/BoundaryML/baml/pull/5514) — ci: speed up wrapper tests and fix CI artifact and cleanup failures. Excluded: CI speed/artifact cleanup and HTTP test cleanup only; no HTTP runtime change.
+- `7c55cb9cb0f4b31c8bea3007cdd44ef8c18fa86e` [#5511](https://github.com/BoundaryML/baml/pull/5511) — Decode class-union fields to their Go structs in generic decoding. Retained for user-effect review.
+- `39a1de3b070bd7ceeb5cd7fc6dd8c5b656e5dd65` [#5508](https://github.com/BoundaryML/baml/pull/5508) — Resolve async Python calls on their event loop in batches. Retained for user-effect review.
+- `a6457173ef1faeb5fae6bdccd7b4c396b7e24ada` [#5517](https://github.com/BoundaryML/baml/pull/5517) — Show the deploy line clearly in the homepage hero. Excluded: Website hero presentation, independent of the language release.
+- `e1d48907d7dfb28e39c0fbbffa51d57d7d2d3168` [#5518](https://github.com/BoundaryML/baml/pull/5518) — Stop printing a napi leak warning when a Node process exits early. Retained for user-effect review.
+- `91e0ddf196e8c37c8507d69b289c03520aa09439` [#5521](https://github.com/BoundaryML/baml/pull/5521) — Use log crate in rust bridge instead of printing to stderr. Retained for user-effect review.
+- `c4c12768489d391b3d0ece87a5f14162f037470a` [#5520](https://github.com/BoundaryML/baml/pull/5520) — Rework the Build, Deploy, Observe, Improve, and Adopt sections. Excluded: Website content/layout, independent of the language release.
+- `2d56c4ddec6075f22f6cef3f6d3e55c241fd8606` [#5516](https://github.com/BoundaryML/baml/pull/5516) — fix(installer): fall back to plain `toolchain use` when the help probe fails. Retained for user-effect review.
+- `e8157fd049381b6214a5545ac9e4f58a8604cc10` [#5519](https://github.com/BoundaryML/baml/pull/5519) — Generate async functions by default, with _sync twins. Retained for user-effect review.
+- `240c120465e6fe20924f9f84d0a76424b8cf5aa7` [#5498](https://github.com/BoundaryML/baml/pull/5498) — Escape analysis: both backends skip locks on task-local objects. Retained for user-effect review.
+- `dfa138c19a965a7a3d9ef7bec1a1880b05317d75` [#5503](https://github.com/BoundaryML/baml/pull/5503) — Bytecode: compile `for` over an array as an index walk. Retained for user-effect review.
+- `7558206a1802c794c7e852c52016f3ae83500d44` [#5506](https://github.com/BoundaryML/baml/pull/5506) — Native: keep the compiled-runtime hot helpers inlinable. Retained for user-effect review.
+- `842da5e2edca55590fb48ac78c2d95fc874952f1` [#5524](https://github.com/BoundaryML/baml/pull/5524) — Keep known compound words like OAuth whole in language naming. Retained for user-effect review.
+- `aabd3533218619285a461ace5bf11dd6b482ead9` [#5525](https://github.com/BoundaryML/baml/pull/5525) — Use the new BAML logomark in the README. Excluded: README logomark update; no language/toolchain behavior.
+- `462088f8427313d68f504bec925d5e82d7fe149a` [#5526](https://github.com/BoundaryML/baml/pull/5526) — Make functions BAML returns async, with sync twins. Retained for user-effect review.
+- `a6d8fcd4700a83739971a26a71b75469551d5f60` [#5528](https://github.com/BoundaryML/baml/pull/5528) — Put every website page on the homepage brand. Excluded: Website brand/layout, independent of the language release.
+- `c83cef10dd18741b47c5a3fb5d2334d076ff6e17` [#5529](https://github.com/BoundaryML/baml/pull/5529) — Add blog post: Teaching Agents to Write Beautiful BAML. Excluded: Standalone agent-skills article; no change to the bundled toolchain skill.
+- `8eb462d8592848b3a81dbf4396776361091c8d6b` [#5527](https://github.com/BoundaryML/baml/pull/5527) — Generate a new constructor for Rust structs that defaults optional fields to None. Retained for user-effect review.
+- `a5db82f06c1da0dfac28e283a15d19d37a3f2cf2` [#5531](https://github.com/BoundaryML/baml/pull/5531) — fix(escape analysis): share objects a finalizer can reach. Retained for user-effect review.
+- `c3ff351043929f9985f548bd2427207d95ec9492` [#5535](https://github.com/BoundaryML/baml/pull/5535) — Revise the agent skills blog post and title its charts. Excluded: Standalone article edits/charts; no bundled toolchain skill change.
+- `c02edfc5399d0e11bd20aa6140cfb0671379a930` [#5537](https://github.com/BoundaryML/baml/pull/5537) — Move setup-baml and baml-action into the monorepo. Retained for user-effect review.
+- `a4ba1b31be27414f79675290c93db02448c5de74` [#5541](https://github.com/BoundaryML/baml/pull/5541) — Rename the agent skills blog post and redirect its old URL. Excluded: Standalone article URL/redirect; independent of language release.
+- `49d6ba488e3cd2ccbd17448bb3d7f8589404da06` [#5542](https://github.com/BoundaryML/baml/pull/5542) — Restyle link preview cards to the new site brand. Excluded: Website preview-card styling; independent of language release.
+- `dec4713a0e7c9699442bf5855b4f327063f769c5` [#5483](https://github.com/BoundaryML/baml/pull/5483) — feat: release baml-in-baml to prod: 0.3.0 wrapper, 0.24.0 toolchain. Retained for user-effect review.
