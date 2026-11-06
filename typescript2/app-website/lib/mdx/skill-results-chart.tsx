@@ -123,7 +123,7 @@ export function SkillResultsChart({ metric }: { metric: Metric }) {
           const rows: readonly number[][] = SKILL_RESULTS[metric][task];
           const max = Math.max(...rows.flat());
           const ticks = log ? logTicks(max) : linearTicks(max);
-          const top = ticks[ticks.length - 1] ?? 1;
+          const top = ticks.at(-1) ?? 1;
           const position = (value: number) =>
             log
               ? (Math.log10(Math.max(value, 1)) / Math.log10(top)) * 100
