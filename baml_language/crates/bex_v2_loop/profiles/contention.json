@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-06T18:43:35.558366+00:00",
+  "note": "Concurrent external Rust build saturating host; diagnostic, not acceptance conditions",
+  "source_sha256": {
+    "src/lib.rs": "c535e8aaebb38c05cd9883ddc55509b2e0ff344c9eabdd263220bb384e7e5733",
+    "src/slice_clock.rs": "bee6deecb51355eb600a4aadfb6fe3e7af833af5b649f153bcd7928e9b8ced7c",
+    "src/tasks.rs": "a5293eb1a049b57313fe7cf2ec9dba38846b1ac8f41925bb89d15e7cb028ebdf",
+    "src/roots.rs": "1ca60286e9b27a3d7883ec2965da8398ed226dcaf491bcaa3a5bdb0fc7f34ba9"
+  },
+  "timings": [
+    {
+      "name": "rust",
+      "trial": 0,
+      "load": "41.84 25.90 14.12 29/3791 3030616",
+      "result": "10000",
+      "elapsed_ns": 16434418,
+      "jobs": 3
+    },
+    {
+      "name": "node",
+      "trial": 0,
+      "load": "41.84 25.90 14.12 27/3791 3030623",
+      "result": "10000",
+      "elapsed_ns": 2551879,
+      "jobs": 3
+    },
+    {
+      "name": "rust",
+      "trial": 1,
+      "load": "41.84 25.90 14.12 29/3790 3030674",
+      "result": "10000",
+      "elapsed_ns": 19667708,
+      "jobs": 3
+    },
+    {
+      "name": "node",
+      "trial": 1,
+      "load": "41.84 25.90 14.12 35/3792 3030687",
+      "result": "10000",
+      "elapsed_ns": 5747809,
+      "jobs": 3
+    },
+    {
+      "name": "rust",
+      "trial": 2,
+      "load": "41.84 25.90 14.12 27/3794 3030723",
+      "result": "10000",
+      "elapsed_ns": 7548919,
+      "jobs": 3
+    },
+    {
+      "name": "node",
+      "trial": 2,
+      "load": "41.84 25.90 14.12 28/3794 3030728",
+      "result": "10000",
+      "elapsed_ns": 4655695,
+      "jobs": 3
+    },
+    {
+      "name": "rust",
+      "trial": 3,
+      "load": "41.84 25.90 14.12 33/3796 3030758",
+      "result": "10000",
+      "elapsed_ns": 13593657,
+      "jobs": 3
+    },
+    {
+      "name": "node",
+      "trial": 3,
+      "load": "41.84 25.90 14.12 29/3796 3030773",
+      "result": "10000",
+      "elapsed_ns": 7643432,
+      "jobs": 3
+    },
+    {
+      "name": "rust",
+      "trial": 4,
+      "load": "41.84 25.90 14.12 26/3791 3030794",
+      "result": "10000",
+      "elapsed_ns": 16557554,
+      "jobs": 3
+    },
+    {
+      "name": "node",
+      "trial": 4,
+      "load": "41.84 25.90 14.12 28/3789 3030805",
+      "result": "10000",
+      "elapsed_ns": 4700030,
+      "jobs": 3
+    }
+  ]
+}

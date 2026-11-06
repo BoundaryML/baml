@@ -4,8 +4,8 @@ use corosensei::{
     stack::{DefaultStack, Stack},
 };
 use std::{
-    cell::{RefCell, UnsafeCell},
-    collections::{BTreeMap, VecDeque},
+    cell::{Cell, RefCell, UnsafeCell},
+    collections::VecDeque,
     future::Future,
     rc::{Rc, Weak},
     sync::mpsc,
@@ -14,6 +14,8 @@ use std::{
 pub use tokio_util::sync::CancellationToken;
 
 mod roots;
+mod slice_clock;
+mod tasks;
 pub use roots::RootSource;
 
 /// Placeholder boundary values; unlike `Value`, these contain no heap addresses.
@@ -100,11 +102,32 @@ impl FutureState {
         })
     }
 }
+/// Loop-local cancellation authority. Cross-thread cancellation uses linked
+/// CancellationTokens; the common parent/child path needs no atomic or lock.
 #[derive(Clone)]
 pub struct TaskCancel {
-    own: CancellationToken,
-    linked: Vec<CancellationToken>,
+    node: Rc<CancelNode>,
     deadline: Option<Instant>,
+}
+struct CancelNode {
+    cancelled: Cell<bool>,
+    parent: Option<Rc<CancelNode>>,
+    linked: Vec<CancellationToken>,
+    external: bool,
+    epoch: Rc<Cell<usize>>,
+}
+impl Drop for CancelNode {
+    fn drop(&mut self) {
+        // Finished parents may leave a long chain owned only by a descendant.
+        // Releasing that chain must not recursively consume a small fiber stack.
+        let mut parent = self.parent.take();
+        while let Some(node) = parent {
+            match Rc::try_unwrap(node) {
+                Ok(mut node) => parent = node.parent.take(),
+                Err(_) => break, // Shared ancestor remains owned elsewhere.
+            }
+        }
+    }
 }
 impl Default for TaskCancel {
     fn default() -> Self {
@@ -113,16 +136,29 @@ impl Default for TaskCancel {
 }
 impl TaskCancel {
     pub fn detached(linked: Vec<CancellationToken>) -> Self {
+        Self::root(linked, Rc::default())
+    }
+    fn root(linked: Vec<CancellationToken>, epoch: Rc<Cell<usize>>) -> Self {
         Self {
-            own: CancellationToken::new(),
-            linked,
+            node: Rc::new(CancelNode {
+                cancelled: Cell::new(false),
+                parent: None,
+                external: !linked.is_empty(),
+                linked,
+                epoch,
+            }),
             deadline: None,
         }
     }
     pub fn child(&self, linked: Vec<CancellationToken>) -> Self {
         Self {
-            own: self.own.child_token(),
-            linked: self.linked.iter().cloned().chain(linked).collect(),
+            node: Rc::new(CancelNode {
+                cancelled: Cell::new(false),
+                parent: Some(self.node.clone()),
+                external: self.node.external || !linked.is_empty(),
+                linked,
+                epoch: self.node.epoch.clone(),
+            }),
             deadline: self.deadline,
         }
     }
@@ -131,12 +167,20 @@ impl TaskCancel {
         self
     }
     pub fn cancel(&self) {
-        self.own.cancel();
+        if !self.node.cancelled.replace(true) {
+            self.node.epoch.set(self.node.epoch.get().wrapping_add(1));
+        }
     }
+    #[inline]
     pub fn is_cancelled(&self) -> bool {
-        self.own.is_cancelled()
-            || self.linked.iter().any(CancellationToken::is_cancelled)
-            || self.deadline.is_some_and(|d| Instant::now() >= d)
+        let mut node = Some(&*self.node);
+        while let Some(n) = node {
+            if n.cancelled.get() || n.linked.iter().any(CancellationToken::is_cancelled) {
+                return true;
+            }
+            node = n.parent.as_deref();
+        }
+        self.deadline.is_some_and(|d| Instant::now() >= d)
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -155,7 +199,12 @@ pub enum TaskState {
 }
 #[derive(Clone)]
 pub struct FutureHandle(Rc<RefCell<FutureData>>);
+struct FuturePool {
+    records: Vec<Rc<RefCell<FutureData>>>,
+    capacity: usize,
+}
 struct FutureData {
+    pool: Weak<RefCell<FuturePool>>,
     id: usize,
     owner: Weak<RefCell<Core>>,
     state: FutureState,
@@ -163,6 +212,37 @@ struct FutureData {
     waiters: Vec<usize>,
     observed: bool,
     errors: Rc<RefCell<Vec<(usize, Err)>>>,
+}
+impl Drop for FutureHandle {
+    fn drop(&mut self) {
+        if Rc::strong_count(&self.0) != 1 {
+            return;
+        }
+        let pool = self.0.borrow().pool.upgrade();
+        if let Some(pool) = pool {
+            let mut pool = pool.borrow_mut();
+            if pool.records.len() == pool.capacity {
+                return;
+            }
+            let mut f = self.0.borrow_mut();
+            if !f.observed
+                && let Some(Err(e @ (Err::Error { .. } | Err::InternalError(_)))) = f.state.result()
+            {
+                f.errors.borrow_mut().push((f.id, e));
+            }
+            f.observed = true;
+            f.state = FutureState::Pending;
+            f.waiters.clear();
+            // Only detach ancestry when no live descendants/cancel handles can
+            // observe it. Otherwise a fresh node is allocated on reuse.
+            if let Some(node) = Rc::get_mut(&mut f.cancel.node) {
+                node.parent = None;
+                node.linked.clear();
+            }
+            drop(f);
+            pool.records.push(self.0.clone());
+        }
+    }
 }
 impl Drop for FutureData {
     fn drop(&mut self) {
@@ -284,7 +364,8 @@ struct Task {
     future: FutureHandle,
     cancel: TaskCancel,
     shield: usize,
-    io_cancel: CancellationToken,
+    io_cancel: Option<CancellationToken>,
+    needs_service: bool,
     io_epoch: u64,
     completion: Option<Result<OwnedValue, Err>>,
     timer: Option<Instant>,
@@ -292,16 +373,40 @@ struct Task {
     roots: Vec<Value>,
     host: Option<mpsc::Sender<Result<OwnedValue, Err>>>,
 }
+#[cfg(feature = "instrument")]
+#[derive(Clone, Debug, Default)]
+pub struct Metrics {
+    pub resumes: usize,
+    pub switches: usize,
+    pub spawns: usize,
+    pub pool_hits: usize,
+    pub queue_probes: usize,
+    pub service_scans: usize,
+    pub checkpoints: usize,
+    pub clock_reads: usize,
+    pub slice_reads: usize,
+    pub future_pool_hits: usize,
+    pub future_allocations: usize,
+    pub cancel_allocations: usize,
+}
 struct Core {
-    tasks: BTreeMap<usize, Task>,
+    slow_tasks: usize,
+    io_pending: usize,
+    host_enabled: bool,
+    cancel_epoch: Rc<Cell<usize>>,
+    last_cancel_epoch: usize,
+    slice: slice_clock::Slice,
+    #[cfg(feature = "instrument")]
+    metrics: Metrics,
+    tasks: tasks::Tasks,
     ready: VecDeque<usize>,
     pool: Vec<DefaultStack>,
-    next: usize,
     config: Config,
     tx: mpsc::Sender<Message>,
     runtime: tokio::runtime::Handle,
     rx: Rc<mpsc::Receiver<Message>>,
     futures: Vec<Weak<RefCell<FutureData>>>,
+    future_pool: Rc<RefCell<FuturePool>>,
     errors: Rc<RefCell<Vec<(usize, Err)>>>,
     host_gate: std::sync::Arc<std::sync::Mutex<Option<mpsc::Sender<Message>>>>,
     heap: Rc<RefCell<dyn LoopHeap>>,
@@ -398,6 +503,15 @@ pub struct ShutdownReport {
     pub leaked: Vec<usize>,
 }
 impl TaskLoop {
+    #[cfg(feature = "instrument")]
+    pub fn metrics(&self) -> Metrics {
+        self.core.borrow().metrics.clone()
+    }
+    #[cfg(feature = "instrument")]
+    pub fn reset_metrics(&mut self) {
+        self.core.borrow_mut().metrics = Metrics::default();
+    }
+
     pub fn new(
         config: Config,
         runtime: tokio::runtime::Handle,
@@ -411,21 +525,33 @@ impl TaskLoop {
             ),
             "I/O requires a runtime on other threads"
         );
+        let pool_capacity = config.pool_capacity;
         let (tx, rx) = mpsc::channel();
         let rx = Rc::new(rx);
         let host_gate = std::sync::Arc::new(std::sync::Mutex::new(Some(tx.clone())));
         Self {
             core: Rc::new(RefCell::new(Core {
-                tasks: BTreeMap::new(),
+                #[cfg(feature = "instrument")]
+                metrics: Metrics::default(),
+                slow_tasks: 0,
+                io_pending: 0,
+                host_enabled: false,
+                cancel_epoch: Rc::default(),
+                last_cancel_epoch: 0,
+                slice: slice_clock::Slice::new(config.time_slice),
+                tasks: tasks::Tasks::default(),
                 ready: VecDeque::new(),
                 pool: vec![],
-                next: 0,
                 config,
                 tx,
                 host_gate,
                 runtime,
                 rx: rx.clone(),
                 futures: vec![],
+                future_pool: Rc::new(RefCell::new(FuturePool {
+                    records: vec![],
+                    capacity: pool_capacity,
+                })),
                 errors: Rc::default(),
                 heap,
                 running_base: None,
@@ -434,6 +560,7 @@ impl TaskLoop {
         }
     }
     pub fn submission_handle(&self) -> SubmissionHandle {
+        self.core.borrow_mut().host_enabled = true;
         SubmissionHandle {
             gate: self.core.borrow().host_gate.clone(),
         }
@@ -494,10 +621,7 @@ impl TaskLoop {
     /// External token cancellation is observed within 1ms while idle.
     pub fn tick(&mut self, block: bool) -> bool {
         loop {
-            while let Ok(msg) = self.rx.try_recv() {
-                message(&self.core, msg);
-            }
-            service(&self.core);
+            maintenance(&self.core);
             let id = {
                 let mut c = self.core.borrow_mut();
                 c.ready.pop_front()
@@ -530,6 +654,12 @@ impl TaskLoop {
         }
     }
     fn run_one(&mut self, id: usize) {
+        #[cfg(feature = "instrument")]
+        {
+            let mut c = self.core.borrow_mut();
+            c.metrics.resumes += 1;
+            c.metrics.switches += 2;
+        }
         let mut fiber = {
             let mut c = self.core.borrow_mut();
             let t = c.tasks.get_mut(&id).unwrap();
@@ -556,7 +686,10 @@ impl TaskLoop {
                 if result.is_err() {
                     task.cancel.cancel();
                 }
-                task.io_cancel.cancel();
+                if let Some(token) = task.io_cancel.take() {
+                    token.cancel();
+                }
+                c.slow_tasks -= usize::from(task.needs_service);
                 let state = match &result {
                     Ok(v) => FutureState::Ready(v.clone()),
                     Err(Err::Cancelled) => FutureState::Cancelled,
@@ -566,13 +699,12 @@ impl TaskLoop {
                     },
                     Err(Err::InternalError(e)) => FutureState::InternalError(e.clone()),
                 };
-                let waiters = {
+                {
                     let mut f = task.future.0.borrow_mut();
                     f.state = state;
-                    std::mem::take(&mut f.waiters)
-                };
-                for waiter in waiters {
-                    wake(&mut c, waiter);
+                    for waiter in f.waiters.drain(..) {
+                        wake(&mut c, waiter);
+                    }
                 }
                 if let Some(reply) = task.host.take() {
                     task.future.0.borrow_mut().observed = true;
@@ -616,9 +748,11 @@ impl TaskLoop {
             std::thread::yield_now();
         }
         // Drop outside Core borrow: forced unwinding runs arbitrary Rust drops.
-        let tasks = std::mem::take(&mut self.core.borrow_mut().tasks);
+        let tasks = self.core.borrow_mut().tasks.drain();
         for (_, mut t) in tasks {
-            t.io_cancel.cancel();
+            if let Some(token) = t.io_cancel.take() {
+                token.cancel();
+            }
             drop(t.fiber.take());
             t.future.0.borrow_mut().state = FutureState::Cancelled;
             if let Some(reply) = t.host.take() {
@@ -626,8 +760,10 @@ impl TaskLoop {
             }
         }
         let mut c = self.core.borrow_mut();
+        c.slow_tasks = 0;
         c.ready.clear();
         c.pool.clear();
+        c.future_pool.borrow_mut().records.clear();
         for weak in &c.futures {
             if let Some(f) = weak.upgrade() {
                 let mut f = f.borrow_mut();
@@ -666,25 +802,77 @@ fn spawn(
     body: Body,
 ) -> FutureHandle {
     let mut c = core.borrow_mut();
-    let id = c.next;
-    c.next += 1;
-    let mut cancel = match parent.and_then(|id| c.tasks.get(&id)) {
-        Some(t) if !options.detached && t.shield == 0 => t.cancel.child(options.linked),
-        _ => TaskCancel::detached(options.linked),
-    };
-    if let Some(deadline) = options.deadline {
-        cancel = cancel.with_deadline(deadline);
+    #[cfg(feature = "instrument")]
+    {
+        c.metrics.spawns += 1;
+        c.metrics.pool_hits += usize::from(!c.pool.is_empty());
     }
-    let future = FutureHandle(Rc::new(RefCell::new(FutureData {
-        id,
-        owner: Rc::downgrade(core),
-        state: FutureState::Pending,
-        cancel: cancel.clone(),
-        waiters: vec![],
-        observed: false,
-        errors: c.errors.clone(),
-    })));
-    c.futures.push(Rc::downgrade(&future.0));
+    let id = c.tasks.reserve();
+    let inherited = parent
+        .and_then(|id| c.tasks.get(&id))
+        .filter(|t| !options.detached && t.shield == 0)
+        .map(|t| t.cancel.clone());
+    let deadline = match (
+        inherited.as_ref().and_then(|p| p.deadline),
+        options.deadline,
+    ) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    };
+    let node = CancelNode {
+        cancelled: Cell::new(false),
+        parent: inherited.as_ref().map(|p| p.node.clone()),
+        external: !options.linked.is_empty() || inherited.as_ref().is_some_and(|p| p.node.external),
+        linked: options.linked,
+        epoch: c.cancel_epoch.clone(),
+    };
+    let needs_service = node.external || deadline.is_some() || options.gate.is_some();
+    c.slow_tasks += usize::from(needs_service);
+    let recycled = c.future_pool.borrow_mut().records.pop();
+    let future = if let Some(f) = recycled {
+        #[cfg(feature = "instrument")]
+        {
+            c.metrics.future_pool_hits += 1;
+        }
+        {
+            let mut data = f.borrow_mut();
+            if let Some(old) = Rc::get_mut(&mut data.cancel.node) {
+                *old = node;
+            } else {
+                #[cfg(feature = "instrument")]
+                {
+                    c.metrics.cancel_allocations += 1;
+                }
+                data.cancel.node = Rc::new(node);
+            }
+            data.cancel.deadline = deadline;
+            data.id = id;
+            data.observed = false;
+        }
+        FutureHandle(f)
+    } else {
+        #[cfg(feature = "instrument")]
+        {
+            c.metrics.future_allocations += 1;
+            c.metrics.cancel_allocations += 1;
+        }
+        let f = Rc::new(RefCell::new(FutureData {
+            pool: Rc::downgrade(&c.future_pool),
+            id,
+            owner: Rc::downgrade(core),
+            state: FutureState::Pending,
+            cancel: TaskCancel {
+                node: Rc::new(node),
+                deadline,
+            },
+            waiters: vec![],
+            observed: false,
+            errors: c.errors.clone(),
+        }));
+        c.futures.push(Rc::downgrade(&f));
+        FutureHandle(f)
+    };
+    let cancel = future.0.borrow().cancel.clone();
     let ticket = options.gate.map(|gate| {
         gate.0.borrow_mut().queue.push_back(id);
         Ticket {
@@ -700,14 +888,22 @@ fn spawn(
     let stack_limit = stack.limit().get();
     let weak = Rc::downgrade(core);
     let fiber = Coroutine::with_stack(stack, move |yielder, ()| {
+        let core = weak.upgrade().expect("loop alive");
+        let cancel = core.borrow().tasks[&id].cancel.clone();
         let mut cx = TaskCx {
-            core: weak.upgrade().expect("loop alive"),
+            core,
             id,
             yielder,
-            scheduled: Instant::now(),
+            cancel,
+            shield: 0,
+            scheduled: slice_clock::now(),
         };
         // Driver catches user panics after corosensei unwinds the fiber. Forced
         // unwind on shutdown runs through this boundary without being caught.
+        #[cfg(feature = "instrument")]
+        {
+            cx.core.borrow_mut().metrics.slice_reads += 1;
+        }
         cx.admit()?;
         body(&mut cx)
     });
@@ -722,7 +918,8 @@ fn spawn(
             future: future.clone(),
             cancel,
             shield: 0,
-            io_cancel: CancellationToken::new(),
+            io_cancel: None,
+            needs_service,
             io_epoch: 0,
             completion: None,
             timer: None,
@@ -739,7 +936,9 @@ pub struct TaskCx<'a> {
     core: Rc<RefCell<Core>>,
     id: usize,
     yielder: &'a Yielder<(), ()>,
-    scheduled: Instant,
+    cancel: TaskCancel,
+    shield: usize,
+    scheduled: slice_clock::Stamp,
 }
 impl TaskCx<'_> {
     pub fn id(&self) -> usize {
@@ -749,7 +948,7 @@ impl TaskCx<'_> {
         self.core.borrow().tasks[&self.id].parent
     }
     pub fn cancel(&self) -> TaskCancel {
-        self.core.borrow().tasks[&self.id].cancel.clone()
+        self.cancel.clone()
     }
     pub fn spawn(
         &mut self,
@@ -764,11 +963,26 @@ impl TaskCx<'_> {
     ) -> FutureHandle {
         spawn(&self.core, Some(self.id), options, Box::new(body))
     }
-    fn checkpoint(&mut self) -> Result<(), Err> {
+    fn enable_service(&mut self) {
         let mut c = self.core.borrow_mut();
         let t = c.tasks.get_mut(&self.id).unwrap();
-        if t.shield == 0 && t.cancel.is_cancelled() {
-            std::mem::replace(&mut t.io_cancel, CancellationToken::new()).cancel();
+        if !t.needs_service {
+            t.needs_service = true;
+            c.slow_tasks += 1;
+        }
+    }
+    #[inline]
+    fn checkpoint(&mut self) -> Result<(), Err> {
+        #[cfg(feature = "instrument")]
+        {
+            self.core.borrow_mut().metrics.checkpoints += 1;
+        }
+        if self.shield == 0 && self.cancel.is_cancelled() {
+            let mut c = self.core.borrow_mut();
+            let t = c.tasks.get_mut(&self.id).unwrap();
+            if let Some(token) = t.io_cancel.take() {
+                token.cancel();
+            }
             t.io_epoch += 1;
             t.completion = None;
             t.timer = None;
@@ -784,7 +998,11 @@ impl TaskCx<'_> {
             .unwrap()
             .state = TaskState::Parked(reason);
         self.yielder.suspend(());
-        self.scheduled = Instant::now();
+        #[cfg(feature = "instrument")]
+        {
+            self.core.borrow_mut().metrics.slice_reads += 1;
+        }
+        self.scheduled = slice_clock::now();
         self.checkpoint()
     }
     fn admit(&mut self) -> Result<(), Err> {
@@ -806,7 +1024,27 @@ impl TaskCx<'_> {
         }
     }
     pub fn await_future(&mut self, future: &FutureHandle) -> Outcome {
-        self.await_any(std::slice::from_ref(future)).map(|(_, v)| v)
+        if !future.0.borrow().owner.ptr_eq(&Rc::downgrade(&self.core)) {
+            return Err(Err::InternalError("future belongs to another loop".into()));
+        }
+        self.checkpoint()?;
+        {
+            let mut f = future.0.borrow_mut();
+            if let Some(result) = f.state.result() {
+                f.observed = true;
+                return result;
+            }
+            // A task has only one active suspension; await_any unregisters all
+            // its inputs before returning, so this id cannot already be here.
+            debug_assert!(!f.waiters.contains(&self.id));
+            f.waiters.push(self.id);
+        }
+        let resumed = self.suspend(WaitReason::Futures);
+        future.0.borrow_mut().waiters.retain(|id| *id != self.id);
+        resumed?;
+        future
+            .result()
+            .expect("await resumed only by settlement or cancellation")
     }
     pub fn await_any(&mut self, futures: &[FutureHandle]) -> Result<(usize, Value), Err> {
         if futures
@@ -818,8 +1056,8 @@ impl TaskCx<'_> {
         if futures.is_empty() {
             return Err(Err::InternalError("await_any requires inputs".into()));
         }
+        self.checkpoint()?;
         loop {
-            self.checkpoint()?;
             for (index, f) in futures.iter().enumerate() {
                 if let Some(result) = f.result() {
                     return result.map(|v| (index, v));
@@ -840,14 +1078,10 @@ impl TaskCx<'_> {
     }
     pub fn poll(&mut self) -> Result<(), Err> {
         self.checkpoint()?;
-        let rx = self.core.borrow().rx.clone();
-        while let Ok(msg) = rx.try_recv() {
-            message(&self.core, msg);
-        }
-        service(&self.core);
+        maintenance(&self.core);
         let yield_now = {
             let c = self.core.borrow();
-            self.scheduled.elapsed() >= c.config.time_slice && !c.ready.is_empty()
+            !c.ready.is_empty() && c.slice.expired(self.scheduled)
         };
         if yield_now {
             {
@@ -856,13 +1090,18 @@ impl TaskCx<'_> {
                 c.ready.push_back(self.id);
             }
             self.yielder.suspend(());
-            self.scheduled = Instant::now();
+            #[cfg(feature = "instrument")]
+            {
+                self.core.borrow_mut().metrics.slice_reads += 1;
+            }
+            self.scheduled = slice_clock::now();
             self.checkpoint()?;
         }
         Ok(())
     }
     pub fn sleep(&mut self, duration: Duration) -> Result<(), Err> {
         self.checkpoint()?;
+        self.enable_service();
         self.core
             .borrow_mut()
             .tasks
@@ -889,7 +1128,11 @@ impl TaskCx<'_> {
             let t = c.tasks.get_mut(&self.id).unwrap();
             t.io_epoch += 1;
             let epoch = t.io_epoch;
-            let token = t.io_cancel.clone();
+            let token = t
+                .io_cancel
+                .get_or_insert_with(CancellationToken::new)
+                .clone();
+            c.io_pending += 1;
             (c.runtime.clone(), c.tx.clone(), token, epoch)
         };
         let id = self.id;
@@ -920,30 +1163,24 @@ impl TaskCx<'_> {
             .map(Value::Owned)
     }
     pub fn shield<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        struct Shield {
-            core: Rc<RefCell<Core>>,
-            id: usize,
-        }
-        impl Drop for Shield {
+        struct Shield<'a, 'b>(&'a mut TaskCx<'b>);
+        impl Drop for Shield<'_, '_> {
             fn drop(&mut self) {
-                if let Some(t) = self.core.borrow_mut().tasks.get_mut(&self.id) {
+                self.0.shield -= 1;
+                if let Some(t) = self.0.core.borrow_mut().tasks.get_mut(&self.0.id) {
                     t.shield -= 1;
                 }
             }
         }
+        self.shield += 1;
         self.core
             .borrow_mut()
             .tasks
             .get_mut(&self.id)
             .unwrap()
             .shield += 1;
-        let guard = Shield {
-            core: self.core.clone(),
-            id: self.id,
-        };
-        let result = f(self);
-        drop(guard);
-        result
+        let guard = Shield(self);
+        f(guard.0)
     }
     /// Rust closures' heap-allocated captures are not stack roots: register
     /// pointer-bearing captures in SpawnOptions::roots before first execution.
@@ -958,6 +1195,7 @@ fn message(core: &Rc<RefCell<Core>>, msg: Message) {
     match msg {
         Message::Io { id, epoch, result } => {
             let mut c = core.borrow_mut();
+            c.io_pending -= 1;
             if let Some(t) = c.tasks.get_mut(&id)
                 && t.io_epoch == epoch
                 && t.state == TaskState::Parked(WaitReason::Io)
@@ -982,8 +1220,47 @@ fn message(core: &Rc<RefCell<Core>>, msg: Message) {
     }
 }
 
+#[inline]
+fn maintenance(core: &Rc<RefCell<Core>>) {
+    let c = core.borrow();
+    if c.io_pending == 0
+        && !c.host_enabled
+        && c.slow_tasks == 0
+        && c.last_cancel_epoch == c.cancel_epoch.get()
+    {
+        return;
+    }
+    drop(c);
+    drain(core);
+    service(core);
+}
+fn drain(core: &Rc<RefCell<Core>>) {
+    let c = core.borrow();
+    if c.io_pending == 0 && !c.host_enabled {
+        return;
+    }
+    let rx = c.rx.clone();
+    drop(c);
+    #[cfg(feature = "instrument")]
+    {
+        core.borrow_mut().metrics.queue_probes += 1;
+    }
+    while let Ok(msg) = rx.try_recv() {
+        message(core, msg);
+    }
+}
 fn service(core: &Rc<RefCell<Core>>) {
     let mut c = core.borrow_mut();
+    let epoch = c.cancel_epoch.get();
+    if c.slow_tasks == 0 && c.last_cancel_epoch == epoch {
+        return;
+    }
+    c.last_cancel_epoch = epoch;
+    #[cfg(feature = "instrument")]
+    {
+        c.metrics.service_scans += 1;
+        c.metrics.clock_reads += 1;
+    }
     let now = Instant::now();
     let wakeups: Vec<_> = c
         .tasks

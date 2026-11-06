@@ -9,3 +9,6 @@ corosensei = { path = "vendor/corosensei" }
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync", "macros"] }
 tokio-util = { workspace = true, features = ["rt"] }
 libc.workspace = true
+
+[features]
+instrument = []

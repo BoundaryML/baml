@@ -579,3 +579,191 @@ fn settled_future_payload_is_a_precise_root() {
     lp.run_until(&root).unwrap();
     assert_eq!(count.get(), 1);
 }
+#[test]
+fn retained_future_and_cancel_handle_survive_slot_reuse() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let saved = Rc::new(RefCell::new(None));
+    let save = saved.clone();
+    let old = lp.spawn(move |cx| {
+        *save.borrow_mut() = Some(cx.cancel());
+        Ok(Value::int(11))
+    });
+    lp.run_until(&old).unwrap();
+    let old_id = old.id();
+    for _ in 0..200 {
+        let saved = saved.clone();
+        let f = lp.spawn(move |cx| {
+            saved.borrow().as_ref().unwrap().cancel();
+            cx.poll()?;
+            Ok(Value::int(22))
+        });
+        assert_ne!(f.id(), old_id);
+        assert_eq!(lp.run_until(&f).unwrap().as_int(), 22);
+        assert_eq!(old.result().unwrap().unwrap().as_int(), 11);
+    }
+    drop(old);
+    let f = lp.spawn(|cx| {
+        cx.poll()?;
+        Ok(Value::int(33))
+    });
+    saved.borrow().as_ref().unwrap().cancel();
+    assert_eq!(lp.run_until(&f).unwrap().as_int(), 33);
+}
+#[test]
+fn successful_parent_recycling_preserves_live_descendant_cancellation() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let child = Rc::new(RefCell::new(None));
+    let save = child.clone();
+    let cancel = Rc::new(RefCell::new(None));
+    let save_cancel = cancel.clone();
+    let parent = lp.spawn(move |cx| {
+        *save_cancel.borrow_mut() = Some(cx.cancel());
+        *save.borrow_mut() = Some(cx.spawn(|cx| {
+            cx.sleep(Duration::from_secs(60))?;
+            Ok(Value::int(0))
+        }));
+        Ok(Value::int(1))
+    });
+    lp.run_until(&parent).unwrap();
+    drop(parent);
+    lp.run_until_idle();
+    for _ in 0..100 {
+        let f = lp.spawn(|_| Ok(Value::int(2)));
+        lp.run_until(&f).unwrap();
+    }
+    cancel.borrow().as_ref().unwrap().cancel();
+    assert_eq!(
+        lp.run_until(child.borrow().as_ref().unwrap()).unwrap_err(),
+        Err::Cancelled
+    );
+}
+#[test]
+fn external_cancellation_wakes_parked_waiter_from_another_thread() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let linked = CancellationToken::new();
+    let authority = linked.clone();
+    let f = lp.spawn_with(
+        SpawnOptions {
+            linked: vec![linked],
+            ..Default::default()
+        },
+        |cx| {
+            let child = cx.spawn(|cx| {
+                cx.sleep(Duration::from_secs(60))?;
+                Ok(Value::int(0))
+            });
+            cx.await_future(&child)
+        },
+    );
+    let thread = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(5));
+        authority.cancel();
+    });
+    assert_eq!(lp.run_until(&f).unwrap_err(), Err::Cancelled);
+    thread.join().unwrap();
+    lp.run_until_idle();
+    assert_eq!(lp.task_count(), 0);
+}
+#[test]
+fn retired_io_messages_cannot_complete_a_reused_task_slot() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    for _ in 0..100 {
+        let old = lp.spawn(|cx| {
+            cx.io(|_| async {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                Ok(OwnedValue::Int(11))
+            })
+        });
+        lp.run_until_idle();
+        old.request_cancel();
+        assert_eq!(lp.run_until(&old).unwrap_err(), Err::Cancelled);
+        let new = lp.spawn(|cx| cx.io(|_| async { Ok(OwnedValue::Int(22)) }));
+        assert_ne!(old.id(), new.id());
+        assert_eq!(lp.run_until(&new).unwrap().as_int(), 22);
+    }
+}
+#[test]
+fn recycled_future_does_not_retain_a_precise_root() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let f = lp.spawn(|_| Ok(Value::pointer(0xfeed)));
+    lp.run_until(&f).unwrap();
+    drop(f);
+    let mut count = 0;
+    lp.precise_roots(&mut |_| count += 1);
+    assert_eq!(count, 0);
+    for _ in 0..100 {
+        let f = lp.spawn(|_| Ok(Value::int(0)));
+        lp.run_until(&f).unwrap();
+    }
+    lp.precise_roots(&mut |_| count += 1);
+    assert_eq!(count, 0);
+}
+#[test]
+fn single_future_waiters_resume_fifo() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let output = log.clone();
+    let root = lp.spawn(move |cx| {
+        let producer = cx.spawn(|cx| {
+            cx.sleep(Duration::from_millis(5))?;
+            Ok(Value::int(7))
+        });
+        let mut joins = Vec::new();
+        for index in 0..8 {
+            let p = producer.clone();
+            let out = output.clone();
+            joins.push(cx.spawn(move |cx| {
+                let v = cx.await_future(&p)?;
+                out.borrow_mut().push(index);
+                Ok(v)
+            }));
+        }
+        for join in joins {
+            assert_eq!(cx.await_future(&join)?.as_int(), 7);
+        }
+        Ok(Value::int(0))
+    });
+    lp.run_until(&root).unwrap();
+    assert_eq!(*log.borrow(), (0..8).collect::<Vec<_>>());
+}
+#[test]
+fn shutdown_does_not_reset_generations_for_local_reuse() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let old = lp.spawn(|cx| {
+        cx.io(|_| async {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            Ok(OwnedValue::Int(11))
+        })
+    });
+    lp.run_until_idle();
+    lp.shutdown(Duration::ZERO);
+    let new = lp.spawn(|cx| cx.io(|_| async { Ok(OwnedValue::Int(22)) }));
+    assert_ne!(old.id(), new.id());
+    assert_eq!(lp.task_state(&old), TaskState::Done);
+    assert_eq!(lp.run_until(&new).unwrap().as_int(), 22);
+    assert!(matches!(old.state(), FutureState::Cancelled));
+}
+#[test]
+fn deep_cancel_ancestry_is_released_on_a_small_fiber_without_recursion() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let f = lp.spawn(|_| {
+        let root = TaskCancel::default();
+        let mut leaf = root.clone();
+        for _ in 0..10_000 {
+            leaf = leaf.child(vec![]);
+        }
+        root.cancel();
+        assert!(leaf.is_cancelled());
+        drop(leaf);
+        Ok(Value::int(1))
+    });
+    assert_eq!(lp.run_until(&f).unwrap().as_int(), 1);
+}
