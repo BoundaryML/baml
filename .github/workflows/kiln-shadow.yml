@@ -503,7 +503,6 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           # Temporarily omit Hawk while its CI check is disabled.
@@ -752,7 +751,6 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "node npm:pnpm protoc protoc-gen-go"
@@ -878,7 +876,6 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "ast-grep"
@@ -955,7 +952,6 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
@@ -1083,7 +1079,6 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv cargo:cargo-nextest"
@@ -1232,7 +1227,6 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv cargo:cargo-nextest"
@@ -1378,7 +1372,6 @@ jobs:
       - name: "Install sccache and direnv"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
@@ -1515,7 +1508,6 @@ jobs:
       - name: "Install sccache and direnv"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
@@ -1628,7 +1620,6 @@ jobs:
       - name: "Install sccache and direnv"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
@@ -1763,7 +1754,6 @@ jobs:
       - name: "Install sdk test tools"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: ${{ matrix.install-args }}
@@ -2119,7 +2109,6 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
@@ -2273,7 +2262,6 @@ jobs:
       - name: "Install sccache and direnv"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
@@ -2383,7 +2371,6 @@ jobs:
       - name: "Install sccache and direnv"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "sccache direnv"
@@ -2522,7 +2509,6 @@ jobs:
       - name: "Setup Node.js and wasm-pack"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "node github:rustwasm/wasm-pack"
@@ -2585,7 +2571,6 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "github:rustwasm/wasm-pack"
@@ -2662,7 +2647,6 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "github:rustwasm/wasm-pack"
@@ -2734,7 +2718,6 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          # Kiln runners bake mise and its tools under /cache; see setup-mise.
           cache: "false"
           mise_dir: ${{ env.TRUNK_MISE_DATA_DIR }}
           install_args: "github:rustwasm/wasm-pack"

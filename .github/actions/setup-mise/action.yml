@@ -33,33 +33,9 @@ inputs:
     required: false
     default: ""
   cache:
-    description: |
-      "true" (the default) restores mise's GitHub Actions cache before
-      `mise install`, and saves it on canary (see `cache_save` below).
-      "false" skips both: `mise install` then installs from the network
-      whatever the runner does not already have, so a changed pin or a new
-      `latest` release still installs.
-
-      Set it to "false" on runners that already carry the tools. Before each
-      restore, mise-action builds the cache key with `hashFiles` over
-      `**/mise.toml`-style globs, which walks the whole workspace, ignored
-      directories included. The Trunk Kiln runners pre-build Rust targets into
-      the checkout (several hundred GB of `baml_language/target`), so that walk
-      alone takes about 50 s per job there; on a fresh checkout it takes
-      under 1 s.
     required: false
     default: "true"
   mise_dir:
-    description: |
-      A mise data directory that already holds mise (`bin/mise`) and the tools.
-      When set, it becomes MISE_DATA_DIR for this step and every later step of
-      the job, so mise-action finds the mise binary there instead of
-      downloading it, and `mise install` finds the tools already installed.
-      Empty (the default) keeps mise's own default directory.
-
-      Pair it with `cache: "false"`: with the cache on, a different directory
-      gives a different cache version, so the restore misses and canary saves
-      the whole directory.
     required: false
     default: ""
 
@@ -81,9 +57,6 @@ runs:
       if: ${{ inputs.install_args == '' || contains(inputs.install_args, 'cargo:') }}
       uses: cargo-bins/cargo-binstall@main
 
-    # Written to $GITHUB_ENV, not to this step's env alone: later steps also
-    # run `mise` (`mise which`, `mise exec`), and they must see the same
-    # directory as mise-action.
     - name: Use the pre-installed mise data directory
       if: ${{ inputs.mise_dir != '' }}
       shell: bash
@@ -99,8 +72,6 @@ runs:
         MISE_FETCH_REMOTE_VERSIONS_TIMEOUT: 60
       with:
         fetch_from_github: false
-        # See the `cache` input: "false" skips the restore, the save, and the
-        # workspace-wide `hashFiles` walk that builds the cache key.
         cache: ${{ inputs.cache }}
         # Our own prefix (not the upstream default), shared across every
         # baml_language workflow. Bump the trailing number to invalidate
