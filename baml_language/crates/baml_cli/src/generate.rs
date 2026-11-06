@@ -948,7 +948,8 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
                     DiagnosticId::InvalidGeneratorPropertyValue,
                     format!(
                         "Go generator `{name}` sets `package_name = \"{package_name}\"`, so \
-                         `sdk_import_path` must end in `/{package_name}`, e.g. `{expected}`"
+                         the last segment of `sdk_import_path` must be `{package_name}`, e.g. \
+                         `{expected}`"
                     ),
                 )
                 .with_primary(
@@ -1062,8 +1063,9 @@ fn parse_required_go_import_path(
     None
 }
 
-/// By Go convention an import path ends in the package's name. Requiring it
-/// keeps `import ".../alien_api"` and the `alien_api.` qualifier in step.
+/// By Go convention an import path's last segment is the package's name.
+/// Requiring it keeps `import ".../alien_api"` and the `alien_api.` qualifier
+/// in step. A bare `alien_api` is the root of a module named `alien_api`.
 fn go_import_path_names_package(import_path: &str, package_name: &str) -> bool {
     import_path.rsplit('/').next() == Some(package_name)
 }
@@ -1450,7 +1452,7 @@ naming_convention = "preserve-case"
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(
             diagnostics[0].message,
-            "Go generator `client` sets `package_name = \"alien_api\"`, so `sdk_import_path` must end in `/alien_api`, e.g. `example.com/test/alien_api`"
+            "Go generator `client` sets `package_name = \"alien_api\"`, so the last segment of `sdk_import_path` must be `alien_api`, e.g. `example.com/test/alien_api`"
         );
         let value = "\"example.com/test/baml_sdk\"";
         let start = manifest.find(value).unwrap();
@@ -1465,6 +1467,26 @@ naming_convention = "preserve-case"
         );
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(generators.len(), 1);
+    }
+
+    #[test]
+    fn go_import_path_compares_whole_segments() {
+        assert!(super::go_import_path_names_package(
+            "alien_api",
+            "alien_api"
+        ));
+        assert!(super::go_import_path_names_package(
+            "example.com/test/alien_api",
+            "alien_api"
+        ));
+        assert!(!super::go_import_path_names_package(
+            "example.com/test/my_alien_api",
+            "alien_api"
+        ));
+        assert!(!super::go_import_path_names_package(
+            "my_alien_api",
+            "alien_api"
+        ));
     }
 
     #[test]
