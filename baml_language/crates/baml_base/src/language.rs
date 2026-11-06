@@ -263,16 +263,19 @@ mod tests {
                 "alias",
                 "skip",
                 "stream.done",
-                "stream.must_exist"
+                "stream.must_exist",
+                "json.rename",
+                "json.flatten",
+                "json.fallback"
             ]
         );
         assert_eq!(
             names_at(AttributePosition::EnumVariant),
-            ["description", "alias", "skip"]
+            ["description", "alias", "skip", "json.rename"]
         );
         assert_eq!(
             names_at(AttributePosition::Class),
-            ["description", "alias", "stream.done"]
+            ["description", "alias", "stream.done", "json.omit_nulls"]
         );
         assert_eq!(names_at(AttributePosition::Enum), ["description", "alias"]);
         assert!(names_at(AttributePosition::Interface).is_empty());
