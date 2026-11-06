@@ -32,6 +32,23 @@ inputs:
       Skipping them when they aren't needed is the cheapest win.
     required: false
     default: ""
+  cache:
+    description: |
+      "true" (the default) restores mise's GitHub Actions cache before
+      `mise install`, and saves it on canary (see `cache_save` below).
+      "false" skips both: `mise install` then installs from the network
+      whatever the runner does not already have, so a changed pin or a new
+      `latest` release still installs.
+
+      Set it to "false" on runners that already carry the tools. Before each
+      restore, mise-action builds the cache key with `hashFiles` over
+      `**/mise.toml`-style globs, which walks the whole workspace, ignored
+      directories included. The Trunk Kiln runners pre-build Rust targets into
+      the checkout (several hundred GB of `baml_language/target`), so that walk
+      alone takes about 50 s per job there; on a fresh checkout it takes
+      under 1 s.
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -59,6 +76,9 @@ runs:
         MISE_FETCH_REMOTE_VERSIONS_TIMEOUT: 60
       with:
         fetch_from_github: false
+        # See the `cache` input: "false" skips the restore, the save, and the
+        # workspace-wide `hashFiles` walk that builds the cache key.
+        cache: ${{ inputs.cache }}
         # Our own prefix (not the upstream default), shared across every
         # baml_language workflow. Bump the trailing number to invalidate
         # every consumer's cache at once.
