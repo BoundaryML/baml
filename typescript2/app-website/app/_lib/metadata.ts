@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 // Central helper for on-brand link previews. Every page builds its metadata
 // through `createMetadata`, which wires a complete Open Graph + Twitter card
 // pointing at the shared `/api/og` renderer so each page gets a branded
-// "cream + purple rail" preview image with its own headline and kicker.
+// preview image with its own headline.
 
 // Resolve the public base URL from the deployment's own production domain
 // (e.g. new.boundaryml.com) rather than hardcoding a host — otherwise og:image
@@ -19,11 +19,8 @@ export const TWITTER_HANDLE = '@boundaryml';
 /** Build the `/api/og` URL that renders a page's preview image. */
 export function ogImagePath(opts: {
   title: string;
-  eyebrow?: string;
-  /** Card subtitle (mono, under the headline). */
+  /** Card subtitle, under the headline. */
   description?: string;
-  /** Render the horizontal computing-eras timeline. */
-  timeline?: boolean;
   /** Render the podcast host avatars. */
   podcast?: boolean;
   /** Render the team photo. */
@@ -31,9 +28,7 @@ export function ogImagePath(opts: {
 }): string {
   const search = new URLSearchParams();
   search.set('title', opts.title);
-  if (opts.eyebrow) search.set('eyebrow', opts.eyebrow);
   if (opts.description) search.set('desc', opts.description);
-  if (opts.timeline) search.set('timeline', '1');
   if (opts.podcast) search.set('podcast', '1');
   if (opts.team) search.set('team', '1');
   return `/api/og?${search.toString()}`;
@@ -49,10 +44,8 @@ export interface CreateMetadataOptions {
   eyebrow?: string;
   /** Override the OG/Twitter/image title when it should differ from <title>. */
   ogTitle?: string;
-  /** Card subtitle (mono, under the headline). Use only for a real fact. */
+  /** Card subtitle, under the headline. Use only for a real fact. */
   ogSubtitle?: string;
-  /** Card variant: the computing-eras timeline (home + /explore). */
-  timeline?: boolean;
   /** Card variant: podcast host avatars (/podcast). */
   podcast?: boolean;
   /** Card variant: the team photo (/who-are-we). */
@@ -78,7 +71,6 @@ export function createMetadata({
   type = 'website',
   keywords,
   indexable = true,
-  timeline,
   podcast,
   team,
 }: CreateMetadataOptions): Metadata {
@@ -91,7 +83,6 @@ export function createMetadata({
       description: ogSubtitle,
       podcast,
       team,
-      timeline,
       title: cardTitle,
     });
 

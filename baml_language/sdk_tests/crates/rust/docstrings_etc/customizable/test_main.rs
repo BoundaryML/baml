@@ -51,9 +51,9 @@ fn item_doc(src: &str, needle: &str) -> String {
 
 #[test]
 fn test_main_imports_symbols_reachable() {
-    use baml_sdk as _;
-    use baml_sdk::docs as _;
-    use baml_sdk::docs::{Doc as _, Note as _, Priority as _, Sentiment as _};
+    use docstrings_sdk as _;
+    use docstrings_sdk::docs as _;
+    use docstrings_sdk::docs::{Doc as _, Note as _, Priority as _, Sentiment as _};
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn test_main_enum_summary_only_omits_members_section() {
     // Priority has a class-level /// but no variant carries one — the
     // Members: section should be suppressed entirely. Variants are
     // still importable / iterable normally.
-    use baml_sdk::docs::Priority;
+    use docstrings_sdk::docs::Priority;
 
     let src = docs_source();
     let doc = item_doc(&src, "pub enum Priority");

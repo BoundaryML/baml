@@ -397,3 +397,101 @@ fn frozen_v4_blobs_remain_readable_with_verified_content_ids() {
         "the argument and value graphs each name one"
     );
 }
+
+/// Format 6 redacted values, hand-built since nothing writes format 6 yet,
+/// then sealed with the ID their content hashes to: a declared redaction, a
+/// pattern's, a reason this reader does not know, and an argument root with
+/// a redacted slot. A writer of format 6 must produce these bytes.
+fn redacted_v6_blobs() -> Vec<Vec<u8>> {
+    let header = || {
+        let mut bytes = btel_snapshot::BLOB_MAGIC.to_vec();
+        bytes.extend_from_slice(&6_u32.to_le_bytes());
+        bytes.extend_from_slice(&[0; 16]);
+        bytes.extend_from_slice(&0_u32.to_le_bytes()); // no children
+        bytes.extend_from_slice(&0_u32.to_le_bytes()); // no objects
+        bytes
+    };
+    let redacted = |body: &[u8]| {
+        let mut bytes = vec![13];
+        bytes.extend_from_slice(&u32::try_from(body.len()).unwrap().to_le_bytes());
+        bytes.extend_from_slice(body);
+        bytes
+    };
+    let value_root = |value: Vec<u8>| {
+        let mut bytes = header();
+        bytes.push(0);
+        bytes.extend_from_slice(&value);
+        bytes
+    };
+    let mut arguments = header();
+    arguments.push(1);
+    arguments.extend_from_slice(&2_u64.to_le_bytes()); // parameters
+    arguments.extend_from_slice(&2_u32.to_le_bytes()); // slots
+    arguments.extend_from_slice(&redacted(b"\x01github-pat"));
+    arguments.push(3);
+    arguments.extend_from_slice(&7_i64.to_le_bytes());
+    [
+        value_root(redacted(&[0])),
+        value_root(redacted(b"\x01openai-api-key")),
+        value_root(redacted(&[7, 1, 2, 3])),
+        arguments,
+    ]
+    .into_iter()
+    .map(|mut bytes| {
+        let Err(btel_snapshot::BlobError::IdMismatch { computed, .. }) =
+            btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+        else {
+            panic!("a hand-built blob decodes to an ID mismatch")
+        };
+        bytes[12..28].copy_from_slice(computed.as_bytes());
+        bytes
+    })
+    .collect()
+}
+
+#[test]
+#[ignore = "prints current encodings for review; never rewrites the fixtures"]
+#[expect(clippy::print_stdout, reason = "the output is the point")]
+fn print_redacted_v6_encodings() {
+    for bytes in redacted_v6_blobs() {
+        println!("{}", hex(&bytes));
+    }
+}
+
+#[test]
+fn frozen_v6_redactions_decode_with_verified_content_ids() {
+    use btel_snapshot::{DecodedRoot, DecodedValue, Redaction};
+    let fixture = include_str!("fixtures/format_v6_redacted.hex");
+    let blobs: Vec<_> = fixture_blobs(fixture).collect();
+    assert_eq!(
+        blobs,
+        redacted_v6_blobs(),
+        "the fixture is the hand-built blobs"
+    );
+    let roots: Vec<_> = blobs
+        .iter()
+        .map(|bytes| {
+            assert_eq!(bytes[8..12], 6_u32.to_le_bytes());
+            let decoded =
+                btel_snapshot::decode_blob(bytes, &btel_snapshot::DecodeLimits::default()).unwrap();
+            assert_eq!(decoded.id.as_bytes(), &bytes[12..28]);
+            decoded.root
+        })
+        .collect();
+    let redacted = |reason| DecodedRoot::Value(DecodedValue::Redacted(reason));
+    assert_eq!(
+        roots,
+        [
+            redacted(Redaction::Declared),
+            redacted(Redaction::Pattern("openai-api-key".into())),
+            redacted(Redaction::Unknown { kind: 7 }),
+            DecodedRoot::FunctionArgs {
+                parameter_count: 2,
+                slots: vec![
+                    DecodedValue::Redacted(Redaction::Pattern("github-pat".into())),
+                    DecodedValue::Int(7),
+                ],
+            },
+        ]
+    );
+}

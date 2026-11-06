@@ -355,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.2.5"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "baml_env",
@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.23.0"
+version = "0.25.2"
 dependencies = [
  "hex",
  "indexmap",

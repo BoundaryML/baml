@@ -1,13 +1,15 @@
 ---
-title: "Teaching Agents to Write Beautiful BAML"
+title: "Teaching Agents to Write Maintainable Code"
 description: "We rewrote our agent skill and built code quality metrics into the toolchain to help agents write better BAML"
-slug: teaching-agents-to-write-beautiful-baml
-date: November 4, 2026
+slug: teaching-agents-to-write-maintainable-code
+date: November 5, 2026
 isPublished: true
 tags: ['Engineering']
 author:
   name: Avery Townsend
 ---
+<PostDrawing slug="teaching-agents-to-write-maintainable-code" alt="An agent's chess move generator with a cognitive complexity of 50, beside the version written with the new skill, with a cognitive complexity of 2." />
+
 Over the last few months we've been putting final polish on the BAML language and prepping for a 1.0 release. We've spent over a year designing the core language, and on that front consider BAML to be nearly complete. But, work remains in making sure BAML meshes well with coding agents, since they are a major part of engineering workflows today.
 
 As it stands, agents can write BAML code that solves problems and passes tests. It is a real turing complete language with a compiler, bytecode VM, formatter, etc. The remaining problems with BAML lie not in the BAML language itself, but in the BAML code that the agents produce. We, and a lot of our testers, noticed that the quality of BAML code written by agents is noticeably worse than what the same agents produce in TypeScript or Rust. For instance, here's part of a chess move generator an agent (GPT-6.1-Sol with Codex) wrote with our current skill installed:
@@ -61,9 +63,9 @@ function chess_candidates(position: ChessPosition) -> ChessCandidate[] {
 }
 ```
 
-This is a single function, nested seven levels deep. Chess pieces are stored as strings, so a knight is `kind == "n"`, and a typo still compiles. It works, but it doesn't make good use of BAML's rich feature set and nobody would want to maintain code like this. We need some way to improve this, or else it is hard to justify the use of BAML.
+This is a single function, nested seven levels deep. Chess pieces are stored as strings, so a knight is `kind == "n"`, and a typo still compiles. It works, but it doesn't make good use of BAML's rich feature set and nobody would want to maintain code like this. We need some way to improve this, or else it is hard to justify the use of BAML when most people are writing their code with agents.
 
-It stands to reason that existing languages don't suffer as much from this problem, as there is plenty of good code written by humans in the training corpus. Not to mention that the big AI labs are likely optimizing on code quality metrics in these languages. So, without BAML code in the training data, our only real knob for improving code quality is to improve the skill that we ship with the BAML toolchain.
+It stands to reason that existing languages don't suffer as much from this problem, as there is plenty of good code written by humans in the training corpus. Not to mention that the big AI labs are likely optimizing on code quality metrics in these languages. So, without BAML code in the training data, or the support of a large lab, our only real knob for improving code quality is to improve the skill that we ship with the BAML toolchain.
 
 Our current skill mostly just lists out BAML's features: we have `match`, we have type unions, we have reflection, etc. It does have a small "best practices" section, but most entries just explain what a feature does, and say nothing about when or how to use it; an agent learns that enums exist without ever being told in what context it should use one.
 
@@ -113,17 +115,17 @@ function hex(c: Color) -> string {
 }
 ```
 
-With these new guidelines, nine of the ten Codex runs with the new skill declared at least one enum in a chess move generator.
+With these new guidelines, nine of ten Codex runs with the new skill declared at least one enum in a chess move generator.
 
 ## Measuring it
 
 This new skill definitely made us feel better, but we wanted to see if we could find some quantitative measure of its effect. So, we brought in a few relatively simple metrics from the literature:
 
-- **Cognitive complexity** (SonarSource) is the main number in this post. Every `if`, loop, and `match` adds one, plus one for each level of nesting it sits in, and `else` adds one.
-- **Cyclomatic complexity** (McCabe) is the number of independent paths through a function.
-- **NPath** (Nejmeh) is the number of possible execution paths. Branches in a row multiply.
-- **Nesting** is the deepest stack of `if`s, loops, and lambdas.
-- **Exits** counts each `return` and `throw`, plus finishing normally.
+- **Cognitive complexity** (SonarSource): every `if`, loop, and `match` adds one point, plus one for each level of nesting it sits in, and `else` adds one
+- **Cyclomatic complexity** (McCabe) is the number of independent paths through a function
+- **NPath** (Nejmeh) is the number of possible execution paths. Branches in a row multiply
+- **Nesting** is the deepest stack of `if`s, loops, and lambdas
+- **Exits** counts each `return` and `throw`, plus finishing normally
 
 <details>
 <summary>Examples</summary>
@@ -303,47 +305,45 @@ We ran each task ten times for each of four different skill treatments:
 
 ## Results
 
-Each chart shows the most complex function in each program, for one metric, averaged over ten runs. Each panel has its own scale, so compare the bars within a panel, not across panels.
-
-<SkillResultsLegend />
-
 ### Cognitive complexity
 
 <SkillResultsChart metric="cognitive" />
 
-Each condition improves on the one before it on every task. The new skill barely helps on GTFS (30 to 28), but on the other three it brings the worst function down by 25 to 75 percent compared with the old skill. Running `baml codequality` brings it down again on all four. Agents ran it three or four times per task.
+Each further treatment clearly improves the cognitive complexity of the final outcome. But, some tasks are more highly affected than others. GTFS barely changed between the old and new skills, until we brought in `baml codequality`.
 
 ### Cyclomatic complexity
 
 <SkillResultsChart metric="cyclomatic" />
 
-This follows the same trend less cleanly. `codequality` beats the old skill on every task, but the new skill alone is worse than the old skill on regex (32 to 34) and GTFS (14 to 22).
+For Chess and Conduit, we see the same clear step-by-step improvement in cyclomatic complexity that we saw with cognitive complexity. Incremental improvement is less clear on Regex and GTFS, but the final new skill including `codequality` improved the average in every category, though on Regex only because of two unusually low runs.
 
 ### NPath
 
 <SkillResultsChart metric="npath" />
 
-This chart uses medians and a log scale, because a few runs produce enormous numbers. NPath drops the most: with `codequality`, the worst function is under 200 on every task, and Conduit goes from 361 million with the old skill to 67. The new skill alone is worse than the old skill only on GTFS (315 to 33,360).
+For all but GTFS we see clear iterative improvements in scores with each further treatment, and the final runs with `codequality` always come out on top.
 
 ### Nesting
 
 <SkillResultsChart metric="nesting" />
 
-Nesting is the cleanest result. Each condition improves on the one before it on every task, from around 5 levels with the old skill to around 3 with `codequality`.
+Just as with cognitive complexity, there is a clear decrease in nesting as we introduce further treatments, and the final runs with the new skill alongside `codequality` score the best.
 
 ### Exits
 
 <SkillResultsChart metric="exits" />
 
-Exits are the weakest result. Regex and Conduit improve with each condition, but on chess and GTFS the new skill alone is worse than the old skill (5.0 to 8.4 and 4.7 to 6.6), and `codequality` only partly brings them back (5.5 on both).
+Exits definitely show the weakest trend, and are the only metric where the runs for the new skill with `codequality` are not consistently better than other treatments.
 
 ## Conclusion
 
-By these metrics, the skill improvements and `baml codequality` seems to have worked. The worst function beats the old skill on cognitive complexity, cyclomatic complexity, NPath, and nesting on all four tasks. Exits were the exception, slightly higher on chess and GTFS. The new skill alone was less consistent.
+By these metrics, the skill improvements and `baml codequality` definitely had a measurable effect on the code. The worst function beats the old skill on cognitive complexity, cyclomatic complexity, NPath, and nesting on all four tasks.
 
-But, these metrics are only a proxy for code quality. A metric going up or down a few points is not necessarily good or bad. And it is possible agents hillclimbed these metrics (even though the instructions specifically said not to). Agents also ended up writing more functions, so some of the improvements came from splitting up functions and moving complexity around: total exits and nesting mostly went up, and total cyclomatic complexity changed little.
+Whether or not code quality truly increased is up to your trust in the metrics. It seems clear that some of the results are heavily swayed by the specific algorithm or program that you are implementing. For instance, the number of exits did not seem to be very affected by our skill changes in the GTFS runs at all, whereas we saw drastic changes in other programs. An agent may also make decisions that tend to decrease one metric while increasing another or vice versa.
 
-The stronger evidence for us is anecdotal: we read the code, and it just seemed overall better. Here's the same chess logic written with the new skill:
+At best these metrics are a proxy for code quality. A metric going up or down a few points is not necessarily good or bad. And, it is possible agents hill-climbed these metrics (even though the instructions specifically said not to). A lot of improvement on these metrics can boil down to just splitting large functions into multiple smaller functions. After all, you can decrease the average number of branches per function if you just split the branches between functions.
+
+The stronger evidence for us is anecdotal. We chose these metrics specifically because we thought they would encourage more of the style of code that we wanted to read. And, when we read the code it just seemed overall better. Here's the same chess logic from an agent run using the new skill:
 
 ```baml
 enum ChessKind {
@@ -412,10 +412,10 @@ function legal_moves(self) -> Move[] {
 }
 ```
 
-The code now makes good use of BAML's features and type system. Piece kinds are an enum, and the movement directions are constant arrays. A single `ray_moves` function handles both sliding pieces and one-step pieces. `candidates` has a cognitive complexity of 2, and `legal_moves` just generates the candidate moves, drops the ones that leave the king in check, and converts the rest.
+The difference from the code that was written with the old skill is night and day. The new code makes good use of BAML's features and type system: piece kinds are an enum, the movement directions are constant arrays, a single `ray_moves` function handles both sliding pieces and one-step pieces, etc.
 
-Unfortunately, we can't put a number on our feelings about the code, but we feel that it's a lot closer to what we would've written by hand.
+Unfortunately, we can't put a number on our taste, or our feelings about the code. But, we do feel that code written with the new skill tends to be strictly of higher quality, and much closer to what we would've written by hand.
 
 ## Try it
 
-The new skill, including the `baml codequality` hint, has shipped in the latest version of [BAML](https://github.com/BoundaryML/baml).
+If you'd like to try it out, the new skill, including the `baml codequality` hint, has shipped in the [latest version of BAML](/quickstart)!

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from release_artifacts import candidates_from_archives
+from environment import test_environment
 
 repo = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
@@ -63,7 +64,7 @@ if args.target:
 wrapper_target = (
     workspace / "target" / cross_target / "debug" if cross_target else target
 )
-environment = dict(os.environ, BAML_CLI_ALLOW_DIRECT="1", DO_NOT_TRACK="1")
+environment = dict(test_environment(os.environ), BAML_CLI_ALLOW_DIRECT="1")
 # The wrapper package Cargo version, e.g. version = "0.2.5".
 wrapper_version = re.search(
     r'^version = "([^"]+)"', (workspace / "crates/baml/Cargo.toml").read_text(), re.M

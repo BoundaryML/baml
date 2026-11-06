@@ -1,116 +1,90 @@
-'use client';
-
-import {
-  Bar,
-  BarChart,
-  Cell,
-  LabelList,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { SKILL_RESULTS } from './skill-results-data';
 
 const CONDITIONS = [
-  { color: '#5c5c5a', name: 'No skill' },
-  { color: 'var(--color-clover-600)', name: 'Old skill' },
-  { color: 'var(--color-clover-400)', name: 'New skill' },
-  { color: 'var(--color-clover-200)', name: 'New skill + codequality' },
+  { color: '#8a8a86', name: 'No skill' },
+  { color: 'var(--color-clover-500)', name: 'Old skill' },
+  { color: 'var(--color-clover-300)', name: 'New skill' },
+  { color: 'var(--color-clover-100)', name: 'New skill + codequality' },
 ];
 
 const TASKS = ['Regex', 'Chess', 'Conduit', 'GTFS'] as const;
-type Task = (typeof TASKS)[number];
-type Values = Record<Task, number[]>;
 
-// Means of ten runs, except NPath: medians on a log scale, because a few runs
-// reach values billions of times larger than the rest.
-const METRICS: Record<string, { log?: boolean; name: string; values: Values }> =
-  {
-    cognitive: {
-      name: 'Cognitive complexity',
-      values: {
-        Chess: [134, 43, 29, 14],
-        Conduit: [145, 65, 16, 10],
-        GTFS: [50, 30, 28, 9],
-        Regex: [70, 39, 28, 17],
-      },
-    },
-    cyclomatic: {
-      name: 'Cyclomatic complexity',
-      values: {
-        Chess: [46, 28, 20, 13],
-        Conduit: [69, 47, 26, 19],
-        GTFS: [29, 14, 22, 11],
-        Regex: [34, 32, 34, 28],
-      },
-    },
-    exits: {
-      name: 'Exits',
-      values: {
-        Chess: [12.4, 5, 8.4, 5.5],
-        Conduit: [24, 15.1, 6.7, 5],
-        GTFS: [5.5, 4.7, 6.6, 5.5],
-        Regex: [9.8, 6, 4, 3.9],
-      },
-    },
-    nesting: {
-      name: 'Nesting',
-      values: {
-        Chess: [6.6, 5.3, 3.9, 2.8],
-        Conduit: [5.8, 4.5, 3.2, 3],
-        GTFS: [5.3, 4.8, 3.7, 3.1],
-        Regex: [5.2, 4.5, 4.3, 3.5],
-      },
-    },
-    npath: {
-      log: true,
-      name: 'NPath',
-      values: {
-        Chess: [2154060, 5654, 2592, 158],
-        Conduit: [39132823680, 361117440, 200, 67],
-        GTFS: [195360, 315, 33360, 117],
-        Regex: [114048, 2376, 242, 35],
-      },
-    },
-  };
+type Metric = keyof typeof SKILL_RESULTS;
+
+// NPath uses medians on a log scale, because a few runs reach values billions
+// of times larger than the rest.
+const METRICS: Record<Metric, { log?: boolean; name: string }> = {
+  cognitive: { name: 'Cognitive complexity' },
+  cyclomatic: { name: 'Cyclomatic complexity' },
+  exits: { name: 'Exits' },
+  nesting: { name: 'Nesting' },
+  npath: { log: true, name: 'NPath' },
+};
 
 const compact = new Intl.NumberFormat('en', {
   maximumFractionDigits: 0,
   notation: 'compact',
 });
 
-interface Point {
-  condition: string;
-  height: number;
-  label: string;
-  value: number;
+const mean = (values: number[]) =>
+  values.reduce((sum, value) => sum + value, 0) / values.length;
+
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = sorted.length / 2;
+  return Number.isInteger(middle)
+    ? mean(sorted.slice(middle - 1, middle + 1))
+    : (sorted[Math.floor(middle)] ?? 0);
+};
+
+const DOT_PERCENT = 2.5;
+const LANE_OFFSETS = [0, -4, 4, -8, 8];
+
+// Moves dots that would overlap into a free lane of the row. Values are sorted,
+// so only each lane's last dot can collide.
+function laneOffsets(positions: number[]): number[] {
+  const lastInLane = LANE_OFFSETS.map(() => Number.NEGATIVE_INFINITY);
+  return positions.map((position) => {
+    const free = lastInLane.findIndex((last) => position - last >= DOT_PERCENT);
+    const lane = free === -1 ? positions.indexOf(position) % 5 : free;
+    lastInLane[lane] = position;
+    return LANE_OFFSETS[lane] ?? 0;
+  });
 }
 
-function ChartTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: { payload: Point }[];
-}) {
-  const point = payload?.[0]?.payload;
-  if (!active || !point) return null;
-  return (
-    <div className="rounded-md border border-hair bg-[#17191b] px-2.5 py-1.5 text-xs text-ink-2">
-      {point.condition}:{' '}
-      <span className="text-ink">{point.value.toLocaleString('en')}</span>
-    </div>
+// Round axis values from 0 that end at or above max.
+function linearTicks(max: number): number[] {
+  const rough = max / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step =
+    [1, 2, 5, 10].map((n) => n * magnitude).find((n) => n >= rough) ?? rough;
+  return Array.from(
+    { length: Math.ceil(max / step) + 1 },
+    (_, index) => index * step,
   );
 }
 
-export function SkillResultsLegend() {
+// Powers of ten from 1 that end at or above max.
+function logTicks(max: number): number[] {
+  const top = Math.ceil(Math.log10(max));
+  const step = Math.ceil(top / 4);
+  return Array.from(
+    { length: Math.ceil(top / step) + 1 },
+    (_, index) => 10 ** (index * step),
+  );
+}
+
+const tickLabel = (tick: number) =>
+  tick >= 1e15 ? tick.toExponential(0) : compact.format(tick);
+
+function Legend() {
   return (
-    <ul className="not-prose my-5 flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-ink-2">
+    <ul className="mb-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-ink-2">
       {CONDITIONS.map(({ color, name }) => (
         <li className="flex items-center gap-2" key={name}>
           <span
             aria-hidden
-            className="size-2.5 rounded-sm"
+            className="size-2.5 rounded-full"
             style={{ background: color }}
           />
           {name}
@@ -122,66 +96,112 @@ export function SkillResultsLegend() {
 
 // Each panel has its own scale: the question is how far each task drops, not
 // how the tasks compare, and GTFS would look flat beside Conduit otherwise.
-export function SkillResultsChart({
-  metric,
-}: {
-  metric: keyof typeof METRICS;
-}) {
+export function SkillResultsChart({ metric }: { metric: Metric }) {
   const definition = METRICS[metric];
   if (!definition) return null;
-  const { log, name, values } = definition;
+  const { log, name } = definition;
+  const average = log ? median : mean;
+  const rounded = (value: number) =>
+    log
+      ? compact.format(value)
+      : String(
+          Number(
+            value.toFixed(metric === 'nesting' || metric === 'exits' ? 1 : 0),
+          ),
+        );
+
   return (
     <figure className="not-prose my-5">
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+      <figcaption className="mb-2 text-sm font-medium text-ink">
+        {name} of the worst function in each run, tick at the{' '}
+        {log ? 'median' : 'mean'}
+        {log && ', log scale'}. Lower scores are simpler by this metric.
+      </figcaption>
+      <Legend />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {TASKS.map((task) => {
-          const data: Point[] = values[task].map((value, index) => ({
-            condition: CONDITIONS[index]?.name ?? '',
-            height: log ? Math.log10(value) : value,
-            label: log ? compact.format(value) : String(value),
-            value,
-          }));
+          const rows: readonly number[][] = SKILL_RESULTS[metric][task];
+          const max = Math.max(...rows.flat());
+          const ticks = log ? logTicks(max) : linearTicks(max);
+          const top = ticks.at(-1) ?? 1;
+          const position = (value: number) =>
+            log
+              ? (Math.log10(Math.max(value, 1)) / Math.log10(top)) * 100
+              : (value / top) * 100;
           return (
             <div
-              aria-label={`${task}, ${name} of worst function: ${data
-                .map(({ condition, value }) => `${condition} ${value}`)
-                .join(', ')}`}
+              className="rounded-lg border border-white/10 bg-white/[0.03] p-3"
               key={task}
-              role="img"
             >
-              <div className="mb-1 text-xs text-ink-2">{task}</div>
-              <ResponsiveContainer height={100} width="100%">
-                <BarChart
-                  barCategoryGap={2}
-                  data={data}
-                  margin={{ bottom: 0, left: 0, right: 0, top: 16 }}
-                >
-                  <XAxis dataKey="condition" hide />
-                  <YAxis
-                    domain={[0, Math.max(...data.map((d) => d.height))]}
-                    hide
+              <div className="mb-2 text-xs text-ink-2">{task}</div>
+              <div
+                aria-label={`${task}, ${name} of the worst function: ${rows
+                  .map(
+                    (values, index) =>
+                      `${CONDITIONS[index]?.name} ${rounded(average(values))}`,
+                  )
+                  .join(', ')}`}
+                className="relative mx-2"
+                role="img"
+              >
+                {ticks.map((tick) => (
+                  <div
+                    className="absolute inset-y-0 w-px bg-white/15"
+                    key={tick}
+                    style={{ left: `${position(tick)}%` }}
                   />
-                  <Tooltip
-                    content={<ChartTooltip />}
-                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
-                    isAnimationActive={false}
-                  />
-                  <Bar
-                    dataKey="height"
-                    isAnimationActive={false}
-                    radius={[3, 3, 0, 0]}
+                ))}
+                {rows.map((values, index) => {
+                  const condition = CONDITIONS[index];
+                  const positions = values.map(position);
+                  const offsets = laneOffsets(positions);
+                  return (
+                    <div className="relative h-6" key={condition?.name}>
+                      {values.map((value, run) => (
+                        <span
+                          className="group absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 hover:z-10"
+                          // biome-ignore lint/suspicious/noArrayIndexKey: runs have no identity
+                          key={run}
+                          style={{
+                            left: `${positions[run]}%`,
+                            marginTop: offsets[run],
+                          }}
+                        >
+                          <span
+                            className="absolute inset-1 rounded-full opacity-85 group-hover:opacity-100"
+                            style={{ background: condition?.color }}
+                          />
+                          <span
+                            className={`absolute bottom-full z-10 mb-1 hidden whitespace-nowrap rounded-md border border-white/10 bg-[#17191b] px-2 py-1 text-xs text-ink-2 group-hover:block ${
+                              (positions[run] ?? 0) > 50 ? 'right-0' : 'left-0'
+                            }`}
+                          >
+                            {condition?.name}:{' '}
+                            <span className="text-ink">
+                              {value.toLocaleString('en')}
+                            </span>
+                          </span>
+                        </span>
+                      ))}
+                      <span
+                        className="pointer-events-none absolute inset-y-0.5 w-0.5 -translate-x-1/2 bg-ink"
+                        style={{ left: `${position(average(values))}%` }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="relative mx-2 mt-1 h-4 text-[11px] text-ink-2 tabular-nums">
+                {ticks.map((tick) => (
+                  <span
+                    className="absolute -translate-x-1/2"
+                    key={tick}
+                    style={{ left: `${position(tick)}%` }}
                   >
-                    {data.map(({ condition }, index) => (
-                      <Cell fill={CONDITIONS[index]?.color} key={condition} />
-                    ))}
-                    <LabelList
-                      dataKey="label"
-                      fill="var(--ink-2)"
-                      fontSize={11}
-                      position="top"
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                    {tickLabel(tick)}
+                  </span>
+                ))}
+              </div>
             </div>
           );
         })}

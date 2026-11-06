@@ -184,7 +184,7 @@ fn cell(value: ValueRef<'_>) -> Json {
 fn typed(rendered: Json, kind: Option<&str>) -> Json {
     match kind.and_then(Kind::from_label) {
         Some(Kind::Bool) => Json::Bool(rendered.as_i64().is_some_and(|n| n != 0)),
-        Some(Kind::Json) => rendered
+        Some(Kind::Json | Kind::Redacted) => rendered
             .as_str()
             .and_then(|text| serde_json::from_str(text).ok())
             .unwrap_or(rendered),

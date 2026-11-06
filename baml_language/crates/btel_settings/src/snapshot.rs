@@ -89,4 +89,7 @@ pub const CARRIED_GROUPS: usize = 4096;
 pub const BLOB_MAGIC: [u8; 8] = *b"BTELCAS\0";
 pub const BLOB_VERSION: u32 = 5;
 /// Supported read formats, newest first, for decoding and on-disk lookup.
-pub const READABLE_BLOB_VERSIONS: &[u32] = &[BLOB_VERSION, 4, 3];
+///
+/// Reading runs one format ahead of writing: format 6 adds redacted values,
+/// and a runtime may write it only once every reader of its blobs reads it.
+pub const READABLE_BLOB_VERSIONS: &[u32] = &[6, BLOB_VERSION, 4, 3];

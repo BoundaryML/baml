@@ -66,14 +66,16 @@ export async function invokeBaml(
   });
 }
 
-export async function readBamlBinaryIdentity(
-  binaryPath: string,
-): Promise<BamlBinaryIdentity> {
-  const result = await invokeBaml(binaryPath, ['--version']);
-  const wrapperMatch = /^baml wrapper (\S+)$/m.exec(result.stdout);
-  const toolchainMatch = /^baml toolchain (\S+)(?: \([^\n]+\))?$/m.exec(
-    result.stdout,
-  );
+/**
+ * Reads `baml --version` output. Wrapper 0.3+ prints `baml wrapper X` and then
+ * passes `--version` through to the selected toolchain (`baml-cli X`); wrapper
+ * 0.2 printed the toolchain itself as `baml toolchain [baml-cli ]X [(...)]`.
+ */
+export function parseBamlVersionOutput(stdout: string): BamlBinaryIdentity {
+  const wrapperMatch = /^baml wrapper (\S+)$/m.exec(stdout);
+  const toolchainMatch =
+    /^baml-cli (\S+)$/m.exec(stdout) ??
+    /^baml toolchain (?:baml-cli )?(\S+)(?: \([^\n]+\))?$/m.exec(stdout);
   if (!wrapperMatch || !toolchainMatch) {
     throw new Error(
       'The selected baml binary did not expose the required wrapper and toolchain identities.',
@@ -81,7 +83,14 @@ export async function readBamlBinaryIdentity(
   }
   return {
     productVersion: toolchainMatch[1],
-    rawVersionOutput: result.stdout,
+    rawVersionOutput: stdout,
     wrapperVersion: wrapperMatch[1],
   };
+}
+
+export async function readBamlBinaryIdentity(
+  binaryPath: string,
+): Promise<BamlBinaryIdentity> {
+  const result = await invokeBaml(binaryPath, ['--version']);
+  return parseBamlVersionOutput(result.stdout);
 }

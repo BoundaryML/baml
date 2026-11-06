@@ -89,8 +89,8 @@ def candidates_from_archives(artifacts, destination, platform, version):
     return [
         stager.stage(implementation, product, variant)
         for implementation, product in [
-            ("rust", "baml-wrapper"),
-            ("baml", "baml-wrapper-baml"),
+            ("rust", "baml-wrapper-rust"),
+            ("baml", "baml-wrapper"),
         ]
         for variant in variants
     ]

@@ -260,7 +260,8 @@ fn identity(cas: &CasStore, snapshot: &Arc<DecodedSnapshot>) -> Result<Option<St
             | DecodedValue::Object(_)
             | DecodedValue::Type(_)
             | DecodedValue::Enum { .. }
-            | DecodedValue::Truncated(_) => false,
+            | DecodedValue::Truncated(_)
+            | DecodedValue::Redacted(_) => false,
         };
         if !scalar {
             return Err(());
@@ -276,7 +277,8 @@ fn identity(cas: &CasStore, snapshot: &Arc<DecodedSnapshot>) -> Result<Option<St
             | Found::Bigint(_)
             | Found::Type(_)
             | Found::Enum { .. }
-            | Found::Object(_) => Err(()),
+            | Found::Object(_)
+            | Found::Redacted(_) => Err(()),
         },
         Nav::Arguments(_) | Nav::Missing | Nav::Unavailable(_) => Err(()),
     }

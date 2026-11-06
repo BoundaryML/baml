@@ -739,3 +739,105 @@ mod definitions {
             .unwrap();
     }
 }
+
+/// args: (customer: {key: redacted by pattern, name, future: an unknown
+/// reason}, note: redacted by declaration)
+fn redacted_snapshot() -> Arc<DecodedSnapshot> {
+    use DecodedValue as V;
+    use btel_snapshot::Redaction;
+    Arc::new(DecodedSnapshot {
+        id: CasId::from_bytes([0; 16]),
+        encoded_len: 0,
+        children: Vec::new(),
+        root: DecodedRoot::FunctionArgs {
+            parameter_count: 2,
+            slots: vec![V::Object(NodeId(0)), V::Redacted(Redaction::Declared)],
+        },
+        objects: vec![DecodedObject::Map {
+            key_type: ty(),
+            value_type: ty(),
+            entries: vec![
+                (
+                    s("key"),
+                    V::Redacted(Redaction::Pattern("openai-api-key".into())),
+                ),
+                (s("name"), s("Ann")),
+                (s("future"), V::Redacted(Redaction::Unknown { kind: 7 })),
+            ],
+            original_len: 3,
+        }],
+    })
+}
+
+#[test]
+fn redacted_values_are_withheld_present_values() {
+    use btel_snapshot::Redaction;
+    let snap = redacted_snapshot();
+    let n = names();
+    let limits = RenderLimits::default();
+    let state_at = |p: &[&str]| {
+        state(
+            &Blobs::default(),
+            &snap,
+            Root::Arguments,
+            Some(&n),
+            &path(p),
+            0,
+        )
+    };
+    assert_eq!(state_at(&["customer", "key"]), "redacted");
+    assert_eq!(state_at(&["note"]), "redacted");
+    assert_eq!(state_at(&["customer", "name"]), "present");
+    // What a redacted value holds is withheld with it, not missing.
+    assert_eq!(state_at(&["note", "inner", "0"]), "redacted");
+    assert_eq!(
+        found(&nav(&snap, Some(&n), &["note", "inner"])),
+        Some(DecodedValue::Redacted(Redaction::Declared))
+    );
+    assert!(leaf_of(&nav(&snap, Some(&n), &["customer", "key"])).is_none());
+
+    let scalar = |p: &[&str]| {
+        let presented = to_scalar(
+            &Blobs::default(),
+            &nav(&snap, Some(&n), p),
+            Some(&n),
+            &limits,
+        );
+        assert_eq!(presented.incomplete, None);
+        (presented.scalar, presented.kind)
+    };
+    assert_eq!(
+        scalar(&["customer", "key"]),
+        (
+            Scalar::Text(r#"{"$redacted":{"pattern":"openai-api-key"}}"#.into()),
+            Kind::Redacted
+        )
+    );
+    assert_eq!(
+        scalar(&["note"]),
+        (
+            Scalar::Text(r#"{"$redacted":"declared"}"#.into()),
+            Kind::Redacted
+        )
+    );
+    assert_eq!(
+        scalar(&["customer", "future"]),
+        (
+            Scalar::Text(r#"{"$redacted":"unknown"}"#.into()),
+            Kind::Redacted
+        )
+    );
+    let (Scalar::Text(json), Kind::Json) = scalar(&[]) else {
+        panic!("the arguments render as JSON text")
+    };
+    let json: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(json["note"], json!({"$redacted": "declared"}));
+    assert_eq!(
+        json["customer"]["key"],
+        json!({"$redacted": {"pattern": "openai-api-key"}})
+    );
+    assert_eq!(
+        Kind::from_label(Kind::Redacted.label()),
+        Some(Kind::Redacted)
+    );
+}

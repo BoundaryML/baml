@@ -1,4 +1,4 @@
-name: BAML Release - Build wrapper
+name: BAML Release - Build Rust wrapper reference
 
 on:
   workflow_call:
@@ -46,7 +46,7 @@ jobs:
           jq . <<<"$include"
 
   build:
-    name: Build wrapper (${{ matrix.target }})
+    name: Build Rust reference (${{ matrix.target }})
     needs: matrix
     runs-on: ${{ matrix.os }}
     env:
@@ -143,13 +143,13 @@ jobs:
               *) echo "unsupported archive suffix: $ARCHIVE_SUFFIX" >&2; exit 1 ;;
             esac
           }
-          archive staging baml-wrapper
+          archive staging baml-wrapper-rust
           if [[ "$NO_SELF_UPDATE" == "true" ]]; then
-            archive staging-no-self-update baml-wrapper-no-self-update
+            archive staging-no-self-update baml-wrapper-rust-no-self-update
           fi
       - uses: actions/upload-artifact@v7
         with:
-          name: wrapper-${{ matrix.target }}
+          name: rust-wrapper-${{ matrix.target }}
           path: |
-            baml-wrapper-${{ inputs.wrapper_version }}-${{ matrix.target }}.*
-            baml-wrapper-no-self-update-${{ inputs.wrapper_version }}-${{ matrix.target }}.*
+            baml-wrapper-rust-${{ inputs.wrapper_version }}-${{ matrix.target }}.*
+            baml-wrapper-rust-no-self-update-${{ inputs.wrapper_version }}-${{ matrix.target }}.*

@@ -292,7 +292,7 @@ generator:
     output_dir = "."
     naming_convention = "language"
   details: |
-    Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `.`; BAML creates a `baml_sdk` directory inside it for every generator.
+    Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `.`; the generated SDK is placed in a directory inside it, `baml_sdk` unless `package_name` says otherwise.
 
     Accepted `output_type` values:
 
@@ -308,6 +308,8 @@ generator:
     - `"csharp"` — C#
 
     `naming_convention` accepts `"preserve-case"`, which spells generated functions, modules, fields, parameters and types exactly as in BAML, or `"language"`, which respells them in the target language's casing (`nextCursor` becomes `next_cursor` in Python and Rust). Names that already follow that casing keep their spelling, and the runtime always sees the BAML names. Python and Rust accept either; `baml generate add` writes `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
+
+    `package_name` is optional and names the generated SDK; it defaults to `baml_sdk`. For Python it is a dotted import path such as `"my_app._generated"`: the SDK is written to `<output_dir>/my_app/_generated` and imported as `my_app._generated`, so `output_dir` is the import root. BAML creates missing parent directories but never writes or edits their `__init__.py`. For Go it is the root package's name (`[a-z][a-z0-9_]*`), and the last segment of `sdk_import_path` must be `<package_name>` (a bare `<package_name>` is the root of a module with that name). For Rust it is the crate name, used for both the Cargo package and the library you `use`. For TypeScript it is only the directory name. Swift, Java, C++ and C# do not accept `package_name` yet. With `package_name` set, `baml generate` refuses to write into an existing, non-empty directory that it did not create. `baml generate --output-dir <PATH>` writes the SDK to exactly `<PATH>`, overriding both `output_dir` and the directory `package_name` selects; the check against writing into a directory BAML did not create still applies.
 
 test:
   summary: "Defines a named executable test using ordinary BAML expressions."
@@ -592,7 +594,7 @@ catch_all:
       _ => fallback_value,
     }
   details: |
-    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` (E0062) if a throw type is left unhandled, so a callee that gains a new error type breaks the build here instead of silently propagating it. In a chain, a `catch_all` protects the whole preceding expression, including earlier handler bodies, and must cover their residual errors and new arm-body errors. Its own arm-body errors can still propagate; a later catch can handle them. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
+    `expr catch_all (e) { ErrorType => handler, ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The block holds `pattern => handler` arms, not statements, so it needs at least one arm. The compiler reports a non-exhaustive `catch_all` (E0062) if a throw type is left unhandled, so a callee that gains a new error type breaks the build here instead of silently propagating it. In a chain, a `catch_all` protects the whole preceding expression, including earlier handler bodies, and must cover their residual errors and new arm-body errors. Its own arm-body errors can still propagate; a later catch can handle them. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
 
 catch_all_panics:
   summary: "Handles every error and every panic raised by a preceding expression."
@@ -624,11 +626,13 @@ cleanup:
       path: string
 
       function cleanup(self) -> void {
-        // release the underlying resource here
+        baml.fs.remove(self.path) catch_all (e) {
+          _ => null,
+        };
       }
     }
   details: |
-    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch_all (e) { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
+    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with a `catch_all` arm, as in `baml.fs.remove(self.path) catch_all (e) { _ => null };`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
 
 match:
   summary: "Pattern matching — branches based on the shape or type of a value."

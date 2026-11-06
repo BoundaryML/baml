@@ -439,7 +439,7 @@ fn thread(
 /// A captured value's UI state from `baml_value_state` and its rendering.
 fn captured(state: Option<&str>, value: &Value) -> (&'static str, Value) {
     match (state, value) {
-        (Some("present" | "null" | "omitted"), value) => {
+        (Some("present" | "null" | "omitted" | "redacted"), value) => {
             ("available", Value::String(value.to_string()))
         }
         (Some("capture_pending"), _) => ("lost:pending", Value::Null),

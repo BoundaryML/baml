@@ -7,6 +7,12 @@
 //! kept for small unit tests and compatibility. Each leaf that routes at
 //! least one symbol carries stub Python definitions and an `__all__`
 //! trailer.
+//!
+//! The tree never names its own package: imports are relative and the
+//! root-level data modules derive the package name from their own
+//! `__name__`. The same output therefore works at the default `baml_sdk/`,
+//! nested inside an application package
+//! (`package_name = "my_app._generated"`), or copied under another name.
 
 mod emit;
 mod leaf;
@@ -27,7 +33,10 @@ pub use baml_sdkgen_types::{NamingConvention, OutputType};
 pub use names::{IdentifierRename, IdentifierRenameReason};
 
 use crate::{
-    emit::{build_emitted, typemap_file::render_typemap_module},
+    emit::{
+        build_emitted,
+        typemap_file::{SDK_PACKAGE, module_path_expression, render_typemap_module},
+    },
     leaf::{
         LeafBody, group_and_sort_with_names, render_leaf_body, render_leaf_body_pyi,
         render_runtime_reexports_pyi,
@@ -161,7 +170,7 @@ impl<'a> RuntimePayload<'a> {
 }
 
 /// Build the Python SDK output tree for `pool`. Returned paths are
-/// relative to the `baml_sdk/` output root.
+/// relative to the SDK package's root directory.
 pub fn to_source_code(
     pool: &SymbolPool,
     user_baml_files: &[UserBamlFile],
@@ -414,7 +423,6 @@ fn to_source_code_internal(
         PathBuf::from("_typemap.py"),
         render_typemap_module(
             &bodies,
-            "baml_sdk",
             &baml_sdkgen_types::ProgramDescriptor::describe(pool).encode_embedded(),
         ),
     );
@@ -470,19 +478,14 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
         .collect();
     functions.sort_by_key(|(name, _)| *name);
 
-    let mut out = String::from(
-        "from __future__ import annotations\n\nFUNCTIONS: dict[str, dict[str, object]] = {\n",
+    let mut out = format!(
+        "from __future__ import annotations\n\n{SDK_PACKAGE} = __name__.rpartition(\".\")[0]\n\nFUNCTIONS: dict[str, dict[str, object]] = {{\n",
     );
     for (name, function) in functions {
         let fqn = name.to_string();
-        let leaf = names.route(name);
-        let module = if leaf.segments.is_empty() {
-            "baml_sdk".to_string()
-        } else {
-            format!("baml_sdk.{}", leaf.segments.join("."))
-        };
+        let module = module_path_expression(&names.route(name));
         let _ = writeln!(out, "    {}: {{", py_string(&fqn));
-        let _ = writeln!(out, "        \"module\": {},", py_string(&module));
+        let _ = writeln!(out, "        \"module\": {module},");
         out.push_str("        \"type_params\": (");
         for param in &function.generic_params {
             let _ = write!(out, "{}, ", py_string(param.as_str()));
@@ -570,7 +573,7 @@ fn init_pyi_path(dir: &[String]) -> PathBuf {
 fn render_package_init(children: &BTreeSet<String>) -> String {
     let mut out = String::from("from __future__ import annotations\n");
     if !children.is_empty() {
-        append_lazy_children_block(&mut out, children);
+        append_lazy_children_block(&mut out, children, false);
     }
     out
 }
@@ -604,8 +607,9 @@ fn render_package_init_pyi(
 /// resolves any name in the set via `importlib.import_module`. Python
 /// caches the loaded module as a real attribute after the first hit,
 /// so the cost is one importlib call per child per process. Shared by
-/// both root and non-root package init renderers.
-fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
+/// both root and non-root package init renderers; only the root also
+/// resolves the `experimental` and `trace` shortcuts.
+fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>, is_root: bool) {
     out.push('\n');
     out.push_str("_LAZY_CHILDREN = frozenset({\n");
     for child in children {
@@ -613,12 +617,14 @@ fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
     }
     out.push_str("})\n\n");
     out.push_str("def __getattr__(name):\n");
-    out.push_str("    if name == \"experimental\" and __name__ == \"baml_sdk\":\n");
-    out.push_str("        import importlib\n");
-    out.push_str("        return importlib.import_module(\".experimental\", __name__)\n");
-    out.push_str("    if name == \"trace\" and __name__ == \"baml_sdk\":\n");
-    out.push_str("        import importlib\n");
-    out.push_str("        return importlib.import_module(\".vendor.trace\", __name__)\n");
+    if is_root {
+        out.push_str("    if name == \"experimental\":\n");
+        out.push_str("        import importlib\n");
+        out.push_str("        return importlib.import_module(\".experimental\", __name__)\n");
+        out.push_str("    if name == \"trace\":\n");
+        out.push_str("        import importlib\n");
+        out.push_str("        return importlib.import_module(\".vendor.trace\", __name__)\n");
+    }
     out.push_str("    if name in _LAZY_CHILDREN:\n");
     out.push_str("        import importlib\n");
     out.push_str("        return importlib.import_module(f\".{name}\", __name__)\n");
@@ -653,7 +659,7 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("set_type_map(_TYPE_MAP)\n");
     out.push_str("from ._invocation_types import BamlOptions as BamlOptions\n");
     if !top_children.is_empty() {
-        append_lazy_children_block(&mut out, top_children);
+        append_lazy_children_block(&mut out, top_children, true);
     }
     out
 }
@@ -918,6 +924,117 @@ mod tests {
         Symbol::Function(bare_func(bare, file, span))
     }
 
+    /// `(module path expression, attribute)` that `_typemap.py` resolves
+    /// `fqn` through, following the entry's module constant.
+    fn typemap_entry(typemap: &str, fqn: &str) -> (String, String) {
+        let prefix = format!("    {}: (", py_string(fqn));
+        let entry = typemap
+            .lines()
+            .find_map(|line| line.strip_prefix(&prefix))
+            .unwrap_or_else(|| panic!("no typemap entry for {fqn}:\n{typemap}"));
+        let (constant, attribute) = entry.strip_suffix("),").unwrap().split_once(", ").unwrap();
+        let module = typemap
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{constant} = ")))
+            .unwrap_or_else(|| panic!("no module constant {constant}:\n{typemap}"));
+        (module.to_string(), attribute.trim_matches('"').to_string())
+    }
+
+    /// The generated tree imports under any package name: nothing spells
+    /// one, module paths derive from `__name__`, and only the root
+    /// resolves the root-only `experimental` and `trace` shortcuts.
+    #[test]
+    fn generated_package_never_names_itself() {
+        let mut pool: SymbolPool = HashMap::new();
+        for (name, symbol) in [
+            (cg_name("user", &[], "Root"), None),
+            (cg_name("user", &["lorem", "ipsum"], "Deep"), None),
+            (
+                cg_name("user", &["lorem"], "Mood"),
+                Some(enum_(cg_name("user", &["lorem"], "Mood"), "x.baml", 1)),
+            ),
+            (
+                cg_name("user", &[], "run"),
+                Some(func_sym("run", "x.baml", 2)),
+            ),
+            (
+                cg_name("user", &[], "run@spec"),
+                Some(func_sym("run@spec", "x.baml", 3)),
+            ),
+            (
+                cg_name("user", &["lorem"], "extract"),
+                Some(func_sym("extract", "x.baml", 4)),
+            ),
+            (
+                cg_name("user", &["lorem"], "extract@spec"),
+                Some(func_sym("extract@spec", "x.baml", 5)),
+            ),
+        ] {
+            let symbol = symbol.unwrap_or_else(|| class(name.clone()));
+            pool.insert(name, symbol);
+        }
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+
+        for (path, content) in &out {
+            assert!(
+                !content.contains("baml_sdk"),
+                "{} names the SDK package:\n{content}",
+                path.display()
+            );
+            assert!(
+                !content.contains("__name__ =="),
+                "{} compares its own module name:\n{content}",
+                path.display()
+            );
+        }
+
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+        assert!(
+            typemap.contains("\n_SDK_PACKAGE = __name__.rpartition(\".\")[0]\n"),
+            "{typemap}"
+        );
+        assert_eq!(
+            typemap_entry(typemap, "user.Root"),
+            ("_SDK_PACKAGE".to_string(), "Root".to_string())
+        );
+        assert_eq!(
+            typemap_entry(typemap, "user.lorem.Mood").0,
+            "_SDK_PACKAGE + \".lorem\""
+        );
+        assert_eq!(
+            typemap_entry(typemap, "user.lorem.ipsum.Deep").0,
+            "_SDK_PACKAGE + \".lorem.ipsum\""
+        );
+        // One constant per module, however many entries share it.
+        assert_eq!(typemap.matches("= _SDK_PACKAGE + \".lorem\"\n").count(), 1);
+
+        let registry = &out[&PathBuf::from("_function_registry.py")];
+        assert!(
+            registry.contains("\n_SDK_PACKAGE = __name__.rpartition(\".\")[0]\n"),
+            "{registry}"
+        );
+        assert!(
+            registry.contains("        \"module\": _SDK_PACKAGE,\n"),
+            "{registry}"
+        );
+        assert!(
+            registry.contains("        \"module\": _SDK_PACKAGE + \".lorem\",\n"),
+            "{registry}"
+        );
+
+        let root = &out[&PathBuf::from("__init__.py")];
+        assert!(
+            root.contains("    if name == \"experimental\":\n"),
+            "{root}"
+        );
+        assert!(root.contains("    if name == \"trace\":\n"), "{root}");
+        let lorem = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(lorem.contains("def __getattr__(name):\n"), "{lorem}");
+        assert!(!lorem.contains("\"experimental\""), "{lorem}");
+        assert!(!lorem.contains("\"trace\""), "{lorem}");
+    }
+
     fn zero_arg_func(bare: &str, return_type: Ty, file: &str, span: u32) -> Symbol {
         let mut f = bare_func(bare, file, span);
         f.arguments.clear();
@@ -1092,9 +1209,14 @@ mod tests {
             let reference = format!("reflect.{routed}.{helper}");
             assert!(consumer_py.contains(&reference));
             assert!(consumer_pyi.contains(&reference));
-            assert!(typemap.contains(&format!(
-                "\"reflect.{source}.{helper}\": (\"baml_sdk.reflect.{routed}\", \"{helper}\")"
-            )));
+            let fqn = format!("reflect.{source}.{helper}");
+            assert_eq!(
+                typemap_entry(typemap, &fqn),
+                (
+                    format!("_SDK_PACKAGE + \".reflect.{routed}\""),
+                    helper.to_string()
+                )
+            );
         }
 
         assert!(!consumer_py.contains("reflect.class.Field"));

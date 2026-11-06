@@ -493,7 +493,7 @@ testset "wrapper telemetry" {
                 "implementation missing",
             );
             root.harness.require(
-                capture_string(first, "wrapper_version") == (candidate.version ?? "0.2.5"),
+                capture_string(first, "wrapper_version") == (candidate.version ?? "0.3.0"),
                 "wrapper version missing",
             );
             let host = fixture.host;

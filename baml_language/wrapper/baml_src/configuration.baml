@@ -38,7 +38,7 @@ class ProjectConfiguration {
                 if let generator_options: baml.toml.Table = table_at(generators, key, self.path) {
                     validate_strings(
                         generator_options,
-                        ["output_type", "naming_convention", "output_dir", "sdk_import_path"],
+                        ["output_type", "naming_convention", "output_dir", "sdk_import_path", "package_name"],
                         self.path,
                     );
                 }

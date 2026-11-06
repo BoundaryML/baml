@@ -105,10 +105,10 @@ fn parse_duration(value: &str) -> Result<Duration, String> {
 fn print_guide() {
     println!("BAML value functions:");
     println!(
-        "  baml_value_state(v)  present, null, missing, omitted, no_value, or why the value is unavailable (cas_missing, value_truncated, capture_pending, ...)"
+        "  baml_value_state(v)  present, null, missing, omitted, redacted, no_value, or why the value is unavailable (cas_missing, value_truncated, capture_pending, ...)"
     );
     println!(
-        "  baml_kind(v)         null, bool, int, float, string, bigint, enum, json (structured), missing, unavailable"
+        "  baml_kind(v)         null, bool, int, float, string, bigint, enum, json (structured), redacted, missing, unavailable"
     );
     println!(
         "  baml_code(v)         BAML code that rebuilds a recorded type, or an instance's or enum value's type, classes made at run time included; NULL for other values"

@@ -83,8 +83,40 @@ pub fn run_all(ctx: &CodegenCtx) {
             "baml.local/sdk/baml_sdk",
         );
         stage_output(&ctx.crate_dir, fixture, output);
+        if *fixture == RENAMED_FIXTURE {
+            stage_renamed_sdk(&ctx.crate_dir, &loaded.pool, &loaded.baml_bytecode);
+        }
     }
     stage_package_edges(&ctx.crate_dir);
+}
+
+/// This fixture is also generated a second time with `package_name` set,
+/// beside its `baml_sdk/`, so `go test ./...` compiles a renamed SDK and the
+/// fixture's `package_name_test.go` consumes it.
+const RENAMED_FIXTURE: &str = "docstrings_etc";
+const RENAMED_PACKAGE: &str = "docs_sdk";
+
+fn stage_renamed_sdk(crate_dir: &Path, pool: &SymbolPool, baml_bytecode: &[u8]) {
+    let sdk_import_path = format!("baml.local/sdk/{RENAMED_PACKAGE}");
+    let output = sdkgen_go::try_to_source_code_with_bytecode_and_options(
+        pool,
+        baml_bytecode,
+        &sdkgen_go::GoGenOptions {
+            naming_convention: NamingConvention::Language,
+            sdk_import_path: &sdk_import_path,
+            package_name: RENAMED_PACKAGE,
+            max_typed_union_arity: sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY,
+        },
+    )
+    .unwrap_or_else(|error| panic!("fixture `{RENAMED_FIXTURE}`: {error}"));
+    write_codegen_output(
+        &crate_dir
+            .join(RENAMED_FIXTURE)
+            .join("generated")
+            .join(RENAMED_PACKAGE),
+        output.files,
+        RENAMED_FIXTURE,
+    );
 }
 
 fn stage_output(crate_dir: &Path, fixture: &str, output: sdkgen_go::Generated) {

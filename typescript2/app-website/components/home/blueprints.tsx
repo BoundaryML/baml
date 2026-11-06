@@ -162,9 +162,13 @@ export default function Blueprints({ progress }: { progress: number }) {
   const stackShown = layers[0] > 0;
 
   return (
-    <figure className="v4-blueprint-sheet grid rounded-2xl overflow-hidden border border-rule">
+    // `isolate` keeps the drawings' animated layers inside the sheet, so none paints over the nav.
+    <figure className="v4-blueprint-sheet isolate grid rounded-2xl overflow-hidden border border-rule">
       {ENGINES.map((e, k) => {
         const q = (e.to > e.from ? ramp(progress, e.from, e.to) : 1) * out;
+        // An engine that's fully faded isn't drawn at all: each is the whole 600-path drawing. The first
+        // stays while it carries the figure's description.
+        if (q <= 0 && (k !== 0 || stackShown)) return null;
         return (
           // biome-ignore lint/performance/noImgElement: a static SVG drawing, shown at its own size
           <img
@@ -184,7 +188,7 @@ export default function Blueprints({ progress }: { progress: number }) {
         );
       })}
       <div aria-hidden={!stackShown} className="col-start-1 row-start-1">
-        <Stack shown={layers} />
+        {stackShown && <Stack shown={layers} />}
       </div>
     </figure>
   );

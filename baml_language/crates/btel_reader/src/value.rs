@@ -19,7 +19,7 @@ use std::{
 
 use btel_snapshot::{
     CasId, DecodedMediaSource, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue,
-    DefinitionRef, Description, Limit, NodeId,
+    DefinitionRef, Description, Limit, NodeId, Redaction,
     definition::{Declaration, Meta},
 };
 use num_bigint::BigInt;
@@ -161,6 +161,8 @@ fn step<'a>(
 ) -> Result<&'a DecodedValue, Nav> {
     let id = match current.value() {
         Found::Object(id) => *id,
+        // What a redacted value holds is withheld with it.
+        Found::Redacted(_) => return Err(Nav::Value(current.clone())),
         // Scalars, null and enum values have no children.
         Found::Null
         | Found::Bool(_)
@@ -264,7 +266,8 @@ fn step<'a>(
 
 /// What a path finds, as `baml_value_state` reports it: `present`, `null`
 /// (a captured null), `missing` (absent key or index), `omitted` (an
-/// argument the caller did not pass) or an unavailable-evidence code such as
+/// argument the caller did not pass), `redacted` (a value the producer
+/// withheld, or a path into one) or an unavailable-evidence code such as
 /// `value_truncated`. Distinguishes the cases navigation folds together.
 pub fn state(
     source: &(impl BlobSource + ?Sized),
@@ -284,6 +287,7 @@ pub fn state(
         Nav::Arguments(_) => "present",
         Nav::Value(found) => match found.value() {
             Found::Null => "null",
+            Found::Redacted(_) => "redacted",
             Found::Bool(_)
             | Found::Int(_)
             | Found::Float(_)
@@ -325,6 +329,9 @@ pub enum Kind {
     Missing,
     /// Evidence unavailable: SQL NULL, reported separately.
     Unavailable,
+    /// A value the producer withheld: its `$redacted` envelope as JSON text.
+    /// Nothing is missing, and it compares as unknown.
+    Redacted,
 }
 
 impl Kind {
@@ -340,6 +347,7 @@ impl Kind {
             Self::Json => "json",
             Self::Missing => "missing",
             Self::Unavailable => "unavailable",
+            Self::Redacted => "redacted",
         }
     }
     pub fn from_label(label: &str) -> Option<Self> {
@@ -354,6 +362,7 @@ impl Kind {
             "json" => Self::Json,
             "missing" => Self::Missing,
             "unavailable" => Self::Unavailable,
+            "redacted" => Self::Redacted,
             _ => return None,
         })
     }
@@ -400,6 +409,12 @@ pub fn to_scalar(
     };
     match found.value() {
         Found::Null => whole(Scalar::Null, Kind::Null),
+        // Presents as its `$redacted` envelope, so a withheld value never
+        // reads as a captured null.
+        Found::Redacted(_) => Presented {
+            kind: Kind::Redacted,
+            ..rendered(render_value(source, found, limits))
+        },
         Found::Bool(b) => whole(Scalar::Integer(i64::from(*b)), Kind::Bool),
         Found::Int(n) => whole(Scalar::Integer(*n), Kind::Int),
         Found::Float(f) if f.is_finite() => whole(Scalar::Real(*f), Kind::Float),
@@ -514,6 +529,8 @@ pub fn leaf_of(nav: &Nav) -> Option<Leaf<'_>> {
         Nav::Missing | Nav::Unavailable(_) => return None,
         Nav::Arguments(_) => Leaf::Structured,
         Nav::Value(found) => match found.value() {
+            // Compares as unknown, like SQL NULL.
+            Found::Redacted(_) => return None,
             Found::Null => Leaf::Null,
             Found::Bool(b) => Leaf::Bool(*b),
             Found::Int(n) => Leaf::Int(*n),
@@ -1140,6 +1157,14 @@ impl<'a> Renderer<'a> {
         match value {
             DecodedValue::Null => Json::Null,
             DecodedValue::OmittedArg => envelope("$omitted", Json::Bool(true)),
+            DecodedValue::Redacted(reason) => {
+                let reason = match reason {
+                    Redaction::Declared => Json::from("declared"),
+                    Redaction::Pattern(rule) => envelope("pattern", self.text(rule)),
+                    Redaction::Unknown { .. } => Json::from("unknown"),
+                };
+                envelope("$redacted", reason)
+            }
             DecodedValue::Bool(b) => Json::Bool(*b),
             DecodedValue::Int(n) => Json::from(*n),
             DecodedValue::Float(f) => serde_json::Number::from_f64(*f).map_or_else(

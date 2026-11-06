@@ -1,0 +1,44 @@
+name: Setup BAML
+description: Install and select a BAML toolchain for later workflow steps
+author: BoundaryML
+
+branding:
+  icon: box
+  color: purple
+
+inputs:
+  toolchain:
+    description: BAML toolchain selector (an exact version, canary, or nightly). When omitted, the selector is resolved from baml.toml.
+    required: false
+
+outputs:
+  version:
+    description: Resolved concrete BAML toolchain version
+    value: ${{ steps.setup-unix.outputs.version || steps.setup-windows.outputs.version }}
+  path:
+    description: Absolute path to the BAML wrapper added to PATH
+    value: ${{ steps.setup-unix.outputs.path || steps.setup-windows.outputs.path }}
+  toolchain-path:
+    description: Absolute path to the resolved baml-cli binary
+    value: ${{ steps.setup-unix.outputs.toolchain-path || steps.setup-windows.outputs.toolchain-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install BAML
+      id: setup-unix
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        BAML_HOME: ${{ runner.tool_cache }}/setup-baml
+        INPUT_TOOLCHAIN: ${{ inputs.toolchain }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/setup.sh"
+
+    - name: Install BAML
+      id: setup-windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        BAML_HOME: ${{ runner.tool_cache }}/setup-baml
+        INPUT_TOOLCHAIN: ${{ inputs.toolchain }}
+      run: '& "$env:GITHUB_ACTION_PATH/scripts/setup.ps1"'
