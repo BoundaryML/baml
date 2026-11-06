@@ -1,0 +1,3 @@
+Linux THP policy: always [madvise] never
+Maximum observed AnonHugePages during bench-after low 100: 34816 kB
+Process exit: 0
