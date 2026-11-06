@@ -501,3 +501,37 @@ fn large_refusal_retries_collection_without_spending_the_reserve() {
         assert!(h.alloc_emergency(0, 32).is_ok());
     }
 }
+
+/// Documents the M3 integration gap without relaxing heap-object validation.
+/// Replace this expected rejection with a tracing test once the inline-entry
+/// representation is decided; it is not a correctness claim for map support.
+#[test]
+#[should_panic(expected = "offset >= 8 && offset % 8 == 0")]
+fn headerless_map_entry_descriptor_is_currently_rejected() {
+    static DESCRIPTORS: [Descriptor; 2] = [
+        Descriptor {
+            kind: Kind::Map,
+            size: 16,
+            ptr_slots: (0, 0),
+            tagged_slots: (0, 0),
+            elem: Some(Elements {
+                offset: 16,
+                layout: ElementLayout::Descriptor(1),
+            }),
+            type_id: 0,
+            fields: &[],
+            finalizer: None,
+        },
+        Descriptor {
+            kind: Kind::Class,
+            size: 16,
+            ptr_slots: (0, 1),
+            tagged_slots: (0, 0),
+            elem: None,
+            type_id: 0,
+            fields: &[],
+            finalizer: None,
+        },
+    ];
+    let _ = Heap::new(&DESCRIPTORS, &[true]);
+}

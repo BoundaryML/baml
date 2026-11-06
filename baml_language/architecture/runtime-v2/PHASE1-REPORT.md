@@ -785,3 +785,53 @@ cargo test --manifest-path baml_language/Cargo.toml -p baml_tests --test rust_ba
 cargo clippy --manifest-path baml_language/Cargo.toml \
   -p baml_builtins2_codegen -p baml_compiler2_rust --all-targets --no-deps -- -D warnings
 ```
+
+## M3 design question: headerless map-entry descriptors
+
+List emission is committed as `78ff4e9d4b`. Map integration exposed a heap API
+gap, so no map backend has been admitted and no padded layout has been silently
+substituted.
+
+A map buffer of `{ key: string-pointer, value: i64 }` entries needs a 16-byte
+stride and a pointer at entry offset 0. `ElementLayout::Descriptor` is documented
+for inline map entries, and tracing already applies the referenced descriptor
+at each entry's base. However, `Heap::new` validates **every** descriptor as a
+heap object: `validate_ranges` asserts `offset >= 8`. This rejects the entry's
+pointer range `(0, 1)` before the program runs. The entry is not an independently
+allocated heap object and has no object header.
+
+Reproduction is committed as the explicitly expected-rejection test
+`headerless_map_entry_descriptor_is_currently_rejected` in
+`crates/bex_v2_heap/tests/heap.rs`:
+
+```sh
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_heap --test heap \
+  headerless_map_entry_descriptor_is_currently_rejected
+```
+
+It reproduces `assertion failed: offset >= 8 && offset % 8 == 0` in
+`bex_v2_heap/src/lib.rs:375`. Passing this regression means the gap is reproduced,
+**not** that map tracing works. The exploratory map runtime is not exposed or
+compiled; its local draft and failed integration log remain in
+`target/phase1/maps-runtime-draft.rs` and `target/phase1/m3-map-tests.log`.
+
+**Decision requested:** distinguish headerless inline entry layouts from heap
+object descriptors, allowing pointer ranges to start at 0 only for the former?
+Recommended: an explicit inline-record element layout (or equivalent separate
+inline descriptor type), retaining the existing header checks for all allocated
+objects. The alternative is a required header-sized prefix in every inline
+entry, adding eight bytes per string/int pair. This needs an explicit heap
+integration decision; simply relaxing validation for every descriptor would
+weaken the verified heap-object contract.
+
+M3 is paused at this design question. Remaining work: resolve the entry layout,
+wire map operations, tagged unions/optionals, index-walk iteration, typed JSON
+and catches/rethrows, then run the full bytecode differential and the agent-loop
+benchmark/profile. Agent-loop has no v2 result or measured ratio yet. The current
+three-workload gate is therefore **NO-GO / incomplete**, despite M1 and M2 passing.
+
+At this checkpoint the full heap tests pass (5 unit, 1 fiber, 16 integration,
+2 doctests), including the explicit gap reproduction. The codegen/compiler
+checks and native regression results are as recorded in the list sub-step.
+Strict all-target clippy passes for heap, codegen and compiler, and strict clippy
+for the touched `baml_tests --test rust_backend` target also passes.
