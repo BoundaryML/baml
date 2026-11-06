@@ -39,6 +39,30 @@ fn render(
 }
 
 #[test]
+fn mir_inventory_keeps_direct_reachable_bodies_before_admission() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "inventory.baml",
+        "function main() -> int { helper() }\nfunction helper() -> int { 42 }\nfunction unused() -> int { 7 }",
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, function)| function.name() == "main")
+        .unwrap();
+    let report = baml_db::rust_backend::inventory_program(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        &[entry],
+    )
+    .unwrap();
+    assert!(report.contains("## user.main"));
+    assert!(report.contains("## user.helper"));
+    assert!(!report.contains("## user.unused"));
+    assert!(report.contains("same-name candidates"));
+}
+
+#[test]
 fn unrelated_iteration_interfaces_are_compiled_with_virtual_dispatch() {
     let db = baml_test_support::setup_multi_file_db(&[(
         "iteration_identity.baml",

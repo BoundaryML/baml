@@ -7,9 +7,11 @@ mod codegen;
 mod coords;
 mod index;
 mod init;
+mod inventory;
 mod operands;
 mod reach;
 mod render;
 mod structure;
 
 pub use admit::{CompiledFunction, Rejection, RustModule, compile_program};
+pub use inventory::inventory_program;
