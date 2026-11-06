@@ -62,6 +62,22 @@ pub struct TracingCall {
     pub function_type: FunctionType,
 }
 
+/// Releases a ref on a call in BAML_TRACER when dropped, also when a panic
+/// unwinds the stack.
+struct TemporaryTracerRef(baml_ids::FunctionCallId);
+
+impl Drop for TemporaryTracerRef {
+    fn drop(&mut self) {
+        match BAML_TRACER.lock() {
+            Ok(mut tracer) => tracer.dec_ref(&self.0),
+            // A second panic during an unwind aborts the process. Keep the ref:
+            // a poisoned tracer is broken anyway.
+            Err(_) if std::thread::panicking() => {}
+            Err(e) => panic!("BAML_TRACER is poisoned: {e}"),
+        }
+    }
+}
+
 impl TracingCall {
     pub fn curr_call_id(&self) -> baml_ids::FunctionCallId {
         self.new_call_id_stack
@@ -202,6 +218,42 @@ mod tests {
             "a collector exposed a call id without a FunctionStart event"
         );
         assert_eq!(collector.function_logs().len(), 5);
+    }
+
+    /// `start_call` holds a temporary ref on the call while the collectors
+    /// track it. When a collector panics there, the ref must still be
+    /// released, or the call's events stay in BAML_TRACER forever.
+    #[test]
+    #[serial_test::serial]
+    fn test_start_call_releases_temporary_ref_when_collector_panics() {
+        let tracer = BamlTracer::new(None, std::iter::empty::<(&str, &str)>()).unwrap();
+        let ctx = RuntimeContextManager::new(None);
+        let collector = Arc::new(Collector::new(Some("poisoned_collector".to_string())));
+        collector.poison_for_test();
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tracer.start_call(
+                "TestFunction",
+                &ctx,
+                &BamlMap::new(),
+                true,
+                false,
+                Some(vec![collector.clone()]),
+                None,
+            )
+        }));
+        assert!(
+            result.is_err(),
+            "track_function on a poisoned collector panics"
+        );
+
+        // `start_call` panicked before `ctx.exit()`, so the call is still on the stack.
+        let call_id = ctx.call_id_stack(false).unwrap().pop().unwrap();
+        ctx.exit();
+        let leaked = BAML_TRACER.lock().unwrap().get_events(&call_id).is_some();
+        // Dropping the collector would panic on its poisoned lock.
+        std::mem::forget(collector);
+        assert!(!leaked, "the temporary ref on the call was not released");
     }
 }
 
@@ -550,15 +602,15 @@ impl BamlTracer {
                 // FunctionStart event panics. So we store FunctionStart under a
                 // temporary ref first, and only then let the collectors track the
                 // call.
-                {
+                let _temporary_ref = {
                     let mut tracer = BAML_TRACER.lock().unwrap();
                     tracer.inc_ref(&call_id);
                     tracer.put(trace_event);
-                }
+                    TemporaryTracerRef(call_id.clone())
+                };
                 for collector in collectors.iter() {
                     collector.track_function(call_id.clone());
                 }
-                BAML_TRACER.lock().unwrap().dec_ref(&call_id);
             }
             _ => {
                 BAML_TRACER.lock().unwrap().put(trace_event);

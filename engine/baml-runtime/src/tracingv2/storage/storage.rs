@@ -742,6 +742,16 @@ impl Collector {
         len
     }
 
+    /// Poisons this collector's lock, so that every later `track_function`
+    /// panics.
+    #[cfg(test)]
+    pub(crate) fn poison_for_test(&self) {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = self.tracked_ids.lock().unwrap();
+            panic!("poison the collector lock for a test");
+        }));
+    }
+
     pub fn function_logs(&self) -> Vec<FunctionLog> {
         let guard = self.tracked_ids.lock().unwrap();
         guard
