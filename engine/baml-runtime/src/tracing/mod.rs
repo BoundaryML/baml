@@ -137,6 +137,74 @@ mod tests {
             format!(r#"👍{}👍👍"#, log_str())
         );
     }
+
+    /// A collector must not expose a call id before the FunctionStart event of
+    /// that call is stored: reading such a log panics (GitHub issue #3424).
+    /// A large param makes the param conversion in `start_call` slow, so a
+    /// reader thread that polls the collector hits any window between "call id
+    /// tracked" and "FunctionStart stored". The reader checks the stored events
+    /// directly, so this test never panics while it holds BAML_TRACER.
+    #[test]
+    #[serial_test::serial]
+    // Documents the bug in #3424; the next commit fixes it and removes should_panic.
+    #[should_panic(expected = "a collector exposed a call id without a FunctionStart event")]
+    fn test_start_call_stores_function_start_before_collector_sees_id() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let tracer = BamlTracer::new(None, std::iter::empty::<(&str, &str)>()).unwrap();
+        let ctx = RuntimeContextManager::new(None);
+        let collector = Arc::new(Collector::new(Some("test_collector".to_string())));
+
+        let items = (0..200_000)
+            .map(|i| BamlValue::String(format!("item-{i}")))
+            .collect();
+        let mut params = BamlMap::new();
+        params.insert("items".to_string(), BamlValue::List(items));
+
+        let done = Arc::new(AtomicBool::new(false));
+        let reader = {
+            let collector = collector.clone();
+            let done = done.clone();
+            std::thread::spawn(move || {
+                let mut ids_without_start = 0usize;
+                while !done.load(Ordering::Acquire) {
+                    for log in collector.function_logs() {
+                        let tracer = BAML_TRACER.lock().unwrap();
+                        let has_start = tracer.get_events(&log.id()).is_some_and(|events| {
+                            events
+                                .iter()
+                                .any(|e| matches!(e.content, TraceData::FunctionStart(_)))
+                        });
+                        if !has_start {
+                            ids_without_start += 1;
+                        }
+                    }
+                }
+                ids_without_start
+            })
+        };
+
+        for _ in 0..5 {
+            tracer.start_call(
+                "TestFunction",
+                &ctx,
+                &params,
+                true,
+                false,
+                Some(vec![collector.clone()]),
+                None,
+            );
+            ctx.exit();
+        }
+
+        done.store(true, Ordering::Release);
+        let ids_without_start = reader.join().unwrap();
+        assert_eq!(
+            ids_without_start, 0,
+            "a collector exposed a call id without a FunctionStart event"
+        );
+        assert_eq!(collector.function_logs().len(), 5);
+    }
 }
 
 impl Visualize for FunctionResult {

@@ -1605,6 +1605,70 @@ mod tests {
         });
     }
 
+    /// Reading a log with no FunctionStart event panics, but the panic must
+    /// not poison BAML_TRACER. A poisoned BAML_TRACER makes every later
+    /// tracing call in the process panic (GitHub issue #3424).
+    ///
+    /// BAML_TRACER is a process global, and other tests in this binary use it
+    /// in parallel. So the test body runs in a child process: if the panic
+    /// poisons BAML_TRACER, only the child sees it.
+    #[test]
+    #[serial]
+    // Documents the bug in #3424; the next commit fixes it and removes should_panic.
+    #[should_panic(expected = "the panic must not poison BAML_TRACER")]
+    fn test_missing_function_start_does_not_poison_tracer() {
+        const CHILD_ENV: &str = "BAML_TEST_TRACER_POISON_CHILD";
+        // Not 0: the harness also exits 0 when the filter matches no test, and
+        // then the child checked nothing.
+        const EXIT_NOT_POISONED: i32 = 42;
+        const EXIT_POISONED: i32 = 3;
+
+        if std::env::var_os(CHILD_ENV).is_some() {
+            let f_id = FunctionCallId::new();
+            let collector = Collector::new(Some("test_collector".to_string()));
+            // Track the function, but never put a FunctionStart event.
+            collector.track_function(f_id.clone());
+
+            let mut logs = collector.function_logs();
+            assert_eq!(logs.len(), 1);
+            let result =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| logs[0].timing()));
+            assert!(
+                result.is_err(),
+                "reading a log without FunctionStart should panic"
+            );
+            let code = if BAML_TRACER.is_poisoned() {
+                EXIT_POISONED
+            } else {
+                EXIT_NOT_POISONED
+            };
+            std::process::exit(code);
+        }
+
+        // The test harness names the test by its path without the crate name.
+        let test_name = concat!(
+            module_path!(),
+            "::test_missing_function_start_does_not_poison_tracer"
+        )
+        .split_once("::")
+        .unwrap()
+        .1;
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([test_name, "--exact", "--nocapture", "--test-threads=1"])
+            .env(CHILD_ENV, "1")
+            .output()
+            .unwrap();
+        match output.status.code() {
+            Some(EXIT_NOT_POISONED) => {}
+            Some(EXIT_POISONED) => panic!("the panic must not poison BAML_TRACER"),
+            _ => panic!(
+                "child test process failed: {}\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        }
+    }
+
     // TODO: validate http request body and response body are serde objects
     // but need to inject these events in as well.
     //  let calls = func_log.calls();
