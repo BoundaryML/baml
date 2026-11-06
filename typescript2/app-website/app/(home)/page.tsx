@@ -10,7 +10,7 @@ import Logos from '@/components/home/logos';
 import Nav from '@/components/home/nav';
 import Observe from '@/components/home/observe';
 import Statement from '@/components/home/statement';
-import { SectionViews } from '@/components/home/track';
+import { CtaClicks, SectionViews } from '@/components/home/track';
 import Workflow from '@/components/home/workflow';
 import './styles/v2.css';
 import './styles/diagram-styles.css';
@@ -38,6 +38,7 @@ export default function Home() {
       </main>
       <Footer />
       <SectionViews />
+      <CtaClicks />
     </div>
   );
 }
