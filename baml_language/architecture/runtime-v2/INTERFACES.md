@@ -105,6 +105,16 @@ fn alloc(desc: DescId, bytes: usize) -> *mut u8   // returns a zeroed object wit
   1. **Conservative roots:** the running stack from its current stack pointer (registers spilled first) to its base, and every parked fiber's stack from its saved stack pointer to its base.
   2. **Precise roots:** globals, the host handle table, task records, pending I/O completions, telemetry captures, interpreter-island boundary values.
   3. **Heap:** precise, through descriptors (1.3).
+- The heap gets roots from its owner (the task loop) through one seam:
+  ```rust
+  pub trait RootSource {
+      /// Word-aligned [low, high) stack ranges to scan conservatively:
+      /// the running stack (registers already spilled) and every parked fiber.
+      fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize));
+      /// Exact pointer slots: globals, host handles, task records, completions.
+      fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize));
+  }
+  ```
 - Sweep: lazy. A line with no marked object is free; a block is swept when the allocator next reaches it.
 - Finalizers: objects with a `cleanup` found unmarked are queued and their cleanup runs once, as a task on the loop, with the same ordering and once-only guarantees as today. Objects reachable from a pending finalizer stay alive until it runs.
 - Weak tables (runtime caches keyed by object) are cleared after marking. Nothing moves, so no re-keying.
