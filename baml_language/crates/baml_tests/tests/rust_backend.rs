@@ -837,7 +837,6 @@ fn v2_trees_and_fail_closed_admission() {
     for source in [
         "function main() -> string { \"hello\" }",
         "function main() -> int { let a = [[1], [2]]; a[0][0] }",
-        "class C { x: int? } function main() -> int { let c = C { x: 1 }; c.x ?? 0 }",
         "const X = 1; function main() -> int { X }",
     ] {
         assert!(
@@ -958,6 +957,10 @@ fn v2_agent_maps_iteration_catch_and_json_admission() {
         (
             include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
             true,
+        ),
+        (
+            r#"class A { x: int } class B { y: int } function main() -> int { let a = baml.json.decode<A | B>("x") catch(e) { baml.json.ParseError => null }; 0 }"#,
+            false,
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",

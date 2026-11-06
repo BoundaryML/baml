@@ -1,0 +1,28 @@
+[
+  {
+    "stress": "0",
+    "v2": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "error: Traceback (most recent call last):\n  File \"rethrow.baml\", line 4, in user.main\n  File \"rethrow.baml\", line 3, in user.inner\n  File \"rethrow.baml\", line 2, in user.fail\nuncaught throw: user.Failure {code: 17}\n"
+    },
+    "bytecode": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "error: Traceback (most recent call last):\n  File \"rethrow.baml\", line 4, in user.main\n  File \"rethrow.baml\", line 3, in user.inner\n  File \"rethrow.baml\", line 2, in user.fail\nuncaught throw: user.Failure {code: 17}\n"
+    }
+  },
+  {
+    "stress": "1",
+    "v2": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "error: Traceback (most recent call last):\n  File \"rethrow.baml\", line 4, in user.main\n  File \"rethrow.baml\", line 3, in user.inner\n  File \"rethrow.baml\", line 2, in user.fail\nuncaught throw: user.Failure {code: 17}\n"
+    },
+    "bytecode": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "error: Traceback (most recent call last):\n  File \"rethrow.baml\", line 4, in user.main\n  File \"rethrow.baml\", line 3, in user.inner\n  File \"rethrow.baml\", line 2, in user.fail\nuncaught throw: user.Failure {code: 17}\n"
+    }
+  }
+]

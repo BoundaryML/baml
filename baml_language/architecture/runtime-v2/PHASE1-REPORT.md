@@ -1,13 +1,20 @@
-# Phase 1 gate: M1 and M2 checkpoints; overall NO-GO
+# Phase 1 gate: M1–M3 correct; performance NO-GO
 
-Binary-trees-14 now compiles from BAML MIR to typed Rust and runs on the v2 heap
-and loop. M2 Richards now also runs end to end. M3 agent-loop remains unsupported. This is not approval
-to advance past the three-workload phase-1 gate. M1 now also has fallible allocation and a tested emergency exception reserve.
-General process-wide allocator exhaustion is not claimed by the managed-heap test limit.
+All three workloads now compile from BAML MIR to typed Rust on the v2 heap and
+loop and match bytecode normally and under v2 GC stress. M3 agent-loop returns
+**592308425**. The final three-row gate and commands are in the M3 completion
+section below. Earlier sections retain checkpoint evidence and limitations as
+historical records; the completion section supersedes their pending-M3 status.
 
-Work is confined to the `v2-codegen` worktree on Spark/aarch64. No push or PR.
-Prior checkpoint commits: `495a15c376` (runtime seam), `deb6f46dbe` (inventory),
-`272ca1113b` (initial report). This report accompanies the M1 implementation commit.
+The performance recommendation is **NO-GO for claiming spike-equivalent generated
+performance**: agent-loop is **7.35×** the hand-written spike. Trees is 0.96× and
+Richards is 1.14×. Agent-loop is 5.76× faster than today's native backend, but its
+JSON decoder's temporary tree, hashing and host allocation dominate the remaining
+gap. This is a measured performance gap, not an unresolved interface question.
+
+Work stayed in the `v2-codegen` worktree on Spark/aarch64. No push or PR.
+Managed allocation failure has a tested emergency exception reserve; arbitrary
+process-wide host allocator exhaustion is not claimed.
 
 ## M1 implementation
 
@@ -896,3 +903,180 @@ Commands and evidence: `phase1/check_fixture.py catches 23`,
 `phase1/check_fixture.py maps 1050`, `target/phase1/m3-integration-tests.log`,
 `target/phase1/m3-vm-json-tests.log`, `target/phase1/m3-agent-repack.log`,
 `target/phase1/agent-{bytecode,stress}.stdout`. No new benchmark claim yet.
+
+## M3 completion — agent-loop-300
+
+**M1, M2 and M3 are implemented and correctness-verified.** The approved
+headerless-element contract landed in `4e9adb106c`; emitter/runtime integration
+landed in `1ef2071e99`. This completion checkpoint adds final differential
+artifacts, regression fixes, strict lint cleanup, and the gate/profile.
+
+### Implemented feature inventory
+
+- Classes with descriptor-planned scalar, pointer and tagged regions; nullable
+  class/string pointers; tagged `int?`, class unions and literal-string unions.
+- Flat strings, concatenation, integer formatting, code-point iteration,
+  character length and slicing; growing `string[]` and `string[][]`; fixed
+  `int[]`; string/int maps with replacement and independent values snapshots.
+- `Array.join/push/length`, `Map.set/values`, `String.length/slice/to_code_points`,
+  `_to_string_default<int>`; per-function observation-word branches, telemetry off.
+- Existing proven MIR index-walk array iteration; class/literal tests; coalescing;
+  checked i63 arithmetic, remainder/division, direct calls and Result errors.
+- Typed JSON decoding of the flat `Search | Calc | Finish` schema, optional
+  missing fields, literal discriminants, exact union errors, duplicate-key
+  replacement and syntax-error precedence. The shared interpreter scanner
+  preserves integral `-0` and numeric range distinctions. A temporary host JSON
+  tree precedes allocation of typed managed classes; this is the principal
+  performance limitation, not a linked VM or bytecode fallback.
+- User-defined typed catches, wildcard catches with panic exclusion, and rethrow
+  preserving the original stack. Caught errors remain loop-rooted.
+
+Admission remains restricted: other map key/value types, other JSON schemas or
+naming modes, generic classes, unsupported mutation/builtins and explicitly typed
+builtin-exception catches fail with `unsupported in runtime v2`. The workload
+catches JSON errors through its wildcard handler; typed `AgentFailed` is supported.
+Builtin exception classes are rejected as user layouts so the compiler cannot
+silently create duplicate tags incompatible with runtime-produced errors.
+
+### Correctness and regression evidence
+
+| Program / probe | Normal | v2 GC stress | Bytecode value |
+|---|---|---|---:|
+| binary-trees-14, rebuilt after M3 | exact stdout/stderr/status | exact | 3222190 |
+| richards-50, rebuilt after M3 | exact stdout/stderr/status | exact | 1161046400 |
+| agent-loop-300 | exact stdout/stderr/status | exact | 592308425 |
+| map fixture | exact | exact | 1050 |
+| catch/rethrow + iteration fixture | exact | exact | 23 |
+| uncaught rethrow | exact exception and all three frames | exact | exit 1 |
+
+`phase1/check_json.py` verifies ten cases in both modes: unknown discriminator,
+missing field, truncated input, wrong primitive, floating-point input to int,
+out-of-range integer, invalid literal union, integer negative zero, duplicate
+keys, and syntax-before-structure failure. Status, stdout, stderr, messages,
+paths and traces match bytecode exactly. Only the CLI source-format warning is
+normalized. Results and sources are recorded in `phase1/json-correctness.json`;
+rethrow traces are in `phase1/rethrow-correctness.json`.
+
+The bytecode oracle is the matching native pack with `BAML_COMPILED_BODIES=0`,
+plus CLI bytecode for small probes. Read-only inspection of sibling `v2-harness`
+at `0887df3816` found its pluggable Backend builder table, but no registered v2
+builder; its KPI matrix also requires medium/high telemetry. This report uses
+the established direct bytecode comparison, not a claim of passing that full
+harness (v2 non-off telemetry remains outside phase one). `BAML_GC_STRESS=1`
+forces collection on every v2 allocation; the bytecode oracle also runs with
+that environment variable, but it does not thereby claim every-allocation
+bytecode collection.
+
+Two integration regressions were found and fixed before completion: map fields
+must be traced pointers, and indexed stores must choose their barrier from the
+**element** representation, not the container representation. Full agent stress
+and rebuilt Richards respectively caught these. The old rejection test for
+`int?` was removed because M3 now implements it; map and builtin-exception
+admission rejection cases were added.
+
+All tests in touched runtime/compiler/codegen/VM crates pass (including native
+compiled-runtime cancellation, moving-GC and stack tests). The Rust backend
+suite has 14 passed and one existing explicitly ignored corpus test. Strict
+clippy passes for all touched crates, all targets, with `--no-deps -D warnings`.
+One existing ignored VM test remains ignored. Logs are in
+`target/phase1/m3-{all-tests,backend-complete-tests,complete-clippy}.log`.
+
+### Full gate — telemetry off, Spark aarch64, CPU 12
+
+Median ms/job, five interleaved rounds; every timed return checked:
+
+| Workload | Node | Native | Generated v2 | Hand-written spike | Generated ÷ spike |
+|---|---:|---:|---:|---:|---:|
+| binary-trees-14 | 38.357569 | 418.960936 | 36.389362 | 37.965193 | **0.958493×** |
+| richards-50 | 3.937868 | 83.120553 | 3.034915 | 2.660391 | **1.140778×** |
+| agent-loop-300 | 5.715754 | 51.924783 | 9.012292 | 1.225852 | **7.351859×** |
+
+Trees/Richards retain the previously accepted interleaved timing rows (20/50
+jobs, one-minute load 4.68–8.81 / 8.71–10.22); their rebuilt binaries were checked
+again for normal/stress correctness. Agent uses 50 jobs, one warmup, with
+**one-minute load 24.57–32.62** from competing builds. Each round runs Node,
+native, v2 and spike sequentially, all pinned by `taskset -c 12`, just like the
+trees script. Raw per-round loads/commands/results are committed in
+`phase1/agent-benchmark-raw.json`. The spike was rebuilt successfully from the
+existing local phase-one copy using the earlier documented commands; no
+historical spike number substitutes for its measured agent row.
+
+### Worst-gap profile
+
+A 500-job checked agent run on CPU 12 with `perf record -g --call-graph dwarf`
+collected about 19K samples with no lost samples. Self samples:
+
+| Cause | Samples |
+|---|---:|
+| Temporary JSON object field lookup | 25.13% |
+| Temporary JSON object insertion | 5.68% |
+| SipHash writes | 4.12% |
+| Host malloc/free/realloc functions combined | 19.88% |
+| JSON string scanning + next-key scanning | 6.63% |
+| Building the owned JSON tree | 3.39% |
+| Managed heap allocation slow path | 3.16% |
+
+Repeated field lookup during union ranking/validation and constructing/freeing
+the intermediate tree explain the largest costs absent from the spike's
+specialized decoder. The reader also scans syntax before building that tree.
+Inlining attributes some remaining work to `entry` (4.66%). These are profile
+attributions, not isolated causal speedup measurements. Kernel symbols were
+restricted; user symbols resolve. The flat report and checked run result are
+committed as `phase1/agent-perf-{flat.txt,run.json}`; the full perf.data stays in
+`target/phase1/agent-perf.data`.
+
+**Recommendation:** correctness GO for the three phase-one programs;
+performance NO-GO for spike-equivalence. Next performance work should remove the
+intermediate JSON object/hash structure while retaining scanner diagnostics and
+union error ordering. No new INTERFACES deviation or design question is pending.
+The sole approved change here is the explicit `InlineElement` paragraph in §1.3.
+
+### Reproduction commands
+
+Run from this worktree; all build directories stay inside it:
+
+```sh
+export CARGO_TARGET_DIR="$PWD/target" BAML_CLI_ALLOW_DIRECT=1
+cargo build --manifest-path baml_language/Cargo.toml -p baml_cli
+
+target/debug/baml-cli --agent-skill-check off --no-progress --color never \
+  pack --rust --runtime v2 --rust-workspace "$PWD/baml_language" \
+  --rust-build-dir "$PWD/target/phase1/agent-v2-build" \
+  --file baml_language/tools/speedtest/workloads/programs/agent-loop-300/main.baml \
+  main -o target/phase1/agent-v2
+
+uv run --no-project python baml_language/architecture/runtime-v2/phase1/prepare_agent.py
+
+# Native driver project uses the same checked driver.baml as Richards,
+# with agent-loop main.baml, and exposes BAML_TELEMETRY in baml.toml.
+target/debug/baml-cli --agent-skill-check off --no-progress --color never \
+  pack --rust --rust-workspace "$PWD/baml_language" \
+  --rust-build-dir "$PWD/target/phase1/trees-native-build" \
+  --from target/phase1/agent-native-project speedtest_driver \
+  -o target/phase1/agent-native
+
+# Plain native pack is the oracle, run with BAML_COMPILED_BODIES=0.
+target/debug/baml-cli --agent-skill-check off --no-progress --color never \
+  pack --rust --rust-workspace "$PWD/baml_language" \
+  --rust-build-dir "$PWD/target/phase1/trees-native-build" \
+  --file baml_language/tools/speedtest/workloads/programs/agent-loop-300/main.baml \
+  main -o target/phase1/agent-oracle
+
+uv run --no-project python baml_language/architecture/runtime-v2/phase1/check_agent.py
+uv run --no-project python baml_language/architecture/runtime-v2/phase1/check_json.py
+PHASE1_JOBS=50 uv run --no-project python \
+  baml_language/architecture/runtime-v2/phase1/bench_agent.py
+
+BAML_TELEMETRY=off taskset -c 12 \
+  /nix/store/i0cd89mpcvd3jb6slpzry4vr23gz4j9k-perf-linux-7.1/bin/perf \
+  record -g --call-graph dwarf -o target/phase1/agent-perf.data -- \
+  target/phase1/agent-v2 --jobs 500 --warmup 1
+
+cargo test --manifest-path baml_language/Cargo.toml \
+  -p bex_vm -p bex_vm_types -p bex_v2_runtime \
+  -p baml_compiler2_rust -p baml_builtins2_codegen
+cargo test --manifest-path baml_language/Cargo.toml -p baml_tests --test rust_backend
+cargo clippy --manifest-path baml_language/Cargo.toml \
+  -p baml_builtins2_codegen -p baml_compiler2_rust -p bex_v2_runtime \
+  -p bex_vm -p bex_vm_types --all-targets --no-deps -- -D warnings
+```

@@ -457,6 +457,22 @@ impl Plan<'_> {
         else {
             return Err(no("non-class layout"));
         };
+        // Runtime-produced exception descriptors are reserved. Phase one supports
+        // wildcard panic exclusion and user-defined typed catches; never emit a
+        // second, incompatible layout/tag for a builtin exception class.
+        if self.program.packages.iter().any(|package| {
+            package.name == "baml"
+                && package
+                    .objects
+                    .contains(&u32::try_from(object).expect("object index"))
+        }) && (class.path.to_string().starts_with("panics.")
+            || matches!(
+                class.path.to_string().as_str(),
+                "json.ParseError" | "json.DecodeError"
+            ))
+        {
+            return Err(no("typed builtin exception class"));
+        }
         if class.cleanup.is_some() || class.generic_param_count != 0 {
             return Err(no("generic class or cleanup"));
         }
@@ -1040,14 +1056,14 @@ impl Emitter<'_, '_> {
             _ => Err(no("static tag")),
         }
     }
-    fn null_test(&self, value: &(String, Repr)) -> Gen<String> {
-        Ok(if value.1 == Repr::Tagged {
+    fn null_test(value: &(String, Repr)) -> String {
+        if value.1 == Repr::Tagged {
             format!("({}).tag==2", value.0)
         } else if value.1.pointer() || value.1 == Repr::Null {
             format!("({})==0", value.0)
         } else {
             "false".into()
-        })
+        }
     }
     fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
         let (value, source) = value;
@@ -1204,8 +1220,8 @@ impl Emitter<'_, '_> {
                 index,
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
-                let (obj, repr) = self.place(base)?;
-                if repr.growing() {
+                let (obj, container) = self.place(base)?;
+                if container.growing() {
                     return Err(no("growing list indexed assignment"));
                 }
                 let slot = self.fallible(&format!("rt::list_slot(object,l{})", index.0));
@@ -1260,12 +1276,7 @@ impl Emitter<'_, '_> {
                     baml_compiler2_mir::TypeTest::Class { class, args } if args.is_empty() => {
                         let head = baml_compiler2_hir_ty::layout::class_head(self.db, *class);
                         if Some(head.root()) == self.plan.lang.get(baml_base::LangPackage::Baml)
-                            && head
-                                .namespace()
-                                .as_slice()
-                                .iter()
-                                .map(|n| n.as_str())
-                                .eq(["iter"])
+                            && head.namespace().as_slice() == ["iter"]
                             && head.name().as_str() == "Done"
                         {
                             "u64::MAX".to_owned()
@@ -1712,7 +1723,7 @@ impl Emitter<'_, '_> {
                     .program
                     .packages
                     .iter()
-                    .find(|p| p.objects.contains(&(c as u32)))
+                    .find(|p| p.objects.contains(&u32::try_from(c).expect("object index")))
                     .ok_or_else(|| no("throw class package"))?;
                 let name = format!("{}.{}", package.name, class.path);
                 let fields = class
@@ -1757,7 +1768,7 @@ impl Emitter<'_, '_> {
             } => {
                 let (v, t) = self.operand(operand)?;
                 if matches!(kind, baml_compiler2_mir::ShortCircuitKind::Coalesce) {
-                    let short = format!("!({})", self.null_test(&(v.clone(), t))?);
+                    let short = format!("!({})", Self::null_test(&(v.clone(), t)));
                     let store = self.assign(destination, (v, t))?;
                     writeln!(&mut out, "c{b}={short};if c{b}{{{store}}}").unwrap();
                     return Ok(out);
@@ -1914,7 +1925,7 @@ impl Emitter<'_, '_> {
                     if let Some(other) = values.iter().find(|v| v.1 != Repr::Null)
                         && values.iter().any(|v| v.1 == Repr::Null)
                     {
-                        (self.null_test(other)?, Repr::Bool)
+                        (Self::null_test(other), Repr::Bool)
                     } else if values.iter().any(|v| v.1 == Repr::Str) {
                         let a = self.coerce(values[0].clone(), Repr::Tagged)?;
                         let b = self.coerce(values[1].clone(), Repr::Tagged)?;

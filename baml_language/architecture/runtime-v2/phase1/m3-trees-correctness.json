@@ -1,0 +1,42 @@
+[
+  {
+    "stress": "0",
+    "backend": "v2",
+    "command": [
+      "target/phase1/trees-v2"
+    ],
+    "status": 0,
+    "stdout": "3222190\n",
+    "stderr": ""
+  },
+  {
+    "stress": "0",
+    "backend": "oracle",
+    "command": [
+      "target/phase1/trees-oracle"
+    ],
+    "status": 0,
+    "stdout": "3222190\n",
+    "stderr": ""
+  },
+  {
+    "stress": "1",
+    "backend": "v2",
+    "command": [
+      "target/phase1/trees-v2"
+    ],
+    "status": 0,
+    "stdout": "3222190\n",
+    "stderr": ""
+  },
+  {
+    "stress": "1",
+    "backend": "oracle",
+    "command": [
+      "target/phase1/trees-oracle"
+    ],
+    "status": 0,
+    "stdout": "3222190\n",
+    "stderr": ""
+  }
+]
