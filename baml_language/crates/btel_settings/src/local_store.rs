@@ -5,68 +5,52 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct Manifest {
-    #[serde(default)]
-    tracing: Tracing,
-}
-
-#[derive(Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Tracing {
-    store: Option<PathBuf>,
-}
+use sha2::{Digest as _, Sha256};
 
 /// Resolve the state directory containing `btel/recordings` and `btel/cas`.
-/// A project's `[tracing].store` wins over nonempty `BAML_HOME`, then the
-/// project's `.baml`, then the user home. Relative manifest paths belong to
-/// the manifest's directory; relative environment paths belong to the cwd.
-/// This only reads configuration; it never creates directories or falls back
-/// to a different store when the selected destination is unwritable.
+/// Project stores live at `<BAML_HOME>/<project-name>-<path-hash>`; without
+/// `BAML_HOME`, the base is `~/.baml`. The canonical project path identifies
+/// the store, so aliases share recordings and separate checkouts stay isolated.
+/// Without a project, use the BAML home itself (including packed programs).
+/// This never reads manifest settings, creates directories, or falls back to
+/// a different store when the selected destination is unwritable.
 pub fn resolve(
     project: Option<&Path>,
     baml_home: Option<OsString>,
     home_dir: Option<PathBuf>,
 ) -> io::Result<PathBuf> {
-    if let Some(project) = project {
-        let path = project.join("baml.toml");
-        let text = match std::fs::read_to_string(&path) {
-            Ok(text) => Some(text),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-            Err(error) => {
-                return Err(io::Error::new(
-                    error.kind(),
-                    format!("{}: {error}", path.display()),
-                ));
+    let home = baml_env::baml_home_from(baml_home, home_dir);
+    let Some(project) = project else {
+        return Ok(home);
+    };
+    let project = std::fs::canonicalize(project).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!(
+                "{}: cannot resolve trace-store project: {error}",
+                project.display()
+            ),
+        )
+    })?;
+    let name: String = project
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("project")
+        .chars()
+        .take(64)
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
             }
-        };
-        if let Some(text) = text {
-            let manifest: Manifest = toml::from_str(&text).map_err(|error| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("{}: invalid [tracing] settings: {error}", path.display()),
-                )
-            })?;
-            if let Some(store) = manifest.tracing.store {
-                if store.as_os_str().is_empty() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("{}: tracing.store must not be empty", path.display()),
-                    ));
-                }
-                return Ok(project.join(store));
-            }
-        }
-    }
-    if let Some(home) = baml_home.filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(home));
-    }
-    Ok(project.map_or_else(
-        || baml_env::baml_home_from(None, home_dir),
-        |project| project.join(".baml"),
-    ))
+        })
+        .collect();
+    let hash = format!(
+        "{:x}",
+        Sha256::digest(project.as_os_str().as_encoded_bytes())
+    );
+    Ok(home.join(format!("{name}-{}", &hash[..16])))
 }
 
 /// SDK hosts discover the project enclosing their working directory. Packed
@@ -84,50 +68,104 @@ pub fn resolve_for_cwd(
 mod tests {
     use super::*;
 
-    /// Each higher-priority location must mask the lower-priority candidates.
     #[test]
-    fn manifest_home_project_and_user_precedence() {
+    fn project_stores_live_under_baml_home_and_are_discovered_from_nested_cwd() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("app");
-        let nested = project.join("src/deep");
+        let nested = project.join("baml_src/deep");
         std::fs::create_dir_all(&nested).unwrap();
         let home = tmp.path().join("user");
         let state = tmp.path().join("state");
-        let resolve =
-            |baml_home| resolve_for_cwd(Some(&nested), baml_home, Some(home.clone())).unwrap();
-        assert_eq!(resolve(None), home.join(".baml"));
-        std::fs::write(project.join("baml.toml"), "[package]\nname = 'app'\n").unwrap();
-        assert_eq!(resolve(None), project.join(".baml"));
-        assert_eq!(resolve(Some("".into())), project.join(".baml"));
-        assert_eq!(resolve(Some(state.clone().into())), state);
-        std::fs::write(project.join("baml.toml"), "[tracing]\nstore = 'traces'\n").unwrap();
-        assert_eq!(resolve(Some(state.clone().into())), project.join("traces"));
-        let config = format!("[tracing]\nstore = {:?}\n", state.to_str().unwrap());
-        std::fs::write(project.join("baml.toml"), config).unwrap();
-        assert_eq!(resolve(None), state);
-        // Packed programs ignore the manifest even when launched in a project.
+        let default = resolve(Some(&project), None, Some(home.clone())).unwrap();
+        assert_eq!(default.parent().unwrap(), home.join(".baml"));
+        assert!(
+            default
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("app-")
+        );
         assert_eq!(
-            super::resolve_for_cwd(None, None, Some(home.clone())).unwrap(),
-            home.join(".baml")
+            resolve(Some(&project), Some("".into()), Some(home.clone())).unwrap(),
+            default
+        );
+        let configured = resolve(Some(&project), Some(state.clone().into()), None).unwrap();
+        assert_eq!(configured, state.join(default.file_name().unwrap()));
+        assert_eq!(
+            resolve_for_cwd(Some(&nested), Some(state.into()), None).unwrap(),
+            configured
+        );
+        // Trace paths do not depend on manifest contents, including old settings.
+        std::fs::write(
+            project.join("baml.toml"),
+            "[tracing]\nstore = 'elsewhere'\n",
+        )
+        .unwrap();
+        assert_eq!(
+            resolve(Some(&project), None, Some(home.clone())).unwrap(),
+            default
+        );
+        assert_eq!(
+            resolve_for_cwd(Some(&nested), None, Some(home)).unwrap(),
+            default
+        );
+        assert!(!default.exists());
+        assert!(!project.join(".baml").exists());
+    }
+
+    #[test]
+    fn separate_checkouts_with_the_same_name_have_separate_stores() {
+        let tmp = tempfile::tempdir().unwrap();
+        let first = tmp.path().join("first/app");
+        let second = tmp.path().join("second/app");
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::create_dir_all(&second).unwrap();
+        let home = Some(tmp.path().join("state").into());
+        let store = resolve(Some(&first), home.clone(), None).unwrap();
+        assert_ne!(store, resolve(Some(&second), home.clone(), None).unwrap());
+        assert_eq!(
+            store,
+            resolve(Some(&first.join("../app")), home, None).unwrap()
         );
     }
 
-    /// Invalid configuration must identify the manifest and never fall through to `BAML_HOME`.
+    #[cfg(unix)]
     #[test]
-    fn invalid_settings_are_actionable_and_do_not_silently_select_another_store() {
+    fn symlinked_project_uses_the_same_store() {
         let tmp = tempfile::tempdir().unwrap();
-        for text in [
-            "[tracing]\nstore = ''",
-            "[tracing]\nstore = 42",
-            "[tracing]\nstroe = 'traces'",
-            "tracing = 'traces'",
-            "not toml",
-        ] {
-            std::fs::write(tmp.path().join("baml.toml"), text).unwrap();
-            let error = resolve(Some(tmp.path()), Some("elsewhere".into()), None).unwrap_err();
-            assert!(error.to_string().contains("baml.toml"), "{error}");
-            assert!(error.to_string().contains("tracing"), "{error}");
-        }
-        assert!(!tmp.path().join(".baml").exists());
+        let project = tmp.path().join("app");
+        let alias = tmp.path().join("alias");
+        std::fs::create_dir(&project).unwrap();
+        std::os::unix::fs::symlink(&project, &alias).unwrap();
+        let home = Some(tmp.path().join("state").into());
+        assert_eq!(
+            resolve(Some(&project), home.clone(), None).unwrap(),
+            resolve(Some(&alias), home, None).unwrap()
+        );
+    }
+
+    #[test]
+    fn no_project_uses_baml_home_itself() {
+        let home = PathBuf::from("user");
+        assert_eq!(
+            resolve_for_cwd(None, None, Some(home.clone())).unwrap(),
+            home.join(".baml")
+        );
+        assert_eq!(
+            resolve(None, Some("state".into()), Some(home)).unwrap(),
+            PathBuf::from("state")
+        );
+        assert_eq!(resolve(None, None, None).unwrap(), PathBuf::from(".baml"));
+    }
+
+    #[test]
+    fn missing_project_reports_the_path_instead_of_selecting_a_different_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("missing");
+        let error =
+            resolve(Some(&missing), Some(tmp.path().join("state").into()), None).unwrap_err();
+        assert!(error.to_string().contains(missing.to_str().unwrap()));
+        assert!(!tmp.path().join("state").exists());
     }
 }

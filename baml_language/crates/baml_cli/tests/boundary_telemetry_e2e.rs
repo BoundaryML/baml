@@ -381,7 +381,13 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
     let output = execute_case(temp.path(), &server.uri(), "local", &["run", "main"]);
     assert!(output.status.success(), "{output:?}");
     // Local writers and readers now honor this fixture's BAML_HOME.
-    assert!(temp.path().join("home/btel/recordings").exists());
+    let store = btel_settings::local_store::resolve(
+        Some(temp.path()),
+        Some(temp.path().join("home").into()),
+        None,
+    )
+    .unwrap();
+    assert!(store.join("btel/recordings").exists());
     assert!(!temp.path().join(RECORDINGS).exists());
     let output = execute_case(
         temp.path(),

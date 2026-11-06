@@ -20,7 +20,7 @@ use std::{
     sync::{Arc, Mutex, TryLockError},
 };
 
-use baml_query_btel::{Index, IndexOptions, QueryRequest, QueryResult, SqlParam};
+use baml_query_btel::{Index, IndexOptions, QueryRequest, QueryResult, SourceLayout, SqlParam};
 use serde_json::{Value, json};
 
 /// Rows the list shows; the newest root calls first. Runtime GC pauses are
@@ -153,8 +153,17 @@ impl PlaygroundTelemetry {
         }
         // Opening can wait on another process's index lock, so other projects
         // must not wait on the table meanwhile.
-        let index = Index::for_project(project, IndexOptions::default())
-            .map_err(|e| TelemetryError::failed(e.to_string()))?;
+        let store = btel_settings::local_store::resolve(
+            Some(project),
+            baml_env::os_var("BAML_HOME"),
+            std::env::home_dir(),
+        )
+        .map_err(|e| TelemetryError::failed(e.to_string()))?;
+        let index = Index::open(
+            SourceLayout::for_btel(store.join("btel")),
+            IndexOptions::default(),
+        )
+        .map_err(|e| TelemetryError::failed(e.to_string()))?;
         // Nothing recorded yet: do not cache an empty in-memory index, so the
         // first recording is found by the next request.
         if index.source_missing() {

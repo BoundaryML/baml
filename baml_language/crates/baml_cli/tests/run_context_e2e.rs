@@ -22,8 +22,6 @@ fn project() -> tempfile::TempDir {
         project.path().join("baml.toml"),
         r#"[package]
 name = "run_context"
-[tracing]
-store = ".baml"
 [scripts]
 json = ["--function", "Check", "--", "--json-args", "-"]
 dash = ["--function", "Check", "--", "--value", "-"]

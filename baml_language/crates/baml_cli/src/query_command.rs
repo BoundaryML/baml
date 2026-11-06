@@ -58,7 +58,7 @@ pub struct QueryArgs {
     #[arg(long, conflicts_with = "local")]
     pub environment: Option<String>,
 
-    /// Project or traces directory: a state directory (.baml or BAML_HOME),
+    /// Project or traces directory: a project store under `BAML_HOME`, a legacy `.baml`,
     /// btel directory, or recordings directory. A traces directory selects local
     /// querying directly. Defaults to the shared local store for this project.
     #[arg(long, value_name = "PATH")]

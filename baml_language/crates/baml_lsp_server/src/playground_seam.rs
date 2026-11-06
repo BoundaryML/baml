@@ -728,7 +728,7 @@ impl PlaygroundSeam {
         // against this root: the process serves every project at once and
         // never changes directory.
         let sys_ops = Arc::new(self.platform.for_root(root));
-        // Playground runs record to the project's `.baml/btel`, like `baml run`.
+        // Playground runs use the project store beneath BAML_HOME, like `baml run`.
         let recording_root = root.to_path_buf();
         let candidate = tokio::task::spawn_blocking(move || {
             construct_engine_candidate(*program, sys_ops, revision, Some(&recording_root))

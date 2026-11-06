@@ -21,7 +21,7 @@ function main(name: string) -> string {
 }
 "#;
 
-/// The playground's own engine construction, recording to the project.
+/// The playground's own engine construction, recording to the project store.
 fn engine(project: &Path) -> Arc<bex_engine::BexEngine> {
     engine_for(project, SOURCE)
 }
@@ -262,7 +262,18 @@ function main(name: string) -> string {
     let execution = main["executionId"].as_str().unwrap().to_owned();
 
     // The request is recorded, under the call that made it.
-    let mut index = Index::for_project(&project, IndexOptions::default()).unwrap();
+    let store = btel_settings::local_store::resolve(
+        Some(&project),
+        baml_env::os_var("BAML_HOME"),
+        std::env::home_dir(),
+    )
+    .unwrap();
+    assert!(!project.join(".baml").exists());
+    let mut index = Index::open(
+        SourceLayout::for_btel(store.join("btel")),
+        IndexOptions::default(),
+    )
+    .unwrap();
     let network = index
         .refresh_and_query(&QueryRequest {
             sql: "SELECT span_id, parent_span_id, is_complete FROM span_announcements

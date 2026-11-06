@@ -417,8 +417,8 @@ impl TelemetryRecording {
         }
     }
 
-    /// Use the shared project store setting, then `BAML_HOME`, then `.baml`.
-    /// Configuration is resolved only when enabled recording starts.
+    /// Use the project store beneath `BAML_HOME` (default `~/.baml`).
+    /// The project path is resolved only when enabled recording starts.
     pub fn project_files(project_root: impl Into<PathBuf>, config: RecordingConfig) -> Self {
         let mut recording = Self::user_files(config);
         recording.destination = Destination::ProjectFiles {

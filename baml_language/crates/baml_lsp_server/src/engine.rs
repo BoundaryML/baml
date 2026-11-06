@@ -533,7 +533,7 @@ impl RuntimeRegistry {
     }
 }
 
-/// `recording_root` is the project root whose `.baml/btel` receives this
+/// `recording_root` identifies the project store beneath `BAML_HOME` for this
 /// engine's telemetry recording (`BAML_TELEMETRY=off` disables it); `None`
 /// records nothing.
 pub fn construct_engine_candidate(
@@ -549,7 +549,7 @@ pub fn construct_engine_candidate(
             Vec::new(),
             Some(bex_project::runtime_compiler()),
             btel_settings::clock::DEFAULT_MODE,
-            bex_engine::TelemetryRecording::local_files(
+            bex_engine::TelemetryRecording::project_files(
                 root,
                 btel_settings::publisher::RecordingConfig::default(),
             )

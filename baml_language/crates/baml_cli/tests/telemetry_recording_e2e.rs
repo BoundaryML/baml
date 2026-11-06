@@ -36,8 +36,8 @@ fn run(command: &mut Command, success: bool) {
     );
 }
 
-fn assert_recordings(root: &Path, count: usize) {
-    let directories: Vec<_> = std::fs::read_dir(root.join(RECORDINGS))
+fn assert_recordings_in(recordings: &Path, count: usize) {
+    let directories: Vec<_> = std::fs::read_dir(recordings)
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();
@@ -54,6 +54,10 @@ fn assert_recordings(root: &Path, count: usize) {
     }
 }
 
+fn assert_recordings(root: &Path, count: usize) {
+    assert_recordings_in(&root.join(RECORDINGS), count);
+}
+
 fn home(root: &Path) -> std::path::PathBuf {
     let home = root.join("home");
     std::fs::create_dir_all(home.join(".baml")).unwrap();
@@ -65,7 +69,7 @@ fn home(root: &Path) -> std::path::PathBuf {
     home
 }
 
-/// Explicit project storage must survive nested launches and bytecode-cache hits.
+/// A project store beneath `BAML_HOME` must survive nested launches and bytecode-cache hits.
 #[test]
 fn cli_uses_project_root_for_cold_cached_nested_expression_and_test_execution() {
     let temp = tempfile::tempdir().unwrap();
@@ -79,14 +83,10 @@ function fail() -> int { assert.is_true(false); 0 }
 testset "smoke" { test "ok" { assert.is_true(true) } }
 "#,
     );
-    // Explicit project tracing keeps the CLI in its project while BAML_HOME
-    // isolates toolchain/auth state and packed-program recordings.
-    std::fs::write(
-        project.join("baml.toml"),
-        "[package]\nname = 'test'\n[tracing]\nstore = '.baml'\n",
-    )
-    .unwrap();
     let home = home(temp.path());
+    let store =
+        btel_settings::local_store::resolve(Some(&project), Some(home.join(".baml").into()), None)
+            .unwrap();
     let nested = project.join("baml_src/nested");
     std::fs::create_dir(&nested).unwrap();
     // --from must win over both cwd and the baml_src subdirectory. Repeat to
@@ -98,31 +98,31 @@ testset "smoke" { test "ok" { assert.is_true(true) } }
                 .arg(&project),
             true,
         );
-        assert_recordings(&project, count);
+        assert_recordings_in(&store.join("btel/recordings"), count);
     }
     run(cli(&nested, &home).args(["run", "main"]), true);
-    assert_recordings(&project, 3);
+    assert_recordings_in(&store.join("btel/recordings"), 3);
     run(
         cli(temp.path(), &home)
             .args(["run", "-e", "1 + 2", "--from"])
             .arg(&project),
         true,
     );
-    assert_recordings(&project, 4);
+    assert_recordings_in(&store.join("btel/recordings"), 4);
     run(
         cli(temp.path(), &home)
             .args(["test", "--from"])
             .arg(&project),
         true,
     );
-    assert_recordings(&project, 5);
+    assert_recordings_in(&store.join("btel/recordings"), 5);
     run(
         cli(temp.path(), &home)
             .args(["run", "fail", "--from"])
             .arg(&project),
         false,
     );
-    assert_recordings(&project, 6);
+    assert_recordings_in(&store.join("btel/recordings"), 6);
     run(
         cli(temp.path(), &home)
             .args(["run", "main", "--from"])
@@ -130,9 +130,10 @@ testset "smoke" { test "ok" { assert.is_true(true) } }
             .env("BAML_TELEMETRY", "off"),
         true,
     );
-    assert_recordings(&project, 6);
+    assert_recordings_in(&store.join("btel/recordings"), 6);
     assert!(!temp.path().join(RECORDINGS).exists());
     assert!(!nested.join(RECORDINGS).exists());
+    assert!(!project.join(".baml").exists());
     assert!(!home.join(RECORDINGS).exists());
 }
 
@@ -322,7 +323,7 @@ fn packed_http_bodies_false_keeps_bodies_out_of_network_spans() {
         let query = |sql: &str| {
             let output = cli(temp.path(), &home)
                 .args(["query", "--local", "--format", "json", "--from"])
-                .arg(&home)
+                .arg(home.join(".baml"))
                 .arg(sql)
                 .output()
                 .unwrap();

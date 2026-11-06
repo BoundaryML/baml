@@ -1,5 +1,5 @@
 //! The real bridge writes, the CLI writes, and fresh CLI processes read one store.
-use std::{fmt::Write as _, path::Path, process::Command};
+use std::{path::Path, process::Command};
 
 use bridge_cffi::baml_bridge::cffi::{
     BamlOutboundResult, CallFunctionArgs, InvocationOptions, baml_outbound_result,
@@ -47,7 +47,7 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
     const STORE: &str = "BAML_TEST_SHARED_STORE";
     let Some(store) = std::env::var_os(STORE) else {
         // Isolate the bridge singleton, cwd, auth, and configuration per scenario.
-        for scenario in ["project", "manifest", "absolute", "home"] {
+        for scenario in ["baml_src", "manifest", "home", "generated"] {
             let tmp = tempfile::tempdir().unwrap();
             let project = tmp.path().join("app");
             let nested = project.join("baml_src/nested");
@@ -57,28 +57,23 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
                 "function main() -> int { 7 }",
             )
             .unwrap();
-            let state = match scenario {
-                "manifest" => project.join("traces"),
-                "absolute" => tmp.path().join("external-traces"),
-                "home" => tmp.path().join("state"),
-                _ => project.join(".baml"),
-            };
-            let mut manifest = "[package]\nname = 'shared-store'\n".to_owned();
-            if scenario == "manifest" {
-                manifest.push_str("[tracing]\nstore = 'traces'\n");
-            } else if scenario == "absolute" {
-                write!(
-                    manifest,
-                    "[tracing]\nstore = {:?}\n",
-                    state.to_str().unwrap()
+            // Source-only and manifest projects use the same fixed layout.
+            if scenario != "baml_src" {
+                std::fs::write(
+                    project.join("baml.toml"),
+                    "[package]\nname = 'shared-store'\n",
                 )
                 .unwrap();
             }
-            // The default case also verifies discovery using only baml_src/.
-            if scenario != "project" {
-                std::fs::write(project.join("baml.toml"), manifest).unwrap();
-            }
             let home = tmp.path().join("user");
+            let baml_home =
+                matches!(scenario, "home" | "generated").then(|| tmp.path().join("state"));
+            let state = btel_settings::local_store::resolve(
+                Some(&project),
+                baml_home.clone().map(Into::into),
+                Some(home.clone()),
+            )
+            .unwrap();
             std::fs::create_dir(&home).unwrap();
             let mut child = Command::new(std::env::current_exe().unwrap());
             child
@@ -92,7 +87,7 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
                 .env("BAML_TEST_SHARED_PROJECT", &project)
                 .env(
                     "BAML_TEST_SHARED_ARTIFACT",
-                    if scenario == "absolute" {
+                    if scenario == "generated" {
                         "generated"
                     } else {
                         "legacy"
@@ -106,8 +101,8 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
                 .env_remove("BOUNDARY_PROJECT")
                 .env_remove("BOUNDARY_API_URL")
                 .env_remove("BAML_HOME");
-            if scenario != "project" {
-                child.env("BAML_HOME", tmp.path().join("state"));
+            if let Some(baml_home) = baml_home {
+                child.env("BAML_HOME", baml_home);
             }
             let output = child.output().unwrap();
             assert!(
@@ -116,12 +111,8 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
-            if scenario == "manifest" || scenario == "absolute" {
-                assert!(
-                    !tmp.path().join("state/btel").exists(),
-                    "manifest wins over BAML_HOME"
-                );
-            }
+            assert!(!project.join(".baml").exists());
+            assert!(!tmp.path().join("state/btel").exists());
         }
         return;
     };
@@ -189,16 +180,18 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
         "{}",
         String::from_utf8_lossy(&run.stderr)
     );
-    // Project roots retain their configured store even when unrelated child
+    // Project roots retain their fixed store even when unrelated child
     // directories look like traces. Actual trace folders below it still work.
     for name in ["recordings", "btel"] {
         std::fs::create_dir_all(project.join(name)).unwrap();
         assert_eq!(query(&cwd, Some(&project))["rows"], json!([[2]]));
     }
-    if store.file_name().is_some_and(|name| name == "state") {
-        // Without a project marker, query still follows the same BAML_HOME.
-        assert_eq!(query(store.parent().unwrap(), None)["rows"], json!([[2]]));
-    }
+    // A query outside a project cannot mix in a project's recordings.
+    assert_eq!(query(project.parent().unwrap(), None)["rows"], json!([[0]]));
+    // Another checkout with the same directory name has its own store.
+    let other = project.parent().unwrap().join("other/app");
+    std::fs::create_dir_all(other.join("baml_src")).unwrap();
+    assert_eq!(query(&cwd, Some(&other))["rows"], json!([[0]]));
 
     // Trace directories override both enclosing projects and cloud credentials.
     // Point BAML_HOME elsewhere too: explicit --from must be authoritative.
@@ -233,29 +226,11 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
     }
 }
 
-/// A malformed manifest must fail visibly without selecting a fallback store.
+/// An explicit empty store bypasses project discovery and rejects cloud selectors.
 #[test]
-fn bad_store_configuration_fails_without_creating_a_different_store() {
+fn empty_trace_folder_bypasses_enclosing_project_store() {
     let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("baml.toml"), "[tracing]\nstore = 42").unwrap();
-    let output = cli(
-        tmp.path(),
-        &["query", "--local", "SELECT COUNT(*) FROM processes"],
-    );
-    assert!(!output.status.success());
-    let error = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        error.contains("baml.toml") && error.contains("tracing"),
-        "{error}"
-    );
-    assert!(!tmp.path().join(".baml").exists());
-}
-
-/// An explicit empty store bypasses enclosing configuration and rejects cloud selectors.
-#[test]
-fn empty_trace_folder_bypasses_enclosing_project_configuration() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("baml.toml"), "[tracing]\nstore = 42").unwrap();
+    std::fs::write(tmp.path().join("baml.toml"), "[package]\nname = 'app'\n").unwrap();
     let traces = tmp.path().join(".baml");
     std::fs::create_dir(&traces).unwrap();
     let result = query(tmp.path(), Some(&traces));
@@ -277,9 +252,9 @@ fn empty_trace_folder_bypasses_enclosing_project_configuration() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("local traces directory"));
 }
 
-/// Disabled source execution must not inspect local-store settings or create traces.
+/// Disabled source execution must not create a project trace store.
 #[test]
-fn telemetry_off_does_not_read_local_store_configuration() {
+fn telemetry_off_does_not_create_a_project_trace_store() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::create_dir(tmp.path().join("baml_src")).unwrap();
     std::fs::write(
@@ -287,11 +262,7 @@ fn telemetry_off_does_not_read_local_store_configuration() {
         "function main() -> int { 7 }",
     )
     .unwrap();
-    std::fs::write(
-        tmp.path().join("baml.toml"),
-        "[package]\nname = 'app'\n[tracing]\nstore = 42",
-    )
-    .unwrap();
+    std::fs::write(tmp.path().join("baml.toml"), "[package]\nname = 'app'\n").unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_baml-cli"))
         .current_dir(tmp.path())
         .args(["run", "main"])
@@ -308,7 +279,13 @@ fn telemetry_off_does_not_read_local_store_configuration() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(!tmp.path().join(".baml").exists());
-    assert!(!tmp.path().join("home/btel").exists());
+    let store = btel_settings::local_store::resolve(
+        Some(tmp.path()),
+        Some(tmp.path().join("home").into()),
+        None,
+    )
+    .unwrap();
+    assert!(!store.exists());
 }
 
 /// Missing source paths must identify both the flag and the supplied directory.
