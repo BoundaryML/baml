@@ -15,6 +15,14 @@ impl RootSource for TaskLoop {
         self.core.borrow().precise_roots(visit);
     }
 }
+impl RootSource for TaskCx<'_> {
+    fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize)) {
+        self.core.borrow().conservative_ranges(visit);
+    }
+    fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+        self.core.borrow().precise_roots(visit);
+    }
+}
 impl RootSource for Core {
     fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize)) {
         // This non-inlined call spills callee-saved registers before visiting.
