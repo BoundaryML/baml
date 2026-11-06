@@ -31,8 +31,22 @@ test("rejects unresolved and unsafe wrapper selectors", () => {
   assert.throws(() => resolveSelector("installed toolchains: (none)\n"));
 });
 
-test("reads concrete versions from wrapper version output", () => {
+test("reads the toolchain version that wrapper 0.3+ passes through", () => {
+  assert.equal(resolveVersion("baml wrapper 0.3.1\nbaml-cli 0.25.1\n"), "0.25.1");
+  assert.equal(resolveVersion("baml wrapper 0.3.1\r\nbaml-cli 0.25.1\r\n"), "0.25.1");
+  assert.equal(resolveVersion("baml wrapper 0.3.1\nbaml-cli 0.23.1-nightly.20261026.a\n"), "0.23.1-nightly.20261026.a");
+});
+
+test("rejects wrapper 0.3+ output without a toolchain version", () => {
+  assert.throws(() => resolveVersion("baml wrapper 0.3.1\n"));
+  assert.throws(() => resolveVersion("baml wrapper 0.3.1\nbaml-cli\n"));
+  assert.throws(() => resolveVersion("baml wrapper 0.3.1\nbaml-cli nightly\n"));
+});
+
+test("reads concrete versions from wrapper 0.2 version output", () => {
   assert.equal(resolveVersion("baml wrapper 0.2.4\nbaml toolchain 0.16.0 (nightly)\n"), "0.16.0");
+  assert.equal(resolveVersion("baml wrapper 0.2.5\nbaml toolchain 0.25.0\n"), "0.25.0");
+  assert.equal(resolveVersion("baml wrapper 0.2.5\nbaml toolchain baml-cli 0.25.0 (local: /work/baml-cli)\n"), "0.25.0");
   assert.equal(resolveVersion("baml wrapper 0.2.4\nbaml toolchain 0.15.1-nightly.20260810.b (nightly, from /work/baml.toml)\n"), "0.15.1-nightly.20260810.b");
 });
 

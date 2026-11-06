@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { parseBamlVersionOutput } from '../lib/generated-content/baml-binary.ts';
 import { hashDocumentManifest } from '../lib/generated-content/document-ir.ts';
 import { projectDocumentRelease } from '../lib/generated-content/document-projector.ts';
 import {
@@ -19,6 +20,48 @@ import {
   referencePageDataSchema,
   referencePageRowSchema,
 } from '../lib/generated-content/schemas.ts';
+
+test('baml --version identity reads wrapper 0.3 and wrapper 0.2 output', () => {
+  // Wrapper 0.3+ passes --version through to the selected toolchain.
+  const current = 'baml wrapper 0.3.1\nbaml-cli 0.25.1\n';
+  assert.deepEqual(parseBamlVersionOutput(current), {
+    productVersion: '0.25.1',
+    rawVersionOutput: current,
+    wrapperVersion: '0.3.1',
+  });
+  // Wrapper 0.2 reported the toolchain on its own line.
+  assert.equal(
+    parseBamlVersionOutput(
+      'baml wrapper 0.2.4\nbaml toolchain 0.16.0 (nightly)\n',
+    ).productVersion,
+    '0.16.0',
+  );
+  assert.equal(
+    parseBamlVersionOutput('baml wrapper 0.2.5\nbaml toolchain 0.25.0\n')
+      .productVersion,
+    '0.25.0',
+  );
+  assert.equal(
+    parseBamlVersionOutput(
+      'baml wrapper 0.2.5\nbaml toolchain baml-cli 0.25.0 (local: /work/baml-cli)\n  set by $BAML_TOOLCHAIN\n',
+    ).productVersion,
+    '0.25.0',
+  );
+});
+
+test('baml --version identity rejects output without both identities', () => {
+  for (const output of [
+    'baml wrapper 0.3.1\n',
+    'baml-cli 0.25.1\n',
+    'baml wrapper 0.2.4\nbaml toolchain not installed\n',
+    'baml wrapper 0.2.4\nbaml toolchain not resolved\n',
+  ]) {
+    assert.throws(
+      () => parseBamlVersionOutput(output),
+      /wrapper and toolchain identities/,
+    );
+  }
+});
 
 test('canonical JSON sorts object keys, preserves arrays, and normalizes negative zero', () => {
   assert.equal(
