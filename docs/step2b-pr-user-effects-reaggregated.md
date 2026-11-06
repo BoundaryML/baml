@@ -320,7 +320,7 @@ Default builds avoid deadlock-detector bookkeeping on every lock. Allocation avo
 
 Eligible array `for` loops use an index walk without allocating an iterator or performing virtual dispatch at every step. They continue to observe changes to the array length. O0 bytecode and native loop lowering are unchanged by this optimization.
 
-An 8,192-element array workload fell from 10.423 ms to 3.573 ms per job. This measurement includes array setup, traversal, indexed updates, and rebuilding; it is not a traversal-only timing. Task-local access improvements also contribute to this release comparison.
+An 8,192-element array workload fell from 10.423 ms to 3.573 ms per job. This measurement includes array setup, traversal, indexed summation, and rebuilding; it is not a traversal-only timing. Task-local access improvements also contribute to this release comparison.
 
 ([#5503](https://github.com/BoundaryML/baml/pull/5503))
 
@@ -344,7 +344,7 @@ The published macOS ARM64 `baml-pack-host` shrank from 32,007,088 to 30,191,248 
 
 Python, TypeScript, Rust, and Swift generated functions and methods now use the plain name for async calls. Blocking calls use `_sync`. The old `_async` names are removed. Regenerate SDKs and update every affected call, including spec and stream helpers. Java, C++, C#, Go, and Ruby keep their existing convention.
 
-For BAML functions `echo(value: string) -> string` and `make_adder(n: int) -> (int) -> int`, Python changes from:
+For BAML functions `echo(value: string) -> string` and `make_adder(n: int) -> (int) -> int throws never`, Python changes from:
 
 ```python
 result = echo("hello")
