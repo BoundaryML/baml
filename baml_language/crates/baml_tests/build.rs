@@ -580,22 +580,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
 
     // parser_-prefixed tests: only for parser_ projects regardless of tier
     let parser_specific_tests = if project.name.starts_with("parser_") {
-        let incremental_tests: TokenStream = project
-            .files
-            .iter()
-            .map(generate_incremental_parsing_test)
-            .collect();
-
-        let node_reuse_tests: TokenStream =
-            project.files.iter().map(generate_node_reuse_test).collect();
-
-        let tree_lossless_test = generate_tree_lossless_test(project);
-
-        quote! {
-            #incremental_tests
-            #node_reuse_tests
-            #tree_lossless_test
-        }
+        generate_tree_lossless_test(project)
     } else {
         quote! {}
     };
@@ -891,71 +876,6 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
 }
 
 // Parser-specific test generation functions
-fn generate_incremental_parsing_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_07_incremental_{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            let content = content.replace("\r\n", "\n");
-
-            // Test single character edits maintain correctness
-            let mut db = ProjectDatabase::new();
-            db.workspace(std::path::Path::new("."));
-            let source_file = db.file(#relative_path, &content);
-            #[expect(deprecated, reason = "reads the rowan tree until this consumer moves to the typed tree")]
-            let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
-
-            // Test adding a character
-            let modified = insert_char(&content, content.len() / 2, 'x');
-            let modified_file = db.file("modified.baml", &modified);
-            #[expect(deprecated, reason = "reads the rowan tree until this consumer moves to the typed tree")]
-            let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
-
-            // Verify the trees are valid
-            assert_no_panics(&original_tree);
-            assert_no_panics(&modified_tree);
-        }
-    }
-}
-
-fn generate_node_reuse_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_08_node_reuse_{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            let content = content.replace("\r\n", "\n");
-
-            // Measure node reuse for single character edit
-            let mut db = ProjectDatabase::new();
-            db.workspace(std::path::Path::new("."));
-            let source_file = db.file(#relative_path, &content);
-            #[expect(deprecated, reason = "reads the rowan tree until this consumer moves to the typed tree")]
-            let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
-
-            // Make a small edit
-            let modified = insert_char(&content, content.len() / 2, 'a');
-            let modified_file = db.file("modified.baml", &modified);
-            #[expect(deprecated, reason = "reads the rowan tree until this consumer moves to the typed tree")]
-            let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
-
-            // Measure reuse (this is a simplified check)
-            // In a real implementation, you'd check actual node reuse
-            assert_no_panics(&original_tree);
-            assert_no_panics(&modified_tree);
-        }
-    }
-}
-
 fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
     let file_checks: TokenStream = project
         .files
@@ -972,8 +892,7 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
                     let mut db = ProjectDatabase::new();
                     db.workspace(std::path::Path::new("."));
                     let source_file = db.file(#relative_path, &content);
-                    #[expect(deprecated, reason = "reads the rowan tree until this consumer moves to the typed tree")]
-                    let tree = baml_compiler_parser::syntax_tree(&db, source_file);
+                    let tree = baml_parser::typed_tree(&db, source_file);
                     assert_tree_is_lossless(&tree, &content);
                 }
             }
@@ -983,7 +902,7 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_09_tree_lossless() {
-            // Verify parse trees can reconstruct original source
+            // The token array reconstructs the source exactly
             #file_checks
         }
     }

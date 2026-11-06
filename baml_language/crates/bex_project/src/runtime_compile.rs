@@ -11,10 +11,8 @@ use std::{
 use baml_base::{LangPackage, Name};
 use baml_compiler_diagnostics::{
     DiagnosticId, DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind,
-    DiagnosticPhase, ParseError, Severity,
+    DiagnosticPhase, Severity,
 };
-use baml_compiler_lexer::{TokenKind, lex_lossless};
-use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
 use baml_compiler2_emit::OptLevel;
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
@@ -22,6 +20,17 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_hir_ty::package_interface::{PackageInterface, WireInterface, interface_digest};
 use baml_db::{CheckedWorld, Dependency, ProjectDatabase, ProjectDiagnostics, SourceRootSpec};
+use baml_parser::ParseError;
+use baml_syntax::{
+    index::descendants,
+    lexer::lex,
+    nodes::{
+        AnyFunctionBody, AnyItem, AnyPattern, AnyStmt, AssignStmt, EnumVariant, Field, FileTree,
+        LetStmt, Name as NameNode, Param, TypeBindingStmt,
+    },
+    token::{Ident, TokenKind, TokenSet as _},
+    tree::{AnyNode as _, AnyNodeId, Id},
+};
 use baml_type::{
     TypeName, WireName,
     wire::{DepSlot, Digest, Locator},
@@ -39,7 +48,6 @@ use bex_vm_types::{
     RuntimeSourceSpan, SessionVisibleKind, SessionVisibleSymbol, types::LocalName,
 };
 use indexmap::IndexMap;
-use rowan::ast::AstNode;
 
 const RUNTIME_VIRTUAL_ROOT: &str = "<runtime>";
 const BUILTIN_VIRTUAL_ROOT: &str = "<builtin>";
@@ -742,167 +750,139 @@ fn session_parse_error_diagnostic(
     submission_name: &str,
     prefix_len: usize,
 ) -> RuntimeCompileDiagnostic {
-    let (code, span, message) = match error {
+    let (code, message) = match error {
         ParseError::UnexpectedToken {
-            expected,
-            found,
-            span,
+            expected, found, ..
         } => (
             DiagnosticId::InvalidSyntax,
-            *span,
             format!("unexpected token: expected {expected}, found {found}"),
         ),
-        ParseError::UnexpectedEof { expected, span } => (
+        ParseError::UnexpectedEof { expected, .. } => (
             DiagnosticId::InvalidSyntax,
-            *span,
             format!("unexpected end of file: expected {expected}"),
         ),
-        ParseError::InvalidSyntax { message, span }
-        | ParseError::RemovedFeature { message, span } => {
-            (DiagnosticId::InvalidSyntax, *span, message.clone())
+        ParseError::InvalidSyntax { message, .. } | ParseError::RemovedFeature { message, .. } => {
+            (DiagnosticId::InvalidSyntax, message.clone())
         }
-        ParseError::AmbiguousUnion { span, groupings } => (
+        ParseError::InvalidStringEscape { issue, .. } => {
+            (DiagnosticId::InvalidStringEscape, issue.to_string())
+        }
+        ParseError::InvalidDirective { message, .. } => {
+            (DiagnosticId::MalformedAttribute, message.clone())
+        }
+        ParseError::AmbiguousUnion { groupings, .. } => (
             DiagnosticId::AmbiguousUnion,
-            *span,
             format!(
                 "{}: {}",
-                ParseError::AMBIGUOUS_UNION_MESSAGE,
-                ParseError::ambiguous_union_label(groupings)
+                baml_compiler_diagnostics::ParseError::AMBIGUOUS_UNION_MESSAGE,
+                baml_compiler_diagnostics::ParseError::ambiguous_union_label(groupings)
             ),
         ),
     };
-    let range = span.range;
+    let range = error.range();
     let start = usize::from(range.start()).saturating_sub(prefix_len);
     let end = usize::from(range.end()).saturating_sub(prefix_len);
     runtime_diagnostic(code, submission_name, start, end, message)
 }
 
-fn byte_range(node: &SyntaxNode) -> std::ops::Range<usize> {
-    let range = node.text_range();
+/// The byte extent of a node in the text its tree was parsed from.
+fn byte_range(tree: &FileTree, id: AnyNodeId) -> std::ops::Range<usize> {
+    let range = tree.tokens().text_range(tree.arenas().span(id));
     usize::from(range.start())..usize::from(range.end())
 }
 
-fn declaration_kind(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::FUNCTION_DEF
-            | SyntaxKind::CLASS_DEF
-            | SyntaxKind::ENUM_DEF
-            | SyntaxKind::INTERFACE_DEF
-            | SyntaxKind::CLIENT_VALUE_DEF
-            | SyntaxKind::CLIENT_DEF
-            | SyntaxKind::GENERATOR_DEF
-            | SyntaxKind::RETRY_POLICY_DEF
-            | SyntaxKind::TEMPLATE_STRING_DEF
-            | SyntaxKind::TYPE_ALIAS_DEF
-            | SyntaxKind::IMPLEMENTS_FOR
+/// A name token's text and byte extent.
+fn name_at(tree: &FileTree, name: Id<NameNode>) -> (String, std::ops::Range<usize>) {
+    let idx = tree.get(name).token.idx;
+    let range = tree.tokens().range(idx);
+    (
+        tree.token_text(idx).to_string(),
+        usize::from(range.start())..usize::from(range.end()),
     )
 }
 
-fn declaration_name(node: &SyntaxNode) -> Option<(String, std::ops::Range<usize>)> {
-    if node.kind() == SyntaxKind::CLIENT_DEF {
-        return node
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
-            .last()
-            .map(|token| {
-                let range = token.text_range();
-                (
-                    token.text().to_string(),
-                    usize::from(range.start())..usize::from(range.end()),
-                )
-            });
-    }
-    let mut saw_head = false;
-    for token in node
-        .children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-    {
-        if matches!(
-            token.kind(),
-            SyntaxKind::KW_FUNCTION
-                | SyntaxKind::KW_CLASS
-                | SyntaxKind::KW_ENUM
-                | SyntaxKind::KW_INTERFACE
-                | SyntaxKind::KW_CLIENT
-                | SyntaxKind::KW_GENERATOR
-                | SyntaxKind::KW_RETRY_POLICY
-                | SyntaxKind::KW_TEMPLATE_STRING
-                | SyntaxKind::KW_TYPE
-        ) {
-            saw_head = true;
-            continue;
+/// A submission item that declares something the rest of the submission
+/// (and later submissions) can name.
+struct Declaration {
+    node: AnyNodeId,
+    /// The declared name and its byte extent; an `implements … for` has
+    /// none.
+    name: Option<(String, std::ops::Range<usize>)>,
+}
+
+/// The declaration `item` is, if it is one. A nameless head of a named kind
+/// is not a declaration (its parse error is reported by the wrapped parse).
+fn declaration(tree: &FileTree, item: AnyItem) -> Option<Declaration> {
+    let node = item
+        .any_node_id()
+        .unwrap_or_else(|| unreachable!("every alternative of `AnyItem` is a node"));
+    let name = match item {
+        AnyItem::Function(id) => tree.get(id).name.ok()?,
+        AnyItem::Class(id) => tree.get(id).name.ok()?,
+        AnyItem::Enum(id) => tree.get(id).name.ok()?,
+        AnyItem::Interface(id) => tree.get(id).name.ok()?,
+        AnyItem::TypeAlias(id) => tree.get(id).name.ok()?,
+        AnyItem::ClientValue(id) => tree.get(id).name,
+        AnyItem::Removed(id) => tree.get(id).name?,
+        AnyItem::ImplementsFor(_) => return Some(Declaration { node, name: None }),
+        AnyItem::Let(_) | AnyItem::TypeBinding(_) | AnyItem::Test(_) | AnyItem::Bogus(_) => {
+            return None;
         }
-        if saw_head && token.kind() == SyntaxKind::WORD {
-            let range = token.text_range();
-            return Some((
-                token.text().to_string(),
-                usize::from(range.start())..usize::from(range.end()),
-            ));
-        }
-    }
-    None
+    };
+    Some(Declaration {
+        node,
+        name: Some(name_at(tree, name)),
+    })
 }
 
-fn first_pattern_name(node: &SyntaxNode) -> Option<(String, std::ops::Range<usize>)> {
-    let pattern = node
-        .children()
-        .find(|child| child.kind() == SyntaxKind::PATTERN)?;
-    let token = pattern
-        .descendants_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .find(|token| token.kind() == SyntaxKind::WORD)?;
-    let range = token.text_range();
-    Some((
-        token.text().to_string(),
-        usize::from(range.start())..usize::from(range.end()),
-    ))
+/// The first name under a `let`'s pattern.
+// BUG: "first name" reads the type of a destructuring or ascribed pattern
+// (`let User { name } = …` binds `User`, `let _: int = …` binds `int`), as
+// the rowan walk did; a session `let` should register every binding the
+// pattern introduces and nothing else.
+fn first_pattern_name(
+    tree: &FileTree,
+    stmt: Id<LetStmt>,
+) -> Option<(String, std::ops::Range<usize>)> {
+    let pattern = tree.get(stmt).pattern.ok()?;
+    let pattern = pattern
+        .any_node_id()
+        .unwrap_or_else(|| unreachable!("every alternative of `AnyPattern` is a node"));
+    descendants(tree, pattern)
+        .find_map(AnyNodeId::cast::<NameNode>)
+        .map(|name| name_at(tree, name))
 }
 
-fn expression_is_assignment(node: &SyntaxNode) -> bool {
-    node.children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .any(|token| {
-            matches!(
-                token.kind(),
-                SyntaxKind::EQUALS
-                    | SyntaxKind::PLUS_EQUALS
-                    | SyntaxKind::MINUS_EQUALS
-                    | SyntaxKind::STAR_EQUALS
-                    | SyntaxKind::SLASH_EQUALS
-                    | SyntaxKind::PERCENT_EQUALS
-                    | SyntaxKind::AND_EQUALS
-                    | SyntaxKind::PIPE_EQUALS
-                    | SyntaxKind::CARET_EQUALS
-                    | SyntaxKind::LESS_LESS_EQUALS
-                    | SyntaxKind::GREATER_GREATER_EQUALS
-            )
-        })
-}
-
-fn assignment_parts(source: &str) -> Option<(&str, &'static str, &str)> {
-    let tokens = lex_lossless(source, baml_base::FileId::new(0));
-    let (token, operator) = tokens.iter().find_map(|token| {
-        let operator = match token.kind {
-            TokenKind::Equals => "=",
-            TokenKind::PlusEquals => "+",
-            TokenKind::MinusEquals => "-",
-            TokenKind::StarEquals => "*",
-            TokenKind::SlashEquals => "/",
-            TokenKind::PercentEquals => "%",
-            TokenKind::AndEquals => "&",
-            TokenKind::PipeEquals => "|",
-            TokenKind::CaretEquals => "^",
-            TokenKind::LessLessEquals => "<<",
-            TokenKind::GreaterGreaterEquals => ">>",
-            _ => return None,
-        };
-        Some((token, operator))
-    })?;
-    let start = usize::from(token.span.range.start());
-    let end = usize::from(token.span.range.end());
-    Some((source[..start].trim(), operator, source[end..].trim()))
+/// The target, operator and value of an assignment step, as written. The
+/// operator is spelled without its `=`, so a compound one re-forms as
+/// `{operator}=`.
+fn assignment_parts<'a>(
+    tree: &FileTree,
+    stmt: Id<AssignStmt>,
+    source: &'a str,
+) -> Option<(&'a str, &'static str, &'a str)> {
+    let stmt = tree.get(stmt);
+    let text = |id: AnyNodeId| source[byte_range(tree, id)].trim();
+    let target = text(
+        stmt.target
+            .any_node_id()
+            .unwrap_or_else(|| unreachable!("every alternative of `AnyExpr` is a node")),
+    );
+    let value = text(
+        stmt.value
+            .ok()?
+            .any_node_id()
+            .unwrap_or_else(|| unreachable!("every alternative of `AnyExpr` is a node")),
+    );
+    let spelling = stmt.op.op().spelling();
+    let operator = if spelling == "=" {
+        "="
+    } else {
+        spelling
+            .strip_suffix('=')
+            .unwrap_or_else(|| unreachable!("every assignment operator ends in `=`"))
+    };
+    Some((target, operator, value))
 }
 
 /// The source text of a session `let type T [extends …] = operand [else
@@ -916,48 +896,30 @@ struct RuntimeTypeBindingParts<'a> {
     else_block: Option<&'a str>,
 }
 
-/// Split a `TYPE_BINDING_STMT` step into its source parts. `None` for the
-/// removed `type T = …` spelling (a parse error the session already reported)
-/// or an incomplete statement.
+/// Split a `let type` step into its source parts. `None` for an incomplete
+/// statement (the removed `type T = …` spelling is a parse error the session
+/// already reported).
 fn runtime_type_binding_parts<'a>(
-    node: &SyntaxNode,
+    tree: &FileTree,
+    stmt: Id<TypeBindingStmt>,
     wrapped: &'a str,
 ) -> Option<RuntimeTypeBindingParts<'a>> {
-    let text = |range: rowan::TextRange| -> &'a str {
-        wrapped[usize::from(range.start())..usize::from(range.end())].trim()
-    };
-    let mut name = None;
-    let mut bounds = None;
-    let mut operand: Option<rowan::TextRange> = None;
-    let mut else_block = None;
-    let (mut seen_let, mut seen_equals, mut seen_else) = (false, false, false);
-    for element in node.children_with_tokens() {
-        let range = element.text_range();
-        match element.kind() {
-            SyntaxKind::KW_LET => seen_let = true,
-            SyntaxKind::WORD if !seen_equals && name.is_none() => {
-                name = Some(text(range).to_string());
-            }
-            SyntaxKind::GENERIC_PARAM_BOUNDS => bounds = Some(text(range)),
-            SyntaxKind::EQUALS if !seen_equals => seen_equals = true,
-            SyntaxKind::KW_ELSE => seen_else = true,
-            SyntaxKind::SEMICOLON => {}
-            kind if kind.is_trivia() => {}
-            _ if seen_else => else_block = Some(text(range)),
-            _ if seen_equals => {
-                operand = Some(operand.map_or(range, |operand| operand.cover(range)));
-            }
-            _ => {}
-        }
-    }
-    if !seen_let {
-        return None;
-    }
+    let text = |id: AnyNodeId| -> &'a str { wrapped[byte_range(tree, id)].trim() };
+    let stmt = tree.get(stmt);
+    let (name, _) = name_at(tree, stmt.name.ok()?);
+    let operand = stmt
+        .init
+        .ok()?
+        .any_node_id()
+        .unwrap_or_else(|| unreachable!("every alternative of `AnyExpr` is a node"));
     Some(RuntimeTypeBindingParts {
-        name: name?,
-        bounds,
-        operand: text(operand?),
-        else_block,
+        name,
+        bounds: stmt.bounds.map(|bounds| text(AnyNodeId::of(bounds))),
+        operand: text(operand),
+        else_block: stmt
+            .else_branch
+            .and_then(|branch| branch.block.ok())
+            .map(|block| text(AnyNodeId::of(block))),
     })
 }
 
@@ -984,44 +946,41 @@ fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol
     prelude
 }
 
+/// Every name bound inside `node` — parameters and `let` bindings — other
+/// than the step's own outer `let`, whose name becomes a Session global.
 fn locally_bound_names(
-    node: &SyntaxNode,
+    tree: &FileTree,
+    node: AnyNodeId,
     outer_let: Option<&std::ops::Range<usize>>,
 ) -> HashSet<String> {
     let mut names = HashSet::new();
-    for local in node
-        .descendants()
-        .filter(|child| matches!(child.kind(), SyntaxKind::PARAMETER | SyntaxKind::LET_STMT))
-    {
-        if local.kind() == SyntaxKind::LET_STMT {
-            if let Some((name, range)) = first_pattern_name(&local)
+    for local in descendants(tree, node) {
+        if let Some(stmt) = local.cast::<LetStmt>() {
+            if let Some((name, range)) = first_pattern_name(tree, stmt)
                 && outer_let != Some(&range)
             {
                 names.insert(name);
             }
-        } else if let Some(token) = local
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+        } else if let Some(param) = local.cast::<Param>()
+            && let Ok(name) = tree.get(param).name
         {
-            names.insert(token.text().to_string());
+            names.insert(name_at(tree, name).0);
         }
     }
     names
 }
 
-fn structural_name_ranges(node: &SyntaxNode) -> HashSet<std::ops::Range<usize>> {
-    node.descendants()
-        .filter(|child| matches!(child.kind(), SyntaxKind::FIELD | SyntaxKind::ENUM_VARIANT))
+/// The name tokens of the fields and variants `node` declares: member keys,
+/// never Session globals.
+fn structural_name_ranges(tree: &FileTree, node: AnyNodeId) -> HashSet<std::ops::Range<usize>> {
+    descendants(tree, node)
         .filter_map(|child| {
-            child
-                .children_with_tokens()
-                .filter_map(rowan::NodeOrToken::into_token)
-                .find(|token| token.kind() == SyntaxKind::WORD)
-                .map(|token| {
-                    let range = token.text_range();
-                    usize::from(range.start())..usize::from(range.end())
-                })
+            let name = if let Some(field) = child.cast::<Field>() {
+                tree.get(field).name
+            } else {
+                tree.get(child.cast::<EnumVariant>()?).name
+            };
+            Some(name_at(tree, name).1)
         })
         .collect()
 }
@@ -1036,133 +995,58 @@ fn rewrite_identifiers(
     skipped: &HashSet<std::ops::Range<usize>>,
     local_names: &HashSet<String>,
 ) -> String {
-    // The lexer is intentionally context-free and exposes words inside quoted
-    // strings/comments. Mark those byte ranges before considering identifier
-    // tokens. Backtick strings stay live because `${...}` interpolation must
-    // still resolve Session names (literal words there are harmless unless
-    // they exactly equal a visible identifier).
-    let bytes = source.as_bytes();
-    let mut quoted_or_comment = vec![false; bytes.len()];
-    let mut cursor = 0;
-    while cursor < bytes.len() {
-        let start = cursor;
-        let end = if bytes[cursor..].starts_with(b"//") {
-            cursor += 2;
-            while cursor < bytes.len() && bytes[cursor] != b'\n' {
-                cursor += 1;
-            }
-            cursor
-        } else if bytes[cursor..].starts_with(b"/*") {
-            cursor += 2;
-            while cursor + 1 < bytes.len() && !bytes[cursor..].starts_with(b"*/") {
-                cursor += 1;
-            }
-            (cursor + 2).min(bytes.len())
-        } else if bytes[cursor] == b'#' {
-            let hashes = bytes[cursor..]
-                .iter()
-                .take_while(|byte| **byte == b'#')
-                .count();
-            if bytes.get(cursor + hashes) == Some(&b'"') {
-                cursor += hashes + 1;
-                loop {
-                    let Some(relative) = bytes[cursor..].iter().position(|byte| *byte == b'"')
-                    else {
-                        cursor = bytes.len();
-                        break;
-                    };
-                    cursor += relative + 1;
-                    if bytes
-                        .get(cursor..cursor.saturating_add(hashes))
-                        .is_some_and(|suffix| suffix.iter().all(|byte| *byte == b'#'))
-                    {
-                        cursor += hashes;
-                        break;
-                    }
-                }
-                cursor
-            } else {
-                cursor += 1;
-                continue;
-            }
-        } else if bytes[cursor] == b'"' {
-            cursor += 1;
-            let mut escaped = false;
-            while cursor < bytes.len() {
-                let byte = bytes[cursor];
-                cursor += 1;
-                if byte == b'"' && !escaped {
-                    break;
-                }
-                escaped = byte == b'\\' && !escaped;
-                if byte != b'\\' {
-                    escaped = false;
-                }
-            }
-            cursor
-        } else {
-            cursor += 1;
-            continue;
-        };
-        for byte in &mut quoted_or_comment[start..end] {
-            *byte = true;
-        }
-        cursor = end;
-    }
-    let tokens = lex_lossless(source, baml_base::FileId::new(0));
-    let significant = tokens
-        .iter()
-        .enumerate()
-        .filter(|(_, token)| {
-            let start = usize::from(token.span.range.start());
-            if quoted_or_comment.get(start).copied().unwrap_or(false) {
-                return false;
-            }
-            !matches!(token.kind, TokenKind::Whitespace | TokenKind::Newline)
-        })
-        .map(|(index, _)| index)
-        .collect::<Vec<_>>();
-    let significant_pos = significant
-        .iter()
-        .enumerate()
-        .map(|(position, index)| (*index, position))
-        .collect::<std::collections::HashMap<_, _>>();
+    // A string or comment is one token, so a word inside one is never a
+    // candidate; a backtick string's `${…}` interpolations are code tokens
+    // between its text chunks, so Session names inside them still resolve.
+    let tokens = lex(source);
     let mut output = String::with_capacity(source.len());
-    for (index, token) in tokens.iter().enumerate() {
-        let range = usize::from(token.span.range.start())..usize::from(token.span.range.end());
+    for idx in tokens.iter() {
+        let text_range = tokens.range(idx);
+        let range = usize::from(text_range.start())..usize::from(text_range.end());
+        let text = &source[range.clone()];
         if let Some(replacement) = forced.get(&range) {
             output.push_str(replacement);
             continue;
         }
-        let replacement = if token.kind == TokenKind::Word
-            && !quoted_or_comment.get(range.start).copied().unwrap_or(false)
+        let replacement = if Ident::KINDS.contains(tokens.kind(idx))
             && !skipped.contains(&range)
-            && !local_names.contains(token.text.as_str())
+            && !local_names.contains(text)
         {
-            significant_pos.get(&index).and_then(|position| {
-                let prev = position
-                    .checked_sub(1)
-                    .and_then(|p| significant.get(p))
-                    .map(|&i| tokens[i].kind);
-                let next = significant.get(position + 1).map(|&i| tokens[i].kind);
-                let reserved_package_root = next == Some(TokenKind::Dot)
-                    && (token.text.as_str() == "json"
-                        || baml_builtins2::STDLIB_PACKAGE_NAMES.contains(&token.text.as_str()));
-                if prev == Some(TokenKind::Dot)
-                    || next == Some(TokenKind::Colon)
-                    || reserved_package_root
-                {
-                    None
-                } else {
-                    mapping.get(token.text.as_str())
-                }
-            })
+            let prev = tokens.prev_significant(idx).map(|i| tokens.kind(i));
+            let next = tokens.next_significant(idx).map(|i| tokens.kind(i));
+            let reserved_package_root = next == Some(TokenKind::Dot)
+                && (text == "json" || baml_builtins2::STDLIB_PACKAGE_NAMES.contains(&text));
+            if prev == Some(TokenKind::Dot)
+                || next == Some(TokenKind::Colon)
+                || reserved_package_root
+            {
+                None
+            } else {
+                mapping.get(text)
+            }
         } else {
             None
         };
-        output.push_str(replacement.map_or(token.text.as_str(), String::as_str));
+        output.push_str(replacement.map_or(text, String::as_str));
     }
     output
+}
+
+/// One line of the wrapped submission's block: a statement, or the tail
+/// expression the submission evaluates to.
+#[derive(Clone, Copy)]
+enum Element {
+    Stmt(AnyStmt),
+    Tail(baml_syntax::nodes::AnyExpr),
+}
+
+impl Element {
+    fn any_node_id(self) -> Option<AnyNodeId> {
+        match self {
+            Element::Stmt(stmt) => stmt.any_node_id(),
+            Element::Tail(expr) => expr.any_node_id(),
+        }
+    }
 }
 
 struct LoweredSession {
@@ -1303,27 +1187,26 @@ fn lower_session_submission(
     let sequence = if sequence.is_empty() { "0" } else { &sequence };
     let internal = |name: &str| format!("__baml_session_{sequence}_{name}");
 
-    let tokens = lex_lossless(&request.source, baml_base::FileId::new(0));
-    let (green, _) = baml_compiler_parser::parse_file(&tokens);
-    let root = SyntaxNode::new_root(green);
-    let declarations_nodes = root
-        .children()
-        .filter(|node| {
-            declaration_kind(node.kind())
-                && (node.kind() == SyntaxKind::IMPLEMENTS_FOR || declaration_name(node).is_some())
-        })
+    // The first parse only locates the declarations; its errors, if any, are
+    // reported by the parse of the wrapped submission below.
+    let parsed = baml_parser::parse(&request.source);
+    let tree = &parsed.tree;
+    let declarations_nodes = tree
+        .list(tree.get(tree.root()).items)
+        .iter()
+        .filter_map(|&item| declaration(tree, item))
         .collect::<Vec<_>>();
 
     let mut declarations = IndexMap::new();
     let mut declaration_name_ranges = IndexMap::new();
-    for node in &declarations_nodes {
-        if let Some((name, range)) = declaration_name(node) {
+    for declaration in &declarations_nodes {
+        if let Some((name, range)) = &declaration.name {
             let symbol = SessionVisibleSymbol {
-                internal: internal(&name),
+                internal: internal(name),
                 kind: SessionVisibleKind::Declaration,
             };
-            declaration_name_ranges.insert(range, symbol.internal.clone());
-            declarations.insert(name, symbol);
+            declaration_name_ranges.insert(range.clone(), symbol.internal.clone());
+            declarations.insert(name.clone(), symbol);
         }
     }
 
@@ -1341,8 +1224,8 @@ fn lower_session_submission(
 
     let mut declaration_source = String::new();
     let mut masked = request.source.as_bytes().to_vec();
-    for node in &declarations_nodes {
-        let range = byte_range(node);
+    for &Declaration { node, .. } in &declarations_nodes {
+        let range = byte_range(tree, node);
         let fragment = &request.source[range.clone()];
         let forced = declaration_name_ranges
             .iter()
@@ -1356,11 +1239,11 @@ fn lower_session_submission(
                 )
             })
             .collect::<IndexMap<_, _>>();
-        let skipped = structural_name_ranges(node)
+        let skipped = structural_name_ranges(tree, node)
             .into_iter()
             .map(|name_range| name_range.start - range.start..name_range.end - range.start)
             .collect();
-        let locals = locally_bound_names(node, None);
+        let locals = locally_bound_names(tree, node, None);
         declaration_source.push_str(&rewrite_identifiers(
             fragment,
             &declaration_mapping,
@@ -1378,24 +1261,43 @@ fn lower_session_submission(
     let masked = String::from_utf8(masked).expect("masking source preserves UTF-8");
     let prefix = "function __baml_session_parse__() -> unknown {\n";
     let wrapped = format!("{prefix}{masked}\n}}\n");
-    let wrapped_tokens = lex_lossless(&wrapped, baml_base::FileId::new(0));
-    let (wrapped_green, parse_errors) = baml_compiler_parser::parse_file(&wrapped_tokens);
-    if let Some(error) = parse_errors.first() {
+    let parsed = baml_parser::parse(&wrapped);
+    if let Some(error) = parsed.errors.first() {
         return Err(vec![session_parse_error_diagnostic(
             error,
             &request.submission_name,
             prefix.len(),
         )]);
     }
-    let wrapped_root = SyntaxNode::new_root(wrapped_green);
-    let block_node = wrapped_root
-        .descendants()
-        .find(|node| node.kind() == SyntaxKind::BLOCK_EXPR)
-        .expect("synthetic function has a block");
-    let block = BlockExpr::cast(block_node).expect("BLOCK_EXPR cast");
-    let elements = block
-        .elements()
-        .filter(|element| !matches!(element, BlockElement::HeaderComment(_)))
+    let tree = &parsed.tree;
+    // An error-free parse of `function … { … }` is that one function whose
+    // body is the block the submission's lines were wrapped in — unless the
+    // submission closed the wrapper's brace itself and went on with items of
+    // its own (`1 }\nlet y = 2;\nlet z = {`): a submission is statements.
+    let wrapper_escaped = || {
+        Err(vec![runtime_diagnostic(
+            DiagnosticId::InvalidSyntax,
+            &request.submission_name,
+            0,
+            request.source.len(),
+            "a submission is a sequence of statements; it cannot close the block it runs in or declare top-level items",
+        )])
+    };
+    let [AnyItem::Function(function)] = tree.list(tree.get(tree.root()).items) else {
+        return wrapper_escaped();
+    };
+    let Ok(AnyFunctionBody::Expr(block)) = tree.get(*function).body else {
+        return wrapper_escaped();
+    };
+    let block = tree.get(block);
+    // A header comment or a stray `;` is not code: the last element that is
+    // decides what the submission evaluates to.
+    let elements = tree
+        .list(block.stmts)
+        .iter()
+        .filter(|stmt| !matches!(stmt, AnyStmt::Header(_) | AnyStmt::Empty(_)))
+        .map(|&stmt| Element::Stmt(stmt))
+        .chain(block.tail.map(Element::Tail))
         .collect::<Vec<_>>();
 
     let mut visible_mapping = request
@@ -1433,67 +1335,87 @@ fn lower_session_submission(
     let mut step_ranges: Vec<std::ops::Range<usize>> = Vec::new();
     let mut result_step = None;
     let mut result_name: Option<String> = None;
-    // A header comment is not code: the last element that is decides what
-    // the submission evaluates to.
-    let last_code = elements
-        .iter()
-        .rposition(|element| !matches!(element, BlockElement::HeaderComment(_)));
+    let last_code = elements.len().checked_sub(1);
 
     for (index, element) in elements.iter().enumerate() {
-        let (node, wrapped_range, has_semicolon, is_statement) = match element {
-            BlockElement::Stmt(node) => (
-                Some(node),
-                byte_range(node),
-                element.has_trailing_semicolon(),
-                true,
+        let (node, has_semicolon, is_statement) = match *element {
+            // The tail expression, or an expression line that a trailing
+            // header comment kept from being the tail.
+            Element::Tail(expr) => (
+                expr.any_node_id()
+                    .unwrap_or_else(|| unreachable!("every alternative of `AnyExpr` is a node")),
+                false,
+                false,
             ),
-            BlockElement::ExprNode(node) => (
-                Some(node),
-                byte_range(node),
-                element.has_trailing_semicolon(),
-                expression_is_assignment(node),
-            ),
-            BlockElement::ExprToken(token) => {
-                let range = token.text_range();
-                (
-                    None,
-                    usize::from(range.start())..usize::from(range.end()),
-                    element.has_trailing_semicolon(),
-                    false,
-                )
+            Element::Stmt(AnyStmt::Expr(stmt)) => {
+                (AnyNodeId::of(stmt), tree.get(stmt).semi.is_some(), false)
             }
-            BlockElement::HeaderComment(_) => continue,
+            Element::Stmt(AnyStmt::Let(stmt)) => {
+                let let_stmt = tree.get(stmt);
+                match (let_stmt.pattern, let_stmt.init) {
+                    // `let _ = e` binds nothing: the step is `e`, a statement.
+                    (Ok(AnyPattern::Wildcard(_)), Ok(init)) => (
+                        init.any_node_id().unwrap_or_else(|| {
+                            unreachable!("every alternative of `AnyExpr` is a node")
+                        }),
+                        let_stmt.semi.is_some(),
+                        true,
+                    ),
+                    _ => (AnyNodeId::of(stmt), let_stmt.semi.is_some(), true),
+                }
+            }
+            Element::Stmt(AnyStmt::TypeBinding(stmt)) => {
+                (AnyNodeId::of(stmt), tree.get(stmt).semi.is_some(), true)
+            }
+            Element::Stmt(AnyStmt::Assign(stmt)) => {
+                (AnyNodeId::of(stmt), tree.get(stmt).semi.is_some(), true)
+            }
+            Element::Stmt(
+                AnyStmt::Defer(_)
+                | AnyStmt::While(_)
+                | AnyStmt::WhileLet(_)
+                | AnyStmt::For(_)
+                | AnyStmt::Test(_),
+            ) => {
+                let stmt = element
+                    .any_node_id()
+                    .unwrap_or_else(|| unreachable!("every alternative of `AnyStmt` is a node"));
+                (stmt, false, true)
+            }
+            Element::Stmt(AnyStmt::Header(_) | AnyStmt::Empty(_)) => continue,
+            Element::Stmt(AnyStmt::Bogus(_)) => {
+                unreachable!("an error-free parse has no bogus statement")
+            }
         };
-        let mut source_range = wrapped_range.start.saturating_sub(prefix.len())
+        let wrapped_range = byte_range(tree, node);
+        let source_range = wrapped_range.start.saturating_sub(prefix.len())
             ..wrapped_range.end.saturating_sub(prefix.len());
-        if has_semicolon {
-            let bytes = request.source.as_bytes();
-            let mut end = source_range.end;
-            while end < bytes.len() && bytes[end].is_ascii_whitespace() {
-                end += 1;
-            }
-            if bytes.get(end) == Some(&b';') {
-                source_range.end = end + 1;
-            }
-        }
         let raw = &request.source[source_range.clone()];
-        let is_type_binding = node.is_some_and(|node| node.kind() == SyntaxKind::TYPE_BINDING_STMT);
-        let is_outer_let = node.is_some_and(|node| node.kind() == SyntaxKind::LET_STMT);
-        let outer_binding = (!is_type_binding)
-            .then(|| node.and_then(first_pattern_name))
-            .flatten();
-        let local_names = node.map_or_else(HashSet::new, |node| {
-            locally_bound_names(node, outer_binding.as_ref().map(|(_, range)| range))
-        });
+        let type_binding = match *element {
+            Element::Stmt(AnyStmt::TypeBinding(stmt)) => Some(stmt),
+            Element::Stmt(_) | Element::Tail(_) => None,
+        };
+        let outer_let = match *element {
+            Element::Stmt(AnyStmt::Let(stmt))
+                if !matches!(tree.get(stmt).pattern, Ok(AnyPattern::Wildcard(_))) =>
+            {
+                Some(stmt)
+            }
+            Element::Stmt(_) | Element::Tail(_) => None,
+        };
+        let is_outer_let = outer_let.is_some();
+        let outer_binding = outer_let.and_then(|stmt| first_pattern_name(tree, stmt));
+        let local_names =
+            locally_bound_names(tree, node, outer_binding.as_ref().map(|(_, range)| range));
         let prelude = runtime_type_binding_prelude(&active_type_bindings);
         // Only the submission's final expression is its value. An earlier
         // one is a statement, as it would be in a block: its value is
         // dropped, so an `if` with no `else` there owes no unit branch.
         let returns_value =
             Some(index) == last_code && !is_outer_let && !is_statement && !has_semicolon;
-        let (generated_name, step_source, commit_global, binding) = if is_type_binding {
-            let Some(parts) = node.and_then(|node| runtime_type_binding_parts(node, &wrapped))
-            else {
+        let (generated_name, step_source, commit_global, binding) = if let Some(stmt) = type_binding
+        {
+            let Some(parts) = runtime_type_binding_parts(tree, stmt, &wrapped) else {
                 return Err(vec![runtime_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     &request.submission_name,
@@ -1562,14 +1484,14 @@ fn lower_session_submission(
                 // the same name.
                 format!("__baml_stmt_{sequence}_{index}")
             };
-            let assignment = is_statement
-                .then(|| assignment_parts(raw))
-                .flatten()
-                .and_then(|(target, operator, rhs)| {
-                    let symbol = request.visible.get(target)?;
-                    matches!(symbol.kind, SessionVisibleKind::Let)
-                        .then_some((symbol, operator, rhs))
-                });
+            let assignment = match *element {
+                Element::Stmt(AnyStmt::Assign(stmt)) => assignment_parts(tree, stmt, &wrapped),
+                Element::Stmt(_) | Element::Tail(_) => None,
+            }
+            .and_then(|(target, operator, rhs)| {
+                let symbol = request.visible.get(target)?;
+                matches!(symbol.kind, SessionVisibleKind::Let).then_some((symbol, operator, rhs))
+            });
             let (source, commit_global) = if let Some((target, operator, rhs)) = assignment {
                 let rhs = rewrite_identifiers(
                     rhs,
@@ -2077,13 +1999,9 @@ mod tests {
 
     #[test]
     fn session_ambiguity_retains_its_error_code_and_pipe_span() {
-        let span = baml_base::Span::new(
-            baml_base::FileId::new(0),
-            rowan::TextRange::new(20.into(), 21.into()),
-        );
         let diagnostic = session_parse_error_diagnostic(
             &ParseError::AmbiguousUnion {
-                span,
+                range: text_size::TextRange::new(20.into(), 21.into()),
                 groupings: vec![
                     "((A) -> B) | ((C) -> D)".into(),
                     "(A) -> (B | (C) -> D)".into(),
@@ -2124,11 +2042,11 @@ mod tests {
         );
         let primary = baml_base::Span::new(
             primary_file.file_id(&db),
-            rowan::TextRange::new(1.into(), 4.into()),
+            text_size::TextRange::new(1.into(), 4.into()),
         );
         let secondary = baml_base::Span::new(
             related_file.file_id(&db),
-            rowan::TextRange::new(2.into(), 5.into()),
+            text_size::TextRange::new(2.into(), 5.into()),
         );
         let diagnostic = Diagnostic::warning(
             DiagnosticId::TypeMismatch,
