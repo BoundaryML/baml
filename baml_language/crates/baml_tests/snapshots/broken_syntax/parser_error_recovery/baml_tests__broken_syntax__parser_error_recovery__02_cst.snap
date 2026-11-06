@@ -8,17 +8,19 @@ SourceFile@0..192
     name: <missing @6>
     l: <missing @6>
     r: <missing @6>
-  items: Bogus@6..9
+  items: Bogus@6..58
     tokens: Integer "123" @6..9
-  items: Bogus@9..16
     tokens: Word "Invalid" @9..16
-  items: Bogus@17..18
+    tokens: Whitespace " " @16..17
     tokens: LBrace "{" @17..18
-  items: Bogus@44..49
+    tokens: Whitespace "  " @18..20
+    tokens: LineComment "// Invalid class name" @20..41
+    tokens: Newline "\n" @41..42
+    tokens: Whitespace "  " @42..44
     tokens: Word "field" @44..49
-  items: Bogus@50..56
+    tokens: Whitespace " " @49..50
     tokens: Word "string" @50..56
-  items: Bogus@57..58
+    tokens: Newline "\n" @56..57
     tokens: RBrace "}" @57..58
   items: EnumDef@60..130
     kw: Enum "enum" @60..64
@@ -60,11 +62,6 @@ SourceFile@0..192
 error @6..9: expected class name, found integer
 error @6..9: expected '{', found integer
 error @6..9: expected top-level declaration, found integer
-error @9..16: expected top-level declaration, found identifier
-error @17..18: expected top-level declaration, found '{'
-error @44..49: expected top-level declaration, found identifier
-error @50..56: expected top-level declaration, found identifier
-error @57..58: expected top-level declaration, found '}'
 error @150..151: expected type, found '{'
 error @184..185: expected expression, found ':'
 === missing_braces.baml ===
@@ -183,9 +180,9 @@ SourceFile@54..585
       token: Word "VALUE1" @506..512
     l: <missing @515>
     r: <missing @515>
-  items: Bogus@515..521
+  items: Bogus@515..523
     tokens: Word "VALUE2" @515..521
-  items: Bogus@522..523
+    tokens: Newline "\n" @521..522
     tokens: RBrace "}" @522..523
   items: EnumDef@525..585
     kw: Enum "enum" @525..529
@@ -208,7 +205,6 @@ error @392..400: expected return type (->), found function
 error @392..400: expected function body, found function
 error @515..521: expected '{', found identifier
 error @515..521: expected top-level declaration, found identifier
-error @522..523: expected top-level declaration, found '}'
 === unclosed_string.baml ===
 SourceFile@0..170
   items: ClassDef@0..170

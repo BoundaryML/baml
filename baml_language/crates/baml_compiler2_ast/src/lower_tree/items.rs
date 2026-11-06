@@ -389,10 +389,7 @@ impl<'t> Items<'t> {
         let func = *v.node(id);
         let span = span_from(v.token_range(func.kw.idx), v.range_of(id));
         let Ok(name_id) = func.name else {
-            self.diags.push(LoweringDiagnostic::MissingItemName {
-                item_kind: "function",
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         let name = v.name(name_id);
@@ -706,10 +703,7 @@ impl<'t> Items<'t> {
             sig.semi.map(|semi| semi.idx),
         );
         let Ok(name_id) = sig.name else {
-            self.diags.push(LoweringDiagnostic::MissingItemName {
-                item_kind: "method signature",
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         let name = v.name(name_id);
@@ -776,10 +770,7 @@ impl<'t> Items<'t> {
         let class = *v.node(id);
         let span = span_from(v.token_range(class.kw.idx), v.range_of(id));
         let Ok(name_id) = class.name else {
-            self.diags.push(LoweringDiagnostic::MissingItemName {
-                item_kind: "class",
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         let generic_params = self.generic_params(class.generics);
@@ -876,10 +867,7 @@ impl<'t> Items<'t> {
         let enum_def = *v.node(id);
         let span = span_from(v.token_range(enum_def.kw.idx), v.range_of(id));
         let Ok(name_id) = enum_def.name else {
-            self.diags.push(LoweringDiagnostic::MissingItemName {
-                item_kind: "enum",
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         let mut variants = Vec::new();
@@ -922,10 +910,7 @@ impl<'t> Items<'t> {
         let iface = *v.node(id);
         let span = span_from(v.token_range(iface.kw.idx), v.range_of(id));
         let Ok(name_id) = iface.name else {
-            self.diags.push(LoweringDiagnostic::MissingItemName {
-                item_kind: "interface",
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         let iface_name = v.name(name_id);
@@ -999,10 +984,7 @@ impl<'t> Items<'t> {
             decl.sep.map(|sep| sep.idx),
         );
         let Ok(name_id) = decl.name else {
-            self.diags.push(LoweringDiagnostic::MissingItemName {
-                item_kind: "associated type",
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         let name = v.name(name_id);
@@ -1035,10 +1017,7 @@ impl<'t> Items<'t> {
             def.sep.map(|sep| sep.idx),
         );
         let Ok(name_id) = def.name else {
-            self.diags.push(LoweringDiagnostic::MissingItemName {
-                item_kind: "associated type binding",
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         let name = v.name(name_id);
@@ -1183,10 +1162,7 @@ impl<'t> Items<'t> {
             link.sep.map(|sep| sep.idx),
         );
         let Ok(class_field) = link.class_field else {
-            self.diags.push(LoweringDiagnostic::MissingFieldName {
-                class_name: "interface field link".to_string(),
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         Some(ast::InterfaceFieldLinkDef {
@@ -1205,10 +1181,7 @@ impl<'t> Items<'t> {
         let alias = *v.node(id);
         let span = span_from(v.token_range(alias.kw.idx), v.range_of(id));
         let Ok(name_id) = alias.name else {
-            self.diags.push(LoweringDiagnostic::MissingItemName {
-                item_kind: "type alias",
-                span,
-            });
+            // The parser reported the missing name.
             return None;
         };
         let name = v.name(name_id);
@@ -1282,6 +1255,10 @@ impl<'t> Items<'t> {
             }
             pattern_ctx.file_scope_introducer = Some(introducer);
         }
+        // A session binding is a local of the session, so `const` warns there
+        // as it does in a body; only the source file's global introducer is
+        // the one place `const` is right.
+        body::warn_const_introducer(&mut pattern_ctx, v, stmt.introducer);
         let pattern = stmt
             .pattern
             .ok()

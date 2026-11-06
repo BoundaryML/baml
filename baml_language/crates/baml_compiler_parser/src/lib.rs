@@ -43,12 +43,18 @@ pub fn parse_green(db: &dyn salsa::Database, file: SourceFile) -> GreenNode {
 }
 
 /// Get parse errors from parsing a file
+#[deprecated(
+    note = "the compiler reads the typed tree (`baml_parser::typed_tree`); the rowan tree stays for `baml_fmt` until the formatter rework"
+)]
 pub fn parse_errors(db: &dyn salsa::Database, file: SourceFile) -> Vec<ParseError> {
     let result = parse_result(db, file);
     result.errors(db)
 }
 
 /// Helper to build a red tree from the green tree.
+#[deprecated(
+    note = "the compiler reads the typed tree (`baml_parser::typed_tree`); the rowan tree stays for `baml_fmt` until the formatter rework"
+)]
 pub fn syntax_tree(db: &dyn salsa::Database, file: SourceFile) -> SyntaxNode {
     let green = parse_green(db, file);
     SyntaxNode::new_root(green)

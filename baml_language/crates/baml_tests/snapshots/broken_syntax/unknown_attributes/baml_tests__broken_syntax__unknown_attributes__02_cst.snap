@@ -1,0 +1,171 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== unknown_attributes.baml ===
+SourceFile@155..659
+  items: ClassDef@155..223
+    kw: Class "class" @155..160
+    name: Name@161..167
+      token: Word "Person" @161..167
+    l: LBrace "{" @168..169
+    members: Field@172..206
+      name: Name@172..176
+        token: Word "name" @172..176
+      ty: PathType@177..183
+        head: Name@177..183
+          token: Word "string" @177..183
+      attrs: Attribute@184..206
+        at: At "@" @184..185
+        path: DottedName@185..191
+          head: Name@185..191
+            token: Word "custom" @185..191
+        args: AttrArgs@191..206
+          l: LParen "(" @191..192
+          args: StringLit@192..205
+            token: String "\"field-extra\"" @192..205
+          r: RParen ")" @205..206
+    members: BlockAttr@209..221
+      at: AtAt "@@" @209..211
+      path: DottedName@211..221
+        head: Name@211..217
+          token: Word "vendor" @211..217
+        dot: Dot "." @217..218
+        name: Name@218..221
+          token: Word "tag" @218..221
+    r: RBrace "}" @222..223
+  items: EnumDef@225..295
+    kw: Enum "enum" @225..229
+    name: Name@230..235
+      token: Word "Color" @230..235
+    l: LBrace "{" @236..237
+    members: EnumVariant@240..268
+      name: Name@240..243
+        token: Word "Red" @240..243
+      attrs: Attribute@244..268
+        at: At "@" @244..245
+        path: DottedName@245..251
+          head: Name@245..251
+            token: Word "custom" @245..251
+        args: AttrArgs@251..268
+          l: LParen "(" @251..252
+          args: StringLit@252..267
+            token: String "\"variant-extra\"" @252..267
+          r: RParen ")" @267..268
+    members: BlockAttr@271..293
+      at: AtAt "@@" @271..273
+      path: DottedName@273..279
+        head: Name@273..279
+          token: Word "custom" @273..279
+      args: AttrArgs@279..293
+        l: LParen "(" @279..280
+        args: StringLit@280..292
+          token: String "\"enum-extra\"" @280..292
+        r: RParen ")" @292..293
+    r: RBrace "}" @294..295
+  items: InterfaceDef@360..415
+    kw: Interface "interface" @360..369
+    name: Name@370..376
+      token: Word "Shaped" @370..376
+    l: LBrace "{" @377..378
+    members: Field@381..402
+      name: Name@381..386
+        token: Word "label" @381..386
+      colon: Colon ":" @386..387
+      ty: PathType@388..394
+        head: Name@388..394
+          token: Word "string" @388..394
+      attrs: Attribute@395..402
+        at: At "@" @395..396
+        path: DottedName@396..402
+          head: Name@396..402
+            token: Word "custom" @396..402
+    members: BlockAttr@405..413
+      at: AtAt "@@" @405..407
+      path: DottedName@407..413
+        head: Name@407..413
+          token: Word "custom" @407..413
+    r: RBrace "}" @414..415
+  items: Bogus@417..436
+    tokens: AtAt "@@" @417..419
+    tokens: Word "internal" @419..427
+    tokens: Dot "." @427..428
+    tokens: Word "uses" @428..432
+    tokens: LParen "(" @432..433
+    tokens: Word "vm" @433..435
+    tokens: RParen ")" @435..436
+  items: FunctionDef@437..489
+    kw: Function "function" @437..445
+    name: Name@446..452
+      token: Word "helper" @446..452
+    params: ParamList@452..467
+      l: LParen "(" @452..453
+      params: Param@453..466
+        name: Name@453..458
+          token: Word "value" @453..458
+        ascription: TypeAscription@458..466
+          colon: Colon ":" @458..459
+          ty: PathType@460..466
+            head: Name@460..466
+              token: Word "string" @460..466
+      r: RParen ")" @466..467
+    ret: ReturnType@468..477
+      arrow: Arrow "->" @468..470
+      ty: PathType@471..477
+        head: Name@471..477
+          token: Word "string" @471..477
+    body: Block@478..489
+      l: LBrace "{" @478..479
+      tail: PathExpr@482..487
+        head: Name@482..487
+          token: Word "value" @482..487
+      r: RBrace "}" @488..489
+  items: ClassDef@558..659
+    kw: Class "class" @558..563
+    name: Name@564..573
+      token: Word "Malformed" @564..573
+    l: LBrace "{" @574..575
+    members: Field@578..599
+      name: Name@578..579
+        token: Word "a" @578..579
+      ty: PathType@580..586
+        head: Name@580..586
+          token: Word "string" @580..586
+      attrs: Attribute@587..599
+        at: At "@" @587..588
+        path: DottedName@588..599
+          head: Name@588..599
+            token: Word "description" @588..599
+    members: Field@602..633
+      name: Name@602..603
+        token: Word "b" @602..603
+      ty: PathType@604..610
+        head: Name@604..610
+          token: Word "string" @604..610
+      attrs: Attribute@611..633
+        at: At "@" @611..612
+        path: DottedName@612..623
+          head: Name@612..623
+            token: Word "description" @612..623
+        args: AttrArgs@623..633
+          l: LParen "(" @623..624
+          args: Name@624..632
+            token: Word "unquoted" @624..632
+          r: RParen ")" @632..633
+    members: Field@636..657
+      name: Name@636..637
+        token: Word "c" @636..637
+      ty: PathType@638..644
+        head: Name@638..644
+          token: Word "string" @638..644
+      attrs: Attribute@645..657
+        at: At "@" @645..646
+        path: DottedName@646..650
+          head: Name@646..650
+            token: Word "skip" @646..650
+        args: AttrArgs@650..657
+          l: LParen "(" @650..651
+          args: StringLit@651..656
+            token: String "\"why\"" @651..656
+          r: RParen ")" @656..657
+    r: RBrace "}" @658..659
+error @417..436: a `@@` attribute is written inside the body of the class, enum or interface it describes

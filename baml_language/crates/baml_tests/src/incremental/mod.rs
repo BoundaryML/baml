@@ -101,7 +101,7 @@ impl IncrementalTestDb {
     /// test_db.assert_executed(
     ///     |db| { baml_compiler_hir::file_items(db, file); },
     ///     &[
-    ///         ("lex_file", 1),        // Should execute once
+    ///         ("parse_typed", 1),        // Should execute once
     ///         ("file_lowering", 0),  // Should NOT execute (cached)
     ///     ],
     /// );
@@ -178,15 +178,8 @@ class Foo {
 
         // Should include expected queries
         assert!(
-            executed.iter().any(|s| s.contains("lex_file")),
-            "Expected lex_file to execute. Got: {:?}",
-            executed
-        );
-        assert!(
-            executed
-                .iter()
-                .any(|s| s.contains("parse_result") || s.contains("syntax_tree")),
-            "Expected parse/syntax query to execute. Got: {:?}",
+            executed.iter().any(|s| s.contains("parse_typed")),
+            "Expected parse_typed to execute. Got: {:?}",
             executed
         );
     }
@@ -209,7 +202,7 @@ class Bar {
             |db| {
                 let _ = baml_compiler2_hir::file_semantic_index(db, file);
             },
-            &[("lex_file", 1)],
+            &[("parse_typed", 1)],
         );
 
         // Second execution without any changes - everything should be cached
@@ -217,7 +210,7 @@ class Bar {
             |db| {
                 let _ = baml_compiler2_hir::file_semantic_index(db, file);
             },
-            &[("lex_file", 0)],
+            &[("parse_typed", 0)],
         );
     }
 
@@ -253,8 +246,8 @@ class Modified {
         });
 
         assert!(
-            executed.iter().any(|s| s.contains("lex_file")),
-            "Expected lex_file to re-execute after modification. Got: {:?}",
+            executed.iter().any(|s| s.contains("parse_typed")),
+            "Expected parse_typed to re-execute after modification. Got: {:?}",
             executed
         );
     }
@@ -283,15 +276,15 @@ class Modified {
 "#
         .to_string());
 
-        // After whitespace change: lex must re-run
+        // After whitespace change: the parse must re-run
         let (_, executed) = test_db.log_executed(|db| {
             let _ = baml_compiler2_hir::file_semantic_index(db, file);
         });
 
-        // At minimum, lex_file should re-execute
+        // At minimum, the parse should re-execute
         assert!(
-            executed.iter().any(|s| s.contains("lex_file")),
-            "Expected lex_file to re-execute after whitespace change"
+            executed.iter().any(|s| s.contains("parse_typed")),
+            "Expected parse_typed to re-execute after whitespace change"
         );
     }
 }

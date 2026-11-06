@@ -457,6 +457,12 @@ fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<Sem
 /// borrowing callers the memoized vec without an O(tokens) clone per request.
 #[salsa::tracked(returns(ref))]
 pub fn semantic_tokens(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<SemanticToken> {
+    // On the statement: the tracked wrapper salsa generates would not
+    // fulfil a function-level expectation.
+    #[expect(
+        deprecated,
+        reason = "reads the rowan tree until this consumer moves to the typed tree"
+    )]
     let root = baml_compiler_parser::syntax_tree(db, file);
     // Full document: classify every token, so build the merged whole-file index
     // (itself a merge of per-scope salsa-cached indices) and resolve from it.
@@ -479,6 +485,10 @@ pub fn semantic_tokens(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec
 /// indexed (the rest of the file is never resolved). Not a Salsa query — keying
 /// on the range would blow the cache; the underlying per-scope indices and name
 /// resolution it calls *are* memoized.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 pub fn semantic_tokens_in_range(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,

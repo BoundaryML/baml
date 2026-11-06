@@ -51,3 +51,4 @@ pub use message::{
 };
 // Re-export the rendering functions and types
 pub use render::{RenderConfig, render_diagnostic};
+pub use to_diagnostic::typed_parse_error_diagnostic;

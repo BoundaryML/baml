@@ -82,10 +82,12 @@ function OptionalChaining(user: User?, nonNullUser: User, node: Node?) -> string
     // Compound assignment through chain
     user?.id += 1;
 
-    // Return value of safe call assignment: short-circuit → null, otherwise → assigned value
-    let a11 = (user?.profile?.name = "new_name");
-
     return a2 ?? "default";
+}
+
+// Return value of safe call assignment: assignment is a statement, so this is a parse error
+function OptionalChainingAssignmentValue(user: User?) -> null {
+    let a11 = (user?.profile?.name = "new_name");
 }
 
 // ============================================================================
@@ -147,10 +149,12 @@ function OptionalIndex(node: Node?, items: int[]?, lookup: map<string, int>?, no
     items?.[0] += 10;
     lookup?.["total"] += 5;
 
-    // Return value of safe indexed assignment
-    let b13 = (items?.[0] = 77);
-
     return b1 ?? 0;
+}
+
+// Return value of safe indexed assignment: assignment is a statement, so this is a parse error
+function OptionalIndexAssignmentValue(items: int[]?) -> null {
+    let b13 = (items?.[0] = 77);
 }
 
 // ============================================================================
@@ -263,9 +267,6 @@ function Combined(user: User?, node: Node?, items: int[]?) -> string {
     // Compound assignment through mixed chain
     node?.value += items?.[0] ?? 1;
 
-    // Return value of safe call assignment (short-circuit → null)
-    let e4 = (node?.next?.value = 42);
-
     // Deeply nested parenthesized eval order
     let e5 = node?.children?.[(user?.profile?.scores?.[0] ?? 0)].value;
 
@@ -289,4 +290,9 @@ function Combined(user: User?, node: Node?, items: int[]?) -> string {
     // let e_lex = user?.3;
 
     return e3;
+}
+
+// Return value of safe call assignment: assignment is a statement, so this is a parse error
+function CombinedAssignmentValue(node: Node?) -> null {
+    let e4 = (node?.next?.value = 42);
 }

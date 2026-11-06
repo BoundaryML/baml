@@ -21,6 +21,10 @@
 //!   test in the set.
 
 use baml_base::SourceFile;
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 use baml_compiler_parser::syntax_tree;
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, ast::StringLiteral};
 use baml_compiler2_ast::ast::FunctionOrigin;
@@ -69,6 +73,10 @@ pub struct FileAction {
 ///
 /// Returns one action per function (Run in Playground) and one per test (Run
 /// Test), in the order they appear in the contributions list.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 pub fn file_actions(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<FileAction> {
     let contribs = file_symbol_contributions(db, file);
     let mut actions = Vec::new();

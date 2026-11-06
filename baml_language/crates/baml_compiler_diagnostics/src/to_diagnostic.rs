@@ -62,6 +62,65 @@ impl ToDiagnostic for ParseError {
     }
 }
 
+/// The diagnostic for a typed-parser error in `file_id`.
+///
+/// Same ids and wording as the rowan parser's errors above; the two kinds
+/// the rowan pipeline raised from its lowering keep their ids too: an escape
+/// sequence that does not decode is E0109 and a directive problem is E0105.
+pub fn typed_parse_error_diagnostic(
+    error: &baml_parser::ParseError,
+    file_id: baml_base::FileId,
+) -> Diagnostic {
+    use baml_parser::ParseError as E;
+    let span = Span {
+        file_id,
+        range: error.range(),
+    };
+    let diag = match error {
+        E::UnexpectedToken {
+            expected, found, ..
+        } => {
+            let label = DiagnosticText::new()
+                .text("expected ")
+                .code(expected)
+                .text(", found ")
+                .code(found);
+            Diagnostic::error(DiagnosticId::UnexpectedToken, "unexpected token")
+                .with_primary(span, label)
+        }
+        E::UnexpectedEof { expected, .. } => {
+            let label = DiagnosticText::new()
+                .text("expected ")
+                .code(expected)
+                .text(", found end of file");
+            Diagnostic::error(DiagnosticId::UnexpectedEof, "unexpected end of file")
+                .with_primary(span, label)
+        }
+        E::InvalidSyntax { message, .. } => {
+            Diagnostic::error(DiagnosticId::InvalidSyntax, "invalid syntax")
+                .with_primary(span, message.clone())
+        }
+        E::AmbiguousUnion { groupings, .. } => Diagnostic::error(
+            DiagnosticId::AmbiguousUnion,
+            ParseError::AMBIGUOUS_UNION_MESSAGE,
+        )
+        .with_primary(span, ParseError::ambiguous_union_label(groupings)),
+        E::RemovedFeature { message, .. } => {
+            Diagnostic::error(DiagnosticId::RemovedFeature, "removed language feature")
+                .with_primary(span, message.clone())
+        }
+        E::InvalidStringEscape { issue, .. } => {
+            Diagnostic::error(DiagnosticId::InvalidStringEscape, issue.to_string())
+                .with_primary(span, issue.kind.label())
+        }
+        E::InvalidDirective { message, .. } => {
+            Diagnostic::error(DiagnosticId::MalformedAttribute, message.clone())
+                .with_primary(span, "invalid directive")
+        }
+    };
+    diag.with_phase(DiagnosticPhase::Parse)
+}
+
 // ============================================================================
 // TypeError
 // ============================================================================

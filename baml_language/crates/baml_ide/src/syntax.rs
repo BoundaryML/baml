@@ -21,6 +21,10 @@ use text_size::{TextRange, TextSize};
 ///
 /// For go-to-definition the caller filters on identifier tokens
 /// (`token.kind() == SyntaxKind::WORD`).
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 pub fn find_token_at_offset(
     db: &dyn salsa::Database,
     file: SourceFile,

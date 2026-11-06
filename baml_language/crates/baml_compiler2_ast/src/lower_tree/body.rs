@@ -225,7 +225,18 @@ fn statement(ctx: &mut LoweringContext, v: View<'_>, stmt: AnyStmt) -> Option<St
                 let call = nested_test_register_call(ctx, v, id, collector);
                 ctx.alloc_stmt(Stmt::Expr(call), v.range_of(id))
             }
-            None => ctx.alloc_stmt(Stmt::Missing, v.range_of(id)),
+            None => {
+                let kind = if v.tree.tokens().kind(v.node(id).kw.idx) == TokenKind::Testset {
+                    crate::lowering_diagnostic::TestBlockKind::Testset
+                } else {
+                    crate::lowering_diagnostic::TestBlockKind::Test
+                };
+                ctx.diags.push(LoweringDiagnostic::TestOutsideTestset {
+                    kind,
+                    span: v.range_of(id),
+                });
+                ctx.alloc_stmt(Stmt::Missing, v.range_of(id))
+            }
         },
         AnyStmt::Bogus(id) => ctx.alloc_stmt(Stmt::Missing, v.range_of(id)),
     })
@@ -1261,16 +1272,8 @@ pub(crate) fn lower_params(
         let param = *v.node(id);
         let default = param.default.and_then(|default| v.node(default).value.ok());
         let index = lowered.len();
-        let name = match param.name {
-            Ok(name) => Some(name),
-            Err(_) => {
-                diags.push(LoweringDiagnostic::MissingParamName {
-                    function_name: owner_name.to_string(),
-                    span: v.range_of(id),
-                });
-                None
-            }
-        };
+        // A missing name was reported by the parser.
+        let name = param.name.ok();
         if let Some(default) = default {
             if !defaults_allowed {
                 diags.push(LoweringDiagnostic::UnsupportedParameterDefault {

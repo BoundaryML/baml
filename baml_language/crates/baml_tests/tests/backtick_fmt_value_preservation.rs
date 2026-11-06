@@ -30,6 +30,10 @@ fn backtick_value(node_text: &str) -> String {
 }
 
 /// Map `f` over every backtick literal in `src`, in source order.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 fn backtick_map(src: &str, f: impl Fn(&str) -> String) -> Vec<String> {
     let mut db = db_with_root(std::path::Path::new("."));
     let file = db.file("main.baml", src);

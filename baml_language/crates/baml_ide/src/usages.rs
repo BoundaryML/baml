@@ -117,6 +117,10 @@ fn workspace_search_files(
 // ── top-level items ──────────────────────────────────────────────────────────
 
 /// Scan workspace files for name tokens resolving to the same definition.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 fn find_item_usages(
     db: &dyn baml_compiler2_hir::Db,
     current_file: SourceFile,

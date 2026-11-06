@@ -35,15 +35,15 @@ use text_size::TextRange;
 /// removed when its layer lands or the difference is ruled acceptable.
 pub const PENDING: &[(&str, &str)] = &[
     (
-        "projects/diagnostic_errors/unknown_attributes/unknown_attributes.baml",
+        "projects/broken_syntax/unknown_attributes/unknown_attributes.baml",
         "a `@@` before a declaration is not a position in the new syntax (reported, one `Bogus`); rowan attached it to the function",
     ),
     (
-        "projects/diagnostic_errors/assignment_expr_position/main.baml",
+        "projects/broken_syntax/assignment_expr_position/main.baml",
         "an assignment in expression position is a parse error with no node; rowan kept a `BINARY_EXPR` and reported it from the lowering",
     ),
     (
-        "projects/diagnostic_errors/null_handling/null_handling.baml",
+        "projects/broken_syntax/null_handling/null_handling.baml",
         "an assignment in expression position is a parse error with no node; rowan kept a `BINARY_EXPR` and reported it from the lowering",
     ),
     (
@@ -75,7 +75,7 @@ pub const PENDING: &[(&str, &str)] = &[
         "`>>` is two `>` tokens: both generic lists close after the attribute error",
     ),
     (
-        "projects/broken_syntax/test_invalid_contexts/main.baml",
+        "projects/diagnostic_errors/test_invalid_contexts/main.baml",
         "a `test` outside a testset is a validation diagnostic (P3.2), not a parse error",
     ),
     (

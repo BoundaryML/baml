@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[main.baml:8:14]
+ 8 │     let y = (x = 5);
+   ·              ──┬──
+   ·                ╰── assignment is not allowed in expression position; assignment is a statement
+   ╰────

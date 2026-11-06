@@ -8,7 +8,7 @@ SourceFile@203..959
     name: Name@209..223
       token: Word "MalformedClass" @209..223
     l: LBrace "{" @224..225
-    members: Field@303..329
+    members: Field@303..330
       name: Name@303..312
         token: Word "bad_field" @303..312
       ty: PathType@313..329
@@ -24,8 +24,6 @@ SourceFile@203..959
             head: Name@325..328
               token: Word "int" @325..328
           r: Greater ">" @328..329
-    members: Bogus@329..330
-      tokens: Greater ">" @329..330
     members: Field@400..427
       name: Name@400..410
         token: Word "good_field" @400..410
@@ -97,16 +95,16 @@ SourceFile@203..959
               token: Word "int" @649..652
           r: Greater ">" @652..653
     r: RBrace "}" @654..655
-  items: FunctionDef@692..729
+  items: FunctionDef@692..777
     kw: Function "function" @692..700
     name: Name@701..709
       token: Word "BadParam" @701..709
-    params: ParamList@709..729
+    params: ParamList@709..731
       l: LParen "(" @709..710
-      params: Param@710..729
+      params: Param@710..730
         name: Name@710..711
           token: Word "x" @710..711
-        ascription: TypeAscription@711..729
+        ascription: TypeAscription@711..730
           colon: Colon ":" @711..712
           ty: PathType@713..729
             head: Name@713..716
@@ -121,45 +119,36 @@ SourceFile@203..959
                 head: Name@725..728
                   token: Word "int" @725..728
               r: Greater ">" @728..729
-      r: <missing @729>
-    ret: <missing @729>
-    body: <missing @729>
-  items: Bogus@729..730
-    tokens: Greater ">" @729..730
-  items: Bogus@730..731
-    tokens: RParen ")" @730..731
-  items: Bogus@732..734
-    tokens: Arrow "->" @732..734
-  items: Bogus@735..741
-    tokens: Word "string" @735..741
-  items: Bogus@742..743
-    tokens: LBrace "{" @742..743
-  items: RemovedItem@746..752
-    kw: Client "client" @746..752
-  items: Bogus@752..753
-    tokens: Colon ":" @752..753
-  items: Bogus@754..758
-    tokens: Word "GPT4" @754..758
-  items: Bogus@761..767
-    tokens: Prompt "prompt" @761..767
-  items: Bogus@767..768
-    tokens: Colon ":" @767..768
-  items: Bogus@769..770
-    tokens: BacktickStart "`" @769..770
-  items: Bogus@770..774
-    tokens: TemplateChunk "test" @770..774
-  items: Bogus@774..775
-    tokens: BacktickEnd "`" @774..775
-  items: Bogus@776..777
-    tokens: RBrace "}" @776..777
-  items: FunctionDef@816..860
+      r: RParen ")" @730..731
+    ret: ReturnType@732..741
+      arrow: Arrow "->" @732..734
+      ty: PathType@735..741
+        head: Name@735..741
+          token: Word "string" @735..741
+    body: LlmBody@742..777
+      l: LBrace "{" @742..743
+      fields: ClientField@746..758
+        kw: Client "client" @746..752
+        colon: Colon ":" @752..753
+        value: PathExpr@754..758
+          head: Name@754..758
+            token: Word "GPT4" @754..758
+      fields: PromptField@761..775
+        kw: Prompt "prompt" @761..767
+        colon: Colon ":" @767..768
+        value: BacktickString@769..775
+          open: BacktickStart "`" @769..770
+          parts: TemplateChunk "test" @770..774
+          close: BacktickEnd "`" @774..775
+      r: RBrace "}" @776..777
+  items: FunctionDef@816..897
     kw: Function "function" @816..824
     name: Name@825..838
       token: Word "BadReturnType" @825..838
     params: ParamList@838..840
       l: LParen "(" @838..839
       r: RParen ")" @839..840
-    ret: ReturnType@841..860
+    ret: ReturnType@841..861
       arrow: Arrow "->" @841..843
       ty: PathType@844..860
         head: Name@844..847
@@ -174,30 +163,23 @@ SourceFile@203..959
             head: Name@856..859
               token: Word "int" @856..859
           r: Greater ">" @859..860
-    body: <missing @860>
-  items: Bogus@860..861
-    tokens: Greater ">" @860..861
-  items: Bogus@862..863
-    tokens: LBrace "{" @862..863
-  items: RemovedItem@866..872
-    kw: Client "client" @866..872
-  items: Bogus@872..873
-    tokens: Colon ":" @872..873
-  items: Bogus@874..878
-    tokens: Word "GPT4" @874..878
-  items: Bogus@881..887
-    tokens: Prompt "prompt" @881..887
-  items: Bogus@887..888
-    tokens: Colon ":" @887..888
-  items: Bogus@889..890
-    tokens: BacktickStart "`" @889..890
-  items: Bogus@890..894
-    tokens: TemplateChunk "test" @890..894
-  items: Bogus@894..895
-    tokens: BacktickEnd "`" @894..895
-  items: Bogus@896..897
-    tokens: RBrace "}" @896..897
-  items: TypeAliasDef@926..958
+    body: LlmBody@862..897
+      l: LBrace "{" @862..863
+      fields: ClientField@866..878
+        kw: Client "client" @866..872
+        colon: Colon ":" @872..873
+        value: PathExpr@874..878
+          head: Name@874..878
+            token: Word "GPT4" @874..878
+      fields: PromptField@881..895
+        kw: Prompt "prompt" @881..887
+        colon: Colon ":" @887..888
+        value: BacktickString@889..895
+          open: BacktickStart "`" @889..890
+          parts: TemplateChunk "test" @890..894
+          close: BacktickEnd "`" @894..895
+      r: RBrace "}" @896..897
+  items: TypeAliasDef@926..959
     kw: Type "type" @926..930
     name: Name@931..939
       token: Word "BadAlias" @931..939
@@ -215,38 +197,7 @@ SourceFile@203..959
           head: Name@954..957
             token: Word "int" @954..957
         r: Greater ">" @957..958
-  items: Bogus@958..959
-    tokens: Greater ">" @958..959
-error @329..330: expected Unexpected token in class body, found '>'
-error @729..730: expected ')', found '>'
-error @729..730: expected return type (->), found '>'
-error @729..730: expected function body, found '>'
-error @729..730: expected top-level declaration, found '>'
-error @730..731: expected top-level declaration, found ')'
-error @732..734: expected top-level declaration, found '->'
-error @735..741: expected top-level declaration, found identifier
-error @742..743: expected top-level declaration, found '{'
-error @752..753: expected client name, found ':'
-error @752..753: expected config block, found ':'
-error @752..753: expected top-level declaration, found ':'
-error @754..758: expected top-level declaration, found identifier
-error @761..767: expected top-level declaration, found identifier
-error @767..768: expected top-level declaration, found ':'
-error @769..770: expected top-level declaration, found '`'
-error @770..774: expected top-level declaration, found template text
-error @774..775: expected top-level declaration, found '`'
-error @776..777: expected top-level declaration, found '}'
-error @860..861: expected function body, found '>'
-error @860..861: expected top-level declaration, found '>'
-error @862..863: expected top-level declaration, found '{'
-error @872..873: expected client name, found ':'
-error @872..873: expected config block, found ':'
-error @872..873: expected top-level declaration, found ':'
-error @874..878: expected top-level declaration, found identifier
-error @881..887: expected top-level declaration, found identifier
-error @887..888: expected top-level declaration, found ':'
-error @889..890: expected top-level declaration, found '`'
-error @890..894: expected top-level declaration, found template text
-error @894..895: expected top-level declaration, found '`'
-error @896..897: expected top-level declaration, found '}'
-error @958..959: expected top-level declaration, found '>'
+error @329..330: unmatched `>` in type expression (found 1 extra)
+error @729..730: unmatched `>` in type expression (found 1 extra)
+error @860..861: unmatched `>` in type expression (found 1 extra)
+error @958..959: unmatched `>` in type expression (found 1 extra)

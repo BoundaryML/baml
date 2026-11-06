@@ -244,6 +244,17 @@ interface Data {}"#,
     /// baml:$trace=missing
     function value(self) -> int throws never;
 }"#,
+    ] {
+        assert_eq!(
+            errors(source),
+            [r#"Trace hooks can only be attached to function definitions.
+help: Place `/// baml:$trace=...` immediately before a function definition."#],
+            "{source}"
+        );
+    }
+    // A hook that precedes no declaration at all is an orphan doc line: the
+    // parser reports the run, whatever it holds, with one message.
+    for source in [
         r#"function target() -> int {
     /// baml:$trace=missing
     1
@@ -253,8 +264,9 @@ interface Data {}"#,
     ] {
         assert_eq!(
             errors(source),
-            [r#"Trace hooks can only be attached to function definitions.
-help: Place `/// baml:$trace=...` immediately before a function definition."#],
+            [
+                "`///` doc comments and `//baml:` directives must directly precede the declaration they belong to; use `//` for a plain comment"
+            ],
             "{source}"
         );
     }

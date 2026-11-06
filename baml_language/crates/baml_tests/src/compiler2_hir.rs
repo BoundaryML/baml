@@ -1503,26 +1503,35 @@ function foo(user: User) -> string {
     }
 
     #[test]
-    fn an_attribute_on_a_function_is_unknown() {
-        use baml_base::AttributePosition;
+    fn a_block_attribute_before_a_function_is_a_parse_error() {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
-        // Attributes are a fixed vocabulary and none of it applies to a
-        // function, so any name written there is reported at its position.
+        // A `@@` attribute is written inside the body of the declaration it
+        // describes; before a function it describes nothing, so the parser
+        // reports it and HIR never sees an attribute to reject.
         let mut db = make_db();
         let file = db.file(
             "user_function_attr.baml",
             "@@internal.uses(vm)\nfunction helper(value: string) -> string {\n  value\n}",
         );
 
+        let errors = baml_parser::typed_parse_errors(&db, file);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                baml_parser::ParseError::InvalidSyntax { message, .. }
+                    if message.contains("`@@` attribute is written inside the body")
+            )),
+            "{errors:?}"
+        );
         let index = file_semantic_index(&db, file);
-        assert!(index.diagnostics().iter().any(|diag| {
-            matches!(
-                diag,
-                Hir2Diagnostic::UnknownAttribute { attr_name, position: AttributePosition::Function, .. }
-                    if attr_name.as_str() == "internal.uses"
-            )
-        }));
+        assert!(
+            index
+                .diagnostics()
+                .iter()
+                .all(|diag| !matches!(diag, Hir2Diagnostic::UnknownAttribute { .. })),
+            "the attribute never reaches HIR"
+        );
     }
 
     #[test]
@@ -2106,7 +2115,8 @@ function foo(user: User) -> string {
     /// is part of the declaration, not a comment: the doc stays attached.
     /// Every documented native in the stdlib has this shape (`/// …`, then
     /// `//baml:mut_self`, then `function push(…)`). An ordinary `// …` line
-    /// there still detaches the doc.
+    /// there is trivia, as in Rust: the doc lines on either side of it are
+    /// one docstring.
     #[test]
     fn a_directive_between_doc_and_declaration_keeps_the_doc() {
         let mut db = make_db();
@@ -2119,7 +2129,7 @@ function directed(x: int) -> int { x }
 /// After.
 function spanning(x: int) -> int { x }
 
-/// Detached.
+/// Not detached.
 // an ordinary comment
 function detached(x: int) -> int { x }
 
@@ -2146,7 +2156,10 @@ class Holder {
             doc(find_function_loc(&db, file, "spanning")).as_deref(),
             Some("Before.\nAfter.")
         );
-        assert_eq!(doc(find_function_loc(&db, file, "detached")), None);
+        assert_eq!(
+            doc(find_function_loc(&db, file, "detached")).as_deref(),
+            Some("Not detached.")
+        );
         assert_eq!(
             doc(find_method_loc(&db, file, "Holder", "method")).as_deref(),
             Some("The method's own doc.")

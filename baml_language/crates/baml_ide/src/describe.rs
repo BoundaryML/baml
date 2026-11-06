@@ -1091,6 +1091,10 @@ fn is_item_node(kind: SyntaxKind) -> bool {
 }
 
 /// Find the text range of a member CST node (FIELD, `ENUM_VARIANT`) for a name span.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 fn find_member_range(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -1118,6 +1122,10 @@ fn find_member_range(
 }
 
 /// Find the text range of the enclosing item CST node for a name span.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 fn find_item_range(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -1728,6 +1736,10 @@ fn describe_type_method_at(
 /// The byte range of a method's name token within its `FUNCTION_DEF` node.
 /// `span` is the method's full source span. Used to anchor reference search at
 /// the name (not the leading `function` keyword / trivia).
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 fn function_def_name_span(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -1929,6 +1941,10 @@ fn resolve_type_for_item(
 // ── Docstring extraction ─────────────────────────────────────────────────────
 
 /// Extract leading `///` doc comments from the CST node preceding the item.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 fn extract_docstring(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -2380,6 +2396,10 @@ fn docstring_prefixed_body(docstring: Option<&str>, body: &str) -> String {
 /// comment token, so it is never touched. A whole-line comment is removed with
 /// its indentation and trailing newline; a trailing inline comment is removed
 /// in place, keeping the code before it. `///` doc comments are kept.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 fn clean_body_source(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -2460,6 +2480,10 @@ fn clean_body_source(
 ///
 /// Returns `None` for user functions (whose body is meaningful and shown) and
 /// non-function symbols.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 fn builtin_signature_range(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,

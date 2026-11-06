@@ -93,6 +93,10 @@ pub struct FileMetrics {
 /// Compiler-generated functions (`Foo@spec` companions, `$init_test`
 /// registrations), builtins, and bodiless declarations are skipped. Fan-in and
 /// recursion only see calls among the functions of `files`.
+#[expect(
+    deprecated,
+    reason = "reads the rowan tree until this consumer moves to the typed tree"
+)]
 pub fn project_metrics(db: &dyn baml_compiler2_hir::Db, files: &[SourceFile]) -> ProjectMetrics {
     let mut functions = Vec::new();
     let mut file_metrics = Vec::new();

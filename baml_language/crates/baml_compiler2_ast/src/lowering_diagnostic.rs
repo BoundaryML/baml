@@ -11,6 +11,13 @@ use text_size::TextRange;
 /// [`LoweringDiagnostic::InvalidAssignmentTarget`].
 pub const DESTRUCTURING_DOCS_URL: &str = "https://developer.boundaryml.com/baml/book/patterns";
 
+/// Which keyword a test block was written with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TestBlockKind {
+    Test,
+    Testset,
+}
+
 /// Diagnostic emitted during CST → AST lowering.
 ///
 /// These are structural problems ("missing name token", "unparseable type")
@@ -155,6 +162,12 @@ pub enum LoweringDiagnostic {
     /// A `let type` binding at file scope. It binds a runtime type for the
     /// rest of a block, and a file has no block for it to bind in.
     TopLevelLetType { span: TextRange },
+
+    /// A `test`/`testset` block in a body that is no testset's.
+    TestOutsideTestset {
+        kind: TestBlockKind,
+        span: TextRange,
+    },
 
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
@@ -577,6 +590,20 @@ impl LoweringDiagnostic {
                 format!("invalid top-level `const`: {reason}"),
                 *span,
                 "a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`",
+            ),
+            LoweringDiagnostic::TestOutsideTestset { kind, span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "invalid syntax".to_string(),
+                *span,
+                match kind {
+                    TestBlockKind::Test => {
+                        "test blocks are only allowed at the top level or inside a testset"
+                    }
+                    TestBlockKind::Testset => {
+                        "testset blocks are only allowed at the top level or inside a testset"
+                    }
+                },
             ),
             LoweringDiagnostic::TopLevelLetType { span } => (
                 DiagnosticId::InvalidSyntax,

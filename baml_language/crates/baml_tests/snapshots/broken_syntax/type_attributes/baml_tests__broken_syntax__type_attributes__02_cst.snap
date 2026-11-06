@@ -144,12 +144,10 @@ SourceFile@100..833
             token: String "\"key\"" @351..356
           r: RParen ")" @356..357
       sep: Comma "," @357..358
-    members: Field@359..363
+    members: Field@359..364
       name: Name@359..363
         token: Word "NBar" @359..363
       ty: <missing @359>
-    members: Bogus@363..364
-      tokens: Greater ">" @363..364
     r: RBrace "}" @365..366
   items: ClassDef@368..451
     kw: Class "class" @368..373
@@ -177,12 +175,10 @@ SourceFile@100..833
           name: Name@438..442
             token: Word "done" @438..442
       sep: Comma "," @442..443
-    members: Field@444..448
+    members: Field@444..449
       name: Name@444..448
         token: Word "NBar" @444..448
       ty: <missing @444>
-    members: Bogus@448..449
-      tokens: Greater ">" @448..449
     r: RBrace "}" @450..451
   items: ClassDef@453..536
     kw: Class "class" @453..458
@@ -291,31 +287,26 @@ SourceFile@100..833
             token: String "\"key\"" @817..822
           r: RParen ")" @822..823
       sep: Comma "," @823..824
-    members: Field@825..829
+    members: Field@825..831
       name: Name@825..829
         token: Word "NBar" @825..829
       ty: <missing @825>
-    members: Bogus@829..830
-      tokens: Greater ">" @829..830
-    members: Bogus@830..831
-      tokens: Greater ">" @830..831
     r: RBrace "}" @832..833
 error @192..193: Unexpected '@' in type expression
 error @269..270: Unexpected '@' in type expression
 error @344..345: expected '>', found '@'
 error @359..363: field 'NBar' is missing a type annotation
-error @363..364: expected Unexpected token in class body, found '>'
+error @363..364: unmatched `>` in type expression (found 1 extra)
 error @430..431: expected '>', found '@'
 error @444..448: field 'NBar' is missing a type annotation
-error @448..449: expected Unexpected token in class body, found '>'
+error @448..449: unmatched `>` in type expression (found 1 extra)
 error @509..510: Unexpected '@' in type expression
 error @608..609: Unexpected '@' in type expression
 error @700..701: Unexpected '@' in type expression
 error @810..811: expected '>', found '@'
 error @810..811: expected '>', found '@'
 error @825..829: field 'NBar' is missing a type annotation
-error @829..830: expected Unexpected token in class body, found '>'
-error @830..831: expected Unexpected token in class body, found '>'
+error @829..831: unmatched `>` in type expression (found 2 extra)
 === signatures.baml ===
 SourceFile@154..758
   items: ClassDef@154..174
@@ -362,15 +353,11 @@ SourceFile@154..758
     ty: PathType@240..244
       head: Name@240..244
         token: Word "EFoo" @240..244
-  items: Bogus@245..246
+  items: Bogus@245..260
     tokens: At "@" @245..246
-  items: Bogus@246..251
     tokens: Word "alias" @246..251
-  items: Bogus@251..252
     tokens: LParen "(" @251..252
-  items: Bogus@252..259
     tokens: String "\"alias\"" @252..259
-  items: Bogus@259..260
     tokens: RParen ")" @259..260
   items: TypeAliasDef@262..298
     kw: Type "type" @262..266
@@ -380,13 +367,10 @@ SourceFile@154..758
     ty: PathType@294..298
       head: Name@294..298
         token: Word "EFoo" @294..298
-  items: Bogus@299..300
+  items: Bogus@299..311
     tokens: At "@" @299..300
-  items: Bogus@300..306
     tokens: Stream "stream" @300..306
-  items: Bogus@306..307
     tokens: Dot "." @306..307
-  items: Bogus@307..311
     tokens: Word "done" @307..311
   items: TypeAliasDef@313..348
     kw: Type "type" @313..317
@@ -396,23 +380,16 @@ SourceFile@154..758
     ty: PathType@344..348
       head: Name@344..348
         token: Word "EFoo" @344..348
-  items: Bogus@349..350
+  items: Bogus@349..377
     tokens: At "@" @349..350
-  items: Bogus@350..355
     tokens: Word "alias" @350..355
-  items: Bogus@355..356
     tokens: LParen "(" @355..356
-  items: Bogus@356..363
     tokens: String "\"alias\"" @356..363
-  items: Bogus@363..364
     tokens: RParen ")" @363..364
-  items: Bogus@365..366
+    tokens: Whitespace " " @364..365
     tokens: At "@" @365..366
-  items: Bogus@366..372
     tokens: Stream "stream" @366..372
-  items: Bogus@372..373
     tokens: Dot "." @372..373
-  items: Bogus@373..377
     tokens: Word "done" @373..377
   items: TypeAliasDef@379..417
     kw: Type "type" @379..383
@@ -427,15 +404,11 @@ SourceFile@154..758
       ty: PathType@415..417
         head: Name@415..417
           token: Word "EB" @415..417
-  items: Bogus@418..419
+  items: Bogus@418..433
     tokens: At "@" @418..419
-  items: Bogus@419..424
     tokens: Word "alias" @419..424
-  items: Bogus@424..425
     tokens: LParen "(" @424..425
-  items: Bogus@425..432
     tokens: String "\"alias\"" @425..432
-  items: Bogus@432..433
     tokens: RParen ")" @432..433
   items: FunctionDef@435..472
     kw: Function "function" @435..443
@@ -454,27 +427,23 @@ SourceFile@154..758
       r: <missing @473>
     ret: <missing @473>
     body: <missing @473>
-  items: Bogus@473..474
+  items: Bogus@473..513
     tokens: At "@" @473..474
-  items: Bogus@474..479
     tokens: Word "alias" @474..479
-  items: Bogus@479..480
     tokens: LParen "(" @479..480
-  items: Bogus@480..487
     tokens: String "\"param\"" @480..487
-  items: Bogus@487..488
     tokens: RParen ")" @487..488
-  items: Bogus@488..489
     tokens: RParen ")" @488..489
-  items: Bogus@490..492
+    tokens: Whitespace " " @489..490
     tokens: Arrow "->" @490..492
-  items: Bogus@493..499
+    tokens: Whitespace " " @492..493
     tokens: Word "string" @493..499
-  items: Bogus@500..501
+    tokens: Whitespace " " @499..500
     tokens: LBrace "{" @500..501
-  items: Bogus@504..511
+    tokens: Newline "\n" @501..502
+    tokens: Whitespace "  " @502..504
     tokens: String "\"hello\"" @504..511
-  items: Bogus@512..513
+    tokens: Newline "\n" @511..512
     tokens: RBrace "}" @512..513
   items: FunctionDef@515..559
     kw: Function "function" @515..523
@@ -493,25 +462,22 @@ SourceFile@154..758
       r: <missing @560>
     ret: <missing @560>
     body: <missing @560>
-  items: Bogus@560..561
+  items: Bogus@560..597
     tokens: At "@" @560..561
-  items: Bogus@561..567
     tokens: Stream "stream" @561..567
-  items: Bogus@567..568
     tokens: Dot "." @567..568
-  items: Bogus@568..572
     tokens: Word "done" @568..572
-  items: Bogus@572..573
     tokens: RParen ")" @572..573
-  items: Bogus@574..576
+    tokens: Whitespace " " @573..574
     tokens: Arrow "->" @574..576
-  items: Bogus@577..583
+    tokens: Whitespace " " @576..577
     tokens: Word "string" @577..583
-  items: Bogus@584..585
+    tokens: Whitespace " " @583..584
     tokens: LBrace "{" @584..585
-  items: Bogus@588..595
+    tokens: Newline "\n" @585..586
+    tokens: Whitespace "  " @586..588
     tokens: String "\"hello\"" @588..595
-  items: Bogus@596..597
+    tokens: Newline "\n" @595..596
     tokens: RBrace "}" @596..597
   items: FunctionDef@599..639
     kw: Function "function" @599..607
@@ -526,31 +492,27 @@ SourceFile@154..758
         head: Name@635..639
           token: Word "EFoo" @635..639
     body: <missing @640>
-  items: Bogus@640..641
+  items: Bogus@640..676
     tokens: At "@" @640..641
-  items: Bogus@641..646
     tokens: Word "alias" @641..646
-  items: Bogus@646..647
     tokens: LParen "(" @646..647
-  items: Bogus@647..655
     tokens: String "\"return\"" @647..655
-  items: Bogus@655..656
     tokens: RParen ")" @655..656
-  items: Bogus@657..658
+    tokens: Whitespace " " @656..657
     tokens: LBrace "{" @657..658
-  items: Bogus@661..665
+    tokens: Newline "\n" @658..659
+    tokens: Whitespace "  " @659..661
     tokens: Word "EFoo" @661..665
-  items: Bogus@666..667
+    tokens: Whitespace " " @665..666
     tokens: LBrace "{" @666..667
-  items: Bogus@668..669
+    tokens: Whitespace " " @667..668
     tokens: Word "x" @668..669
-  items: Bogus@669..670
     tokens: Colon ":" @669..670
-  items: Bogus@671..672
+    tokens: Whitespace " " @670..671
     tokens: Integer "1" @671..672
-  items: Bogus@673..674
+    tokens: Whitespace " " @672..673
     tokens: RBrace "}" @673..674
-  items: Bogus@675..676
+    tokens: Newline "\n" @674..675
     tokens: RBrace "}" @675..676
   items: FunctionDef@678..725
     kw: Function "function" @678..686
@@ -565,107 +527,43 @@ SourceFile@154..758
         head: Name@721..725
           token: Word "EFoo" @721..725
     body: <missing @726>
-  items: Bogus@726..727
+  items: Bogus@726..758
     tokens: At "@" @726..727
-  items: Bogus@727..733
     tokens: Stream "stream" @727..733
-  items: Bogus@733..734
     tokens: Dot "." @733..734
-  items: Bogus@734..738
     tokens: Word "done" @734..738
-  items: Bogus@739..740
+    tokens: Whitespace " " @738..739
     tokens: LBrace "{" @739..740
-  items: Bogus@743..747
+    tokens: Newline "\n" @740..741
+    tokens: Whitespace "  " @741..743
     tokens: Word "EFoo" @743..747
-  items: Bogus@748..749
+    tokens: Whitespace " " @747..748
     tokens: LBrace "{" @748..749
-  items: Bogus@750..751
+    tokens: Whitespace " " @749..750
     tokens: Word "x" @750..751
-  items: Bogus@751..752
     tokens: Colon ":" @751..752
-  items: Bogus@753..754
+    tokens: Whitespace " " @752..753
     tokens: Integer "1" @753..754
-  items: Bogus@755..756
+    tokens: Whitespace " " @754..755
     tokens: RBrace "}" @755..756
-  items: Bogus@757..758
+    tokens: Newline "\n" @756..757
     tokens: RBrace "}" @757..758
 error @245..246: expected top-level declaration, found '@'
-error @246..251: expected top-level declaration, found identifier
-error @251..252: expected top-level declaration, found '('
-error @252..259: expected top-level declaration, found '"'
-error @259..260: expected top-level declaration, found ')'
 error @299..300: expected top-level declaration, found '@'
-error @300..306: expected top-level declaration, found identifier
-error @306..307: expected top-level declaration, found '.'
-error @307..311: expected top-level declaration, found identifier
 error @349..350: expected top-level declaration, found '@'
-error @350..355: expected top-level declaration, found identifier
-error @355..356: expected top-level declaration, found '('
-error @356..363: expected top-level declaration, found '"'
-error @363..364: expected top-level declaration, found ')'
-error @365..366: expected top-level declaration, found '@'
-error @366..372: expected top-level declaration, found identifier
-error @372..373: expected top-level declaration, found '.'
-error @373..377: expected top-level declaration, found identifier
 error @418..419: expected top-level declaration, found '@'
-error @419..424: expected top-level declaration, found identifier
-error @424..425: expected top-level declaration, found '('
-error @425..432: expected top-level declaration, found '"'
-error @432..433: expected top-level declaration, found ')'
 error @473..474: expected ')', found '@'
 error @473..474: expected return type (->), found '@'
 error @473..474: expected function body, found '@'
 error @473..474: expected top-level declaration, found '@'
-error @474..479: expected top-level declaration, found identifier
-error @479..480: expected top-level declaration, found '('
-error @480..487: expected top-level declaration, found '"'
-error @487..488: expected top-level declaration, found ')'
-error @488..489: expected top-level declaration, found ')'
-error @490..492: expected top-level declaration, found '->'
-error @493..499: expected top-level declaration, found identifier
-error @500..501: expected top-level declaration, found '{'
-error @504..511: expected top-level declaration, found '"'
-error @512..513: expected top-level declaration, found '}'
 error @560..561: expected ')', found '@'
 error @560..561: expected return type (->), found '@'
 error @560..561: expected function body, found '@'
 error @560..561: expected top-level declaration, found '@'
-error @561..567: expected top-level declaration, found identifier
-error @567..568: expected top-level declaration, found '.'
-error @568..572: expected top-level declaration, found identifier
-error @572..573: expected top-level declaration, found ')'
-error @574..576: expected top-level declaration, found '->'
-error @577..583: expected top-level declaration, found identifier
-error @584..585: expected top-level declaration, found '{'
-error @588..595: expected top-level declaration, found '"'
-error @596..597: expected top-level declaration, found '}'
 error @640..641: expected function body, found '@'
 error @640..641: expected top-level declaration, found '@'
-error @641..646: expected top-level declaration, found identifier
-error @646..647: expected top-level declaration, found '('
-error @647..655: expected top-level declaration, found '"'
-error @655..656: expected top-level declaration, found ')'
-error @657..658: expected top-level declaration, found '{'
-error @661..665: expected top-level declaration, found identifier
-error @666..667: expected top-level declaration, found '{'
-error @668..669: expected top-level declaration, found identifier
-error @669..670: expected top-level declaration, found ':'
-error @671..672: expected top-level declaration, found integer
-error @673..674: expected top-level declaration, found '}'
-error @675..676: expected top-level declaration, found '}'
 error @726..727: expected function body, found '@'
 error @726..727: expected top-level declaration, found '@'
-error @727..733: expected top-level declaration, found identifier
-error @733..734: expected top-level declaration, found '.'
-error @734..738: expected top-level declaration, found identifier
-error @739..740: expected top-level declaration, found '{'
-error @743..747: expected top-level declaration, found identifier
-error @748..749: expected top-level declaration, found '{'
-error @750..751: expected top-level declaration, found identifier
-error @751..752: expected top-level declaration, found ':'
-error @753..754: expected top-level declaration, found integer
-error @755..756: expected top-level declaration, found '}'
-error @757..758: expected top-level declaration, found '}'
 === unions.baml ===
 SourceFile@157..616
   items: ClassDef@157..175

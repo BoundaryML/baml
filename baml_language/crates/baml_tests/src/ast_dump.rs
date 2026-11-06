@@ -361,6 +361,11 @@ fn typed_bodies(text: &str) -> BTreeMap<(u32, u32), (ExprBody, AstSourceMap)> {
 /// keep differing; the list may only shrink.
 pub const BODY_PENDING: &[(&str, &str, &str)] = &[
     (
+        "projects/diagnostic_errors/header_after_value/main.baml",
+        "header_after_value",
+        "ruled 2026-11-04: a header after the last expression makes it a statement, so the block has no value; rowan kept the value",
+    ),
+    (
         "projects/broken_syntax/banned_expressions/banned_expressions.baml",
         "ParenAssignSimple",
         "`(x = 5)` in expression position: the parser reports it and keeps `x`; rowan lowered the whole assignment to `Missing`",
@@ -406,29 +411,24 @@ pub const BODY_PENDING: &[(&str, &str, &str)] = &[
         "`(x = 5)` in expression position: the parser reports it and keeps `x`; rowan lowered the whole assignment to `Missing`",
     ),
     (
-        "projects/diagnostic_errors/assignment_expr_position/main.baml",
+        "projects/broken_syntax/assignment_expr_position/main.baml",
         "assignment_in_expression_position",
         "`(x = 5)` in expression position: the parser reports it and keeps `x`; rowan lowered the whole assignment to `Missing`",
     ),
     (
-        "projects/diagnostic_errors/null_handling/null_handling.baml",
-        "OptionalChaining",
+        "projects/broken_syntax/null_handling/null_handling.baml",
+        "OptionalChainingAssignmentValue",
         "`(x = 5)` in expression position: the parser reports it and keeps `x`; rowan lowered the whole assignment to `Missing`",
     ),
     (
-        "projects/diagnostic_errors/null_handling/null_handling.baml",
-        "OptionalIndex",
+        "projects/broken_syntax/null_handling/null_handling.baml",
+        "OptionalIndexAssignmentValue",
         "`(x = 5)` in expression position: the parser reports it and keeps `x`; rowan lowered the whole assignment to `Missing`",
     ),
     (
-        "projects/diagnostic_errors/null_handling/null_handling.baml",
-        "Combined",
+        "projects/broken_syntax/null_handling/null_handling.baml",
+        "CombinedAssignmentValue",
         "`(x = 5)` in expression position: the parser reports it and keeps `x`; rowan lowered the whole assignment to `Missing`",
-    ),
-    (
-        "corpus/ns_unit_type/unit_type.baml",
-        "unit_header_after_value",
-        "ruled 2026-11-04: a header after the last expression makes it a statement, so the block has no value (rowan kept the value); the fixture becomes a diagnostic case at the cutover",
     ),
     (
         "projects/broken_syntax/banned_expressions/banned_expressions.baml",
@@ -641,12 +641,27 @@ fn item_label(item: &Item) -> String {
 /// shrink.
 pub const ITEM_PENDING: &[(&str, &str, &str)] = &[
     (
-        "projects/diagnostic_errors/trace_hook_placement/main.baml",
+        "projects/broken_syntax/type_attributes/nested.baml",
+        "class `AttributeInsideGenericArgument`",
+        "a stray `>` after a field's type is skipped inside the field (its span covers it, one token longer); rowan ended the field before it",
+    ),
+    (
+        "projects/broken_syntax/type_attributes/nested.baml",
+        "class `StreamAttributeInsideGenericArgument`",
+        "a stray `>` after a field's type is skipped inside the field (its span covers it, one token longer); rowan ended the field before it",
+    ),
+    (
+        "projects/broken_syntax/type_attributes/nested.baml",
+        "class `AttributeInsideNestedGenericArgument`",
+        "a stray `>` after a field's type is skipped inside the field (its span covers it, one token longer); rowan ended the field before it",
+    ),
+    (
+        "projects/broken_syntax/trace_hook_placement/main.baml",
         "let `global`",
         "rowan's file-scope `let` docstring keeps a `/// baml:$trace` line (its declaration walk skips them; the `let` walk did not); the typed lowering treats every declaration alike",
     ),
     (
-        "projects/diagnostic_errors/unknown_attributes/unknown_attributes.baml",
+        "projects/broken_syntax/unknown_attributes/unknown_attributes.baml",
         "function `helper`",
         "a `@@` before a declaration is a parse error in the new syntax, not the function's attribute (rowan attached it)",
     ),
@@ -664,11 +679,6 @@ pub const ITEM_PENDING: &[(&str, &str, &str)] = &[
         "projects/broken_syntax/parser_strings/nested_quotes.baml",
         "class `NestedQuotes`",
         "a string in a recovery position is one token, not re-split around its quotes (parity pending too)",
-    ),
-    (
-        "projects/broken_syntax/pending_greaters_fix/extra_greater.baml",
-        "*",
-        "a stray `>` recovers at the item head; rowan ran the items together (parity pending too)",
     ),
     (
         "projects/broken_syntax/type_attributes/nested.baml",
@@ -850,7 +860,10 @@ fn typed_items_match_rowan() {
 /// misplaced, malformed or repeated trace hooks (`reject_unsupported_trace_hooks`,
 /// `docstring::trace_hook`). Differences, each with its reason; an entry must
 /// keep differing.
-pub const DIAG_PENDING: &[(&str, &str)] = &[];
+pub const DIAG_PENDING: &[(&str, &str)] = &[(
+    "projects/parser_stress/rust.baml",
+    "`///` lines before Rust code document no declaration: an error now that docs are syntax; rowan read them as comments",
+)];
 
 /// The moved diagnostics of the rowan pipeline as `(range, message)`,
 /// sorted so the two sides compare as multisets.
