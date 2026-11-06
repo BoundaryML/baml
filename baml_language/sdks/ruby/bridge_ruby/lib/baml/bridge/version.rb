@@ -2,8 +2,8 @@
 
 module Baml
   module Bridge
-    TOOLCHAIN_VERSION = "0.25.1"
-    BRIDGE_RUNTIME_VERSION = "0.25.1"
+    TOOLCHAIN_VERSION = "0.25.2"
+    BRIDGE_RUNTIME_VERSION = "0.25.2"
     VERSION = TOOLCHAIN_VERSION
   end
 end
