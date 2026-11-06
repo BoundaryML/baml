@@ -1,0 +1,26 @@
+[package]
+name = "changelog"
+
+[generator.python]
+output_type = "python/pydantic"
+output_dir = "python"
+naming_convention = "language"
+
+[generator.rust]
+output_type = "rust"
+output_dir = "rust"
+naming_convention = "language"
+
+[generator.typescript]
+output_type = "typescript/node"
+output_dir = "typescript"
+naming_convention = "preserve-case"
+
+[generator.go]
+output_type = "go"
+output_dir = "go"
+naming_convention = "language"
+sdk_import_path = "example.com/changelog"
+
+[bridge.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"
