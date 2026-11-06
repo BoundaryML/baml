@@ -127,6 +127,21 @@ struct Memory {
     layout: Layout,
 }
 impl Memory {
+    fn try_slab(size: usize) -> Option<Self> {
+        let layout = Layout::from_size_align(size, size).expect("BAML out of memory");
+        // Do not fault in small pages before giving Linux its huge-page hint.
+        // The allocator zeroes each free run before publishing any object.
+        let ptr = unsafe { std::alloc::alloc(layout) };
+        if ptr.is_null() {
+            return None;
+        }
+        #[cfg(target_os = "linux")]
+        unsafe {
+            // Best effort only: correctness never depends on huge-page support.
+            libc::madvise(ptr.cast(), size, libc::MADV_HUGEPAGE);
+        }
+        Some(Self { ptr, layout })
+    }
     fn try_new(size: usize, align: usize) -> Option<Self> {
         let layout = Layout::from_size_align(size, align).expect("BAML out of memory");
         let ptr = unsafe { alloc_zeroed(layout) };
@@ -143,12 +158,13 @@ impl Drop for Memory {
     }
 }
 struct Block {
-    mem: Memory,
+    base: *mut u8,
     starts: [u64; SLOTS / 64],
     marks: [u64; SLOTS / 64],
     sizes: [u16; SLOTS],
     lines: [u8; BLOCK_BYTES / LINE_BYTES],
     needs_sweep: bool,
+    next_line: usize,
 }
 fn bit(bits: &[u64; SLOTS / 64], i: usize) -> bool {
     bits[i / 64] & (1 << (i % 64)) != 0
@@ -157,14 +173,15 @@ fn set(bits: &mut [u64; SLOTS / 64], i: usize) {
     bits[i / 64] |= 1 << (i % 64);
 }
 impl Block {
-    fn new(mem: Memory) -> Self {
+    fn new(base: *mut u8) -> Self {
         Self {
-            mem,
+            base,
             starts: [0; 32],
             marks: [0; 32],
             sizes: [0; SLOTS],
             lines: [0; 256],
             needs_sweep: false,
+            next_line: 0,
         }
     }
     fn sweep(&mut self) {
@@ -176,7 +193,7 @@ impl Block {
         }
     }
     fn candidate(&self, address: usize) -> Option<usize> {
-        let offset = address - self.mem.ptr as usize;
+        let offset = address - self.base as usize;
         if offset >= BLOCK_BYTES {
             return None;
         }
@@ -200,7 +217,7 @@ impl Block {
     }
     fn run(&mut self, bytes: usize) -> Option<(usize, usize)> {
         self.sweep();
-        let mut low = 0;
+        let mut low = self.next_line;
         while low < 256 {
             if self.lines[low] != 0 {
                 low += 1;
@@ -211,12 +228,34 @@ impl Block {
                 high += 1;
             }
             if (high - low) * LINE_BYTES >= bytes {
+                self.next_line = high;
                 self.lines[low..high].fill(1);
+                // Only free lines are touched; live objects mark every line they span.
+                unsafe {
+                    self.base
+                        .add(low * LINE_BYTES)
+                        .write_bytes(0, (high - low) * LINE_BYTES);
+                }
                 return Some((low * LINE_BYTES, high * LINE_BYTES));
             }
             low = high;
         }
         None
+    }
+}
+// Only allocator-owned aligned block addresses are keys: no user-controlled
+// input requiring SipHash. Shift out alignment, mix for hashbrown's H2 bits.
+#[derive(Default)]
+struct BlockHasher(u64);
+impl std::hash::Hasher for BlockHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, _: &[u8]) {
+        unreachable!("block address keys are usize")
+    }
+    fn write_usize(&mut self, key: usize) {
+        self.0 = ((key >> 15) as u64).wrapping_mul(0x9e3779b97f4a7c15);
     }
 }
 struct Large {
@@ -238,11 +277,21 @@ struct Large {
 pub struct Heap {
     descriptors: &'static [Descriptor],
     pointer_types: &'static [bool],
-    blocks: Vec<Block>,
-    block_index: HashMap<usize, usize>,
+    // Stable metadata addresses avoid moving/copying kilobytes per block when
+    // the directory grows and let the fast path cache its current block.
+    #[allow(clippy::vec_box)]
+    blocks: Vec<Box<Block>>,
+    slabs: Vec<Memory>,
+    slab_cursor: usize,
+    slab_limit: usize,
+    block_index: HashMap<usize, usize, std::hash::BuildHasherDefault<BlockHasher>>,
     large: BTreeMap<usize, Large>,
-    active: usize,
+    active_metadata: *mut Block,
+    layout_key: u64,
+    layout_finalizer: Option<FinalizerId>,
     cursor: usize,
+    accounted_cursor: usize,
+    budget_end: usize,
     limit: usize,
     search: usize,
     finalizable: Vec<Finalizable>,
@@ -277,10 +326,17 @@ impl Heap {
             descriptors,
             pointer_types,
             blocks: vec![],
-            block_index: HashMap::new(),
+            slabs: vec![],
+            slab_cursor: 0,
+            slab_limit: 0,
+            block_index: HashMap::default(),
             large: BTreeMap::new(),
-            active: 0,
+            active_metadata: std::ptr::null_mut(),
+            layout_key: u64::MAX,
+            layout_finalizer: None,
             cursor: 0,
+            accounted_cursor: 0,
+            budget_end: 0,
             limit: 0,
             search: 0,
             finalizable: vec![],
@@ -311,7 +367,11 @@ impl Heap {
         self.stress = enabled;
     }
     pub fn stats(&self) -> Stats {
-        self.stats
+        let mut stats = self.stats;
+        stats.allocated_since_gc = stats
+            .allocated_since_gc
+            .saturating_add(self.cursor - self.accounted_cursor);
+        stats
     }
     /// Reset timing metrics without changing collection policy or heap state.
     pub fn reset_pause_metrics(&mut self) {
@@ -324,17 +384,11 @@ impl Heap {
     /// preserve the header, and never access an object after it is collected.
     #[inline(always)]
     pub unsafe fn alloc(&mut self, desc: DescId, bytes: usize, roots: &dyn RootSource) -> *mut u8 {
-        let d = &self.descriptors[desc as usize];
-        assert!(bytes >= 8);
-        if let Some(e) = d.elem {
-            assert!(bytes >= e.offset && (bytes - e.offset).is_multiple_of(d.size));
-        } else {
-            assert_eq!(bytes, d.size);
-        }
         let aligned = bytes.checked_add(15).expect("BAML out of memory") & !15;
         if bytes > LARGE_THRESHOLD
+            || self.layout_key != ((u64::from(desc) << 32) | bytes as u64)
             || self.limit - self.cursor < aligned
-            || self.stats.allocated_since_gc >= self.stats.budget
+            || self.cursor >= self.budget_end
         {
             return unsafe { self.alloc_slow(desc, bytes, aligned, roots) };
         }
@@ -342,23 +396,28 @@ impl Heap {
     }
     #[inline(always)]
     unsafe fn bump(&mut self, desc: DescId, bytes: usize, aligned: usize) -> *mut u8 {
-        let b = &mut self.blocks[self.active];
-        let slot = self.cursor / 16;
-        let p = unsafe { b.mem.ptr.add(self.cursor) };
+        // Boxed metadata stays put when the block directory grows. Collection
+        // invalidates the run before touching metadata; acquiring a run installs
+        // a fresh pointer before the next bump.
+        let b = unsafe { &mut *self.active_metadata };
+        let slot = (self.cursor & (BLOCK_BYTES - 1)) / 16;
+        let p = self.cursor as *mut u8;
         self.cursor += aligned;
-        set(&mut b.starts, slot);
-        b.sizes[slot] = bytes as u16;
+        // Run bounds establish both indices, avoiding repeated bounds branches.
+        debug_assert!(slot < SLOTS);
         unsafe {
-            p.write_bytes(0, aligned);
+            *b.starts.get_unchecked_mut(slot / 64) |= 1 << (slot % 64);
+            *b.sizes.get_unchecked_mut(slot) = bytes as u16;
+        }
+        unsafe {
             p.cast::<Header>().write(Header { desc, aux: 0 });
         }
-        self.account(desc, p as usize, aligned);
+        self.register_finalizer(p as usize);
         p
     }
     #[inline(always)]
-    fn account(&mut self, desc: DescId, object: usize, bytes: usize) {
-        self.stats.allocated_since_gc = self.stats.allocated_since_gc.saturating_add(bytes);
-        if let Some(cleanup) = self.descriptors[desc as usize].finalizer {
+    fn register_finalizer(&mut self, object: usize) {
+        if let Some(cleanup) = self.layout_finalizer {
             self.finalizable.push(Finalizable {
                 object,
                 cleanup,
@@ -375,6 +434,20 @@ impl Heap {
         aligned: usize,
         roots: &dyn RootSource,
     ) -> *mut u8 {
+        self.settle_run();
+        let d = &self.descriptors[desc as usize];
+        assert!(bytes >= 8);
+        if let Some(e) = d.elem {
+            assert!(bytes >= e.offset && (bytes - e.offset).is_multiple_of(d.size));
+        } else {
+            assert_eq!(bytes, d.size);
+        }
+        self.layout_key = if bytes <= LARGE_THRESHOLD {
+            (u64::from(desc) << 32) | bytes as u64
+        } else {
+            u64::MAX
+        };
+        self.layout_finalizer = d.finalizer;
         if self.stress || self.stats.allocated_since_gc >= self.stats.budget {
             unsafe {
                 self.collect(roots);
@@ -404,21 +477,36 @@ impl Heap {
                 },
             );
             self.stats.reserved_bytes += aligned;
-            self.account(desc, p as usize, aligned);
+            self.stats.allocated_since_gc = self.stats.allocated_since_gc.saturating_add(aligned);
+            self.budget_end = self.cursor.saturating_add(
+                self.stats
+                    .budget
+                    .saturating_sub(self.stats.allocated_since_gc),
+            );
+            self.register_finalizer(p as usize);
             return p;
+        }
+        if self.limit - self.cursor >= aligned {
+            return unsafe { self.bump(desc, bytes, aligned) };
         }
         loop {
             while self.search < self.blocks.len() {
                 let i = self.search;
                 if let Some((low, high)) = self.blocks[i].run(aligned) {
-                    self.active = i;
-                    self.cursor = low;
-                    self.limit = high;
+                    self.active_metadata = &mut *self.blocks[i];
+                    self.cursor = self.blocks[i].base as usize + low;
+                    self.limit = self.blocks[i].base as usize + high;
+                    self.accounted_cursor = self.cursor;
+                    self.budget_end = self.cursor.saturating_add(
+                        self.stats
+                            .budget
+                            .saturating_sub(self.stats.allocated_since_gc),
+                    );
                     return unsafe { self.bump(desc, bytes, aligned) };
                 }
                 self.search += 1;
             }
-            let mem = match Memory::try_new(BLOCK_BYTES, BLOCK_BYTES) {
+            let base = match self.fresh_block() {
                 Some(m) => m,
                 None => {
                     unsafe {
@@ -427,20 +515,46 @@ impl Heap {
                     // Retry every reclaimed run, including partially occupied blocks.
                     for (i, block) in self.blocks.iter_mut().enumerate() {
                         if let Some((low, high)) = block.run(aligned) {
-                            self.active = i;
+                            self.active_metadata = &mut *self.blocks[i];
                             self.search = i;
-                            self.cursor = low;
-                            self.limit = high;
+                            self.cursor = self.blocks[i].base as usize + low;
+                            self.limit = self.blocks[i].base as usize + high;
+                            self.accounted_cursor = self.cursor;
+                            self.budget_end = self.cursor.saturating_add(
+                                self.stats
+                                    .budget
+                                    .saturating_sub(self.stats.allocated_since_gc),
+                            );
                             return unsafe { self.bump(desc, bytes, aligned) };
                         }
                     }
-                    Memory::try_new(BLOCK_BYTES, BLOCK_BYTES).expect("BAML out of memory")
+                    self.fresh_block().expect("BAML out of memory")
                 }
             };
-            self.block_index.insert(mem.ptr as usize, self.blocks.len());
-            self.blocks.push(Block::new(mem));
-            self.stats.reserved_bytes += BLOCK_BYTES;
+            self.block_index.insert(base as usize, self.blocks.len());
+            self.blocks.push(Box::new(Block::new(base)));
         }
+    }
+    fn fresh_block(&mut self) -> Option<*mut u8> {
+        const SLAB_BYTES: usize = 2 * 1024 * 1024;
+        if self.slab_cursor == self.slab_limit {
+            // Failure to reserve a batch must not fail an allocation for which
+            // a single spec-sized block is still available.
+            let slab = Memory::try_slab(SLAB_BYTES)
+                .or_else(|| Memory::try_new(BLOCK_BYTES, BLOCK_BYTES))?;
+            let bytes = slab.layout.size();
+            self.slab_cursor = slab.ptr as usize;
+            self.slab_limit = self.slab_cursor + bytes;
+            self.slabs.push(slab);
+            self.stats.reserved_bytes += bytes;
+        }
+        let base = self.slab_cursor as *mut u8;
+        self.slab_cursor += BLOCK_BYTES;
+        Some(base)
+    }
+    fn settle_run(&mut self) {
+        self.stats.allocated_since_gc = self.stats().allocated_since_gc;
+        self.accounted_cursor = self.cursor;
     }
     fn locate(&self, address: usize) -> Option<(usize, usize)> {
         if let Some(&i) = self.block_index.get(&(address & !(BLOCK_BYTES - 1))) {
@@ -451,7 +565,7 @@ impl Heap {
     /// Returns the base of an allocated object containing this address.
     pub fn object_start(&self, address: usize) -> Option<usize> {
         if let Some((i, s)) = self.locate(address) {
-            return Some(self.blocks[i].mem.ptr as usize + s * 16);
+            return Some(self.blocks[i].base as usize + s * 16);
         }
         self.large
             .range(..=address)
@@ -465,6 +579,9 @@ impl Heap {
         self.large.get(&address).is_some_and(|l| l.marked)
     }
     fn mark(&mut self, address: usize, queue: &mut Vec<usize>) {
+        if address == 0 {
+            return;
+        }
         if let Some((i, s)) = self.locate(address) {
             let b = &mut self.blocks[i];
             if bit(&b.marks, s) {
@@ -474,7 +591,7 @@ impl Heap {
             let bytes = b.sizes[s] as usize;
             b.lines[s * 16 / LINE_BYTES..(s * 16 + bytes).div_ceil(LINE_BYTES)].fill(1);
             self.stats.live_bytes += (bytes + 15) & !15;
-            queue.push(b.mem.ptr as usize + s * 16);
+            queue.push(b.base as usize + s * 16);
         } else if let Some((&base, l)) = self.large.range_mut(..=address).next_back()
             && address - base < l.bytes
             && !l.marked
@@ -552,6 +669,8 @@ impl Heap {
     pub unsafe fn collect(&mut self, roots: &dyn RootSource) {
         let start = Instant::now();
         self.cursor = 0;
+        self.accounted_cursor = 0;
+        self.budget_end = 0;
         self.limit = 0;
         self.search = 0;
         self.stats.live_bytes = 0;
@@ -559,6 +678,7 @@ impl Heap {
             b.sweep();
             b.marks.fill(0);
             b.lines.fill(0);
+            b.next_line = 0;
         }
         for l in self.large.values_mut() {
             l.marked = false;
@@ -652,7 +772,7 @@ impl Heap {
     /// # Safety
     /// Same contract as `collect`; stress mode collects at every safepoint.
     pub unsafe fn safepoint(&mut self, roots: &dyn RootSource) {
-        if self.stress || self.stats.allocated_since_gc >= self.stats.budget {
+        if self.stress || self.stats().allocated_since_gc >= self.stats.budget {
             unsafe {
                 self.collect(roots);
             }
@@ -674,7 +794,7 @@ impl Heap {
                 while bits != 0 {
                     let s = w * 64 + bits.trailing_zeros() as usize;
                     unsafe {
-                        self.trace(b.mem.ptr as usize + s * 16, &mut |p| check(p));
+                        self.trace(b.base as usize + s * 16, &mut |p| check(p));
                     }
                     bits &= bits - 1;
                 }
@@ -734,4 +854,127 @@ pub unsafe fn write_ptr(_obj: *mut u8, slot: *mut usize, value: usize) {
 #[allow(clippy::disallowed_methods)]
 fn stress_from_environment() -> bool {
     std::env::var("BAML_GC_STRESS").is_ok_and(|v| v == "1")
+}
+
+#[cfg(test)]
+mod allocation_tests {
+    use super::*;
+    static DESCS: [Descriptor; 2] = [
+        Descriptor {
+            kind: Kind::Class,
+            size: 32,
+            ptr_slots: (0, 0),
+            tagged_slots: (0, 0),
+            elem: None,
+            type_id: 0,
+            fields: &[],
+            finalizer: None,
+        },
+        Descriptor {
+            kind: Kind::List,
+            size: 8,
+            ptr_slots: (0, 0),
+            tagged_slots: (0, 0),
+            elem: Some(Elements {
+                offset: 8,
+                layout: ElementLayout::Scalar,
+            }),
+            type_id: 0,
+            fields: &[],
+            finalizer: None,
+        },
+    ];
+    fn heap(budget: usize) -> Heap {
+        let mut heap = Heap::new(&DESCS, &[true]);
+        heap.set_stress(false);
+        heap.stats.budget = budget;
+        heap
+    }
+    #[test]
+    fn deferred_spending_is_exact_across_layouts_and_budget_crossing() {
+        unsafe {
+            let mut h = heap(80);
+            let a = h.alloc(0, 32, &NoRoots);
+            a.add(8).write_bytes(0xa5, 24);
+            assert_eq!(h.stats().allocated_since_gc, 32);
+            let b = h.alloc(1, 40, &NoRoots); // 48 rounded bytes; layout cache miss.
+            assert_eq!(b as usize, a as usize + 32);
+            assert_eq!(*a.add(8), 0xa5); // Cache miss must not zero the active run.
+            assert!(
+                std::slice::from_raw_parts(b.add(8), 40)
+                    .iter()
+                    .all(|v| *v == 0)
+            );
+            assert_eq!(h.stats().allocated_since_gc, 80);
+            assert_eq!(h.stats().collections, 0);
+            h.alloc(0, 32, &NoRoots);
+            assert_eq!(h.stats().collections, 1);
+            assert_eq!(h.stats().allocated_since_gc, 32);
+            // Repeated statistics reads cannot settle or double-charge spending.
+            assert_eq!(h.stats().allocated_since_gc, 32);
+        }
+    }
+    #[test]
+    fn allocation_crosses_budget_before_next_collection() {
+        unsafe {
+            let mut h = heap(48);
+            h.alloc(0, 32, &NoRoots);
+            h.alloc(0, 32, &NoRoots);
+            assert_eq!(h.stats().allocated_since_gc, 64);
+            assert_eq!(h.stats().collections, 0);
+            h.safepoint(&NoRoots);
+            assert_eq!(h.stats().collections, 1);
+            assert_eq!(h.stats().allocated_since_gc, 0);
+        }
+    }
+    #[test]
+    fn large_allocation_settles_and_updates_active_run_budget() {
+        unsafe {
+            let mut h = heap(20000);
+            let a = h.alloc(0, 32, &NoRoots);
+            h.alloc(1, 8200, &NoRoots);
+            assert_eq!(h.stats().allocated_since_gc, 8240);
+            let b = h.alloc(0, 32, &NoRoots);
+            assert_eq!(b as usize, a as usize + 32);
+            assert_eq!(h.stats().allocated_since_gc, 8272);
+            h.alloc(1, 12008, &NoRoots); // rounds to 12016 and crosses the budget.
+            assert_eq!(h.stats().allocated_since_gc, 20288);
+            assert_eq!(h.stats().collections, 0);
+            h.alloc(0, 32, &NoRoots);
+            assert_eq!(h.stats().collections, 1);
+            assert_eq!(h.stats().allocated_since_gc, 32);
+        }
+    }
+    #[test]
+    fn bulk_zeroing_preserves_live_partial_lines_and_clears_reused_bytes() {
+        unsafe {
+            let mut h = heap(MIN_BUDGET);
+            let live = h.alloc(1, 136, &NoRoots);
+            live.add(8).write_bytes(0xa5, 128);
+            let garbage = h.alloc(1, 8008, &NoRoots);
+            garbage.add(8).write_bytes(0xee, 8000);
+            struct Root(usize);
+            impl RootSource for Root {
+                fn conservative_ranges(&self, v: &mut dyn FnMut(*const usize, *const usize)) {
+                    let p = &self.0 as *const usize;
+                    v(p, unsafe { p.add(1) });
+                }
+                fn precise_roots(&self, _: &mut dyn FnMut(*mut usize)) {}
+            }
+            let root = Root(live as usize + 135);
+            h.collect(&root);
+            let reused = h.alloc(1, 8008, &root);
+            assert_eq!(reused as usize, live as usize + 256);
+            assert!(
+                std::slice::from_raw_parts(reused.add(8), 8008)
+                    .iter()
+                    .all(|v| *v == 0)
+            );
+            assert!(
+                std::slice::from_raw_parts(live.add(8), 128)
+                    .iter()
+                    .all(|v| *v == 0xa5)
+            );
+        }
+    }
 }

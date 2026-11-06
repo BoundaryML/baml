@@ -139,9 +139,14 @@ unsafe fn low(h: &mut Heap, r: &Roots) {
     }
 }
 fn main() {
+    let args: Vec<_> = std::env::args().collect();
+    let trials = args.get(2).map_or(5, |s| s.parse::<usize>().unwrap());
     unsafe {
         for name in ["trees", "low"] {
-            for trial in 1..=5 {
+            if args.get(1).is_some_and(|s| s != name) {
+                continue;
+            }
+            for trial in 1..=trials {
                 let mut h = Heap::new(&DESCS, &[true]);
                 h.set_stress(false);
                 let r = Roots::new();
@@ -149,7 +154,11 @@ fn main() {
                 job(&mut h, &r); // untimed verification warmup; retain allocator capacity
                 h.reset_pause_metrics();
                 let before = h.stats();
-                let jobs = if name == "trees" { 1 } else { 2 };
+                let jobs = args
+                    .get(3)
+                    .map_or(if name == "trees" { 1 } else { 2 }, |s| {
+                        s.parse::<usize>().unwrap()
+                    });
                 let start = Instant::now();
                 for _ in 0..jobs {
                     job(&mut h, &r);

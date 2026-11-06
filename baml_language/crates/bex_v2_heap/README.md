@@ -1,17 +1,35 @@
 # Runtime v2 heap
 
-A dependency-free, single-owner (`!Send`, `!Sync`), non-moving mark-region heap.
+A single-owner (`!Send`, `!Sync`), non-moving mark-region heap.
 Objects have the specified 8-byte `Header { desc: u32, aux: u32 }`; GC never
 writes mark state into object memory. The workspace's existing `crates/*` glob
 includes this crate. No existing runtime crate depends on it yet.
 
 Allocation uses 32 KiB aligned blocks, 128-byte lines, 16-byte object alignment,
-an inlined bump fast path and a cold slow path. Every allocation zeroes the
-entire rounded allocation and publishes its header and start bit. Allocations
+an inlined bump fast path and a cold slow path. Free line runs are zeroed in bulk
+when acquired, so every allocation returns entirely zeroed rounded storage and
+publishes its header and start bit immediately (start bits are not deferred). Allocations
 strictly above 8 KiB use individually swept large objects, aligned to 64 KiB
 (page-aligned on native systems with 4/16/64 KiB pages). Small objects retain
 stable addresses; empty lines are reused. Empty blocks remain reserved for
 reuse until heap destruction. There is no compaction or RSS limit.
+
+Logical blocks are obtained from 2 MiB aligned backing batches. On Linux, `libc`
+is used only for a best-effort `MADV_HUGEPAGE` hint **before** touching the batch;
+normal pages remain a correct fallback. A failed batch allocation falls back to
+one 32 KiB block before the existing collect/retry/OOM path. The GC geometry is
+unchanged. Batching can reserve up to almost 2 MiB of unused backing storage,
+and huge pages can increase residency for very small heaps. This trades memory
+at small sizes for fewer first-touch faults; no hard heap budget was introduced.
+
+Block metadata is boxed so directory growth cannot move or copy its roughly
+4.8 KiB records. The fast path caches the active metadata pointer and last
+validated `(descriptor, bytes, finalizer)`; it still performs the start-bit and
+requested-size stores per object. Layout changes validate on the slow path and
+reuse the current run. Free-run search remembers its last consumed line and
+resets at collection. Block-address lookup uses an alignment-aware multiplicative
+hasher over allocator-owned keys instead of SipHash; conservative validation is
+unchanged. Null edges are rejected before the lookup.
 
 Each block has the specified 2048-bit start bitmap, 2048-bit mark bitmap and
 256 line bytes, plus a 2048-entry `u16` requested-size table. This extra side
@@ -26,7 +44,14 @@ The budget is `max(32 MiB, 4 * live_bytes)`, with saturating arithmetic, ported
 from `bex_heap/src/gc_policy.rs`. Rounded object bytes, including inline buffers
 and large objects, spend the budget. Crossing it enters the slow path on the
 next allocation or collects at a safepoint. Marking resets spending; retained
-finalizer graphs contribute to live bytes. This crate has no TLABs or external
+finalizer graphs contribute to live bytes. Per-run spending is derived from
+`cursor - accounted_cursor`, then settled on the slow path; an absolute budget
+boundary keeps the **same allocation crossing point**, including overshoot by
+one allocation. Statistics and safepoints include unsettled bytes exactly. Large
+allocations settle the current run and update its boundary. Reserved unused
+lines/backing batches do not spend this object-byte budget.
+
+This crate has no TLABs or external
 Rust payload allocator: the old TLAB settlement, shared-payload census and
 negative external-release accounting tests are consequently not applicable.
 A future opaque builtin with external allocations needs a separate accounting
@@ -122,7 +147,8 @@ cargo test -p bex_v2_heap --release
 cargo clippy -p bex_v2_heap --all-targets --no-deps -- -D warnings
 ```
 
-14 integration tests and two compile-fail ownership doctests pass. Tests cover
+4 allocation regression tests, 14 integration tests and two compile-fail
+ownership doctests pass in debug and release. Tests cover
 zeroing/reuse, aliases/cycles, model-checked reachability, stale and interior
 candidates, padding rejection, large objects, precise tagged/list/map elements,
 finalizer cycles/order/explicit suppression/once-only resurrection, weak clearing,
@@ -167,15 +193,24 @@ reported collection pause. Collection counts are per timed trial.
 
 | Collector / runtime | Trees ms/job | Low-retention ms/job | Trees max pause ms | Low max pause ms |
 |---|---:|---:|---:|---:|
-| **bex_v2_heap** | **33.618** | **5.893** | **2.259** | **0.347** |
+| **bex_v2_heap optimized** | **26.979** | **2.015** | **1.369** | **0.307** |
+| bex_v2_heap initial (`adc6de86ff`) | 33.618 | 5.893 | 2.259 | 0.347 |
 | OwnSemiSpace (reference) | 19.301 | 1.175 | 0.248 | 0.051 |
 | MMTk Immix (reference) | 31.672 | 2.326 | 1.886 | 0.772 |
 | Node (reference) | 39.067 | 17.223 | — | — |
 
-Current trees range: 33.482–33.822 ms/job, three collections per timed job.
-Low-retention range: 5.854–6.037 ms/job, one collection per **two-job** timed
-trial (0.5/job). This is the final five-trial run, not a selection of the best
-trials from earlier development runs.
+Current trees range: 26.864–27.004 ms/job, three collections per timed job.
+Low-retention range: 1.998–2.146 ms/job, one collection per **two-job** timed
+trial (0.5/job). This meets the required low-retention target of 2.3 ms and the
+tree stretch target of 28 ms; it misses the low-retention stretch target of 1.5 ms.
+
+These are the final complete five-trial confirmation sets. An earlier final run
+had large outliers (trees up to 52.061 ms; low retention up to 3.378 ms), so a
+serial confirmation was performed. All of that run and a baseline rerun are
+retained in `profiles/`; no individual trials were dropped or mixed. The baseline
+rerun was also slower than its historical measurement, demonstrating host noise;
+the initial row above remains the original committed result. See
+[profiles/README.md](profiles/README.md) for the profile findings and commands.
 
 References are historical values from `perf/v2-gc/REPORT.md`, not reruns.
 This benchmark uses precise roots to isolate heap costs, as do the listed native
@@ -189,12 +224,13 @@ to preserve the reference's 32-byte size.
 This is a shape/layout comparison, **not** a controlled collector-only comparison:
 the reference used a fixed 16 MiB heap (OwnSemiSpace: two 8 MiB spaces); this heap
 uses the required adaptive budget with 32 MiB minimum headroom. Timed reserved
-object storage reaches about 33.7 MiB for trees and 32.1 MiB for low retention,
-excluding metadata and host allocations. Peak RSS and fragmentation over
+object backing storage reaches 34 MiB for both shapes (including unused batch
+capacity), excluding metadata and host allocations. Peak RSS and fragmentation over
 long-running agent workloads have not been measured. These are handwritten
 kernels, not generated BAML or an end-to-end runtime acceptance test.
 
-Binary trees is below the historical Node time. Low retention misses decision
-3's approximately-10%-of-semispace gate substantially. This implementation does
-not establish that the full phase-one performance gate passes; further allocator
-profiling and memory measurements are needed before making that decision.
+Binary trees is below the historical Node time, and low retention beats the
+historical Immix result. The original decision 3 approximately-10%-of-semispace
+gate is still not met; these improvements do not establish full phase-one
+acceptance or the unmeasured memory/fragmentation gate. There are no new interface
+or collector-semantic deviations in this optimization.

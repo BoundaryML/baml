@@ -1,0 +1,12 @@
+# started on Fri Nov  6 18:22:22 2026
+
+
+ Performance counter stats for 'taskset -c 12 baml_language/crates/bex_v2_heap/target/bench-before low 5':
+
+             62920      page-faults
+             62920      minor-faults
+
+       0.113920188 seconds time elapsed
+
+       0.033953000 seconds user
+       0.079889000 seconds sys

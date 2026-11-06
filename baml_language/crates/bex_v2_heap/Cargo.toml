@@ -6,3 +6,6 @@ license.workspace = true
 
 [dev-dependencies]
 corosensei = { package = "bex-v2-corosensei", path = "vendor/corosensei" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true

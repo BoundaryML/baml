@@ -1392,6 +1392,7 @@ name = "bex_v2_heap"
 version = "0.1.0"
 dependencies = [
  "bex-v2-corosensei",
+ "libc",
 ]
 
 [[package]]

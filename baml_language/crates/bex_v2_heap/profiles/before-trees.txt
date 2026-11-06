@@ -1,0 +1,23 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'armv8_pmuv3_0/cycles/u'
+# Event count (approx.): 9709101663
+#
+# Overhead  Command       Shared Object          Symbol
+# ........  ............  .....................  ...................................
+#
+    66.24%  bench-before  bench-before           [.] bench::tree
+    12.60%  bench-before  bench-before           [.] <bex_v2_heap::Heap>::locate
+    10.32%  bench-before  bench-before           [.] bench::check
+     3.55%  bench-before  bench-before           [.] <bex_v2_heap::Block>::run
+     2.05%  bench-before  bench-before           [.] <bex_v2_heap::Heap>::mark
+     1.49%  bench-before  [unknown]              [k] 0xffffb182ab148f64
+     1.19%  bench-before  bench-before           [.] <bex_v2_heap::Heap>::drain
+
+
+#
+# (Tip: To set sample time separation other than 100ms with --sort time use --time-quantum)
+#
