@@ -1,9 +1,9 @@
 //! Inbound (host → engine) wire construction.
 //!
 //! Every value crosses through an [`Encoder`], which owns what the encoding
-//! creates (a clone of each engine handle the value holds, a registration of
-//! each host callable) until the value is sent, and releases it if the
-//! encoding fails. A value nested deeper than the wire carries is refused
+//! creates (a clone of each engine handle the value holds, a reference to
+//! each host value it sends) until the value is sent, and gives it back if
+//! the encoding fails. A value nested deeper than the wire carries is refused
 //! here, before anything is sent: the engine's decoder reads at most
 //! [`WIRE_NESTING_LIMIT`] nested protobuf messages, so the encoder measures
 //! the value it built exactly as the decoder will.
@@ -49,6 +49,9 @@ pub enum EncodeError {
     /// The engine could not clone a handle the value holds: the handle was
     /// released, or the runtime shut down.
     HandleClone,
+    /// A host value the value holds is no longer registered: the engine gave
+    /// back every reference to it.
+    ReleasedHostValue,
     /// A type the value states names a declaration only the runtime can
     /// name (an anonymous label the engine sent beside a value it returned).
     AnonymousDeclaration,
@@ -56,7 +59,7 @@ pub enum EncodeError {
     /// requires a container to state its type, and nothing else knows it.
     UntypedContainer,
     /// The value is one only the runtime builds (a `baml.errors.HostCallable`,
-    /// a raw outbound wire value).
+    /// a stream item).
     RuntimeOnly {
         /// What the value is.
         what: &'static str,
@@ -72,6 +75,9 @@ impl fmt::Display for EncodeError {
             ),
             EncodeError::HandleClone => {
                 write!(f, "a handle the value holds could not be cloned")
+            }
+            EncodeError::ReleasedHostValue => {
+                write!(f, "a host value the value holds is no longer registered")
             }
             EncodeError::AnonymousDeclaration => write!(
                 f,
@@ -135,8 +141,8 @@ pub struct Encoder {
     levels: usize,
     /// Engine references cloned for the value, one per occurrence.
     clones: Vec<u64>,
-    /// Host callables registered for the value.
-    registrations: Vec<u64>,
+    /// References to host values taken for the value, one per occurrence.
+    host_references: Vec<u64>,
 }
 
 impl Encoder {
@@ -170,22 +176,22 @@ impl Encoder {
         Ok(cloned)
     }
 
-    /// Record a host value registered for the value, unregistered if the
-    /// value is never sent.
-    pub(crate) fn registered(&mut self, key: u64) {
-        self.registrations.push(key);
+    /// Record one reference to the host value `key` taken for the value,
+    /// given back if the value is never sent.
+    pub(crate) fn host_reference(&mut self, key: u64) {
+        self.host_references.push(key);
     }
 
     /// Take over what `other` created: one value is sent with both.
     pub(crate) fn adopt(&mut self, mut other: Encoder) {
         self.clones.append(&mut other.clones);
-        self.registrations.append(&mut other.registrations);
+        self.host_references.append(&mut other.host_references);
     }
 
     /// The value was handed to the engine, which now owns what it holds.
     pub(crate) fn commit(mut self) {
         self.clones.clear();
-        self.registrations.clear();
+        self.host_references.clear();
     }
 }
 
@@ -194,8 +200,8 @@ impl Drop for Encoder {
         for key in self.clones.drain(..) {
             crate::handle::release_engine_key(key);
         }
-        for key in self.registrations.drain(..) {
-            crate::host_value::unregister(key);
+        for key in self.host_references.drain(..) {
+            crate::host_value::give_back(key);
         }
     }
 }
@@ -471,7 +477,6 @@ fn baml_ty_depth(ty: &wire::BamlTy) -> usize {
             | Ty::Unknown(_)
             | Ty::Media(_)
             | Ty::EnumVariant(_)
-            | Ty::RustType(_)
             | Ty::MetaType(_)
             | Ty::Resource(_)
             | Ty::PromptAst(_)

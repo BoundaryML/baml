@@ -25,6 +25,7 @@
 #include <baml/errors.h>
 #include <baml_cffi.h>
 
+#include <algorithm>
 #include <any>
 #include <array>
 #include <atomic>
@@ -33,6 +34,7 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -66,8 +68,8 @@
 extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* request,
                                                          size_t length);
 extern "C" inline void baml_cpp_host_cancel_trampoline(uint32_t callback_id);
-extern "C" inline void baml_cpp_host_release_trampoline(
-    uint64_t host_value_key);
+extern "C" inline void baml_cpp_host_release_trampoline(uint64_t host_value_key,
+                                                        uint64_t count);
 
 namespace baml {
 
@@ -77,16 +79,20 @@ struct codec;
 namespace detail {
 
 // Process-wide table of host values handed to BAML: callables (registered
-// when a std::function is encoded as an argument) and opaque exception_ptrs
+// when a std::function is encoded as an argument), opaque exception_ptrs
 // (registered when a host callable raises an exception of its own, so the
 // engine's baml.errors.HostCallable around it is rehydrated to the original
-// exception on round-trip). Keys are never 0; entries are removed by the
-// engine-driven release callback when the engine drops its last reference
-// to the corresponding host value.
+// exception on round-trip), and the values of `baml::host_value`s (registered
+// when one is sent, once per value). Keys are never 0.
+//
+// Each key counts the references to it held: one per send of the key to the
+// engine, and one per received `baml::value` that holds it. The engine gives
+// references back through the release callback, a send that never reached
+// the engine gives back its own, and the last one removes the entry.
 class host_value_registry {
  public:
   using dispatcher =
-      std::function<void(uint32_t call_id, std::vector<uint8_t> args)>;
+      std::function<void(uint32_t call_id, const pb::BamlToHostCall& call)>;
 
   // A callable the host registered: how the engine's calls to it run, the
   // function type it was stated under (stated again whenever the host sends
@@ -105,48 +111,100 @@ class host_value_registry {
     return *registry;
   }
 
+  // Registers `registered` under a new key, holding the reference of the one
+  // send it is registered for.
   uint64_t add_callable(callable registered) {
-    auto shared = std::make_shared<const callable>(std::move(registered));
-    std::lock_guard<std::mutex> lock(mu_);
-    const uint64_t key = next_key_++;
-    table_.emplace(key, std::move(shared));
-    return key;
+    return add(std::make_shared<const callable>(std::move(registered)));
   }
 
+  // Registers `exception` under a new key, holding the reference of the one
+  // send it is registered for.
   uint64_t add_exception(std::exception_ptr exception) {
+    return add(std::move(exception));
+  }
+
+  // The key `value` is registered under, holding one more reference for the
+  // send it is taken for; registered under a new key when it is not. One
+  // value is one key while any reference to it is out.
+  uint64_t send_value(const std::shared_ptr<const std::any>& value) {
     std::lock_guard<std::mutex> lock(mu_);
+    if (const auto it = value_keys_.find(value.get());
+        it != value_keys_.end()) {
+      ++table_.at(it->second).count;
+      return it->second;
+    }
     const uint64_t key = next_key_++;
-    table_.emplace(key, std::move(exception));
+    table_.emplace(key, registration{value, 1});
+    value_keys_.emplace(value.get(), key);
     return key;
   }
 
-  void release(uint64_t key) {
+  // Takes one more reference to `key`, received back from the engine, to
+  // send it again or to hold it. Under the lock, so a release racing the
+  // send either leaves the key registered or finds it gone and the send is
+  // refused: a key no longer registered is never sent.
+  void send_again(uint64_t key) {
     std::lock_guard<std::mutex> lock(mu_);
-    table_.erase(key);
+    const auto it = table_.find(key);
+    if (it == table_.end())
+      throw bridge_error("host value " + std::to_string(key) +
+                         " is no longer registered in this process");
+    ++it->second.count;
+  }
+
+  // Gives back `count` references to `key`: the engine's release, or the
+  // references of sends that never reached it. The last one removes the
+  // entry; its value is dropped outside the lock. A key not registered is
+  // ignored: a reference given back twice is never applied to another key.
+  void release(uint64_t key, uint64_t count) {
+    entry dropped;
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      const auto it = table_.find(key);
+      if (it == table_.end()) return;
+      registration& found = it->second;
+      found.count -= (std::min)(count, found.count);
+      if (found.count > 0) return;
+      if (const auto* value =
+              std::get_if<std::shared_ptr<const std::any>>(&found.value))
+        value_keys_.erase(value->get());
+      dropped = std::move(found.value);
+      table_.erase(it);
+    }
   }
 
   // Shared out under the lock so a concurrent release cannot invalidate the
   // returned callable mid-call. Null when `key` names no callable.
   std::shared_ptr<const callable> find_callable(uint64_t key) {
-    std::lock_guard<std::mutex> lock(mu_);
-    auto it = table_.find(key);
-    if (it == table_.end()) return nullptr;
-    const auto* found =
-        std::get_if<std::shared_ptr<const callable>>(&it->second);
-    return found == nullptr ? nullptr : *found;
+    return find<std::shared_ptr<const callable>>(key);
   }
 
+  // Null when `key` names no host value.
+  std::shared_ptr<const std::any> find_value(uint64_t key) {
+    return find<std::shared_ptr<const std::any>>(key);
+  }
+
+  // Null when `key` names no exception.
   std::exception_ptr find_exception(uint64_t key) {
+    return find<std::exception_ptr>(key);
+  }
+
+  // How many references to `key` are out; 0 when it is not registered.
+  uint64_t count(uint64_t key) {
     std::lock_guard<std::mutex> lock(mu_);
-    auto it = table_.find(key);
-    if (it == table_.end()) return nullptr;
-    const auto* found = std::get_if<std::exception_ptr>(&it->second);
-    return found == nullptr ? nullptr : *found;
+    const auto it = table_.find(key);
+    return it == table_.end() ? 0 : it->second.count;
   }
 
  private:
   using entry =
-      std::variant<std::shared_ptr<const callable>, std::exception_ptr>;
+      std::variant<std::shared_ptr<const callable>, std::exception_ptr,
+                   std::shared_ptr<const std::any>>;
+  struct registration {
+    entry value;
+    // References held and not yet given back; never 0 in the table.
+    uint64_t count;
+  };
 
   host_value_registry() {
     api().register_host_dispatch_v2(&baml_cpp_host_dispatch_trampoline);
@@ -154,9 +212,150 @@ class host_value_registry {
     api().register_host_release_callback(&baml_cpp_host_release_trampoline);
   }
 
+  uint64_t add(entry value) {
+    std::lock_guard<std::mutex> lock(mu_);
+    const uint64_t key = next_key_++;
+    table_.emplace(key, registration{std::move(value), 1});
+    return key;
+  }
+
+  template <typename T>
+  T find(uint64_t key) {
+    std::lock_guard<std::mutex> lock(mu_);
+    const auto it = table_.find(key);
+    if (it == table_.end()) return nullptr;
+    const auto* found = std::get_if<T>(&it->second.value);
+    return found == nullptr ? nullptr : *found;
+  }
+
   std::mutex mu_;
-  std::unordered_map<uint64_t, entry> table_;
+  std::unordered_map<uint64_t, registration> table_;
+  // The key each registered host_value's value is under.
+  std::unordered_map<const std::any*, uint64_t> value_keys_;
   uint64_t next_key_ = 1;
+};
+
+// Gives back the references `value` took for a send that never reached the
+// engine: each engine handle and `live` head, and one reference per
+// occurrence of a host key.
+inline void release_input_value(const pb::InboundValue& value) {
+  if (value.has_handle()) {
+    if (is_host_handle(value.handle().handle_type()))
+      host_value_registry::instance().release(value.handle().key(), 1);
+    else
+      api().handle_release(value.handle().key());
+  }
+  if (value.has_ty_value()) release_live_heads(value.ty_value());
+  if (value.has_list_value())
+    for (const auto& item : value.list_value().values())
+      release_input_value(item);
+  if (value.has_map_value())
+    for (const auto& item : value.map_value().entries())
+      release_input_value(item.value());
+  if (value.has_class_value())
+    for (const auto& item : value.class_value().fields())
+      release_input_value(item.value());
+}
+
+// Builds one CallFunctionArgs message: kwargs entries are filled via the
+// value-writer callbacks that codec<T>::encode provides, then finish()
+// stamps the engine call id and serializes.
+class args_encoder {
+ public:
+  explicit args_encoder(const invocation_options& controls = {}) {
+    if (controls.timeout &&
+        (*controls.timeout < 0 || *controls.timeout > 2147483647))
+      throw error("timeout_ms must be between 0 and 2147483647");
+    id_ = api().new_function_call();
+    if (!id_) throw error("runtime call allocation failed");
+    try {
+      auto* invocation = args_.mutable_invocation();
+      invocation->set_host_environment(id_);
+      inherited_ = current_invocation_state;
+      invocation->set_inherited_state(inherited_ ? inherited_->key : 0);
+      if (controls.timeout) {
+        uint64_t now = 0;
+        if (api().invocation_clock_ns(id_, &now) != 0)
+          throw error("runtime clock failed");
+        const uint64_t duration =
+            static_cast<uint64_t>(*controls.timeout) * 1000000;
+        if (duration > (std::numeric_limits<uint64_t>::max)() - now)
+          throw error("deadline overflow");
+        invocation->set_deadline_ns(now + duration);
+      }
+      if (controls.trace_key) {
+        BamlBuffer buffer{};
+        const auto status = api().trace_selection(id_, controls.trace_key(),
+                                                  &buffer, &reservation_);
+        if (status != 0) throw error("invalid trace selection");
+        const bool ok = invocation->mutable_trace()->ParseFromArray(
+            buffer.ptr, static_cast<int>(buffer.len));
+        api().free_buffer(buffer);
+        if (!ok) throw error("invalid trace selection payload");
+      }
+      if (controls.encode_cancel)
+        controls.encode_cancel(*invocation->mutable_cancel());
+    } catch (...) {
+      cleanup();
+      throw;
+    }
+  }
+  args_encoder(const args_encoder&) = delete;
+  args_encoder& operator=(const args_encoder&) = delete;
+  ~args_encoder() { cleanup(); }
+  uint64_t id() const { return id_; }
+  void submitted() {
+    id_ = 0;
+    reservation_ = 0;
+  }
+
+  // `write_value` fills the InboundValue for this argument, which must fit
+  // the wire as an argument. A refused argument stays in the message, so the
+  // references it took are released with the call that never starts.
+  template <typename WriteValue>
+  void add_arg(const std::string& name, WriteValue&& write_value) {
+    pb::InboundMapEntry* entry = args_.add_kwargs();
+    entry->set_string_key(name);
+    write_value(*entry->mutable_value());
+    require_fits_wire(entry->value(), argument_depth);
+  }
+
+  void add_type(const std::string& name, const pb::BamlTy& type) {
+    auto* binding = args_.add_type_args();
+    binding->set_type_var(name);
+    *binding->mutable_type_value() = type;
+  }
+
+  std::string finish(uint64_t call_id, const std::string& function_name) {
+    args_.set_call_id(call_id);
+    args_.set_function_name(function_name);
+    return args_.SerializeAsString();
+  }
+
+  std::string finish(uint64_t call_id, uint64_t function_handle) {
+    args_.set_call_id(call_id);
+    args_.set_function_handle(function_handle);
+    return args_.SerializeAsString();
+  }
+
+ private:
+  void cleanup() noexcept {
+    if (!id_) return;
+    try {
+      for (const auto& argument : args_.kwargs())
+        release_input_value(argument.value());
+      if (args_.invocation().has_cancel())
+        release_input_value(args_.invocation().cancel());
+      if (reservation_) api().handle_release(reservation_);
+      api().release_function_call(id_);
+    } catch (...) {
+    }
+    id_ = 0;
+    reservation_ = 0;
+  }
+  uint64_t id_ = 0, reservation_ = 0;
+  std::shared_ptr<invocation_state> inherited_;
+  pb::CallFunctionArgs args_;
 };
 
 // The stack a host callable runs on: the 8 MiB a main thread gets on macOS
@@ -232,11 +431,21 @@ void spawn_host_call_thread(Body body) {
   static_cast<void>(task.release());
 }
 
+// Releases the type values and pins a callback's arguments borrowed.
+inline void release_borrowed_arguments(const pb::BamlToHostCall& call) {
+  for (const pb::BamlToHostArg& arg : call.args())
+    release_borrowed(arg.value());
+}
+
 struct callback_frame {
   pb::HostInvocation wire;
+  // The callable's arguments, read from `wire`. Decoding borrows their type
+  // values and pins; the frame releases them when the call is done with them.
+  pb::BamlToHostCall call;
   std::shared_ptr<invocation_state> state;
   std::atomic<bool> cancelled{false};
   ~callback_frame() {
+    release_borrowed_arguments(call);
     if (!state && wire.effective_state() != 0)
       api().handle_release(wire.effective_state());
     if (!state && wire.has_cancel()) release_control_value(wire.cancel());
@@ -399,22 +608,27 @@ inline void restate_shape(pb::InboundValue& out,
 }
 
 // Replaces every engine reference in `value` with a clone of its own: each
-// engine handle and each `live` head of a type value (a host key is the
-// host's own registration and goes back as it is). On failure releases the
-// clones it made and leaves the received references alone.
+// engine handle and each `live` head of a type value. A host key is the
+// host's own registration and goes back as it is, taking a reference of its
+// own; one no longer registered is refused. On failure gives back what it
+// took and leaves the received references alone.
 inline void take_own_references(pb::InboundValue& value) {
   std::vector<uint64_t> cloned;
+  std::vector<uint64_t> resent;
   std::vector<const pb::BamlTy*> restated;
   const std::function<void(pb::InboundValue&)> visit =
       [&](pb::InboundValue& node) {
-        if (node.has_handle() &&
-            node.handle().handle_type() != pb::HOST_VALUE_CALLABLE &&
-            node.handle().handle_type() != pb::HOST_VALUE_OPAQUE) {
-          uint64_t key = 0;
-          if (api().handle_clone(node.handle().key(), &key) != 0 || key == 0)
-            throw bridge_error("BAML handle clone failed");
-          cloned.push_back(key);
-          node.mutable_handle()->set_key(key);
+        if (node.has_handle()) {
+          if (is_host_handle(node.handle().handle_type())) {
+            host_value_registry::instance().send_again(node.handle().key());
+            resent.push_back(node.handle().key());
+          } else {
+            uint64_t key = 0;
+            if (api().handle_clone(node.handle().key(), &key) != 0 || key == 0)
+              throw bridge_error("BAML handle clone failed");
+            cloned.push_back(key);
+            node.mutable_handle()->set_key(key);
+          }
         }
         if (node.has_ty_value()) {
           *node.mutable_ty_value() = restate_live_heads(node.ty_value());
@@ -437,6 +651,8 @@ inline void take_own_references(pb::InboundValue& value) {
     visit(value);
   } catch (...) {
     for (const uint64_t key : cloned) api().handle_release(key);
+    for (const uint64_t key : resent)
+      host_value_registry::instance().release(key, 1);
     for (const pb::BamlTy* ty : restated) release_live_heads(*ty);
     throw;
   }
@@ -450,8 +666,8 @@ inline void take_own_references(pb::InboundValue& value) {
 // registered function type -- with engine references of its own, so the
 // received value keeps its own. A value the host cannot state back (a type
 // naming a declaration by its display label, a container the engine sent
-// without its types) or a reference it cannot clone is refused as a
-// bridge_error.
+// without its types), a reference it cannot clone, or a host key no longer
+// registered is refused as a bridge_error.
 inline void transcode_outbound_to_inbound(pb::InboundValue& out,
                                           const pb::BamlOutboundValue& v) {
   pb::InboundValue restated;
@@ -638,16 +854,16 @@ materialize_host_slots(Staging& staging, std::index_sequence<I...>) {
   return {materialize_host_slot(std::get<I>(staging))...};
 }
 
-// The callable's arguments, decoded from the engine's BamlToHostCall:
-// required ones in declared order, supplied optional ones by name. `names`
-// are the callable's declared BAML parameter names ("" for unnamed required
-// ones). Throws for a payload the bridge cannot decode, or one that does not
-// match the callable's parameters (an unknown or repeated name, more or
-// fewer required arguments than declared).
+// The callable's arguments, decoded from the engine's BamlToHostCall, whose
+// type values and pins they borrow: required ones in declared order, supplied
+// optional ones by name. `names` are the callable's declared BAML parameter
+// names ("" for unnamed required ones). Throws for arguments the bridge
+// cannot decode, or that do not match the callable's parameters (an unknown
+// or repeated name, more or fewer required arguments than declared).
 template <typename... Ps>
 std::tuple<std::decay_t<Ps>...> decode_host_arguments(
     const std::array<std::string, sizeof...(Ps)>& names,
-    const std::vector<uint8_t>& args_bytes) {
+    const pb::BamlToHostCall& call) {
   constexpr size_t n = sizeof...(Ps);
   using Staging = std::tuple<std::optional<std::decay_t<Ps>>...>;
   Staging staging;
@@ -656,19 +872,6 @@ std::tuple<std::decay_t<Ps>...> decode_host_arguments(
   const auto fillers =
       make_host_slot_fillers<Staging>(std::make_index_sequence<n>{});
 
-  pb::BamlToHostCall call;
-  if (args_bytes.size() > static_cast<size_t>(INT_MAX) ||
-      !call.ParseFromArray(args_bytes.data(),
-                           static_cast<int>(args_bytes.size())))
-    throw bridge_error("malformed BamlToHostCall payload");
-  // Decoding only borrows the arguments' type values.
-  struct release_borrowed_types {
-    pb::BamlToHostCall& call;
-    ~release_borrowed_types() {
-      for (pb::BamlToHostArg& arg : *call.mutable_args())
-        release_type_values(*arg.mutable_value());
-    }
-  } borrowed{call};
   std::array<bool, n> filled{};
   size_t required_cursor = 0;
   for (const pb::BamlToHostArg& arg : call.args()) {
@@ -707,10 +910,10 @@ template <typename R, typename... Ps>
 pb::HostCallCompletion host_call_completion(
     const std::function<R(Ps...)>& fn,
     const std::array<std::string, sizeof...(Ps)>& names,
-    const std::vector<uint8_t>& args_bytes) {
+    const pb::BamlToHostCall& call) {
   std::optional<std::tuple<std::decay_t<Ps>...>> arguments;
   try {
-    arguments.emplace(decode_host_arguments<Ps...>(names, args_bytes));
+    arguments.emplace(decode_host_arguments<Ps...>(names, call));
   } catch (const std::exception& e) {
     return bridge_failure_completion(
         std::string("host callable arguments could not be decoded: ") +
@@ -788,9 +991,9 @@ void encode_callable(pb::InboundValue& value_msg, std::function<R(Ps...)> fn,
   value_msg.mutable_value_type()->CopyFrom(ty);
   host_value_registry::dispatcher dispatch =
       [fn, names = std::move(names)](uint32_t call_id,
-                                     std::vector<uint8_t> args_bytes) {
-        complete_host_call(
-            call_id, host_call_completion<R, Ps...>(fn, names, args_bytes));
+                                     const pb::BamlToHostCall& call) {
+        complete_host_call(call_id,
+                           host_call_completion<R, Ps...>(fn, names, call));
       };
   const uint64_t key = host_value_registry::instance().add_callable(
       {std::move(dispatch), std::move(ty), std::any(std::move(fn))});
@@ -820,17 +1023,20 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
   };
   // No C++ exception may cross the C ABI (bridge contract), and every
   // setup fault must still complete the call or the engine awaits forever:
-  // bytes.assign can throw bad_alloc, the registry lock can throw, and
+  // parsing can throw bad_alloc, the registry lock can throw, and
   // starting the thread throws system_error under thread exhaustion.
   try {
     frame = std::make_shared<baml::detail::callback_frame>();
     frame->wire = std::move(wire);
+    if (!frame->call.ParseFromString(frame->wire.application_args())) {
+      // What a failed parse read is not the engine's: none of it is released.
+      frame->call.Clear();
+      bridge_failure("malformed BamlToHostCall payload");
+      return;
+    }
     frame->state = std::make_shared<baml::detail::invocation_state>(
         frame->wire.effective_state());
     frame->state->cancel.Swap(frame->wire.mutable_cancel());
-    std::vector<uint8_t> bytes;
-    const auto& application = frame->wire.application_args();
-    bytes.assign(application.begin(), application.end());
     auto callable = baml::detail::host_value_registry::instance().find_callable(
         host_value_key);
     if (!callable) {
@@ -847,8 +1053,8 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
       baml::detail::callback_frames.emplace(call_id, frame);
     }
     baml::detail::spawn_host_call_thread([callable = std::move(callable),
-                                          bridge_failure, call_id, frame,
-                                          bytes = std::move(bytes)]() mutable {
+                                          bridge_failure, call_id,
+                                          frame]() mutable {
       baml::detail::current_invocation_state = frame->state;
       try {
         if (frame->cancelled.load())
@@ -857,7 +1063,7 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
           // discarded-before-execution path words it.
           bridge_failure("host callback was discarded before execution");
         else
-          callable->dispatch(call_id, std::move(bytes));
+          callable->dispatch(call_id, frame->call);
       } catch (...) {
         bridge_failure(
             "host callable dispatch failed outside the user callable");
@@ -869,7 +1075,14 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
   } catch (...) {
     if (!frame) {
       baml::detail::api().handle_release(wire.effective_state());
-      if (wire.has_cancel()) baml::detail::release_control_value(wire.cancel());
+      try {
+        if (wire.has_cancel())
+          baml::detail::release_control_value(wire.cancel());
+        baml::detail::pb::BamlToHostCall call;
+        if (call.ParseFromString(wire.application_args()))
+          baml::detail::release_borrowed_arguments(call);
+      } catch (...) {
+      }
     }
     try {
       {
@@ -895,11 +1108,12 @@ extern "C" inline void baml_cpp_host_cancel_trampoline(uint32_t callback_id) {
   }
 }
 
-extern "C" inline void baml_cpp_host_release_trampoline(
-    uint64_t host_value_key) {
+extern "C" inline void baml_cpp_host_release_trampoline(uint64_t host_value_key,
+                                                        uint64_t count) {
   // No C++ exception may cross the C ABI (bridge contract).
   try {
-    baml::detail::host_value_registry::instance().release(host_value_key);
+    baml::detail::host_value_registry::instance().release(host_value_key,
+                                                          count);
   } catch (...) {
   }
 }

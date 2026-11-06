@@ -7,7 +7,20 @@ import { BamlHandle, _seedGenericMediaHandle } from '../dist/index.js';
 // web bridge has no wasm binding for them. They stay reachable here through the
 // native module, the same way the web bridge keeps `_testHandleTableEntryCount`
 // off its own root.
-import { _handleRefcount, _liveHandleCount, _seedHeapHandle } from '../dist/native.js';
+import {
+    _encodeInbound,
+    _handleRefcount,
+    _hostValueCount,
+    _hostValueRegistered,
+    _liveHandleCount,
+    _seedHeapHandle,
+    releaseHostValueKey,
+} from '../dist/native.js';
+import { lookupHostValue, registerHostOpaque } from '../dist/host_value_registry.js';
+import { baml_bridge } from '../dist/proto/baml_cffi.js';
+
+const HOST_VALUE_OPAQUE = baml_bridge.cffi.v1.BamlHandleType.HOST_VALUE_OPAQUE;
+const hostKeyOf = (key: { low: number; high: number }) => (BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0);
 
 describe('handle table dispatch', () => {
     test('generic media handle wraps from raw key', () => {
@@ -57,5 +70,42 @@ describe('handle table dispatch', () => {
         const h = new BamlHandle({ low: 999999, high: 0 }, 5);
         expect(h).toBeInstanceOf(BamlHandle);
         expect(() => h.clone()).toThrow(/invalid handle/);
+    });
+});
+
+describe('host-value references', () => {
+    test('a host value sent again takes a reference, and is refused once every one is given back', async () => {
+        const before = _hostValueCount();
+        const value = { name: 'sent twice' };
+        const key = registerHostOpaque(value);
+        const handle = new BamlHandle(key, HOST_VALUE_OPAQUE);
+        expect(handle._cloneKeyForWire()).toEqual(key);
+        // A wrapper of a host value owns none of its references.
+        expect(handle.clone().key).toEqual(key);
+        expect(_hostValueCount()).toBe(before + 1);
+
+        releaseHostValueKey(key);
+        expect(_hostValueRegistered(key)).toBe(true);
+        expect(lookupHostValue(hostKeyOf(key))).toBe(value);
+        releaseHostValueKey(key);
+        expect(_hostValueRegistered(key)).toBe(false);
+        expect(_hostValueCount()).toBe(before);
+        expect(() => handle._cloneKeyForWire()).toThrow(/no longer registered/);
+        // The value's entry goes with the key's last reference, on the loop.
+        await vi.waitFor(() => expect(lookupHostValue(hostKeyOf(key))).toBeUndefined());
+    });
+
+    test('a send that never goes out gives back only the reference it took', () => {
+        const key = registerHostOpaque('rolled back');
+        const handle = new BamlHandle(key, HOST_VALUE_OPAQUE);
+        expect(() => _encodeInbound([handle, Symbol('cannot encode')])).toThrow();
+        // The registration's own reference is untouched.
+        expect(_hostValueRegistered(key)).toBe(true);
+        // A send that does go out keeps its reference.
+        _encodeInbound(handle);
+        releaseHostValueKey(key);
+        expect(_hostValueRegistered(key)).toBe(true);
+        releaseHostValueKey(key);
+        expect(_hostValueRegistered(key)).toBe(false);
     });
 });

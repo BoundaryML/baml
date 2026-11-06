@@ -11,8 +11,9 @@ use crate::{
     external_to_outbound,
 };
 
-/// Releases each wire occurrence separately; identity-bearing keys can repeat.
-/// A host value is the engine's reference, not the host's: nothing to release.
+/// Releases every engine row an undecoded outbound value carries, each wire
+/// occurrence separately (identity-bearing keys can repeat). A host value's
+/// key is the host's own, but its pin is an engine row like any other.
 pub fn release_outbound_references(value: BamlOutboundValue) {
     use baml_outbound_value::Value;
     match value.value {
@@ -20,8 +21,13 @@ pub fn release_outbound_references(value: BamlOutboundValue) {
             Ok(WireHandle::Engine(key)) => {
                 HANDLE_TABLE.release(key);
             }
-            // The host owns nothing for these; a key 0 names nothing.
-            Ok(WireHandle::Host(..)) | Err(_) => {}
+            Ok(WireHandle::Host(..)) => {
+                if let Some(pin) = TableKey::new(handle.pin) {
+                    HANDLE_TABLE.release(pin);
+                }
+            }
+            // A key 0 names nothing.
+            Err(_) => {}
         },
         // A type value holds one row per runtime declaration it names, read
         // off the raw message so a tree the parse would refuse releases too.

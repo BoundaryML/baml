@@ -99,8 +99,8 @@ pub(crate) struct RenderedField {
     pub ty: String,
     pub boxed: bool,
     pub doc: Option<String>,
-    /// `$rust_type` field (opaque engine handle).
-    pub is_rust: bool,
+    /// A handle field: a host's own value, or a media struct's engine handle.
+    pub is_handle: bool,
     /// The field's [`slot_expr`], its type variables spelled as the class
     /// slot's arguments ([`class_argument_local`]).
     pub slot: String,
@@ -137,8 +137,8 @@ fn class_argument_locals(class: &Class, fields: &[RenderedField]) -> String {
 }
 
 /// The Swift struct of a class crossing by its fields, or, given `media`,
-/// of the class crossing as that media together with its one field, its
-/// `$rust_type` payload.
+/// of the class crossing as that media together with its one field, the
+/// engine's handle to the media.
 pub(crate) fn render_class(
     class: &Class,
     key: &Name,
@@ -278,10 +278,10 @@ pub(crate) fn render_class(
         })
         .collect::<Vec<_>>()
         .join(",\n");
-    // Media shape: a class whose ONLY field is a `$rust_type` handle
+    // Media shape: a class whose ONLY field is a handle
     // arrives from the engine as a bare tagged handle (ADT_MEDIA_*),
     // not a class value — decode accepts both forms.
-    let media_fallback = if fields.len() == 1 && fields[0].is_rust {
+    let media_fallback = if fields.len() == 1 && fields[0].is_handle {
         format!(
             "\t\tif let handle = try? BamlHandle._bamlDecode(v) {{\n\
              \t\t\treturn {name}({}: handle)\n\

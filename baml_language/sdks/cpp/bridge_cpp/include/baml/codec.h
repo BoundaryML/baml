@@ -41,7 +41,7 @@ template <typename T, typename ThrownU>
 class future;
 template <typename Signature>
 class function;
-class rust_type;
+class host_value;
 class target;
 
 namespace detail {
@@ -527,38 +527,64 @@ std::function<R(Args...)> registered_host_callable(
 
 }  // namespace detail
 
-class rust_type {
+// A `baml.host.Value`: a C++ value BAML holds by reference and never looks
+// into. Sent to BAML, it is registered with this process; back from BAML, it
+// is the same value again. Copies share one value, and one value is
+// registered under one key while BAML holds it, so a value sent several
+// times is one value to BAML.
+class host_value {
  public:
-  rust_type() = default;
-  explicit rust_type(uint64_t key)
-      : state_(std::make_shared<detail::function_handle_state>(key)) {}
-  uint64_t key() const {
-    if (!state_ || !state_->key) throw error("invalid Rust data handle");
-    return state_->key;
+  host_value() = default;
+  template <class T, class = std::enable_if_t<
+                         !std::is_same_v<std::decay_t<T>, host_value>>>
+  explicit host_value(T value)
+      : original_(std::make_shared<const std::any>(std::move(value))) {}
+
+  // The C++ value.
+  const std::any& value() const {
+    if (!original_) throw error("invalid host value");
+    return *original_;
   }
-  friend bool operator==(const rust_type& lhs, const rust_type& rhs) {
-    return lhs.state_ == rhs.state_;
+
+  // The same value: the one this process sent.
+  friend bool operator==(const host_value& lhs, const host_value& rhs) {
+    return lhs.original_ == rhs.original_;
   }
 
  private:
-  std::shared_ptr<detail::function_handle_state> state_;
+  friend struct codec<host_value>;
+  explicit host_value(std::shared_ptr<const std::any> original)
+      : original_(std::move(original)) {}
+  std::shared_ptr<const std::any> original_;
 };
 template <>
-struct codec<rust_type> {
-  static void encode(detail::pb::InboundValue& out, const rust_type& value) {
-    uint64_t key = 0;
-    if (detail::api().handle_clone(value.key(), &key) != 0)
-      throw bridge_error("Rust data handle clone failed");
-    out.mutable_handle()->set_key(key);
-    out.mutable_handle()->set_handle_type(detail::pb::UNTAGGED_RUST_DATA);
+struct codec<host_value> {
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    ty.mutable_class_ty()->set_name("baml.host.Value");
+    return ty;
   }
-  static rust_type decode(const detail::pb::BamlOutboundValue& raw) {
+  static void encode(detail::pb::InboundValue& out, const host_value& value) {
+    if (!value.original_) throw error("invalid host value");
+    out.mutable_handle()->set_key(
+        detail::host_value_registry::instance().send_value(value.original_));
+    out.mutable_handle()->set_handle_type(detail::pb::HOST_VALUE_OPAQUE);
+  }
+  static host_value decode(const detail::pb::BamlOutboundValue& raw) {
     const auto& value = detail::unwrap(raw);
     if (!value.has_handle_value() ||
-        value.handle_value().handle_type() != detail::pb::UNTAGGED_RUST_DATA ||
+        value.handle_value().handle_type() != detail::pb::HOST_VALUE_OPAQUE ||
         !value.handle_value().key())
-      detail::kind_mismatch("Rust data handle", value);
-    return rust_type(value.handle_value().key());
+      detail::kind_mismatch("host value", value);
+    // Only this process registers its values, and the pin the engine sends
+    // with the key keeps it registered while the value is read: a miss is a
+    // lifetime bug.
+    auto original = detail::host_value_registry::instance().find_value(
+        value.handle_value().key());
+    if (!original)
+      throw bridge_error(
+          "BAML returned a host value this process does not hold");
+    return host_value(std::move(original));
   }
 };
 
@@ -1121,8 +1147,8 @@ struct codec<std::variant<Ts...>> {
                detail::pb::BamlLiteralValue::kIntValue;
   }
 
-  // BUG: an alternative that adopts an engine handle (a rust_type, a
-  // function, a capability) and then fails releases that handle as its
+  // BUG: an alternative that adopts an engine handle (a function, a
+  // capability) and then fails releases that handle as its
   // partial value unwinds; a later alternative that adopts the same handle
   // then owns a reference already given back. The engine keys one instance
   // by one counted handle, so that extra release takes a reference another
@@ -1286,10 +1312,10 @@ T decode_result(const std::vector<uint8_t>& envelope) {
       throw_from_result_typed<ThrownU>(result);
     }
   }
-  struct release_borrowed_types {
-    pb::BamlOutboundValue& ok;
-    ~release_borrowed_types() { release_type_values(ok); }
-  } borrowed{*result.mutable_ok()};
+  struct release_borrowed_references {
+    const pb::BamlOutboundValue& ok;
+    ~release_borrowed_references() { release_borrowed(ok); }
+  } borrowed{result.ok()};
   // BUG: a decode that fails part way leaks the engine handles it had not
   // yet adopted (so does error::get and value::as, which decode a clone):
   // nothing records which handles the decoded value took.

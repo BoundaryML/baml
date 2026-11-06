@@ -994,7 +994,7 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Media(kind) => media_component(*kind).to_string(),
         GoTy::Json => "Json".into(),
         GoTy::ReflectedType => "Type".into(),
-        GoTy::RustType => "RustType".into(),
+        GoTy::HostValue => "HostValue".into(),
         GoTy::FunctionSpec { output } => {
             format!("FunctionSpec{}", union_type_component(output, names))
         }
@@ -1079,7 +1079,7 @@ fn disambiguated_union_component(ty: &GoTy, base: &str) -> String {
         GoTy::Media(kind) => format!("Primitive{}", media_component(*kind)),
         GoTy::Json => "StdlibJson".into(),
         GoTy::ReflectedType => "PrimitiveType".into(),
-        GoTy::RustType => "PrimitiveRustType".into(),
+        GoTy::HostValue => "PrimitiveHostValue".into(),
         GoTy::TypeVar(_) => {
             let mut hash = StableFnv::new();
             hash_go_ty(&mut hash, ty);
@@ -1117,7 +1117,7 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
         }
         GoTy::Json => hash.byte(18),
         GoTy::ReflectedType => hash.byte(19),
-        GoTy::RustType => hash.byte(20),
+        GoTy::HostValue => hash.byte(20),
         GoTy::FunctionSpec { output } => {
             hash.byte(23);
             hash_go_ty(hash, output);

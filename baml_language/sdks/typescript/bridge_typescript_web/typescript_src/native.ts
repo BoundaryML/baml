@@ -34,6 +34,10 @@ import initWasm, {
   registerWebHostCallable,
   registerWebHostValueReleaseCallback,
   releaseHandle as releaseWasmHandle,
+  releaseWebHostValue,
+  sendWebHostValueAgain,
+  _testWebHostValueCount,
+  _testWebHostValueRegistered,
   seedGenericMediaHandle as seedWasmGenericMediaHandle,
   shutdownRuntime as shutdownWasmRuntime,
   stageRuntimeBytecode,
@@ -268,9 +272,18 @@ export class BamlHandle {
     return new BamlHandle(keyFromBigint(cloneWasmHandle(this.rawKey)), this.handleType);
   }
 
+  /**
+   * The key one more wire occurrence of this handle carries: a fresh engine
+   * reference for an engine object. A host value's key goes as it is, taking
+   * one more of the host's references to it; refused once the key is no
+   * longer registered.
+   */
   _cloneKeyForWire(): HandleKey {
     this.assertLive();
-    if (isHostValueHandleType(this.handleType)) return keyFromBigint(this.rawKey);
+    if (isHostValueHandleType(this.handleType)) {
+      sendWebHostValueAgain(this.rawKey);
+      return keyFromBigint(this.rawKey);
+    }
     return keyFromBigint(cloneWasmHandle(this.rawKey));
   }
 
@@ -489,7 +502,12 @@ export function _isInvocationCancelled(handle: BamlHandle): boolean { return was
 export function _startHostCallExecution(execution: object): string | null { return (execution as WebHostExecution).cancelled ? null : ""; }
 export function _finishHostCallExecution(_execution: object): void { }
 function releaseControlValue(value: baml_bridge.cffi.v1.IBamlOutboundValue): void {
-    if (value.handleValue && !isHostValueHandleType(value.handleValue.handleType ?? 0)) releaseWasmHandle(BigInt(value.handleValue.key!.toString()));
+    if (value.handleValue) {
+        // A host value's key is the host's own; the engine's pin on it is a row to release.
+        const owned = isHostValueHandleType(value.handleValue.handleType ?? 0) ? value.handleValue.pin : value.handleValue.key;
+        const key = owned == null ? 0n : BigInt(owned.toString());
+        if (key !== 0n) releaseWasmHandle(key);
+    }
     for (const item of value.listValue?.items ?? []) releaseControlValue(item);
     for (const item of value.mapValue?.entries ?? value.classValue?.fields ?? []) if (item.value) releaseControlValue(item.value);
     if (value.unionVariantValue?.value) releaseControlValue(value.unionVariantValue.value);
@@ -509,11 +527,19 @@ export function getVersion(): string { return getWasmVersion(); }
 export function getToolchainVersion(): string { return getWasmToolchainVersion(); }
 export function getBridgeRuntimeVersion(): string { return getWasmBridgeRuntimeVersion(); }
 export function mintHostValueKey(): HandleKey { return keyFromBigint(mintWebHostValueKey()); }
+/** Give back one reference to a host value whose send never reached the engine. */
+export function releaseHostValueKey(key: HandleKey): void { releaseWebHostValue(keyToBigint(key)); }
+/** Test-only: how many host-value keys (callable and opaque) are registered. */
+export function _hostValueCount(): number { return _testWebHostValueCount(); }
+/** Test-only: whether `key` is registered. */
+export function _hostValueRegistered(key: HandleKey): boolean { return _testWebHostValueRegistered(keyToBigint(key)); }
 export function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void {
   hostRelease = callback;
   registerWebHostValueReleaseCallback((key: bigint) => hostRelease?.(keyFromBigint(key)));
 }
-export function registerHostCallable(callback: (callId: number, args: Uint8Array, execution?: object) => void, marker?: BamlHandle): HandleKey {
+/** A host function's instrumentation marker: the Web has no host instrumentation, so none exists. */
+export type _HostMarker = never;
+export function registerHostCallable(callback: (callId: number, args: Uint8Array, execution?: object) => void, marker?: object): HandleKey {
     if (marker) throw new TypeError("host instrumentation is not supported in Web");
     return keyFromBigint(registerWebHostCallable((bytes: Uint8Array) => {
         const wire = baml_bridge.cffi.v1.HostInvocation.decode(bytes);

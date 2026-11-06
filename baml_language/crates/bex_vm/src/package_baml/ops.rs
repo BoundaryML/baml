@@ -646,6 +646,18 @@ impl EqualsDriver {
                         bex_vm_types::RustPayload::SpanId(x),
                         bex_vm_types::RustPayload::SpanId(y),
                     ) => step(x == y),
+                    // A host's value is the host's value it names: every
+                    // arrival of one registration shares one `Arc`.
+                    (
+                        bex_vm_types::RustPayload::HostValue(x),
+                        bex_vm_types::RustPayload::HostValue(y),
+                    ) => step(std::sync::Arc::ptr_eq(x, y)),
+                    // A token is the cancellation it controls: every instance
+                    // built from one host body's token shares its state.
+                    (
+                        bex_vm_types::RustPayload::CancelToken(x),
+                        bex_vm_types::RustPayload::CancelToken(y),
+                    ) => step(std::sync::Arc::ptr_eq(x, y)),
                     // Immutable data compares by value: the same media, the
                     // same rendered prompt, the same pattern in the same
                     // dialect, the same record read at the same place.

@@ -35,9 +35,9 @@ pub(crate) enum GoTy {
     /// A first-class reflected BAML type value (`type`). Its Go surface is the
     /// opaque runtime descriptor `baml_go.BAMLType`.
     ReflectedType,
-    /// Opaque Rust-managed state (`$rust_type`). The native handle table owns
-    /// the underlying value; Go only holds a cloneable lifetime token.
-    RustType,
+    /// A host's own value (`baml.host.Value`): the Go value this process
+    /// sent, which BAML holds by reference.
+    HostValue,
     FunctionSpec {
         output: Box<Self>,
     },
@@ -388,7 +388,7 @@ impl<'a> GoTypeProjection<'a> {
                 },
                 (ClassCrossing::Prompt, []) => GoTy::Prompt(name.clone()),
                 // A host's own value is the host's handle to it.
-                (ClassCrossing::HostValue, []) => GoTy::RustType,
+                (ClassCrossing::HostValue, []) => GoTy::HostValue,
                 (ClassCrossing::Opaque, arguments) => GoTy::Opaque(
                     name.clone(),
                     arguments

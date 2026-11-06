@@ -152,7 +152,6 @@ func bamlTyDepth(ty *cffi.BamlTy) int {
 		*cffi.BamlTy_Unknown,
 		*cffi.BamlTy_Media,
 		*cffi.BamlTy_EnumVariant,
-		*cffi.BamlTy_RustType,
 		*cffi.BamlTy_MetaType,
 		*cffi.BamlTy_Resource,
 		*cffi.BamlTy_PromptAst,

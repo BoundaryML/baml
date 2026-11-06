@@ -86,7 +86,7 @@ import java.util.stream.Collectors;
  *                    bigint_value=4 (decimal string), float_value=5 (decimal string)
  * </pre>
  * {@link #fromWireTy} returns {@code null} for any arm outside this grammar (a
- * wire type the token cannot represent, e.g. a future, a rust_type, a type
+ * wire type the token cannot represent, e.g. a future, a type
  * variable), and for any composite whose nested tokens are themselves outside
  * the grammar — a partial token would misalign positions, so the whole token is
  * poisoned.

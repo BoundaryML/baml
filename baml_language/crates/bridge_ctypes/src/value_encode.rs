@@ -154,21 +154,28 @@ pub fn external_to_outbound(
             Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
         }
 
-        // A host value is the engine's reference to a host object, not a
-        // handle-table row: it goes back to its host by its own key, and the
-        // Arc keeps the release semantics (HostValueArc::drop fires
-        // HostReleaseFn on last drop). A callable goes back by key alone: the
-        // host has its own signature.
+        // A host value is the engine's reference to a host object: it goes
+        // back to its host by its own key. Its pin keeps the engine's
+        // references to that key until the host has read it; the host
+        // releases the pin with whatever carried the value. A callable goes
+        // back by key alone: the host has its own signature.
         BexExternalValue::HostValue(arc) | BexExternalValue::HostCallable { handle: arc, .. } => {
             use crate::baml_bridge::cffi::BamlHandleType;
             let ht = match arc.kind {
                 bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
                 bex_project::HostValueKind::Opaque => BamlHandleType::HostValueOpaque as i32,
             };
+            let pin =
+                options
+                    .table
+                    .insert(CffiHandleTableEntry::HostValuePin(std::sync::Arc::clone(
+                        arc,
+                    )));
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key: arc.key.get(),
                 handle_type: ht,
                 ty: None,
+                pin: pin.get(),
             }))
         }
 
@@ -193,10 +200,16 @@ pub fn external_to_outbound(
             // wrapper. Its `ty` rides along only for annotations and
             // diagnostics; live declaration identity and generic substitution
             // come from the rooted heap object when it re-enters the engine.
+            // A host body's cancel token states its class the same way, so a
+            // host wraps it as it wraps any reference to a `CancelToken`.
             let ty = match value {
-                BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                    ty: annotation, ..
-                }) => Some(crate::ty_encode::wire_ty_to_proto_ty(
+                BexExternalValue::Adt(
+                    BexExternalAdt::TaggedHeapHandle { ty: annotation, .. }
+                    | BexExternalAdt::CancelToken(bex_project::CancelTokenCapability {
+                        ty: annotation,
+                        ..
+                    }),
+                ) => Some(crate::ty_encode::wire_ty_to_proto_ty(
                     annotation,
                     &mut |never| match *never {},
                 )),
@@ -211,6 +224,7 @@ pub fn external_to_outbound(
                 key: key.get(),
                 handle_type: ht as i32,
                 ty,
+                pin: 0,
             }))
         }
     };
@@ -718,6 +732,38 @@ mod tests {
         );
 
         assert_eq!(encoded.selected_option_index, Some(0));
+    }
+
+    /// A host value going out carries a pin: a row holding the engine's
+    /// identity for the key, so the engine cannot give the key's references
+    /// back before the host has read it. Releasing the pin gives up that
+    /// hold, and a pin is never a value.
+    #[test]
+    fn an_outbound_host_value_is_pinned_until_the_host_releases_it() {
+        let arc = HostValueArc::new(
+            bex_project::HostKey::new(43).unwrap(),
+            HostValueKind::Opaque,
+        );
+        let value = BexExternalValue::HostValue(std::sync::Arc::clone(&arc));
+        let options = CffiHandleTableOptions::for_in_process();
+        let encoded = external_to_outbound(&value, &options).expect("encode succeeds");
+        let Some(BamlValueVariant::HandleValue(handle)) = encoded.value else {
+            panic!("a host value goes out as a handle");
+        };
+        assert_eq!(handle.key, 43);
+        let pin = crate::TableKey::new(handle.pin).expect("a host value carries a pin");
+        drop(value);
+        assert_eq!(
+            std::sync::Arc::strong_count(&arc),
+            2,
+            "the pin holds the engine's identity after the value is gone"
+        );
+        let row = options.table.resolve(pin).expect("the pin is live");
+        assert_eq!(row.handle_type(), BamlHandleType::HostValuePin);
+        assert!(row.value().is_none(), "a pin is never a value");
+        drop(row);
+        assert!(options.table.release(pin));
+        assert_eq!(std::sync::Arc::strong_count(&arc), 1);
     }
 
     #[test]

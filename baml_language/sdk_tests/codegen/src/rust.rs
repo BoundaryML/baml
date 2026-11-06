@@ -85,6 +85,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     ("function_calls", "test_generic_inference.rs", Gate::Now),
     ("function_calls", "test_generic_references.rs", Gate::Now),
     ("function_calls", "test_host_callables.rs", Gate::Now),
+    ("function_calls", "test_host_values.rs", Gate::Now),
     // Rust-only: typed error surfaces from callback-throws inference (python/TS
     // erase `throws`, so there is no cross-language counterpart).
     ("function_calls", "test_callback_throws.rs", Gate::Now),

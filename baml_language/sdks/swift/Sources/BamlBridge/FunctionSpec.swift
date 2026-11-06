@@ -103,7 +103,7 @@ extension BamlFunctionSpec: Equatable {
 extension BamlFunctionSpec: BamlLeafEncodable {
     /// A spec rides as its bare handle, whose type the engine knows.
     public func _bamlEncode(as _: BamlSlot<BamlFunctionSpec<Final>>) throws -> BamlInboundValue {
-        try handle._bamlEncode(as: ._leaf(.rustType))
+        try handle._bamlEncode(as: ._leaf(.unknown))
     }
 }
 

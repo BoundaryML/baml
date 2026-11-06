@@ -17,7 +17,10 @@ import {
     _seedGenericMediaHandle,
 } from '../dist/index.js';
 
-const { BamlOutboundResult, BamlOutboundValue } = baml_bridge.cffi.v1;
+import { _handleRefcount, releaseHostValueKey } from '../dist/native.js';
+import { registerHostOpaque } from '../dist/host_value_registry.js';
+
+const { BamlOutboundResult, BamlOutboundValue, BamlHandleType } = baml_bridge.cffi.v1;
 
 function encodeResult(result: baml_bridge.cffi.v1.IBamlOutboundResult): Buffer {
     return Buffer.from(BamlOutboundResult.encode(BamlOutboundResult.create(result)).finish());
@@ -102,5 +105,44 @@ describe('decodeCallResult — thrown value carries structured detail', () => {
         expect(panic.className).toBe('baml.errors.GenericSdkError');
         expect(panic.bamlTrace).toEqual(trace);
         expect(panic.value).toMatchObject({ message: 'boom' });
+    });
+});
+
+describe('decodeCallResult — pinned host values', () => {
+    test('a host value in a result releases its pin once read', () => {
+        const [pin] = _seedGenericMediaHandle();
+        const key = { low: 0x7fff_0002, high: 0 };
+        const decoded = decodeCallResult(encodeResult({
+            ok: { handleValue: { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE, pin } },
+        }));
+        expect((decoded as { key: unknown }).key).toEqual(key);
+        expect(_handleRefcount(pin)).toBeNull();
+    });
+
+    test('a host error rehydrates while its pin is held, and the pin is released', () => {
+        const raised = new Error('pinned');
+        const key = registerHostOpaque(raised);
+        const [pin] = _seedGenericMediaHandle();
+        try {
+            const bytes = encodeResult({
+                error: {
+                    value: {
+                        classValue: {
+                            name: 'baml.errors.HostCallable',
+                            fields: [
+                                { key: 'message', value: { stringValue: 'pinned' } },
+                                { key: '_handle', value: { handleValue: { key, handleType: BamlHandleType.HOST_VALUE_OPAQUE, pin } } },
+                            ],
+                        },
+                    },
+                },
+            });
+            let caught: unknown;
+            try { decodeCallResult(bytes); } catch (error) { caught = error; }
+            expect(caught).toBe(raised);
+            expect(_handleRefcount(pin)).toBeNull();
+        } finally {
+            releaseHostValueKey(key);
+        }
     });
 });

@@ -21,12 +21,17 @@
 //!    handle leaks one ownership; a second release on a shared key steals a
 //!    live co-owner's ownership (the table cannot tell owners apart).
 //!
+//! A handle to a host value (`HOST_VALUE_CALLABLE` / `HOST_VALUE_OPAQUE`)
+//! names a key of the host-value registry instead: it holds one reference to
+//! that key, taken when it is constructed or copied and given back on drop,
+//! so the key stays registered for as long as Python can send it again.
+//!
 //! There is no public `handle_type()` method. The wire transmits
 //! `BamlHandle.handle_type`, the Python object stores it on construction,
 //! and Rust-internal callers (media class validation) read the field directly.
 
 use bridge_cffi::{BamlCffiStatus, handle_cffi};
-use bridge_ctypes::WireHandle;
+use bridge_ctypes::{TableKey, WireHandle};
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
@@ -58,15 +63,23 @@ pub struct BamlPyHandle {
 #[gen_stub_pymethods]
 #[pymethods]
 impl BamlPyHandle {
+    /// Adopt the engine reference `handle_key` transfers, or take a reference
+    /// to the host value `handle_key` names, which must still be registered.
     #[new]
-    fn py_new(handle_key: u64, handle_type: u64) -> Self {
-        Self::new(handle_key, handle_type)
+    fn py_new(handle_key: u64, handle_type: u64) -> PyResult<Self> {
+        let handle = Self {
+            handle_key,
+            handle_type,
+        };
+        if let Ok(WireHandle::Host(key, _)) = handle.wire_handle() {
+            crate::host_value::send_again(key)?;
+        }
+        Ok(handle)
     }
 
     fn __copy__(&self) -> PyResult<Self> {
-        let (new_key, _) = self._clone_key_for_wire()?;
         Ok(Self {
-            handle_key: new_key,
+            handle_key: wire_key(self.wire_reference()?),
             handle_type: self.handle_type,
         })
     }
@@ -75,17 +88,10 @@ impl BamlPyHandle {
         self.__copy__()
     }
 
-    /// Clone this handle for inbound wire ownership. A host value is the
-    /// engine's reference to the host's own object: its key goes as it is,
-    /// nothing is cloned.
+    /// Clone this handle for inbound wire ownership: the key carries one
+    /// reference of its own, which the receiver takes over.
     fn _clone_key_for_wire(&self) -> PyResult<(u64, u64)> {
-        let new_key = match self.wire_handle()? {
-            WireHandle::Host(key, _) => key.get(),
-            WireHandle::Engine(_) => {
-                handle_clone(self.handle_key, "BamlPyHandle._clone_key_for_wire")?
-            }
-        };
-        Ok((new_key, self.handle_type))
+        Ok((wire_key(self.wire_reference()?), self.handle_type))
     }
 
     fn _key_for_invocation(&self) -> PyResult<u64> {
@@ -113,16 +119,42 @@ impl BamlPyHandle {
 }
 
 impl BamlPyHandle {
+    /// Adopt the engine reference `handle_key`, which the caller holds.
     pub fn new(handle_key: u64, handle_type: u64) -> Self {
-        Self {
+        let handle = Self {
             handle_key,
             handle_type,
+        };
+        debug_assert!(
+            !matches!(handle.wire_handle(), Ok(WireHandle::Host(..))),
+            "a handle to a host value takes its reference through `py_new`"
+        );
+        handle
+    }
+
+    /// One more reference to what this handle names, for a wire or another
+    /// handle to own: a clone of the engine reference, or one more reference
+    /// to the host value's key.
+    pub(crate) fn wire_reference(&self) -> PyResult<WireHandle> {
+        match self.wire_handle()? {
+            WireHandle::Host(key, kind) => {
+                crate::host_value::send_again(key)?;
+                Ok(WireHandle::Host(key, kind))
+            }
+            WireHandle::Engine(_) => {
+                let cloned = handle_clone(self.handle_key, "BamlPyHandle wire reference")?;
+                TableKey::new(cloned)
+                    .map(WireHandle::Engine)
+                    .ok_or_else(|| {
+                        pyo3::exceptions::PyRuntimeError::new_err("a cloned handle key is 0")
+                    })
+            }
         }
     }
 
     /// Which reference this handle is: the host's reference to an engine
     /// object, or the engine's reference to a host object.
-    fn wire_handle(&self) -> PyResult<WireHandle> {
+    pub(crate) fn wire_handle(&self) -> PyResult<WireHandle> {
         let handle_type = i32::try_from(self.handle_type).map_err(|_| {
             pyo3::exceptions::PyTypeError::new_err("handle type does not fit the wire")
         })?;
@@ -131,14 +163,23 @@ impl BamlPyHandle {
     }
 }
 
+/// The key a wire handle carries, in whichever table it names.
+fn wire_key(handle: WireHandle) -> u64 {
+    match handle {
+        WireHandle::Engine(key) => key.get(),
+        WireHandle::Host(key, _) => key.get(),
+    }
+}
+
 impl Drop for BamlPyHandle {
     fn drop(&mut self) {
-        // A host value is the engine's reference to a host object, released
-        // through the host-value registry (see
-        // [`crate::host_value::lookup_host_value`]); only an engine reference
-        // is this wrapper's to release. Key 0 names nothing.
-        if let Ok(WireHandle::Engine(key)) = self.wire_handle() {
-            let _ = handle_cffi::release_handle(key.get());
+        // Key 0 names nothing.
+        match self.wire_handle() {
+            Ok(WireHandle::Engine(key)) => {
+                let _ = handle_cffi::release_handle(key.get());
+            }
+            Ok(WireHandle::Host(key, _)) => crate::host_value::release(key, 1),
+            Err(_) => {}
         }
     }
 }

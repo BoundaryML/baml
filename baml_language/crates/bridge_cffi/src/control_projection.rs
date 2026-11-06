@@ -1,6 +1,6 @@
 //! Data-only projections used by every generated invocation and trace facade.
 
-use bex_project::{BexExternalAdt, TaggedHeapHandleKind, TraceControl};
+use bex_project::{TaggedHeapHandleKind, TraceControl};
 use bridge_ctypes::{
     CffiHandleTableEntry, HANDLE_TABLE, TableKey, TraceReservationHandle, WireHandle,
     baml_bridge::cffi::{
@@ -29,7 +29,7 @@ pub(crate) fn trace_control(
     let entry = TableKey::new(key)
         .and_then(|key| HANDLE_TABLE.resolve(key))
         .ok_or_else(|| invalid(&format!("{what} is no longer live")))?;
-    let CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle {
+    let CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::TaggedHeapHandle {
         kind: TaggedHeapHandleKind::TraceControl(control),
         heap_handle,
         ..

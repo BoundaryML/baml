@@ -4,7 +4,10 @@
 //! Each occurrence of an engine key in a value the engine sent is one
 //! reference this process owns: a handle's key, and a `live` head in a type
 //! value. A host key (a value this process registered) is the engine's
-//! reference, never cloned or released here.
+//! reference, never cloned or released here; the `pin` beside it keeps the
+//! engine's references to that key while the value is read. Decoding a value
+//! takes over its engine references but only reads its pins: [`Pins`] owns
+//! them, taken where the value arrives and released once it is decoded.
 
 use crate::{
     encode::{CloneRefused, EncodeError, Encoder},
@@ -14,7 +17,131 @@ use crate::{
     },
 };
 
-/// Release every engine reference `value` holds.
+/// The pins of host values the engine sent, released when dropped.
+#[must_use = "dropping the pins releases them"]
+#[derive(Default)]
+pub(crate) struct Pins(Vec<u64>);
+
+impl Pins {
+    /// Take over the pins the host values in `values` carry: values the
+    /// engine sent, whose pins nothing else owns.
+    pub(crate) fn of<'a>(values: impl IntoIterator<Item = &'a wire::BamlOutboundValue>) -> Self {
+        let mut pins = Self::default();
+        for value in values {
+            each_pin(value, &mut |pin| pins.0.push(pin));
+        }
+        pins
+    }
+
+    /// Give `value` pins of its own: each pin it carries replaced by a fresh
+    /// reference to the same pin, owned by the result. The pins it carried
+    /// are read only, and stay their owner's.
+    pub(crate) fn renew(value: &mut wire::BamlOutboundValue) -> Result<Self, CloneRefused> {
+        let mut pins = Self::default();
+        renew_pins(value, &mut pins)?;
+        Ok(pins)
+    }
+}
+
+impl Drop for Pins {
+    fn drop(&mut self) {
+        for pin in self.0.drain(..) {
+            crate::handle::release_engine_key(pin);
+        }
+    }
+}
+
+/// Every pin `value` carries.
+fn each_pin(value: &wire::BamlOutboundValue, pin: &mut impl FnMut(u64)) {
+    let Some(value) = &value.value else {
+        return;
+    };
+    match value {
+        Out::HandleValue(handle) => {
+            if handle.pin != 0 {
+                pin(handle.pin);
+            }
+        }
+        Out::ListValue(list) => list.items.iter().for_each(|item| each_pin(item, pin)),
+        Out::MapValue(map) => map
+            .entries
+            .iter()
+            .filter_map(|entry| entry.value.as_ref())
+            .for_each(|value| each_pin(value, pin)),
+        Out::ClassValue(class) => class
+            .fields
+            .iter()
+            .filter_map(|entry| entry.value.as_ref())
+            .for_each(|value| each_pin(value, pin)),
+        Out::UnionVariantValue(union) => {
+            if let Some(value) = &union.value {
+                each_pin(value, pin);
+            }
+        }
+        Out::TyValue(_)
+        | Out::NullValue(_)
+        | Out::StringValue(_)
+        | Out::IntValue(_)
+        | Out::FloatValue(_)
+        | Out::BoolValue(_)
+        | Out::EnumValue(_)
+        | Out::LiteralValue(_)
+        | Out::MediaValue(_)
+        | Out::PromptAstValue(_)
+        | Out::Uint8arrayValue(_)
+        | Out::BigintValue(_) => {}
+    }
+}
+
+/// Replace every pin `value` carries by a fresh reference, which `pins` owns.
+fn renew_pins(value: &mut wire::BamlOutboundValue, pins: &mut Pins) -> Result<(), CloneRefused> {
+    let Some(value) = &mut value.value else {
+        return Ok(());
+    };
+    match value {
+        Out::HandleValue(handle) => {
+            if handle.pin != 0 {
+                let fresh = crate::handle::clone_engine_key(handle.pin).ok_or(CloneRefused)?;
+                pins.0.push(fresh);
+                handle.pin = fresh;
+            }
+            Ok(())
+        }
+        Out::ListValue(list) => list
+            .items
+            .iter_mut()
+            .try_for_each(|item| renew_pins(item, pins)),
+        Out::MapValue(map) => map
+            .entries
+            .iter_mut()
+            .filter_map(|entry| entry.value.as_mut())
+            .try_for_each(|value| renew_pins(value, pins)),
+        Out::ClassValue(class) => class
+            .fields
+            .iter_mut()
+            .filter_map(|entry| entry.value.as_mut())
+            .try_for_each(|value| renew_pins(value, pins)),
+        Out::UnionVariantValue(union) => match &mut union.value {
+            Some(value) => renew_pins(value, pins),
+            None => Ok(()),
+        },
+        Out::TyValue(_)
+        | Out::NullValue(_)
+        | Out::StringValue(_)
+        | Out::IntValue(_)
+        | Out::FloatValue(_)
+        | Out::BoolValue(_)
+        | Out::EnumValue(_)
+        | Out::LiteralValue(_)
+        | Out::MediaValue(_)
+        | Out::PromptAstValue(_)
+        | Out::Uint8arrayValue(_)
+        | Out::BigintValue(_) => Ok(()),
+    }
+}
+
+/// Release every engine reference `value` holds. Its pins are its [`Pins`]'
+/// owner's.
 pub(crate) fn release(value: wire::BamlOutboundValue) {
     let Some(value) = value.value else {
         return;
@@ -64,9 +191,10 @@ pub(crate) fn release(value: wire::BamlOutboundValue) {
     }
 }
 
-/// A copy of `value` holding references of its own, which `encoder` owns
-/// until the copy is taken over: decoding a held value twice must not hand
-/// out the one reference twice.
+/// A copy of `value` holding engine references of its own, which `encoder`
+/// owns until the copy is taken over: decoding a held value twice must not
+/// hand out the one reference twice. Its pins are `value`'s, read while
+/// `value` is held.
 pub(crate) fn clone(
     value: &wire::BamlOutboundValue,
     encoder: &mut Encoder,
@@ -82,6 +210,7 @@ pub(crate) fn clone(
             },
             handle_type: handle.handle_type,
             ty: handle.ty.clone(),
+            pin: handle.pin,
         }),
         Out::TyValue(ty) => Out::TyValue(map_heads(ty, &mut |head| match head {
             Head::Live(key) => encoder.clone_handle(key).map(Head::Live),
@@ -158,10 +287,10 @@ pub(crate) fn clone(
     })
 }
 
-/// `value` sent back as it arrived: every engine reference cloned (each
-/// occurrence transfers one), a container stating the type the engine sent
-/// beside it, a host callable the function type this process registered it
-/// under. A type the engine labeled (a runtime declaration it would not name)
+/// `value` sent back as it arrived: every engine reference cloned and every
+/// host value referenced again (each occurrence transfers one), a container
+/// stating the type the engine sent beside it, a host callable the function
+/// type this process registered it under. A type the engine labeled (a runtime declaration it would not name)
 /// cannot be stated, nor can a container it sent without a type.
 pub(crate) fn to_inbound(
     value: &wire::BamlOutboundValue,
@@ -200,12 +329,7 @@ pub(crate) fn to_inbound(
                 KeySpace::Engine => (encoder.clone_handle(handle.key)?, None),
                 KeySpace::Host => (
                     handle.key,
-                    match wire::BamlHandleType::try_from(handle.handle_type) {
-                        Ok(wire::BamlHandleType::HostValueCallable) => {
-                            crate::host_value::registered_function_type(handle.key)
-                        }
-                        _ => None,
-                    },
+                    crate::host_value::send_again(handle.key, encoder)?,
                 ),
             };
             (
@@ -492,7 +616,6 @@ fn map_heads<E>(
         | Ty::Literal(_)
         | Ty::Unknown(_)
         | Ty::Media(_)
-        | Ty::RustType(_)
         | Ty::MetaType(_)
         | Ty::Resource(_)
         | Ty::PromptAst(_)

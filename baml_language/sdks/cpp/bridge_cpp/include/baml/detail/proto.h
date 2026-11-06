@@ -3,9 +3,9 @@
 
 // The typed wire layer over the generated protobuf-lite bindings for the
 // bridge_ctypes CFFI schemas (checked-in under bridge_cpp/pb/, pinned to
-// the repo's vendored protoc). args_encoder builds one CallFunctionArgs;
-// the helpers here normalize outbound values (union unwrap, arm naming)
-// for the codec layer. Copies are deliberate and visible (contract:
+// the repo's vendored protoc). The helpers here normalize outbound values
+// (union unwrap, arm naming) for the codec layer and release the engine
+// references they carry. Copies are deliberate and visible (contract:
 // coarse-grained boundary, measurable copies).
 
 #include <baml/detail/loader.h>
@@ -14,7 +14,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -107,7 +106,6 @@ inline std::size_t baml_ty_depth(const pb::BamlTy& ty) {
     case pb::BamlTy::kUnknown:
     case pb::BamlTy::kMedia:
     case pb::BamlTy::kEnumVariant:
-    case pb::BamlTy::kRustType:
     case pb::BamlTy::kMetaType:
     case pb::BamlTy::kResource:
     case pb::BamlTy::kPromptAst:
@@ -369,7 +367,6 @@ void for_each_nominal(pb::BamlTy& ty, const Visit& visit) {
     case pb::BamlTy::kLiteral:
     case pb::BamlTy::kUnknown:
     case pb::BamlTy::kMedia:
-    case pb::BamlTy::kRustType:
     case pb::BamlTy::kMetaType:
     case pb::BamlTy::kResource:
     case pb::BamlTy::kPromptAst:
@@ -442,12 +439,81 @@ void for_each_type_value(pb::BamlOutboundValue& value, const Visit& visit) {
   }
 }
 
-// Decoding only borrows a value's type values: no typed codec keeps one, and
-// `baml::value` restates its own. So the wire they arrived on releases them
-// once decoding is done, however it ends.
-inline void release_type_values(pb::BamlOutboundValue& value) {
-  for_each_type_value(value,
-                      [](const pb::BamlTy& ty) { release_live_heads(ty); });
+// Whether a handle of `type` is a host key: the host's own registration,
+// never an engine row.
+inline bool is_host_handle(pb::BamlHandleType type) {
+  return type == pb::HOST_VALUE_CALLABLE || type == pb::HOST_VALUE_OPAQUE;
+}
+
+// A host key the engine sends comes with a pin, an engine row that keeps the
+// engine's references to the key while the host reads it. The wire it came on
+// releases it once (0 is none).
+inline void release_pin(const pb::BamlOutboundHandle& handle) {
+  if (handle.pin() != 0) api().handle_release(handle.pin());
+}
+
+// Decoding only borrows a value's type values and pins: no typed codec keeps
+// one, `baml::value` restates its own type values, and nothing holds a pin
+// past the wire. So the wire they arrived on releases them once decoding is
+// done, however it ends.
+inline void release_borrowed(const pb::BamlOutboundValue& value) {
+  switch (value.value_case()) {
+    case pb::BamlOutboundValue::kTyValue:
+      release_live_heads(value.ty_value());
+      return;
+    case pb::BamlOutboundValue::kHandleValue:
+      if (is_host_handle(value.handle_value().handle_type()))
+        release_pin(value.handle_value());
+      return;
+    case pb::BamlOutboundValue::kListValue:
+      for (const auto& item : value.list_value().items())
+        release_borrowed(item);
+      return;
+    case pb::BamlOutboundValue::kMapValue:
+      for (const auto& entry : value.map_value().entries())
+        release_borrowed(entry.value());
+      return;
+    case pb::BamlOutboundValue::kClassValue:
+      for (const auto& field : value.class_value().fields())
+        release_borrowed(field.value());
+      return;
+    case pb::BamlOutboundValue::kUnionVariantValue:
+      release_borrowed(value.union_variant_value().value());
+      return;
+    case pb::BamlOutboundValue::VALUE_NOT_SET:
+    case pb::BamlOutboundValue::kNullValue:
+    case pb::BamlOutboundValue::kStringValue:
+    case pb::BamlOutboundValue::kIntValue:
+    case pb::BamlOutboundValue::kFloatValue:
+    case pb::BamlOutboundValue::kBoolValue:
+    case pb::BamlOutboundValue::kEnumValue:
+    case pb::BamlOutboundValue::kLiteralValue:
+    case pb::BamlOutboundValue::kMediaValue:
+    case pb::BamlOutboundValue::kPromptAstValue:
+    case pb::BamlOutboundValue::kUint8ArrayValue:
+    case pb::BamlOutboundValue::kBigintValue:
+      return;
+  }
+}
+
+// Calls `visit` on every host-key handle in `value`, through its containers.
+template <typename Visit>
+void for_each_host_handle(pb::BamlOutboundValue& value, const Visit& visit) {
+  if (value.has_handle_value() &&
+      is_host_handle(value.handle_value().handle_type()))
+    visit(*value.mutable_handle_value());
+  if (value.has_list_value())
+    for (auto& item : *value.mutable_list_value()->mutable_items())
+      for_each_host_handle(item, visit);
+  if (value.has_map_value())
+    for (auto& entry : *value.mutable_map_value()->mutable_entries())
+      for_each_host_handle(*entry.mutable_value(), visit);
+  if (value.has_class_value())
+    for (auto& field : *value.mutable_class_value()->mutable_fields())
+      for_each_host_handle(*field.mutable_value(), visit);
+  if (value.has_union_variant_value())
+    for_each_host_handle(*value.mutable_union_variant_value()->mutable_value(),
+                         visit);
 }
 
 // Explicitly owned callback state can be carried to another thread by SDK
@@ -463,8 +529,9 @@ inline thread_local std::shared_ptr<invocation_state> current_invocation_state;
 inline void release_control_value(const pb::BamlOutboundValue& value) {
   switch (value.value_case()) {
     case pb::BamlOutboundValue::kHandleValue:
-      if (value.handle_value().handle_type() != pb::HOST_VALUE_CALLABLE &&
-          value.handle_value().handle_type() != pb::HOST_VALUE_OPAQUE)
+      if (is_host_handle(value.handle_value().handle_type()))
+        release_pin(value.handle_value());
+      else
         api().handle_release(value.handle_value().key());
       break;
     case pb::BamlOutboundValue::kListValue:
@@ -523,15 +590,17 @@ inline std::shared_ptr<const thrown_value> take_thrown_value(
 }
 
 // A copy whose engine handles are its own. Its type values stay borrowed
-// from `value`: decoding keeps none, and restating one clones its own.
+// from `value`: decoding keeps none, and restating one clones its own. Its
+// host keys carry no pin: `value` holds those.
 inline pb::BamlOutboundValue clone_control_value(
     const pb::BamlOutboundValue& value) {
   pb::BamlOutboundValue result(value);
+  for_each_host_handle(result,
+                       [](pb::BamlOutboundHandle& host) { host.clear_pin(); });
   std::function<void(pb::BamlOutboundValue*)> visit =
       [&](pb::BamlOutboundValue* item) {
         if (item->has_handle_value() &&
-            item->handle_value().handle_type() != pb::HOST_VALUE_CALLABLE &&
-            item->handle_value().handle_type() != pb::HOST_VALUE_OPAQUE) {
+            !is_host_handle(item->handle_value().handle_type())) {
           uint64_t key = 0;
           if (api().handle_clone(item->handle_value().key(), &key) != 0)
             throw bridge_error("invocation handle clone failed");
@@ -564,22 +633,6 @@ inline pb::BamlOutboundValue current_trace_context() {
   api().free_buffer(buffer);
   if (!ok) throw error("invalid invocation context payload");
   return value;
-}
-inline void release_input_value(const pb::InboundValue& value) {
-  if (value.has_handle() &&
-      value.handle().handle_type() != pb::HOST_VALUE_CALLABLE &&
-      value.handle().handle_type() != pb::HOST_VALUE_OPAQUE)
-    api().handle_release(value.handle().key());
-  if (value.has_ty_value()) release_live_heads(value.ty_value());
-  if (value.has_list_value())
-    for (const auto& item : value.list_value().values())
-      release_input_value(item);
-  if (value.has_map_value())
-    for (const auto& item : value.map_value().entries())
-      release_input_value(item.value());
-  if (value.has_class_value())
-    for (const auto& item : value.class_value().fields())
-      release_input_value(item.value());
 }
 
 // Human-readable arm name for decode diagnostics.
@@ -634,111 +687,6 @@ inline const pb::BamlOutboundValue& unwrap(const pb::BamlOutboundValue& v) {
   }
   return *cur;
 }
-
-// Builds one CallFunctionArgs message: kwargs entries are filled via the
-// value-writer callbacks that codec<T>::encode provides, then finish()
-// stamps the engine call id and serializes.
-class args_encoder {
- public:
-  explicit args_encoder(const invocation_options& controls = {}) {
-    if (controls.timeout &&
-        (*controls.timeout < 0 || *controls.timeout > 2147483647))
-      throw error("timeout_ms must be between 0 and 2147483647");
-    id_ = api().new_function_call();
-    if (!id_) throw error("runtime call allocation failed");
-    try {
-      auto* invocation = args_.mutable_invocation();
-      invocation->set_host_environment(id_);
-      inherited_ = current_invocation_state;
-      invocation->set_inherited_state(inherited_ ? inherited_->key : 0);
-      if (controls.timeout) {
-        uint64_t now = 0;
-        if (api().invocation_clock_ns(id_, &now) != 0)
-          throw error("runtime clock failed");
-        const uint64_t duration =
-            static_cast<uint64_t>(*controls.timeout) * 1000000;
-        if (duration > (std::numeric_limits<uint64_t>::max)() - now)
-          throw error("deadline overflow");
-        invocation->set_deadline_ns(now + duration);
-      }
-      if (controls.trace_key) {
-        BamlBuffer buffer{};
-        const auto status = api().trace_selection(id_, controls.trace_key(),
-                                                  &buffer, &reservation_);
-        if (status != 0) throw error("invalid trace selection");
-        const bool ok = invocation->mutable_trace()->ParseFromArray(
-            buffer.ptr, static_cast<int>(buffer.len));
-        api().free_buffer(buffer);
-        if (!ok) throw error("invalid trace selection payload");
-      }
-      if (controls.encode_cancel)
-        controls.encode_cancel(*invocation->mutable_cancel());
-    } catch (...) {
-      cleanup();
-      throw;
-    }
-  }
-  args_encoder(const args_encoder&) = delete;
-  args_encoder& operator=(const args_encoder&) = delete;
-  ~args_encoder() { cleanup(); }
-  uint64_t id() const { return id_; }
-  void submitted() {
-    id_ = 0;
-    reservation_ = 0;
-  }
-
-  // `write_value` fills the InboundValue for this argument, which must fit
-  // the wire as an argument. A refused argument stays in the message, so the
-  // references it took are released with the call that never starts.
-  template <typename WriteValue>
-  void add_arg(const std::string& name, WriteValue&& write_value) {
-    pb::InboundMapEntry* entry = args_.add_kwargs();
-    entry->set_string_key(name);
-    write_value(*entry->mutable_value());
-    require_fits_wire(entry->value(), argument_depth);
-  }
-
-  void add_type(const std::string& name, const pb::BamlTy& type) {
-    auto* binding = args_.add_type_args();
-    binding->set_type_var(name);
-    *binding->mutable_type_value() = type;
-  }
-
-  std::string finish(uint64_t call_id, const std::string& function_name) {
-    args_.set_call_id(call_id);
-    args_.set_function_name(function_name);
-    return args_.SerializeAsString();
-  }
-
-  std::string finish(uint64_t call_id, uint64_t function_handle) {
-    args_.set_call_id(call_id);
-    args_.set_function_handle(function_handle);
-    return args_.SerializeAsString();
-  }
-
- private:
-  // BUG: a host callable registered for an argument of a call that never
-  // starts stays in host_value_registry: release_input_value leaves host
-  // keys alone (a re-sent one belongs to the engine), and nothing tells a
-  // fresh registration from a re-sent key.
-  void cleanup() noexcept {
-    if (!id_) return;
-    try {
-      for (const auto& argument : args_.kwargs())
-        release_input_value(argument.value());
-      if (args_.invocation().has_cancel())
-        release_input_value(args_.invocation().cancel());
-      if (reservation_) api().handle_release(reservation_);
-      api().release_function_call(id_);
-    } catch (...) {
-    }
-    id_ = 0;
-    reservation_ = 0;
-  }
-  uint64_t id_ = 0, reservation_ = 0;
-  std::shared_ptr<invocation_state> inherited_;
-  pb::CallFunctionArgs args_;
-};
 
 }  // namespace detail
 }  // namespace baml

@@ -62,7 +62,6 @@ BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_PDF == 3, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_VIDEO == 4, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_GENERIC == 5, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_UNSPECIFIED == 0, "handle discriminant drifted");
-BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_UNTAGGED_RUST_DATA == 1, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_UNTAGGED_BEX_HEAP == 2, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_FUNCTION_REF == 5, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_IMAGE == 6, "handle discriminant drifted");
@@ -71,10 +70,14 @@ BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_VIDEO == 8, "handle discriminant 
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_PDF == 9, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_GENERIC == 10, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_PROMPT_AST == 11, "handle discriminant drifted");
-BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_TYPE == 13, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_TAGGED_HEAP_HANDLE == 14, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_HOST_VALUE_CALLABLE == 15, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_HOST_VALUE_OPAQUE == 16, "handle discriminant drifted");
+BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_FUNCTION_SPEC == 17, "handle discriminant drifted");
+BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_RUNTIME_VALUE == 18, "handle discriminant drifted");
+BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_INVOCATION_STATE == 19, "handle discriminant drifted");
+BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_TRACE_RESERVATION == 20, "handle discriminant drifted");
+BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_HOST_VALUE_PIN == 21, "handle discriminant drifted");
 
 BAML_STATIC_ASSERT(offsetof(BamlBuffer, ptr) == 0, "buffer pointer must be first");
 BAML_STATIC_ASSERT(

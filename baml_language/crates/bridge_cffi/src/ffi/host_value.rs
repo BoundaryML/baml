@@ -172,8 +172,11 @@ mod tests {
     static RELEASED_HOST_KEYS: LazyLock<Mutex<Vec<u64>>> = LazyLock::new(|| Mutex::new(Vec::new()));
     static NEXT_TEST_HOST_KEY: AtomicU64 = AtomicU64::new(10_000_000);
 
-    extern "C" fn record_host_release(key: u64) {
-        RELEASED_HOST_KEYS.lock().unwrap().push(key);
+    extern "C" fn record_host_release(key: u64, count: u64) {
+        let mut released = RELEASED_HOST_KEYS.lock().unwrap();
+        for _ in 0..count {
+            released.push(key);
+        }
     }
 
     fn install_release_recorder() {

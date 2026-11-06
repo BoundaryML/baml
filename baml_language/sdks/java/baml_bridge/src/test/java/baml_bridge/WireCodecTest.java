@@ -993,8 +993,12 @@ class WireCodecTest {
                 BamlType.map(BamlType.STRING, BamlType.BYTES).toWireTy(),
                 valueTypeOf(ProtoWriter.encodeInboundValue(Map.of("k", new byte[] {1}))));
         // A host opaque value is a handle the engine owns the type of; its key
-        // goes as it is, so no native row is touched.
-        BamlHandle opaque = new BamlHandle(7, BamlHandle.HOST_VALUE_OPAQUE);
+        // goes as it is, taking a count in the host registry, so no native row
+        // is touched. Any registered key will do.
+        long key = HostCalls.registerCallable(
+                new BamlTypedCallable((java.util.function.Supplier<Long>) () -> 1L,
+                        BamlType.function(List.of(), BamlType.INT, BamlType.UNKNOWN)));
+        BamlHandle opaque = new BamlHandle(key, BamlHandle.HOST_VALUE_OPAQUE);
         assertArrayEquals(
                 BamlType.list(BamlType.UNKNOWN).toWireTy(),
                 valueTypeOf(ProtoWriter.encodeInboundValue(List.of(opaque))));
@@ -1006,6 +1010,7 @@ class WireCodecTest {
                 () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(
                         List.of(opaque), BamlType.list(BamlType.typeVar("T")))));
         assertTrue(open.getMessage().contains("could not infer a type for `T`"), open.getMessage());
+        HostCalls.release(key, Long.MAX_VALUE);
         // A type value is a value of `type`, and crosses as itself.
         assertArrayEquals(
                 BamlType.list(BamlType.TYPE).toWireTy(),
@@ -2171,7 +2176,7 @@ class WireCodecTest {
      * A genuinely out-of-grammar type arg (a media arm — no {@link BamlType}
      * kind) still poisons the whole binding all-or-nothing: positions must never
      * misalign. The residual skip cases after the widening are the non-token
-     * {@code BamlTy} arms (media / function / rust_type / unknown / never / …)
+     * {@code BamlTy} arms (media / function / unknown / never / …)
      * and the {@code null}/{@code bytes}/{@code bigint} primitive kinds.
      */
     @Test

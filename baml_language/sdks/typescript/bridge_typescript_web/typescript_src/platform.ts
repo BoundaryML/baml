@@ -1,4 +1,4 @@
-import { _discardHostCallArgs, _hostInvocationFrame, _startHostCallExecution, completeHostCallBridgeFailure, registerHostCallable, type BamlHandle } from './native.js';
+import { _discardHostCallArgs, _hostInvocationFrame, _startHostCallExecution, completeHostCallBridgeFailure, registerHostCallable } from './native.js';
 import type { BamlPanic } from './shared/errors.js';
 
 import { ExecutionContext } from './shared/execution_context.js';
@@ -45,7 +45,7 @@ export function registerCallableDispatch(
     dispatch: (callId: number, argsBytes: Uint8Array, execution?: object) => void,
     marker: object | undefined,
 ): string {
-    const key = registerHostCallable(dispatch, marker as BamlHandle | undefined);
+    const key = registerHostCallable(dispatch, marker);
     return (BigInt.asUintN(32, BigInt(key.high)) << 32n | BigInt.asUintN(32, BigInt(key.low))).toString();
 }
 

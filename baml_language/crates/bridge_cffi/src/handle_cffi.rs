@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use bex_project::{BexExternalAdt, MediaKind, MediaValue};
+use bex_project::{MediaKind, MediaValue};
 use bridge_ctypes::{
     CffiHandleTableEntry, HANDLE_TABLE, TableKey,
     baml_bridge::cffi::{BamlHandleType, MediaTypeEnum},
@@ -69,7 +69,7 @@ fn resolve_media(key: u64, handle_type: i32) -> Result<Arc<MediaValue>, HandleEr
     }
 
     match &*entry {
-        CffiHandleTableEntry::Adt(BexExternalAdt::Media(media)) => Ok(media.clone()),
+        CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(media)) => Ok(media.clone()),
         _ => Err(HandleError::UnsupportedHandleType),
     }
 }
@@ -114,7 +114,7 @@ pub fn handle_refcount(key: u64) -> Option<u64> {
 
 /// Seed a generic-media handle for focused bridge tests.
 pub fn seed_generic_media_handle() -> HandleParts {
-    insert_entry(CffiHandleTableEntry::Adt(BexExternalAdt::Media(
+    insert_entry(CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(
         MediaValue::from_url(MediaKind::Generic, "https://example.com/", None),
     )))
 }
@@ -155,7 +155,7 @@ pub fn media_from_url(
 ) -> Result<HandleParts, HandleError> {
     validate_media_input(url, mime_type)?;
     Ok(insert_entry(CffiHandleTableEntry::Adt(
-        BexExternalAdt::Media(MediaValue::from_url(kind, url, mime_type)),
+        bridge_ctypes::TableAdt::Media(MediaValue::from_url(kind, url, mime_type)),
     )))
 }
 
@@ -169,7 +169,7 @@ pub fn media_from_file_content(
     validate_media_input(file, mime_type)?;
     validate_input(base64, "base64")?;
     Ok(insert_entry(CffiHandleTableEntry::Adt(
-        BexExternalAdt::Media(MediaValue::from_file_content(
+        bridge_ctypes::TableAdt::Media(MediaValue::from_file_content(
             kind,
             file,
             base64.into(),
@@ -186,7 +186,7 @@ pub fn media_from_base64(
 ) -> Result<HandleParts, HandleError> {
     validate_media_input(base64, mime_type)?;
     Ok(insert_entry(CffiHandleTableEntry::Adt(
-        BexExternalAdt::Media(MediaValue::from_base64(kind, base64.into(), mime_type)),
+        bridge_ctypes::TableAdt::Media(MediaValue::from_base64(kind, base64.into(), mime_type)),
     )))
 }
 
@@ -263,20 +263,13 @@ mod tests {
 
     #[test]
     fn resolve_media_rejects_unsupported_handle_type() {
-        let parts = insert_entry(CffiHandleTableEntry::HostMarker(std::sync::Arc::new(
-            bex_project::HostMarker {
-                definition: bex_project::HostDefinition {
-                    language: "test".into(),
-                    module: "test".into(),
-                    qualified_name: "test.callback".into(),
-                    source_file: "test".into(),
-                    definition_line: 0,
-                    wrapper_line: 0,
-                    display_name: "callback".into(),
-                },
-                options: bex_project::TraceOptionsData::default(),
-            },
-        )));
+        let parts = insert_entry(CffiHandleTableEntry::Adt(
+            bridge_ctypes::TableAdt::PromptAst(std::sync::Arc::new(
+                bex_project::PromptAst::Simple(std::sync::Arc::new(
+                    bex_project::PromptAstSimple::String("hi".into()),
+                )),
+            )),
+        ));
 
         assert_eq!(
             resolve_media(parts.key, parts.handle_type),

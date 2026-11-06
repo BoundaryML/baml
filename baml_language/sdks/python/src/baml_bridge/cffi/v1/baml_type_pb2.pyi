@@ -51,7 +51,7 @@ BAML_TY_FUNCTION_PARAM_MODE_REQUIRED: BamlTyFunctionParamMode
 BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL: BamlTyFunctionParamMode
 
 class BamlTy(_message.Message):
-    __slots__ = ("primitive", "class_ty", "enum", "list", "map", "optional", "union", "literal", "type_alias", "unknown", "media", "interface", "enum_variant", "function", "future", "rust_type", "meta_type", "resource", "prompt_ast", "type_var", "associated_type_projection", "never")
+    __slots__ = ("primitive", "class_ty", "enum", "list", "map", "optional", "union", "literal", "type_alias", "unknown", "media", "interface", "enum_variant", "function", "future", "meta_type", "resource", "prompt_ast", "type_var", "associated_type_projection", "never")
     PRIMITIVE_FIELD_NUMBER: _ClassVar[int]
     CLASS_TY_FIELD_NUMBER: _ClassVar[int]
     ENUM_FIELD_NUMBER: _ClassVar[int]
@@ -67,7 +67,6 @@ class BamlTy(_message.Message):
     ENUM_VARIANT_FIELD_NUMBER: _ClassVar[int]
     FUNCTION_FIELD_NUMBER: _ClassVar[int]
     FUTURE_FIELD_NUMBER: _ClassVar[int]
-    RUST_TYPE_FIELD_NUMBER: _ClassVar[int]
     META_TYPE_FIELD_NUMBER: _ClassVar[int]
     RESOURCE_FIELD_NUMBER: _ClassVar[int]
     PROMPT_AST_FIELD_NUMBER: _ClassVar[int]
@@ -89,14 +88,13 @@ class BamlTy(_message.Message):
     enum_variant: BamlTyEnumVariant
     function: BamlTyFunction
     future: BamlTyFuture
-    rust_type: BamlTyRustType
     meta_type: BamlTyMetaType
     resource: BamlTyResource
     prompt_ast: BamlTyPromptAst
     type_var: BamlTyTypeVar
     associated_type_projection: BamlTyAssociatedTypeProjection
     never: BamlTyNever
-    def __init__(self, primitive: _Optional[_Union[BamlTyPrimitive, _Mapping]] = ..., class_ty: _Optional[_Union[BamlTyClass, _Mapping]] = ..., enum: _Optional[_Union[BamlTyEnum, _Mapping]] = ..., list: _Optional[_Union[BamlTyList, _Mapping]] = ..., map: _Optional[_Union[BamlTyMap, _Mapping]] = ..., optional: _Optional[_Union[BamlTyOptional, _Mapping]] = ..., union: _Optional[_Union[BamlTyUnion, _Mapping]] = ..., literal: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., type_alias: _Optional[_Union[BamlTyTypeAlias, _Mapping]] = ..., unknown: _Optional[_Union[BamlTyUnknown, _Mapping]] = ..., media: _Optional[_Union[BamlTyMedia, _Mapping]] = ..., interface: _Optional[_Union[BamlTyInterface, _Mapping]] = ..., enum_variant: _Optional[_Union[BamlTyEnumVariant, _Mapping]] = ..., function: _Optional[_Union[BamlTyFunction, _Mapping]] = ..., future: _Optional[_Union[BamlTyFuture, _Mapping]] = ..., rust_type: _Optional[_Union[BamlTyRustType, _Mapping]] = ..., meta_type: _Optional[_Union[BamlTyMetaType, _Mapping]] = ..., resource: _Optional[_Union[BamlTyResource, _Mapping]] = ..., prompt_ast: _Optional[_Union[BamlTyPromptAst, _Mapping]] = ..., type_var: _Optional[_Union[BamlTyTypeVar, _Mapping]] = ..., associated_type_projection: _Optional[_Union[BamlTyAssociatedTypeProjection, _Mapping]] = ..., never: _Optional[_Union[BamlTyNever, _Mapping]] = ...) -> None: ...
+    def __init__(self, primitive: _Optional[_Union[BamlTyPrimitive, _Mapping]] = ..., class_ty: _Optional[_Union[BamlTyClass, _Mapping]] = ..., enum: _Optional[_Union[BamlTyEnum, _Mapping]] = ..., list: _Optional[_Union[BamlTyList, _Mapping]] = ..., map: _Optional[_Union[BamlTyMap, _Mapping]] = ..., optional: _Optional[_Union[BamlTyOptional, _Mapping]] = ..., union: _Optional[_Union[BamlTyUnion, _Mapping]] = ..., literal: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., type_alias: _Optional[_Union[BamlTyTypeAlias, _Mapping]] = ..., unknown: _Optional[_Union[BamlTyUnknown, _Mapping]] = ..., media: _Optional[_Union[BamlTyMedia, _Mapping]] = ..., interface: _Optional[_Union[BamlTyInterface, _Mapping]] = ..., enum_variant: _Optional[_Union[BamlTyEnumVariant, _Mapping]] = ..., function: _Optional[_Union[BamlTyFunction, _Mapping]] = ..., future: _Optional[_Union[BamlTyFuture, _Mapping]] = ..., meta_type: _Optional[_Union[BamlTyMetaType, _Mapping]] = ..., resource: _Optional[_Union[BamlTyResource, _Mapping]] = ..., prompt_ast: _Optional[_Union[BamlTyPromptAst, _Mapping]] = ..., type_var: _Optional[_Union[BamlTyTypeVar, _Mapping]] = ..., associated_type_projection: _Optional[_Union[BamlTyAssociatedTypeProjection, _Mapping]] = ..., never: _Optional[_Union[BamlTyNever, _Mapping]] = ...) -> None: ...
 
 class BamlTyPrimitive(_message.Message):
     __slots__ = ("kind",)
@@ -251,10 +249,6 @@ class BamlTyFuture(_message.Message):
     value: BamlTy
     error: BamlTy
     def __init__(self, value: _Optional[_Union[BamlTy, _Mapping]] = ..., error: _Optional[_Union[BamlTy, _Mapping]] = ...) -> None: ...
-
-class BamlTyRustType(_message.Message):
-    __slots__ = ()
-    def __init__(self) -> None: ...
 
 class BamlTyMetaType(_message.Message):
     __slots__ = ()

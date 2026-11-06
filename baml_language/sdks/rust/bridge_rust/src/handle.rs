@@ -29,7 +29,6 @@ impl KeySpace {
             Ok(Kind::HostValueCallable | Kind::HostValueOpaque) => Self::Host,
             Ok(
                 Kind::HandleUnspecified
-                | Kind::UntaggedRustData
                 | Kind::UntaggedBexHeap
                 | Kind::FunctionRef
                 | Kind::AdtMediaImage
@@ -38,12 +37,12 @@ impl KeySpace {
                 | Kind::AdtMediaPdf
                 | Kind::AdtMediaGeneric
                 | Kind::AdtPromptAst
-                | Kind::AdtType
                 | Kind::AdtTaggedHeapHandle
                 | Kind::AdtFunctionSpec
                 | Kind::AdtRuntimeValue
                 | Kind::InvocationState
-                | Kind::TraceReservation,
+                | Kind::TraceReservation
+                | Kind::HostValuePin,
             )
             | Err(_) => Self::Engine,
         }
@@ -60,6 +59,16 @@ pub(crate) fn clone_engine_key(key: u64) -> Option<u64> {
     #[expect(unsafe_code)]
     let status = unsafe { (api.handle_clone)(key, &raw mut cloned) };
     (status == 0 && cloned != 0).then_some(cloned)
+}
+
+/// One reference to an engine handle-table row, released when dropped.
+pub(crate) struct OwnedHandle(pub(crate) u64);
+
+impl Drop for OwnedHandle {
+    fn drop(&mut self) {
+        // This object owns exactly one reference.
+        release_engine_key(self.0);
+    }
 }
 
 /// Release one engine reference. A key the engine no longer holds is

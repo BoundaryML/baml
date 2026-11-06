@@ -464,8 +464,8 @@ func decodeReflected(value Value, typ reflect.Type, path string, depth int) (ref
 		decoded, err := value.Pdf()
 		return reflect.ValueOf(decoded), err
 	}
-	if typ == reflect.TypeOf(RustType{}) {
-		decoded, err := value.RustType()
+	if typ == reflect.TypeOf(HostValue{}) {
+		decoded, err := value.HostValue()
 		return reflect.ValueOf(decoded), err
 	}
 	if typ.Kind() == reflect.Pointer {
@@ -752,8 +752,8 @@ func decodeDynamicValue(value Value, path string, depth int) (any, error) {
 		}
 	case *cffi.BamlOutboundValue_HandleValue:
 		switch kind := item.HandleValue.GetHandleType(); kind {
-		case cffi.BamlHandleType_UNTAGGED_RUST_DATA:
-			return value.RustType()
+		case cffi.BamlHandleType_HOST_VALUE_OPAQUE:
+			return value.HostValue()
 		case cffi.BamlHandleType_ADT_RUNTIME_VALUE:
 			return value.RuntimeValue()
 		case cffi.BamlHandleType_FUNCTION_REF:

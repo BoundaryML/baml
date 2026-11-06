@@ -58,8 +58,7 @@ pub(crate) type AliasTable = BTreeMap<Name, (Ty, bool)>;
 pub(crate) type CrossingTable = BTreeMap<Name, ClassCrossing>;
 
 /// Whether the class `name` is a host's own value, which crosses as the
-/// host's handle to it: everywhere a type names it, it is exactly what
-/// `Ty::RustType` is.
+/// host's handle to it everywhere a type names it.
 pub(crate) fn is_host_value(name: &Name, crossings: &CrossingTable) -> bool {
     match crossings.get(name) {
         Some(ClassCrossing::HostValue) => true,

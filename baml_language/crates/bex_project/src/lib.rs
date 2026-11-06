@@ -30,10 +30,11 @@ pub use bex_engine::{
     CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation, capture_callback_inputs,
 };
 pub use bex_external_types::{
-    AnnotationTy, BexExternalAdt, BexExternalValue, Bounded, Handle, HostCallCompletion,
-    HostException, HostKey, HostOutcome, HostReleaseFn, HostValueArc, HostValueKind, MediaKind,
-    RuntimeTy, TaggedHeapHandleKind, TraceControl, WeakHeapRef, WireFunctionParamTy, WireHead,
-    WireTy, host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
+    AnnotationTy, BexExternalAdt, BexExternalValue, Bounded, CancelTokenCapability, Handle,
+    HostCallCompletion, HostException, HostKey, HostOutcome, HostReleaseFn, HostValueArc,
+    HostValueKind, MediaKind, RuntimeTy, TaggedHeapHandleKind, TraceControl, WeakHeapRef,
+    WireFunctionParamTy, WireHead, WireTy, host_release_dispatch, runtime_ty_structurally_equal,
+    selected_arm_equal,
 };
 pub use bex_vm_types::{
     BexRustData, HeapPtr, MediaContent, MediaValue, Meter, Program, PromptAst, PromptAstSimple,

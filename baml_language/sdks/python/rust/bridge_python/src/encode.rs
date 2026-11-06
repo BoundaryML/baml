@@ -234,7 +234,7 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
             let entry = TableKey::new(*key).and_then(|key| HANDLE_TABLE.resolve(key));
             let signature = match entry.as_deref() {
                 Some(bridge_ctypes::CffiHandleTableEntry::Adt(
-                    bex_project::BexExternalAdt::TaggedHeapHandle {
+                    bridge_ctypes::TableAdt::TaggedHeapHandle {
                         ty:
                             bex_project::AnnotationTy::Function {
                                 params,
@@ -374,7 +374,12 @@ impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
         let marker = if marker.is_none() {
             None
         } else {
-            Some(marker.cast::<BamlPyHandle>()?.borrow().handle_key)
+            Some(std::sync::Arc::clone(
+                &marker
+                    .cast::<crate::invocation::_HostMarker>()?
+                    .get()
+                    .marker,
+            ))
         };
         crate::host_value::register_callable(
             callable.obj.clone().unbind(),
@@ -388,8 +393,9 @@ impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
         match kind {
             LeafKind::Handle => {
                 // A wrapper's `_to_pyhandle` clones the key into a Python
-                // object that releases it as usual; the wire takes a clone of
-                // its own.
+                // object that releases it as usual; the wire takes a
+                // reference of its own: a clone of an engine reference, or
+                // one more reference to a host value's key.
                 let handle = if obj.is_instance_of::<BamlPyHandle>() {
                     obj.clone()
                 } else {
@@ -398,22 +404,14 @@ impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
                 let handle = handle.cast::<BamlPyHandle>()?.borrow();
                 let handle_type = i32::try_from(handle.handle_type)
                     .map_err(|_| PyTypeError::new_err("handle type does not fit the wire"))?;
-                let (key, owner) = match WireHandle::from_parts(handle.handle_key, handle_type)
-                    .map_err(|error| PyTypeError::new_err(error.to_string()))?
-                {
-                    // A host value is the engine's reference to the host's
-                    // own object: the key goes as it is, and nothing is
-                    // cloned or owed.
-                    WireHandle::Host(key, _) => (key.get(), None),
-                    WireHandle::Engine(_) => {
-                        let cloned =
-                            crate::py_handle::handle_clone(handle.handle_key, "inbound encode")?;
-                        let cloned = TableKey::new(cloned)
-                            .ok_or_else(|| PyTypeError::new_err("a cloned handle key is 0"))?;
-                        (cloned.get(), Some(Owner::Handle(cloned)))
-                    }
+                let (key, owner) = match handle.wire_reference()? {
+                    WireHandle::Host(key, _) => (key.get(), Owner::Callable(key)),
+                    WireHandle::Engine(key) => (key.get(), Owner::Handle(key)),
                 };
-                Ok((LeafWire::Handle(BamlHandle { key, handle_type }), owner))
+                Ok((
+                    LeafWire::Handle(BamlHandle { key, handle_type }),
+                    Some(owner),
+                ))
             }
             LeafKind::Media(kind) => {
                 let payload: BamlValueMedia = match kind {
@@ -465,7 +463,9 @@ impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
 
     fn release(&self, owner: Owner) {
         match owner {
-            Owner::Callable(key) => crate::host_value::release_registered(key),
+            // One reference to a host value's key, from its registration or
+            // a send of a key Python holds.
+            Owner::Callable(key) => crate::host_value::release(key, 1),
             // Best effort: a key the engine never saw has no other owner.
             Owner::Handle(key) => {
                 let _ = handle_cffi::release_handle(key.get());

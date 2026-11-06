@@ -17,10 +17,13 @@
 //! a returned Promise if any), encodes the result, and calls the wasm-exported
 //! [`complete_host_call`] which resolves the `CompletionHandle`.
 //!
-//! When the engine drops the last Rust clone of the corresponding
-//! `HostValueArc`, the global `host_release_dispatch` fires
-//! [`host_release_callback`] which removes the registry entry — the user's
-//! JS callable becomes GC-eligible.
+//! The registry counts the references to each key handed to the engine: one
+//! for the send a key is registered for, one more for each later send of a
+//! key the host still holds ([`send_host_value_again`]). The engine gives
+//! references back through the global `host_release_dispatch`, which fires
+//! [`host_release_callback`]; a send rolled back before it reached the engine
+//! gives back its own ([`release_host_value`]). At the last one the entry is
+//! removed — the user's JS callable becomes GC-eligible.
 //!
 //! ## Per-runtime dispatch, global registry
 //!
@@ -40,10 +43,10 @@
 //! and are routed purely by id (mirroring the Node bridge's process-global
 //! registry):
 //!
-//! * The `callables` map only keeps the JS `Function` alive and is consulted
-//!   solely to *drop* it on release. Keys are minted by a process-global
-//!   atomic and are therefore **globally unique**, so releasing by key drops
-//!   exactly the right entry regardless of which runtime registered it. There
+//! * The [`HOST_VALUES`] registry keeps each JS `Function` alive and counts its
+//!   references. Keys are minted by the process-global registry and are
+//!   therefore **globally unique**, so releasing by key drops exactly the
+//!   right entry regardless of which runtime registered it. There
 //!   is no per-runtime ambiguity to resolve. (In WASM, `registerHostCallable`
 //!   is a free function the JS encoder calls *while building the proto args*,
 //!   before a `RunStore` start command is invoked — there is no runtime receiver to
@@ -74,7 +77,10 @@ use std::{
 };
 
 use bex_project::{HostKey, HostValueArc, HostValueKind, host_release_dispatch};
-use bridge_ctypes::{CffiHandleTableOptions, HANDLE_TABLE, decode_host_call_completion};
+use bridge_ctypes::{
+    CffiHandleTableOptions, DeadHostKey, HANDLE_TABLE, HostValueRegistry, Released,
+    decode_host_call_completion,
+};
 use indexmap::IndexMap;
 use js_sys::Function;
 use prost::Message;
@@ -88,7 +94,7 @@ use crate::send_wrapper::SendWrapper;
 // Process-global, id-routed WASM host-value state
 // ============================================================================
 //
-// Keyed by globally-unique ids (see `next_key` / `next_call_id`), so neither
+// Keyed by globally-unique ids (see [`HOST_VALUES`] / `next_call_id`), so neither
 // table needs a per-runtime split to route correctly: a key/call-id maps to at
 // most one entry across the whole process. Only the *dispatch callback* is
 // per-runtime (see `WasmHost`).
@@ -105,14 +111,17 @@ struct HostExecution {
 }
 
 thread_local! {
-    /// `u64 → user JS callable`. Populated by [`register_host_callable`] from
-    /// the JS encoder; removed by [`host_release_callback`] when the Rust
-    /// runtime drops the last clone of the corresponding `HostValueArc`. Keys
-    /// are globally unique, so release-by-key is unambiguous across runtimes.
-    static CALLABLES: RefCell<HashMap<HostKey, SendWrapper<Function>>> = RefCell::new(HashMap::new());
+    /// Host key → user JS callable, with the references to each key handed to
+    /// the engine. Populated by [`register_host_callable`] from the JS
+    /// encoder; an opaque value's key ([`mint_host_value_key`]) is registered
+    /// with no value, as its value lives in the SDK's JS-side registry. An
+    /// entry is removed when its last reference is given back. Keys are
+    /// globally unique, so release-by-key is unambiguous across runtimes.
+    static HOST_VALUES: HostValueRegistry<SendWrapper<Function>> = HostValueRegistry::default();
 
-    /// Optional SDK callback used to release host-owned opaque values kept in
-    /// a JS-side registry. Playground consumers do not need to install one.
+    /// Optional SDK callback told of every key whose last reference was given
+    /// back, so it can drop what it keeps for the key (an opaque value in its
+    /// JS-side registry). Playground consumers do not need to install one.
     static HOST_VALUE_RELEASE_CALLBACK: RefCell<Option<SendWrapper<Function>>> = const { RefCell::new(None) };
 
     /// `call_id → CompletionHandle`. Populated by [`WasmHost::_call_host_value`]
@@ -123,10 +132,6 @@ thread_local! {
     static EXECUTIONS: RefCell<HashMap<u32, HostExecution>> = RefCell::new(HashMap::new());
 
     static IN_FLIGHT: RefCell<HashMap<u32, InFlightHostCall>> = RefCell::new(HashMap::new());
-
-    /// Process-global key minter. Globally unique so release-by-key routing is
-    /// unambiguous. Zero is reserved as "invalid"; wrap-around skips 0.
-    static NEXT_KEY: RefCell<u64> = const { RefCell::new(1) };
 
     /// Process-global call-id minter. Globally unique so completion routing is
     /// unambiguous. Zero is reserved as "invalid"; wrap-around skips 0.
@@ -169,19 +174,6 @@ fn web_sync_failure(operation: SysOp, reason: &str) -> sys_types::VmInternalErro
 struct InFlightHostCall {
     operation: SysOp,
     completion: CompletionHandle,
-}
-
-fn next_key() -> HostKey {
-    NEXT_KEY.with(|cell| {
-        let mut next = cell.borrow_mut();
-        loop {
-            let k = *next;
-            *next = next.wrapping_add(1);
-            if let Some(key) = HostKey::new(k) {
-                return key;
-            }
-        }
-    })
 }
 
 fn next_call_id() -> u32 {
@@ -304,34 +296,38 @@ impl Drop for WasmInflightGuard {
 /// fit into JS's safe-integer range.
 #[wasm_bindgen(js_name = registerHostCallable)]
 pub fn register_host_callable(callable: Function) -> u64 {
-    let key = next_key();
-    CALLABLES.with(|cell| {
-        cell.borrow_mut().insert(key, SendWrapper::new(callable));
-    });
-    key.get()
+    HOST_VALUES
+        .with(|registry| registry.insert(SendWrapper::new(callable)))
+        .get()
 }
 
-/// Retain an existing registered callable as an engine host value.
+/// Retain an existing registered callable as an engine host value, taking one
+/// more of its references for the identity that holds it.
 pub(crate) fn retain_host_callable(key: u64) -> Result<Arc<HostValueArc>, String> {
     let key = HostKey::new(key).ok_or_else(|| "host callable key 0 names nothing".to_string())?;
-    let registered = CALLABLES.with(|cell| cell.borrow().contains_key(&key));
+    let registered = HOST_VALUES.with(|registry| registry.with(key, |_| ()).is_some());
     if !registered {
         return Err(format!("host callable key {key} is not registered"));
     }
+    send_host_value_again(key).map_err(|dead| dead.to_string())?;
     ensure_release_dispatch_installed();
-    HostValueArc::try_intern(key, HostValueKind::Callable)
-        .map_err(|_live| format!("host value key {key} is live as an opaque value"))
+    HostValueArc::try_intern(key, HostValueKind::Callable).map_err(|_live| {
+        // The engine refused the reference this retain took: give it back.
+        release_host_value(key, 1);
+        format!("host value key {key} is live as an opaque value")
+    })
 }
 
 /// Mint a key for a JS-owned opaque value from the same keyspace used by
 /// callable host values: both are the engine's references to host objects.
+/// The key holds the one reference the send it is minted for takes.
 #[wasm_bindgen(js_name = mintHostValueKey)]
 pub fn mint_host_value_key() -> u64 {
-    next_key().get()
+    HOST_VALUES.with(HostValueRegistry::mint_key).get()
 }
 
-/// Register the JS callback that releases opaque values from the SDK's local
-/// registry when the engine drops its last corresponding `HostValueArc`.
+/// Register the JS callback told of every key whose last reference was given
+/// back, so the SDK can drop what it keeps for the key.
 #[wasm_bindgen(js_name = registerHostValueReleaseCallback)]
 pub fn register_host_value_release_callback(callback: Function) -> bool {
     HOST_VALUE_RELEASE_CALLBACK.with(|cell| {
@@ -345,19 +341,57 @@ pub fn register_host_value_release_callback(callback: Function) -> bool {
     })
 }
 
-/// Remove a callable that was registered but never transferred to the engine.
-#[wasm_bindgen(js_name = releaseHostCallable)]
-pub fn release_host_callable(key: u64) {
-    if let Some(key) = HostKey::new(key) {
-        CALLABLES.with(|cell| {
-            cell.borrow_mut().remove(&key);
-        });
+/// Take one more reference to `key` for sending it to the engine again (a key
+/// the host received back and passes in). Refused when every reference has
+/// been given back: the key names nothing any more.
+pub fn send_host_value_again(key: HostKey) -> Result<(), DeadHostKey> {
+    HOST_VALUES.with(|registry| registry.send_again(key))
+}
+
+/// Give back `count` references to `key`: the engine's release, or a send
+/// rolled back before it reached the engine. Returns whether that was the
+/// last one, in which case the entry is removed and the SDK's release
+/// callback is told.
+pub fn release_host_value(key: HostKey, count: u64) -> bool {
+    match HOST_VALUES.with(|registry| registry.release(key, count)) {
+        Released::Held => false,
+        Released::Last(value) => {
+            // The callable drops before the SDK hears of it, outside any lock.
+            drop(value);
+            notify_released(key);
+            true
+        }
+        Released::Unknown => {
+            log::warn!("host value {key} released {count} more time(s) than it was sent");
+            false
+        }
     }
 }
 
+/// Tell the SDK's release callback, if one is installed, that `key` is gone.
+fn notify_released(key: HostKey) {
+    let callback = HOST_VALUE_RELEASE_CALLBACK.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .map(|callback| callback.inner().clone())
+    });
+    if let Some(callback) = callback
+        && let Err(error) = callback.call1(&JsValue::NULL, &JsValue::from(key.get()))
+    {
+        log::warn!("host-value release callback threw: {error:?}");
+    }
+}
+
+/// How many host-value keys (callable and opaque) are registered.
 #[doc(hidden)]
-pub fn test_host_callable_count() -> u32 {
-    CALLABLES.with(|cell| cell.borrow().len().try_into().unwrap_or(u32::MAX))
+pub fn test_host_value_count() -> u32 {
+    HOST_VALUES.with(|registry| registry.len().try_into().unwrap_or(u32::MAX))
+}
+
+/// Whether `key` is registered.
+#[doc(hidden)]
+pub fn test_host_value_registered(key: u64) -> bool {
+    HostKey::new(key).is_some_and(|key| HOST_VALUES.with(|registry| registry.contains(key)))
 }
 
 #[doc(hidden)]
@@ -372,7 +406,7 @@ pub fn test_host_release_callback_installed() -> bool {
 
 #[doc(hidden)]
 pub fn test_fire_host_release(key: u64) {
-    host_release_callback(key);
+    host_release_callback(key, 1);
 }
 
 #[doc(hidden)]
@@ -457,31 +491,21 @@ pub fn complete_host_call(call_id: u32, content: &[u8]) -> bool {
 /// `HostReleaseFn` C-ABI handler installed via [`host_release_dispatch::install`].
 ///
 /// Fires (via the engine's `host_release_dispatch::drain()` at a safepoint)
-/// when the last Rust clone of the corresponding `HostValueArc` is dropped —
-/// see `bex_project::host_release_dispatch`. Dropping the
+/// when the engine gives back `count` references to `key` — see
+/// `bex_project::host_release_dispatch`. At the last one, dropping the
 /// [`SendWrapper<Function>`] releases the underlying `js_sys::Function`,
 /// allowing the user's JS callable to become GC-eligible.
 ///
-/// Routes by the bare `key` against the process-global [`CALLABLES`] table.
-/// Keys are globally unique, so this removes exactly the right entry regardless
-/// of which runtime registered the callable.
-extern "C" fn host_release_callback(key: u64) {
-    if let Some(key) = HostKey::new(key) {
-        CALLABLES.with(|cell| {
-            cell.borrow_mut().remove(&key);
-        });
-    }
-    HOST_VALUE_RELEASE_CALLBACK.with(|cell| {
-        let callback = cell
-            .borrow()
-            .as_ref()
-            .map(|callback| callback.inner().clone());
-        if let Some(callback) = callback {
-            if let Err(error) = callback.call1(&JsValue::NULL, &JsValue::from(key)) {
-                log::warn!("host-value release callback threw: {error:?}");
-            }
+/// Routes by the bare `key` against the process-global [`HOST_VALUES`] table.
+/// Keys are globally unique, so this releases exactly the right entry
+/// regardless of which runtime registered the callable.
+extern "C" fn host_release_callback(key: u64, count: u64) {
+    match HostKey::new(key) {
+        Some(key) => {
+            release_host_value(key, count);
         }
-    });
+        None => log::warn!("host value release for the reserved key 0"),
+    }
 }
 
 /// Install the global release-dispatch callback. Idempotent (first call wins).
@@ -532,7 +556,7 @@ impl WasmHost {
         Self { dispatch }
     }
 
-    /// Construct an SDK host that dispatches only callables in [`CALLABLES`].
+    /// Construct an SDK host that dispatches only callables in [`HOST_VALUES`].
     #[allow(dead_code)]
     pub(crate) fn direct() -> Self {
         ensure_release_dispatch_installed();
@@ -645,10 +669,8 @@ impl WasmHost {
 
             let dispatched = match &self.dispatch {
                 WasmHostDispatch::DirectRegistry => {
-                    let registered = CALLABLES.with(|cell| {
-                        cell.borrow()
-                            .get(&callable.key)
-                            .map(|callable| callable.inner().clone())
+                    let registered = HOST_VALUES.with(|registry| {
+                        registry.with(callable.key, |callable| callable.inner().clone())
                     });
                     match registered {
                         Some(registered) => {
@@ -851,14 +873,15 @@ mod tests {
         (call_id, result)
     }
 
-    /// Minted keys must be unique (a `HostKey` is nonzero by type).
+    /// Minted keys must be unique and nonzero.
     /// Globally-unique keys are what make release-by-key routing unambiguous
     /// across runtimes.
     #[test]
-    fn next_key_is_unique() {
+    fn minted_keys_are_unique() {
         let mut seen = HashSet::new();
         for _ in 0..1000 {
-            let k = next_key();
+            let k = mint_host_value_key();
+            assert_ne!(k, 0, "the reserved key 0 was minted");
             assert!(seen.insert(k), "minted key {k} was handed out twice");
         }
     }

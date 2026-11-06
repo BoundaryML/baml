@@ -2,7 +2,7 @@
 //!
 //! Per 15b: each Python media class is a re-export of a Rust PyO3 type
 //! that wraps a `BamlPyHandle` whose backing `HANDLE_TABLE` row is a
-//! `CffiHandleTableEntry::Adt(BexExternalAdt::Media(arc))`. Static and
+//! `CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(arc))`. Static and
 //! instance methods dispatch natively here instead of round-tripping
 //! through the BAML engine.
 //!

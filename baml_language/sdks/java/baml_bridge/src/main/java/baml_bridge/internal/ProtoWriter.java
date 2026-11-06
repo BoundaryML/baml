@@ -416,12 +416,11 @@ public final class ProtoWriter {
             // ADT_RUNTIME_VALUE handle it arrived as, never by fields.
             return encodeInboundValue(opaque.bamlHandle(), contextualType, nesting);
         } else if (value instanceof baml_bridge.BamlHandle handle) {
-            // A bare engine handle (a $rust_type shell's private field, e.g.
-            // baml.fs.File `_handle` / baml.http.Response `_body`): an
-            // InboundValue.handle carrying BamlHandle{key, handle_type}. The
-            // key is a fresh clone — the engine drains its copy on decode
-            // while the Java shell keeps its own row (same contract as the
-            // media `_data` handle).
+            // A bare handle (an engine handle, or a host's own value): an
+            // InboundValue.handle carrying BamlHandle{key, handle_type}. An
+            // engine key is one more ownership of the row — the engine drains
+            // it on decode while the Java value keeps its own; a host key goes
+            // as it is, taking one more count of it in the host registry.
             WireWriter handleMsg = new WireWriter();
             handleMsg.writeInt64(HANDLE_KEY, handle.cloneKeyForWire());
             handleMsg.writeInt64(HANDLE_TYPE, handle.handleType());

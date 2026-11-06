@@ -286,12 +286,11 @@ impl HostInvocation {
     }
 
     /// The `baml.spawn.CancelToken` this execution's host body holds, as the
-    /// live reference a host receives: it observes the execution's effective
+    /// reference a host receives: it observes the execution's effective
     /// cancellation, including its deadline.
-    pub async fn cancel_token(&self) -> Result<bex_external_types::BexExternalValue, EngineError> {
+    pub fn cancel_token(&self) -> Result<bex_external_types::BexExternalValue, EngineError> {
         self.engine
-            .alloc_cancel_token(self.state.cancel_token_state())
-            .await
+            .issue_cancel_token(self.state.cancel_token_state())
     }
 
     pub fn finish(self, outcome: InvocationOutcome) {

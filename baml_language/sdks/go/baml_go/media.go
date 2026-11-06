@@ -93,8 +93,10 @@ func finalizeResultOwner(owner *resultOwner) {
 }
 
 // appendOutboundHandles appends the engine references value transfers to
-// Go, once per occurrence: every engine handle, and every live head of a
-// returned `type` value. Host-value handles are Go's own registrations.
+// Go, once per occurrence: every engine handle, every live head of a returned
+// `type` value, and the pin of every host-value handle. A host key is Go's
+// own registration; its pin is the engine's hold on it, which keeps the key
+// registered until the owner releases the pin.
 func appendOutboundHandles(keys []uint64, value *cffi.BamlOutboundValue) []uint64 {
 	stack := []*cffi.BamlOutboundValue{value}
 	for len(stack) > 0 {
@@ -109,8 +111,12 @@ func appendOutboundHandles(keys []uint64, value *cffi.BamlOutboundValue) []uint6
 			if item.HandleValue == nil || item.HandleValue.Key == 0 {
 				continue
 			}
-			handleType := item.HandleValue.HandleType
-			if handleType != cffi.BamlHandleType_HOST_VALUE_CALLABLE && handleType != cffi.BamlHandleType_HOST_VALUE_OPAQUE {
+			switch item.HandleValue.HandleType {
+			case cffi.BamlHandleType_HOST_VALUE_CALLABLE, cffi.BamlHandleType_HOST_VALUE_OPAQUE:
+				if pin := item.HandleValue.Pin; pin != 0 {
+					keys = append(keys, pin)
+				}
+			default:
 				keys = append(keys, item.HandleValue.Key)
 			}
 		case *cffi.BamlOutboundValue_TyValue:
@@ -142,57 +148,6 @@ func appendOutboundHandles(keys []uint64, value *cffi.BamlOutboundValue) []uint6
 		}
 	}
 	return keys
-}
-
-// releaseOutboundOpaqueHostValues releases Go-native error identities only
-// after an error/panic envelope has been fully formatted. These handles are
-// not native handle-table entries and deliberately remain excluded from the
-// ordinary result owner; callable handles may have independent live uses and
-// are never reclaimed here.
-func releaseOutboundOpaqueHostValues(value *cffi.BamlOutboundValue) {
-	keys := make(map[uint64]struct{})
-	stack := []*cffi.BamlOutboundValue{value}
-	for len(stack) > 0 {
-		last := len(stack) - 1
-		value = stack[last]
-		stack = stack[:last]
-		if value == nil {
-			continue
-		}
-		switch item := value.Value.(type) {
-		case *cffi.BamlOutboundValue_HandleValue:
-			if item.HandleValue != nil && item.HandleValue.Key != 0 && item.HandleValue.HandleType == cffi.BamlHandleType_HOST_VALUE_OPAQUE {
-				keys[item.HandleValue.Key] = struct{}{}
-			}
-		case *cffi.BamlOutboundValue_ClassValue:
-			if item.ClassValue != nil {
-				for _, field := range item.ClassValue.Fields {
-					if field != nil {
-						stack = append(stack, field.Value)
-					}
-				}
-			}
-		case *cffi.BamlOutboundValue_ListValue:
-			if item.ListValue != nil {
-				stack = append(stack, item.ListValue.Items...)
-			}
-		case *cffi.BamlOutboundValue_MapValue:
-			if item.MapValue != nil {
-				for _, entry := range item.MapValue.Entries {
-					if entry != nil {
-						stack = append(stack, entry.Value)
-					}
-				}
-			}
-		case *cffi.BamlOutboundValue_UnionVariantValue:
-			if item.UnionVariantValue != nil {
-				stack = append(stack, item.UnionVariantValue.Value)
-			}
-		}
-	}
-	for key := range keys {
-		unregisterHostValue(key)
-	}
 }
 
 type mediaConstructor uint8

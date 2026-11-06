@@ -53,13 +53,17 @@
  * payload a `HostCallCompletion` with one of five outcomes; the `is_error`
  * flag is gone. The slot changed in place, which is why the revision is
  * required exactly rather than as a minimum.
+ *
+ * Revision 6: host-value keys are counted. The release callback takes
+ * `(host_value_key, count)` and gives back that many references; an
+ * outbound host value carries a `HOST_VALUE_PIN` row the host releases.
  */
-#define BAML_API_V1_ABI_VERSION 5
+#define BAML_API_V1_ABI_VERSION 6
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
  *
- * Values 3 and 4 are permanently reserved. Host-value handle keys use their
+ * Values 1, 3, 4 and 13 are permanently reserved. Host-value handle keys use their
  * own registry and release callback rather than `handle_release`.
  */
 enum BamlCffiHandleType
@@ -68,7 +72,6 @@ enum BamlCffiHandleType
 #endif // __cplusplus
  {
   BAML_CFFI_HANDLE_TYPE_UNSPECIFIED = 0,
-  BAML_CFFI_HANDLE_TYPE_UNTAGGED_RUST_DATA = 1,
   BAML_CFFI_HANDLE_TYPE_UNTAGGED_BEX_HEAP = 2,
   BAML_CFFI_HANDLE_TYPE_FUNCTION_REF = 5,
   BAML_CFFI_HANDLE_TYPE_MEDIA_IMAGE = 6,
@@ -77,7 +80,6 @@ enum BamlCffiHandleType
   BAML_CFFI_HANDLE_TYPE_MEDIA_PDF = 9,
   BAML_CFFI_HANDLE_TYPE_MEDIA_GENERIC = 10,
   BAML_CFFI_HANDLE_TYPE_PROMPT_AST = 11,
-  BAML_CFFI_HANDLE_TYPE_TYPE = 13,
   BAML_CFFI_HANDLE_TYPE_TAGGED_HEAP_HANDLE = 14,
   BAML_CFFI_HANDLE_TYPE_HOST_VALUE_CALLABLE = 15,
   BAML_CFFI_HANDLE_TYPE_HOST_VALUE_OPAQUE = 16,
@@ -85,6 +87,7 @@ enum BamlCffiHandleType
   BAML_CFFI_HANDLE_TYPE_RUNTIME_VALUE = 18,
   BAML_CFFI_HANDLE_TYPE_INVOCATION_STATE = 19,
   BAML_CFFI_HANDLE_TYPE_TRACE_RESERVATION = 20,
+  BAML_CFFI_HANDLE_TYPE_HOST_VALUE_PIN = 21,
 };
 #ifndef __cplusplus
 typedef int32_t BamlCffiHandleType;
@@ -232,13 +235,18 @@ typedef void (*BamlHostDispatchCallback)(uint64_t host_value_key,
 typedef void (*BamlRegisterHostDispatchCallbackFn)(BamlHostDispatchCallback callback);
 
 /**
- * Notifies the host that a host-owned value key can be released.
+ * Gives a host back `count` references to the host value `host_value_key`.
+ *
+ * A host counts references per key: it takes one each time it sends the key
+ * to the engine (a fresh registration or a key it sends again), and drops its
+ * object when the engine has given them all back. A notification may batch
+ * several references to one key.
  *
  * Notifications are deferred until an engine safepoint, may occur on any
  * runtime thread, and may be concurrent. The callback must not unwind or
  * throw across the C boundary.
  */
-typedef void (*BamlHostReleaseCallback)(uint64_t host_value_key);
+typedef void (*BamlHostReleaseCallback)(uint64_t host_value_key, uint64_t count);
 
 typedef void (*BamlRegisterHostReleaseCallbackFn)(BamlHostReleaseCallback callback);
 

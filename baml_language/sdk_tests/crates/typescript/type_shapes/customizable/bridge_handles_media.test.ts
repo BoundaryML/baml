@@ -67,7 +67,9 @@ describe("bridge handles and media — key ownership", () => {
     for (const handleType of [15, 16]) {
       const owner = new BamlHandle({ low: 1, high: 0 }, handleType);
       expect(owner.clone().key).toEqual(owner.key);
-      expect(owner._cloneKeyForWire()).toEqual(owner.key);
+      // A host value's key is the host's own: a wire occurrence takes one of
+      // its references, so a key the host has not registered is refused.
+      expect(() => owner._cloneKeyForWire()).toThrow(/no longer registered/);
       expect(releaseForWeb(owner)).toBe(false);
       expect(owner.clone()).toBeInstanceOf(BamlHandle);
     }

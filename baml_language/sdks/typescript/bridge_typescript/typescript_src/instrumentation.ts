@@ -66,13 +66,13 @@ export function instrument<F extends Body>(optionsOrBody: unknown, body?: F, dis
         sourceFile: site.sourceFile, definitionLine: site.line,
         wrapperLine: site.line, displayName: display?.name ?? name ?? '<anonymous>',
     };
-    const marker = { handle: _defineHostMarker(definition, options), identity: {} };
+    const marker = { marker: _defineHostMarker(definition, options), identity: {} };
     const wrapped = function (this: unknown, ...args: unknown[]): unknown {
         if (consumeHostAdoption(marker.identity)) return Reflect.apply(target, this, args);
         let execution: ReturnType<typeof _beginHostInvocation>[0] | undefined;
         let active: ExecutionContext;
         try {
-            const entered = _beginHostInvocation(definition, current()?.state, options, callerSite(), requests[0] ? capture(args) : undefined);
+            const entered = _beginHostInvocation(marker.marker, current()?.state, callerSite(), requests[0] ? capture(args) : undefined);
             execution = entered[0];
             active = new ExecutionContext(entered[1], entered[2]);
         } catch (error) {

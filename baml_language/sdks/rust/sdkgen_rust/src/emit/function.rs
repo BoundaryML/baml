@@ -315,7 +315,7 @@ fn emit_binding(
                 // parameters accept `value` or `&value` (or an `Arc`/`Box`
                 // of it): a caller reusing one value across calls does not
                 // clone it per call. A host's own value is a shared handle
-                // (`baml_bridge::RustType`), taken by value.
+                // (`baml_bridge::HostValue`), taken by value.
                 params.push(quote! { #param: impl ::std::borrow::Borrow<#ty> });
                 value = quote! { ::std::borrow::Borrow::<#ty>::borrow(&#param) };
             } else {

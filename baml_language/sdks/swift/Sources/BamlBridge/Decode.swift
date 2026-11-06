@@ -261,7 +261,7 @@ func forEachHead(_ ty: BamlBridge_Cffi_V1_BamlTy, _ body: (BamlWireHead) -> Void
         case .associatedTypeProjection(let projection):
             visit(projection.base)
             visit(projection.interface)
-        case .primitive, .literal, .unknown, .media, .rustType, .metaType,
+        case .primitive, .literal, .unknown, .media, .metaType,
             .resource, .promptAst, .typeVar, .never:
             break
         }
@@ -285,16 +285,53 @@ func liveKeys(_ ty: BamlBridge_Cffi_V1_BamlTy) -> [UInt64] {
     return keys
 }
 
-/// Swift keeps no type value (no decodable accepts one), so a value arriving
-/// from the engine gives back the references its type values hold at once.
-func releaseTypeValues(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
-    switch value.value {
-    case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
-    case .listValue(let list): list.items.forEach(releaseTypeValues)
-    case .mapValue(let map): for entry in map.entries { releaseTypeValues(entry.value) }
-    case .classValue(let cls): for field in cls.fields { releaseTypeValues(field.value) }
-    case .unionVariantValue(let variant): releaseTypeValues(variant.value)
-    default: break
+/// A row of the engine's handle table an outbound value holds, once per
+/// occurrence: each is one release the host owes.
+enum EngineRow {
+    /// An engine handle's key.
+    case handle(UInt64)
+    /// The pin of a host value: the engine's hold on the host's key while the
+    /// host reads it.
+    case pin(UInt64)
+    /// A `live` head of a type value.
+    case typeValue(UInt64)
+}
+
+/// Every engine row `value` holds.
+func engineRows(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) -> [EngineRow] {
+    var rows: [EngineRow] = []
+    func visit(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
+        switch value.value {
+        case .handleValue(let handle):
+            switch BamlHandle.keySpace(of: handle.handleType) {
+            case .engine: rows.append(.handle(handle.key))
+            // A pin of 0 is none: only an offline encoding carries one.
+            case .host: if handle.pin != 0 { rows.append(.pin(handle.pin)) }
+            }
+        case .tyValue(let ty): rows.append(contentsOf: liveKeys(ty).map(EngineRow.typeValue))
+        case .listValue(let list): list.items.forEach(visit)
+        case .mapValue(let map): for entry in map.entries { visit(entry.value) }
+        case .classValue(let cls): for field in cls.fields { visit(field.value) }
+        case .unionVariantValue(let variant): visit(variant.value)
+        case nil, .nullValue, .stringValue, .intValue, .floatValue, .boolValue, .bigintValue,
+            .uint8ArrayValue, .mediaValue, .promptAstValue, .literalValue, .enumValue:
+            break
+        }
+    }
+    visit(value)
+    return rows
+}
+
+/// Give back, as `value` arrives from the engine, the rows no Swift value
+/// will own: its type values' (no decodable accepts one) and its host
+/// values' pins (a host value is the host's own key, which Swift resolves,
+/// if at all, before this). Its engine handles go to what decodes them.
+func releaseUnownedRows(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
+    for row in engineRows(value) {
+        switch row {
+        case .handle: break
+        case .pin(let key), .typeValue(let key): _ = BamlApi.handleRelease(key)
+        }
     }
 }
 
@@ -579,20 +616,19 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
         // as Python.
         return BamlOutboundValue(BamlBridge_Cffi_V1_BamlOutboundValue())
     case .ok(let value):
-        releaseTypeValues(value)
+        releaseUnownedRows(value)
         return BamlOutboundValue(value)
     case .error(let error):
-        releaseTypeValues(error.value)
         // Same-process host-callable rehydration: a Swift error thrown
         // inside a passed-in callback comes back as the ORIGINAL error
         // object, not a BamlError wrapper (Python re-raises the exact
-        // exception the same way).
-        if let original = rehydrateHostError(error.value) {
-            throw original
-        }
+        // exception the same way). Read while the pins hold its key.
+        let original = rehydrateHostError(error.value)
+        releaseUnownedRows(error.value)
+        if let original { throw original }
         throw bamlError(from: error.value, trace: error.trace)
     case .panic(let panic):
-        releaseTypeValues(panic.value)
+        releaseUnownedRows(panic.value)
         if panic.isExitPanic {
             exit(Int32(truncatingIfNeeded: panic.exitCode))
         }

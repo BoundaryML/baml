@@ -20,9 +20,8 @@ import type {
   BamlJsValue,
 } from './types';
 
-const HANDLE_TYPE_NAMES: Record<number, string> = {
+const HANDLE_TYPE_NAMES: Record<BamlHandleType, string> = {
   [BamlHandleType.HANDLE_UNSPECIFIED]: 'unspecified',
-  [BamlHandleType.UNTAGGED_RUST_DATA]: 'rust_data',
   [BamlHandleType.UNTAGGED_BEX_HEAP]: 'bex_heap',
   [BamlHandleType.FUNCTION_REF]: 'function_ref',
   [BamlHandleType.ADT_MEDIA_IMAGE]: 'image',
@@ -31,11 +30,19 @@ const HANDLE_TYPE_NAMES: Record<number, string> = {
   [BamlHandleType.ADT_MEDIA_PDF]: 'pdf',
   [BamlHandleType.ADT_MEDIA_GENERIC]: 'media',
   [BamlHandleType.ADT_PROMPT_AST]: 'prompt_ast',
-  [BamlHandleType.ADT_TYPE]: 'type',
+  [BamlHandleType.ADT_TAGGED_HEAP_HANDLE]: 'tagged_heap_handle',
+  [BamlHandleType.HOST_VALUE_CALLABLE]: 'host_value_callable',
+  [BamlHandleType.HOST_VALUE_OPAQUE]: 'host_value_opaque',
+  [BamlHandleType.ADT_FUNCTION_SPEC]: 'function_spec',
+  [BamlHandleType.ADT_RUNTIME_VALUE]: 'runtime_value',
+  [BamlHandleType.INVOCATION_STATE]: 'invocation_state',
+  [BamlHandleType.TRACE_RESERVATION]: 'trace_reservation',
+  [BamlHandleType.HOST_VALUE_PIN]: 'host_value_pin',
 };
 
 export function handleTypeName(handleType: number): string {
-  return HANDLE_TYPE_NAMES[handleType] ?? `handle(${handleType})`;
+  const names: Partial<Record<number, string>> = HANDLE_TYPE_NAMES;
+  return names[handleType] ?? `handle(${handleType})`;
 }
 
 export type WrapHandleFn<T> = (

@@ -80,7 +80,7 @@ extension BamlStream: BamlLeafEncodable {
     /// `BamlStream` to the inner `BamlPyHandle` the same way) — never a
     /// class-value wrapper.
     public func _bamlEncode(as _: BamlSlot<BamlStream<Value>>) throws -> BamlInboundValue {
-        try handle._bamlEncode(as: ._leaf(.rustType))
+        try handle._bamlEncode(as: ._leaf(.unknown))
     }
 }
 

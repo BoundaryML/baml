@@ -68,13 +68,17 @@ impl std::fmt::Display for HostKey {
     }
 }
 
-/// Drop-on-last-clone notification fired to the host language.
-pub type HostReleaseFn = extern "C" fn(host_value_key: u64);
+/// The engine giving a host back `count` of the references it holds to the
+/// host value `host_value_key`. A host counts the references it hands out per
+/// key (one each time the key crosses into the engine) and drops its object
+/// when the count reaches zero.
+pub type HostReleaseFn = extern "C" fn(host_value_key: u64, count: u64);
 
 /// Inner Arc payload for a host value.
 ///
-/// `Drop` fires `host_release_dispatch::fire(self.key)` so the bridge can
-/// remove the underlying host object from its registry.
+/// Every crossing of a host key into the engine transfers one host reference,
+/// which the engine's one `Arc` for that key holds (`held`). `Drop` gives them
+/// all back (`host_release_dispatch::fire(self.key, held)`).
 ///
 /// `PartialEq` compares by `(key, kind)`: the engine's reference index
 /// guarantees one live `Arc<HostValueArc>` per key (see
@@ -85,6 +89,9 @@ pub struct HostValueArc {
     pub key: HostKey,
     pub kind: HostValueKind,
     annotation: Option<HostAnnotation>,
+    /// The host references this identity holds: one per crossing of `key`
+    /// into the engine that it took in.
+    held: std::sync::atomic::AtomicU64,
 }
 
 #[derive(Clone)]
@@ -155,16 +162,19 @@ impl HostValueArc {
             key,
             kind,
             annotation: None,
+            held: std::sync::atomic::AtomicU64::new(1),
         })
     }
 
-    /// The single live `Arc<HostValueArc>` for `key`, created if none exists.
+    /// The single live `Arc<HostValueArc>` for `key`, created if none exists,
+    /// taking in the one host reference this crossing of `key` transfers.
     ///
     /// This is the identity-stable constructor used at the FFI decode
     /// boundary: repeated decodes of the same wire `key` all yield clones of
-    /// one `Arc`, so `host_release_dispatch::fire(key)` fires exactly once
-    /// when the last clone (across the entire process) drops — even when BAML
-    /// returns a host callable to the host and it is later passed back in.
+    /// one `Arc`, which holds every reference they transferred and gives them
+    /// back when the last clone (across the entire process) drops — even when
+    /// BAML returns a host callable to the host and it is later passed back
+    /// in.
     ///
     /// A key's kind is fixed for its lifetime. When `key` is live under
     /// another kind the result is `Err` with that live `Arc`, so the decoder
@@ -177,6 +187,9 @@ impl HostValueArc {
             .unwrap_or_else(PoisonError::into_inner);
         if let Some(existing) = map.get(&key).and_then(Weak::upgrade) {
             return if existing.kind == kind {
+                existing
+                    .held
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
                 Ok(existing)
             } else {
                 Err(existing)
@@ -192,6 +205,7 @@ impl HostValueArc {
             key,
             kind,
             annotation,
+            held: std::sync::atomic::AtomicU64::new(1),
         });
         map.insert(key, Arc::downgrade(&arc));
         Ok(arc)
@@ -220,7 +234,7 @@ impl Drop for HostValueArc {
                 map.remove(&self.key);
             }
         }
-        host_release_dispatch::fire(self.key);
+        host_release_dispatch::fire(self.key, *self.held.get_mut());
     }
 }
 
@@ -231,7 +245,7 @@ pub mod host_release_dispatch {
 
     use once_cell::sync::{Lazy, OnceCell};
 
-    use super::{HOST_REFERENCES, HostKey, HostReleaseFn};
+    use super::{HostKey, HostReleaseFn};
 
     static INSTALLED: OnceCell<HostReleaseFn> = OnceCell::new();
 
@@ -242,8 +256,8 @@ pub mod host_release_dispatch {
     #[cfg(test)]
     static TEST_DEFER: AtomicBool = AtomicBool::new(false);
 
-    /// Process-global queue of host-value keys whose last `Arc` has dropped
-    /// and whose release callback is *pending*.
+    /// Process-global queue of host references the engine has given back and
+    /// the host has not yet been told of: a key and how many.
     ///
     /// [`fire`] (called from `HostValueArc::drop`) only enqueues here; it never
     /// invokes the installed [`HostReleaseFn`]. The host callback runs
@@ -252,7 +266,8 @@ pub mod host_release_dispatch {
     /// permits are parked — firing host code there is an AB-BA deadlock risk.
     /// The engine calls [`drain`] at safepoints *outside* that window to flush
     /// these.
-    static PENDING_RELEASES: Lazy<Mutex<Vec<HostKey>>> = Lazy::new(|| Mutex::new(Vec::new()));
+    static PENDING_RELEASES: Lazy<Mutex<Vec<(HostKey, u64)>>> =
+        Lazy::new(|| Mutex::new(Vec::new()));
 
     // For tests we sometimes need to swap implementations. Use an AtomicPtr
     // to fn() so we can override safely without mutex contention.
@@ -265,14 +280,18 @@ pub mod host_release_dispatch {
         INSTALLED.set(release).map_err(|_| AlreadyInstalled)
     }
 
-    /// Record that the last `Arc` for `key` has dropped, so the host can be
-    /// told to release the underlying object.
+    /// Give the host back `count` references to `key`: the engine no longer
+    /// holds them (an identity dropped, or a refused request never took them
+    /// in).
     ///
-    /// This **enqueues** `key` onto the pending-release queue instead of
-    /// invoking the host callback inline — it may be called from a `Drop`
-    /// running inside the GC stop-the-world window. The engine flushes the
-    /// queue via [`drain`] at a safepoint where no heap permit is parked.
-    pub fn fire(key: HostKey) {
+    /// This **enqueues** onto the pending-release queue instead of invoking
+    /// the host callback inline — it may be called from a `Drop` running
+    /// inside the GC stop-the-world window. The engine flushes the queue via
+    /// [`drain`] at a safepoint where no heap permit is parked.
+    pub fn fire(key: HostKey, count: u64) {
+        if count == 0 {
+            return;
+        }
         // Test override path: fire inline (default) so the original
         // drop-time-release tests stay simple — the override never runs inside
         // a real GC window. Tests that need the production enqueue/drain
@@ -287,38 +306,29 @@ pub mod host_release_dispatch {
                     reason = "test-only AtomicPtr → fn-pointer transmute for the release-dispatch override"
                 )]
                 let f: HostReleaseFn = unsafe { std::mem::transmute(p) };
-                f(key.get());
+                f(key.get(), count);
                 return;
             }
         }
         PENDING_RELEASES
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .push(key);
+            .push((key, count));
     }
 
-    /// Fire the installed [`HostReleaseFn`] for every pending released key,
-    /// skipping any key that has been resurrected.
+    /// Tell the host of every reference the engine has given back.
     ///
     /// Call this only at engine safepoints where **no heap permit is parked**
     /// and no engine lock (`FutureManager`, the reference index) is held — the
     /// host callback runs arbitrary host code.
     ///
-    /// ## Resurrection guard
-    ///
-    /// Between a key being enqueued (at `HostValueArc::drop`) and `drain`
-    /// running, the host may re-pass the same wire key, which
-    /// [`HostValueArc::try_intern`](super::HostValueArc::try_intern) turns into
-    /// a fresh *live* `Arc` for that key. Releasing it would tear the host
-    /// registry entry out from under the live handle. So for each queued key
-    /// we consult the index: if a live `Arc` exists, the key is alive again
-    /// and we **skip** the release. Only keys with no live `Arc` are released.
-    ///
-    /// Locks are held only to snapshot/filter; the host callback fires with all
-    /// locks dropped.
+    /// Each entry gives back exactly the references one identity took in, so
+    /// no entry is ever skipped: a key the host passed in again after its old
+    /// identity dropped is a new identity holding the new crossing's
+    /// reference, and the host's count stays above zero for it. Repeated
+    /// entries for one key are summed into one call.
     pub fn drain() {
-        // Snapshot and clear the queue under its lock, then drop the lock.
-        let pending: Vec<HostKey> = {
+        let pending: Vec<(HostKey, u64)> = {
             let mut queue = PENDING_RELEASES
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner);
@@ -327,34 +337,13 @@ pub mod host_release_dispatch {
         if pending.is_empty() {
             return;
         }
-
-        // Filter out resurrected keys and de-duplicate, under the index lock,
-        // then drop it before firing any host callback. A single key can be
-        // enqueued more than once (drop → re-intern → drop before a drain
-        // runs); the host release callback must fire at most once per key per
-        // drain, so we keep only the first occurrence of each.
-        let to_release: Vec<HostKey> = {
-            let references = HOST_REFERENCES
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner);
-            let mut seen = std::collections::HashSet::new();
-            pending
-                .into_iter()
-                .filter(|key| {
-                    // A live `Arc` for `key` means the host re-passed it after
-                    // the enqueue — it is alive again, do not release. Read
-                    // the count rather than upgrading: an upgraded `Arc`
-                    // dropped under this lock could be the last owner and
-                    // re-enter it.
-                    references
-                        .get(key)
-                        .is_none_or(|weak| weak.strong_count() == 0)
-                        // Collapse duplicate enqueues of the same key into one
-                        // release (`insert` is false on a repeat).
-                        && seen.insert(*key)
-                })
-                .collect()
-        };
+        let mut to_release: Vec<(HostKey, u64)> = Vec::with_capacity(pending.len());
+        for (key, count) in pending {
+            match to_release.iter_mut().find(|(seen, _)| *seen == key) {
+                Some((_, total)) => *total += count,
+                None => to_release.push((key, count)),
+            }
+        }
 
         // Fire with no locks held — the host callback runs arbitrary code.
         #[cfg(test)]
@@ -367,15 +356,15 @@ pub mod host_release_dispatch {
                     reason = "test-only AtomicPtr → fn-pointer transmute for the release-dispatch override"
                 )]
                 let f: HostReleaseFn = unsafe { std::mem::transmute(p) };
-                for key in to_release {
-                    f(key.get());
+                for (key, count) in to_release {
+                    f(key.get(), count);
                 }
                 return;
             }
         }
         if let Some(f) = INSTALLED.get() {
-            for key in to_release {
-                f(key.get());
+            for (key, count) in to_release {
+                f(key.get(), count);
             }
         }
         // No installed callback => silently drop. The Rust runtime cannot
@@ -420,15 +409,15 @@ mod tests {
 
     use super::*;
 
-    static FIRED: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+    static FIRED: Mutex<Vec<(u64, u64)>> = Mutex::new(Vec::new());
 
     // `FIRED`, the release-dispatch test override, and the process-global
     // `HOST_REFERENCES` are all shared mutable state. Tests run in parallel
     // threads within one process, so serialize the ones that touch this state.
     static TEST_LOCK: Mutex<()> = Mutex::new(());
 
-    extern "C" fn record_release(key: u64) {
-        FIRED.lock().unwrap().push(key);
+    extern "C" fn record_release(key: u64, count: u64) {
+        FIRED.lock().unwrap().push((key, count));
     }
 
     fn key(key: u64) -> HostKey {
@@ -471,7 +460,7 @@ mod tests {
             "clone alive => no release"
         );
         drop(arc2);
-        assert_eq!(FIRED.lock().unwrap().as_slice(), &[42]);
+        assert_eq!(FIRED.lock().unwrap().as_slice(), &[(42, 1)]);
     }
 
     #[test]
@@ -504,8 +493,8 @@ mod tests {
         drop(arc2);
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[100],
-            "release fires exactly once at the true last drop"
+            &[(100, 2)],
+            "the last drop gives back both crossings' references at once"
         );
         // The dead entry must have been cleaned out of the index.
         assert!(
@@ -521,7 +510,7 @@ mod tests {
         drop(arc1);
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[101],
+            &[(101, 1)],
             "release fires when the only Arc drops"
         );
 
@@ -531,8 +520,8 @@ mod tests {
         drop(arc2);
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[101, 101],
-            "the fresh identity fires its own release on drop"
+            &[(101, 1), (101, 1)],
+            "the fresh identity gives back its own reference on drop"
         );
     }
 
@@ -574,8 +563,8 @@ mod tests {
         drop(arc2);
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[102],
-            "release fires exactly once, at the true last drop"
+            &[(102, 2)],
+            "the last drop gives back both decodes' references"
         );
     }
 
@@ -598,7 +587,7 @@ mod tests {
         host_release_dispatch::drain();
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[200],
+            &[(200, 1)],
             "drain fires the queued release exactly once"
         );
 
@@ -606,45 +595,36 @@ mod tests {
         host_release_dispatch::drain();
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[200],
+            &[(200, 1)],
             "an empty queue must not re-fire"
         );
     }
 
-    /// Resurrection guard: if a key is re-interned (host re-passes it) between
-    /// the enqueue and the drain, the key is alive again and must NOT be
-    /// released. Once that fresh `Arc` also drops, a later drain releases it.
+    /// A key the host passes in again after its identity dropped (but before
+    /// the drain) is a new identity holding the new crossing's reference: the
+    /// drain still gives back the old identity's, and the host's count stays
+    /// above zero for the new one.
     #[test]
-    fn drain_skips_resurrected_key() {
+    fn a_re_passed_key_gives_back_each_identitys_references() {
         let _guard = lock_and_reset();
         host_release_dispatch::set_test_defer(true);
 
-        // Last Arc drops -> key enqueued for release.
         let arc1 = intern(201, HostValueKind::Callable);
         drop(arc1);
-        assert!(
-            FIRED.lock().unwrap().is_empty(),
-            "drop only enqueues under deferred dispatch"
-        );
-
-        // Host re-passes the same wire key before the drain runs: a fresh live
-        // Arc now exists for `key`.
         let arc2 = intern(201, HostValueKind::Callable);
-
-        // Drain must SKIP the queued release because the key is alive again.
         host_release_dispatch::drain();
-        assert!(
-            FIRED.lock().unwrap().is_empty(),
-            "drain must not release a resurrected (live) key"
+        assert_eq!(
+            FIRED.lock().unwrap().as_slice(),
+            &[(201, 1)],
+            "the dropped identity's reference is given back; the live one keeps its own"
         );
 
-        // Now drop the live Arc and drain again: the key is dead, so it fires.
         drop(arc2);
         host_release_dispatch::drain();
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[201],
-            "once the resurrected Arc drops, drain releases the key exactly once"
+            &[(201, 1), (201, 1)],
+            "the second identity gives back its own reference"
         );
     }
 
@@ -673,19 +653,15 @@ mod tests {
         );
     }
 
-    /// A key enqueued more than once before a drain (drop → re-intern → drop,
-    /// both Arcs dead by drain time) must fire the host release callback
-    /// exactly once, not once per enqueue.
+    /// A key given back more than once before a drain (drop → re-intern →
+    /// drop) is told to the host once, with the references summed.
     #[test]
-    fn drain_dedupes_a_key_enqueued_twice() {
+    fn drain_sums_repeated_releases_of_one_key() {
         let _guard = lock_and_reset();
         host_release_dispatch::set_test_defer(true);
 
-        // First last-drop enqueues the key.
         let arc1 = intern(202, HostValueKind::Callable);
         drop(arc1);
-        // Host re-passes the same wire key (a fresh Arc) and it drops again
-        // before any drain runs — the key is now sitting in the queue twice.
         let arc2 = intern(202, HostValueKind::Callable);
         drop(arc2);
         assert!(
@@ -693,14 +669,17 @@ mod tests {
             "deferred dispatch only enqueues at drop"
         );
 
-        // The key is dead (no live Arc), so it is released — but only once
-        // despite two enqueues.
         host_release_dispatch::drain();
-        assert_eq!(
-            FIRED.lock().unwrap().as_slice(),
-            &[202],
-            "a key enqueued twice must fire release exactly once per drain"
-        );
+        assert_eq!(FIRED.lock().unwrap().as_slice(), &[(202, 2)]);
+    }
+
+    /// A count of zero gives back nothing and tells the host nothing.
+    #[test]
+    fn giving_back_no_references_tells_the_host_nothing() {
+        let _guard = lock_and_reset();
+        host_release_dispatch::fire(key(206), 0);
+        host_release_dispatch::drain();
+        assert!(FIRED.lock().unwrap().is_empty());
     }
 
     /// `HostValueKind::Opaque` (used for opaque host-value round-trip, e.g. the
@@ -713,7 +692,7 @@ mod tests {
         drop(arc);
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[200],
+            &[(200, 1)],
             "Opaque-kind release must fire just like Callable"
         );
     }
@@ -736,8 +715,8 @@ mod tests {
         drop(callable);
         assert_eq!(
             FIRED.lock().unwrap().as_slice(),
-            &[205],
-            "one identity, one release"
+            &[(205, 1)],
+            "the refusal took in nothing, so only the live crossing is given back"
         );
         // Once dead, the key may be minted again under either kind.
         let opaque = intern(205, HostValueKind::Opaque);

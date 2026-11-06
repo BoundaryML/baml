@@ -1,7 +1,7 @@
 //! napi types for BAML media (`baml.media.{Image,Video,Audio,Pdf}`).
 //!
 //! Mirrors `bridge_python/src/media.rs`. Each class wraps a `HANDLE_TABLE`
-//! row that is a `CffiHandleTableEntry::Adt(BexExternalAdt::Media(arc))`.
+//! row that is a `CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(arc))`.
 //! Static constructors (`fromUrl`/`fromFileContent`/`fromBase64`) and
 //! accessors (`url`/`name`/`base64`/`mimeType`) dispatch natively here instead
 //! of round-tripping through the BAML engine. `fromFile` is the exception: it

@@ -18,6 +18,9 @@ message BamlTy {
   // Formerly `void`: the unit type is the `null` primitive.
   reserved 20;
   reserved "void";
+  // Formerly `rust_type`: a host's own value is the `baml.host.Value` class.
+  reserved 16;
+  reserved "rust_type";
   oneof ty {
     BamlTyPrimitive primitive = 1;
     // `class_ty` (not `class`) — `class` is a reserved word in Python, where
@@ -37,7 +40,6 @@ message BamlTy {
     BamlTyEnumVariant enum_variant = 13;
     BamlTyFunction function = 14;
     BamlTyFuture future = 15;
-    BamlTyRustType rust_type = 16;
     // `meta_type` (not `type`) — `type` is a reserved word in TypeScript;
     // mirrors `RuntimeTy::Type`, the `type` metatype.
     BamlTyMetaType meta_type = 17;
@@ -216,9 +218,6 @@ message BamlTyFuture {
   BamlTy value = 1;
   BamlTy error = 2;
 }
-
-// Opaque Rust-managed state (`RuntimeTy::RustType`).
-message BamlTyRustType {}
 
 // The `type` metatype — a runtime value wrapping a `BamlTy` (`RuntimeTy::Type`).
 message BamlTyMetaType {}

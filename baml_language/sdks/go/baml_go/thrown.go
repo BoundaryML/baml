@@ -317,8 +317,8 @@ func literalToInbound(literal *cffi.BamlLiteralValue) (*cffi.InboundValue, error
 }
 
 // handleToInbound sends a handle back as it arrived: an engine handle as a
-// fresh clone of its own kind, a host key as the same key (a host key is one
-// registration however often it occurs), and a host callable stating the
+// fresh clone of its own kind, a host key as the same key with one more
+// reference journalled in transaction, and a host callable stating the
 // function type the engine annotated it with.
 func handleToInbound(handle *cffi.BamlOutboundHandle, transaction *inputTransaction) (*cffi.InboundValue, error) {
 	if handle == nil || handle.GetKey() == 0 {
@@ -326,11 +326,17 @@ func handleToInbound(handle *cffi.BamlOutboundHandle, transaction *inputTransact
 	}
 	switch handle.GetHandleType() {
 	case cffi.BamlHandleType_HOST_VALUE_OPAQUE:
+		if err := resendHostKey(transaction, handle.GetKey()); err != nil {
+			return nil, err
+		}
 		return hostValueInput(handle.GetKey(), handle.GetHandleType()), nil
 	case cffi.BamlHandleType_HOST_VALUE_CALLABLE:
 		stated, err := annotationStatement(handle.GetTy())
 		if err != nil {
 			return nil, fmt.Errorf("host callable: %w", err)
+		}
+		if err := resendHostKey(transaction, handle.GetKey()); err != nil {
+			return nil, err
 		}
 		value := hostValueInput(handle.GetKey(), handle.GetHandleType())
 		value.ValueType = stated
@@ -344,6 +350,19 @@ func handleToInbound(handle *cffi.BamlOutboundHandle, transaction *inputTransact
 			Key: cloned, HandleType: handle.GetHandleType(),
 		}}}, nil
 	}
+}
+
+// resendHostKey takes one more reference to a host key the engine sent Go,
+// for sending it back within transaction.
+func resendHostKey(transaction *inputTransaction, key uint64) error {
+	if transaction == nil {
+		return errors.New("a host key is sent only within a call's input transaction")
+	}
+	if err := retainHostValue(key); err != nil {
+		return err
+	}
+	transaction.ownHostValue(key)
+	return nil
 }
 
 // annotationStatement states an annotation the engine sent beside a value.

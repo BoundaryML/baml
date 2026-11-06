@@ -110,7 +110,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         Ty::Null => Some("BamlNull".to_string()),
         Ty::Uint8Array => Some("Foundation.Data".to_string()),
         // Provider-neutral prompts cross as a copied protobuf tree. They are
-        // portable values, not generated `$rust_type` handle wrappers.
+        // portable values, not handle wrappers.
         Ty::PromptAst => Some("BamlPrompt".to_string()),
         // Media is spelled by the generated struct of the class the
         // compiler says crosses as that media. The generic media shape has
@@ -189,8 +189,6 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 Some(path)
             }
         }
-        // Opaque engine-owned state (`$rust_type` fields on stdlib
-        // resource classes: File._handle, Response._body, media _data).
         // Unit is only meaningful in return position; the emitter
         // special-cases it. Everything else lands in later phases.
         _ => None,
@@ -446,9 +444,15 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
 /// handle to a media value.
 pub(crate) const HANDLE: &str = "BamlHandle?";
 
-/// The slot of an opaque handle ([`HANDLE`]).
+/// The slot of a host's own value ([`HANDLE`]): a `baml.host.Value`.
 pub(crate) fn handle_slot() -> String {
-    "BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.rustType))".to_string()
+    "BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.hostValue))".to_string()
+}
+
+/// The slot of an engine handle ([`HANDLE`]), whose type the engine knows:
+/// it states nothing.
+pub(crate) fn engine_handle_slot() -> String {
+    "BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.unknown))".to_string()
 }
 
 /// Whether a value of `ty` is an opaque handle ([`HANDLE`]): a host's own

@@ -1,14 +1,16 @@
 import CBamlBridge
 import Foundation
 
-/// An engine-owned resource riding in a generated model's `$rust_type`
-/// field (`File._handle`, `Response._body`, media `_data`, …). The
-/// wire carries only a key into the engine's handle table; the Swift
-/// object owns one release of that key: deinit performs it, and
-/// encoding clones one more ownership for the wire (a fresh key for
-/// media, the same refcounted key for an engine-heap handle) so this
-/// instance stays independently droppable (Python's
-/// `_clone_key_for_wire` semantics).
+/// A key the wire carries: an engine-owned resource riding in a generated
+/// model's handle field (media `_data`, …), or a host's own value. An engine
+/// key names a row of the engine's handle table; the Swift object owns one
+/// release of it: deinit performs it, and encoding clones one more ownership
+/// for the wire (a fresh key for media, the same refcounted key for an
+/// engine-heap handle) so this instance stays independently droppable
+/// (Python's `_clone_key_for_wire` semantics). A host value's key names this
+/// host's own registration, which the engine's references keep: the instance
+/// owns none, and encoding takes one more for the wire, refused once the
+/// engine has let the key go.
 public final class BamlHandle: @unchecked Sendable {
     let key: UInt64
     let handleType: BamlBridge_Cffi_V1_BamlHandleType
@@ -74,26 +76,26 @@ extension BamlHandle {
         switch handleType {
         case .hostValueCallable, .hostValueOpaque:
             return .host
-        case .handleUnspecified, .untaggedRustData, .untaggedBexHeap, .functionRef, .adtMediaImage,
-            .adtMediaAudio, .adtMediaVideo, .adtMediaPdf, .adtMediaGeneric, .adtPromptAst, .adtType,
+        case .handleUnspecified, .untaggedBexHeap, .functionRef, .adtMediaImage,
+            .adtMediaAudio, .adtMediaVideo, .adtMediaPdf, .adtMediaGeneric, .adtPromptAst,
             .adtTaggedHeapHandle, .adtFunctionSpec, .adtRuntimeValue, .invocationState,
-            .traceReservation, .UNRECOGNIZED:
+            .traceReservation, .hostValuePin, .UNRECOGNIZED:
             return .engine
         }
     }
 }
 
 /// A handle states nothing: its type is the engine's, checked live. It has
-/// no Swift-side type of its own, so it is not `BamlTyped`; a `$rust_type`
-/// field's slot is the field's declared type.
+/// no Swift-side type of its own, so it is not `BamlTyped`; a host value's
+/// slot is the field's declared type.
 extension BamlHandle: BamlLeafEncodable {
     public func _bamlEncode(as _: BamlSlot<BamlHandle>) throws -> BamlInboundValue {
         if let portableMedia {
             return BamlMedia.encodePortable(portableMedia)
         }
-        // A host value is the engine's reference to this host's own object:
-        // its key goes as it is. An engine handle clones a fresh key for the
-        // wire; the engine drains it while this instance keeps its own.
+        // An engine handle clones a fresh key for the wire; the engine drains
+        // it while this instance keeps its own. A host value goes under its
+        // own key, taking one more reference to it.
         var wireKey: UInt64 = key
         switch keySpace {
         case .engine:
@@ -102,7 +104,11 @@ extension BamlHandle: BamlLeafEncodable {
                 throw BamlBridgeFailure(message: "handle_clone failed with status \(status)")
             }
         case .host:
-            break
+            do throws(BamlHostKeyGone) {
+                try HostCallableRegistry.shared.sendAgain(key)
+            } catch {
+                throw BamlBridgeFailure(message: error.description)
+            }
         }
         var handle = BamlBridge_Cffi_V1_BamlHandle()
         handle.key = wireKey
@@ -122,8 +128,13 @@ extension BamlHandle: BamlDecodable {
         guard case .handleValue(let handle) = raw.value else {
             throw BamlDecodeError.typeMismatch(expected: "handle", got: wireArmName(raw))
         }
-        guard handle.handleType != .handleUnspecified else {
+        switch handle.handleType {
+        case .handleUnspecified:
             throw BamlDecodeError.typeMismatch(expected: "tagged handle", got: "HANDLE_UNSPECIFIED")
+        case .hostValuePin:
+            throw BamlDecodeError.typeMismatch(expected: "tagged handle", got: "HOST_VALUE_PIN, which is never a value")
+        default:
+            break
         }
         // An anonymous label is display text, never an identity.
         let classFQN: String?

@@ -5,9 +5,9 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-import type { BamlHandle } from './native.js';
+import type { _HostMarker } from './native.js';
 export type HostMarker = {
-    readonly handle: BamlHandle;
+    readonly marker: _HostMarker;
     readonly identity: object;
 };
 export declare function hostMarker(function_: Function): HostMarker | undefined;

@@ -148,7 +148,6 @@ internal static class WireDepth
             case BamlTy.TyOneofCase.Unknown:
             case BamlTy.TyOneofCase.Media:
             case BamlTy.TyOneofCase.EnumVariant:
-            case BamlTy.TyOneofCase.RustType:
             case BamlTy.TyOneofCase.MetaType:
             case BamlTy.TyOneofCase.Resource:
             case BamlTy.TyOneofCase.PromptAst:

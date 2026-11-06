@@ -74,23 +74,37 @@ impl BamlHandle {
         self.handle_type
     }
 
+    /// Another wrapper of the same reference: a fresh engine reference for
+    /// an engine object; for a host value, which no wrapper owns, the key
+    /// itself.
     #[napi(js_name = "clone")]
     pub fn clone_handle(&self) -> napi::Result<BamlHandle> {
-        let new_key = self.key_for_wire("BamlHandle.clone")?;
+        let key = match self.wire_handle()? {
+            WireHandle::Host(key, _) => key.get(),
+            WireHandle::Engine(_) => handle_clone(self.key, "BamlHandle.clone")?,
+        };
         Ok(BamlHandle {
-            key: new_key,
+            key,
             handle_type: self.handle_type,
         })
     }
 
-    /// Clone this handle for inbound wire ownership. A host value is the
-    /// engine's reference to the host's own object: its key goes as it is,
-    /// nothing is cloned.
+    /// The key one more wire occurrence of this handle carries: a fresh
+    /// engine reference for an engine object. A host value is the engine's
+    /// reference to the host's own object: its key goes as it is, taking one
+    /// more of the host's references to it, and is refused once the key is
+    /// no longer registered. Either is the caller's to give back if the
+    /// occurrence never reaches the engine.
     #[napi(js_name = "_cloneKeyForWire")]
     pub fn clone_key_for_wire(&self) -> napi::Result<HandleKey> {
-        Ok(HandleKey::from_u64(
-            self.key_for_wire("BamlHandle._cloneKeyForWire")?,
-        ))
+        let key = match self.wire_handle()? {
+            WireHandle::Host(key, _) => {
+                crate::host_value::send_again(key)?;
+                key.get()
+            }
+            WireHandle::Engine(_) => handle_clone(self.key, "BamlHandle._cloneKeyForWire")?,
+        };
+        Ok(HandleKey::from_u64(key))
     }
 
     /// Whether this handle is the engine's reference to a host object, as
@@ -119,15 +133,6 @@ impl BamlHandle {
     fn wire_handle(&self) -> napi::Result<WireHandle> {
         WireHandle::from_parts(self.key, self.handle_type)
             .map_err(|error| napi::Error::new(napi::Status::InvalidArg, error.to_string()))
-    }
-
-    /// The key one more wire occurrence of this handle carries: a fresh
-    /// engine reference for an engine object, the key itself for a host value.
-    fn key_for_wire(&self, context: &str) -> napi::Result<u64> {
-        match self.wire_handle()? {
-            WireHandle::Host(key, _) => Ok(key.get()),
-            WireHandle::Engine(_) => handle_clone(self.key, context),
-        }
     }
 }
 
