@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { Post } from './get-posts';
 
 // A drawn preview for a post on the blog index, in place of its share card: a small diagram of the
@@ -197,7 +197,7 @@ function Stat({
         y2={H - PAD - 96}
       />
       <text
-        fill="var(--muted)"
+        fill="var(--ink-2)"
         fontSize={22}
         style={SANS}
         x={x + 32}
@@ -554,6 +554,25 @@ export function checkArt(posts: Post[]) {
       `blog/_lib/art.tsx has a preview for ${stale.map((slug) => `"${slug}"`).join(', ')}, but no post has that slug. Change the key in ART to the post's current slug.`,
     );
   }
+}
+
+/** A post's drawing inside its own body. */
+export function PostDrawing({ alt, slug }: { alt: string; slug: string }) {
+  const Art = ART[slug];
+  if (!Art) return null;
+  return (
+    <svg
+      aria-label={alt}
+      className="not-prose my-8 aspect-[1200/630] w-full overflow-hidden rounded-xl bg-raised"
+      role="img"
+      // Post bodies redefine --muted as a dark background color.
+      style={{ '--muted': '#828280' } as CSSProperties}
+      viewBox={`0 0 ${W} ${H}`}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <Art id="body" />
+    </svg>
+  );
 }
 
 /** A post's preview at the share card's shape: its drawing, else its first image, else a plain
