@@ -372,6 +372,7 @@ fn mint_class(
             stream_done: false,
             must_exist: false,
             runtime_type: Some(row.type_value),
+            redact: false,
         });
     }
 
@@ -398,6 +399,7 @@ fn mint_class(
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        redact: false,
     })));
     // The head is built off the declaration that was just allocated, so the
     // type reaches it directly — there is no table to consult and no name

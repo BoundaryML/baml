@@ -160,6 +160,7 @@ mod tests {
             stream_done: false,
             must_exist: false,
             runtime_type: None,
+            redact: false,
         }
     }
 
@@ -194,6 +195,7 @@ mod tests {
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         };
 
         let definition = class_definition(&class);

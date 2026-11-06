@@ -205,6 +205,7 @@ impl AttributeCarrier for ClassFieldAttrs {
             ("skip", AttributeValue::Flag) => self.skip = true,
             ("stream.done", AttributeValue::Flag) => self.stream_done = true,
             ("stream.must_exist", AttributeValue::Flag) => self.must_exist = true,
+            ("trace.redact", AttributeValue::Flag) => self.redact = true,
             _ => drift(spec, Self::POSITION),
         }
     }
@@ -233,6 +234,7 @@ impl AttributeCarrier for ClassAttrs {
         };
         match (spec.name, value) {
             ("stream.done", AttributeValue::Flag) => self.stream_done = true,
+            ("trace.redact", AttributeValue::Flag) => self.redact = true,
             _ => drift(spec, Self::POSITION),
         }
     }

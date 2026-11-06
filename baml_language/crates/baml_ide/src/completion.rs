@@ -1299,6 +1299,7 @@ function f() -> int throws <[CURSOR]
             "skip",
             "stream.done",
             "stream.must_exist",
+            "trace.redact",
         ] {
             assert!(labels.contains(&name), "missing `{name}`: {labels:?}");
         }
@@ -1321,7 +1322,7 @@ function f() -> int throws <[CURSOR]
             ),
             (
                 "class C {\n    x: int\n    @@<[CURSOR]\n}\n",
-                &["alias", "description", "stream.done"],
+                &["alias", "description", "stream.done", "trace.redact"],
             ),
             (
                 "enum E {\n    A\n    @@<[CURSOR]\n}\n",

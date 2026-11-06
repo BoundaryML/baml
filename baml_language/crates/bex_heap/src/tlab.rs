@@ -764,6 +764,7 @@ mod tests {
                     stream_done: false,
                     must_exist: false,
                     runtime_type: None,
+                    redact: false,
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
@@ -777,6 +778,7 @@ mod tests {
                     stream_done: false,
                     must_exist: false,
                     runtime_type: None,
+                    redact: false,
                 },
             ],
             description: None,
@@ -791,6 +793,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
 
         // Allocate an instance of that class

@@ -142,6 +142,7 @@ pub(crate) fn build_class_object<'db>(
                 skip: field.attrs.skip,
                 stream_done: field.attrs.stream_done,
                 must_exist: field.attrs.must_exist,
+                redact: field.attrs.redact,
                 runtime_type: None,
             }
         })
@@ -154,6 +155,7 @@ pub(crate) fn build_class_object<'db>(
         docstring: class.docstring.clone(),
         other: indexmap::IndexMap::new(),
         stream_done: class.attrs.stream_done,
+        redact: class.attrs.redact,
         declared_crossing: layout::class_crossing(db, DeclRef::Source(class_loc)),
         type_tag,
         cleanup: None,

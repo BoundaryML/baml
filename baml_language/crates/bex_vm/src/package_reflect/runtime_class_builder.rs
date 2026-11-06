@@ -79,6 +79,8 @@ struct BuilderField {
     /// `@skip`. A `WithMeta` row has no slot for it, so only `fields_from`,
     /// which copies another class's fields, sets it.
     skip: bool,
+    /// `@trace.redact`, set the same way: a copied field stays redacted.
+    redact: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -149,6 +151,7 @@ struct PreparedField {
     docstring: Option<String>,
     other: IndexMap<String, String>,
     skip: bool,
+    redact: bool,
 }
 
 type PreparedGroup = IndexMap<u64, Vec<PreparedField>>;
@@ -427,6 +430,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
             name: name.to_string(),
             root_index,
             skip: false,
+            redact: false,
         });
 
         for target in pending_builders {
@@ -491,6 +495,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
                 name: field.name,
                 root_index: roots.len(),
                 skip: field.skip,
+                redact: field.redact,
             });
             roots.push(root);
         }
@@ -695,6 +700,7 @@ fn prepare_group(
                             docstring: meta.docstring,
                             other: meta.other,
                             skip: field.skip,
+                            redact: field.redact,
                         }
                     }
                     Err(message) => {
@@ -718,6 +724,7 @@ fn prepare_group(
                         docstring,
                         other,
                         skip: field.skip,
+                        redact: field.redact,
                     },
                     Err(message) => {
                         diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
@@ -960,6 +967,7 @@ fn build_group(
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(ptr, type_tag),
@@ -1027,6 +1035,7 @@ fn build_group(
                 stream_done: false,
                 must_exist: false,
                 runtime_type: Some(type_value),
+                redact: field.redact,
             });
         }
         let plan = &plans[&node.id];
