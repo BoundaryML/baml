@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArticleStructuredData } from '@/components/structured-data';
+import { checkArt } from '../_lib/art';
 import { formatPostDate, isoPostDate } from '../_lib/format';
 import { getPost, getPosts } from '../_lib/get-posts';
 import { BLOG_WRAP, BlogShell } from '../_lib/shell';
@@ -14,6 +15,7 @@ interface BlogPostPageProps {
 
 export async function generateStaticParams() {
   const posts = await getPosts();
+  checkArt(posts);
   return posts.map((post) => ({ slug: post.slug }));
 }
 

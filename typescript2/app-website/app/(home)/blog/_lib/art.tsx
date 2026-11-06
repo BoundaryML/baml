@@ -223,9 +223,9 @@ const HALF = (W - PAD * 2 - 36) / 2;
 const LEFT = PAD;
 const RIGHT = PAD + HALF + 36;
 
-/** "Teaching Agents to Write Beautiful BAML": the agent's chess move generator before and after the
+/** "Teaching Agents to Write Maintainable Code": the agent's chess move generator before and after the
  *  new skill, with each function's cognitive complexity. */
-function BeautifulBaml({ id }: { id: string }) {
+function MaintainableCode({ id }: { id: string }) {
   return (
     <>
       <Pane id={`${id}-a`} title="Before" w={HALF} x={LEFT}>
@@ -537,11 +537,24 @@ const ART: Record<string, (props: { id: string }) => ReactNode> = {
   'schema-aligned-parsing': SchemaAlignedParsing,
   'structured-output-from-llms': ComparisonChart,
   'structured-outputs-create-false-confidence': FalseConfidence,
-  'teaching-agents-to-write-beautiful-baml': BeautifulBaml,
+  'teaching-agents-to-write-maintainable-code': MaintainableCode,
 };
 
 /** Whether a post has a drawn preview. */
 export const hasArt = (post: Post) => post.slug in ART;
+
+/** Throws when a drawing's key matches no post. That happens when a post's slug changes and its key
+ *  here doesn't, and the post quietly loses its preview. The post pages call this while they build,
+ *  so the build fails instead. */
+export function checkArt(posts: Post[]) {
+  const slugs = new Set(posts.map((post) => post.slug));
+  const stale = Object.keys(ART).filter((slug) => !slugs.has(slug));
+  if (stale.length > 0) {
+    throw new Error(
+      `blog/_lib/art.tsx has a preview for ${stale.map((slug) => `"${slug}"`).join(', ')}, but no post has that slug. Change the key in ART to the post's current slug.`,
+    );
+  }
+}
 
 /** A post's preview at the share card's shape: its drawing, else its first image, else a plain
  *  pattern. `id` keeps the drawing's clip paths apart when one post's preview shows twice. */
