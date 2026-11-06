@@ -603,9 +603,9 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_db",
+ "baml_parser",
+ "baml_syntax",
  "num-bigint",
  "text-size",
 ]
