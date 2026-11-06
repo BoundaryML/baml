@@ -65,6 +65,8 @@ struct State {
     active_function: Option<usize>,
     active_slot: usize,
     next_path: u32,
+    gc_function: FunctionId,
+    gc_started: Option<ClockInstant>,
     thread: TelemetryId,
     started: ClockInstant,
 }
@@ -249,6 +251,115 @@ pub fn before_yield() {
     }
 }
 
+fn gc_metadata(function_id: FunctionId) -> btel_types::FunctionMetadata {
+    use btel_types::{FunctionMetadata, RuntimeFunctionKind, RuntimeFunctionOrigin};
+    FunctionMetadata {
+        function_id,
+        fqn: "baml.gc".into(),
+        display_name: "baml.gc".into(),
+        source_file: None,
+        source_span: None,
+        kind: RuntimeFunctionKind::Native,
+        origin: RuntimeFunctionOrigin::Builtin,
+        owner_type: None,
+        parent_function: None,
+        lambda_path: None,
+        definition_key: None,
+        package_name: Some("baml".into()),
+        namespace: vec![],
+        argument_layout: None,
+        source_map: None,
+        model_invoke: false,
+    }
+}
+
+/// Publish collector facts only after marking finishes; never traverse managed values.
+pub fn collection(event: bex_v2_heap::CollectionEvent) {
+    use bex_v2_heap::CollectionEvent;
+    use btel_types::context::{Context, ContextPatch, ContextValue};
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *ptr };
+    let (live_slots, reclaimed_slots, live_payload_bytes) = match event {
+        CollectionEvent::Started => {
+            state.gc_started = Some(state.clock.read());
+            return;
+        }
+        CollectionEvent::Completed {
+            live_slots,
+            reclaimed_slots,
+            live_payload_bytes,
+        } => (live_slots, reclaimed_slots, live_payload_bytes),
+    };
+    let completed_at = state.clock.read();
+    let started_at = state.gc_started.take().expect("collection started");
+    let mut patch = ContextPatch::default();
+    for (key, value) in [("collection_level", "major"), ("trigger", "automatic")] {
+        patch
+            .metadata
+            .insert(key.into(), Some(ContextValue::String(value.into())));
+    }
+    // This non-generational, non-moving collector performs no promotions.
+    for (key, count) in [
+        ("live_slots", live_slots),
+        ("reclaimed_slots", reclaimed_slots),
+        ("live_payload_bytes", live_payload_bytes),
+        ("promoted_to_gen1", 0),
+        ("promoted_to_gen2", 0),
+    ] {
+        patch.metadata.insert(
+            key.into(),
+            Some(ContextValue::Int(i64::try_from(count).unwrap())),
+        );
+    }
+    let captured_context = btel_snapshot::context::capture(
+        &Context::default().with_patch(&patch),
+        &btel_snapshot::SnapshotPool::unbounded(Default::default()),
+    );
+    let thread = allocate_telemetry_id();
+    state.next_path = state.next_path.checked_add(1).expect("call path exhausted");
+    let path = CallPathId::new_non_root(state.next_path).unwrap();
+    let name = Some(Arc::new("baml.gc".into()));
+    // Fresh chunk holds the complete context and operation, with no interleaved
+    // user records. The ordinary writer reselects the task on its next chunk.
+    state.producer.seal();
+    for record in [
+        SpanRecord::ThreadSelected { thread_id: thread },
+        SpanRecord::ContextSelected { captured_context },
+        SpanRecord::CallPathDefined {
+            call_path: path,
+            parent_call_path: CallPathId::ROOT,
+            visible_caller: None,
+            caller_pc: 0,
+            callee: state.gc_function,
+            edge: CallPathEdge::Spawn,
+        },
+        SpanRecord::ThreadSpanAnnouncement {
+            id: thread,
+            parent_id: None,
+            spawn_call_path: path,
+            started_at,
+            clock: state.clock.clone(),
+            name: name.clone(),
+        },
+        SpanRecord::ThreadSpanCompletion {
+            id: thread,
+            parent_id: None,
+            spawn_call_path: path,
+            started_at,
+            completed_at,
+            outcome: InvocationOutcome::Ok,
+            clock: state.clock.clone(),
+            name,
+        },
+    ] {
+        state.producer.write_span(record);
+    }
+    state.producer.seal();
+}
+
 pub struct Session {
     state: Option<Box<State>>,
     pool: Option<Pool>,
@@ -299,13 +410,16 @@ impl Session {
             .iter()
             .map(|_| allocator.allocate().unwrap())
             .collect();
-        let metadata = Arc::new(btel_types::FunctionMetadataTable {
+        let gc_function = allocator.allocate().unwrap();
+        let mut metadata = btel_types::FunctionMetadataTable {
             functions: functions
                 .iter()
                 .zip(&ids)
                 .map(|(f, &id)| (f.metadata)(id))
                 .collect(),
-        });
+        };
+        metadata.functions.push(gc_metadata(gc_function));
+        let metadata = Arc::new(metadata);
         let names = metadata
             .functions
             .iter()
@@ -376,6 +490,8 @@ impl Session {
             active_function: None,
             active_slot: 0,
             next_path: 0,
+            gc_function,
+            gc_started: None,
             thread: allocate_telemetry_id(),
             started: ClockInstant::from_ticks(0),
         }));
@@ -609,6 +725,8 @@ mod tests {
             active_function: None,
             active_slot: 0,
             next_path: 0,
+            gc_function: allocator.allocate().unwrap(),
+            gc_started: None,
             thread: allocate_telemetry_id(),
             started: ClockInstant::from_ticks(0),
         });

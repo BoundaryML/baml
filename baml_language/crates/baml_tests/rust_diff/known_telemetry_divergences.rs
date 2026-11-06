@@ -1,13 +1,16 @@
 //! Narrow, visible exceptions for today's compiled backend only. A new backend
-//! does not inherit these. Never allow process-output differences here.
+//! does not inherit these except for the explicit C5 GC exception.
+//! Never allow process-output differences here.
 use serde_json::Value;
 
 pub const GC_REASON: &str = "GC scheduling and heap occupancy differ (especially under BAML_GC_STRESS); only successful root baml.gc maintenance tasks are exempt";
 
+// Runtime-v2 CONTRACTS.md C5: collector maintenance counts/context describe
+// the collector, not the program. All other records remain strict.
 pub fn without_gc(trace: &str, backend: &str) -> String {
     if !matches!(
         backend,
-        "compiled" | "gc-stress" | "vm-frames" | "vm-frames-gc-stress"
+        "compiled" | "gc-stress" | "vm-frames" | "vm-frames-gc-stress" | "runtime-v2" | "v2"
     ) {
         return trace.to_owned();
     }
@@ -82,13 +85,16 @@ mod tests {
         };
         let gc = record("baml.gc", 1);
         assert!(without_gc(&gc, "gc-stress").is_empty());
-        assert_eq!(without_gc(&gc, "runtime-v2"), gc);
+        assert!(without_gc(&gc, "runtime-v2").is_empty());
+        assert!(without_gc(&gc, "v2").is_empty());
+        assert_eq!(without_gc(&gc, "unknown-backend"), gc);
         for retained in [
             record("user.task", 1),
             record("baml.gc", 2),
             record("baml.gc", 3),
         ] {
             assert_eq!(without_gc(&retained, "compiled"), retained);
+            assert_eq!(without_gc(&retained, "v2"), retained);
         }
     }
 }

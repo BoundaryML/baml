@@ -1426,3 +1426,30 @@ the unchanged recording (`target/t1-profile-report-final.log`).
 - Performance decision remains open under decision 8. The default remains
   medium and the full observation contract remains the target; the measured
   20.876× Richards ratio does not justify claiming the gate is met.
+
+## C5 collector telemetry follow-up
+
+The approved C5 exception now applies to `v2`/`runtime-v2` in the harness's GC
+filter only. Its comment points to CONTRACTS.md C5. Other backend exceptions
+(polling, errors, captures, etc.) are unchanged. The direct checker retains raw
+BTEL equality/diffs while its acceptance comparison applies only C5.
+
+The heap now offers a synchronous collection observer, independent of telemetry
+crates. The runtime emits the existing root `baml.gc` task/path/context formats
+for actual collections. Counts describe v2 allocation starts surviving or
+reclaimed by that collection; payload bytes exclude the eight-byte object
+header. This non-generational collector reports zero promotions. Automatic
+budget, stress and allocation-retry collections use `trigger=automatic`.
+Dropping a heap is not labeled a collection: no fictitious shutdown GC is emitted.
+
+The count regression keeps one object, reclaims a small and large object, then
+collects twice without roots, checking exact counts and payload sizes. Heap and
+runtime tests and strict clippy pass. The copied harness normalizer/exception
+module's 11 tests pass, including retaining user tasks, failed GC tasks and
+unknown backends. Logs: `target/t2-gc-{tests-final,clippy,harness-tests}.log`.
+
+Acceptance now passes **12/12** cases: trees and Richards at off/low/medium,
+normal and GC-stressed, with all program records strict and only C5 maintenance
+records exempt. Raw equality is retained separately (4/12 at off). Both v2
+recordings and bytecode recordings continue through the unchanged harness
+normalizer. Matrix logs: `target/t2-gc-{trees,richards}-parity.log`.

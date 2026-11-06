@@ -3,6 +3,7 @@
     "workload": "trees",
     "level": "off",
     "stress": "0",
+    "strict_parity": true,
     "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": null
@@ -11,7 +12,8 @@
     "workload": "trees",
     "level": "low",
     "stress": "0",
-    "parity": false,
+    "strict_parity": false,
+    "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-low-0.diff"
   },
@@ -19,7 +21,8 @@
     "workload": "trees",
     "level": "medium",
     "stress": "0",
-    "parity": false,
+    "strict_parity": false,
+    "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-medium-0.diff"
   },
@@ -27,6 +30,7 @@
     "workload": "trees",
     "level": "off",
     "stress": "1",
+    "strict_parity": true,
     "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": null
@@ -35,7 +39,8 @@
     "workload": "trees",
     "level": "low",
     "stress": "1",
-    "parity": false,
+    "strict_parity": false,
+    "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-low-1.diff"
   },
@@ -43,7 +48,8 @@
     "workload": "trees",
     "level": "medium",
     "stress": "1",
-    "parity": false,
+    "strict_parity": false,
+    "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-medium-1.diff"
   },
@@ -51,6 +57,7 @@
     "workload": "richards",
     "level": "off",
     "stress": "0",
+    "strict_parity": true,
     "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": null
@@ -59,7 +66,8 @@
     "workload": "richards",
     "level": "low",
     "stress": "0",
-    "parity": false,
+    "strict_parity": false,
+    "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-low-0.diff"
   },
@@ -67,7 +75,8 @@
     "workload": "richards",
     "level": "medium",
     "stress": "0",
-    "parity": false,
+    "strict_parity": false,
+    "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-medium-0.diff"
   },
@@ -75,6 +84,7 @@
     "workload": "richards",
     "level": "off",
     "stress": "1",
+    "strict_parity": true,
     "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": null
@@ -83,7 +93,8 @@
     "workload": "richards",
     "level": "low",
     "stress": "1",
-    "parity": false,
+    "strict_parity": false,
+    "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-low-1.diff"
   },
@@ -91,7 +102,8 @@
     "workload": "richards",
     "level": "medium",
     "stress": "1",
-    "parity": false,
+    "strict_parity": false,
+    "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-medium-1.diff"
   }

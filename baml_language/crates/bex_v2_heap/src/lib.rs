@@ -113,6 +113,17 @@ pub struct Stats {
     pub total_pause: Duration,
     pub reserved_bytes: usize,
 }
+/// Collector-owned observations; counts refer to v2 object allocations, not VM slots.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CollectionEvent {
+    Started,
+    Completed {
+        live_slots: usize,
+        reclaimed_slots: usize,
+        live_payload_bytes: usize,
+    },
+}
+
 /// Opaque completion token. Keep it pending until cleanup has returned (even if
 /// it throws). Publish resurrected pointers as roots before completing it.
 #[derive(Debug)]
@@ -308,6 +319,7 @@ pub struct Heap {
     ready: Vec<Finalizer>,
     weak: Vec<BTreeMap<usize, usize>>,
     stats: Stats,
+    collection_observer: Option<fn(CollectionEvent)>,
     stress: bool,
     poll_word: Option<Rc<Cell<u8>>>,
     capacity_limit: usize,
@@ -371,6 +383,7 @@ impl Heap {
                 budget: MIN_BUDGET,
                 ..Stats::default()
             },
+            collection_observer: None,
             stress: stress_from_environment(),
             poll_word: None,
             capacity_limit: usize::MAX,
@@ -379,6 +392,10 @@ impl Heap {
             emergency_limit: 0,
             _owner: PhantomData,
         }
+    }
+    /// Called synchronously before/after actual full collections, outside marking.
+    pub fn set_collection_observer(&mut self, observer: Option<fn(CollectionEvent)>) {
+        self.collection_observer = observer;
     }
     fn validate_ranges(d: &Descriptor, bound: usize) {
         for ((offset, count), stride) in [(d.ptr_slots, 8usize), (d.tagged_slots, 16)] {
@@ -844,7 +861,11 @@ impl Heap {
     /// # Safety
     /// Same root/readability contract as `alloc`. No mutator may run during mark.
     pub unsafe fn collect(&mut self, roots: &dyn RootSource) {
+        if let Some(observer) = self.collection_observer {
+            observer(CollectionEvent::Started);
+        }
         let start = Instant::now();
+        let mut before = self.large.len();
         self.cursor = 0;
         self.accounted_cursor = 0;
         self.budget_end = 0;
@@ -856,6 +877,13 @@ impl Heap {
         self.stats.live_bytes = 0;
         for b in &mut self.blocks {
             b.sweep();
+            if self.collection_observer.is_some() {
+                before += b
+                    .starts
+                    .iter()
+                    .map(|w| w.count_ones() as usize)
+                    .sum::<usize>();
+            }
             b.marks.fill(0);
             b.lines.fill(0);
             b.next_line = 0;
@@ -946,6 +974,26 @@ impl Heap {
         self.stats.total_pause += pause;
         self.stats.max_pause = self.stats.max_pause.max(pause);
         self.refresh_poll_word();
+        if let Some(observer) = self.collection_observer {
+            let mut live_slots = self.large.len();
+            let mut live_payload_bytes = self.large.values().map(|l| l.bytes - 8).sum::<usize>();
+            for b in &self.blocks {
+                for (word, &bits) in b.marks.iter().enumerate() {
+                    live_slots += bits.count_ones() as usize;
+                    let mut bits = bits;
+                    while bits != 0 {
+                        let slot = word * 64 + bits.trailing_zeros() as usize;
+                        live_payload_bytes += b.sizes[slot] as usize - 8;
+                        bits &= bits - 1;
+                    }
+                }
+            }
+            observer(CollectionEvent::Completed {
+                live_slots,
+                reclaimed_slots: before - live_slots,
+                live_payload_bytes,
+            });
+        }
     }
     pub fn budget_for(live_bytes: usize) -> usize {
         live_bytes.saturating_mul(4).max(MIN_BUDGET)
@@ -1093,6 +1141,55 @@ mod allocation_tests {
             h.set_stress(false);
             assert_eq!(word.get(), 1);
         }
+    }
+    #[test]
+    fn collection_observer_reports_actual_objects_and_payload() {
+        thread_local! { static EVENTS: std::cell::RefCell<Vec<CollectionEvent>> = const { std::cell::RefCell::new(Vec::new()) }; }
+        fn observe(event: CollectionEvent) {
+            EVENTS.with(|e| e.borrow_mut().push(event));
+        }
+        struct One(usize);
+        impl RootSource for One {
+            fn conservative_ranges(&self, _: &mut dyn FnMut(*const usize, *const usize)) {}
+            fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+                visit(std::ptr::from_ref(&self.0).cast_mut());
+            }
+        }
+        let mut h = heap(usize::MAX);
+        h.set_collection_observer(Some(observe));
+        unsafe {
+            let kept = h.alloc(0, 32, &NoRoots);
+            h.alloc(0, 32, &NoRoots);
+            h.alloc(1, 65536, &NoRoots);
+            h.collect(&One(kept as usize));
+            h.collect(&NoRoots);
+            h.collect(&NoRoots);
+        }
+        EVENTS.with(|e| {
+            assert_eq!(
+                *e.borrow(),
+                vec![
+                    CollectionEvent::Started,
+                    CollectionEvent::Completed {
+                        live_slots: 1,
+                        reclaimed_slots: 2,
+                        live_payload_bytes: 24
+                    },
+                    CollectionEvent::Started,
+                    CollectionEvent::Completed {
+                        live_slots: 0,
+                        reclaimed_slots: 1,
+                        live_payload_bytes: 0
+                    },
+                    CollectionEvent::Started,
+                    CollectionEvent::Completed {
+                        live_slots: 0,
+                        reclaimed_slots: 0,
+                        live_payload_bytes: 0
+                    },
+                ]
+            )
+        });
     }
     fn heap(budget: usize) -> Heap {
         let mut heap = Heap::new(&DESCS, &[true]);
