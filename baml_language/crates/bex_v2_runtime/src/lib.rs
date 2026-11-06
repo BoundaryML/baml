@@ -3,6 +3,7 @@
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
 pub mod language;
+pub mod lists;
 pub mod strings;
 use bex_v2_heap::{Descriptor, Heap, RootSource};
 use bex_v2_loop::{Config, TaskCx, TaskLoop, Value};

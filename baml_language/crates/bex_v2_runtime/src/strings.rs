@@ -20,6 +20,10 @@ impl Cx {
         }
     }
 
+    pub fn poll(&mut self) -> R<()> {
+        crate::language::poll()
+    }
+
     pub fn string(&mut self, text: &str) -> R<Str> {
         if text.len() > baml_type::Int63::MAX.get() as usize {
             return Err(allocation_failure(text.len()));

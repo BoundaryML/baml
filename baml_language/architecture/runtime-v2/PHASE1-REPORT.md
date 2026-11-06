@@ -701,3 +701,46 @@ tagged unions and optional scalars, proven index-walk iteration, remaining
 builtin specializations, exact typed JSON decoding, typed catch/rethrow emission,
 and the complete normal/stress differential and interleaved benchmark row.
 No new INTERFACES decision is requested at this checkpoint.
+
+## M3 checkpoint: managed growing-list runtime
+
+Added `List<T>` runtime components for `i64`, flat strings and nested lists.
+A stable 32-byte list object holds a pointer to a separately traced typed
+buffer, length and capacity. Growth replaces the buffer pointer through the
+barrier hook, preserving list identity and aliases; pointer elements also use
+the hook. Descriptor constructors define the list/buffer pair; callers must supply
+matching descriptor IDs through an unsafe integration API. The existing fixed-size Richards list layout is unchanged.
+`lists::join` for `List<Str>` produces a flat string and polls every 16 elements through the
+same cancellation/GC path as generated loops.
+
+Runtime debug and release suites now pass **10 tests**, including nested-list
+aliasing across growth and collection, Unicode joining, negative indexing, and
+forced allocation failure with a 32 KiB heap limit. A failed growth preserves
+the original length and every element. Strict runtime all-target clippy passes.
+Commands: the runtime commands above, plus `cargo test --manifest-path
+baml_language/Cargo.toml -p bex_v2_runtime --release`.
+
+These growing lists are **not yet wired into the emitter or builtin adapters**.
+M3 remains incomplete, with no agent-loop correctness or timing claim. No
+additional INTERFACES decision is required by this runtime component.
+
+### Additional Richards hotspot evidence
+
+The final recording (not the earlier intermediate annotation) was inspected
+with `perf annotate -i target/phase1/richards-checkpoint-after.perf.data --stdio
+--symbol baml_rust_program::entry`. `phase1/richards-checkpoint-hotspots.txt`
+retains the hottest annotated instructions. The largest sampled instructions
+are the Tcb state load at `0x13208` (**8.72%**) and its state-test branch at
+`0x1320c` (**4.28%**), followed by the comparison (**2.27%**). Remaining hot
+instructions include pointer traffic, poll binding checks, observation loads
+and stack-limit checks. The safe binding check alone samples at **1.47%**;
+its presence was already disclosed in the optimization checkpoint. These are
+local-period sample percentages, not proven additive causes of the residual
+1.14× gap: sampling skid and inlining prevent that attribution. Allocation's
+out-of-line slow path remains only 0.35% of the whole-program profile. Indirect
+task storage remains unchanged; no measured claim isolates its cost against
+the spike's enum layout.
+
+The added admission regression test also passes strict clippy:
+`cargo clippy --manifest-path baml_language/Cargo.toml -p baml_tests
+--test rust_backend --no-deps -- -D warnings`.

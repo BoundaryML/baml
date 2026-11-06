@@ -471,7 +471,7 @@ pub const INDEX_DESC: Descriptor = Descriptor {
 };
 
 #[cold]
-fn index_error(index: i64, length: usize) -> Box<Error> {
+pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
     let message = bex_vm_types::errors::VmPanic::IndexOutOfBounds { index, length }.to_string();
     unsafe {
         let object = match crate::try_alloc(6, 24) {
