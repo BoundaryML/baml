@@ -3,8 +3,8 @@ namespace Baml;
 internal static class RuntimeIdentity
 {
     internal const string RuntimeName = "baml-bridge";
-    internal const string ToolchainVersion = "0.25.0";
-    internal const string BridgeRuntimeVersion = "0.25.0";
+    internal const string ToolchainVersion = "0.25.1";
+    internal const string BridgeRuntimeVersion = "0.25.1";
     internal const string PackageVersion = BridgeRuntimeVersion;
     internal const string RequiredBridgeVersion = ToolchainVersion;
     internal const int GeneratedContractVersion = 1;
