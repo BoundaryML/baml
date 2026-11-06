@@ -19,6 +19,8 @@ pub struct SchemaAttrs {
 }
 
 /// The attributes a class field can carry.
+// Each bool is one flag attribute.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct ClassFieldAttrs {
     pub schema: SchemaAttrs,
@@ -30,6 +32,13 @@ pub struct ClassFieldAttrs {
     /// `@stream.must_exist`: the field has no default, so its class has no
     /// partial parse until the field is present.
     pub must_exist: bool,
+    /// `@json.rename("…")`: the field's JSON key.
+    pub json_rename: Option<String>,
+    /// `@json.flatten`: the field holds every key no other field took.
+    pub json_flatten: bool,
+    /// `@json.fallback`: the field holds the whole object, and its class is
+    /// the member of a union no other member's literals match.
+    pub json_fallback: bool,
 }
 
 /// The attributes an enum variant can carry.
@@ -38,6 +47,8 @@ pub struct EnumVariantAttrs {
     pub schema: SchemaAttrs,
     /// `@skip`: left out of the schema and never parsed.
     pub skip: bool,
+    /// `@json.rename("…")`: the variant's JSON string.
+    pub json_rename: Option<String>,
 }
 
 /// The `@@` attributes a class can carry.
@@ -47,6 +58,8 @@ pub struct ClassAttrs {
     /// `@@stream.done`: while streaming, an instance is never surfaced until
     /// the whole object is complete.
     pub stream_done: bool,
+    /// `@@json.omit_nulls`: the class's fields holding `null` are not written.
+    pub json_omit_nulls: bool,
 }
 
 /// The `@@` attributes an enum can carry.

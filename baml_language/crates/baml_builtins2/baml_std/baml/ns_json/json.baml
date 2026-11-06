@@ -268,7 +268,8 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 ///
 /// A class field whose type admits `null` may be absent, and then decodes to
 /// `null`: `T?`, `unknown`, and `json` all admit it. Every other field must
-/// be present. Unrecognized keys are ignored. A recursive alias decodes as
+/// be present. Unrecognized keys are ignored, unless a `@json.flatten` field
+/// holds them. A field reads from its `@json.rename` key. A recursive alias decodes as
 /// its definition. A `float` target takes a NaN or infinite `float` as it
 /// is.
 ///
@@ -293,6 +294,10 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 /// Ties go to declaration order. When the most specific candidate fails
 /// deeper in, the next one is tried. A union inside a member resolves by the
 /// same rule.
+///
+/// A union with a `@json.fallback` member reads an object by tag instead: the
+/// member whose literal fields all match is the one, and failing there is an
+/// error. The fallback takes an object no member's literals match.
 ///
 /// `T` matters here in a way it does not for `from`: decoding has only the
 /// target type to go on, so a wider `T` changes the result, not just its

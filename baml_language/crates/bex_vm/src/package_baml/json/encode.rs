@@ -62,7 +62,8 @@ impl WriteOptions {
 
     /// Whether the walk writes the class field `field` holding `value`.
     fn writes_field(self, field: &bex_vm_types::ClassField, value: Value) -> bool {
-        self.naming.shows(field.skip) && !(self.omit_nulls && value.is_null())
+        self.naming.shows(field.skip)
+            && !((self.omit_nulls || field.json_omit_null) && value.is_null())
     }
 }
 
@@ -700,7 +701,7 @@ impl Walker<'_, '_> {
                         Some(v) if self.options.naming.shows(v.skip) => Ok(self
                             .options
                             .naming
-                            .key(&v.name, v.alias.as_deref())
+                            .key(&v.name, v.alias.as_deref(), v.json_rename.as_deref())
                             .to_owned()),
                         Some(v) => Err(format!("{}.{}", e.name(), v.name)),
                         None => Ok(String::new()),
@@ -873,7 +874,11 @@ impl Walker<'_, '_> {
                         .map(|field| {
                             self.options
                                 .naming
-                                .key(&field.name, field.alias.as_deref())
+                                .key(
+                                    &field.name,
+                                    field.alias.as_deref(),
+                                    field.json_rename.as_deref(),
+                                )
                                 .to_owned()
                         })
                         .collect();
@@ -905,6 +910,14 @@ impl Walker<'_, '_> {
         else {
             unreachable!("the instance and its class were just read")
         };
+        // A `@json.fallback` class is the object it was read from.
+        let fallback = instance
+            .field_values()
+            .zip(&declaration.fields)
+            .find_map(|(value, field)| field.json_fallback.then_some(value));
+        if let Some(raw) = fallback {
+            return self.visit(vm, raw, false, sink);
+        }
         let mut children: Vec<(Option<Slot>, Value)> = instance
             .field_values()
             .zip(&declaration.fields)
@@ -930,6 +943,32 @@ impl Walker<'_, '_> {
                 }
             }
             children = unique;
+        }
+        // A `@json.flatten` field writes its entries where it sits, and a
+        // declared field's key stays that field's.
+        if let Some(flattened) = declaration.fields.iter().position(|f| f.json_flatten) {
+            let at = children
+                .iter()
+                .position(|(slot, _)| matches!(slot, Some(Slot::Field(_, i)) if *i == flattened));
+            if let Some(at) = at {
+                let (_, map) = children.remove(at);
+                let entries = match map.as_object_ptr().map(|map| vm.get_object(map)) {
+                    Some(Object::Map(map)) => map.snapshot_entries(),
+                    _ => Vec::new(),
+                };
+                let written = entries.into_iter().filter(|(key, _)| {
+                    let key = vm.as_string(key).ok().map(bex_vm_types::BexStr::as_str);
+                    !declaration.fields.iter().enumerate().any(|(i, field)| {
+                        i != flattened
+                            && self.options.naming.shows(field.skip)
+                            && key.is_some_and(|key| plan.keys[i] == key)
+                    })
+                });
+                let written: Vec<_> = written
+                    .map(|(key, value)| (Some(Slot::Key(key)), value))
+                    .collect();
+                children.splice(at..at, written);
+            }
         }
         self.push(vm, ptr, FrameKind::Object, children, false)?;
         sink.begin_object(vm);

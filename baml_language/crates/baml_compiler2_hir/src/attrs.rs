@@ -205,6 +205,9 @@ impl AttributeCarrier for ClassFieldAttrs {
             ("skip", AttributeValue::Flag) => self.skip = true,
             ("stream.done", AttributeValue::Flag) => self.stream_done = true,
             ("stream.must_exist", AttributeValue::Flag) => self.must_exist = true,
+            ("json.rename", AttributeValue::Text(key)) => self.json_rename = Some(key),
+            ("json.flatten", AttributeValue::Flag) => self.json_flatten = true,
+            ("json.fallback", AttributeValue::Flag) => self.json_fallback = true,
             _ => drift(spec, Self::POSITION),
         }
     }
@@ -219,6 +222,7 @@ impl AttributeCarrier for EnumVariantAttrs {
         };
         match (spec.name, value) {
             ("skip", AttributeValue::Flag) => self.skip = true,
+            ("json.rename", AttributeValue::Text(key)) => self.json_rename = Some(key),
             _ => drift(spec, Self::POSITION),
         }
     }
@@ -233,6 +237,7 @@ impl AttributeCarrier for ClassAttrs {
         };
         match (spec.name, value) {
             ("stream.done", AttributeValue::Flag) => self.stream_done = true,
+            ("json.omit_nulls", AttributeValue::Flag) => self.json_omit_nulls = true,
             _ => drift(spec, Self::POSITION),
         }
     }

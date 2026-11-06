@@ -14,7 +14,7 @@ use quote::quote;
 use super::function::{Receiver, doc_attrs, emit_method};
 use crate::{
     SkipWarning,
-    analyze::ClassShape,
+    analyze::{self, ClassShape},
     idents,
     translate_ty::{self, TyCtx},
     unions, wire_ty,
@@ -195,12 +195,24 @@ fn fields_struct(
                 quote! { #type_args_ident[#index].clone() }
             })
     };
-    // Under the `serde` feature the JSON keys are the BAML field names, as
-    // in BAML's own JSON. A class that cannot derive says why on its docs,
-    // where a user missing the impl looks first.
+    // Under the `serde` feature the JSON keys are the fields' `@json.rename`
+    // or BAML names, as in BAML's own JSON. A class that cannot derive says
+    // why on its docs, where a user missing the impl looks first.
     let derives_serde = field_ctx.analysis.derives_serde(name);
+    let fallback = properties.iter().find(|prop| prop.json_fallback);
+    let flatten = properties.iter().find(|prop| prop.json_flatten);
     let serde_attrs = if derives_serde {
-        quote! { #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))] }
+        // A `@json.flatten` class writes through its own impl, and a
+        // `@json.fallback` class reads and writes through its own.
+        match (fallback, flatten) {
+            (Some(_), _) => TokenStream::new(),
+            (None, Some(_)) => {
+                quote! { #[cfg_attr(feature = "serde", derive(::serde::Deserialize))] }
+            }
+            (None, None) => quote! {
+                #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+            },
+        }
     } else {
         let note = match properties
             .iter()
@@ -218,7 +230,14 @@ fn fields_struct(
         quote! { #[cfg_attr(feature = "serde", doc = "", doc = #note)] }
     };
 
+    // Field attributes are for serde's derive, which a `@json.fallback` class
+    // does without.
+    let derived_fields = derives_serde && fallback.is_none();
     let mut field_defs = Vec::new();
+    let mut literal_checks = Vec::new();
+    let mut serialize_entries = Vec::new();
+    let mut fallback_fields = Vec::new();
+    let mut fallback_tags = Vec::new();
     let mut encode_entries = Vec::new();
     let mut decode_fields = Vec::new();
     let mut required_fields = Vec::new();
@@ -243,17 +262,89 @@ fn fields_struct(
                 )
             })?;
         let field_docs = doc_attrs(prop.docstring.as_deref());
-        let serde_rename = (derives_serde && field_ident != field_name)
-            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #field_name))] });
+        let json_key = analyze::json_key(prop);
+        let serde_rename = (derived_fields && !prop.json_flatten && field_ident != json_key)
+            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #json_key))] });
+        let serde_flatten = (derived_fields && prop.json_flatten)
+            .then(|| quote! { #[cfg_attr(feature = "serde", serde(flatten))] });
+        let omit_null = class.json_omit_nulls && is_optional(&prop.ty, name, field_ctx.analysis);
+        let serde_omit = (derived_fields && omit_null).then(|| {
+            quote! {
+                #[cfg_attr(
+                    feature = "serde",
+                    serde(default, skip_serializing_if = "::std::option::Option::is_none")
+                )]
+            }
+        });
+        // Rust has no literal types, so the check a literal field stands for
+        // is written out: without it, every string fits a tag.
+        let literal = match &prop.ty {
+            Ty::Literal(literal, ..) => Some(literal),
+            _ => None,
+        };
+        let literal_check = literal.filter(|_| derived_fields).and_then(|literal| {
+            literal_check(
+                field_ctx.analysis.names.type_name(name),
+                field_name,
+                literal,
+            )
+        });
+        let serde_literal = literal_check.as_ref().map(|(path, _)| {
+            quote! { #[cfg_attr(feature = "serde", serde(deserialize_with = #path))] }
+        });
+        literal_checks.extend(literal_check.map(|(_, check)| check));
+        if let Some(check) = literal.and_then(tag_kind_check) {
+            let missing = format!("missing required field `{json_key}`");
+            fallback_tags.push(quote! {
+                if !__baml_raw.get(#json_key).is_some_and(#check) {
+                    return ::std::result::Result::Err(
+                        <__D::Error as ::serde::de::Error>::custom(#missing),
+                    );
+                }
+            });
+        }
+        fallback_fields.push(if prop.json_fallback {
+            quote! { #field_ident: __baml_raw }
+        } else {
+            let value = literal.and_then(literal_value).unwrap_or_else(|| {
+                quote! { ::std::default::Default::default() }
+            });
+            quote! { #field_ident: #value }
+        });
+        serialize_entries.push(if prop.json_flatten {
+            let declared = properties
+                .iter()
+                .filter(|other| !other.json_flatten)
+                .map(analyze::json_key);
+            quote! {
+                let declared: &[&str] = &[#(#declared),*];
+                for (key, value) in &self.#field_ident {
+                    if !declared.contains(&key.as_str()) {
+                        map.serialize_entry(key, value)?;
+                    }
+                }
+            }
+        } else if omit_null {
+            quote! {
+                if let ::std::option::Option::Some(value) = &self.#field_ident {
+                    map.serialize_entry(#json_key, value)?;
+                }
+            }
+        } else {
+            quote! { map.serialize_entry(#json_key, &self.#field_ident)?; }
+        });
         // BAML reads a missing `json` field as `null` (the type admits it), so
         // serde must too, through user aliases of `json` as well. `Option`
         // fields already read a missing key as `None`.
-        let serde_default = (derives_serde
+        let serde_default = (derived_fields
             && matches!(&prop.ty, Ty::TypeAlias(name) if field_ctx.analysis.is_json_alias(name)))
         .then(|| quote! { #[cfg_attr(feature = "serde", serde(default))] });
         field_defs.push(quote! {
             #(#field_docs)*
             #serde_rename
+            #serde_flatten
+            #serde_omit
+            #serde_literal
             #serde_default
             pub #field_ident: #field_ty
         });
@@ -385,6 +476,66 @@ fn fields_struct(
         }
     };
 
+    let serialize_generics = if param_idents.is_empty() {
+        TokenStream::new()
+    } else {
+        quote! { <#(#param_idents: ::baml_bridge::BamlValue + ::serde::Serialize),*> }
+    };
+    let deserialize_bounds = param_idents
+        .iter()
+        .map(|id| quote! { #id: ::baml_bridge::BamlValue + ::serde::Deserialize<'de> });
+    let serde_impls = match (derives_serde, fallback, flatten) {
+        (true, Some(raw), _) => {
+            let raw = idents::ident(field_ctx.analysis.names.field(name, &raw.name));
+            quote! {
+                #[cfg(feature = "serde")]
+                impl #serialize_generics ::serde::Serialize for #ident #type_generics {
+                    fn serialize<__S: ::serde::Serializer>(
+                        &self,
+                        serializer: __S,
+                    ) -> ::std::result::Result<__S::Ok, __S::Error> {
+                        ::serde::Serialize::serialize(&self.#raw, serializer)
+                    }
+                }
+
+                #[cfg(feature = "serde")]
+                impl<'de #(, #deserialize_bounds)*> ::serde::Deserialize<'de>
+                    for #ident #type_generics
+                {
+                    fn deserialize<__D: ::serde::Deserializer<'de>>(
+                        deserializer: __D,
+                    ) -> ::std::result::Result<Self, __D::Error> {
+                        let __baml_raw: ::baml_bridge::Map<
+                            ::std::string::String,
+                            ::baml_bridge::Json,
+                        > = ::serde::Deserialize::deserialize(deserializer)?;
+                        #(#fallback_tags)*
+                        ::std::result::Result::Ok(Self {
+                            #(#fallback_fields,)*
+                        })
+                    }
+                }
+            }
+        }
+        // `serde(flatten)` would write a key twice when the map holds a key a
+        // declared field writes. The declared field wins, as in BAML's JSON.
+        (true, None, Some(_)) => quote! {
+            #[cfg(feature = "serde")]
+            impl #serialize_generics ::serde::Serialize for #ident #type_generics {
+                fn serialize<__S: ::serde::Serializer>(
+                    &self,
+                    serializer: __S,
+                ) -> ::std::result::Result<__S::Ok, __S::Error> {
+                    use ::serde::ser::SerializeMap as _;
+                    let mut map = serializer.serialize_map(::std::option::Option::None)?;
+                    #(#serialize_entries)*
+                    map.end()
+                }
+            }
+        },
+        _ => TokenStream::new(),
+    };
+
     Ok(quote! {
         #(#docs)*
         #[derive(Debug, Clone, PartialEq)]
@@ -392,6 +543,10 @@ fn fields_struct(
         pub struct #ident #bounded_generics {
             #(#field_defs,)*
         }
+
+        #(#literal_checks)*
+
+        #serde_impls
 
         #methods_impl
 
@@ -424,6 +579,77 @@ fn fields_struct(
             }
         }
     })
+}
+
+/// The `serde_json::Value` method that says a tag's value is of `literal`'s
+/// JSON kind. The value itself is whatever the server sent.
+fn tag_kind_check(literal: &baml_base::Literal) -> Option<TokenStream> {
+    match literal {
+        baml_base::Literal::String(_) => {
+            Some(quote! { ::baml_bridge::serde_json::Value::is_string })
+        }
+        baml_base::Literal::Bool(_) => {
+            Some(quote! { ::baml_bridge::serde_json::Value::is_boolean })
+        }
+        baml_base::Literal::Int(_) | baml_base::Literal::Float(_) => {
+            Some(quote! { ::baml_bridge::serde_json::Value::is_number })
+        }
+        baml_base::Literal::Bigint(_) => None,
+    }
+}
+
+/// The value of a literal field, as its Rust type. `None` for the literals
+/// a class holding them gets no serde impls for.
+fn literal_value(literal: &baml_base::Literal) -> Option<TokenStream> {
+    match literal {
+        baml_base::Literal::String(value) => {
+            let value = value.as_str();
+            Some(quote! { ::std::string::String::from(#value) })
+        }
+        baml_base::Literal::Int(value) => Some(quote! { #value }),
+        baml_base::Literal::Bool(value) => Some(quote! { #value }),
+        baml_base::Literal::Float(_) | baml_base::Literal::Bigint(_) => None,
+    }
+}
+
+/// The `deserialize_with` function that rejects any value but `literal` for
+/// a field, and the path serde names it by. `None` for the literals with no
+/// check to write.
+fn literal_check(
+    class: &str,
+    field: &str,
+    literal: &baml_base::Literal,
+) -> Option<(String, TokenStream)> {
+    let (rust_ty, expected) = match literal {
+        baml_base::Literal::String(value) => {
+            let value = value.as_str();
+            (quote! { ::std::string::String }, quote! { #value })
+        }
+        baml_base::Literal::Int(_) => (quote! { ::core::primitive::i64 }, literal_value(literal)?),
+        baml_base::Literal::Bool(_) => {
+            (quote! { ::core::primitive::bool }, literal_value(literal)?)
+        }
+        baml_base::Literal::Float(_) | baml_base::Literal::Bigint(_) => return None,
+    };
+    let path = format!("__baml_literal_{class}_{field}");
+    let function = idents::ident(&path);
+    let message = format!("`{class}.{field}` holds another value than its literal");
+    let check = quote! {
+        #[cfg(feature = "serde")]
+        #[doc(hidden)]
+        #[allow(non_snake_case, clippy::bool_comparison)]
+        fn #function<'de, __D: ::serde::Deserializer<'de>>(
+            deserializer: __D,
+        ) -> ::std::result::Result<#rust_ty, __D::Error> {
+            let value = <#rust_ty as ::serde::Deserialize<'de>>::deserialize(deserializer)?;
+            if value == #expected {
+                ::std::result::Result::Ok(value)
+            } else {
+                ::std::result::Result::Err(<__D::Error as ::serde::de::Error>::custom(#message))
+            }
+        }
+    };
+    Some((path, check))
 }
 
 /// Whether a field of `owner` is optional: its type has a `null` arm

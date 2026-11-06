@@ -1026,6 +1026,10 @@ fn build_group(
                 skip: field.skip,
                 stream_done: false,
                 must_exist: false,
+                json_rename: None,
+                json_flatten: false,
+                json_fallback: false,
+                json_omit_null: false,
                 runtime_type: Some(type_value),
             });
         }

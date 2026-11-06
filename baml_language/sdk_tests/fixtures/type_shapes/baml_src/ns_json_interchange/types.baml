@@ -47,3 +47,44 @@ function to_json<T>(value: T) -> string throws baml.json.SerializationError {
 function from_json<T>(source: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     baml.json.decode<T>(source)
 }
+
+// `@json` attributes shape a class's JSON the same in `baml.json` and serde.
+// The union is open: an object no member's tag matches is `WireOther`, and a
+// member whose tag matches but whose fields do not is an error.
+class WireDefault {
+    type: "use-default",
+}
+
+class WireVpc {
+    type: "byo-vpc",
+    vpc_id_field: string @json.rename("vpc-id"),
+    subnets: string[]? @json.rename("subnet_ids"),
+
+    @@json.omit_nulls
+}
+
+class WireOther {
+    type: "UNKNOWN",
+    raw: map<string, json> @json.fallback,
+}
+
+enum WireMode {
+    Fast @json.rename("fast-mode")
+    Slow
+}
+
+class WireSettings {
+    network: (WireDefault | WireVpc | WireOther)?,
+    mode: WireMode,
+    name: string?,
+
+    @@json.omit_nulls
+}
+
+class WireConfig {
+    id: string,
+    kind: string?,
+    extra: map<string, json> @json.flatten,
+
+    @@json.omit_nulls
+}

@@ -37,6 +37,9 @@ pub(crate) struct Analysis {
     /// serde can match to BAML's own (`baml.json`), so their Rust types
     /// get serde impls under the generated crate's `serde` feature.
     serde: HashSet<Name>,
+    /// What each class's literal fields say about a JSON object, for unions
+    /// to choose a member by.
+    json_tags: HashMap<Name, JsonTag>,
     /// How each class in the pool crosses the boundary, decided by the
     /// compiler once per declaration.
     crossings: HashMap<Name, ClassCrossing>,
@@ -87,6 +90,11 @@ impl Analysis {
     /// Whether the emitted class `name` derives serde's traits.
     pub(crate) fn derives_serde(&self, name: &Name) -> bool {
         self.serde.contains(name)
+    }
+
+    /// What the class `name`'s literal fields say about a JSON object.
+    pub(crate) fn json_tag(&self, name: &Name) -> Option<&JsonTag> {
+        self.json_tags.get(name)
     }
 
     /// Whether the Rust type for `ty` implements serde's traits under the
@@ -436,6 +444,10 @@ pub(crate) fn analyze(
             type_names_by_leaf,
             alias_bodies,
             serde,
+            json_tags: classes
+                .iter()
+                .map(|(name, class)| ((*name).clone(), JsonTag::of(class)))
+                .collect(),
             crossings: classes
                 .iter()
                 .map(|(name, class)| ((*name).clone(), class.crossing))
@@ -537,6 +549,37 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         Ty::Never => Err("unsupported type: never".to_string()),
         Ty::RustType => Ok(()),
     }
+}
+
+/// What a class's literal fields say about a JSON object: the union member
+/// a value is, as the engine picks it in `baml.json`.
+pub(crate) struct JsonTag {
+    /// Each literal field's JSON key and value.
+    pub(crate) literals: Vec<(String, baml_base::Literal)>,
+    /// A `@json.fallback` class is the member no other member's literals
+    /// match.
+    pub(crate) fallback: bool,
+}
+
+impl JsonTag {
+    fn of(class: &baml_sdkgen_types::Class) -> Self {
+        Self {
+            literals: class
+                .properties
+                .iter()
+                .filter_map(|prop| match &prop.ty {
+                    Ty::Literal(literal, ..) => Some((json_key(prop).to_string(), literal.clone())),
+                    _ => None,
+                })
+                .collect(),
+            fallback: class.properties.iter().any(|prop| prop.json_fallback),
+        }
+    }
+}
+
+/// The key a class field goes by in JSON.
+pub(crate) fn json_key(prop: &ClassProperty) -> &str {
+    prop.json_rename.as_deref().unwrap_or(prop.name.as_str())
 }
 
 /// Whether the Rust type `translate_ty` produces for `ty` implements

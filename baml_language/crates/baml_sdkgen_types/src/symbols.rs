@@ -94,6 +94,8 @@ pub struct Class {
     /// reference (a capability) or carried as its own wire value (media, a
     /// prompt), and never built by a host.
     pub crossing: baml_type::ClassCrossing,
+    /// `@@json.omit_nulls`: fields holding `null` are not written.
+    pub json_omit_nulls: bool,
     /// Static methods on this class. Source-declaration order is
     /// preserved by the pool builder; the emitter sorts at fan-out
     /// time. Static vs. instance is encoded structurally — kind is
@@ -111,6 +113,13 @@ pub struct ClassProperty {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub ty: super::Ty,
+    /// `@json.rename`: the field's JSON key.
+    pub json_rename: Option<String>,
+    /// `@json.flatten`: the field holds every key no other field took.
+    pub json_flatten: bool,
+    /// `@json.fallback`: the field holds the whole object, and its class is
+    /// the union member no other member's literals match.
+    pub json_fallback: bool,
 }
 
 #[derive(Clone)]
@@ -126,6 +135,8 @@ pub struct EnumVariant {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub value: String,
+    /// `@json.rename`: the variant's JSON string.
+    pub json_rename: Option<String>,
 }
 
 #[derive(Clone)]
@@ -410,10 +421,14 @@ mod tests {
                     key: Box::new(key),
                     value: Box::new(Ty::Int),
                 },
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
             origin: origin(),
+            json_omit_nulls: false,
         })
     }
 

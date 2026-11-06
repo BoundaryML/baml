@@ -709,6 +709,38 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }
+        // `@json` ATTRIBUTE errors: the class's own, and each union a field
+        // holds whose fallback another member would shadow.
+        for &class_loc in baml_compiler2_hir::item_data::file_classes(db, file) {
+            let data = baml_compiler2_hir::item_data::class_data(db, class_loc);
+            let head = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                baml_compiler2_hir::contributions::Definition::Class(class_loc),
+                &data.name,
+            );
+            let viewer = baml_compiler2_hir::file_package::file_package(db, file).root;
+            let mut errors =
+                baml_compiler2_hir_ty::json_attrs::class_errors(db, class_loc, &head, viewer);
+            let source_map = baml_compiler2_hir::item_data::class_source_map(db, class_loc);
+            let fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
+            for (field, (_, ty, _)) in data.fields.iter().zip(fields.iter()) {
+                if let Some(error) =
+                    baml_compiler2_hir_ty::json_attrs::untagged_member_error(db, ty)
+                {
+                    errors.push((source_map.type_refs.span(field.type_ref), error));
+                }
+            }
+            for (range, error) in errors {
+                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                    message: error.render(&vp),
+                    error,
+                    range,
+                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    related: Vec::new(),
+                };
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
         // LLM OUTPUT field warnings: an optional field an LLM function's
         // output reaches, which a model can never fill (E0185), at the
         // field's written type.
@@ -772,8 +804,15 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
         let Definition::TypeAlias(alias_loc) = contrib.definition else {
             continue;
         };
+        let value = baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc);
+        let untagged = baml_compiler2_hir_ty::json_attrs::untagged_member_error(db, &value);
+        let declaration_span =
+            baml_compiler2_hir::item_data::type_alias_source_map(db, alias_loc).name_span;
         for (range, error) in
             baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(db, alias_loc)
+                .iter()
+                .cloned()
+                .chain(untagged.map(|error| (declaration_span, error)))
         {
             let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
                 message: error.render(&vp),
@@ -2280,6 +2319,12 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InitThrowNotHandled { .. } => DiagnosticId::InitThrowNotHandled,
         TirTypeError::LlmOutputMemberDropped { .. } => DiagnosticId::LlmOutputMemberDropped,
         TirTypeError::LlmOutputFieldAlwaysNull { .. } => DiagnosticId::LlmOutputFieldAlwaysNull,
+        TirTypeError::JsonAttributesWithOverride { .. }
+        | TirTypeError::JsonRestFieldType { .. }
+        | TirTypeError::JsonRestRenamed { .. }
+        | TirTypeError::JsonRestRepeated { .. }
+        | TirTypeError::JsonFallbackFieldNotLiteral { .. }
+        | TirTypeError::JsonFallbackUntaggedMember { .. } => DiagnosticId::InvalidJsonAttribute,
         // Global variables.
         TirTypeError::AssignmentToGlobal { .. } => DiagnosticId::AssignmentToGlobal,
         TirTypeError::ReturnInGlobalInitializer { .. } => DiagnosticId::ReturnInGlobalInitializer,

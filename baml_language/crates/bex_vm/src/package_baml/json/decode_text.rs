@@ -262,6 +262,10 @@ impl TextDecoder<'_, '_> {
     ) -> Result<Value, Stop> {
         self.parser.reader.open_object()?;
         let plan = self.plans.class(vm, head, type_args).map_err(|_| Stop)?;
+        // Its value is the object's keys, which the slow path has as a map.
+        if plan.reads_rest() {
+            return Err(Stop);
+        }
         let mut slots: Vec<Option<Value>> = vec![None; plan.fields.len()];
         let mut first = true;
         while let Some(key) = self.parser.reader.next_key(first)? {

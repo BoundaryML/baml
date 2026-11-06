@@ -153,6 +153,51 @@ impl Candidates {
     }
 }
 
+/// The member a union with a `@json.fallback` member decodes the object at
+/// `ptr` as, or `None` for any other union.
+///
+/// A member's literal fields are its tag, so the member whose literals all
+/// match is the one, and failing after that is an error rather than a reason
+/// to try the fallback. The fallback takes what no member's tag matches. The
+/// compiler rejects a member that could read an object without a tag.
+pub(super) fn tagged_member(
+    vm: &BexVm,
+    members: &[RealizedTy],
+    ptr: HeapPtr,
+    plans: &mut Plans,
+) -> Option<RealizedTy> {
+    if !matches!(vm.get_object(ptr), Object::Map(_)) {
+        return None;
+    }
+    let mut classes = Vec::new();
+    for member in members {
+        super::alias_members(vm, member, &mut Vec::new(), &mut classes);
+    }
+    let class_plan = |member: &RealizedTy, plans: &mut Plans| match member {
+        RealizedTy::Class(head, type_args) => plans.class(vm, *head, type_args).ok(),
+        _ => None,
+    };
+    let fallback = classes
+        .iter()
+        .find(|member| class_plan(member, plans).is_some_and(|plan| plan.is_fallback()))?
+        .clone();
+    let tagged = classes.iter().find(|member| {
+        class_plan(member, plans).is_some_and(|plan| {
+            let mut literals = plan.fields.iter().filter_map(|field| match &field.ty {
+                RealizedTy::Literal(literal, _) if field.shown => Some((field, literal)),
+                _ => None,
+            });
+            let first = literals.next();
+            first.is_some()
+                && first.into_iter().chain(literals).all(|(field, literal)| {
+                    super::object_get(vm, ptr, field.hash(), &field.key)
+                        .is_some_and(|value| vm.value_is_literal(value, literal))
+                })
+        })
+    });
+    Some(tagged.cloned().unwrap_or(fallback))
+}
+
 /// The member that is not `null`, when `members` is `T | null` in either
 /// order: such a union needs no ranking, since `null` decodes as `null` and
 /// anything else can only be a `T`.

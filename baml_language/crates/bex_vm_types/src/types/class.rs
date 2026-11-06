@@ -6,6 +6,8 @@ use crate::{
 };
 
 /// A field within a runtime class, carrying type and schema metadata.
+// Each bool is one flag attribute of the declaration.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ClassField {
     pub name: String,
@@ -31,6 +33,17 @@ pub struct ClassField {
     /// `@stream.must_exist`: the field has no default, so its class has no
     /// partial parse until the field is present.
     pub must_exist: bool,
+    /// `@json.rename`: the field's JSON key, under every naming.
+    pub json_rename: Option<String>,
+    /// `@json.flatten`: the field holds every key no other field took, and
+    /// writes them next to the other fields.
+    pub json_flatten: bool,
+    /// `@json.fallback`: the field holds the whole object, and is all its
+    /// class writes.
+    pub json_fallback: bool,
+    /// `@@json.omit_nulls` on the class, and the field is optional: it is not
+    /// written while it holds `null`.
+    pub json_omit_null: bool,
 
     /// The exact `type` operand a runtime-constructed field was built from, so
     /// reflection reads back the definitions it carried, not just its shape.

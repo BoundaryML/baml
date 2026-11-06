@@ -1317,11 +1317,11 @@ function f() -> int throws <[CURSOR]
         let cases: [(&str, &[&str]); 6] = [
             (
                 "enum E {\n    A @<[CURSOR]\n}\n",
-                &["alias", "description", "skip"],
+                &["alias", "description", "json.rename", "skip"],
             ),
             (
                 "class C {\n    x: int\n    @@<[CURSOR]\n}\n",
-                &["alias", "description", "stream.done"],
+                &["alias", "description", "json.omit_nulls", "stream.done"],
             ),
             (
                 "enum E {\n    A\n    @@<[CURSOR]\n}\n",

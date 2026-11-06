@@ -139,6 +139,38 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         repeatable: false,
         positions: &[AttributePosition::ClassField],
     },
+    // The JSON key of a field or variant, in `baml.json` and generated SDK
+    // serialization. `@alias` stays the name a model is shown.
+    SchemaAttributeSpec {
+        name: "json.rename",
+        arguments: SchemaAttributeArguments::String { placeholder: "key" },
+        repeatable: false,
+        positions: DATA_MEMBERS,
+    },
+    // A `map<string, json>` field that holds every key no other field took,
+    // and writes them next to the other fields.
+    SchemaAttributeSpec {
+        name: "json.flatten",
+        arguments: SchemaAttributeArguments::None,
+        repeatable: false,
+        positions: &[AttributePosition::ClassField],
+    },
+    // A `map<string, json>` field that makes its class the member of a union
+    // that takes any object no other member's literals match. It holds the
+    // whole object, and is all the class writes.
+    SchemaAttributeSpec {
+        name: "json.fallback",
+        arguments: SchemaAttributeArguments::None,
+        repeatable: false,
+        positions: &[AttributePosition::ClassField],
+    },
+    // The class's fields holding `null` are left out when it is written.
+    SchemaAttributeSpec {
+        name: "json.omit_nulls",
+        arguments: SchemaAttributeArguments::None,
+        repeatable: false,
+        positions: &[AttributePosition::Class],
+    },
 ];
 
 pub fn schema_attribute_spec(name: &str) -> Option<&'static SchemaAttributeSpec> {

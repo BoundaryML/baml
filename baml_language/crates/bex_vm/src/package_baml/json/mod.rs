@@ -240,6 +240,54 @@ fn object_get(vm: &BexVm, ptr: HeapPtr, hash: u64, key: &str) -> Option<Value> {
     })
 }
 
+/// The `map<string, json>` a [`plan::Rest`] field of `plan` holds, read from
+/// the object at `ptr`. A copy: the instance owns its map.
+fn rest_value(vm: &mut BexVm, ptr: HeapPtr, plan: &plan::ClassPlan, rest: plan::Rest) -> Value {
+    let Object::Map(map) = vm.get_object(ptr) else {
+        unreachable!("a class decodes from a JSON object")
+    };
+    let mut data = bex_vm_types::MapData::new();
+    for (key, value) in map.snapshot_entries() {
+        let Ok(text) = vm.as_string(&key).map(BexStr::as_str) else {
+            continue;
+        };
+        let claimed = rest == plan::Rest::Unclaimed
+            && plan
+                .fields
+                .iter()
+                .any(|field| field.shown && field.key == text);
+        if !claimed {
+            data.insert_hashed(bex_vm_types::map_string_hash(text), key, value);
+        }
+    }
+    let json_ty = json_alias_ty(vm);
+    Value::object(vm.alloc(Object::Map(Map::new(RealizedTy::String, json_ty, data))))
+}
+
+/// Why the object at `ptr` is not a `@json.fallback` class of `plan`: it has
+/// to hold each key the class's literal fields name, the union's tag, as the
+/// JSON kind of its literal. The value itself is whatever the server sent.
+fn fallback_tag_error(vm: &BexVm, ptr: HeapPtr, plan: &plan::ClassPlan) -> Option<String> {
+    use baml_type::Literal;
+    plan.fields.iter().find_map(|field| {
+        let RealizedTy::Literal(literal, _) = &field.ty else {
+            return None;
+        };
+        let Some(value) = object_get(vm, ptr, field.hash(), &field.key) else {
+            return Some(format!("missing required field `{}`", field.key));
+        };
+        let (expected, kind) = match literal {
+            Literal::String(_) => (union::Kind::String, "string"),
+            Literal::Bool(_) => (union::Kind::Bool, "boolean"),
+            Literal::Int(_) | Literal::Bigint(_) | Literal::Float(_) => {
+                (union::Kind::Number, "number")
+            }
+        };
+        let fits = decode::kind_of(vm, value) == expected;
+        (!fits).then(|| format!("expected {kind} at `.{}`", field.key))
+    })
+}
+
 /// The entries of the string-keyed map at `ptr`, in order.
 fn string_entries(vm: &BexVm, ptr: HeapPtr) -> Vec<(BexStr, Value)> {
     let Object::Map(map) = vm.get_object(ptr) else {
@@ -532,7 +580,8 @@ fn variant_named(
 ) -> Result<Option<usize>, ()> {
     match vm.get_object(head.ptr()) {
         Object::Enum(e) => Ok(e.variants.iter().position(|v| {
-            naming.shows(v.skip) && naming.key(&v.name, v.alias.as_deref()) == written
+            naming.shows(v.skip)
+                && naming.key(&v.name, v.alias.as_deref(), v.json_rename.as_deref()) == written
         })),
         _ => Err(()),
     }
@@ -551,7 +600,12 @@ fn variant_written_as(
         return None;
     };
     let variant = e.variants.iter().find(|v| v.name == name.as_str())?;
-    if !naming.shows(variant.skip) || naming.key(&variant.name, variant.alias.as_deref()) != written
+    if !naming.shows(variant.skip)
+        || naming.key(
+            &variant.name,
+            variant.alias.as_deref(),
+            variant.json_rename.as_deref(),
+        ) != written
     {
         return None;
     }

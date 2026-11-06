@@ -142,6 +142,11 @@ pub(crate) fn build_class_object<'db>(
                 skip: field.attrs.skip,
                 stream_done: field.attrs.stream_done,
                 must_exist: field.attrs.must_exist,
+                json_rename: field.attrs.json_rename.clone(),
+                json_flatten: field.attrs.json_flatten,
+                json_fallback: field.attrs.json_fallback,
+                json_omit_null: class.attrs.json_omit_nulls
+                    && baml_compiler2_hir_ty::json_attrs::is_optional(db, tir_ty),
                 runtime_type: None,
             }
         })
@@ -182,6 +187,7 @@ pub(crate) fn build_enum_object<'db>(
             docstring: variant.docstring.clone(),
             other: indexmap::IndexMap::new(),
             skip: variant.attrs.skip,
+            json_rename: variant.attrs.json_rename.clone(),
         })
         .collect();
     Enum {

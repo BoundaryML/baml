@@ -1127,6 +1127,31 @@ pub enum TirTypeError {
     /// JSON answer can never fill (a warning): its type has no JSON form
     /// besides `null`, so the field is always `null`.
     LlmOutputFieldAlwaysNull { field: Name },
+    /// `@json` attributes on a class that provides `baml.ToJson` or
+    /// `baml.FromJson`, which they would not reach.
+    JsonAttributesWithOverride {
+        class: Name,
+        interface: &'static str,
+    },
+    /// `@json.flatten` or `@json.fallback` on a field that is not
+    /// `map<string, json>`.
+    JsonRestFieldType {
+        attribute: &'static str,
+        field: Name,
+    },
+    /// `@json.rename` on a `@json.flatten` or `@json.fallback` field, which has
+    /// no key of its own.
+    JsonRestRenamed {
+        attribute: &'static str,
+        field: Name,
+    },
+    /// A class with a second `@json.flatten` or `@json.fallback` field.
+    JsonRestRepeated { class: Name },
+    /// A `@json.fallback` class with a field that is not a literal.
+    JsonFallbackFieldNotLiteral { class: Name, field: Name },
+    /// A union with a `@json.fallback` member and a member that reads any
+    /// object, so the fallback is never reached.
+    JsonFallbackUntaggedMember { fallback: Name, member: Ty },
     /// An assignment targets a top-level binding. `$init` sets every global
     /// once and requests then share it, so the binding is immutable; only
     /// what it holds may change.
@@ -2693,6 +2718,36 @@ impl TirTypeError {
                     f,
                     "the model can never fill `{field}`, so it is always null. Mark it @skip if \
                      that is intended"
+                ),
+                TirTypeError::JsonAttributesWithOverride { class, interface } => write!(
+                    f,
+                    "`{class}` implements `{interface}`, so its `@json` attributes would be \
+                     ignored. Remove the attributes or the override"
+                ),
+                TirTypeError::JsonRestFieldType { attribute, field } => write!(
+                    f,
+                    "`{attribute}` needs a `map<string, json>` field, and `{field}` is not one"
+                ),
+                TirTypeError::JsonRestRenamed { attribute, field } => write!(
+                    f,
+                    "`{field}` holds keys of the object through `{attribute}`, so it has no key \
+                     for `@json.rename` to set"
+                ),
+                TirTypeError::JsonRestRepeated { class } => write!(
+                    f,
+                    "`{class}` can have only one `@json.flatten` or `@json.fallback` field"
+                ),
+                TirTypeError::JsonFallbackFieldNotLiteral { class, field } => write!(
+                    f,
+                    "`{class}` has a `@json.fallback` field, so its other fields must be \
+                     literals, and `{field}` is not one"
+                ),
+                TirTypeError::JsonFallbackUntaggedMember { fallback, member } => write!(
+                    f,
+                    "`{fallback}` is this union's `@json.fallback` member, but `{}` has no \
+                     literal field to match on, so it would take every object. Add a literal \
+                     field such as `type: \"name\"`, or remove `@json.fallback`",
+                    member.spell(vp)
                 ),
                 TirTypeError::InitThrowNotHandled {
                     declaration,

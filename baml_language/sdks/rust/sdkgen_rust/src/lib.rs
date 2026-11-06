@@ -624,10 +624,11 @@ serde = {{ version = "1", features = ["derive"], optional = true }}
 [features]
 # `serde::Serialize` and `serde::Deserialize` for the generated classes,
 # enums and unions, in the JSON shape of BAML's own `baml.json`: keys are
-# the BAML field names, an enum is its variant name, and a union is
-# untagged (deserializing takes the first arm that fits). The impls are
-# structural, so a `baml.ToJson` override on one of your classes is not
-# applied. BAML standard-library classes, and any class holding a `bigint`,
+# the `@json.rename` or BAML field names, an enum is its variant name, and a
+# union is untagged (deserializing takes the first arm that fits, or the arm
+# whose literals match when the union has a `@json.fallback` member). A
+# `baml.ToJson` or `baml.FromJson` override on one of your classes is not
+# applied: `@json` attributes are. BAML standard-library classes, and any class holding a `bigint`,
 # `uint8array`, function or handle, directly or nested, get no impls; the
 # class docs name the field.
 serde = ["dep:serde"]
@@ -726,6 +727,7 @@ mod tests {
                 source_file_path: "main.baml".to_string(),
                 span_start: 0,
             },
+            json_omit_nulls: false,
         })
     }
 
@@ -743,6 +745,9 @@ mod tests {
                     name: baml_base::Name::new(field),
                     docstring: None,
                     ty,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 })
                 .collect(),
             static_methods: Vec::new(),
@@ -751,6 +756,7 @@ mod tests {
                 source_file_path: "main.baml".to_string(),
                 span_start: 0,
             },
+            json_omit_nulls: false,
         })
     }
 
@@ -835,6 +841,9 @@ mod tests {
                     name: baml_base::Name::new("x"),
                     docstring: None,
                     ty: union_field,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
                 static_methods: Vec::new(),
                 instance_methods: Vec::new(),
@@ -842,6 +851,7 @@ mod tests {
                     source_file_path: "main.baml".to_string(),
                     span_start: 0,
                 },
+                json_omit_nulls: false,
             }),
         )]);
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
@@ -878,6 +888,9 @@ mod tests {
             name: baml_base::Name::new(field),
             docstring: None,
             ty,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
         };
         let part_ref = Ty::TypeAlias(part.clone());
         let pool = SymbolPool::from([
@@ -1444,6 +1457,7 @@ mod tests {
             name: baml_base::Name::new(variant),
             docstring: None,
             value: variant.to_string(),
+            json_rename: None,
         };
         let mut function = nullary_string_fn(&f);
         function.arguments = vec![
@@ -1667,6 +1681,9 @@ mod tests {
                         name: baml_base::Name::new("url"),
                         docstring: None,
                         ty: Ty::String,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     }],
                     Vec::new(),
                     vec![merge],
@@ -1876,6 +1893,9 @@ mod tests {
                     name: baml_base::Name::new("name"),
                     docstring: None,
                     ty: Ty::String,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
                 vec![create],
                 vec![who, greet],
@@ -2280,6 +2300,9 @@ mod tests {
                 name: baml_base::Name::new("_inner"),
                 docstring: None,
                 ty: Ty::Unknown,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             vec![current],
             vec![diagnostics],
@@ -2419,6 +2442,9 @@ mod tests {
                     name: baml_base::Name::new("next"),
                     docstring: None,
                     ty: next_field,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
                 Vec::new(),
                 vec![next_or_self],
@@ -2517,6 +2543,7 @@ mod tests {
                         name: baml_base::Name::new("NOT_FOUND"),
                         docstring: None,
                         value: "NOT_FOUND".to_string(),
+                        json_rename: None,
                     }],
                     origin: Origin {
                         source_file_path: "main.baml".to_string(),
@@ -2714,6 +2741,9 @@ mod tests {
             name: baml_base::Name::new(field),
             docstring: None,
             ty,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
         }
     }
 
@@ -2974,6 +3004,99 @@ mod tests {
     }
 
     #[test]
+    fn json_attributes_shape_the_serde_impls() {
+        let vpc = name("user", &[], "Vpc");
+        let other = name("user", &[], "Other");
+        let config = name("user", &[], "Config");
+        let vpc_id = baml_sdkgen_types::ClassProperty {
+            json_rename: Some("vpc_id".to_string()),
+            ..property("vpcId", Ty::String)
+        };
+        let mut vpc_symbol = class_symbol(
+            &vpc,
+            vec![
+                property("type", string_literal("byo-vpc")),
+                vpc_id,
+                property("note", Ty::Union(vec![Ty::String, Ty::Null].into())),
+            ],
+            vec![],
+            vec![],
+        );
+        if let Symbol::Class(class) = &mut vpc_symbol {
+            class.json_omit_nulls = true;
+        }
+        let raw = baml_sdkgen_types::ClassProperty {
+            json_fallback: true,
+            ..property(
+                "raw",
+                Ty::Map {
+                    key: Box::new(Ty::String),
+                    value: Box::new(json_ref()),
+                },
+            )
+        };
+        let extra = baml_sdkgen_types::ClassProperty {
+            name: baml_base::Name::new("extra"),
+            json_flatten: true,
+            json_fallback: false,
+            ..raw.clone()
+        };
+        let network = Ty::Union(
+            vec![
+                Ty::Class(vpc.clone(), Vec::new().into()),
+                Ty::Class(other.clone(), Vec::new().into()),
+            ]
+            .into(),
+        );
+        let pool = SymbolPool::from([
+            (vpc, vpc_symbol),
+            (
+                other.clone(),
+                class_symbol(
+                    &other,
+                    vec![property("type", string_literal("UNKNOWN")), raw],
+                    vec![],
+                    vec![],
+                ),
+            ),
+            (
+                config.clone(),
+                class_symbol(
+                    &config,
+                    vec![
+                        property("id", Ty::String),
+                        property("network", network),
+                        extra,
+                    ],
+                    vec![],
+                    vec![],
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let lib = flat(text(&generated, "src/lib.rs"));
+        for expected in [
+            // A rename, and an optional field of a `@@json.omit_nulls` class.
+            "serde(rename=\"vpc_id\")",
+            "serde(default,skip_serializing_if=\"::std::option::Option::is_none\")",
+            // A literal is checked.
+            "serde(deserialize_with=\"__baml_literal_Vpc_type\")",
+            "fn__baml_literal_Vpc_type",
+            // `@json.flatten` reads with serde and writes declared keys first.
+            "serde(flatten)",
+            "letdeclared:&[&str]=&[\"id\",\"network\"];",
+            // `@json.fallback` reads and writes the whole object.
+            "::serde::Serialize::serialize(&self.raw,serializer)",
+            "raw:__baml_raw",
+            "__baml_raw.get(\"type\").is_some_and(::baml_bridge::serde_json::Value::is_string)",
+            // The union picks by tag, and the fallback takes the rest.
+            "ifjson.is_object(){ifjson.get(\"type\")",
+        ] {
+            assert!(lib.contains(expected), "missing {expected}: {lib}");
+        }
+    }
+
+    #[test]
     fn serde_impls_follow_baml_json_behind_the_serde_feature() {
         let doc = name("user", &[], "Doc");
         let shade = name("user", &[], "Shade");
@@ -2981,6 +3104,7 @@ mod tests {
             name: baml_base::Name::new(variant),
             docstring: None,
             value: variant.to_string(),
+            json_rename: None,
         };
         let pool = SymbolPool::from([
             (

@@ -37,6 +37,9 @@ pub fn class_definition(class: &Class) -> ClassDefinition {
                 docstring: field.docstring.clone(),
                 alias: field.alias.clone(),
                 skip: field.skip,
+                json_rename: field.json_rename.clone(),
+                json_flatten: field.json_flatten,
+                json_fallback: field.json_fallback,
                 stream_done: field.stream_done,
                 must_exist: field.must_exist,
             })
@@ -70,6 +73,7 @@ pub fn parse_class(
                 name: field.name.clone(),
                 ty: lane_realized_ty(ty),
                 alias: field.alias.clone(),
+                json_rename: field.json_rename.clone(),
                 stream_done: field.stream_done,
                 must_exist: field.must_exist,
             })
@@ -96,6 +100,7 @@ pub fn enum_definition(enm: &Enum) -> EnumDefinition {
                 docstring: variant.docstring.clone(),
                 alias: variant.alias.clone(),
                 skip: variant.skip,
+                json_rename: variant.json_rename.clone(),
             })
             .collect(),
     }
@@ -160,6 +165,10 @@ mod tests {
             stream_done: false,
             must_exist: false,
             runtime_type: None,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
+            json_omit_null: false,
         }
     }
 
@@ -171,6 +180,7 @@ mod tests {
             docstring: None,
             other: IndexMap::new(),
             skip,
+            json_rename: None,
         }
     }
 
