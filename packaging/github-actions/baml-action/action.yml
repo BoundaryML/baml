@@ -56,9 +56,11 @@ runs:
       shell: bash
       run: rm -rf "$RUNNER_TEMP/baml-action"
 
+    # Tested against the setup-baml next to it. The mirror sync rewrites this
+    # line to the setup-baml commit it published from the same source commit.
     - name: Set up BAML
       id: setup
-      uses: BoundaryML/setup-baml@01c5b25be8c853c3192c3891a0fc62f2a3ea4969 # main
+      uses: ./packaging/github-actions/setup-baml
       with:
         toolchain: ${{ inputs.toolchain }}
 
