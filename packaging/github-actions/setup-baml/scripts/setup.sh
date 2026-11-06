@@ -2,12 +2,15 @@
 set -euo pipefail
 
 readonly installer_url="https://pkg.boundaryml.com/install.sh"
+# Later steps get the official manifest source explicitly: wrapper 0.3 rejects an
+# empty BAML_MANIFEST_BASE_URL instead of treating it as unset.
+readonly manifest_base_url="https://pkg.boundaryml.com/manifest/v1"
 readonly helper="${GITHUB_ACTION_PATH}/lib/wrapper-output.mjs"
 readonly bin_dir="${BAML_HOME}/bin"
 readonly wrapper="${bin_dir}/baml"
 
 unset BAML_MANIFEST_BASE_URL || true
-unset BAML_VERSION || true
+unset BAML_TOOLCHAIN || true
 
 tmp_dir="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/setup-baml.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -21,14 +24,14 @@ version_override=""
 if [[ -n "$requested" ]]; then
   selector="$(printf '%s' "$requested" | node "$helper" validate-selector)"
   version_override="$selector"
-  export BAML_VERSION="$version_override"
+  export BAML_TOOLCHAIN="$version_override"
 else
   list_output="$("$wrapper" toolchain list)"
   printf '%s\n' "$list_output"
   selector="$(printf '%s' "$list_output" | node "$helper" selector)"
 fi
 
-"$wrapper" toolchain use "$selector"
+"$wrapper" toolchain use --global "$selector"
 version_output="$("$wrapper" --version)"
 printf '%s\n' "$version_output"
 version="$(printf '%s' "$version_output" | node "$helper" version)"
@@ -42,8 +45,8 @@ fi
 printf '%s\n' "$bin_dir" >> "$GITHUB_PATH"
 {
   printf 'BAML_HOME=%s\n' "$BAML_HOME"
-  printf 'BAML_VERSION=%s\n' "$version_override"
-  printf 'BAML_MANIFEST_BASE_URL=\n'
+  printf 'BAML_TOOLCHAIN=%s\n' "$version_override"
+  printf 'BAML_MANIFEST_BASE_URL=%s\n' "$manifest_base_url"
 } >> "$GITHUB_ENV"
 {
   printf 'version=%s\n' "$version"

@@ -1,5 +1,7 @@
 # Tests the public GitHub Actions in packaging/github-actions. Also called by
 # sync-github-actions-mirror.yml, so a mirror only moves after these pass.
+# baml-action is tested with the setup-baml next to it, which is the setup-baml
+# its published copy pins, so its jobs are also setup-baml integration tests.
 
 name: GitHub Actions CI
 
@@ -34,9 +36,13 @@ jobs:
         working-directory: packaging/github-actions/setup-baml
         run: npm test
 
+      # The sync publishes setup-baml before baml-action and pins it there.
+      - name: Test mirror sync
+        run: bash packaging/github-actions/mirror/test.sh
+
       - name: Lint Bash
-        working-directory: packaging/github-actions/setup-baml
-        run: shellcheck scripts/setup.sh
+        working-directory: packaging/github-actions
+        run: shellcheck setup-baml/scripts/setup.sh mirror/*.sh
 
       - name: Parse PowerShell
         working-directory: packaging/github-actions/setup-baml
@@ -156,10 +162,10 @@ jobs:
         with:
           toolchain: nightly
 
-      # Unset BAML_VERSION so the renderer's own baml.toml picks its toolchain,
+      # Unset BAML_TOOLCHAIN so the renderer's own baml.toml picks its toolchain,
       # as it does when the action runs it.
       - name: Test comment rendering
-        run: env -u BAML_VERSION baml --agent-skill-check off --color never --no-progress --project packaging/github-actions/baml-action/codequality test
+        run: env -u BAML_TOOLCHAIN baml --agent-skill-check off --color never --no-progress --project packaging/github-actions/baml-action/codequality test
 
       - name: Lint Bash
         working-directory: packaging/github-actions/baml-action

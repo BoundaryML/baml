@@ -25,7 +25,7 @@ steps:
     toolchain: 0.16.0
 ```
 
-An explicit `toolchain` input overrides a conflicting project selector for subsequent workflow steps through the wrapper's documented `BAML_VERSION` mechanism.
+An explicit `toolchain` input overrides a conflicting project selector for subsequent workflow steps through the wrapper's documented `BAML_TOOLCHAIN` mechanism.
 
 When `toolchain` is omitted, the official BAML wrapper resolves the project selector from the nearest `baml.toml`:
 

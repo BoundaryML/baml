@@ -15,7 +15,11 @@ run_check() {
 }
 
 run_fmt() {
-  if ! baml fmt --help 2>/dev/null | grep -q -- '--check'; then
+  # Capture instead of piping into `grep -q`: under pipefail, grep exiting
+  # early can fail the pipeline with SIGPIPE.
+  local help
+  help="$(baml fmt --help 2>/dev/null || true)"
+  if [[ "$help" != *--check* ]]; then
     echo "::error::baml fmt --check is not available in BAML $(baml --version 2>/dev/null); use a newer toolchain or set fmt: false"
     return 1
   fi
@@ -61,7 +65,7 @@ measure_base() {
     echo "$work/base.json"
   # Measure the base with the head's toolchain, not whatever the base's
   # baml.toml selects, so a toolchain bump doesn't read as a code change.
-  elif BAML_VERSION="$BAML_RESOLVED_VERSION" measure "$base_dir/$prefix" "$work/base.json"; then
+  elif BAML_TOOLCHAIN="$BAML_RESOLVED_VERSION" measure "$base_dir/$prefix" "$work/base.json"; then
     echo "$work/base.json"
   fi
   git -C "$root" worktree remove --force "$base_dir" >&2 || true
@@ -125,8 +129,8 @@ run_codequality() {
 
   local status
   # The renderer is a BAML project pinned to its own toolchain, so drop
-  # setup-baml's BAML_VERSION and let its baml.toml choose.
-  status="$(env -u BAML_VERSION BAML_TELEMETRY=off \
+  # setup-baml's BAML_TOOLCHAIN and let its baml.toml choose.
+  status="$(env -u BAML_TOOLCHAIN BAML_TELEMETRY=off \
     baml "${flags[@]}" --project "$GITHUB_ACTION_PATH/codequality" run main -- \
     ${base_args[@]+"${base_args[@]}"} \
     --head "$work/head.json" \
