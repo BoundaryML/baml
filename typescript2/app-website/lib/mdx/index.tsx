@@ -1,6 +1,7 @@
 import type { MDXComponents } from 'mdx/types';
 import dynamic from 'next/dynamic';
 import NextImage from 'next/image';
+import { PostDrawing } from '@/app/(home)/blog/_lib/art';
 import NewsletterForm from '@/components/NewsletterForm';
 import BamlBlock from './baml-block/BamlBlockClient';
 import { CodeBlocks } from './code-blocks';
@@ -8,7 +9,7 @@ import { DevSpotlight } from './dev-spotlight';
 import { MDXMedia } from './media';
 import { MDXNote } from './note';
 import { ProblemStatement, TechniqueTitle, WhatIsSAP } from './sap/intro';
-import { SkillResultsChart, SkillResultsLegend } from './skill-results-chart';
+import { SkillResultsChart } from './skill-results-chart';
 import { MDXTip } from './tip';
 import Video from './video';
 
@@ -74,11 +75,11 @@ export const mdxComponents: MDXComponents = {
   img: MDXMedia,
   NewsletterForm: NewsletterForm,
   Note: MDXNote,
+  PostDrawing: PostDrawing,
   SapProblemStatement: ProblemStatement,
   SapTechniqueTitle: TechniqueTitle,
   SapWhatIsSAP: WhatIsSAP,
   SkillResultsChart: SkillResultsChart,
-  SkillResultsLegend: SkillResultsLegend,
   Tip: MDXTip,
   Video: Video,
   // pre: ({ children, ...props }: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLPreElement>) => {

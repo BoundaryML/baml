@@ -8,6 +8,8 @@ tags: ['Engineering']
 author:
   name: Avery Townsend
 ---
+<PostDrawing slug="teaching-agents-to-write-maintainable-code" alt="An agent's chess move generator with a cognitive complexity of 50, beside the version written with the new skill, with a cognitive complexity of 2." />
+
 Over the last few months we've been putting final polish on the BAML language and prepping for a 1.0 release. We've spent over a year designing the core language, and on that front consider BAML to be nearly complete. But, work remains in making sure BAML meshes well with coding agents, since they are a major part of engineering workflows today.
 
 As it stands, agents can write BAML code that solves problems and passes tests. It is a real turing complete language with a compiler, bytecode VM, formatter, etc. The remaining problems with BAML lie not in the BAML language itself, but in the BAML code that the agents produce. We, and a lot of our testers, noticed that the quality of BAML code written by agents is noticeably worse than what the same agents produce in TypeScript or Rust. For instance, here's part of a chess move generator an agent (GPT-6.1-Sol with Codex) wrote with our current skill installed:
@@ -303,8 +305,6 @@ We ran each task ten times for each of four different skill treatments:
 
 ## Results
 
-<SkillResultsLegend />
-
 ### Cognitive complexity
 
 <SkillResultsChart metric="cognitive" />
@@ -315,7 +315,7 @@ Each further treatment clearly improves the cognitive complexity of the final ou
 
 <SkillResultsChart metric="cyclomatic" />
 
-For Chess and Conduit, we see the same clear step-by-step improvement in cyclomatic complexity that we saw with cognitive complexity. Incremental improvement is less clear on Regex and GTFS, but the final new skill including `codequality` did seem to measurably improve for all categories.
+For Chess and Conduit, we see the same clear step-by-step improvement in cyclomatic complexity that we saw with cognitive complexity. Incremental improvement is less clear on Regex and GTFS, but the final new skill including `codequality` improved the average in every category, though on Regex only because of two unusually low runs.
 
 ### NPath
 
