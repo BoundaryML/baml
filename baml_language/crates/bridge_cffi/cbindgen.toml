@@ -43,10 +43,10 @@ header = """#ifndef BAML_CFFI_H
 #  endif
 #endif"""
 
-trailer = """/* ABI revision 4 requires every operation through media_from_file_content. */
+trailer = """/* ABI revision 5 requires every operation through host_span_finish. */
 #define BAML_API_V1_MIN_SIZE \\
-  (offsetof(BamlApiV1, media_from_file_content) + \\
-   sizeof(((BamlApiV1 *)0)->media_from_file_content))
+  (offsetof(BamlApiV1, host_span_finish) + \\
+   sizeof(((BamlApiV1 *)0)->host_span_finish))
 
 /*
  * Validate the complete revision-4 table while permitting appended fields.
@@ -103,6 +103,8 @@ include = [
   "baml_get_api_v1",
 ]
 exclude = [
+  "host_span_begin",
+  "host_span_finish",
   "trace_selection_ffi",
   "invocation_context_ffi",
   "invocation_protocol_version",

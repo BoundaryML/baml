@@ -33,7 +33,9 @@ fn lower_function(function: &Function) -> Function {
 /// The Rust type a host fills a parameter with: the part of the declared type
 /// it can supply, with `unknown` taken as JSON and a function-value arm dropped.
 /// The argument is still stated under the declared type, which is what the
-/// engine checks it against.
+/// engine checks it against. Dropping an arm from a union that keeps several
+/// would make a generated enum disagree with its stated arms, so such a union
+/// stays as declared and its function skips.
 pub(crate) fn narrow_argument(ty: &Ty) -> Ty {
     match ty {
         Ty::Unknown => Ty::TypeAlias(Name::from_dotted_path(BAML_JSON_JSON)),
@@ -42,14 +44,17 @@ pub(crate) fn narrow_argument(ty: &Ty) -> Ty {
             key: key.clone(),
             value: Box::new(narrow_argument(value)),
         },
-        Ty::Union(members) if members.iter().any(|member| !is_any_function(member)) => Ty::Union(
-            members
+        Ty::Union(members) => {
+            let kept: Vec<_> = members
                 .iter()
                 .filter(|member| !is_any_function(member))
-                .map(narrow_argument)
-                .collect(),
-        )
-        .canonicalize(),
+                .collect();
+            let arms = kept.iter().filter(|member| ***member != Ty::Null).count();
+            if kept.is_empty() || (kept.len() < members.len() && arms > 1) {
+                return ty.clone();
+            }
+            Ty::Union(kept.into_iter().map(narrow_argument).collect()).canonicalize()
+        }
         _ => ty.clone(),
     }
 }

@@ -210,6 +210,44 @@ async fn host_shutdown_waits_for_actual_exit() {
 }
 
 #[tokio::test]
+async fn host_shutdown_does_not_wait_for_a_detached_span() {
+    let program = common::compile_for_engine("function child() -> int { 7 }");
+    let engine =
+        Arc::new(BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), vec![]).unwrap());
+    let host = engine
+        .begin_detached_host_invocation(
+            &definition(),
+            None,
+            &bex_vm_types::trace::TraceOptionsData::default(),
+            &bex_engine::HostCallSite {
+                source_file: "caller.rs".into(),
+                line: 20,
+            },
+            None,
+        )
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), engine.shutdown())
+        .await
+        .unwrap();
+    host.close();
+    assert!(
+        engine
+            .begin_detached_host_invocation(
+                &definition(),
+                None,
+                &bex_vm_types::trace::TraceOptionsData::default(),
+                &bex_engine::HostCallSite {
+                    source_file: "caller.rs".into(),
+                    line: 20,
+                },
+                None,
+            )
+            .is_err(),
+        "a detached span is still admitted like any other"
+    );
+}
+
+#[tokio::test]
 async fn host_definitions_and_call_sites_are_structural_across_modes() {
     let program = common::compile_for_engine("function child() -> int { 7 }");
     let directory = tempfile::tempdir().unwrap();

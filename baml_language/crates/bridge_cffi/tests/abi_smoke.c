@@ -65,7 +65,8 @@ static int baml_required_functions_exist(const BamlApiV1 *api) {
          api->invocation_clock_ns != NULL && api->release_function_call != NULL &&
          api->register_host_dispatch_v2 != NULL && api->register_host_cancel_callback != NULL &&
          api->trace_selection != NULL && api->invocation_context != NULL &&
-         api->media_name != NULL && api->media_from_file_content != NULL;
+         api->media_name != NULL && api->media_from_file_content != NULL &&
+         api->host_span_begin != NULL && api->host_span_finish != NULL;
 }
 
 static int baml_test_evolution_checks(const BamlApiV1 *api) {

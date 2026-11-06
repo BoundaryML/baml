@@ -387,6 +387,25 @@ fn to_source_code_with_optional_metadata(
                 pub enum Selection { Options(Options), ReservedSpan(ReservedSpan) }
                 impl From<Options> for Selection { fn from(value: Options) -> Self { Self::Options(value) } }
                 impl From<ReservedSpan> for Selection { fn from(value: ReservedSpan) -> Self { Self::ReservedSpan(value) } }
+                /// A `tracing` layer recording spans as BAML spans. BAML calls made inside a
+                /// span nest under it. Spans take their inputs from their fields, except
+                /// `baml.distinct_id` and `baml.metadata.<key>`, which set their context.
+                /// `#[instrument(ret, err)]` report the outcome; a span with no report
+                /// records as `closed`, and fields recorded after it opens are kept only
+                /// with a `ret`.
+                /// Filter it with `Layer::with_filter`: every span it sees is recorded.
+                ///
+                /// # Errors
+                ///
+                /// The BAML runtime could not be initialized.
+                #[cfg(feature = "tracing")]
+                pub fn tracing_layer<S>() -> ::std::result::Result<::baml_bridge::tracing_layer::BamlLayer<S>, ::baml_bridge::SdkError>
+                where
+                    S: ::baml_bridge::tracing_layer::Subscriber + for<'a> ::baml_bridge::tracing_layer::LookupSpan<'a>,
+                {
+                    crate::_runtime::ensure_init()?;
+                    ::std::result::Result::Ok(::baml_bridge::tracing_layer::BamlLayer::new())
+                }
             },
         });
     }
@@ -591,6 +610,8 @@ serde = {{ version = "1", features = ["derive"], optional = true }}
 # `uint8array`, function or handle, directly or nested, get no impls; the
 # class docs name the field.
 serde = ["dep:serde"]
+# `trace::tracing_layer`, which records `tracing` spans as BAML spans.
+tracing = ["baml_bridge/tracing"]
 "#
     );
     if let Some(extra) = manifest_extra {
@@ -2568,26 +2589,33 @@ mod tests {
     fn function_value_arm_narrows_out_of_the_signature_but_stays_declared() {
         let n = name("user", &[], "named");
         let mut function = nullary_string_fn(&n);
-        function.arguments = vec![
-            arg("target", Ty::Union(Box::new([Ty::String, any_function()]))),
-            arg(
-                "either",
-                Ty::Union(Box::new([Ty::String, Ty::Int, any_function()])),
-            ),
-        ];
+        function.arguments = vec![arg(
+            "target",
+            Ty::Union(Box::new([Ty::String, any_function()])),
+        )];
         let pool = SymbolPool::from([(n, Symbol::Function(function))]);
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
         assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
         let lib = compact(text(&generated, "src/lib.rs"));
         assert!(lib.contains("target:::std::string::String,"), "{lib}");
         assert!(
-            lib.contains("impl::std::convert::Into<crate::StringOrInt>"),
-            "{lib}"
-        );
-        assert!(
             lib.contains(r#"interface_ty("reflect.AnyFunction""#),
             "{lib}"
         );
+    }
+
+    #[test]
+    fn function_value_arm_beside_several_others_skips() {
+        let n = name("user", &[], "either");
+        let mut function = nullary_string_fn(&n);
+        function.arguments = vec![arg(
+            "either",
+            Ty::Union(Box::new([Ty::String, Ty::Int, any_function()])),
+        )];
+        let pool = SymbolPool::from([(n, Symbol::Function(function))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert!(generated.warnings[0].reason.contains("either"));
     }
 
     #[test]

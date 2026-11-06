@@ -100,5 +100,7 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, invocation_context);
   PRINT_OFFSET(BamlApiV1, media_name);
   PRINT_OFFSET(BamlApiV1, media_from_file_content);
+  PRINT_OFFSET(BamlApiV1, host_span_begin);
+  PRINT_OFFSET(BamlApiV1, host_span_finish);
   return 0;
 }

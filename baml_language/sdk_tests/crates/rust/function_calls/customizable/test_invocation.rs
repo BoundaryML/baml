@@ -596,6 +596,7 @@ mod host_spans {
         assert_eq!(context.distinct_id.as_deref(), Some(distinct_id));
         assert!(context.metadata.contains_key("stage"));
     }
+    // SDK_PARITY_LINT(skip): pins the Rust start_span signature
     #[test]
     fn test_run_scopes_host_work_and_baml_calls_to_the_span() {
         let span = start("load_batch", "sync-span");
@@ -620,6 +621,7 @@ mod host_spans {
         span.finish_sync(value).unwrap();
         assert!(span.is_closed_sync().unwrap());
     }
+    // SDK_PARITY_LINT(skip): pins the Rust start_span signature
     #[tokio::test]
     async fn test_run_stays_open_across_await() {
         let span = trace::start_span(
@@ -645,6 +647,7 @@ mod host_spans {
         span.close().await.unwrap();
         assert!(span.is_closed().await.unwrap());
     }
+    // SDK_PARITY_LINT(skip): pins the Rust start_span signature
     #[test]
     fn test_child_span_takes_its_parent_explicitly() {
         let parent = start("parent", "parent-span");
@@ -662,6 +665,7 @@ mod host_spans {
         assert!(!parent.is_closed_sync().unwrap());
         parent.close_sync().unwrap();
     }
+    // SDK_PARITY_LINT(skip): pins the Rust start_span signature
     #[test]
     fn test_closed_span_refuses_to_run_its_body() {
         let span = start("closed", "closed-span");

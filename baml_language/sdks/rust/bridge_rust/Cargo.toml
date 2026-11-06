@@ -50,6 +50,15 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
+# Not the workspace spec: that one turns on `fmt` and `env-filter`, which would
+# reach every consumer of this feature.
+tracing = { workspace = true, optional = true }
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [ "registry", "std" ], optional = true }
+
+[features]
+# `tracing_layer`: records `tracing` spans as BAML spans and nests BAML calls
+# made inside them.
+tracing = [ "dep:tracing", "dep:tracing-subscriber" ]
 
 # The unit tests turn both `serde_json` features on, covering an app that
 # opts in. The default path is covered by the generated SDK crates in
