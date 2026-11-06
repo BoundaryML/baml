@@ -710,7 +710,7 @@ impl BexEngine {
         };
         let ty = to_annotation(&bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(instance.class, class.type_tag),
-            instance.class_type_args.clone(),
+            Box::from(instance.class_type_args.as_slice()),
         ))?;
         let not_its_payload = || {
             EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure {

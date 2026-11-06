@@ -835,7 +835,7 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
         Object::RustInstance(inst) => match vm.get_object(inst.class) {
             Object::Class(class) => Some(RealizedTy::Class(
                 bex_vm_types::TypeHead::new(inst.class, class.type_tag),
-                inst.class_type_args.clone(),
+                Box::from(inst.class_type_args.as_slice()),
             )),
             _ => None,
         },

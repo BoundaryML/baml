@@ -74,6 +74,7 @@ pub use rust_data::{
     BexRustData, MeteredGuard, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc,
     TestRustData,
 };
+pub use thin_vec::ThinVec;
 pub use type_head::TypeHead;
 
 /// The name prefix of the helper that evaluates one global's initializer.

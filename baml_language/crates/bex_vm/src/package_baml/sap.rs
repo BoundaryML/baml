@@ -79,7 +79,7 @@ impl BamlNamespaceSap for PackageBamlImpl {
         })?;
         let payload: Arc<dyn bex_vm_types::BexRustData> =
             Arc::new(ParseCache { model, has_shapes });
-        Ok(copy::sap::ParseCache { payload }.to_value(vm, Box::new([target])))
+        Ok(copy::sap::ParseCache { payload }.to_value(vm, bex_vm_types::ThinVec::from([target])))
     }
 
     fn _reads_shapes(vm: &BexVm) -> Result<bool, VmRustFnError> {

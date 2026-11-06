@@ -641,7 +641,7 @@ mod tests {
         })));
         vm.alloc_rust_instance(
             class,
-            Box::new([]),
+            bex_vm_types::ThinVec::new(),
             bex_vm_types::RustPayload::Foreign(payload),
         )
     }
@@ -681,7 +681,11 @@ mod tests {
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
             redact,
         })));
-        vm.alloc_rust_instance(class, Box::new([]), bex_vm_types::RustPayload::media(media))
+        vm.alloc_rust_instance(
+            class,
+            bex_vm_types::ThinVec::new(),
+            bex_vm_types::RustPayload::media(media),
+        )
     }
 
     fn capture(values: &[Value]) -> Snapshot {

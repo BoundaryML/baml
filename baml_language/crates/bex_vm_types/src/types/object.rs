@@ -1,8 +1,8 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-    ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
-    Uint8ArrayContainer, Value, Variant,
+    ArrayContainer, BoundMethod, Class, CleanupLatch, Enum, Function, GenericFunction, HeapPtr,
+    HostClosure, Instance, Uint8ArrayContainer, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
         RuntimeImplRule, RustInstance, TypeAliasDef,
@@ -181,10 +181,46 @@ impl Object {
     /// test (`is`, `match`, a typed `catch`) and every class-keyed dispatch
     /// asks of a value.
     #[must_use]
-    pub fn class_instance(&self) -> Option<(crate::HeapPtr, &[crate::RealizedTy])> {
+    pub fn class_instance(&self) -> Option<(HeapPtr, &[crate::RealizedTy])> {
         match self {
             Object::Instance(instance) => Some((instance.class, &instance.class_type_args)),
             Object::RustInstance(instance) => Some((instance.class, &instance.class_type_args)),
+            Object::Package(_)
+            | Object::Function(_)
+            | Object::Interface(_)
+            | Object::ImplRule(_)
+            | Object::Class(_)
+            | Object::Enum(_)
+            | Object::TypeAlias(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::GenericFunction(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::Type(_)
+            | Object::Tombstone => None,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => None,
+        }
+    }
+
+    /// The instance a BEP-042 `cleanup` finalizer runs on: its class and its
+    /// run-once latch. Plain and `@@rust_type` instances both qualify, so the
+    /// collector and the run-once guard read every instance the same way;
+    /// whether the class has a finalizer is the class's to say.
+    #[must_use]
+    pub fn cleanup_subject(&self) -> Option<(HeapPtr, &CleanupLatch)> {
+        match self {
+            Object::Instance(instance) => Some((instance.class, &instance.cleaned)),
+            Object::RustInstance(instance) => Some((instance.class, &instance.cleaned)),
             Object::Package(_)
             | Object::Function(_)
             | Object::Interface(_)

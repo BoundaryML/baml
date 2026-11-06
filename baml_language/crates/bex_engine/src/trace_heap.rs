@@ -812,7 +812,7 @@ mod tests {
                 .tlab_mut()
                 .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
                     class,
-                    Box::new([]),
+                    bex_vm_types::ThinVec::new(),
                     bex_vm_types::RustPayload::HostValue(bex_resource_types::HostValueArc::new(
                         bex_resource_types::HostKey::new(1).expect("nonzero"),
                         bex_resource_types::HostValueKind::Opaque,
@@ -885,7 +885,7 @@ mod tests {
                 .tlab_mut()
                 .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
                     class,
-                    Box::new([]),
+                    bex_vm_types::ThinVec::new(),
                     bex_vm_types::RustPayload::media(media),
                 )));
         let trace_heap = TraceHeap::new();
