@@ -2,6 +2,9 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $InstallerUrl = "https://pkg.boundaryml.com/install.ps1"
+# Later steps get the official manifest source explicitly: wrapper 0.3 rejects an
+# empty BAML_MANIFEST_BASE_URL instead of treating it as unset.
+$ManifestBaseUrl = "https://pkg.boundaryml.com/manifest/v1"
 $Helper = Join-Path $env:GITHUB_ACTION_PATH "lib/wrapper-output.mjs"
 $BinDir = Join-Path $env:BAML_HOME "bin"
 $Wrapper = Join-Path $BinDir "baml.exe"
@@ -10,7 +13,7 @@ $Temp = Join-Path $TempRoot ("setup-baml-" + [System.Guid]::NewGuid())
 $Installer = Join-Path $Temp "install.ps1"
 
 Remove-Item Env:BAML_MANIFEST_BASE_URL -ErrorAction SilentlyContinue
-Remove-Item Env:BAML_VERSION -ErrorAction SilentlyContinue
+Remove-Item Env:BAML_TOOLCHAIN -ErrorAction SilentlyContinue
 
 New-Item -ItemType Directory -Path $Temp | Out-Null
 try {
@@ -29,7 +32,7 @@ try {
       throw "setup-baml: invalid toolchain input"
     }
     $VersionOverride = $Selector
-    $env:BAML_VERSION = $VersionOverride
+    $env:BAML_TOOLCHAIN = $VersionOverride
   } else {
     $ListOutput = (& $Wrapper toolchain list | Out-String)
     if ($LASTEXITCODE -ne 0) {
@@ -42,7 +45,7 @@ try {
     }
   }
 
-  & $Wrapper toolchain use $Selector
+  & $Wrapper toolchain use --global $Selector
   if ($LASTEXITCODE -ne 0) {
     throw "setup-baml: BAML toolchain installation failed with exit code $LASTEXITCODE"
   }
@@ -63,8 +66,8 @@ try {
 
   $BinDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
   "BAML_HOME=$($env:BAML_HOME)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-  "BAML_VERSION=$VersionOverride" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-  "BAML_MANIFEST_BASE_URL=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+  "BAML_TOOLCHAIN=$VersionOverride" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+  "BAML_MANIFEST_BASE_URL=$ManifestBaseUrl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
   "version=$Version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
   "path=$Wrapper" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
   "toolchain-path=$ToolchainPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
