@@ -561,13 +561,20 @@ impl GenerateArgs {
                     .collect()
                 }
                 OutputType::Rust => {
+                    // The Cargo package and the library users import share
+                    // the configured name.
+                    let crate_name = generator
+                        .package_name
+                        .as_deref()
+                        .unwrap_or(sdkgen_rust::DEFAULT_LIB_NAME);
                     let generated = sdkgen_rust::to_source_code_with_bytecode_and_metadata(
                         &pool,
                         &baml_bytecode,
                         &embedded_baml_toml,
                         &sdkgen_rust::RustGenOptions {
                             naming_convention: generator.naming_convention,
-                            package_name: "baml_sdk".to_string(),
+                            package_name: crate_name.to_string(),
+                            lib_name: crate_name.to_string(),
                             // The runtime crate is not published yet; pin the
                             // matching version for when it is.
                             runtime_dep: format!("\"={}\"", baml_version::CANONICAL_VERSION),
@@ -593,6 +600,10 @@ impl GenerateArgs {
                                 .sdk_import_path
                                 .as_deref()
                                 .expect("validated Go generator must have sdk_import_path"),
+                            package_name: generator
+                                .package_name
+                                .as_deref()
+                                .unwrap_or(sdkgen_go::DEFAULT_PACKAGE_NAME),
                             max_typed_union_arity: generator.max_typed_union_arity,
                         },
                     )
@@ -921,6 +932,37 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         if output_type == OutputType::Go && sdk_import_path.is_none() {
             continue;
         }
+        if let (Some(import_path), Some(package_name), Some(value)) = (
+            sdk_import_path.as_deref(),
+            package_name.as_deref(),
+            generator.sdk_import_path.as_ref(),
+        ) && !go_import_path_names_package(import_path, package_name)
+        {
+            // Suggest keeping the module prefix and renaming the last segment.
+            let expected = match import_path.rsplit_once('/') {
+                Some((prefix, _)) => format!("{prefix}/{package_name}"),
+                None => format!("example.com/{package_name}"),
+            };
+            diags.push(
+                Diagnostic::error(
+                    DiagnosticId::InvalidGeneratorPropertyValue,
+                    format!(
+                        "Go generator `{name}` sets `package_name = \"{package_name}\"`, so \
+                         the last segment of `sdk_import_path` must be `{package_name}`, e.g. \
+                         `{expected}`"
+                    ),
+                )
+                .with_primary(
+                    Span {
+                        file_id: manifest_file_id(),
+                        range: to_text_range(value.span()),
+                    },
+                    format!("expected `{expected}`"),
+                )
+                .with_phase(DiagnosticPhase::Validation),
+            );
+            continue;
+        }
 
         generators.push(GeneratorDef {
             name: name.clone(),
@@ -1019,6 +1061,13 @@ fn parse_required_go_import_path(
         .with_phase(DiagnosticPhase::Validation),
     );
     None
+}
+
+/// By Go convention an import path's last segment is the package's name.
+/// Requiring it keeps `import ".../alien_api"` and the `alien_api.` qualifier
+/// in step. A bare `alien_api` is the root of a module named `alien_api`.
+fn go_import_path_names_package(import_path: &str, package_name: &str) -> bool {
+    import_path.rsplit('/').next() == Some(package_name)
 }
 
 fn is_valid_go_import_path(import_path: &str) -> bool {
@@ -1335,18 +1384,13 @@ naming_convention = "preserve-case"
 
     #[test]
     fn package_name_is_rejected_on_targets_that_cannot_rename_their_sdk() {
-        for &output_type in OutputType::all() {
-            if matches!(
-                output_type,
-                OutputType::PythonPydantic | OutputType::PythonPydanticV1
-            ) {
-                continue;
-            }
-            let sdk_import_path = if output_type == OutputType::Go {
-                "sdk_import_path = \"example.com/test/my_sdk\"\n"
-            } else {
-                ""
-            };
+        for output_type in [
+            OutputType::Swift,
+            OutputType::Java,
+            OutputType::Cpp,
+            OutputType::CSharp,
+        ] {
+            let sdk_import_path = "";
             let naming_convention = output_type.naming_support().default_convention();
             let (generators, diagnostics) = discover_with_manifest(&format!(
                 "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{naming_convention}\"\n{sdk_import_path}package_name = \"my_sdk\"\n"
@@ -1356,6 +1400,114 @@ naming_convention = "preserve-case"
             assert_eq!(
                 diagnostics[0].message,
                 format!("`package_name` is not supported for output_type `{output_type}` yet")
+            );
+        }
+    }
+
+    fn manifest_with_package_name(output_type: OutputType, extra: &str) -> String {
+        let naming_convention = output_type.naming_support().default_convention();
+        format!(
+            "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{naming_convention}\"\noutput_dir = \"out\"\npackage_name = \"alien_api\"\n{extra}"
+        )
+    }
+
+    #[test]
+    fn go_rust_and_typescript_package_names_name_the_sdk_directory() {
+        for (output_type, extra) in [
+            (
+                OutputType::Go,
+                "sdk_import_path = \"example.com/test/alien_api\"\n",
+            ),
+            (OutputType::Rust, ""),
+            (OutputType::TypescriptNode, ""),
+            (OutputType::TypescriptWeb, ""),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            fs::write(
+                directory.path().join("baml.toml"),
+                manifest_with_package_name(output_type, extra),
+            )
+            .unwrap();
+
+            let (generators, diagnostics) = discover_generators(directory.path());
+
+            assert!(diagnostics.is_empty(), "{output_type}: {diagnostics:?}");
+            assert_eq!(
+                generators[0].output_dir,
+                directory.path().join("out/alien_api"),
+                "{output_type}"
+            );
+        }
+    }
+
+    #[test]
+    fn go_import_path_must_end_in_the_configured_package_name() {
+        let manifest = manifest_with_package_name(
+            OutputType::Go,
+            "sdk_import_path = \"example.com/test/baml_sdk\"\n",
+        );
+        let (generators, diagnostics) = discover_with_manifest(&manifest);
+
+        assert!(generators.is_empty());
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message,
+            "Go generator `client` sets `package_name = \"alien_api\"`, so the last segment of `sdk_import_path` must be `alien_api`, e.g. `example.com/test/alien_api`"
+        );
+        let value = "\"example.com/test/baml_sdk\"";
+        let start = manifest.find(value).unwrap();
+        assert_eq!(
+            diagnostics[0].primary_span().unwrap().range,
+            super::to_text_range(start..start + value.len())
+        );
+
+        // Without `package_name`, the import path's last segment is free.
+        let (generators, diagnostics) = discover_with_manifest(
+            &go_manifest(None).replace("example.com/test/baml_sdk", "example.com/test/client"),
+        );
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(generators.len(), 1);
+    }
+
+    #[test]
+    fn go_import_path_compares_whole_segments() {
+        assert!(super::go_import_path_names_package(
+            "alien_api",
+            "alien_api"
+        ));
+        assert!(super::go_import_path_names_package(
+            "example.com/test/alien_api",
+            "alien_api"
+        ));
+        assert!(!super::go_import_path_names_package(
+            "example.com/test/my_alien_api",
+            "alien_api"
+        ));
+        assert!(!super::go_import_path_names_package(
+            "my_alien_api",
+            "alien_api"
+        ));
+    }
+
+    #[test]
+    fn invalid_go_rust_and_typescript_package_names_are_rejected() {
+        for (output_type, package_name, extra) in [
+            (
+                OutputType::Go,
+                "Alien",
+                "sdk_import_path = \"example.com/test/Alien\"\n",
+            ),
+            (OutputType::Rust, "baml_bridge", ""),
+            (OutputType::TypescriptNode, "a/b", ""),
+        ] {
+            let manifest = manifest_with_package_name(output_type, extra)
+                .replace("\"alien_api\"", &format!("\"{package_name}\""));
+            let (generators, diagnostics) = discover_with_manifest(&manifest);
+            assert!(generators.is_empty(), "{output_type}");
+            assert_eq!(diagnostics.len(), 1, "{output_type}: {diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].message,
+                format!("invalid `package_name` `{package_name}` on generator `client`")
             );
         }
     }
@@ -1432,6 +1584,40 @@ naming_convention = "preserve-case"
                 "{} names `baml_sdk`",
                 file.display()
             );
+        }
+    }
+
+    #[test]
+    fn named_rust_go_and_typescript_sdks_carry_their_name() {
+        let project = python_project("unused");
+        fs::write(
+            project.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n\
+             [generator.rs]\noutput_type = \"rust\"\nnaming_convention = \"language\"\noutput_dir = \"rust\"\npackage_name = \"alien_api\"\n\n\
+             [generator.go]\noutput_type = \"go\"\nnaming_convention = \"language\"\noutput_dir = \"go\"\npackage_name = \"alien_api\"\nsdk_import_path = \"example.com/test/alien_api\"\n\n\
+             [generator.ts]\noutput_type = \"typescript/node\"\nnaming_convention = \"preserve-case\"\noutput_dir = \"ts\"\npackage_name = \"alien-api\"\n",
+        )
+        .unwrap();
+
+        let result = generate_project(project.path()).unwrap();
+
+        assert!(matches!(result, crate::ExitCode::Success));
+        let manifest =
+            fs::read_to_string(project.path().join("rust/alien_api/Cargo.toml")).unwrap();
+        assert!(
+            manifest.contains("[package]\nname = \"alien_api\"\n"),
+            "{manifest}"
+        );
+        assert!(
+            manifest.contains("[lib]\nname = \"alien_api\"\n"),
+            "{manifest}"
+        );
+        let invocation =
+            fs::read_to_string(project.path().join("go/alien_api/invocation.go")).unwrap();
+        assert!(invocation.contains("\npackage alien_api\n"), "{invocation}");
+        assert!(project.path().join("ts/alien-api/index.ts").is_file());
+        for default in ["rust", "go", "ts"] {
+            assert!(!project.path().join(default).join("baml_sdk").exists());
         }
     }
 
