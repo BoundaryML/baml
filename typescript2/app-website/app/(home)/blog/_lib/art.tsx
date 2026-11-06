@@ -543,6 +543,19 @@ const ART: Record<string, (props: { id: string }) => ReactNode> = {
 /** Whether a post has a drawn preview. */
 export const hasArt = (post: Post) => post.slug in ART;
 
+/** Throws when a drawing's key matches no post. That happens when a post's slug changes and its key
+ *  here doesn't, and the post quietly loses its preview. The post pages call this while they build,
+ *  so the build fails instead. */
+export function checkArt(posts: Post[]) {
+  const slugs = new Set(posts.map((post) => post.slug));
+  const stale = Object.keys(ART).filter((slug) => !slugs.has(slug));
+  if (stale.length > 0) {
+    throw new Error(
+      `blog/_lib/art.tsx has a preview for ${stale.map((slug) => `"${slug}"`).join(', ')}, but no post has that slug. Change the key in ART to the post's current slug.`,
+    );
+  }
+}
+
 /** A post's preview at the share card's shape: its drawing, else its first image, else a plain
  *  pattern. `id` keeps the drawing's clip paths apart when one post's preview shows twice. */
 export function PostArt({
