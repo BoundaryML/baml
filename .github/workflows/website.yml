@@ -1,0 +1,113 @@
+name: Website
+
+# Builds boundaryml.com (typescript2/app-website) on pull requests that touch it. Vercel builds this
+# site only after a merge to canary, so without this job a broken build, such as a blog preview keyed
+# by a slug no post has, is first caught by the production deploy. The steps mirror
+# app-website/scripts/vercel-build.sh.
+
+on:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches: [main, canary]
+    paths:
+      - "typescript2/app-website/**"
+      - "typescript2/pkg-grammar/**"
+      - "typescript2/pkg-playground/**"
+      - "typescript2/pkg-proto/**"
+      - "baml_language/crates/bridge_ctypes/types/**"
+      - "typescript2/package.json"
+      - "typescript2/pnpm-lock.yaml"
+      - "typescript2/pnpm-workspace.yaml"
+      - ".github/actions/setup-node2/**"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  determine-changes:
+    name: Determine website changes
+    runs-on: ubuntu-24.04
+    outputs:
+      should-run: ${{ steps.changes.outputs.should-run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check website inputs
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # A missing diff base must fail rather than silently skip the build.
+          changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          should_run=false
+          while IFS= read -r file; do
+            case "$file" in
+              typescript2/app-website/* | \
+              typescript2/pkg-grammar/* | \
+              typescript2/pkg-playground/* | \
+              typescript2/pkg-proto/* | \
+              baml_language/crates/bridge_ctypes/types/* | \
+              typescript2/package.json | \
+              typescript2/pnpm-lock.yaml | \
+              typescript2/pnpm-workspace.yaml | \
+              .github/actions/setup-node2/* | \
+              .github/workflows/website.yml)
+                should_run=true
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+          echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build boundaryml.com
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+      - name: Install bridge_wasm from npm
+        run: bash scripts/restore-bridge-wasm-from-npm.sh
+        working-directory: typescript2/app-website
+      - name: Generate pkg-proto files
+        run: pnpm --filter @b/pkg-proto generate
+        working-directory: typescript2
+      - name: Restore the Next build cache
+        uses: actions/cache@v6
+        with:
+          path: typescript2/app-website/.next/cache
+          key: website-next-${{ hashFiles('typescript2/pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            website-next-${{ hashFiles('typescript2/pnpm-lock.yaml') }}-
+      - name: Build the site
+        run: pnpm --filter app-website build
+        working-directory: typescript2
