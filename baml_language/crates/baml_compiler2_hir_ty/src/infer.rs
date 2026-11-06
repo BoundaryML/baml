@@ -1755,7 +1755,10 @@ fn infer_body_impl<'db>(
             // Its body, run-once guard included, is written for the
             // finalizer's unit return and owes the declared one nothing.
             let return_ty = match crate::cleanup::cleanup_method(db, function) {
-                Some(crate::cleanup::CleanupMethod::Malformed) => Ty::error(),
+                Some(
+                    crate::cleanup::CleanupMethod::Malformed
+                    | crate::cleanup::CleanupMethod::Native,
+                ) => Ty::error(),
                 Some(crate::cleanup::CleanupMethod::Finalizer) | None => {
                     crate::impls::interned_ty(&signature.ret)
                 }

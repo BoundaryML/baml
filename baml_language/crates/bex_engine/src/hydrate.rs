@@ -663,7 +663,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         Value::object(self.holder.holder_mut().tlab_mut().alloc(
                             Object::RustInstance(bex_vm_types::RustInstance::new(
                                 class,
-                                Box::new([]),
+                                bex_vm_types::ThinVec::new(),
                                 bex_vm_types::RustPayload::HostValue(host.clone()),
                             )),
                         ))
@@ -878,7 +878,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                 .tlab_mut()
                 .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
                     class,
-                    Box::new([]),
+                    bex_vm_types::ThinVec::new(),
                     payload,
                 ))),
         )
@@ -1030,7 +1030,7 @@ impl BexEngine {
                     "an op builds a tagged instance of a non-generic class"
                 );
                 Value::object(thread.tlab_mut().alloc(Object::RustInstance(
-                    bex_vm_types::RustInstance::new(class, Box::new([]), payload),
+                    bex_vm_types::RustInstance::new(class, bex_vm_types::ThinVec::new(), payload),
                 )))
             }
             // An instance holding the runtime's own instances: each field

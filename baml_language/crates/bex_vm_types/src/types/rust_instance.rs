@@ -27,9 +27,15 @@ pub struct RustInstance {
     /// The `Object::Class` this is an instance of.
     pub class: HeapPtr,
     /// The class's type arguments, realized at construction, in the class's
-    /// parameter order. Empty for a non-generic class.
-    pub class_type_args: Box<[crate::RealizedTy]>,
+    /// parameter order. Empty for a non-generic class, which allocates
+    /// nothing. Thin (one word) so the latch below fits `Object`'s 64 bytes
+    /// even where `HeapPtr` carries a debug epoch.
+    pub class_type_args: thin_vec::ThinVec<crate::RealizedTy>,
     pub payload: RustPayload,
+    /// BEP-042 `cleanup` run-once latch, as on a plain
+    /// [`Instance`](super::Instance): `false` when built, set by the first
+    /// `cleanup` invocation. A deep copy starts unset.
+    pub cleaned: crate::CleanupLatch,
 }
 
 /// The payload type of each kind, named as the kind: what a native reads
@@ -415,13 +421,14 @@ impl std::fmt::Debug for RustPayload {
 impl RustInstance {
     pub fn new(
         class: HeapPtr,
-        class_type_args: Box<[crate::RealizedTy]>,
+        class_type_args: thin_vec::ThinVec<crate::RealizedTy>,
         payload: RustPayload,
     ) -> Self {
         Self {
             class,
             class_type_args,
             payload,
+            cleaned: crate::CleanupLatch::new(false),
         }
     }
 }

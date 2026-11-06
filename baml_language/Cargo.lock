@@ -1452,6 +1452,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sys_regex",
+ "thin-vec",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

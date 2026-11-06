@@ -148,21 +148,17 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// the body is skipped. The latch is set on entry: a `cleanup` that throws
     /// is still considered cleaned and will not be retried.
     ///
-    /// A non-instance receiver returns `true` defensively; the guard is only
-    /// emitted for a class `cleanup(self)` method, whose `self` is an instance.
+    /// The guard is only emitted for a class's `cleanup(self)`, whose `self`
+    /// is an instance.
     fn _cleanup_begin(vm: &BexVm, value: &Value) -> bool {
-        match value.as_object_ptr() {
-            Some(ptr) => match vm.get_object(ptr) {
-                Object::Instance(inst) => inst.cleaned.begin(),
-                // BUG: a `@@rust_type` instance carries no run-once latch, so
-                // a `cleanup` on a `@@rust_type` class would run on every
-                // invocation. No such class declares one yet; the latch (and
-                // the collector's finalizer scan) must come before one does.
-                Object::RustInstance(_) => true,
-                _ => true,
-            },
-            None => true,
-        }
+        let subject = value
+            .as_object_ptr()
+            .and_then(|ptr| vm.get_object(ptr).cleanup_subject());
+        debug_assert!(
+            subject.is_some(),
+            "the `cleanup` guard runs on an instance receiver"
+        );
+        subject.is_none_or(|(_, cleaned)| cleaned.begin())
     }
 
     // ── Numeric-array reductions (formerly `baml.math.*`) ──────────────────────

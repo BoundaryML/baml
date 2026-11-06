@@ -491,11 +491,11 @@ mod tests {
             inline: [0; 16],
             buffer: Vec::with_capacity(1_000),
         });
-        let instance = Object::RustInstance(crate::RustInstance {
-            class: crate::HeapPtr::null(),
-            class_type_args: Box::new([]),
-            payload: crate::RustPayload::Foreign(payload),
-        });
+        let instance = Object::RustInstance(crate::RustInstance::new(
+            crate::HeapPtr::null(),
+            crate::ThinVec::new(),
+            crate::RustPayload::Foreign(payload),
+        ));
         assert_eq!(
             charged(instance),
             2 * size_of::<usize>() + size_of::<Payload>() + 1_000

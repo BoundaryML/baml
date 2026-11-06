@@ -4503,7 +4503,7 @@ impl BexVm {
                     debug_assert_eq!(instance.class_type_args.len(), class.generic_param_count);
                     ConcreteRealizedTy::Class(
                         bex_vm_types::TypeHead::new(instance.class, class.type_tag),
-                        instance.class_type_args.clone(),
+                        Box::from(instance.class_type_args.as_slice()),
                     )
                 }
                 other => unreachable!(
@@ -5982,7 +5982,7 @@ impl BexVm {
     pub fn alloc_rust_instance(
         &mut self,
         class: HeapPtr,
-        class_type_args: Box<[bex_vm_types::RealizedTy]>,
+        class_type_args: bex_vm_types::ThinVec<bex_vm_types::RealizedTy>,
         payload: bex_vm_types::RustPayload,
     ) -> Value {
         Value::object(
@@ -6002,7 +6002,11 @@ impl BexVm {
             unreachable!("a media value is built with a kind of its own, never `Generic`")
         });
         let class = self.lang_object(wrapper);
-        self.alloc_rust_instance(class, Box::new([]), bex_vm_types::RustPayload::media(media))
+        self.alloc_rust_instance(
+            class,
+            bex_vm_types::ThinVec::new(),
+            bex_vm_types::RustPayload::media(media),
+        )
     }
 
     /// A rendered prompt, as an `ai.Prompt`.
@@ -6010,7 +6014,7 @@ impl BexVm {
         let class = self.lang_object(crate::lang_items::AI_PROMPT);
         self.alloc_rust_instance(
             class,
-            Box::new([]),
+            bex_vm_types::ThinVec::new(),
             bex_vm_types::RustPayload::Prompt(prompt),
         )
     }
@@ -6179,7 +6183,7 @@ impl BexVm {
                 let handle_val = Value::object(self.tlab.alloc(Object::RustInstance(
                     bex_vm_types::RustInstance::new(
                         host_value,
-                        Box::new([]),
+                        bex_vm_types::ThinVec::new(),
                         bex_vm_types::RustPayload::HostValue(handle),
                     ),
                 )));

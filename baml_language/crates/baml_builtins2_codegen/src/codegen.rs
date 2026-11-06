@@ -653,7 +653,7 @@ fn emit_rust_copy_struct(
     let type_args_param = if def.generic_params.is_empty() {
         String::new()
     } else {
-        ", class_type_args: Box<[bex_vm_types::RealizedTy]>".to_string()
+        ", class_type_args: bex_vm_types::ThinVec<bex_vm_types::RealizedTy>".to_string()
     };
     writeln!(
         out,
@@ -662,7 +662,7 @@ fn emit_rust_copy_struct(
     .unwrap();
     writeln!(out, "{inner2}let class_ptr = vm.lang_object({item});").unwrap();
     let type_args = if def.generic_params.is_empty() {
-        "Box::new([])"
+        "bex_vm_types::ThinVec::new()"
     } else {
         "class_type_args"
     };

@@ -57,8 +57,7 @@ pub fn maybe_inject_cleanup_guard(class: &mut ClassDef) {
         }
         let span = method.name_span;
         // A `$rust_function` `cleanup` (Builtin body) has no expression body to
-        // guard, and an empty body has no root; neither is expected for a user
-        // finalizer, so skip rather than fabricate a body.
+        // guard; the checker refuses one (E0144). An empty body has no root.
         let Some(FunctionBodyDef::Expr(body, source_map)) = method.body.as_mut() else {
             continue;
         };

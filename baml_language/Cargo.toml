@@ -282,6 +282,8 @@ serde_yaml = { package = "yaml_serde", version = "0.10" }
 sha1 = "0.10"
 smallvec = { version = "1.15", features = [ "const_generics" ] }
 sqlparser = "0.62.0"
+# An 8-byte vector (length in the allocation): keeps `Object` within 64 bytes.
+thin-vec = "0.2"
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 corosensei = "0.3.4"
 strsim = { version = "0.11.1" }

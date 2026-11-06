@@ -163,17 +163,17 @@ impl BexHeap {
                 })
                 .unwrap_or_else(|| unreachable!("finalizable entry {ptr:?} is outside from-space"));
             // SAFETY: from-space object is still intact pre-swap.
-            let Object::Instance(inst) = (unsafe { ptr.get() }) else {
+            let Some((class, cleaned)) = (unsafe { ptr.get() }).cleanup_subject() else {
                 continue;
             };
-            if inst.cleaned.is_cleaned() {
+            if cleaned.is_cleaned() {
                 continue; // explicit/`defer` already cleaned it — SuppressFinalize
             }
             // A runtime-created class is itself collectible, so this
             // collection may already have evacuated it: read it where it
             // lives now. A compile-time class, or one this collection does
-            // not move, is still at `inst.class`.
-            let class_ptr = forwarding.get(&inst.class).copied().unwrap_or(inst.class);
+            // not move, is still at the instance's class pointer.
+            let class_ptr = forwarding.get(&class).copied().unwrap_or(class);
             // SAFETY: a forwarded pointer names an initialized destination
             // slot; an unforwarded one names a slot no evacuation touched.
             let Object::Class(class) = (unsafe { class_ptr.get() }) else {
@@ -2656,6 +2656,86 @@ mod tests {
         unsafe { heap.collect_garbage(&[]) };
         assert!(heap.take_pending_finalizers().is_empty());
         assert!(finalizable_entries(&heap).is_empty());
+    }
+
+    /// A `@@rust_type` instance's state, which this test never reads.
+    struct NoState;
+
+    impl bex_vm_types::BexRustData for NoState {
+        fn measure(&self, _: &mut bex_vm_types::Meter) {}
+    }
+
+    /// `class_object(finalizer)`, tagged `@@rust_type` with a foreign kind.
+    fn tagged_class_object(finalizer: Option<HeapPtr>) -> Object {
+        let Object::Class(mut class) = class_object(finalizer) else {
+            unreachable!("class_object builds a class")
+        };
+        class.body = bex_vm_types::ClassBody::RustType(baml_base::RustPayloadKind::Foreign);
+        class.declared_crossing = baml_type::ClassCrossing::Opaque;
+        Object::Class(class)
+    }
+
+    fn rust_instance(class: HeapPtr) -> Object {
+        Object::RustInstance(bex_vm_types::RustInstance::new(
+            class,
+            bex_vm_types::ThinVec::new(),
+            bex_vm_types::RustPayload::Foreign(Arc::new(NoState)),
+        ))
+    }
+
+    /// A `@@rust_type` instance of a class with a finalizer is registered,
+    /// finalized when it dies, and, once its own latch is set, neither
+    /// finalized again nor kept on the list: exactly as a plain instance.
+    #[test]
+    fn rust_instance_is_finalized_once() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(tagged_class_object(Some(finalizer)));
+        heap.note_finalizable_class();
+        let instance = tlab.alloc(rust_instance(class));
+        assert_eq!(finalizable_entries(&heap), vec![instance]);
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        let pending = heap.take_pending_finalizers();
+        assert_eq!(
+            pending,
+            vec![(forwarding[&instance], forwarding[&finalizer])]
+        );
+        // The engine runs `cleanup`, whose guard latches the instance.
+        let Object::RustInstance(finalized) = (unsafe { pending[0].0.get() }) else {
+            panic!("the finalizer seed is the `@@rust_type` instance");
+        };
+        assert!(finalized.cleaned.begin());
+        assert!(!finalized.cleaned.begin(), "the latch runs `cleanup` once");
+
+        unsafe { heap.collect_garbage(&[]) };
+        assert!(heap.take_pending_finalizers().is_empty());
+        assert!(finalizable_entries(&heap).is_empty());
+    }
+
+    /// The walk that rebuilds an invalidated list finds `@@rust_type`
+    /// instances too.
+    #[test]
+    fn rebuilt_list_includes_rust_instances() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(tagged_class_object(None));
+        let older = tlab.alloc(rust_instance(class));
+        assert!(finalizable_entries(&heap).is_empty());
+
+        // SAFETY: single-threaded test; nothing else references the class object.
+        unsafe {
+            *class.get_mut() = tagged_class_object(Some(finalizer));
+        }
+        heap.invalidate_finalizable_instances();
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        assert_eq!(
+            heap.take_pending_finalizers(),
+            vec![(forwarding[&older], forwarding[&finalizer])]
+        );
     }
 
     /// A class that gains a finalizer after an instance of it exists

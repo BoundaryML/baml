@@ -677,7 +677,7 @@ fn rust_instance_keeps_and_follows_its_class() {
     let orphan = alloc_tagged_class(&mut tlab, "Orphan", baml_base::RustPayloadKind::Foreign, 1);
     let instance = tlab.alloc(Object::RustInstance(RustInstance::new(
         class,
-        Box::new([RealizedTy::int()]),
+        bex_vm_types::ThinVec::from([RealizedTy::int()]),
         RustPayload::Foreign(Arc::new(TestRustData(7))),
     )));
 
@@ -736,7 +736,7 @@ fn an_interface_witness_keeps_and_follows_its_interface() {
     );
     let witness = tlab.alloc(Object::RustInstance(RustInstance::new(
         class,
-        Box::new([]),
+        bex_vm_types::ThinVec::new(),
         RustPayload::InterfaceWitness(Box::new(bex_vm_types::InterfaceWitness {
             interface_ptr: interface,
             interface_ty: RealizedTy::Interface(
@@ -1167,7 +1167,7 @@ fn test_survivor_payload_is_dropped_exactly_once() {
     let class = alloc_tagged_class(&mut tlab, "Tagged", baml_base::RustPayloadKind::Foreign, 0);
     let instance = tlab.alloc(Object::RustInstance(RustInstance::new(
         class,
-        Box::new([]),
+        bex_vm_types::ThinVec::new(),
         RustPayload::Foreign(payload.clone()),
     )));
     let mut roots = vec![instance];

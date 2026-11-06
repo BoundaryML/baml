@@ -94,7 +94,8 @@ pub struct HeapStats {
 /// BEP-042: the instances a collection checks for finalization, so it need not
 /// walk every object in from-space.
 ///
-/// Invariant, unless `stale`: every `Instance` in gen0 or gen2 whose
+/// Invariant, unless `stale`: every instance (plain or `@@rust_type`, see
+/// [`Object::cleanup_subject`]) in gen0 or gen2 whose
 /// class has a `cleanup` finalizer is in `instances`. Entries may repeat, and
 /// may name an instance whose class has since lost its finalizer or that was
 /// already cleaned: a collection re-checks each entry exactly as a full walk
@@ -1153,11 +1154,11 @@ impl BexHeap {
     /// anything.
     #[inline]
     pub unsafe fn needs_finalizer_registration(object: &Object) -> bool {
-        let Object::Instance(instance) = object else {
+        let Some((class, _)) = object.cleanup_subject() else {
             return false;
         };
         // SAFETY: the caller guarantees the class object is live.
-        matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
+        matches!(unsafe { class.get() }, Object::Class(class) if class.cleanup.is_some())
     }
 
     /// BEP-042: keep the finalizable list complete after the object at `ptr`

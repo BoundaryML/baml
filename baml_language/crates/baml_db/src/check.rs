@@ -609,10 +609,14 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
         // BEP-042: `cleanup` is a reserved finalizer name, so a class's own
         // method called `cleanup` must have the finalizer's shape (E0144).
         for &func_loc in baml_compiler2_hir::item_data::file_functions(db, file) {
-            if baml_compiler2_hir_ty::cleanup::cleanup_method(db, func_loc)
-                == Some(baml_compiler2_hir_ty::cleanup::CleanupMethod::Malformed)
-            {
-                diagnostics.push(malformed_cleanup_diagnostic(db, file, func_loc));
+            match baml_compiler2_hir_ty::cleanup::cleanup_method(db, func_loc) {
+                Some(baml_compiler2_hir_ty::cleanup::CleanupMethod::Malformed) => {
+                    diagnostics.push(malformed_cleanup_diagnostic(db, file, func_loc));
+                }
+                Some(baml_compiler2_hir_ty::cleanup::CleanupMethod::Native) => {
+                    diagnostics.push(native_cleanup_diagnostic(db, file, func_loc));
+                }
+                Some(baml_compiler2_hir_ty::cleanup::CleanupMethod::Finalizer) | None => {}
             }
         }
         // TOP-LEVEL DECLARATION effect diagnostics: io reachable from a
@@ -1778,6 +1782,37 @@ fn malformed_cleanup_diagnostic<'db>(
             range: function_source_map(db, method).name_span,
         },
         "expected `cleanup(self) -> void`",
+    )
+    .with_phase(DiagnosticPhase::Type)
+}
+
+/// The E0144 report for a native `cleanup`, which the run-once guard cannot
+/// wrap, at the method's name.
+fn native_cleanup_diagnostic<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    method: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Diagnostic {
+    use baml_compiler2_hir::item_data::{
+        MethodOwner, class_data, function_source_map, method_owner,
+    };
+    let Some(MethodOwner::Class(class)) = method_owner(db, method) else {
+        unreachable!("only a class's own method is a `cleanup` finalizer")
+    };
+    let class_name = &class_data(db, class).name;
+    Diagnostic::error(
+        DiagnosticId::CleanupMagicMethodSignature,
+        format!(
+            "`cleanup` on class `{class_name}` must have a BAML body: it runs at most once \
+             per instance, which a native body cannot guarantee"
+        ),
+    )
+    .with_primary(
+        Span {
+            file_id: file.file_id(db),
+            range: function_source_map(db, method).name_span,
+        },
+        "a native `cleanup`",
     )
     .with_phase(DiagnosticPhase::Type)
 }
