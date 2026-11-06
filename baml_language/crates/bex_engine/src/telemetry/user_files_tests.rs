@@ -9,14 +9,17 @@ use btel_types::context::Context;
 
 use super::{TelemetryRecording, user_file_roots};
 
+/// Recording and CAS roots inside a selected state directory.
 fn btel(root: &Path) -> (PathBuf, PathBuf) {
     (root.join("btel/recordings"), root.join("btel/cas"))
 }
 
+/// Resolve the expected project destination with an injectable home.
 fn project(root: &Path, baml_home: Option<PathBuf>, home: Option<PathBuf>) -> (PathBuf, PathBuf) {
     btel(&btel_settings::local_store::resolve(Some(root), baml_home.map(Into::into), home).unwrap())
 }
 
+/// SDK discovery uses the enclosing project identity beneath the user home.
 #[test]
 fn project_enclosing_cwd_is_namespaced_under_home() {
     let dir = tempfile::tempdir().unwrap();
@@ -32,6 +35,7 @@ fn project_enclosing_cwd_is_namespaced_under_home() {
     );
 }
 
+/// An explicit BAML home still isolates each project in its own child store.
 #[test]
 fn baml_home_contains_the_project_store() {
     let dir = tempfile::tempdir().unwrap();
@@ -44,6 +48,7 @@ fn baml_home_contains_the_project_store() {
     );
 }
 
+/// An empty environment override preserves the default user-home project store.
 #[test]
 fn empty_baml_home_is_unset() {
     let dir = tempfile::tempdir().unwrap();
@@ -56,6 +61,7 @@ fn empty_baml_home_is_unset() {
     );
 }
 
+/// Unassociated SDK hosts and packed programs keep the user store.
 #[test]
 fn no_project_uses_home() {
     let dir = tempfile::tempdir().unwrap();

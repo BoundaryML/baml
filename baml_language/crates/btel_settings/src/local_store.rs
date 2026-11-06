@@ -68,6 +68,7 @@ pub fn resolve_for_cwd(
 mod tests {
     use super::*;
 
+    /// Project identity and nested discovery select one store without manifest configuration or writes.
     #[test]
     fn project_stores_live_under_baml_home_and_are_discovered_from_nested_cwd() {
         let tmp = tempfile::tempdir().unwrap();
@@ -114,6 +115,7 @@ mod tests {
         assert!(!project.join(".baml").exists());
     }
 
+    /// Canonical paths separate checkouts while equivalent path spellings share a store.
     #[test]
     fn separate_checkouts_with_the_same_name_have_separate_stores() {
         let tmp = tempfile::tempdir().unwrap();
@@ -131,6 +133,7 @@ mod tests {
     }
 
     #[cfg(unix)]
+    /// A symlink alias must not create another history for the same checkout.
     #[test]
     fn symlinked_project_uses_the_same_store() {
         let tmp = tempfile::tempdir().unwrap();
@@ -145,6 +148,7 @@ mod tests {
         );
     }
 
+    /// Packed and unassociated hosts retain the user store, including existing home fallbacks.
     #[test]
     fn no_project_uses_baml_home_itself() {
         let home = PathBuf::from("user");
@@ -159,6 +163,7 @@ mod tests {
         assert_eq!(resolve(None, None, None).unwrap(), PathBuf::from(".baml"));
     }
 
+    /// Project-resolution errors identify the requested path and never create a fallback store.
     #[test]
     fn missing_project_reports_the_path_instead_of_selecting_a_different_store() {
         let tmp = tempfile::tempdir().unwrap();

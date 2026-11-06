@@ -147,6 +147,7 @@ impl PlaygroundTelemetry {
         Ok(path)
     }
 
+    /// Reuse one query index per project at the shared recording destination.
     fn index(&self, project: &Path) -> Result<Option<Arc<Mutex<Index>>>, TelemetryError> {
         if let Some(index) = self.indexes.lock().expect("index table").get(project) {
             return Ok(Some(Arc::clone(index)));

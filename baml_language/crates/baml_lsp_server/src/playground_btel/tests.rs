@@ -67,6 +67,7 @@ async fn run(
         .await
 }
 
+/// Live refresh finds new playground recordings and preserves their captured values.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     let workspace = tempfile::tempdir().unwrap();

@@ -36,6 +36,7 @@ fn run(command: &mut Command, success: bool) {
     );
 }
 
+/// Validate completed recording contents at an explicit recordings directory.
 fn assert_recordings_in(recordings: &Path, count: usize) {
     let directories: Vec<_> = std::fs::read_dir(recordings)
         .unwrap()
@@ -54,6 +55,7 @@ fn assert_recordings_in(recordings: &Path, count: usize) {
     }
 }
 
+/// Validate recordings in the conventional user-home layout used by packed programs.
 fn assert_recordings(root: &Path, count: usize) {
     assert_recordings_in(&root.join(RECORDINGS), count);
 }
