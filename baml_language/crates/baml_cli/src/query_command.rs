@@ -1,6 +1,6 @@
-//! `baml query`: SQL over the project's local Btel recordings.
+//! `baml query`: SQL over local Btel recordings or the Boundary cloud.
 //!
-//! The first query creates `<project>/.baml/btel/query.sqlite`; each query
+//! The first local query creates `query.sqlite` in the selected Btel root; each query
 //! then applies only newly completed recording files before running. Rows
 //! and a terminal outcome (indexed extents, evidence diagnostics) are
 //! printed; JSON keeps diagnostics out of row data.
@@ -12,7 +12,9 @@
 
 use std::{io::Read as _, path::PathBuf, time::Duration};
 
-use baml_query_btel::{Budgets, Error, Index, IndexOptions, QueryRequest, Status, catalog, format};
+use baml_query_btel::{
+    Budgets, Error, Index, IndexOptions, QueryRequest, SourceLayout, Status, catalog, format,
+};
 use clap::{Parser, ValueEnum};
 
 use crate::project_load::find_project_root_from;
@@ -56,7 +58,9 @@ pub struct QueryArgs {
     #[arg(long, conflicts_with = "local")]
     pub environment: Option<String>,
 
-    /// Project directory (defaults to the current directory's project).
+    /// Project or traces directory: a project store under `BAML_HOME`, a legacy `.baml`,
+    /// btel directory, or recordings directory. A traces directory selects local
+    /// querying directly. Defaults to the shared local store for this project.
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
 
@@ -165,6 +169,7 @@ impl QueryArgs {
         crate::cloud_query::run(self, endpoint, credential, source, project, sql)
     }
 
+    /// Select a source, refresh local files when requested, and render rows and outcomes.
     pub fn run(&self) -> anyhow::Result<crate::ExitCode> {
         if self.schema {
             return self.print_schema();
@@ -178,14 +183,38 @@ impl QueryArgs {
             Some(sql) => sql.to_owned(),
             None => anyhow::bail!("provide a SELECT statement, or --schema to list relations"),
         };
-        let root = match find_project_root_from(self.from.as_deref())? {
-            Some(root) => root,
+        // Trace folders beat enclosing projects and saved cloud credentials.
+        // An explicitly selected project root still uses its own configuration,
+        // even if it contains unrelated directories named btel or recordings.
+        let from = self
+            .from
+            .as_deref()
+            .map(|from| {
+                std::fs::canonicalize(from)
+                    .map_err(|error| anyhow::anyhow!("--from {}: {error}", from.display()))
+            })
+            .transpose()?;
+        let project_root = find_project_root_from(from.as_deref())?;
+        let trace_layout = from
+            .as_deref()
+            .filter(|from| {
+                !from.join(baml_db::BAML_TOML).is_file()
+                    && !from.join(baml_db::BAML_SRC_DIR).is_dir()
+            })
+            .and_then(SourceLayout::from_trace_directory);
+        let local = self.local || trace_layout.is_some();
+        anyhow::ensure!(
+            trace_layout.is_none() || (self.project.is_none() && self.environment.is_none()),
+            "--from selects a local traces directory; use a project directory for a cloud query"
+        );
+        let root = match project_root.as_ref() {
+            Some(root) => root.clone(),
             None => match &self.from {
                 Some(from) => from.clone(),
                 None => std::env::current_dir()?,
             },
         };
-        let api_key = if self.local {
+        let api_key = if local {
             None
         } else {
             baml_env::string_var("BOUNDARY_API_KEY")?
@@ -195,7 +224,7 @@ impl QueryArgs {
             !local_from_env || (self.project.is_none() && self.environment.is_none()),
             "BOUNDARY_API_KEY=local selects local recordings; unset BOUNDARY_API_KEY to use --project or --environment for a cloud query"
         );
-        if !self.local && !local_from_env {
+        if !local && !local_from_env {
             let settings = crate::cloud_config::Boundary::read(&root)?;
             let endpoint = settings.endpoint().map_err(|error| {
                 bcs_api::diagnostics::Context {
@@ -259,7 +288,19 @@ impl QueryArgs {
             },
             explain: self.explain,
         };
-        let outcome = Index::for_project(&root, options).and_then(|mut index| {
+        let layout = match trace_layout {
+            Some(layout) => layout,
+            None => {
+                let store = btel_settings::local_store::resolve(
+                    project_root.as_deref().or(self.from.as_deref()),
+                    baml_env::os_var("BAML_HOME"),
+                    std::env::home_dir(),
+                )?;
+                SourceLayout::for_btel(store.join("btel"))
+            }
+        };
+        let recordings = layout.recordings.clone();
+        let outcome = Index::open(layout, options).and_then(|mut index| {
             if self.no_refresh {
                 index.query(&request)
             } else {
@@ -287,8 +328,8 @@ impl QueryArgs {
         }
         if result.outcome.source_missing && self.format == QueryFormat::Table {
             eprintln!(
-                "note: no recordings at {}; run BAML code in this project to record some",
-                root.join(".baml/btel/recordings").display()
+                "note: no recordings at {}; run BAML code with this local store to record some",
+                recordings.display()
             );
         }
         Ok(match result.outcome.status {

@@ -225,6 +225,7 @@ async def test_stream_precancelled_admission_preserves_reservation():
 # The ordinary SDK CI does not build the query CLI. Run these audits wherever
 # baml-cli is built, or set BAML_AUDIT_CLI to a CLI from the same checkout.
 def _audit_cli():
+    """Use a compatible query CLI, skipping inherited binaries from older checkouts."""
     import os
     from pathlib import Path
 
@@ -235,15 +236,18 @@ def _audit_cli():
     cli = Path(os.environ.get("BAML_AUDIT_CLI", workspace / "target/debug/baml-cli"))
     if not cli.is_file():
         pytest.skip("Build baml_cli to run the native stream recording audit")
-    # A CLI older than this checkout's blob format can't read what the SDK
-    # records here: one left over from another checkout skips, not fails.
-    blob_format = workspace / "crates/btel_settings/src/snapshot.rs"
+    # A CLI older than the blob format or store resolver cannot read what
+    # this SDK records. Warm CI runners can retain an older query binary.
+    reader_sources = [
+        workspace / "crates/btel_settings/src/snapshot.rs",
+        workspace / "crates/btel_settings/src/local_store.rs",
+    ]
     if (
         "BAML_AUDIT_CLI" not in os.environ
-        and cli.stat().st_mtime < blob_format.stat().st_mtime
+        and cli.stat().st_mtime < max(path.stat().st_mtime for path in reader_sources)
     ):
         pytest.skip(
-            "target/debug/baml-cli predates this checkout's blob format; "
+            "target/debug/baml-cli predates this checkout's trace format or layout; "
             "rebuild baml_cli or set BAML_AUDIT_CLI"
         )
     return cli
@@ -251,6 +255,7 @@ def _audit_cli():
 
 # SDK_PARITY_LINT(skip): native Python recording lands where `baml query --local` reads
 def test_recording_lands_in_cwd_project(tmp_path):
+    """SDK and CLI discover the same project store beneath the user home."""
     import json
     import os
     from pathlib import Path
@@ -291,6 +296,9 @@ def test_recording_lands_in_cwd_project(tmp_path):
     )
     assert child.returncode == 0, child.stderr
     assert not (home / ".baml/btel/recordings").exists()
+    assert not (project / ".baml").exists()
+    stores = list((home / ".baml").glob("app-*/btel/recordings"))
+    assert len(stores) == 1 and any(stores[0].iterdir()), child.stderr
 
     result = subprocess.run(
         [
@@ -316,6 +324,7 @@ def test_recording_lands_in_cwd_project(tmp_path):
 
 # SDK_PARITY_LINT(skip): native Python recording ancestry, duration, values and step-count audit
 def test_stream_recording_parent_chain(tmp_path):
+    """Recorded stream ancestry and values remain queryable without a project."""
     import json
     import os
     from pathlib import Path
@@ -328,9 +337,10 @@ def test_stream_recording_parent_chain(tmp_path):
     import baml_sdk
 
     marker = "stream-audit-" + uuid.uuid4().hex
-    # Local queries are project-relative: the child records beneath
-    # `<query_root>/.baml`, its BAML_HOME, and the query reads from there.
+    # With no project enclosing cwd, the child records in BAML_HOME itself.
+    # Query that state directory explicitly rather than adopting a project.
     query_root = tmp_path / "config"
+    query_root.mkdir()
     env = {
         key: value
         for key, value in os.environ.items()
@@ -349,6 +359,7 @@ def test_stream_recording_parent_chain(tmp_path):
     )
     child = subprocess.run(
         [sys.executable, str(sdk_root / "stream_recording_cases.py"), marker],
+        cwd=query_root,
         env=env,
         capture_output=True,
         text=True,
@@ -375,7 +386,7 @@ def test_stream_recording_parent_chain(tmp_path):
             "query",
             "--local",
             "--from",
-            str(query_root),
+            str(query_root / ".baml"),
             "--format",
             "json",
             sql,

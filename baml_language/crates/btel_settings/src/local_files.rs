@@ -1,8 +1,8 @@
 //! Local delivery settings. File output is enabled explicitly per engine.
 use std::num::NonZeroUsize;
 
-/// Standard recording directory relative to the CLI-resolved BAML project root.
-/// User-level recordings instead resolve `btel/recordings` beneath the BAML home.
+/// Conventional recording directory relative to a BAML project root.
+/// Configured stores instead resolve `btel/recordings` beneath the state directory.
 /// Each recording gets its own ID directory beneath this path.
 pub const RECORDINGS_DIRECTORY: &str = ".baml/btel/recordings";
 
@@ -25,7 +25,7 @@ impl Default for LocalDeliveryConfig {
 }
 
 /// CAS directory relative to the BAML project root, shared across recordings.
-/// User-level recordings instead resolve `btel/cas` beneath the BAML home.
+/// Configured stores instead resolve `btel/cas` beneath the state directory.
 /// Local delivery appends the blob format version before the digest shards.
 pub const CAS_DIRECTORY: &str = ".baml/btel/cas";
 /// Writer buffering for scalar-heavy snapshot blobs; does not constrain capture size.

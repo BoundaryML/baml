@@ -15,6 +15,7 @@ pub(crate) fn create_engine(
     create_engine_with_context(program, argv, project_root, sources, Default::default())
 }
 
+/// Create the CLI engine with its launch context and shared local-store fallback.
 pub(crate) fn create_engine_with_context(
     program: bex_vm_types::Program,
     argv: Vec<String>,
@@ -37,7 +38,7 @@ pub(crate) fn create_engine_with_context(
                     boundary.api_url.as_deref(),
                 )
                 .unwrap_or_else(|| {
-                    TelemetryRecording::local_files(
+                    TelemetryRecording::project_files(
                         project_root,
                         btel_settings::publisher::RecordingConfig::default(),
                     )

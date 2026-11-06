@@ -788,6 +788,7 @@ async fn wrapper_build_embeds_named_api_key_for_both_release_variants() {
     }
 }
 
+/// Packed wrapper recordings stay in the user store and keep boundary spans value-free.
 #[test]
 fn wrapper_command_boundaries_record_spans_without_values() {
     let built = common::ensure_built();
@@ -843,7 +844,7 @@ fn wrapper_command_boundaries_record_spans_without_values() {
     let query = |sql: &str| {
         let output = Command::new(&built.baml_cli)
             .args(["query", "--local", "--format", "json", "--from"])
-            .arg(&home)
+            .arg(home.join(".baml"))
             .arg(sql)
             .env("BAML_HOME", home.join(".baml"))
             .env("BAML_CLI_ALLOW_DIRECT", "1")

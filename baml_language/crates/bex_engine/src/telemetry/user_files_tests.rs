@@ -9,19 +9,19 @@ use btel_types::context::Context;
 
 use super::{TelemetryRecording, user_file_roots};
 
+/// Recording and CAS roots inside a selected state directory.
 fn btel(root: &Path) -> (PathBuf, PathBuf) {
     (root.join("btel/recordings"), root.join("btel/cas"))
 }
 
-fn project(root: &Path) -> (PathBuf, PathBuf) {
-    (
-        root.join(".baml/btel/recordings"),
-        root.join(".baml/btel/cas"),
-    )
+/// Resolve the expected project destination with an injectable home.
+fn project(root: &Path, baml_home: Option<PathBuf>, home: Option<PathBuf>) -> (PathBuf, PathBuf) {
+    btel(&btel_settings::local_store::resolve(Some(root), baml_home.map(Into::into), home).unwrap())
 }
 
+/// SDK discovery uses the enclosing project identity beneath the user home.
 #[test]
-fn project_enclosing_cwd_precedes_home() {
+fn project_enclosing_cwd_is_namespaced_under_home() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("app");
     let nested = root.join("src/deep");
@@ -30,23 +30,25 @@ fn project_enclosing_cwd_precedes_home() {
     let home = dir.path().join("home");
 
     assert_eq!(
-        user_file_roots(None, Some(&nested), Some(home.clone())),
-        vec![project(&root), btel(&home.join(".baml"))]
+        user_file_roots(None, Some(&nested), Some(home.clone())).unwrap(),
+        project(&root, None, Some(home))
     );
 }
 
+/// An explicit BAML home still isolates each project in its own child store.
 #[test]
-fn baml_home_overrides_project() {
+fn baml_home_contains_the_project_store() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("baml.toml"), "").unwrap();
     let baml_home = dir.path().join("state");
 
     assert_eq!(
-        user_file_roots(Some(baml_home.clone().into()), Some(dir.path()), None),
-        vec![btel(&baml_home)]
+        user_file_roots(Some(baml_home.clone().into()), Some(dir.path()), None).unwrap(),
+        project(dir.path(), Some(baml_home), None)
     );
 }
 
+/// An empty environment override preserves the default user-home project store.
 #[test]
 fn empty_baml_home_is_unset() {
     let dir = tempfile::tempdir().unwrap();
@@ -54,24 +56,55 @@ fn empty_baml_home_is_unset() {
     let home = dir.path().join("home");
 
     assert_eq!(
-        user_file_roots(Some("".into()), Some(dir.path()), Some(home.clone())),
-        vec![project(dir.path()), btel(&home.join(".baml"))]
+        user_file_roots(Some("".into()), Some(dir.path()), Some(home.clone())).unwrap(),
+        project(dir.path(), None, Some(home))
     );
 }
 
+/// Unassociated SDK hosts and packed programs keep the user store.
 #[test]
 fn no_project_uses_home() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join("home");
 
     assert_eq!(
-        user_file_roots(None, Some(dir.path()), Some(home.clone())),
-        vec![btel(&home.join(".baml"))]
+        user_file_roots(None, Some(dir.path()), Some(home.clone())).unwrap(),
+        btel(&home.join(".baml"))
     );
     assert_eq!(
-        user_file_roots(None, None, Some(home.clone())),
-        vec![btel(&home.join(".baml"))]
+        user_file_roots(None, None, Some(home.clone())).unwrap(),
+        btel(&home.join(".baml"))
     );
+}
+
+/// A blocked destination disables delivery instead of selecting an unrelated home.
+#[test]
+fn an_unwritable_selected_store_does_not_redirect_recordings() {
+    const CHILD: &str = "BAML_TEST_BLOCKED_STORE";
+    if let Some(root) = baml_env::os_var(CHILD) {
+        let root = PathBuf::from(root);
+        let (runtime, delivery) =
+            TelemetryRecording::project_files(&root, RecordingConfig::default())
+                .start(None, Arc::default(), &Context::default())
+                .unwrap();
+        assert!(delivery.is_none(), "must not open a different store");
+        assert!(runtime.finish().is_err());
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    // A regular file blocks directory creation even for privileged test runners.
+    let blocked = dir.path().join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "telemetry::user_files_tests::an_unwritable_selected_store_does_not_redirect_recordings", "--nocapture"])
+        .env(CHILD, dir.path())
+        .env("BAML_HOME", blocked)
+        .env("HOME", dir.path().join("user"))
+        .env("USERPROFILE", dir.path().join("user"))
+        .output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(!dir.path().join(".baml").exists());
+    assert!(!dir.path().join("user").exists());
 }
 
 /// Starts real recordings in child processes whose working directory is a
@@ -131,7 +164,7 @@ fn recording_starts_in_cwd_project() {
         );
     };
 
-    let recordings = root.join(".baml/btel/recordings");
+    let recordings = project(&root, None, Some(home.clone())).0;
     let fallback = home.join(".baml/btel/recordings");
     std::fs::create_dir_all(&recordings).unwrap();
     std::fs::create_dir_all(&fallback).unwrap();
@@ -139,25 +172,10 @@ fn recording_starts_in_cwd_project() {
     // Packed programs keep recording to the user store.
     run(&fallback, true);
 
-    // An unwritable project store falls back to the user store.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        let readonly = std::fs::Permissions::from_mode(0o555);
-        std::fs::set_permissions(&recordings, readonly).unwrap();
-        let writable = std::fs::File::create(recordings.join("probe")).is_ok();
-        if !writable {
-            run(&fallback, false);
-        }
-        std::fs::set_permissions(&recordings, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-        // So does a writable project store whose CAS is not.
-        let cas = root.join(".baml/btel/cas");
-        std::fs::create_dir_all(&cas).unwrap();
-        std::fs::set_permissions(&cas, std::fs::Permissions::from_mode(0o555)).unwrap();
-        if !writable {
-            run(&fallback, false);
-        }
-        std::fs::set_permissions(&cas, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    // Manifest settings cannot redirect recordings away from the fixed project store.
+    std::fs::write(root.join("baml.toml"), "[tracing]\nstore = 'custom'\n").unwrap();
+    run(&recordings, false);
+    run(&fallback, true);
+    assert!(!root.join("custom").exists());
+    assert!(!root.join(".baml").exists());
 }
