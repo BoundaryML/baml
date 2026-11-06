@@ -15,10 +15,12 @@ HERE = Path(__file__).resolve().parent
 
 
 def read(path):
+    """Load one preserved JSON evidence file."""
     return json.loads(path.read_text())
 
 
 def summarize(data, array=False):
+    """Calculate medians, ranges, changes, and shared checksums from raw trials."""
     if set(data) != {"023", "024"}:
         raise ValueError("Expected both release labels: 023 and 024")
     if not data["023"] or len(data["023"]) != len(data["024"]):
@@ -52,12 +54,14 @@ def summarize(data, array=False):
 
 
 def stored_summary(directory):
+    """Combine the original suite and array summaries from an evidence directory."""
     result = summarize(read(directory / "benchmark-results.json"))
     result.update(summarize(read(directory / "array-results.json"), array=True))
     return result
 
 
 def validate_preserved():
+    """Verify preserved file hashes and reproduce the exact stored summary."""
     for name, expected in read(HERE / "environment.json")["preserved_files_sha256"].items():
         actual = hashlib.sha256((HERE / name).read_bytes()).hexdigest()
         if actual != expected:
@@ -69,6 +73,7 @@ def validate_preserved():
 
 
 def print_summary(result):
+    """Print rounded measurements alongside their full observed ranges."""
     for name, row in result.items():
         lower, upper = row["023"], row["024"]
         print(
@@ -80,6 +85,7 @@ def print_summary(result):
 
 
 def replay(args):
+    """Run fresh interleaved trials without overwriting historical observations."""
     destination = args.output_dir.resolve()
     destination.mkdir(parents=True, exist_ok=False)
     bindings = {
@@ -123,6 +129,7 @@ def replay(args):
 
 
 def main():
+    """Dispatch evidence validation or a caller-configured benchmark replay."""
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("validate", help="Verify preserved hashes, results, and exact summary; does not benchmark")

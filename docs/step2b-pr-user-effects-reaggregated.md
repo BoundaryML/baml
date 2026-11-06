@@ -424,7 +424,7 @@ let add = make_adder(10).await?;
 let sum = add.call((5,)).await?;
 ```
 
-Keep blocking calls outside a Tokio async context; otherwise the Rust bridge returns `CalledSyncFromAsync`. For Rust options variants, replace a blocking `echo_with_options(...)` with `echo_sync_with_options(...)`, or await `echo_with_options(...)`.
+Keep blocking calls outside an entered Tokio runtime; otherwise the Rust bridge returns `CalledSyncFromAsync`. `tokio::task::spawn_blocking` still carries that runtime context. Use an async binding, or a separate OS thread without an entered Tokio runtime. For Rust options variants, replace a blocking `echo_with_options(...)` with `echo_sync_with_options(...)`, or await `echo_with_options(...)`.
 
 Swift changes from:
 
