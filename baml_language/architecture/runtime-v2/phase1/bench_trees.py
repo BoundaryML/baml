@@ -13,6 +13,8 @@ commands = {
     "v2": [str(out / "trees-v2"), "--jobs", str(jobs), "--warmup", "1"],
     "spike": [str(out / "spike-target/release/v2-spike"), "binary-trees-14", str(jobs), "1", "3222190"],
 }
+if before := os.environ.get("PHASE1_TREE_BEFORE"):
+    commands["v2-before"] = [before, "--jobs", str(jobs), "--warmup", "1"]
 env = dict(os.environ, BAML_TELEMETRY="off", BAML_GC_STRESS="0")
 env.pop("BAML_COMPILED_BODIES", None)
 rows = []

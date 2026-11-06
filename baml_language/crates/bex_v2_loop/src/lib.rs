@@ -115,6 +115,7 @@ struct CancelNode {
     linked: Vec<CancellationToken>,
     external: bool,
     epoch: Rc<Cell<usize>>,
+    poll_word: Rc<Cell<u8>>,
 }
 impl Drop for CancelNode {
     fn drop(&mut self) {
@@ -146,6 +147,7 @@ impl TaskCancel {
                 external: !linked.is_empty(),
                 linked,
                 epoch,
+                poll_word: Rc::default(),
             }),
             deadline: None,
         }
@@ -158,6 +160,7 @@ impl TaskCancel {
                 external: self.node.external || !linked.is_empty(),
                 linked,
                 epoch: self.node.epoch.clone(),
+                poll_word: self.node.poll_word.clone(),
             }),
             deadline: self.deadline,
         }
@@ -167,6 +170,7 @@ impl TaskCancel {
         self
     }
     pub fn cancel(&self) {
+        self.node.poll_word.set(self.node.poll_word.get() | 1);
         if !self.node.cancelled.replace(true) {
             self.node.epoch.set(self.node.epoch.get().wrapping_add(1));
         }
@@ -395,6 +399,7 @@ struct Core {
     host_enabled: bool,
     cancel_epoch: Rc<Cell<usize>>,
     last_cancel_epoch: usize,
+    poll_word: Rc<Cell<u8>>,
     slice: slice_clock::Slice,
     #[cfg(feature = "instrument")]
     metrics: Metrics,
@@ -539,6 +544,7 @@ impl TaskLoop {
                 host_enabled: false,
                 cancel_epoch: Rc::default(),
                 last_cancel_epoch: 0,
+                poll_word: Rc::new(Cell::new(1)),
                 slice: slice_clock::Slice::new(config.time_slice),
                 tasks: tasks::Tasks::default(),
                 ready: VecDeque::new(),
@@ -664,6 +670,7 @@ impl TaskLoop {
         }
         let mut fiber = {
             let mut c = self.core.borrow_mut();
+            refresh_poll_word(&c, id);
             let t = c.tasks.get_mut(&id).unwrap();
             t.state = TaskState::Running;
             let base = t.base;
@@ -827,6 +834,7 @@ fn spawn(
         external: !options.linked.is_empty() || inherited.as_ref().is_some_and(|p| p.node.external),
         linked: options.linked,
         epoch: c.cancel_epoch.clone(),
+        poll_word: c.poll_word.clone(),
     };
     let needs_service = node.external || deadline.is_some() || options.gate.is_some();
     c.slow_tasks += usize::from(needs_service);
@@ -931,6 +939,7 @@ fn spawn(
         },
     );
     c.ready.push_back(id);
+    c.poll_word.set(c.poll_word.get() | 1);
     future
 }
 
@@ -967,6 +976,7 @@ impl TaskCx<'_> {
     }
     fn enable_service(&mut self) {
         let mut c = self.core.borrow_mut();
+        c.poll_word.set(c.poll_word.get() | 1);
         let t = c.tasks.get_mut(&self.id).unwrap();
         if !t.needs_service {
             t.needs_service = true;
@@ -1078,7 +1088,16 @@ impl TaskCx<'_> {
             result?;
         }
     }
+    #[inline(always)]
     pub fn poll(&mut self) -> Result<(), Err> {
+        if self.cancel.node.poll_word.get() & 1 == 0 {
+            return Ok(());
+        }
+        self.poll_slow()
+    }
+    #[cold]
+    #[inline(never)]
+    fn poll_slow(&mut self) -> Result<(), Err> {
         self.checkpoint()?;
         maintenance(&self.core);
         let yield_now = {
@@ -1099,6 +1118,7 @@ impl TaskCx<'_> {
             self.scheduled = slice_clock::now();
             self.checkpoint()?;
         }
+        refresh_poll_word(&self.core.borrow(), self.id);
         Ok(())
     }
     pub fn sleep(&mut self, duration: Duration) -> Result<(), Err> {
@@ -1281,4 +1301,15 @@ fn service(core: &Rc<RefCell<Core>>) {
     for id in wakeups {
         wake(&mut c, id);
     }
+}
+
+// Bit zero is loop work. Other bits belong to the heap/runtime integration.
+fn refresh_poll_word(c: &Core, running: usize) {
+    let required = !c.ready.is_empty()
+        || c.slow_tasks != 0
+        || c.io_pending != 0
+        || c.host_enabled
+        || c.tasks[&running].cancel.is_cancelled();
+    c.poll_word
+        .set((c.poll_word.get() & !1) | u8::from(required));
 }

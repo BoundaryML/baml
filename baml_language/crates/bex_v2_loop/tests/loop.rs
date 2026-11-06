@@ -792,3 +792,24 @@ fn integration_root_leases_are_loop_owned_and_released_without_borrowing() {
     }
     lp.precise_roots(&mut |_| panic!("expired integration root"));
 }
+
+#[test]
+fn idle_poll_word_is_clear_and_local_cancellation_is_immediate_and_sticky() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let word = lp.integration_roots().poll_word();
+    let word_in = word.clone();
+    let future = lp.spawn(move |cx| {
+        assert_eq!(word_in.get() & 1, 0);
+        for _ in 0..1000 {
+            cx.poll()?;
+        }
+        assert_eq!(word_in.get() & 1, 0);
+        cx.cancel().cancel();
+        assert_eq!(word_in.get() & 1, 1);
+        assert!(matches!(cx.poll(), Err(Err::Cancelled)));
+        assert!(matches!(cx.poll(), Err(Err::Cancelled)));
+        Ok(Value::int(1))
+    });
+    lp.run_until(&future).unwrap();
+}

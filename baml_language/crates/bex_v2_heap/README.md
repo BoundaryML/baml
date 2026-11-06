@@ -248,3 +248,12 @@ historical Immix result. The original decision 3 approximately-10%-of-semispace
 gate is still not met; these improvements do not establish full phase-one
 acceptance or the unmeasured memory/fragmentation gate. There are no new interface
 or collector-semantic deviations in this optimization.
+
+### Integrated checkpoint word
+
+`bind_poll_word` attaches the loop's owner-thread word; the heap owns bit 1 and
+preserves the scheduler's bit 0. Budget-crossing small/large allocations request
+collection, collection clears the request, and GC stress keeps it set. The
+cached layout's budget guard sends the crossing object through the cold path;
+the bump fast path gains no post-allocation branch. Ordinary collection still
+occurs at the next allocation or safepoint, with unchanged byte accounting.

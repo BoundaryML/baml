@@ -5,6 +5,7 @@
 //! Descriptors and type-tag classification are immutable for the heap lifetime.
 use std::{
     alloc::{Layout, alloc_zeroed, dealloc},
+    cell::Cell,
     collections::{BTreeMap, HashMap},
     marker::PhantomData,
     rc::Rc,
@@ -298,6 +299,7 @@ pub struct Heap {
     cursor: usize,
     accounted_cursor: usize,
     budget_end: usize,
+    budget_guard: usize,
     limit: usize,
     search: usize,
     finalizable: Vec<Finalizable>,
@@ -305,6 +307,7 @@ pub struct Heap {
     weak: Vec<BTreeMap<usize, usize>>,
     stats: Stats,
     stress: bool,
+    poll_word: Option<Rc<Cell<u8>>>,
     capacity_limit: usize,
     emergency_block: Option<usize>,
     emergency_cursor: usize,
@@ -347,6 +350,7 @@ impl Heap {
             cursor: 0,
             accounted_cursor: 0,
             budget_end: 0,
+            budget_guard: 0,
             limit: 0,
             search: 0,
             finalizable: vec![],
@@ -357,6 +361,7 @@ impl Heap {
                 ..Stats::default()
             },
             stress: stress_from_environment(),
+            poll_word: None,
             capacity_limit: usize::MAX,
             emergency_block: None,
             emergency_cursor: 0,
@@ -379,6 +384,25 @@ impl Heap {
     }
     pub fn set_stress(&mut self, enabled: bool) {
         self.stress = enabled;
+        self.refresh_poll_word();
+    }
+    /// Bind the integrated runtime checkpoint word. Bit 1 belongs to this heap;
+    /// the scheduler owns bit 0. The word and heap have the same owner thread.
+    pub fn bind_poll_word(&mut self, word: Rc<Cell<u8>>) {
+        self.poll_word = Some(word);
+        self.refresh_poll_word();
+    }
+    fn refresh_poll_word(&self) {
+        if let Some(word) = &self.poll_word {
+            let due = self.stress || self.stats().allocated_since_gc >= self.stats.budget;
+            word.set((word.get() & !2) | if due { 2 } else { 0 });
+        }
+    }
+    #[cold]
+    fn request_poll(&self) {
+        if let Some(word) = &self.poll_word {
+            word.set(word.get() | 2);
+        }
     }
     pub fn stats(&self) -> Stats {
         let mut stats = self.stats;
@@ -414,7 +438,7 @@ impl Heap {
         if bytes > LARGE_THRESHOLD
             || self.layout_key != ((u64::from(desc) << 32) | bytes as u64)
             || self.limit - self.cursor < aligned
-            || self.cursor >= self.budget_end
+            || self.cursor >= self.budget_guard
         {
             return unsafe { self.alloc_slow(desc, bytes, aligned, roots) };
         }
@@ -489,6 +513,7 @@ impl Heap {
             p.cast::<Header>().write(Header { desc, aux: 0 });
         }
         self.stats.allocated_since_gc = self.stats.allocated_since_gc.saturating_add(aligned);
+        self.refresh_poll_word();
         Ok(p)
     }
     #[inline(always)]
@@ -511,6 +536,21 @@ impl Heap {
         }
         self.register_finalizer(p as usize);
         p
+    }
+    // Only used by the cold allocator. The fast allocation guard routes the
+    // budget-crossing object here, avoiding a second branch in every bump.
+    unsafe fn bump_and_request_poll(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        aligned: usize,
+    ) -> *mut u8 {
+        self.budget_guard = self.budget_end.saturating_sub(aligned);
+        let pointer = unsafe { self.bump(desc, bytes, aligned) };
+        if self.cursor >= self.budget_end {
+            self.request_poll();
+        }
+        pointer
     }
     #[inline(always)]
     fn register_finalizer(&mut self, object: usize) {
@@ -588,10 +628,11 @@ impl Heap {
                     .saturating_sub(self.stats.allocated_since_gc),
             );
             self.register_finalizer(p as usize);
+            self.refresh_poll_word();
             return Ok(p);
         }
         if self.limit - self.cursor >= aligned {
-            return Ok(unsafe { self.bump(desc, bytes, aligned) });
+            return Ok(unsafe { self.bump_and_request_poll(desc, bytes, aligned) });
         }
         loop {
             while self.search < self.blocks.len() {
@@ -610,7 +651,7 @@ impl Heap {
                             .budget
                             .saturating_sub(self.stats.allocated_since_gc),
                     );
-                    return Ok(unsafe { self.bump(desc, bytes, aligned) });
+                    return Ok(unsafe { self.bump_and_request_poll(desc, bytes, aligned) });
                 }
                 self.search += 1;
             }
@@ -636,7 +677,7 @@ impl Heap {
                                     .budget
                                     .saturating_sub(self.stats.allocated_since_gc),
                             );
-                            return Ok(unsafe { self.bump(desc, bytes, aligned) });
+                            return Ok(unsafe { self.bump_and_request_poll(desc, bytes, aligned) });
                         }
                     }
                     self.fresh_block().ok_or(AllocFailure { bytes })?
@@ -785,6 +826,7 @@ impl Heap {
         self.cursor = 0;
         self.accounted_cursor = 0;
         self.budget_end = 0;
+        self.budget_guard = 0;
         self.limit = 0;
         self.search = 0;
         self.emergency_cursor = 0;
@@ -881,6 +923,7 @@ impl Heap {
         let pause = start.elapsed();
         self.stats.total_pause += pause;
         self.stats.max_pause = self.stats.max_pause.max(pause);
+        self.refresh_poll_word();
     }
     pub fn budget_for(live_bytes: usize) -> usize {
         live_bytes.saturating_mul(4).max(MIN_BUDGET)
@@ -1000,6 +1043,35 @@ mod allocation_tests {
             finalizer: None,
         },
     ];
+    #[test]
+    fn checkpoint_word_tracks_small_large_and_stress_collection() {
+        let word = Rc::new(Cell::new(1)); // scheduler bit must survive heap changes
+        let mut h = heap(48);
+        h.bind_poll_word(word.clone());
+        assert_eq!(word.get(), 1);
+        unsafe {
+            h.alloc(0, 32, &NoRoots);
+            assert_eq!(word.get(), 1);
+            h.alloc(0, 32, &NoRoots);
+            assert_eq!(word.get(), 3);
+            h.safepoint(&NoRoots);
+            assert_eq!(word.get(), 1);
+            h.stats.budget = 8192;
+            h.alloc(1, 16384, &NoRoots);
+            assert_eq!(word.get(), 3);
+            h.safepoint(&NoRoots);
+            assert_eq!(word.get(), 1);
+            h.set_stress(true);
+            assert_eq!(word.get(), 3);
+            let collections = h.stats().collections;
+            h.safepoint(&NoRoots);
+            h.safepoint(&NoRoots);
+            assert_eq!(h.stats().collections, collections + 2);
+            assert_eq!(word.get(), 3);
+            h.set_stress(false);
+            assert_eq!(word.get(), 1);
+        }
+    }
     fn heap(budget: usize) -> Heap {
         let mut heap = Heap::new(&DESCS, &[true]);
         heap.set_stress(false);

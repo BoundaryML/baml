@@ -22,6 +22,7 @@ impl RootSource for Roots<'_> {
 }
 
 thread_local! {
+    static POLL_WORD: Cell<*const Cell<u8>> = const { Cell::new(std::ptr::null()) };
     static STACK_LIMIT: Cell<usize> = const { Cell::new(0) };
     static ROOTS: Cell<*const bex_v2_loop::IntegrationRoots> = const { Cell::new(std::ptr::null()) };
     static HEAP: Cell<*mut Heap> = const { Cell::new(std::ptr::null_mut()) };
@@ -79,7 +80,18 @@ unsafe fn emergency_alloc(desc: u32, bytes: usize) -> *mut u8 {
 /// # Safety
 /// The same rooting contract as `alloc` applies. This phase-one adapter supports
 /// a single root task; it does not expose child spawning or heap-valued results.
+#[inline(always)]
 pub unsafe fn safepoint() -> Result<(), bex_v2_loop::Err> {
+    let word = POLL_WORD.get();
+    assert!(!word.is_null(), "v2 safepoint outside a root task");
+    if unsafe { (*word).get() } == 0 {
+        return Ok(());
+    }
+    unsafe { safepoint_slow() }
+}
+#[cold]
+#[inline(never)]
+unsafe fn safepoint_slow() -> Result<(), bex_v2_loop::Err> {
     HEAP.with(|heap| {
         TASK.with(|task| {
             assert!(
@@ -129,6 +141,7 @@ impl Instance {
             io.handle().clone(),
             Rc::new(RefCell::new(())),
         );
+        heap.bind_poll_word(tasks.integration_roots().poll_word());
         Self {
             heap,
             tasks,
@@ -170,6 +183,7 @@ impl Instance {
                 *mut TaskCx<'static>,
                 *const bex_v2_loop::IntegrationRoots,
                 usize,
+                *const Cell<u8>,
             );
             impl Drop for Binding {
                 fn drop(&mut self) {
@@ -177,6 +191,7 @@ impl Instance {
                     TASK.set(self.1);
                     ROOTS.set(self.2);
                     STACK_LIMIT.set(self.3);
+                    POLL_WORD.set(self.4);
                 }
             }
             let previous_heap = HEAP.replace(heap);
@@ -185,7 +200,15 @@ impl Instance {
             let previous_task = TASK.replace(current.cast::<TaskCx<'static>>());
             let previous_roots = ROOTS.replace(&roots);
             let previous_limit = STACK_LIMIT.replace(roots.stack_limit(cx.id()));
-            let _binding = Binding(previous_heap, previous_task, previous_roots, previous_limit);
+            let poll_word = roots.poll_word();
+            let previous_poll = POLL_WORD.replace(Rc::as_ptr(&poll_word));
+            let _binding = Binding(
+                previous_heap,
+                previous_task,
+                previous_roots,
+                previous_limit,
+                previous_poll,
+            );
             *output.borrow_mut() = Some(entry());
             Ok(Value::int(0))
         });

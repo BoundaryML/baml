@@ -28,6 +28,12 @@ impl IntegrationRoot {
     }
 }
 impl IntegrationRoots {
+    /// Shared owner-thread checkpoint word. Bit 0 is maintained by the loop;
+    /// bit 1 is reserved for the integrated heap. Callers must preserve bit 0.
+    pub fn poll_word(&self) -> Rc<Cell<u8>> {
+        self.0.borrow().poll_word.clone()
+    }
+
     /// Register a managed pointer held outside the conservatively scanned stacks.
     ///
     /// # Safety

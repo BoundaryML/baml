@@ -363,3 +363,13 @@ no loop borrow, including during fiber destruction. Expired weak registrations
 are pruned on registration. The caller must keep the owning heap alive and may
 register only null or live pointers from that heap. This does not expose root
 access through `TaskCx` or make task contexts implement `RootSource`.
+
+### Quiet poll fast path
+
+The loop maintains bit 0 of an owner-thread checkpoint word exposed only through
+`IntegrationRoots::poll_word` for runtime integration. It is clear when no ready
+peer, cancellation/service source, I/O or host submission can require work.
+Local cancellation and spawning request work immediately. External tokens and
+deadlines keep polling active; an epoch/maintenance refresh cannot suppress them.
+Bit 1 belongs to the integrated heap. A quiet poll skips the previous cancellation
+ancestry walk and maintenance; active polls retain the original yield policy.

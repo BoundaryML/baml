@@ -21,6 +21,7 @@ Descriptor{kind:Kind::List,size:8,ptr_slots:(0,0),tagged_slots:(0,0),elem:Some(b
 #[repr(C)] struct C4185{header:bex_v2_heap::Header,f0:usize,f1:usize,}
 static O4187:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4187:rt::Source=rt::Source{file:"main.baml",function:"user.packet",lines:&[14,14,14,14]};
+#[inline(always)]
 unsafe fn f4187(mut l1:usize,mut l2:i64,mut l3:i64)->R<usize>{unsafe{rt::observe(&O4187);rt::check_stack().map_err(|e|e.at(&S4187,0))?;
 let mut l0:usize=0;
 let mut l4:usize=0;
@@ -30,6 +31,7 @@ return Ok(l0);
 }}
 static O4188:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4188:rt::Source=rt::Source{file:"main.baml",function:"user.add_to",lines:&[17,17,18,18,18,18,19,19,21,21,22,22,25,25,26,23,23,18,18]};
+#[inline(always)]
 unsafe fn f4188(mut l1:usize,mut l2:usize)->R<usize>{unsafe{rt::observe(&O4188);rt::check_stack().map_err(|e|e.at(&S4188,0))?;
 let mut l0:usize=0;
 let mut l3:bool=false;
@@ -64,6 +66,7 @@ return Ok(l0);
 }}
 static O4190:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4190:rt::Source=rt::Source{file:"main.baml",function:"user.tcb_run",lines:&[40,40,41,41,42,42,43,43,43,44,44,45,46,46,46,46,46,46,46,49,49,49,49,49]};
+#[inline(always)]
 unsafe fn f4190(mut l1:usize,mut l2:usize)->R<usize>{unsafe{rt::observe(&O4190);rt::check_stack().map_err(|e|e.at(&S4190,0))?;
 let mut l0:usize=0;
 let mut l3:usize=0;
@@ -111,6 +114,7 @@ return Ok(l0);
 }}
 static O4191:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4191:rt::Source=rt::Source{file:"main.baml",function:"user.check_priority_add",lines:&[52,52,52,52,53,53,54,54,55,55,55,55,55,57,57,57,57,57,59,59,55,55]};
+#[inline(always)]
 unsafe fn f4191(mut l1:usize,mut l2:usize,mut l3:usize)->R<usize>{unsafe{rt::observe(&O4191);rt::check_stack().map_err(|e|e.at(&S4191,0))?;
 let mut l0:usize=0;
 let mut l4:bool=false;
@@ -150,6 +154,7 @@ return Ok(l0);
 }}
 static O4192:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4192:rt::Source=rt::Source{file:"main.baml",function:"user.held_or_suspended",lines:&[62,62,62,62,62,62,62,62,62]};
+#[inline(always)]
 unsafe fn f4192(mut l1:usize)->R<bool>{unsafe{rt::observe(&O4192);rt::check_stack().map_err(|e|e.at(&S4192,0))?;
 let mut l0:bool=false;
 let mut l2:bool=false;
@@ -174,6 +179,7 @@ return Ok(l0);
 }}
 static O4193:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4193:rt::Source=rt::Source{file:"main.baml",function:"user.add_task",lines:&[73,73,73,73,73,73,73,74,74,74,74,75,76,77,77,78,78,78]};
+#[inline(always)]
 unsafe fn f4193(mut l1:usize,mut l2:i64,mut l3:i64,mut l4:usize,mut l5:rt::Dyn)->R<usize>{unsafe{rt::observe(&O4193);rt::check_stack().map_err(|e|e.at(&S4193,0))?;
 let mut l0:usize=0;
 let mut l6:i64=0;
@@ -205,6 +211,7 @@ return Ok(l0);
 }}
 static O4194:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4194:rt::Source=rt::Source{file:"main.baml",function:"user.release",lines:&[81,81,81,82,82,82,82,83,83,83,84,85,85,85,85,85,85,86,86,85,85,82,82]};
+#[inline(always)]
 unsafe fn f4194(mut l1:usize,mut l2:i64)->R<usize>{unsafe{rt::observe(&O4194);rt::check_stack().map_err(|e|e.at(&S4194,0))?;
 let mut l0:usize=0;
 let mut l3:usize=0;
@@ -255,6 +262,7 @@ return Ok(l0);
 }}
 static O4195:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4195:rt::Source=rt::Source{file:"main.baml",function:"user.hold_current",lines:&[89,89,90,91,91,91,91,92,92,92,93,91,91]};
+#[inline(always)]
 unsafe fn f4195(mut l1:usize)->R<usize>{unsafe{rt::observe(&O4195);rt::check_stack().map_err(|e|e.at(&S4195,0))?;
 let mut l0:usize=0;
 let mut l2:usize=0;
@@ -279,6 +287,7 @@ return Ok(l0);
 }}
 static O4196:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4196:rt::Source=rt::Source{file:"main.baml",function:"user.suspend_current",lines:&[96,96,97,97,97,97,98,98,98,99,97,97]};
+#[inline(always)]
 unsafe fn f4196(mut l1:usize)->R<usize>{unsafe{rt::observe(&O4196);rt::check_stack().map_err(|e|e.at(&S4196,0))?;
 let mut l0:usize=0;
 let mut l2:usize=0;
@@ -302,6 +311,7 @@ return Ok(l0);
 }}
 static O4197:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4197:rt::Source=rt::Source{file:"main.baml",function:"user.enqueue",lines:&[102,102,102,102,103,103,103,103,104,104,105,105,105,105,106,106,107,108,109,109,103,103]};
+#[inline(always)]
 unsafe fn f4197(mut l1:usize,mut l2:usize)->R<usize>{unsafe{rt::observe(&O4197);rt::check_stack().map_err(|e|e.at(&S4197,0))?;
 let mut l0:usize=0;
 let mut l3:usize=0;
@@ -344,6 +354,7 @@ return Ok(l0);
 }}
 static O4198:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4198:rt::Source=rt::Source{file:"main.baml",function:"user.<(user.IdleTask as user.Task)>.run",lines:&[116,116,117,117,117,117,118,118,118,118,119,119,119,120,122,122,122,122,123,117,117]};
+#[inline(always)]
 unsafe fn f4198(mut l1:usize,mut l2:usize,mut l3:usize)->R<usize>{unsafe{rt::observe(&O4198);rt::check_stack().map_err(|e|e.at(&S4198,0))?;
 let mut l0:usize=0;
 let mut l4:bool=false;
@@ -382,6 +393,7 @@ return Ok(l0);
 }}
 static O4199:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4199:rt::Source=rt::Source{file:"main.baml",function:"user.<(user.DeviceTask as user.Task)>.run",lines:&[131,131,131,132,132,133,133,133,133,134,134,135,137,137,138,133,133]};
+#[inline(always)]
 unsafe fn f4199(mut l1:usize,mut l2:usize,mut l3:usize)->R<usize>{unsafe{rt::observe(&O4199);rt::check_stack().map_err(|e|e.at(&S4199,0))?;
 let mut l0:usize=0;
 let mut l4:bool=false;
@@ -413,6 +425,7 @@ return Ok(l0);
 }}
 static O4200:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4200:rt::Source=rt::Source{file:"main.baml",function:"user.<(user.WorkerTask as user.Task)>.run",lines:&[147,147,147,147,147,148,148,148,148,148,148,148,149,149,150,151,151,151,151,152,152,153,153,153,153,154,154,154,154,151,151,156,156,147,147]};
+#[inline(always)]
 unsafe fn f4200(mut l1:usize,mut l2:usize,mut l3:usize)->R<usize>{unsafe{rt::observe(&O4200);rt::check_stack().map_err(|e|e.at(&S4200,0))?;
 let mut l0:usize=0;
 let mut l4:bool=false;
@@ -475,6 +488,7 @@ return Ok(l0);
 }}
 static O4201:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4201:rt::Source=rt::Source{file:"main.baml",function:"user.<(user.HandlerTask as user.Task)>.run",lines:&[165,165,165,165,166,166,166,166,166,166,166,166,167,167,167,167,167,169,169,170,170,170,171,171,172,173,173,174,174,174,175,175,176,176,176,177,178,181,181,182,185,185,178,178]};
+#[inline(always)]
 unsafe fn f4201(mut l1:usize,mut l2:usize,mut l3:usize)->R<usize>{unsafe{rt::observe(&O4201);rt::check_stack().map_err(|e|e.at(&S4201,0))?;
 let mut l0:usize=0;
 let mut l4:bool=false;
@@ -564,6 +578,7 @@ return Ok(l0);
 }}
 static O4202:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4202:rt::Source=rt::Source{file:"main.baml",function:"user.richards",lines:&[190,190,190,191,191,192,192,193,194,194,194,195,195,195,195,195,196,196,197,197,197,198,198,198,199,199,199,199,199,200,200,201,201,201,202,202,202,203,203,203,203,203,204,204,204,204,205,205,205,205,206,206,208,208,209,209,217,217,217,217,217,217,210,210,210,210,211,211,213,213,214,214,214,214]};
+#[inline(always)]
 unsafe fn f4202()->R<i64>{unsafe{rt::observe(&O4202);rt::check_stack().map_err(|e|e.at(&S4202,0))?;
 let mut l0:i64=0;
 let mut l1:usize=0;
@@ -674,6 +689,7 @@ continue 'l15;
 }}
 static O4203:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
 static S4203:rt::Source=rt::Source{file:"main.baml",function:"user.main",lines:&[220,220,221,221,221,221,221,221,221,221,221,221,222,222,222]};
+#[inline(always)]
 unsafe fn f4203()->R<i64>{unsafe{rt::observe(&O4203);rt::check_stack().map_err(|e|e.at(&S4203,0))?;
 let mut l0:i64=0;
 let mut l1:i64=0;

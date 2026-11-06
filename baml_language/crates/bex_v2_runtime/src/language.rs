@@ -705,3 +705,41 @@ mod caught_tests {
         assert!(instance.stats().collections >= 100);
     }
 }
+
+#[cfg(test)]
+mod stack_guard_tests {
+    use super::*;
+    static DESCRIPTORS: &[Descriptor] = &[
+        STRING_DESC,
+        OVERFLOW_DESC,
+        SHIFT_DESC,
+        CANCEL_DESC,
+        STACK_DESC,
+        ALLOC_DESC,
+    ];
+    #[inline(never)]
+    fn recurse() -> R<i64> {
+        // Keep an addressable frame so LLVM cannot turn this into a tail loop.
+        let pad = [0u8; 1024];
+        std::hint::black_box(&pad);
+        check_stack()?;
+        let value = recurse();
+        std::hint::black_box(&pad);
+        value
+    }
+    #[test]
+    fn quiet_checkpoint_does_not_disable_stack_overflow_detection() {
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[false, false, false, true, true, true, true, true, true],
+        );
+        let error = unsafe { instance.run_baml(recurse) }.unwrap_err();
+        assert_eq!(error.class, "baml.panics.StackOverflow");
+        assert_eq!(error.message, "stack overflow");
+        fn recover() -> R<i64> {
+            poll()?;
+            Ok(1)
+        }
+        assert_eq!(unsafe { instance.run_baml(recover) }.unwrap(), 1);
+    }
+}

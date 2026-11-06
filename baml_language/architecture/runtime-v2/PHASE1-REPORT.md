@@ -510,3 +510,132 @@ return `3222190` and `1161046400`, respectively, both normally and with
 `unsupported in runtime v2: list element`. Benchmark rows above belong to their
 named completed checkpoints; this preparation checkpoint adds no agent-loop
 measurement and does not substitute correctness timings for benchmark trials.
+
+## Richards gap checkpoint: shared poll word and bounded inlining
+
+The user independently confirmed the M2 result and measured Node 3.91, native
+83.0, v2 3.93 and spike 2.66 ms/job at load about 21 (50 jobs/trial, ratio 1.48).
+The measurements below are new local runs, not substituted user numbers.
+
+Changes:
+
+- The loop and heap share an owner-thread checkpoint word. Bit zero requests
+  scheduler/cancellation work; bit one requests collection. A quiet generated
+  poll reads this word and skips task cancellation walks, RefCell borrows,
+  maintenance and heap-accounting reads. The actual task/heap checks are cold,
+  out-of-line code. The release path retains a separate null-binding guard for
+  the public safe language wrapper; assembly shows `cbz` for that guard followed
+  by `ldrb`/`cbnz` for the work word, not an assertion-free unchecked API.
+- Local cancellation sets the scheduler bit immediately. Ready tasks, external
+  cancellation sources, deadlines, I/O and host submissions keep the scheduler
+  bit active. A slow poll refreshes it; cancellation remains sticky. Existing
+  scheduling and cancellation delivery tests run unchanged.
+- Budget-crossing allocation sets the heap bit, and collection clears it unless
+  stress is enabled. Stress keeps it set, so every generated safepoint still
+  collects. Small allocations retain an inline bump path: the layout's budget
+  comparison threshold is computed on the cold path, avoiding an extra add or
+  branch in every allocation. Collection policy still charges the same objects.
+- Polls were already every 16 iterations using local counters at MIR loop
+  headers. That frequency is unchanged. Observation loads and stack checks
+  remain per function and are separate from the loop checkpoint: merging them
+  would conflate different frequencies and lifetimes. Inlining may eliminate
+  redundant checks when the machine frame and pointer facts are unchanged.
+- Small nonrecursive generated functions are forced inline. The linked call
+  graph includes virtual dispatch targets; recursive SCCs keep real frames.
+  Forced inlining is limited to programs with at most 1,024 total MIR locals.
+  Immutable error side tables and each call's error-frame append remain present,
+  including when LLVM inlines the body.
+- Task representation is unchanged: the 16-byte interface slot holds a concrete
+  type tag and an implementation pointer. The spike instead embeds its task enum
+  in Tcb. Removing that pointer without proving unique ownership could change
+  aliasing semantics and would violate the specified class layout.
+
+### Final measured gate
+
+Spark aarch64, CPU 12, telemetry off, five interleaved rounds, one warmup,
+**50 jobs/trial for Richards and 20 for trees**. Every result, exit status and
+stderr was checked. Trees includes the saved pre-change v2 executable as a
+fifth backend in every round, to check regression under the same host load.
+
+| Workload | Node ms/job | Native ms/job | V2 ms/job | Spike ms/job | V2 / spike |
+|---|---:|---:|---:|---:|---:|
+| richards-50 | 3.938 | 83.121 | 3.035 | 2.660 | **1.141×** |
+| binary-trees-14 | 38.358 | 418.961 | 36.389 | 37.965 | **0.958×** |
+| agent-loop-300 | — | — | Unsupported | — | — |
+
+One-minute load ranges: **8.71–10.22** for Richards; **4.68–8.81** for trees.
+The previous trees executable measured **36.411 ms/job** in the same rounds;
+new/old is **0.9994×**, effectively unchanged. Richards meets the requested
+≤1.2 ratio. This is a two-workload checkpoint, not the three-workload GO gate.
+Final observations: `phase1/checkpoint-guard-{richards,trees}.jsonl`.
+
+Intermediate complete trials are retained, not pooled into the final medians:
+shared word alone 3.422/2.661 ms/job (1.286×); first inlining trial 2.772/2.659
+(1.042×); subsequent loaded run 3.187/2.748 (1.160×). The first paired trees run
+found 37.854 versus 37.002 ms/job (2.3% slower), prompting the cold-path budget
+threshold fix. Files: `poll-richards-bench`, `inline-richards-bench`,
+`poll-trees-bench`, and `checkpoint-final-{richards,trees}`, all `.jsonl` under
+`phase1/`. The final threshold fix then produced the table above.
+
+### Before/after profile
+
+Before: `phase1/richards-v2-perf-report.txt` from M2, 1,000 checked jobs,
+15.57% across safepoint (6.51), maintenance (4.63) and task checkpoint (4.43),
+47.31% in entry and 36.74% in the named scheduler helpers.
+
+After: `phase1/richards-checkpoint-after-perf.txt`, 1,000 checked jobs,
+3,110 samples and zero lost samples. **99.32%** is in the fully inlined entry;
+allocation slow path is **0.35%**. The old scheduler/checkpoint symbols no longer
+appear at the 0.1% reporting threshold. This does not mean polling costs zero:
+the counter and word load/branches now live inside entry. The annotation confirms
+those instructions and the observation-word branches remain. Inlining also
+makes old/new per-symbol percentages incomparable as an exact causal split.
+Remaining costs are the scheduler algorithm, typed loads/stores, dispatch,
+observation/stack/null/i63 checks, and the inline poll branch. No required check
+was disabled. Perf wall times are excluded from gate medians.
+
+### Validation and commands
+
+Heap 5 unit + 1 fiber + 15 integration + 2 ownership doctests pass; loop 2 unit
++ 30 integration + 2 ownership doctests pass; runtime 7 tests pass, all in debug
+and release. New tests cover the shared word at small/large allocation budget
+crossings, persistent GC stress, immediate/repeated cancellation after quiet
+polls, and actual recursive stack overflow followed by instance reuse.
+Compiler units (including recursive-SCC inlining exclusion), the existing native
+regression target (11 passed, one existing ignored test), and strict all-target
+clippy for touched crates pass. CLI code is unchanged.
+
+```sh
+# Save the prior executable before rebuilding (same worktree, no checkout change).
+cp target/phase1/trees-v2 target/phase1/trees-before-checkpoint
+cargo build --manifest-path baml_language/Cargo.toml -p baml_cli
+# Rebuild the v2 trees/Richards packs using the M1/M2 pack commands above.
+PHASE1_JOBS=50 uv run --no-project python \
+  baml_language/architecture/runtime-v2/phase1/bench_richards.py
+PHASE1_JOBS=20 PHASE1_TREE_BEFORE=target/phase1/trees-before-checkpoint \
+  uv run --no-project python baml_language/architecture/runtime-v2/phase1/bench_trees.py
+perf record -e cycles:u -F 997 -g --call-graph dwarf \
+  -o target/phase1/richards-checkpoint-after.perf.data -- \
+  taskset -c 12 target/phase1/richards-v2 --jobs 1000 --warmup 1
+perf report -i target/phase1/richards-checkpoint-after.perf.data --stdio \
+  --no-children --call-graph none --sort symbol --percent-limit 0.1
+cargo test --manifest-path baml_language/Cargo.toml \
+  -p bex_v2_heap -p bex_v2_loop -p bex_v2_runtime -p baml_compiler2_rust
+cargo test --manifest-path baml_language/Cargo.toml \
+  -p bex_v2_heap -p bex_v2_loop -p bex_v2_runtime --release
+cargo test --manifest-path baml_language/Cargo.toml -p baml_tests --test rust_backend
+cargo clippy --manifest-path baml_language/Cargo.toml \
+  -p bex_v2_heap -p bex_v2_loop -p bex_v2_runtime -p baml_compiler2_rust \
+  --all-targets --no-deps -- -D warnings
+```
+
+No representation deviation or user decision is required. The new shared-word
+integration API preserves root ownership. M3 remains pending at this checkpoint.
+
+Final correctness was rerun after the budget-guard change: trees and Richards
+match bytecode's stdout, empty stderr and zero exit status in both modes. The
+newly inlined index-error fixture matches the complete bytecode diagnostic and
+exit status in both modes, demonstrating retention of the caller/callee source
+frames. Evidence: `phase1/checkpoint-trees-correctness.json` and the refreshed
+`phase1/richards-correctness.json`. The final guard-specific release tests and
+clippy also passed.

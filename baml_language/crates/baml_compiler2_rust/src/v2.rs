@@ -332,6 +332,7 @@ pub fn compile_v2(
     }
     let mut queue = VecDeque::from([entry]);
     let mut reached = BTreeSet::new();
+    let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     while let Some(object) = queue.pop_front() {
         if !reached.insert(object) {
             continue;
@@ -370,6 +371,7 @@ pub fn compile_v2(
                         .function(db, *f)
                         .ok_or_else(|| no("unlinked call"))?;
                     if plan.index.display(callee) != "baml.ops.equals_equals" {
+                        calls.entry(object).or_default().insert(callee);
                         queue.push_back(callee);
                     }
                 }
@@ -386,6 +388,7 @@ pub fn compile_v2(
                         .interface_at(&iface.name)
                         .ok_or_else(|| no("virtual interface"))?;
                     for (_, target) in plan.targets(i, method)? {
+                        calls.entry(object).or_default().insert(target);
                         queue.push_back(target);
                     }
                 }
@@ -488,6 +491,16 @@ pub fn compile_v2(
         }
         out.push_str("}\n");
     }
+    // Bound forced inlining by the same total-local budget as a single body.
+    // Recursive SCCs retain real frames and the normal per-entry stack guard.
+    let small_program = reached
+        .iter()
+        .map(|id| match &all[id].kind {
+            MirFunctionKind::Bytecode(body) => body.locals.len(),
+            MirFunctionKind::Builtin(_) => 0,
+        })
+        .sum::<usize>()
+        <= 1024;
     for &object in &reached {
         let mir = all[&object];
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
@@ -504,7 +517,7 @@ pub fn compile_v2(
             sites: Vec::new(),
             site: 0,
         };
-        out.push_str(&emitter.function(mir.arity)?);
+        out.push_str(&emitter.function(mir.arity, small_program && !recursive(&calls, object))?);
     }
     // Resolve once at startup. Opaque initialization keeps the observation
     // load/branch real under LTO without imposing an opaque call on every entry.
@@ -803,7 +816,7 @@ impl Emitter<'_, '_> {
             _ => Err(no(format!("rvalue {r:?}"))),
         }
     }
-    fn function(&mut self, arity: usize) -> Gen<String> {
+    fn function(&mut self, arity: usize, inline: bool) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
             unwinds: vec![None; self.body.blocks.len()],
@@ -841,8 +854,9 @@ impl Emitter<'_, '_> {
             .map(|i| Ok(format!("mut l{i}:{}", self.local(i)?.rust())))
             .collect::<Gen<Vec<_>>>()?
             .join(",");
+        let attribute = if inline { "#[inline(always)]\n" } else { "" };
         let mut code = format!(
-            "unsafe fn f{}({params})->R<{}>{{unsafe{{rt::observe(&O{});rt::check_stack().map_err(|e|e.at(&S{},0))?;\n",
+            "{attribute}unsafe fn f{}({params})->R<{}>{{unsafe{{rt::observe(&O{});rt::check_stack().map_err(|e|e.at(&S{},0))?;\n",
             self.object,
             self.local(0)?.rust(),
             self.object,
@@ -1133,5 +1147,43 @@ impl Emitter<'_, '_> {
             _ => return Err(no("terminator")),
         }
         Ok(out)
+    }
+}
+
+fn recursive(calls: &BTreeMap<usize, BTreeSet<usize>>, function: usize) -> bool {
+    let mut pending: Vec<_> = calls
+        .get(&function)
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    let mut seen = BTreeSet::new();
+    while let Some(callee) = pending.pop() {
+        if callee == function {
+            return true;
+        }
+        if seen.insert(callee) {
+            pending.extend(calls.get(&callee).into_iter().flatten().copied());
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod inline_tests {
+    use super::*;
+    #[test]
+    fn recursion_including_indirect_cycles_keeps_real_frames() {
+        let calls = BTreeMap::from([
+            (0, BTreeSet::from([1])),
+            (1, BTreeSet::from([2])),
+            (2, BTreeSet::from([1])),
+            (3, BTreeSet::from([3])),
+        ]);
+        assert!(!recursive(&calls, 0));
+        assert!(recursive(&calls, 1));
+        assert!(recursive(&calls, 2));
+        assert!(recursive(&calls, 3));
+        assert!(!recursive(&calls, 4));
     }
 }
