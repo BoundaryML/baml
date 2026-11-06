@@ -34,9 +34,17 @@ Managed pointers must remain on the fiber stack or in traced heap objects.
 Rust vectors and boxes are not implicit roots. The current uncaught-error path
 performs no managed allocation after storing the error in its host box; catches
 will need explicit exception rooting. Heap-valued host results, finalizers,
-opaque ownership and OOM translation remain unimplemented. The heap currently
-panics on unrecoverable allocation failure; this is an interface integration gap,
-not claimed language-error parity. See `architecture/runtime-v2/PHASE1-REPORT.md`.
+and opaque ownership remain unimplemented. Generated allocation now calls
+`try_alloc` and propagates its Result with the same line-table rule as calls.
+`BAML_V2_HEAP_LIMIT=<bytes>` sets the ordinary usable-capacity limit before
+execution (32 KiB block granularity); it is a test knob, not an RSS limit.
+Every instance reserves a separate 32 KiB error block first. After ordinary
+allocation fails its full collection/retry, the runtime constructs the
+AllocFailure string and instance in that traced reserve. The message constructor
+is shared with `VmPanic`; the interpreter's actual exception conversion is
+checked separately because the two corosensei builds cannot share one executable.
+The reserve covers the admitted uncaught-error path. Arbitrarily retained caught
+OOM values and failure of host Rust bookkeeping allocations are not covered. See `architecture/runtime-v2/PHASE1-REPORT.md`.
 
 From the worktree root:
 

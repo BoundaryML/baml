@@ -1,8 +1,8 @@
 #![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]
 use bex_v2_runtime::{self as rt, R};
 use bex_v2_heap::{Descriptor,Kind,Field,SlotKind};
-static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,
-Descriptor{kind:Kind::Class,size:24,ptr_slots:(8,2),tagged_slots:(0,0),elem:None,type_id:5,fields:&[Field{name:"left",offset:8,slot:SlotKind::Pointer,type_id:5},Field{name:"right",offset:16,slot:SlotKind::Pointer,type_id:5}],finalizer:None},
+static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,
+Descriptor{kind:Kind::Class,size:24,ptr_slots:(8,2),tagged_slots:(0,0),elem:None,type_id:6,fields:&[Field{name:"left",offset:8,slot:SlotKind::Pointer,type_id:6},Field{name:"right",offset:16,slot:SlotKind::Pointer,type_id:6}],finalizer:None},
 ];
 #[repr(C)] struct C4179{header:bex_v2_heap::Header,f0:usize,f1:usize,}
 static O4180:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);
@@ -17,13 +17,13 @@ let mut l6:i64=0;
 let mut c0=false;
 'b5:{ l2=(l1 <= 0i64);
 c0=l2;
-if c0{ l0={let a0=0usize;let a1=0usize;let p=rt::alloc(5, 24) as *mut C4179;bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f0).cast(),a0);bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f1).cast(),a1);p as usize};
+if c0{ l0={let a0=0usize;let a1=0usize;let p=(rt::try_alloc(6, 24)).map_err(|e|e.at(&S4180,3))? as *mut C4179;bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f0).cast(),a0);bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f1).cast(),a1);p as usize};
 break 'b5;
  }else{ l4=(rt::sub(l1,1i64)).map_err(|e|e.at(&S4180,5))?;
 l3=(f4180(l4)).map_err(|e|e.at(&S4180,6))?;
 l6=(rt::sub(l1,1i64)).map_err(|e|e.at(&S4180,8))?;
 l5=(f4180(l6)).map_err(|e|e.at(&S4180,9))?;
-l0={let a0=l3;let a1=l5;let p=rt::alloc(5, 24) as *mut C4179;bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f0).cast(),a0);bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f1).cast(),a1);p as usize};
+l0={let a0=l3;let a1=l5;let p=(rt::try_alloc(6, 24)).map_err(|e|e.at(&S4180,11))? as *mut C4179;bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f0).cast(),a0);bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f1).cast(),a1);p as usize};
 break 'b5;
  }
  }

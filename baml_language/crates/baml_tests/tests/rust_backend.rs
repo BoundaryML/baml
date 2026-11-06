@@ -840,3 +840,25 @@ fn v2_trees_and_fail_closed_admission() {
         );
     }
 }
+
+#[test]
+fn allocation_failure_constructor_matches_interpreter_exception() {
+    use std::sync::{Arc, atomic::AtomicBool};
+    let program = baml_test_support::compile_source("function main() -> int { 0 }");
+    let mut vm = bex_vm::BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+    let value = vm.panic_to_exception_value(bex_vm_types::errors::VmPanic::allocation_failure(16));
+    let Object::Instance(instance) = vm.get_object(value.as_object_ptr().unwrap()) else {
+        panic!("exception instance")
+    };
+    let Object::Class(class) = vm.get_object(instance.class) else {
+        panic!("exception class")
+    };
+    let field = instance.try_load_field(0).unwrap();
+    let Object::String(message) = vm.get_object(field.as_object_ptr().unwrap()) else {
+        panic!("message field")
+    };
+    // Paired with the v2 runtime's forced-limit test. The two corosensei builds
+    // export the same asm ABI, so the runtime tests use separate executables.
+    assert_eq!(format!("baml.{}", class.path), "baml.panics.AllocFailure");
+    assert_eq!(message.as_str(), "Allocation of 16 bytes failed");
+}

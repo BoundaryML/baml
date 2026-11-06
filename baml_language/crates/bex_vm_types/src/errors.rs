@@ -108,6 +108,16 @@ pub enum VmPanic {
     },
 }
 
+impl VmPanic {
+    /// Shared wording for a refused ordinary managed-heap allocation. Existing
+    /// operation-specific allocation failures retain their specialized messages.
+    pub fn allocation_failure(bytes: usize) -> Self {
+        Self::AllocFailure {
+            message: format!("Allocation of {bytes} bytes failed"),
+        }
+    }
+}
+
 /// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmBamlError {

@@ -451,3 +451,53 @@ fn finalizer_order_follows_reused_storage_not_registration_time() {
         );
     }
 }
+
+#[test]
+fn refusal_collects_preserves_live_graph_and_keeps_emergency_capacity() {
+    unsafe {
+        let mut h = heap();
+        h.reserve_emergency().unwrap();
+        h.set_capacity_limit(BLOCK_BYTES);
+        let roots = Roots::default();
+        for _ in 0..BLOCK_BYTES / 32 {
+            let p = h.try_alloc(0, 32, &roots).unwrap();
+            roots.precise.borrow_mut().push(p as usize);
+        }
+        let before = h.stats().collections;
+        assert_eq!(h.try_alloc(0, 32, &roots), Err(AllocFailure { bytes: 32 }));
+        assert!(h.stats().collections > before);
+        for p in roots.precise.borrow().iter() {
+            assert_eq!(h.object_start(*p), Some(*p));
+        }
+        let error = h.alloc_emergency(0, 32).unwrap();
+        let message = h.alloc_emergency(2, 64).unwrap();
+        link(error, 1, message as usize);
+        roots.precise.borrow_mut().clear();
+        roots.precise.borrow_mut().push(error as usize);
+        h.collect(&roots);
+        assert_eq!(h.object_start(message as usize), Some(message as usize));
+        h.verify(&roots);
+        // A failed allocation has not poisoned the ordinary allocator.
+        assert!(h.try_alloc(0, 32, &roots).is_ok());
+        assert_eq!(
+            h.try_alloc(2, usize::MAX, &roots),
+            Err(AllocFailure { bytes: usize::MAX })
+        );
+    }
+}
+
+#[test]
+fn large_refusal_retries_collection_without_spending_the_reserve() {
+    unsafe {
+        let mut h = heap();
+        h.reserve_emergency().unwrap();
+        h.set_capacity_limit(0);
+        let before = h.stats().collections;
+        assert_eq!(
+            h.try_alloc(2, 16392, &NoRoots),
+            Err(AllocFailure { bytes: 16392 })
+        );
+        assert_eq!(h.stats().collections, before + 1);
+        assert!(h.alloc_emergency(0, 32).is_ok());
+    }
+}

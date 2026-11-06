@@ -255,7 +255,7 @@ pub fn compile_v2(
         .enumerate()
         .map(|(i, c)| (*c, i + rt_descriptors()))
         .collect();
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,\n");
     for (&object, layout) in &plan.layouts {
         let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
         else {
@@ -341,7 +341,7 @@ pub fn compile_v2(
     Ok(out)
 }
 fn rt_descriptors() -> usize {
-    5
+    6
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -497,8 +497,11 @@ impl Emitter<'_, '_> {
                 }
                 write!(
                     &mut init,
-                    "let p=rt::alloc({}, {}) as *mut C{c};",
-                    self.descriptors[&c], layout.bytes
+                    "let p={} as *mut C{c};",
+                    self.fallible(&format!(
+                        "rt::try_alloc({}, {})",
+                        self.descriptors[&c], layout.bytes
+                    ))
                 )
                 .unwrap();
                 for (i, t) in layout.fields.iter().enumerate() {

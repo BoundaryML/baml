@@ -1,6 +1,6 @@
 //! Typed phase-one language operations. Exception objects use the same declared
 //! class fields as the interpreter; stack frames are appended only on failure.
-use crate::{Instance, alloc};
+use crate::Instance;
 use baml_type::Int63;
 use bex_v2_heap::{Descriptor, ElementLayout, Elements, Field, Header, Kind, SlotKind};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -41,6 +41,10 @@ pub const SHIFT_DESC: Descriptor = Descriptor {
 };
 pub const CANCEL_DESC: Descriptor = Descriptor {
     type_id: 3,
+    ..OVERFLOW_DESC
+};
+pub const ALLOC_DESC: Descriptor = Descriptor {
+    type_id: 5,
     ..OVERFLOW_DESC
 };
 pub const STACK_DESC: Descriptor = Descriptor {
@@ -109,10 +113,16 @@ fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
     // SAFETY: called only from a running generated root. The string is rooted
     // in this stack frame across the class allocation; initialization cannot GC.
     unsafe {
-        let string = alloc(0, 16 + message.len().next_multiple_of(8));
+        let string = match crate::try_alloc(0, 16 + message.len().next_multiple_of(8)) {
+            Ok(p) => p,
+            Err(e) => return e,
+        };
         string.add(8).cast::<usize>().write(message.len());
         std::ptr::copy_nonoverlapping(message.as_ptr(), string.add(16), message.len());
-        let object = alloc(desc, std::mem::size_of::<MessagePanic>()).cast::<MessagePanic>();
+        let object = match crate::try_alloc(desc, std::mem::size_of::<MessagePanic>()) {
+            Ok(p) => p.cast::<MessagePanic>(),
+            Err(e) => return e,
+        };
         bex_v2_heap::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
             value: object as usize,
@@ -350,5 +360,77 @@ mod tests {
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 0);
         assert!(instance.stats().collections >= 4);
+    }
+}
+
+/// The normal heap has already performed its full-collection retry. Construct
+/// the language value exclusively from the pre-reserved traced block.
+#[cold]
+pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
+    let bex_vm_types::errors::VmPanic::AllocFailure { message } =
+        bex_vm_types::errors::VmPanic::allocation_failure(bytes)
+    else {
+        unreachable!()
+    };
+    unsafe {
+        let string = crate::emergency_alloc(0, 16 + message.len().next_multiple_of(8));
+        string.add(8).cast::<usize>().write(message.len());
+        std::ptr::copy_nonoverlapping(message.as_ptr(), string.add(16), message.len());
+        let object =
+            crate::emergency_alloc(5, std::mem::size_of::<MessagePanic>()).cast::<MessagePanic>();
+        bex_v2_heap::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
+        Box::new(Error {
+            value: object as usize,
+            class: "baml.panics.AllocFailure",
+            message,
+            frames: Vec::new(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod allocation_tests {
+    use super::*;
+    static DESCRIPTORS: &[Descriptor] = &[
+        STRING_DESC,
+        OVERFLOW_DESC,
+        SHIFT_DESC,
+        CANCEL_DESC,
+        STACK_DESC,
+        ALLOC_DESC,
+    ];
+
+    #[test]
+    fn exhausted_heap_constructs_traced_language_failure_and_recovers() {
+        fn entry() -> R<i64> {
+            let error = unsafe { crate::try_alloc(1, 16) }.unwrap_err();
+            assert_eq!(error.class, "baml.panics.AllocFailure");
+            assert_eq!(error.message, "Allocation of 16 bytes failed");
+            let value = error.value;
+            drop(error);
+            unsafe { crate::safepoint() }.unwrap();
+            unsafe {
+                let object = value as *const MessagePanic;
+                assert_eq!((*object).header.desc, 5);
+                let message = (*object).message as *const u8;
+                let len = message.add(8).cast::<usize>().read();
+                assert_eq!(
+                    std::slice::from_raw_parts(message.add(16), len),
+                    b"Allocation of 16 bytes failed"
+                );
+            }
+            Ok(42)
+        }
+        let mut instance = Instance::new(DESCRIPTORS, &[true; 6]);
+        instance.set_heap_limit(0);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 42);
+        assert!(instance.stats().collections >= 2);
+        instance.set_heap_limit(32768);
+        fn recover() -> R<i64> {
+            unsafe { crate::try_alloc(1, 16) }?;
+            Ok(7)
+        }
+        assert_eq!(unsafe { instance.run_baml(recover) }.unwrap(), 7);
     }
 }

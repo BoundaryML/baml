@@ -2,8 +2,8 @@
 
 Binary-trees-14 now compiles from BAML MIR to typed Rust and runs on the v2 heap
 and loop. M2 Richards and M3 agent-loop remain unsupported. This is not approval
-to advance past the three-workload phase-1 gate. M1 resource-exhaustion parity
-also remains incomplete: the heap has no fallible allocation API (details below).
+to advance past the three-workload phase-1 gate. M1 now also has fallible allocation and a tested emergency exception reserve.
+General process-wide allocator exhaustion is not claimed by the managed-heap test limit.
 
 Work is confined to the `v2-codegen` worktree on Spark/aarch64. No push or PR.
 Prior checkpoint commits: `495a15c376` (runtime seam), `deb6f46dbe` (inventory),
@@ -103,7 +103,7 @@ Important transitive details visible in the full census/current owners:
 
 | Milestone | Normal | GC stress | Status |
 |---|---|---|---|
-| M1 binary-trees-14 | Bytecode = v2: stdout `3222190\n`, empty stderr, exit 0 | Same exact output/status | Workload path and performance verified; allocation-failure contract still open |
+| M1 binary-trees-14 | Bytecode = v2: stdout `3222190\n`, empty stderr, exit 0 | Same exact output/status | Verified, including forced managed-heap allocation failure |
 | M2 richards-50 | Not run | Not run | Pack rejects nullable-class lists; dispatch/lists not implemented |
 | M3 agent-loop-300 | Not run | Not run | Pack rejects nested string lists; unions/JSON/catches not implemented |
 
@@ -129,7 +129,7 @@ or supported-entry selector has landed. Its full fixture corpus requires M2/M3
 and later features. This milestone therefore compares against bytecode directly;
 it does not claim that the full differential harness passed.
 
-## Gate measurements
+## Gate measurements (initial M1, before fallible allocation)
 
 Spark/aarch64, CPU 12 via `taskset`, telemetry off, one untimed warmup, five
 interleaved rounds (Node, native, v2, spike). Final trials use **20 timed jobs**
@@ -280,12 +280,20 @@ Only the CLI source-format advisory is excluded from those diagnostic comparison
 
 ## Remaining interface gaps and questions
 
-1. **§2.2 allocation failure:** the verified heap retries collection and then
-   panics with `BAML out of memory`. The loop catches Rust panics as internal
-   errors; this is not the interpreter's `baml.panics.AllocFailure` contract.
-   **May the heap gain a fallible allocation entry point so the runtime can
-   construct that language error, with an emergency allocation policy?** No
-   panic-string matching or silent reinterpretation has been added.
+1. **§2.2 managed allocation failure is implemented.** `try_alloc` performs a
+   full collection/retry before returning refusal. The old infallible API remains
+   available. Each runtime instance reserves one separate, traced 32 KiB block;
+   ordinary allocation cannot spend it, and error construction does not request
+   more heap backing. The admitted uncaught-OOM path needs one small string and
+   class object. Arbitrarily retained caught OOM objects can exhaust a finite
+   reserve; that general case is not admitted in phase 1. Host `Box`, trace-vector,
+   collector-metadata and process-wide allocator failure are not simulated by
+   the managed-capacity limit.
+   Ordinary interpreter class allocation had no recoverable OOM message to
+   preserve. A shared `VmPanic::allocation_failure(bytes)` now supplies
+   `Allocation of {bytes} bytes failed`; existing operation-specific messages
+   are unchanged. The interpreter's real `panic_to_exception_value` conversion
+   and the forced-limit v2 path are paired tests in separate executables.
 2. The message-bearing exception layout matches the VM, and `VmPanic`, null
    `VmInternalError`, `Int63` and traceback formatting are shared. The actual
    heap-object allocation adapter is v2-specific. Factoring general builtin
@@ -299,3 +307,59 @@ Only the CLI source-format advisory is excluded from those diagnostic comparison
 Root ownership is resolved as requested; no decision is pending on TaskCx.
 No representation relaxation is requested. M2/M3 and the full three-row gate
 remain work to do, not implicit fallbacks or performance conclusions.
+
+## M1 allocation-failure checkpoint
+
+The user independently confirmed both binary-trees executables return `3222190`.
+Their reported five-round run with 10 jobs/trial and host load about 27 measured
+Node 40.5, native 470, v2 38.3 and spike 45.1 ms/job (ratio 0.849×). Those are
+user-reported confirmation numbers, not substituted for the measurements below.
+
+After adding fallible allocation, a fresh five-round set on CPU 12 with 10
+jobs/trial, one warmup, telemetry off and every return checked measured:
+
+| Workload | Node ms/job | Native ms/job | V2 ms/job | Spike ms/job | V2 / spike |
+|---|---:|---:|---:|---:|---:|
+| binary-trees-14 | 39.145 | 419.181 | 36.277 | 37.922 | **0.957×** |
+
+`phase1/trees-benchmark-allocation.jsonl` preserves each measurement and the
+1/5/15-minute load averages immediately before and after each backend.
+The observed one-minute load range was **15.60–24.80**.
+The previous profile above belongs to the initial M1 checkpoint; this update
+has no ratio above 1.5 and makes no new causal performance attribution.
+
+`BAML_V2_HEAP_LIMIT=0` deterministically refuses ordinary allocation after full
+collection and raises `baml.panics.AllocFailure` with message
+`Allocation of 24 bytes failed`, exit 1, empty stdout and the correct tree
+allocation/caller lines. Both stress modes pass. Unlimited runs still produce
+exactly `3222190`, empty stderr and exit 0. Evidence: `phase1/oom-correctness.json`.
+The limit measures usable ordinary block capacity plus large-object backing,
+not slab reservation, metadata or RSS; small-object capacity has 32 KiB granularity.
+
+Additional reproduction commands:
+
+```sh
+BAML_V2_HEAP_LIMIT=0 BAML_TELEMETRY=off target/phase1/trees-v2
+BAML_V2_HEAP_LIMIT=0 BAML_GC_STRESS=1 BAML_TELEMETRY=off target/phase1/trees-v2
+PHASE1_JOBS=10 uv run --no-project python baml_language/architecture/runtime-v2/phase1/bench_trees.py
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_heap
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_heap --release
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_runtime
+cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_runtime --release
+cargo test --manifest-path baml_language/Cargo.toml -p baml_tests --test rust_backend
+```
+
+Heap tests cover full-collection refusal with a retained live graph, emergency
+object tracing, recovery after releasing roots, large-object refusal, and size
+overflow. The runtime test forces a zero limit, checks the actual error object
+and string through a GC, and successfully allocates after lifting the limit.
+The paired interpreter test checks the same class and message through its real
+exception constructor. Linking both runtimes into one test was rejected by the
+linker because the two corosensei builds export the same assembler symbols;
+the tests correctly remain separate executables, as do the packed backends.
+
+Checkpoint validation: heap 4 unit + 1 fiber + 15 integration + 2 doctests pass
+in debug and release; runtime 4 tests pass in debug/release; compiler 9 unit
+tests and VM types 128 tests pass; native regression/exception conversion
+11 pass with the existing full-corpus test ignored. Strict clippy passes for
+heap, runtime, compiler, VM types and the rust_backend test target.

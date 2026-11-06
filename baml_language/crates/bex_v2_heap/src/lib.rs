@@ -11,6 +11,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Refusal after a full collection/retry, or an unrepresentable request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AllocFailure {
+    pub bytes: usize,
+}
+
 pub type DescId = u32;
 pub type TypeId = u32;
 pub type FinalizerId = u32;
@@ -128,7 +134,7 @@ struct Memory {
 }
 impl Memory {
     fn try_slab(size: usize) -> Option<Self> {
-        let layout = Layout::from_size_align(size, size).expect("BAML out of memory");
+        let layout = Layout::from_size_align(size, size).ok()?;
         // Do not fault in small pages before giving Linux its huge-page hint.
         // The allocator zeroes each free run before publishing any object.
         let ptr = unsafe { std::alloc::alloc(layout) };
@@ -143,7 +149,7 @@ impl Memory {
         Some(Self { ptr, layout })
     }
     fn try_new(size: usize, align: usize) -> Option<Self> {
-        let layout = Layout::from_size_align(size, align).expect("BAML out of memory");
+        let layout = Layout::from_size_align(size, align).ok()?;
         let ptr = unsafe { alloc_zeroed(layout) };
         if ptr.is_null() {
             None
@@ -299,6 +305,10 @@ pub struct Heap {
     weak: Vec<BTreeMap<usize, usize>>,
     stats: Stats,
     stress: bool,
+    capacity_limit: usize,
+    emergency_block: Option<usize>,
+    emergency_cursor: usize,
+    emergency_limit: usize,
     _owner: PhantomData<Rc<()>>,
 }
 impl Heap {
@@ -347,6 +357,10 @@ impl Heap {
                 ..Stats::default()
             },
             stress: stress_from_environment(),
+            capacity_limit: usize::MAX,
+            emergency_block: None,
+            emergency_cursor: 0,
+            emergency_limit: 0,
             _owner: PhantomData,
         }
     }
@@ -384,7 +398,19 @@ impl Heap {
     /// preserve the header, and never access an object after it is collected.
     #[inline(always)]
     pub unsafe fn alloc(&mut self, desc: DescId, bytes: usize, roots: &dyn RootSource) -> *mut u8 {
-        let aligned = bytes.checked_add(15).expect("BAML out of memory") & !15;
+        unsafe { self.try_alloc(desc, bytes, roots) }.expect("BAML out of memory")
+    }
+    /// Fallible counterpart of `alloc`; the successful bump path is identical.
+    /// # Safety
+    /// Same descriptor, initialization and root contract as `alloc`.
+    #[inline(always)]
+    pub unsafe fn try_alloc(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        roots: &dyn RootSource,
+    ) -> Result<*mut u8, AllocFailure> {
+        let aligned = bytes.checked_add(15).ok_or(AllocFailure { bytes })? & !15;
         if bytes > LARGE_THRESHOLD
             || self.layout_key != ((u64::from(desc) << 32) | bytes as u64)
             || self.limit - self.cursor < aligned
@@ -392,7 +418,78 @@ impl Heap {
         {
             return unsafe { self.alloc_slow(desc, bytes, aligned, roots) };
         }
-        unsafe { self.bump(desc, bytes, aligned) }
+        Ok(unsafe { self.bump(desc, bytes, aligned) })
+    }
+    /// Limit usable ordinary block capacity plus live large-object backing.
+    /// Existing blocks are retained; set before ordinary allocations for a hard
+    /// cap. Slab reservation and the emergency block are excluded.
+    pub fn set_capacity_limit(&mut self, bytes: usize) {
+        self.capacity_limit = bytes;
+    }
+    fn capacity_available(&self, bytes: usize) -> bool {
+        let blocks = self.blocks.len() - usize::from(self.emergency_block.is_some());
+        let used = self
+            .large
+            .values()
+            .fold(blocks.saturating_mul(BLOCK_BYTES), |n, l| {
+                n.saturating_add(l.mem.layout.size())
+            });
+        used.checked_add(bytes)
+            .is_some_and(|total| total <= self.capacity_limit)
+    }
+    /// Reserve one collector-traced block exclusively for error construction.
+    /// Must succeed before admitting BAML execution. Ordinary allocation never
+    /// consumes it; collection reclaims dead reserve objects normally.
+    pub fn reserve_emergency(&mut self) -> Result<(), AllocFailure> {
+        if self.emergency_block.is_some() {
+            return Ok(());
+        }
+        let mem =
+            Memory::try_new(BLOCK_BYTES, BLOCK_BYTES).ok_or(AllocFailure { bytes: BLOCK_BYTES })?;
+        let index = self.blocks.len();
+        self.block_index.insert(mem.ptr as usize, index);
+        self.blocks.push(Box::new(Block::new(mem.ptr)));
+        self.slabs.push(mem);
+        self.stats.reserved_bytes += BLOCK_BYTES;
+        self.emergency_block = Some(index);
+        Ok(())
+    }
+    /// Allocate from the pre-reserved block without allocating host backing or
+    /// collecting. Returns refusal if retained exception objects exhaust it.
+    /// # Safety
+    /// Same initialization/descriptor contract as `alloc`; finalizers and large
+    /// objects are not permitted in this error-only reserve.
+    pub unsafe fn alloc_emergency(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+    ) -> Result<*mut u8, AllocFailure> {
+        let failure = AllocFailure { bytes };
+        let aligned = bytes.checked_add(15).ok_or(failure)? & !15;
+        let d = &self.descriptors[desc as usize];
+        assert!(d.finalizer.is_none() && (8..=LARGE_THRESHOLD).contains(&bytes));
+        if let Some(e) = d.elem {
+            assert!(bytes >= e.offset && (bytes - e.offset).is_multiple_of(d.size));
+        } else {
+            assert_eq!(bytes, d.size);
+        }
+        let index = self.emergency_block.ok_or(failure)?;
+        let block = &mut self.blocks[index];
+        if self.emergency_limit - self.emergency_cursor < aligned {
+            let (low, high) = block.run(aligned).ok_or(failure)?;
+            self.emergency_cursor = block.base as usize + low;
+            self.emergency_limit = block.base as usize + high;
+        }
+        let p = self.emergency_cursor as *mut u8;
+        let slot = (self.emergency_cursor - block.base as usize) / 16;
+        self.emergency_cursor += aligned;
+        set(&mut block.starts, slot);
+        block.sizes[slot] = bytes as u16;
+        unsafe {
+            p.cast::<Header>().write(Header { desc, aux: 0 });
+        }
+        self.stats.allocated_since_gc = self.stats.allocated_since_gc.saturating_add(aligned);
+        Ok(p)
     }
     #[inline(always)]
     unsafe fn bump(&mut self, desc: DescId, bytes: usize, aligned: usize) -> *mut u8 {
@@ -433,7 +530,7 @@ impl Heap {
         bytes: usize,
         aligned: usize,
         roots: &dyn RootSource,
-    ) -> *mut u8 {
+    ) -> Result<*mut u8, AllocFailure> {
         self.settle_run();
         let d = &self.descriptors[desc as usize];
         assert!(bytes >= 8);
@@ -455,13 +552,20 @@ impl Heap {
         }
         if bytes > LARGE_THRESHOLD {
             // 64 KiB alignment is page-aligned on supported native 4/16/64 KiB systems.
-            let mem = match Memory::try_new(aligned, 65536) {
+            let mem = match self
+                .capacity_available(aligned)
+                .then(|| Memory::try_new(aligned, 65536))
+                .flatten()
+            {
                 Some(m) => m,
                 None => {
                     unsafe {
                         self.collect(roots);
                     }
-                    Memory::try_new(aligned, 65536).expect("BAML out of memory")
+                    self.capacity_available(aligned)
+                        .then(|| Memory::try_new(aligned, 65536))
+                        .flatten()
+                        .ok_or(AllocFailure { bytes })?
                 }
             };
             let p = mem.ptr;
@@ -484,14 +588,18 @@ impl Heap {
                     .saturating_sub(self.stats.allocated_since_gc),
             );
             self.register_finalizer(p as usize);
-            return p;
+            return Ok(p);
         }
         if self.limit - self.cursor >= aligned {
-            return unsafe { self.bump(desc, bytes, aligned) };
+            return Ok(unsafe { self.bump(desc, bytes, aligned) });
         }
         loop {
             while self.search < self.blocks.len() {
                 let i = self.search;
+                if self.emergency_block == Some(i) {
+                    self.search += 1;
+                    continue;
+                }
                 if let Some((low, high)) = self.blocks[i].run(aligned) {
                     self.active_metadata = &mut *self.blocks[i];
                     self.cursor = self.blocks[i].base as usize + low;
@@ -502,7 +610,7 @@ impl Heap {
                             .budget
                             .saturating_sub(self.stats.allocated_since_gc),
                     );
-                    return unsafe { self.bump(desc, bytes, aligned) };
+                    return Ok(unsafe { self.bump(desc, bytes, aligned) });
                 }
                 self.search += 1;
             }
@@ -514,6 +622,9 @@ impl Heap {
                     }
                     // Retry every reclaimed run, including partially occupied blocks.
                     for (i, block) in self.blocks.iter_mut().enumerate() {
+                        if self.emergency_block == Some(i) {
+                            continue;
+                        }
                         if let Some((low, high)) = block.run(aligned) {
                             self.active_metadata = &mut *self.blocks[i];
                             self.search = i;
@@ -525,10 +636,10 @@ impl Heap {
                                     .budget
                                     .saturating_sub(self.stats.allocated_since_gc),
                             );
-                            return unsafe { self.bump(desc, bytes, aligned) };
+                            return Ok(unsafe { self.bump(desc, bytes, aligned) });
                         }
                     }
-                    self.fresh_block().expect("BAML out of memory")
+                    self.fresh_block().ok_or(AllocFailure { bytes })?
                 }
             };
             self.block_index.insert(base as usize, self.blocks.len());
@@ -536,6 +647,9 @@ impl Heap {
         }
     }
     fn fresh_block(&mut self) -> Option<*mut u8> {
+        if !self.capacity_available(BLOCK_BYTES) {
+            return None;
+        }
         const SLAB_BYTES: usize = 2 * 1024 * 1024;
         if self.slab_cursor == self.slab_limit {
             // Failure to reserve a batch must not fail an allocation for which
@@ -673,6 +787,8 @@ impl Heap {
         self.budget_end = 0;
         self.limit = 0;
         self.search = 0;
+        self.emergency_cursor = 0;
+        self.emergency_limit = 0;
         self.stats.live_bytes = 0;
         for b in &mut self.blocks {
             b.sweep();

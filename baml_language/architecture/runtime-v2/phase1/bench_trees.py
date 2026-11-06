@@ -19,13 +19,15 @@ rows = []
 for round_no in range(5):
     for backend, command in commands.items():
         command = ["taskset", "-c", "12"] + command
+        load_before = os.getloadavg()
         process = subprocess.run(command, env=env, capture_output=True, text=True)
+        load_after = os.getloadavg()
         assert process.returncode == 0, (command, process.stderr)
         assert process.stderr == "", (command, process.stderr)
         data = json.loads(process.stdout)
         assert str(data["result"]) == "3222190", data
         assert data["jobs"] == jobs, data
-        row = dict(round=round_no + 1, backend=backend, command=command, status=process.returncode, stderr=process.stderr, **data)
+        row = dict(round=round_no + 1, load_before=load_before, load_after=load_after, backend=backend, command=command, status=process.returncode, stderr=process.stderr, **data)
         rows.append(row)
         print(json.dumps(row), flush=True)
         (out / "trees-benchmark-raw.json").write_text(json.dumps(rows, indent=2) + "\n")

@@ -52,6 +52,28 @@ pub unsafe fn alloc(desc: u32, bytes: usize) -> *mut u8 {
     })
 }
 
+/// Fallible language allocation with a reserved AllocFailure construction path.
+/// # Safety
+/// Same contract as `alloc`.
+#[inline(always)]
+pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
+    let result = HEAP.with(|heap| {
+        assert!(
+            !heap.get().is_null() && !ROOTS.get().is_null(),
+            "v2 allocation outside a root task"
+        );
+        unsafe { (&mut *heap.get()).try_alloc(desc, bytes, &Roots(&*ROOTS.get())) }
+    });
+    result.map_err(|failure| language::allocation_failure(failure.bytes))
+}
+
+/// # Safety
+/// Only error constructors may consume the reserved block. No collection occurs.
+unsafe fn emergency_alloc(desc: u32, bytes: usize) -> *mut u8 {
+    unsafe { (&mut *HEAP.get()).alloc_emergency(desc, bytes) }
+        .expect("v2 emergency exception reserve exhausted")
+}
+
 /// Poll the root task and run the heap's allocation-budget/stress safepoint.
 ///
 /// # Safety
@@ -94,6 +116,11 @@ impl Instance {
             .unwrap();
         let mut heap = Heap::new(descriptors, pointer_types);
         heap.set_stress(baml_env::raw_var("BAML_GC_STRESS").is_some_and(|value| value == "1"));
+        heap.reserve_emergency()
+            .expect("cannot reserve v2 emergency exception storage");
+        if let Some(limit) = baml_env::raw_var("BAML_V2_HEAP_LIMIT") {
+            heap.set_capacity_limit(limit.parse().expect("BAML_V2_HEAP_LIMIT must be bytes"));
+        }
         let tasks = TaskLoop::new(
             Config {
                 stack_size: 8 << 20,
@@ -167,6 +194,9 @@ impl Instance {
         Ok(result)
     }
 
+    pub fn set_heap_limit(&mut self, bytes: usize) {
+        self.heap.set_capacity_limit(bytes);
+    }
     pub fn stats(&self) -> bex_v2_heap::Stats {
         self.heap.stats()
     }
