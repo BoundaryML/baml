@@ -2056,6 +2056,7 @@ mod outbound_selection_tests {
                 generic_param_count: 0,
                 owner,
                 telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                redact: false,
             })))
         }
 

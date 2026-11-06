@@ -20,6 +20,10 @@ pub struct SchemaAttrs {
 
 /// The attributes a class field can carry.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one independent flag per attribute the source can write; no combination is invalid"
+)]
 pub struct ClassFieldAttrs {
     pub schema: SchemaAttrs,
     /// `@skip`: left out of the schema and never parsed.
@@ -30,6 +34,9 @@ pub struct ClassFieldAttrs {
     /// `@stream.must_exist`: the field has no default, so its class has no
     /// partial parse until the field is present.
     pub must_exist: bool,
+    /// `@trace.redact`: telemetry records a redaction in place of the field's
+    /// value.
+    pub redact: bool,
 }
 
 /// The attributes an enum variant can carry.
@@ -47,6 +54,9 @@ pub struct ClassAttrs {
     /// `@@stream.done`: while streaming, an instance is never surfaced until
     /// the whole object is complete.
     pub stream_done: bool,
+    /// `@@trace.redact`: telemetry records a redaction in place of every
+    /// instance of the class.
+    pub redact: bool,
 }
 
 /// The `@@` attributes an enum can carry.
