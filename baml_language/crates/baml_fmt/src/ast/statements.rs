@@ -1,4 +1,4 @@
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use super::tokens as t;

@@ -65,6 +65,25 @@ impl fmt::Display for ParseError {
 }
 
 impl ParseError {
+    /// Headline for [`ParseError::AmbiguousUnion`].
+    pub const AMBIGUOUS_UNION_MESSAGE: &str = "ambiguous union";
+
+    /// Pipe label for [`ParseError::AmbiguousUnion`]; one line so concise
+    /// renderers stay readable.
+    pub fn ambiguous_union_label(groupings: &[String]) -> String {
+        let explicit = "use parentheses to make the intended grouping explicit";
+        if groupings.is_empty() {
+            explicit.to_string()
+        } else {
+            let options = groupings
+                .iter()
+                .map(|grouping| format!("`{grouping}`"))
+                .collect::<Vec<_>>()
+                .join(" or ");
+            format!("{explicit}: {options}")
+        }
+    }
+
     pub fn range(&self) -> TextRange {
         match self {
             Self::UnexpectedToken { range, .. }

@@ -4,12 +4,8 @@ pub mod printer;
 mod trivia_classifier;
 
 use ast::FromCST as _;
-use baml_db::{
-    ProjectDatabase, SourceRootSpec,
-    baml_compiler_diagnostics::ParseError,
-    baml_compiler_lexer, baml_compiler_parser,
-    baml_compiler_syntax::{SyntaxElement, SyntaxNode},
-};
+use baml_compiler_syntax::{SyntaxElement, SyntaxNode};
+use baml_db::{ProjectDatabase, SourceRootSpec, baml_compiler_diagnostics::ParseError};
 use newline_style::apply_newline_style;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
@@ -120,8 +116,8 @@ fn has_ignore_directive(cst: &SyntaxNode) -> bool {
         };
         matches!(
             token.kind(),
-            baml_db::baml_compiler_syntax::SyntaxKind::LINE_COMMENT
-                | baml_db::baml_compiler_syntax::SyntaxKind::BLOCK_COMMENT
+            baml_compiler_syntax::SyntaxKind::LINE_COMMENT
+                | baml_compiler_syntax::SyntaxKind::BLOCK_COMMENT
         ) && comment_contains_ignore_directive(token.text())
     })
 }

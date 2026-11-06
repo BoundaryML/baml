@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use baml_db::baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use ouroboros::self_referencing;
 use rowan::{TextRange, TextSize};
 
@@ -474,7 +474,7 @@ impl TriviaSliceExt for [EmittableTrivia] {
 
 #[cfg(test)]
 mod tests {
-    use baml_db::{baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax::SyntaxNode};
+    use baml_compiler_syntax::SyntaxNode;
 
     use super::*;
 

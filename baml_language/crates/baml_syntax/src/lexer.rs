@@ -375,3 +375,14 @@ fn run_template(lexer: &mut Lexer<Template>, modes: &mut Vec<Mode>, out: &mut Ou
         }
     }
 }
+
+/// Whether `text` is one name as the grammar accepts it for a declaration: a
+/// single token in [`Ident`](crate::token::Ident) — a word or a contextual
+/// keyword (`prompt`, `type`, `_`, …), which a class, field, enum or variant
+/// may be called. A reserved keyword (`class`, `function`) is refused; the
+/// grammar admits those only in a few member positions.
+pub fn is_identifier(text: &str) -> bool {
+    use crate::token::{Ident, TokenIdx, TokenSet as _};
+    let tokens = lex(text);
+    tokens.len() == 1 && Ident::KINDS.contains(tokens.kind(TokenIdx(0)))
+}

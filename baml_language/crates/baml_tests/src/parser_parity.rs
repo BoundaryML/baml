@@ -20,10 +20,7 @@
 use std::{collections::BTreeMap, fmt::Write as _};
 
 use baml_base::FileId;
-use baml_db::{
-    baml_compiler_lexer, baml_compiler_parser,
-    baml_compiler_syntax::{SyntaxKind, SyntaxNode, traversal::trimmed_range},
-};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, traversal::trimmed_range};
 use baml_syntax::{
     nodes::{AnyNodeRef, Arenas, NodeKind},
     token::{TokenIdx, TokenKind, Tokens},

@@ -17,7 +17,7 @@
 //! `:` (chain narrow) is split before `|` (union alternation), so
 //! `let x: int | string` parses as `let x : (int | string)`.
 
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use crate::{
@@ -205,7 +205,7 @@ pub struct WildcardPattern {
 }
 
 impl WildcardPattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it
             .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
@@ -254,7 +254,7 @@ pub struct BindingPattern {
 }
 
 impl BindingPattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = t::BindingKeyword::from_cst(it.expect_next("binding introducer")?)?;
         let name = it.expect_parse()?;
@@ -360,7 +360,7 @@ impl Printable for DestructureTypeArgs {
 }
 
 impl DestructurePattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it
             .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
@@ -607,7 +607,7 @@ pub struct ArrayPattern {
 }
 
 impl ArrayPattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let open_bracket = it.expect_parse()?;
         let mut elements = Vec::new();
@@ -839,7 +839,7 @@ pub struct TypePattern {
 }
 
 impl TypePattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let ty = it.expect_parse()?;
         it.expect_end()?;
@@ -868,7 +868,7 @@ pub struct ParenPattern {
 }
 
 impl ParenPattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let open_paren = it.expect_parse()?;
         let pattern = it.expect_parse()?;
@@ -918,7 +918,7 @@ pub struct UnionPattern {
 }
 
 impl UnionPattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let first_elem = it.expect_next("a pattern atom")?;
         let first = MatchPattern::from_inner(first_elem)?;
@@ -1060,7 +1060,7 @@ pub struct ChainPattern {
 }
 
 impl ChainPattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let first_elem = it.expect_next("a pattern atom")?;
         let first = MatchPattern::from_inner(first_elem)?;

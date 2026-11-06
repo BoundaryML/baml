@@ -1093,7 +1093,8 @@ function read(p: P, n: Named, s: Shows) -> string throws never {
     #[test]
     fn the_replacement_must_be_one_identifier() {
         let test = at("enum Status", "Status");
-        for bad in ["", "2legit", "has space", "with.dot", "class", "type"] {
+        // `type` is a contextual keyword, a name a declaration may have.
+        for bad in ["", "2legit", "has space", "with.dot", "class"] {
             let error = rename(&test.db, test.cursor.file, test.cursor.offset, bad)
                 .expect_err("`{bad}` is not an identifier");
             assert_eq!(

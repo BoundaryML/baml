@@ -100,11 +100,10 @@ pub fn typed_parse_error_diagnostic(
             Diagnostic::error(DiagnosticId::InvalidSyntax, "invalid syntax")
                 .with_primary(span, message.clone())
         }
-        E::AmbiguousUnion { groupings, .. } => Diagnostic::error(
-            DiagnosticId::AmbiguousUnion,
-            ParseError::AMBIGUOUS_UNION_MESSAGE,
-        )
-        .with_primary(span, ParseError::ambiguous_union_label(groupings)),
+        E::AmbiguousUnion { groupings, .. } => {
+            Diagnostic::error(DiagnosticId::AmbiguousUnion, E::AMBIGUOUS_UNION_MESSAGE)
+                .with_primary(span, E::ambiguous_union_label(groupings))
+        }
         E::RemovedFeature { message, .. } => {
             Diagnostic::error(DiagnosticId::RemovedFeature, "removed language feature")
                 .with_primary(span, message.clone())

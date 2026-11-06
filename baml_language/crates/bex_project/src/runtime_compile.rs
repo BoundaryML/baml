@@ -774,8 +774,8 @@ fn session_parse_error_diagnostic(
             DiagnosticId::AmbiguousUnion,
             format!(
                 "{}: {}",
-                baml_compiler_diagnostics::ParseError::AMBIGUOUS_UNION_MESSAGE,
-                baml_compiler_diagnostics::ParseError::ambiguous_union_label(groupings)
+                ParseError::AMBIGUOUS_UNION_MESSAGE,
+                ParseError::ambiguous_union_label(groupings)
             ),
         ),
     };

@@ -10,7 +10,7 @@ mod types;
 use std::{borrow::Cow, path::Path};
 
 pub use attributes::*;
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use declarations::*;
 pub use expressions::*;
 pub use interfaces::*;
@@ -480,7 +480,8 @@ fn has_blank_line(gap: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use baml_db::{baml_compiler_parser::parse_green, baml_compiler_syntax::SyntaxNode};
+    use baml_compiler_parser::parse_green;
+    use baml_compiler_syntax::SyntaxNode;
 
     use super::*;
 

@@ -1,8 +1,8 @@
-//! Reference: [`baml_db::baml_compiler_syntax::type_ref`], though many of the types are grouped into [`Type::Path`] for us,
+//! Reference: [`baml_compiler_syntax::type_ref`], though many of the types are grouped into [`Type::Path`] for us,
 //! since we shouldn't need special treatment for things like `string` and `int` during formatting.
 //! If this ever gets used for something else, we can split it up into multiple types.
 
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::{TextRange, TextSize};
 
 use super::{FromCST, KnownKind, StrongAstError, tokens as t};
@@ -1364,10 +1364,8 @@ impl Printable for FunctionTypeParam {
 
 #[cfg(test)]
 mod tests {
-    use baml_db::{
-        baml_compiler_parser::parse_green,
-        baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode},
-    };
+    use baml_compiler_parser::parse_green;
+    use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode};
 
     use super::*;
 
