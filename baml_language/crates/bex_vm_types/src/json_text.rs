@@ -238,6 +238,27 @@ impl<'a> Reader<'a> {
         Ok(self.span_str(start))
     }
 
+    /// Validate and consume a string, borrowing its source bytes when unescaped.
+    /// Escaped strings return None; callers may save a mark and decode them later.
+    pub fn borrowed_string(&mut self) -> Result<Option<&'a str>, Stop> {
+        if self.peek() != Some(b'"') {
+            return Err(Stop);
+        }
+        Ok(self
+            .string_span()?
+            .map(|(start, end)| &self.src[start..end]))
+    }
+
+    /// Consume a number with the same bigint/finite-float limits as `skip_value`.
+    pub fn validated_number(&mut self) -> Result<Number<'a>, Stop> {
+        let value = self.number()?;
+        if value.within_limits() {
+            Ok(value)
+        } else {
+            Err(Stop)
+        }
+    }
+
     /// Consume the string at the cursor (its opening quote is at the cursor).
     /// Returns where its text began, or `None` when it held an escape and its
     /// decoded text is in `scratch`.

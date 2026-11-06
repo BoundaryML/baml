@@ -992,3 +992,26 @@ fn v2_agent_maps_iteration_catch_and_json_admission() {
         assert_eq!(before, fingerprint(&program));
     }
 }
+
+#[test]
+fn v2_json_streaming_specializations_and_per_type_fallback() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "json.baml",
+        include_str!("../../../architecture/runtime-v2/phase1/json-stream-layouts.baml"),
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_v2(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    assert!(source.contains("rt::json::Stream::<"));
+    assert!(source.contains("json_specialized_4_0"));
+    assert!(source.contains("Tree fallback: aliased @skip"));
+}

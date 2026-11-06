@@ -19,6 +19,7 @@ pub struct SchemaField {
     pub name: &'static str,
     pub offset: usize,
     pub ty: Ty,
+    pub skip: bool,
 }
 pub struct Schema {
     pub name: &'static str,
@@ -124,6 +125,9 @@ fn check(value: &Value, schema: &Schema) -> Result<(), Report> {
         )
     })?;
     for field in schema.fields {
+        if field.skip {
+            continue;
+        }
         match object.get(field.name) {
             Some(value) => check_field(value, field.ty, &format!(".{}", field.name))?,
             None if matches!(field.ty, Ty::OptionalInt) => {}
@@ -230,8 +234,10 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, schemas: &'static [Schema]) -> R<Dy
                 schemas[*i]
                     .fields
                     .iter()
-                    .filter(|f| object.contains_key(f.name))
-                    .count(),
+                    .filter(|f| !f.skip && object.contains_key(f.name))
+                    .map(|f| f.name)
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len(),
             )
         });
     }
@@ -244,7 +250,22 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, schemas: &'static [Schema]) -> R<Dy
         // Object is zeroed and rooted in this frame across each string allocation.
         let object = value.as_object().unwrap();
         for field in schema.fields {
-            let value = object.get(field.name).unwrap_or(&Value::Null);
+            let empty = if field.skip {
+                match field.ty {
+                    Ty::String => Value::from(""),
+                    Ty::Int => Value::from(0),
+                    Ty::OptionalInt => Value::Null,
+                    Ty::Literal(s) => Value::from(s),
+                    Ty::Literals(values) => Value::from(values[0]),
+                }
+            } else {
+                Value::Null
+            };
+            let value = if field.skip {
+                &empty
+            } else {
+                object.get(field.name).unwrap_or(&Value::Null)
+            };
             let slot = unsafe { ptr.add(field.offset) };
             match field.ty {
                 Ty::Int => unsafe { slot.cast::<i64>().write(value.as_i64().unwrap()) },
@@ -310,4 +331,289 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, schemas: &'static [Schema]) -> R<Dy
         )
     };
     Err(error(cx, message, Some(path)))
+}
+
+/// Stack-resident validated tokens for a generated concrete decoder. Unknown
+/// fields are syntax checked and skipped; repeated fields overwrite their slot.
+/// No JSON object or owned name per field is constructed. Escaped text uses the
+/// shared scanner's reusable scratch; ordinary strings borrow the input.
+#[derive(Clone, Copy)]
+enum Token<'a> {
+    String(&'a str),
+    Escaped(bex_vm_types::json_text::Mark),
+    Number(Option<i64>),
+    Null,
+    Other,
+}
+pub struct Stream<'a, const N: usize> {
+    reader: Reader<'a>,
+    fields: [Option<Token<'a>>; N],
+    object: bool,
+}
+impl<'a, const N: usize> Stream<'a, N> {
+    pub fn scan(
+        source: &'a str,
+        field: impl Fn(&str) -> Option<usize>,
+    ) -> Result<Self, bex_vm_types::json_text::Stop> {
+        let mut reader = Reader::new(source);
+        let mut fields = [None; N];
+        let object = reader.peek() == Some(b'{');
+        if object {
+            reader.open_object()?;
+            let mut first = true;
+            while let Some(key) = reader.next_key(first)? {
+                first = false;
+                let slot = field(key);
+                if let Some(slot) = slot {
+                    let mark = reader.mark();
+                    fields[slot] = Some(match reader.peek() {
+                        Some(b'"') => match reader.borrowed_string()? {
+                            Some(value) => Token::String(value),
+                            None => Token::Escaped(mark),
+                        },
+                        Some(b'-' | b'0'..=b'9') => {
+                            Token::Number(reader.validated_number()?.as_i64())
+                        }
+                        Some(b'n') => {
+                            reader.null()?;
+                            Token::Null
+                        }
+                        _ => {
+                            reader.skip_value()?;
+                            Token::Other
+                        }
+                    });
+                } else {
+                    reader.skip_value()?;
+                }
+            }
+        } else {
+            reader.skip_value()?;
+        }
+        reader.finish()?;
+        Ok(Self {
+            reader,
+            fields,
+            object,
+        })
+    }
+    #[inline(always)]
+    pub fn is_object(&self) -> bool {
+        self.object
+    }
+    #[inline(always)]
+    pub fn present(&self, field: usize) -> usize {
+        usize::from(self.fields[field].is_some())
+    }
+    #[inline(always)]
+    pub fn matches(&mut self, field: usize, ty: Ty) -> bool {
+        if !self.object {
+            return false;
+        }
+        let Some(token) = self.fields[field] else {
+            return matches!(ty, Ty::OptionalInt);
+        };
+        match ty {
+            Ty::String => matches!(token, Token::String(_) | Token::Escaped(_)),
+            Ty::Int | Ty::OptionalInt => match token {
+                Token::Null => matches!(ty, Ty::OptionalInt),
+                Token::Number(Some(n)) => baml_type::Int63::new(n).is_some(),
+                _ => false,
+            },
+            Ty::Literal(wanted) => self.text(token).is_some_and(|s| s == wanted),
+            Ty::Literals(wanted) => self.text(token).is_some_and(|s| wanted.contains(&s)),
+        }
+    }
+    #[inline(always)]
+    fn text(&mut self, token: Token<'a>) -> Option<&str> {
+        match token {
+            Token::String(s) => Some(s),
+            Token::Escaped(mark) => {
+                self.reader.reset(mark);
+                Some(self.reader.string().expect("validated escape"))
+            }
+            _ => None,
+        }
+    }
+    /// # Safety
+    /// The generated decoder validated this field with `matches`. `object` and
+    /// its field offset describe the selected managed class. The source remains
+    /// borrowed from its non-moving, conservatively rooted managed string.
+    #[inline(always)]
+    pub unsafe fn store(
+        &mut self,
+        cx: &mut Cx,
+        object: *mut u8,
+        offset: usize,
+        field: usize,
+        ty: Ty,
+    ) -> R<()> {
+        let token = self.fields[field];
+        let slot = unsafe { object.add(offset) };
+        match ty {
+            Ty::String | Ty::Literal(_) | Ty::Literals(_) => {
+                let value = cx.string(
+                    self.text(token.expect("validated field"))
+                        .expect("validated string"),
+                )?;
+                unsafe {
+                    if matches!(ty, Ty::Literals(_)) {
+                        crate::write_dyn(
+                            object,
+                            slot.cast(),
+                            Dyn {
+                                tag: 3,
+                                payload: value.as_raw() as u64,
+                            },
+                        );
+                    } else {
+                        write_ptr(object, slot.cast(), value.as_raw());
+                    }
+                }
+            }
+            Ty::Int => unsafe {
+                slot.cast::<i64>().write(match token {
+                    Some(Token::Number(Some(n))) => n,
+                    _ => unreachable!("validated integer"),
+                });
+            },
+            Ty::OptionalInt => {
+                let value = if matches!(token, None | Some(Token::Null)) {
+                    Dyn { tag: 2, payload: 0 }
+                } else {
+                    Dyn {
+                        tag: 0,
+                        payload: match token {
+                            Some(Token::Number(Some(n))) => n,
+                            _ => unreachable!("validated integer"),
+                        } as u64,
+                    }
+                };
+                unsafe {
+                    crate::write_dyn(object, slot.cast(), value);
+                }
+            }
+        }
+        Ok(())
+    }
+    #[cold]
+    fn report(&mut self, schema: &Schema, indices: &[usize]) -> Report {
+        if !self.object {
+            return mismatch(
+                format!("expected JSON object for class `{}`", schema.name),
+                "",
+            );
+        }
+        for (field, &index) in schema.fields.iter().zip(indices) {
+            if self.matches(index, field.ty) {
+                continue;
+            }
+            let Some(token) = self.fields[index] else {
+                return mismatch(format!("missing required field `{}`", field.name), "");
+            };
+            let message = match field.ty {
+                Ty::String => "expected string".to_owned(),
+                Ty::Int | Ty::OptionalInt => {
+                    if matches!(token, Token::Number(_)) {
+                        "expected integer in the BAML int range [-2^62, 2^62 - 1]".to_owned()
+                    } else {
+                        "expected integer".to_owned()
+                    }
+                }
+                Ty::Literal(_) => "literal mismatch".to_owned(),
+                Ty::Literals(wanted) => format!(
+                    "no union member matched: {}",
+                    wanted
+                        .iter()
+                        .map(|w| format!("`{w:?}`: literal mismatch"))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                ),
+            };
+            return mismatch(message, &format!(".{}", field.name));
+        }
+        unreachable!("report requested for a valid candidate")
+    }
+    #[cold]
+    pub fn failure(&mut self, cx: &mut Cx, schemas: &[Schema], indices: &[&[usize]]) -> Box<Error> {
+        let reports: Vec<_> = schemas
+            .iter()
+            .zip(indices)
+            .map(|(s, i)| (s.name, self.report(s, i)))
+            .collect();
+        let (message, path) = if reports.len() == 1 {
+            (reports[0].1.message.clone(), reports[0].1.path.clone())
+        } else {
+            (
+                format!(
+                    "no union member matched: {}",
+                    reports
+                        .iter()
+                        .map(|(name, r)| if r.path.is_empty() {
+                            format!("`{name}`: {}", r.message)
+                        } else {
+                            format!("`{name}`: {} at `{}`", r.message, r.path)
+                        })
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                ),
+                String::new(),
+            )
+        };
+        error(cx, message, Some(path))
+    }
+}
+#[cold]
+pub fn syntax_error(cx: &mut Cx, source: &str) -> Box<Error> {
+    let message = match refusal(source) {
+        Refusal::Syntax(m) | Refusal::OutOfRange(m) => m,
+        Refusal::BigintLimit => bigint_limit_message(),
+    };
+    error(cx, message, None)
+}
+
+#[cfg(test)]
+mod stream_tests {
+    use super::*;
+    #[test]
+    fn streaming_slots_replace_duplicates_and_validate_unknown_values() {
+        let mut input = Stream::<2>::scan(
+            r#"{"a":"wrong","extra":[{},null],"a":-0,"s":"a\u0062"}"#,
+            |k| match k {
+                "a" => Some(0),
+                "s" => Some(1),
+                _ => None,
+            },
+        )
+        .unwrap();
+        assert!(input.matches(0, Ty::Int));
+        assert!(input.matches(1, Ty::Literal("ab")));
+        assert_eq!(input.present(0), 1);
+        assert!(Stream::<0>::scan(r#"{"unknown":[1,]}"#, |_| None).is_err());
+        assert!(Stream::<0>::scan(r#"{} trailing"#, |_| None).is_err());
+    }
+    #[test]
+    fn streaming_integer_semantics_do_not_coerce_float_string_or_bool() {
+        for (token, valid) in [
+            ("-4611686018427387904", true),
+            ("4611686018427387903", true),
+            ("4611686018427387904", false),
+            ("1.0", false),
+            ("true", false),
+            ("\"1\"", false),
+            ("null", false),
+        ] {
+            let text = format!("{{\"a\":{token}}}");
+            let mut input = Stream::<1>::scan(&text, |_| Some(0)).unwrap();
+            assert_eq!(input.matches(0, Ty::Int), valid, "{token}");
+            assert_eq!(
+                input.matches(0, Ty::OptionalInt),
+                valid || token == "null",
+                "{token}"
+            );
+        }
+        let mut missing = Stream::<1>::scan("{}", |_| Some(0)).unwrap();
+        assert!(missing.matches(0, Ty::OptionalInt));
+        assert!(!missing.matches(0, Ty::Int));
+    }
 }

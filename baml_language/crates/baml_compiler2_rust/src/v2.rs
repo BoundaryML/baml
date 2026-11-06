@@ -29,12 +29,13 @@ enum Repr {
     ListInt,
     ListStr,
     ListListStr,
-    Type(u8),
+    Type(usize),
     ListPtr(usize),
     Dyn(usize),
     Tagged,
     MapStrInt,
     Iter,
+    Naming,
     Null,
 }
 impl Repr {
@@ -89,7 +90,7 @@ struct Plan<'a> {
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
-    json_classes: Vec<usize>,
+    json_types: Vec<Vec<usize>>,
 }
 impl Plan<'_> {
     fn class_tag(&self, tag: baml_type::typetag::TypeTag) -> Gen<usize> {
@@ -214,21 +215,41 @@ impl Plan<'_> {
     // MIR may reuse a method-valued temporary for its extracted receiver.
     // Infer only copy-assigned storage, and require every definition to agree.
     // Actual function values, cycles, parameters and call results stay rejected.
-    fn type_code(ty: &baml_compiler2_mir::TyTemplate) -> Gen<u8> {
+    fn type_code(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<usize> {
         use baml_compiler2_mir::TyTemplate as T;
         match ty {
             T::Int => Ok(0),
             T::String => Ok(1),
             T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),
-            T::Union(members)
-                if members
+            T::Class(_, _) | T::Union(_) => {
+                let classes = self.json_class_types(ty)?;
+                self.json_types
                     .iter()
-                    .all(|m| matches!(m,T::Class(_,args) if args.is_empty())) =>
-            {
-                Ok(3)
+                    .position(|c| *c == classes)
+                    .map(|i| i + 3)
+                    .ok_or_else(|| no("unregistered JSON specialization"))
             }
             _ => Err(no(format!("type argument {ty:?}"))),
         }
+    }
+    fn json_class_types(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<Vec<usize>> {
+        use baml_compiler2_mir::TyTemplate as T;
+        let members = if let T::Union(members) = ty {
+            members.as_ref()
+        } else {
+            std::slice::from_ref(ty)
+        };
+        members
+            .iter()
+            .map(|m| match m {
+                T::Class(head, args) if args.is_empty() => self
+                    .index
+                    .class_at(head)
+                    .map(|c| c.0)
+                    .ok_or_else(|| no("JSON class")),
+                _ => Err(no("JSON union member")),
+            })
+            .collect()
     }
     fn local_repr(&self, body: &MirFunctionBody<'_>, i: usize, depth: usize) -> Gen<Repr> {
         let definitions: Vec<_> = body
@@ -261,7 +282,7 @@ impl Plan<'_> {
                 let Rvalue::LoadType(ty) = value else {
                     return Err(no("dynamic type storage"));
                 };
-                let next = Self::type_code(ty)?;
+                let next = self.type_code(ty)?;
                 if code.is_some_and(|c| c != next) {
                     return Err(no("dynamic type argument"));
                 }
@@ -356,6 +377,13 @@ impl Plan<'_> {
                         .interface_at(head)
                         .ok_or_else(|| no("interface"))?,
                 )
+            }
+            RuntimeTy::Enum(head)
+                if Some(head.root()) == self.lang.get(baml_base::LangPackage::Baml)
+                    && head.namespace().as_slice() == ["json"]
+                    && head.name().as_str() == "Naming" =>
+            {
+                Repr::Naming
             }
             RuntimeTy::Class(head, args)
                 if args.is_empty()
@@ -541,7 +569,7 @@ pub fn compile_v2(
         program,
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
-        json_classes: Vec::new(),
+        json_types: Vec::new(),
     };
     let mut all = BTreeMap::new();
     for &file in world_files(db, root) {
@@ -585,29 +613,21 @@ pub fn compile_v2(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             if let StatementKind::Assign {
-                value: Rvalue::LoadType(baml_compiler2_mir::TyTemplate::Union(members)),
+                value:
+                    Rvalue::LoadType(
+                        ty @ (baml_compiler2_mir::TyTemplate::Union(_)
+                        | baml_compiler2_mir::TyTemplate::Class(..)),
+                    ),
                 ..
             } = &statement.kind
             {
-                let classes = members
-                    .iter()
-                    .map(|m| match m {
-                        baml_compiler2_mir::TyTemplate::Class(head, args) if args.is_empty() => {
-                            plan.index
-                                .class_at(head)
-                                .map(|c| c.0)
-                                .ok_or_else(|| no("JSON class"))
-                        }
-                        _ => Err(no("JSON union member")),
-                    })
-                    .collect::<Gen<Vec<_>>>()?;
-                if !plan.json_classes.is_empty() && plan.json_classes != classes {
-                    return Err(no("multiple JSON schema specializations"));
-                }
+                let classes = plan.json_class_types(ty)?;
                 for &c in &classes {
                     plan.add(c)?;
                 }
-                plan.json_classes = classes;
+                if !plan.json_types.contains(&classes) {
+                    plan.json_types.push(classes);
+                }
             }
         }
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
@@ -771,7 +791,7 @@ pub fn compile_v2(
                         Repr::Str => 3,
                         Repr::Int => 0,
                         Repr::Bool => 1,
-                        Repr::Iter | Repr::Null | Repr::Type(_) =>
+                        Repr::Iter | Repr::Naming | Repr::Null | Repr::Type(_) =>
                             unreachable!("null/type fields are rejected"),
                     }
                 )
@@ -829,93 +849,219 @@ pub fn compile_v2(
         out.push_str("}\n");
     }
     if let Some(callee) = json_decode {
-        if plan.json_classes.is_empty() {
+        if plan.json_types.is_empty() {
             return Err(no("missing JSON specialization"));
         }
-        out.push_str("static JSON_SCHEMA:&[rt::json::Schema]=&[\n");
-        for c in &plan.json_classes {
-            let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(*c)]
-            else {
-                unreachable!()
-            };
-            for package in &program.packages {
-                for rules in package.impl_rules.values() {
-                    for rule in rules {
-                        if matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if head.tag()==class.type_tag)
-                        {
-                            return Err(no("JSON class with custom interface implementations"));
+        for (specialization, json_classes) in plan.json_types.iter().enumerate() {
+            let code = specialization + 3;
+            for aliased in [false, true] {
+                let mode = usize::from(aliased);
+                let schema_name = format!("JSON_SCHEMA_{code}_{mode}");
+                writeln!(&mut out, "static {schema_name}:&[rt::json::Schema]=&[").unwrap();
+                for c in json_classes {
+                    let Object::Class(class) =
+                        &program.objects[bex_vm_types::ObjectIndex::from_raw(*c)]
+                    else {
+                        unreachable!()
+                    };
+                    for package in &program.packages {
+                        for rules in package.impl_rules.values() {
+                            for rule in rules {
+                                if matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if head.tag()==class.type_tag)
+                                {
+                                    return Err(no(
+                                        "JSON class with custom interface implementations",
+                                    ));
+                                }
+                            }
                         }
                     }
+                    let name = class.path.to_string();
+                    let layout = &plan.layouts[c];
+                    write!(
+                        &mut out,
+                        "rt::json::Schema{{name:{name:?},desc:{},bytes:{},fields:&[",
+                        descriptors[c], layout.bytes
+                    )
+                    .unwrap();
+                    for (i, field) in class.fields.iter().enumerate() {
+                        use bex_vm_types::RuntimeTy as T;
+                        let ty = match &field.field_type {
+                            T::String => "rt::json::Ty::String".into(),
+                            T::Int => "rt::json::Ty::Int".into(),
+                            T::Literal(baml_type::Literal::String(value), _) => {
+                                format!("rt::json::Ty::Literal({:?})", value.as_str())
+                            }
+                            T::Union(m)
+                                if m.len() == 2
+                                    && m.iter().any(|t| matches!(t, T::Null))
+                                    && m.iter().any(|t| matches!(t, T::Int)) =>
+                            {
+                                "rt::json::Ty::OptionalInt".into()
+                            }
+                            T::Union(m) => {
+                                let members = m
+                                    .iter()
+                                    .map(|t| match t {
+                                        T::Literal(baml_type::Literal::String(value), _) => {
+                                            Ok(format!("{:?}", value.as_str()))
+                                        }
+                                        _ => Err(no("JSON field union")),
+                                    })
+                                    .collect::<Gen<Vec<_>>>()?;
+                                format!("rt::json::Ty::Literals(&[{}])", members.join(","))
+                            }
+                            _ => return Err(no("JSON field type")),
+                        };
+                        write!(
+                            &mut out,
+                            "rt::json::SchemaField{{name:{:?},offset:{},ty:{ty},skip:{}}},",
+                            if aliased {
+                                field.alias.as_ref().unwrap_or(&field.name)
+                            } else {
+                                &field.name
+                            },
+                            layout.offsets[i],
+                            aliased && field.skip
+                        )
+                        .unwrap();
+                    }
+                    out.push_str("]},\n");
+                }
+                out.push_str("];\n");
+                let fallback = aliased
+                    && json_classes.iter().any(|c| {
+                        let Object::Class(class) =
+                            &program.objects[bex_vm_types::ObjectIndex::from_raw(*c)]
+                        else {
+                            unreachable!()
+                        };
+                        class.fields.iter().any(|f| f.skip)
+                    });
+                if fallback {
+                    writeln!(&mut out,"// Tree fallback: aliased @skip empty-value construction.\nunsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{unsafe{{rt::json::decode(cx,rt::strings::Str::from_raw(s),{schema_name})}}}}").unwrap();
+                } else {
+                    // A per-specialization field matcher and fixed stack slots replace the
+                    // intermediate JSON tree. Candidate checks preserve declaration-order
+                    // ties and prefer the class with the most matching input keys.
+                    let mut names = BTreeMap::new();
+                    for c in json_classes {
+                        let Object::Class(class) =
+                            &program.objects[bex_vm_types::ObjectIndex::from_raw(*c)]
+                        else {
+                            unreachable!()
+                        };
+                        for field in &class.fields {
+                            let next = names.len();
+                            names
+                                .entry(if aliased {
+                                    field.alias.as_ref().unwrap_or(&field.name).clone()
+                                } else {
+                                    field.name.clone()
+                                })
+                                .or_insert(next);
+                        }
+                    }
+                    writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.as_str(&read_cx);let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
+                    for (name, index) in &names {
+                        writeln!(&mut out, "{name:?}=>Some({index}),").unwrap();
+                    }
+                    out.push_str("_=>None}){Ok(input)=>input,Err(_)=>return Err(rt::json::syntax_error(cx,source))};let mut best=None;let mut score=0usize;\n");
+                    let mut indices = Vec::new();
+                    for (candidate, c) in json_classes.iter().enumerate() {
+                        let Object::Class(class) =
+                            &program.objects[bex_vm_types::ObjectIndex::from_raw(*c)]
+                        else {
+                            unreachable!()
+                        };
+                        let fields = class
+                            .fields
+                            .iter()
+                            .map(|f| {
+                                names[if aliased {
+                                    f.alias.as_ref().unwrap_or(&f.name)
+                                } else {
+                                    &f.name
+                                }]
+                            })
+                            .collect::<Vec<_>>();
+                        let checks = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, slot)| {
+                        format!("input.matches({slot},{schema_name}[{candidate}].fields[{i}].ty)")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                        let count = fields
+                            .iter()
+                            .copied()
+                            .collect::<BTreeSet<_>>()
+                            .iter()
+                            .map(|slot| format!("input.present({slot})"))
+                            .collect::<Vec<_>>()
+                            .join("+");
+                        writeln!(&mut out,"if input.is_object() && ({}){{let n={};if best.is_none()||n>score{{best=Some({candidate});score=n;}}}}",if checks.is_empty(){"true"}else{&checks},if count.is_empty(){"0"}else{&count}).unwrap();
+                        indices.push(fields);
+                    }
+                    out.push_str("match best{\n");
+                    for (candidate, c) in json_classes.iter().enumerate() {
+                        writeln!(
+                            &mut out,
+                            "Some({candidate})=>{{let p=unsafe{{rt::try_alloc({},{})}}?;",
+                            descriptors[c], plan.layouts[c].bytes
+                        )
+                        .unwrap();
+                        for (i, slot) in indices[candidate].iter().enumerate() {
+                            writeln!(&mut out,"unsafe{{input.store(cx,p,{}, {slot}, {schema_name}[{candidate}].fields[{i}].ty)}}?;",plan.layouts[c].offsets[i]).unwrap();
+                        }
+                        writeln!(
+                            &mut out,
+                            "Ok(rt::Dyn{{tag:{},payload:p as u64}})}},",
+                            descriptors[c] + 3
+                        )
+                        .unwrap();
+                    }
+                    let indices = indices
+                        .iter()
+                        .map(|i| format!("&{i:?}"))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    writeln!(
+                        &mut out,
+                        "_=>Err(input.failure(cx,{schema_name},&[{indices}]))}}}}"
+                    )
+                    .unwrap();
+                }
+                let mir = all[&callee];
+                let MirFunctionKind::Bytecode(body) = &mir.kind else {
+                    return Err(no("JSON wrapper body"));
+                };
+                let mut line = None;
+                for block in &body.blocks {
+                    if let Some(Terminator::Call {
+                        callee: Operand::Constant(Constant::Function(f)),
+                        ..
+                    }) = &block.terminator
+                        && let Some((target, _)) = plan.index.function(db, *f)
+                        && plan.index.display(target) == "baml.json._decode"
+                    {
+                        line = plan.index.positions(callee).block_pcs[block.id.0]
+                            .terminator
+                            .map(|pc| plan.index.positions(callee).source_line_for_pc(pc));
+                    }
+                }
+                let line = line.ok_or_else(|| no("JSON wrapper source line"))?;
+                if specialization == 0 && !aliased {
+                    writeln!(&mut out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}]}};",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
+                }
+                if !aliased {
+                    writeln!(&mut out,"unsafe fn f{callee}_json{code}(s:usize,naming:usize)->R<rt::Dyn>{{unsafe{{rt::observe(&O{callee});rt::check_stack().map_err(|e|e.at(&S{callee},0))?;if naming==0{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}}}}}").unwrap();
                 }
             }
-            let name = class.path.to_string();
-            let layout = &plan.layouts[c];
-            write!(
-                &mut out,
-                "rt::json::Schema{{name:{name:?},desc:{},bytes:{},fields:&[",
-                descriptors[c], layout.bytes
-            )
-            .unwrap();
-            for (i, field) in class.fields.iter().enumerate() {
-                use bex_vm_types::RuntimeTy as T;
-                let ty = match &field.field_type {
-                    T::String => "rt::json::Ty::String".into(),
-                    T::Int => "rt::json::Ty::Int".into(),
-                    T::Literal(baml_type::Literal::String(value), _) => {
-                        format!("rt::json::Ty::Literal({:?})", value.as_str())
-                    }
-                    T::Union(m)
-                        if m.len() == 2
-                            && m.iter().any(|t| matches!(t, T::Null))
-                            && m.iter().any(|t| matches!(t, T::Int)) =>
-                    {
-                        "rt::json::Ty::OptionalInt".into()
-                    }
-                    T::Union(m) => {
-                        let members = m
-                            .iter()
-                            .map(|t| match t {
-                                T::Literal(baml_type::Literal::String(value), _) => {
-                                    Ok(format!("{:?}", value.as_str()))
-                                }
-                                _ => Err(no("JSON field union")),
-                            })
-                            .collect::<Gen<Vec<_>>>()?;
-                        format!("rt::json::Ty::Literals(&[{}])", members.join(","))
-                    }
-                    _ => return Err(no("JSON field type")),
-                };
-                write!(
-                    &mut out,
-                    "rt::json::SchemaField{{name:{:?},offset:{},ty:{ty}}},",
-                    field.name, layout.offsets[i]
-                )
-                .unwrap();
-            }
-            out.push_str("]},\n");
         }
-        out.push_str("];\n");
-        let mir = all[&callee];
-        let MirFunctionKind::Bytecode(body) = &mir.kind else {
-            return Err(no("JSON wrapper body"));
-        };
-        let mut line = None;
-        for block in &body.blocks {
-            if let Some(Terminator::Call {
-                callee: Operand::Constant(Constant::Function(f)),
-                ..
-            }) = &block.terminator
-                && let Some((target, _)) = plan.index.function(db, *f)
-                && plan.index.display(target) == "baml.json._decode"
-            {
-                line = plan.index.positions(callee).block_pcs[block.id.0]
-                    .terminator
-                    .map(|pc| plan.index.positions(callee).source_line_for_pc(pc));
-            }
-        }
-        let line = line.ok_or_else(|| no("JSON wrapper source line"))?;
-        writeln!(&mut out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}]}};unsafe fn f{callee}(s:usize)->R<rt::Dyn>{{unsafe{{rt::observe(&O{callee});rt::check_stack().map_err(|e|e.at(&S{callee},0))?;rt::json::decode(&mut rt::strings::Cx::current(),rt::strings::Str::from_raw(s),JSON_SCHEMA)}}}}",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
     }
+
     // Bound forced inlining by the same total-local budget as a single body.
     // Recursive SCCs retain real frames and the normal per-entry stack guard.
     let small_program = reached
@@ -1191,6 +1337,13 @@ impl Emitter<'_, '_> {
                 )),
                 Repr::Str,
             )),
+            Operand::Constant(Constant::EnumVariant { enum_ref, index }) => {
+                let head = baml_compiler2_hir_ty::layout::enum_head(self.db, *enum_ref);
+                if self.plan.repr(&RuntimeTy::Enum(head))? != Repr::Naming || *index > 1 {
+                    return Err(no("enum constant"));
+                }
+                Ok((format!("{index}usize"), Repr::Naming))
+            }
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),
             Operand::Constant(_) => Err(no(format!("operand {o:?}"))),
         }
@@ -1321,7 +1474,7 @@ impl Emitter<'_, '_> {
                 };
                 Ok((expr, Repr::Int))
             }
-            Rvalue::LoadType(ty) => Ok(("0usize".into(), Repr::Type(Plan::type_code(ty)?))),
+            Rvalue::LoadType(ty) => Ok(("0usize".into(), Repr::Type(self.plan.type_code(ty)?))),
             Rvalue::Use(o) => self.operand(o),
             Rvalue::Aggregate {
                 kind: AggregateKind::Array,
@@ -1804,18 +1957,25 @@ impl Emitter<'_, '_> {
                     .function(self.db, *f)
                     .ok_or_else(|| no("call"))?;
                 if self.plan.index.display(c) == "baml.json.decode" {
-                    if *ntypeargs != 1
-                        || args.len() != 3
-                        || self.operand(&args[0])?.1 != Repr::Type(3)
-                        || !matches!(args[2], Operand::Constant(Constant::OmittedArg))
-                    {
+                    let Repr::Type(code) = self.operand(&args[0])?.1 else {
+                        return Err(no("JSON type argument"));
+                    };
+                    if *ntypeargs != 1 || args.len() != 3 || code < 3 {
                         return Err(no("JSON decode specialization/naming"));
                     }
+                    let naming = if matches!(args[2], Operand::Constant(Constant::OmittedArg)) {
+                        "0usize".to_owned()
+                    } else {
+                        self.coerce(self.operand(&args[2])?, Repr::Naming)?
+                    };
                     let text = self.coerce(self.operand(&args[1])?, Repr::Str)?;
                     let (destination, _) = crate::analysis::continuation(term).unwrap();
                     out.push_str(&self.assign(
                         destination,
-                        (self.fallible(&format!("f{c}({text})")), Repr::Tagged),
+                        (
+                            self.fallible(&format!("f{c}_json{code}({text},{naming})")),
+                            Repr::Tagged,
+                        ),
                     )?);
                     return Ok(out);
                 }

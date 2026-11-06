@@ -1,20 +1,19 @@
-# Phase 1 gate: M1–M3 correct; performance NO-GO
+# Phase 1: streaming JSON meets the required Node gate
 
-All three workloads now compile from BAML MIR to typed Rust on the v2 heap and
-loop and match bytecode normally and under v2 GC stress. M3 agent-loop returns
-**592308425**. The final three-row gate and commands are in the M3 completion
-section below. Earlier sections retain checkpoint evidence and limitations as
-historical records; the completion section supersedes their pending-M3 status.
+M1–M3 remain correctness-verified. Generated per-type streaming JSON decoding
+reduces agent-loop from **9.012 ms/job to 3.450 ms/job (2.61× faster)**. It beats
+both the requested 5.7 ms ceiling and the current interleaved Node result
+(6.011 ms/job). **Required performance gate: GO.** The hand-written spike is
+1.241 ms/job, so **2.780× remains above the 2× stretch target**.
 
-The performance recommendation is **NO-GO for claiming spike-equivalent generated
-performance**: agent-loop is **7.35×** the hand-written spike. Trees is 0.96× and
-Richards is 1.14×. Agent-loop is 5.76× faster than today's native backend, but its
-JSON decoder's temporary tree, hashing and host allocation dominate the remaining
-gap. This is a measured performance gap, not an unresolved interface question.
+See the final streaming-decoder section for current coverage, fallback types,
+commands, correctness evidence, timing and profile. Earlier sections are
+historical checkpoints; their pending-M3 and overall NO-GO statements are
+superseded by the current scoped gate above. Telemetry production remains outside
+phase one, and this is not a claim of general BAML/JSON support or full
+telemetry-harness acceptance.
 
-Work stayed in the `v2-codegen` worktree on Spark/aarch64. No push or PR.
-Managed allocation failure has a tested emergency exception reserve; arbitrary
-process-wide host allocator exhaustion is not claimed.
+All work stayed in the `v2-codegen` worktree on Spark/aarch64. No push or PR.
 
 ## M1 implementation
 
@@ -1080,3 +1079,164 @@ cargo clippy --manifest-path baml_language/Cargo.toml \
   -p baml_builtins2_codegen -p baml_compiler2_rust -p bex_v2_runtime \
   -p bex_vm -p bex_vm_types --all-targets --no-deps -- -D warnings
 ```
+
+## Generated streaming JSON decoder checkpoint
+
+The new v2 decoder emits a matcher and a fixed set of stack slots for each
+concrete class/class-union specialization. Slots retain validated integers and
+borrowed unescaped strings; escaped strings retain shared-scanner positions.
+The complete document is validated before structural errors or managed class
+allocation. Candidate selection counts distinct recognized keys, tries valid
+members by descending key coverage, and preserves declaration-order ties.
+Selected fields are written directly into the descriptor-planned managed layout.
+There is no JSON Value tree or field hash table on this path, including errors.
+
+The specialization registry now supports multiple concrete decodes in one pack
+and both declared/aliased field naming. Aliased specializations with `@skip`
+retain the existing tree path for empty-value construction; other types in the
+same pack still stream. The agent's `Search | Calc | Finish` has no fallback.
+This is intentionally not general support for every BAML type: the existing
+flat JSON field-type admission boundary still applies.
+
+Agent-loop still returns 592308425 under GC stress; preliminary pinned runs are
+about 3.4 ms/job (previously 9.01). Final interleaved gate, expanded rule probes,
+and post-change profiling follow below after verification. This checkpoint does
+not promote that preliminary timing to a gate result.
+
+## Streaming decoder completion and updated gate
+
+The emitter now has a concrete JSON specialization registry rather than one
+pack-wide schema. Each reached admitted class or class union gets generated
+code: a field matcher, fixed stack slots, candidate validation/ranking, and
+writes to its planned layout. It uses the shared interpreter scanner, not a
+second permissive JSON parser. No `serde_json::Value`, IndexMap or owned
+field-name table is built on the streaming path. Ordinary string tokens borrow
+the managed input until copied into flat managed strings; escaped strings use
+the scanner's scratch and retained positions. All managed writes keep the
+existing descriptors/barriers and loop-owned collection roots.
+
+Coverage is explicit:
+
+- Flat non-generic classes and their unions, including several different
+  `decode<T>` calls in one program.
+- String, int, `int?`, string-literal and string-literal-union fields. Integers
+  validate i63 bounds; floats, numeric strings and booleans do not coerce to int.
+- Declared names and `Naming.Aliased`, including a naming argument passed through
+  a BAML function. Declared mode ignores `@alias` and `@skip` as the interpreter
+  does. Aliased mode uses field aliases for matching and error paths.
+- Unknown fields are syntax checked then skipped. Duplicate input keys replace
+  earlier values. Missing nullable fields become null; other missing fields
+  fail in declaration order. Syntax/numeric-token limits are checked before
+  structural failures, including malformed content in unknown fields.
+- Class unions prefer the valid member using the most distinct input keys;
+  declaration order breaks ties. A higher-ranked but invalid candidate does not
+  prevent a lower-ranked valid candidate from winning. Failure reports retain
+  the interpreter's member ordering, messages, paths and hidden wrapper frame.
+
+**Per-type fallback:** an aliased specialization containing an `@skip` field uses
+`rt::json::decode` and its tree for SAP-style empty-value construction (zero,
+empty string, null, or first literal as appropriate to these admitted fields).
+The declared specialization of the same type still streams. Other concrete
+specializations in that pack also still stream. The probe `Defaults` exercises
+this mixed path; **agent's `Search | Calc | Finish` has no fallback**. Generated
+source comments name the fallback reason. No broader unsupported schemas are
+silently admitted: maps/lists/nested/generic JSON classes and other field types
+outside the existing flat-schema admission boundary still produce a clear
+unsupported diagnostic. Duplicate field aliases are rejected by the common
+compiler before runtime; ranking also defensively counts shared keys once.
+
+The original ten JSON probes and agent-loop are checked against bytecode,
+normal and under GC stress. Expanded probes cover extra nested fields, escaped
+keys/values, explicit/absent optionals, wrong primitives, both duplicate-key
+orders, both i63 endpoints, non-object input, malformed ignored content,
+ambiguous unions (tie, key ranking, invalid preferred member), multiple types,
+alias naming/errors, and skipped defaults. The combined layout fixture returns
+139 and exercises two naming modes, a ranked union, multiple single-class
+specializations, and the per-type fallback in one execution. Evidence is in
+`phase1/json-stream-correctness.json` (30 cases) and
+`phase1/json-stream-extra-correctness.json` (four supplementary cases): **34 cases,
+each normal and stressed**, with exact status/stdout/stderr parity.
+`check_json_stream.py` reproduces the complete matrix.
+
+All touched compiler/runtime/shared-scanner tests and the existing bytecode VM
+suite pass. The backend suite passes 15 tests, with its one existing corpus test
+ignored. Strict clippy passes for the touched crates and backend test target.
+No `INTERFACES.md` deviation or design question was introduced.
+
+### Updated gate
+
+Median ms/job, telemetry off, CPU 12, five rounds interleaving all four backends,
+with every timed value checked:
+
+| Workload | Node | Native | Generated v2 | Hand-written spike | Generated ÷ spike |
+|---|---:|---:|---:|---:|---:|
+| binary-trees-14 | 38.357569 | 418.960936 | 36.389362 | 37.965193 | **0.958493×** |
+| richards-50 | 3.937868 | 83.120553 | 3.034915 | 2.660391 | **1.140778×** |
+| agent-loop-300, streaming | 6.010886 | 56.135378 | 3.450282 | 1.241324 | **2.779517×** |
+
+Trees/Richards are the prior accepted rows; this change targets JSON decoding.
+Agent uses 50 jobs and one warmup per backend/round, with one-minute load
+**43.447–50.005** from concurrent builds. The final benchmark and profiler ran
+sequentially, not against one another. An earlier exploratory timing that
+briefly overlapped profiling was discarded. Current raw commands, loads,
+statuses and results are in `phase1/agent-stream-benchmark-raw.json`.
+
+This meets the required v2 ≤ Node / 5.7 ms gate with substantial margin, and
+reduces v2 time by 61.7% versus the previous 9.012 ms row. The ≤2× spike stretch
+is **not met**. These are wall-time comparisons under reported machine load,
+not isolated causal attribution to individual code changes.
+
+### Post-change profile
+
+After the final timing rounds, a separate pinned 1,000-job checked run recorded
+about 13K cycle samples with no lost samples. Its result is 592308425. The old
+JSON lookup/insertion/SipHash cluster (34.93% of old self samples) is absent from
+the new profile; the agent binary also has no `json::owned` or JSON Value-table
+lookup symbol. Remaining self costs include:
+
+| Cost | Self samples |
+|---|---:|
+| Generated workload code, attributed to `entry` | 16.23% |
+| Managed heap allocation slow path | 8.92% |
+| Host malloc/free/realloc functions combined | 24.70% |
+| JSON string scanning | 4.81% |
+| JSON next-key scanning | 2.67% |
+| Debug string formatting | 3.01% |
+| General format allocation | 2.30% |
+
+The remaining host allocation/formatting includes normal flat-string building
+and exact error construction; the decoder no longer creates a temporary tree
+for either successful or failing agent actions. Percentages are relative cycle
+samples, so a larger percentage after the speedup does not itself mean that
+operation regressed. Some helpers are inlined into `entry`; the flat attribution
+is not an exact decomposition of its 16.23%. Kernel symbols were restricted;
+user symbols resolve. Full perf.data is local; the flat profile and checked run
+result are committed as `phase1/agent-stream-perf-{flat.txt,run.json}`.
+
+### Reproduction additions
+
+Use the preceding pack/driver/oracle commands, then:
+
+```sh
+uv run --no-project python baml_language/architecture/runtime-v2/phase1/check_json_stream.py
+uv run --no-project python baml_language/architecture/runtime-v2/phase1/check_agent.py
+PHASE1_JOBS=50 uv run --no-project python \
+  baml_language/architecture/runtime-v2/phase1/bench_agent.py
+# Run profiling after the benchmark finishes:
+BAML_TELEMETRY=off taskset -c 12 \
+  /nix/store/i0cd89mpcvd3jb6slpzry4vr23gz4j9k-perf-linux-7.1/bin/perf \
+  record -g --call-graph dwarf -o target/phase1/agent-stream-final-perf.data -- \
+  target/phase1/agent-v2 --jobs 1000 --warmup 1
+
+CARGO_TARGET_DIR="$PWD/target" cargo test --manifest-path baml_language/Cargo.toml \
+  -p bex_vm -p bex_vm_types -p bex_v2_runtime -p baml_compiler2_rust
+CARGO_TARGET_DIR="$PWD/target" cargo test --manifest-path baml_language/Cargo.toml \
+  -p baml_tests --test rust_backend
+CARGO_TARGET_DIR="$PWD/target" cargo clippy --manifest-path baml_language/Cargo.toml \
+  -p baml_compiler2_rust -p bex_v2_runtime -p bex_vm_types -p bex_vm \
+  --all-targets --no-deps -- -D warnings
+CARGO_TARGET_DIR="$PWD/target" cargo clippy --manifest-path baml_language/Cargo.toml \
+  -p baml_tests --test rust_backend --no-deps -- -D warnings
+```
+
+Final validation logs: `target/phase1/json-stream-{regressions,backend-tests,final-clippy,backend-clippy,final-differential}.log`.
