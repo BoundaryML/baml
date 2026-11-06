@@ -56,8 +56,9 @@ jobs:
             exit 0
           fi
 
-          # A missing diff base must fail rather than silently skip the build.
-          changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          # A missing diff base must fail rather than silently skip the build. With --no-renames, a
+          # file moved out of the site still lists its old path, so the move triggers a build.
+          changed_files="$(git diff --no-renames --name-only "$BASE_SHA" "$HEAD_SHA")"
           should_run=false
           while IFS= read -r file; do
             case "$file" in
