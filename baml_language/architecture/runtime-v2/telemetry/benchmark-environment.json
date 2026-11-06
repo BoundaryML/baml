@@ -1,0 +1,49 @@
+{
+  "cpu": "12",
+  "logical_cpus": 20,
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "load": [
+    23.71728515625,
+    31.32421875,
+    38.88916015625
+  ],
+  "platform": [
+    "Linux",
+    "spark",
+    "7.0.14",
+    "#1-NixOS SMP PREEMPT_DYNAMIC Tue Jan  1 00:00:00 UTC 1980",
+    "aarch64"
+  ],
+  "node": "v24.15.0",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "base_commit": "8789ff6964c87a7fff7c2836d91f3e44d6652ac1",
+  "binaries": {
+    "trees-v2": "90cb10ea2609f82149240a0594c7516e6dfdf8f1ccfdb9be361717641e0432e8",
+    "trees-oracle": "151a1049cdaef0e7cca6f59013945c57b45db4e4f30ebcff2db0a2d31e1c64f8",
+    "trees-native": "68ccd445689729ea1b9409636c773361a010957a5165b442ae87075d5056342c",
+    "richards-v2": "35c573715ebf265eea4d82e74b613132e9953f939a9db843cf1b5a27125187c8",
+    "richards-oracle": "6d9055e1363a4e345069e9226c677660d811bf62c4ce6664645b8a258a56dff6",
+    "richards-native": "a3a56c880272e0b3b2d38757b8bba6eaa0f44c59f7dcb91c592d5b18ea23021d"
+  }
+}

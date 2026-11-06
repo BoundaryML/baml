@@ -1,0 +1,30 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 100K of event 'armv8_pmuv3_0/cycles/P'
+# Event count (approx.): 69426299798
+#
+# Overhead  Source:Line
+# ........  .......................................................................................................................................................................................
+#
+    26.05%  /home/rathi/.local/share/rustup/toolchains/1.98.0-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs:459
+    18.42%  /home/rathi/.local/share/rustup/toolchains/1.98.0-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:1873
+    15.86%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/vendor/quanta/src/clocks/counter.rs:19
+     8.90%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:222
+     6.08%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:165
+     5.29%  /home/rathi/.local/share/rustup/toolchains/1.98.0-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:238
+     1.99%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/btel_types/src/lib.rs:306
+     1.98%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/vendor/quanta/src/lib.rs:417
+     1.87%  /home/rathi/.local/share/rustup/toolchains/1.98.0-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/hash/sip.rs:76
+     1.80%  /home/rathi/.local/share/rustup/toolchains/1.98.0-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/uint_macros.rs:2500
+     1.12%  /home/rathi/.local/share/rustup/toolchains/1.98.0-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/../../stdarch/crates/core_arch/src/arm_shared/neon/generated.rs:46181
+     0.54%  /home/rathi/.local/share/rustup/toolchains/1.98.0-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2442
+     0.51%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:167
+     0.50%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:46
+
+
+#
+# (Tip: Customize output of perf script with: perf script -F event,ip,sym)
+#

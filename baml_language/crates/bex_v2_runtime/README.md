@@ -16,9 +16,13 @@ and append source-side-table frames on failure. Shared `Int63`, `VmPanic`, and
 `format_traceback` retain the existing scalar and diagnostic conventions.
 This is not yet the general builtin error conversion API or catch support.
 
-Generated functions execute the observation-word branch on every call. This
-phase defaults explicitly to telemetry off and rejects any other value of
-`BAML_TELEMETRY`; a telemetry producer is not implemented. `BAML_GC_STRESS=1`
+Generated functions execute one observation-word branch on every call. Medium
+is the default; ordinary calls accumulate loop-local path/reentry deltas and
+flush through the existing processor at yields and task boundaries. Off and
+low skip function instrumentation. Constant Hidden hooks used by the supported
+stdlib wrappers resolve to a hidden observation word. Other declaration hooks,
+high and span/promotion policies remain unsupported until the span producer
+is implemented. `BAML_GC_STRESS=1`
 enables collection at heap stress points. Root fibers reserve 8 MiB. Generated
 prologues check the loop-provided stack bound with 64 KiB reserved for error
 construction/unwinding; bodies exceeding 1024 locals are rejected.

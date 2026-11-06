@@ -642,6 +642,7 @@ dependencies = [
  "baml_compiler2_mir",
  "baml_type",
  "bex_vm_types",
+ "btel_types",
 ]
 
 [[package]]
@@ -1419,10 +1420,20 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_env",
  "baml_type",
+ "baml_version",
+ "bex_chunkedringbuffer",
  "bex_str",
  "bex_v2_heap",
  "bex_v2_loop",
  "bex_vm_types",
+ "btel_clock",
+ "btel_file",
+ "btel_processor",
+ "btel_recorder",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
  "serde_json",
  "tokio",
 ]

@@ -612,6 +612,25 @@ pub fn compile_v2(
             return Err(no("more than 1024 locals in one body"));
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+            let unsupported_hook = match &statement.kind {
+                StatementKind::Intrinsic {
+                    op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(mode),
+                    ..
+                } => *mode != baml_compiler2_mir::BuiltinTraceHook::Hidden,
+                StatementKind::Intrinsic {
+                    op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook,
+                    ..
+                }
+                | StatementKind::Assign {
+                    value: Rvalue::TraceHookSettings { .. },
+                    ..
+                } => true,
+                _ => false,
+            };
+            if unsupported_hook {
+                return Err(no("declaration hooks"));
+            }
+
             if let StatementKind::Assign {
                 value:
                     Rvalue::LoadType(
@@ -1072,6 +1091,7 @@ pub fn compile_v2(
         })
         .sum::<usize>()
         <= 1024;
+    let telemetry_sites = std::cell::RefCell::new(vec![(None, 0usize, entry)]);
     for &object in &reached {
         let mir = all[&object];
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
@@ -1101,25 +1121,100 @@ pub fn compile_v2(
             block: 0,
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
+            telemetry_sites: &telemetry_sites,
             site: 0,
         };
         out.push_str(&emitter.function(mir.arity, small_program && !recursive(&calls, object))?);
     }
-    // Resolve once at startup. Opaque initialization keeps the observation
-    // load/branch real under LTO without imposing an opaque call on every entry.
-    let mut observation_init = if builtins.is_empty() {
-        String::new()
-    } else {
-        "init_builtin_observation();".to_owned()
+    // The pack host formats an integer through stringify and _aliased(Declared).
+    // Preserve these logical calls in the typed host specialization too.
+    let host_function = |name: &str| {
+        program
+            .objects
+            .iter()
+            .enumerate()
+            .find_map(|(i, o)| {
+                (matches!(o, Object::Function(_)) && plan.index.display(i) == name).then_some(i)
+            })
+            .ok_or_else(|| no(format!("host function {name}")))
     };
-    for id in reached.iter().chain(json_decode.as_ref()) {
-        write!(
-            &mut observation_init,
-            "O{id}.store(std::hint::black_box(0),std::sync::atomic::Ordering::Relaxed);"
+    let stringify = host_function("baml.json.stringify")?;
+    let aliased = host_function("baml.json._aliased")?;
+    let MirFunctionKind::Bytecode(host_body) = &all[&stringify].kind else {
+        return Err(no("host stringify body"));
+    };
+    let alias_block = host_body
+        .blocks
+        .iter()
+        .find(|b| {
+            matches!(&b.terminator,
+        Some(Terminator::Call { callee:Operand::Constant(Constant::Function(f)), .. })
+        if plan.index.function(db,*f).is_some_and(|(id,_)|id==aliased))
+        })
+        .ok_or_else(|| no("host naming call"))?;
+    let bytecode = plan.index.positions(stringify);
+    let alias_pc = bytecode
+        .lower_to_compact_with_offsets()
+        .offset_of(bytecode.block_pcs[alias_block.id.0].terminator.unwrap())
+        .unwrap();
+    let format_site = telemetry_sites.borrow().len();
+    telemetry_sites
+        .borrow_mut()
+        .extend([(None, 0, stringify), (Some(stringify), alias_pc, aliased)]);
+    let mut observed = reached.clone();
+    for id in [stringify, aliased] {
+        if observed.insert(id) {
+            writeln!(
+                &mut out,
+                "static O{id}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);"
+            )
+            .unwrap();
+        }
+    }
+    let function_ids: BTreeMap<_, _> = observed
+        .iter()
+        .enumerate()
+        .map(|(i, &id)| (id, i))
+        .collect();
+    out.push_str("static TELEMETRY_FUNCTIONS:&[rt::telemetry::Function]=&[\n");
+    let allocator = btel_types::FunctionIdAllocator::default();
+    for &id in &observed {
+        let mut info = plan.index.info(id).clone();
+        info.bytecode.compact = Some(info.bytecode.lower_to_compact());
+        let label = program
+            .packages
+            .iter()
+            .find(|p| {
+                p.objects
+                    .contains(&u32::try_from(id).expect("function index"))
+            })
+            .map(|p| baml_base::Name::new(&p.name));
+        let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
+        let metadata = telemetry_metadata_source(&metadata);
+        let hidden = info.trace_passthrough
+            || matches!(&all[&id].kind,
+            MirFunctionKind::Bytecode(body) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
+                StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
+
+        writeln!(&mut out,"rt::telemetry::Function{{metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();
+    }
+    out.push_str("];\nstatic TELEMETRY_SITES:&[rt::telemetry::Site]=&[\n");
+    for &(caller, pc, callee) in telemetry_sites.borrow().iter() {
+        writeln!(
+            &mut out,
+            "rt::telemetry::Site{{caller:{:?},pc:{pc},callee:{}}},",
+            caller.map(|id| function_ids[&id]),
+            function_ids[&callee]
         )
         .unwrap();
     }
-    write!(&mut out,"fn entry()->R<i64>{{unsafe{{f{entry}()}}}}\nfn main()->std::process::ExitCode{{{observation_init}rt::driver(DESCRIPTORS,entry)}}\n").unwrap();
+    out.push_str("];\n");
+    let builtin_init = if builtins.is_empty() {
+        ""
+    } else {
+        "init_builtin_observation();"
+    };
+    write!(&mut out,"fn entry()->R<i64>{{unsafe{{f{entry}(0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_observed(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}\n").unwrap();
     Ok(out)
 }
 fn rt_descriptors() -> usize {
@@ -1139,9 +1234,24 @@ struct Emitter<'a, 'db> {
     block: usize,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
+    telemetry_sites: &'a std::cell::RefCell<Vec<(Option<usize>, usize, usize)>>,
     site: usize,
 }
 impl Emitter<'_, '_> {
+    fn telemetry_site(&self, callee: usize) -> usize {
+        let bytecode = self.plan.index.positions(self.object);
+        let instruction = bytecode.block_pcs[self.block]
+            .terminator
+            .expect("call source position");
+        let pc = bytecode
+            .lower_to_compact_with_offsets()
+            .offset_of(instruction)
+            .expect("compact site");
+        let mut sites = self.telemetry_sites.borrow_mut();
+        let id = sites.len();
+        sites.push((Some(self.object), pc, callee));
+        id
+    }
     fn local(&self, i: usize) -> Gen<Repr> {
         if self
             .body
@@ -1704,12 +1814,14 @@ impl Emitter<'_, '_> {
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let attribute = if inline { "#[inline(always)]\n" } else { "" };
+        let object = self.object;
+        let returned = self.local(0)?.rust();
+        let arguments = (1..=arity)
+            .map(|i| format!("l{i}"))
+            .collect::<Vec<_>>()
+            .join(",");
         let mut code = format!(
-            "{attribute}unsafe fn f{}({params})->R<{}>{{unsafe{{rt::observe(&O{});rt::check_stack().map_err(|e|e.at(&S{},0))?;\n",
-            self.object,
-            self.local(0)?.rust(),
-            self.object,
-            self.object
+            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{if !rt::telemetry::enabled(&O{object}){{return f{object}_body({arguments});}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
         );
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {
@@ -2112,7 +2224,8 @@ impl Emitter<'_, '_> {
                     }
                     (
                         self.fallible(&format!(
-                            "f{c}({})",
+                            "f{c}({}, {})",
+                            self.telemetry_site(c),
                             values
                                 .iter()
                                 .map(|(v, _)| v.as_str())
@@ -2209,8 +2322,9 @@ impl Emitter<'_, '_> {
                     returned = Some(ty);
                     write!(
                         &mut expr,
-                        "{}=>f{callee}({arguments}),",
-                        self.descriptors[&class] + 3
+                        "{}=>f{callee}({},{arguments}),",
+                        self.descriptors[&class] + 3,
+                        self.telemetry_site(callee)
                     )
                     .unwrap();
                 }
@@ -2249,6 +2363,82 @@ fn recursive(calls: &BTreeMap<usize, BTreeSet<usize>>, function: usize) -> bool 
         }
     }
     false
+}
+
+fn telemetry_metadata_source(m: &btel_types::FunctionMetadata) -> String {
+    fn string(s: &str) -> String {
+        format!("{s:?}.into()")
+    }
+    fn optional(s: Option<&str>) -> String {
+        s.map_or_else(|| "None".into(), |s| format!("Some({})", string(s)))
+    }
+    fn key(k: Option<&btel_types::DefinitionKey>) -> String {
+        k.map_or_else(
+            || "None".into(),
+            |k| format!("Some(DefinitionKey({}))", string(&k.0)),
+        )
+    }
+    let span = m.source_span.as_ref().map_or_else(
+        || "None".into(),
+        |s| {
+            format!(
+                "Some(SourceSpan{{file_id:{},start:{},end:{}}})",
+                s.file_id, s.start, s.end
+            )
+        },
+    );
+    let args = m.argument_layout.as_ref().map_or_else(
+        || "None".into(),
+        |a| {
+            format!(
+                "Some(ArgumentLayout{{slots:vec![{}]}})",
+                a.slots
+                    .iter()
+                    .map(|s| format!(
+                        "ArgumentSlot{{name:{},receiver:{}}}",
+                        optional(s.name.as_deref()),
+                        s.receiver
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        },
+    );
+    let map = m.source_map.as_ref().map_or_else(
+        || "None".into(),
+        |s| {
+            format!(
+                "Some(SourceMap{{code_bytes:{},entries:vec![{}]}})",
+                s.code_bytes,
+                s.entries
+                    .iter()
+                    .map(|e| format!(
+                        "SourceMapEntry{{pc:{},file_id:{},start:{},end:{},line:{}}}",
+                        e.pc, e.file_id, e.start, e.end, e.line
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        },
+    );
+    format!(
+        "FunctionMetadata{{function_id,fqn:{},display_name:{},source_file:{},source_span:{span},kind:RuntimeFunctionKind::Bytecode,origin:RuntimeFunctionOrigin::{:?},owner_type:{},parent_function:{},lambda_path:{},definition_key:{},package_name:{},namespace:vec![{}],argument_layout:{args},source_map:{map},model_invoke:{}}}",
+        string(&m.fqn),
+        string(&m.display_name),
+        optional(m.source_file.as_deref()),
+        m.origin,
+        key(m.owner_type.as_ref()),
+        key(m.parent_function.as_ref()),
+        optional(m.lambda_path.as_deref()),
+        key(m.definition_key.as_ref()),
+        optional(m.package_name.as_deref()),
+        m.namespace
+            .iter()
+            .map(|s| string(s))
+            .collect::<Vec<_>>()
+            .join(","),
+        m.model_invoke
+    )
 }
 
 #[cfg(test)]

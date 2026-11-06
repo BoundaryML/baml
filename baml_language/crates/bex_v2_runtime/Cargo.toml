@@ -13,3 +13,14 @@ serde_json.workspace = true
 bex_v2_heap = { path = "../bex_v2_heap" }
 bex_v2_loop = { path = "../bex_v2_loop" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+bex_chunkedringbuffer.workspace = true
+btel_clock.workspace = true
+btel_processor.workspace = true
+btel_records.workspace = true
+btel_snapshot.workspace = true
+btel_types.workspace = true
+btel_settings.workspace = true
+btel_file.workspace = true
+btel_recorder.workspace = true
+baml_version.workspace = true

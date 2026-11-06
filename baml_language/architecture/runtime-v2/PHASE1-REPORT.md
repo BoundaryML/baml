@@ -1279,3 +1279,150 @@ ignored test. The final aggregate-only rerun also passed after strengthening
 the regression to transfer multiple nodes in one batch. Local logs:
 `target-telemetry-tests.log`, `target-telemetry-aggregate-tests.log`, and
 `target-telemetry-clippy.log`.
+
+## T1 ordinary-function telemetry checkpoint
+
+The v2 emitter now resolves one atomic observation word per function at startup
+from the selected level, hidden status and supplied policy. Medium remains the
+default. Off/low wrappers branch straight to the body. Medium wrappers keep an
+on-stack frame, resolve static bytecode-mapped sites through one-entry
+parent/path caches, and update per-path/reentry aggregate slots. Cache misses
+emit the existing `CallPathDefined`; batches flush at safepoints, root completion
+and shutdown. The first observed error completion reads the unwind clock and
+outer frames reuse it. One bound producer supplies the existing processor and
+local publisher. Compiler metadata uses the same source-map construction as the
+VM. The pack host's integer JSON formatting task and `_aliased` call are also
+observed, matching the bytecode host's published work.
+
+Constant Hidden hooks are reached by the supported stdlib wrappers and resolve
+to hidden words. Other declaration hooks receive `unsupported in runtime v2`.
+High and promotion policies fail closed pending T2. The producer accepts explicit
+non-promoting timing policies, but generated ordinary functions currently supply
+`Policy::NONE`; no external policy-setting API is added by this checkpoint.
+
+### Acceptance boundary
+
+`telemetry/check.py` copies the differential harness's Rust normalizer unchanged
+into a standalone reader. Every run checks the program result and retains the
+normalized BTEL and unified diff under `target/telemetry`. Its acceptance result
+is **strict equality**. A separate diagnostic uses the harness's existing
+compiled-backend GC exception to identify GC-only differences; it does not
+change the v2 allowlist or turn a strict failure into a pass. `telemetry/parity.json`
+records both results.
+
+The contract question remains open: may v2 use that narrow exception for
+successful root `baml.gc` maintenance tasks? Bytecode records collector-specific
+heap occupancy, promotion and collection scheduling; v2 uses a different
+collector and currently emits no GC maintenance records. Reproducing bytecode's
+heap counts would not describe v2 execution. The harness deliberately excludes
+new backends from its existing exception. No exception has been granted or
+silently applied here. Whether v2 should separately publish its own maintenance
+tasks also needs resolution. Consequently this checkpoint does not claim T1's
+strict telemetry finish line, and T2/T3 remain pending.
+
+### Reproduction
+
+From the designated worktree:
+
+```sh
+CARGO_TARGET_DIR="$PWD/target" cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py build
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py check
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py bench --cpu 12
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py profile --cpu 12
+```
+
+The check command deliberately returns nonzero while strict GC differences
+remain. `BAML_GC_STRESS=1` forces v2 collection; the bytecode oracle retains its
+normal collector schedule (the existing VM stress knob targets compiled bodies).
+Native baselines use today's release/fat-LTO backend at medium with compiled
+bodies enabled. The oracle uses the same native host with compiled bodies
+disabled. No backend silently falls back during v2 execution.
+
+Touched runtime, compiler and VM-type tests passed (16, 10 and 133 respectively),
+as did the full Rust-backend suite (15 passed, one existing ignored test), the
+additional Hidden/unsupported-hook admission regression, and strict clippy for
+those crates and the backend test target. Logs are in
+`target/t1-{tests-final,backend-final,hook-test,clippy-final,backend-clippy}.log`.
+
+### T1 parity results
+
+| Workload | Mode | Off strict | Low strict | Medium strict | Excluding existing GC exception, diagnostic only |
+|---|---|---|---|---|---|
+| binary-trees-14 | normal | pass | GC-only mismatch | GC-only mismatch | all three pass |
+| binary-trees-14 | stress | pass | GC-only mismatch | GC-only mismatch | all three pass |
+| richards-50 | normal | pass | GC-only mismatch | GC-only mismatch | all three pass |
+| richards-50 | stress | pass | GC-only mismatch | GC-only mismatch | all three pass |
+
+All 24 executions returned the expected integer (3222190 for trees,
+1161046400 for Richards). Strict acceptance is 4/12, not 12/12. No workload
+aggregate or host-formatting differences remain in these cases. High,
+agent-loop telemetry, policy captures/promotions and recording error evidence
+remain unverified. Final matrix log: `target/t1-parity-final.log`.
+
+### T1 performance gate
+
+Five interleaved rounds, rotating backend order, pinned to CPU 12 on Spark
+(aarch64, 20 logical CPUs), one untimed warmup per process. Each trees round
+checks three timed jobs; each Richards round checks ten. These medians exclude
+startup and include the normal recording producer/processor path. BAML_HOME is
+worktree-local for every backend. Own builds/tests finished before timing.
+System 1/5/15-minute load ranges were 16.77–23.72 / 28.34–31.32 / 37.48–38.89;
+other machine work remained active, so these are loaded-machine measurements.
+
+| Workload | v2 off ms/job | v2 medium ms/job | Native medium ms/job | Node ms/job | v2 medium / off |
+|---|---:|---:|---:|---:|---:|
+| binary-trees-14 | 44.640 | 272.025 | 1038.930 | 41.469 | **6.094×** |
+| richards-50 | 3.934 | 82.122 | 289.194 | 4.173 | **20.876×** |
+
+**Decision-8 gate not met:** Richards is far above the approximately 1.5× target.
+Pre-combining removes per-invocation transport, but this implementation has not
+made medium cheap enough. Medium remains the default; neither precision nor
+coverage was reduced to improve the ratio. High and agent-loop rows are pending
+T2/T3. Raw rounds, medians, tool versions, affinity and binary hashes are in
+`telemetry/benchmark-{raw,summary,environment}.json`.
+
+### Richards medium profile
+
+A separate CPU-12 run checked 300 jobs plus one warmup and recorded 100,447
+cycle samples, with zero lost samples. Its profiled elapsed time was 25.329 s;
+this is not substituted for the benchmark median. Load moved from
+16.77/28.34/37.48 to 15.42/26.90/36.71. Kernel symbols are restricted; user symbols
+and source lines resolve. Raw perf.data stays under `target/telemetry`.
+
+| Flat symbol | Self samples |
+|---|---:|
+| Generated `entry` (including inlined telemetry) | 88.93% |
+| SipHash writes | 3.60% |
+| `AggregateDelta::checked_merge` | 3.25% |
+| Telemetry `State::path` | 2.65% |
+| Call-path key hashing | 1.27% |
+
+Source-line attribution helps expose the inlined work: ARM counter reads
+15.86%, the aggregate-merge call site 8.90%, static-site loading 6.08%, and
+slice indexing 5.29%. The largest other source buckets are Rust's `unlikely`
+intrinsic (26.05%) and vector-to-slice access (18.42%). These are optimized debug
+locations, not an exact causal breakdown: much of the instrumentation is
+inlined into `entry`, and source buckets must not be added to symbol buckets.
+The sample profile identifies entry/exit state, clock reads, aggregation and
+path lookup as areas requiring further work; it does not establish a path to
+1.5× without further measurement.
+
+Committed evidence: `telemetry/richards-medium-{profile.txt,lines.txt,profile-run.json}`.
+`check.py profile-report` regenerates the two flat reports without recording
+again. The initial callgraph-rendering command was stopped because it was
+unnecessarily expensive; flat report regeneration completed successfully from
+the unchanged recording (`target/t1-profile-report-final.log`).
+
+### Milestone status and questions
+
+- Open 4.a processor prerequisite: completed in `8789ff6964`.
+- T1 producer, direct matrix, measurements and profile: implemented/measured;
+  **acceptance incomplete** (GC contract decision and failed performance gate).
+- T2 high/spans/captures/promotion and T3 agent-loop telemetry: pending.
+- Contract question: extend the existing successful-root-GC exception to v2,
+  and separately require truthful v2 collector maintenance records? No v2
+  exception or fabricated collector data is included in this checkpoint.
+- Performance decision remains open under decision 8. The default remains
+  medium and the full observation contract remains the target; the measured
+  20.876× Richards ratio does not justify claiming the gate is met.

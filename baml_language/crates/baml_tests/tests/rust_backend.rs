@@ -816,12 +816,21 @@ fn v2_trees_and_fail_closed_admission() {
             entry,
         )
     }
+    assert!(emit("/// baml:$trace=trace.hidden\nfunction main() -> int { 1 }").is_ok());
+    for hook in ["trace.timing", "trace.span", "trace.empty_span"] {
+        let source = format!("/// baml:$trace={hook}\nfunction main() -> int {{ 1 }}");
+        assert!(
+            emit(&source)
+                .unwrap_err()
+                .contains("unsupported in runtime v2")
+        );
+    }
     let trees = emit(include_str!(
         "../../../tools/speedtest/workloads/memory/binary-trees-14/main.baml"
     ))
     .unwrap();
     assert!(trees.contains("size:24,ptr_slots:(8,2)"));
-    assert!(trees.contains("rt::observe("));
+    assert!(trees.contains("rt::telemetry::enter_observed("));
     assert!(trees.contains("rt::shl("));
     assert!(trees.contains("rt::Source"));
     assert!(trees.contains("bex_v2_heap::write_ptr("));
