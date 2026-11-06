@@ -136,7 +136,7 @@ pub fn rename(
     new_name: &str,
 ) -> Result<Vec<Location>, RenameError> {
     let target = renameable(db, file, offset)?;
-    if !baml_compiler_lexer::is_baml_identifier(new_name) {
+    if !baml_compiler_diagnostics::runtime_type::is_baml_identifier(new_name) {
         return Err(RenameError::InvalidName {
             name: new_name.to_string(),
         });

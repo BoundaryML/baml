@@ -233,8 +233,13 @@ fn token_navigation() {
             right: TokenIdx(7)
         }
     );
+    // The end of the text belongs to the last token.
     assert_eq!(
         tokens.token_at_offset(TextSize::from(14)),
+        TokenAtOffset::Single(TokenIdx(11))
+    );
+    assert_eq!(
+        tokens.token_at_offset(TextSize::from(15)),
         TokenAtOffset::None
     );
     assert_eq!(tokens.prev_significant(TokenIdx(11)), Some(TokenIdx(9)));

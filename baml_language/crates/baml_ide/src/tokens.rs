@@ -1,11 +1,11 @@
 //! Semantic tokens for BAML files.
 //!
-//! `semantic_tokens(db, file) -> Vec<SemanticToken>` is a single document-order
-//! walk of the CST. Classification follows rust-analyzer's model:
+//! `semantic_tokens(db, file) -> Vec<SemanticToken>` is a single pass over the
+//! token array in document order. Classification follows rust-analyzer's model:
 //!
 //! - **Structural tokens** (keywords, punctuation, strings, comments, numbers)
-//!   are classified syntactically by token kind — the syntax tree only supplies
-//!   positions and these non-name tokens.
+//!   are classified syntactically by token kind — the tree supplies only the
+//!   node that owns a name.
 //!
 //! - **Identifiers inside expression bodies** are classified by what they
 //!   *resolve to*, via a pre-built resolution index (`index`) keyed by exact
@@ -17,19 +17,27 @@
 //!   `declaration` modifier; a reference is classified the same way as its
 //!   definition.
 
+use std::sync::Arc;
+
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::{HighlightAttributes, HighlightColor, HighlightStyle};
-use baml_compiler_syntax::{
-    NodeOrToken, SyntaxKind, SyntaxNode, SyntaxToken, WalkEvent,
-    ast::{
-        CallArg, ClassDef, GenericParam, ImplementsBlock, ImplementsTarget, InterfaceFieldLink,
-        ObjectField, TypeExpr,
-    },
-};
 use baml_compiler2_hir::resolve::{
     resolve_enum_variant, resolve_field, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
 };
-use rowan::ast::AstNode;
+use baml_syntax::{
+    index::TreeIndex,
+    nodes::{
+        AnyObjectCtor, Arg, AssocTypeBinding, AssocTypeDecl, AssocTypeDef, Attribute,
+        BindingPattern, BlockAttr, CatchClause, ClassDef, ClientField, ClientValueDef, DottedName,
+        EnumDef, EnumVariant, Field, FileTree, FunctionDef, GenericApplyExpr, GenericParam,
+        ImplementsBlock, ImplementsFor, InterfaceDef, InterfaceFieldLink, LetItem, MethodSig,
+        Name as NameNode, ObjectField, ObjectLiteral, Param, PathExpr, PathType, PromptField,
+        QualifiedPath, RemovedItem, ToolsField, TypeAliasDef, TypeBindingStmt,
+    },
+    ops::{AnyOperator, OpTok, Operator as _},
+    token::{TokenIdx, TokenKind, TokenSet as _, sets::CommentToken},
+    tree::{AnyNodeId, AnyNodeIdOf as _, Id},
+};
 use text_size::{TextRange, TextSize};
 
 mod classify;
@@ -298,32 +306,6 @@ fn plain(ty: SemanticTokenType) -> Class {
     (ty, ModifierSet::empty())
 }
 
-/// Whether a `BINDING_PATTERN` names a global variable: the pattern of a
-/// file-scope `const`.
-fn declares_global(binding: &SyntaxNode) -> bool {
-    binding
-        .parent()
-        .filter(|pattern| pattern.kind() == SyntaxKind::PATTERN)
-        .and_then(|pattern| pattern.parent())
-        .filter(|statement| statement.kind() == SyntaxKind::LET_STMT)
-        .and_then(|statement| statement.parent())
-        .is_some_and(|file| file.kind() == SyntaxKind::SOURCE_FILE)
-}
-
-/// Whether a `FUNCTION_DEF` / `METHOD_SIG` node is declared inside a class,
-/// interface, or implements block — i.e. it is a method, not a free function.
-fn in_method_context(node: &SyntaxNode) -> bool {
-    node.ancestors().skip(1).any(|a| {
-        matches!(
-            a.kind(),
-            SyntaxKind::CLASS_DEF
-                | SyntaxKind::INTERFACE_DEF
-                | SyntaxKind::IMPLEMENTS_BLOCK
-                | SyntaxKind::IMPLEMENTS_FOR
-        )
-    })
-}
-
 /// Push a classified token.
 fn emit(range: TextRange, class: Class, out: &mut Vec<SemanticToken>) {
     out.push(SemanticToken {
@@ -331,14 +313,6 @@ fn emit(range: TextRange, class: Class, out: &mut Vec<SemanticToken>) {
         token_type: class.0,
         modifiers: class.1,
     });
-}
-
-/// Emit a string/byte-string literal, splitting backslash escape sequences
-/// (`\n`, `\t`, `\xNN`, `\u{..}`, `\"`, ...) out as `EscapeSequence` while the
-/// surrounding text stays `String`. The lexer leaves escapes undecoded, so we
-/// scan the literal text ourselves (rust-analyzer does the same).
-fn string_with_escapes(node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-    emit_string_runs(&node.text().to_string(), node.text_range().start(), out);
 }
 
 /// The token runs of one string literal's text: `String` runs interleaved
@@ -431,17 +405,6 @@ fn hex_digit_run(s: &str, cap: usize) -> usize {
         .count()
 }
 
-/// Emit every non-trivia leaf under `node` with one type (comments/strings).
-fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<SemanticToken>) {
-    for child in node.descendants_with_tokens() {
-        if let NodeOrToken::Token(t) = child
-            && !t.kind().is_whitespace()
-        {
-            emit(t.text_range(), plain(token_type), out);
-        }
-    }
-}
-
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Compute semantic tokens for a file.
@@ -449,32 +412,26 @@ fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<Sem
 /// Always returns tokens in document order (required by the LSP
 /// `textDocument/semanticTokens/full` contract).
 ///
-/// Salsa tracked query: the CST walk re-classifies every token
-/// against type inference, which measured 40–150ms on real projects — too
-/// slow to recompute per request while the file is unchanged. Memoization
-/// keys off the file revision; edits to *other* files reuse this file's
-/// result if its inference inputs are unaffected. `returns(ref)` hands
-/// borrowing callers the memoized vec without an O(tokens) clone per request.
+/// Salsa tracked query: the walk re-classifies every token against type
+/// inference, which measured 40–150ms on real projects — too slow to
+/// recompute per request while the file is unchanged. Memoization keys off
+/// the file revision; edits to *other* files reuse this file's result if its
+/// inference inputs are unaffected. `returns(ref)` hands borrowing callers the
+/// memoized vec without an O(tokens) clone per request.
 #[salsa::tracked(returns(ref))]
 pub fn semantic_tokens(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<SemanticToken> {
-    // On the statement: the tracked wrapper salsa generates would not
-    // fulfil a function-level expectation.
-    #[expect(
-        deprecated,
-        reason = "reads the rowan tree until this consumer moves to the typed tree"
-    )]
-    let root = baml_compiler_parser::syntax_tree(db, file);
     // Full document: classify every token, so build the merged whole-file index
     // (itself a merge of per-scope salsa-cached indices) and resolve from it.
     let index = index::build(db, file);
     let walk = Walk {
         db,
         file,
+        tree: baml_parser::typed_tree(db, file),
+        index: baml_parser::tree_index(db, file),
         resolve: Box::new(move |range| index.get(&range).copied()),
-        range: None,
     };
     let mut out = Vec::new();
-    walk.run(&root, &mut out);
+    walk.run(None, &mut out);
     out.sort_by_key(|token| (token.range.start(), token.range.end()));
     out
 }
@@ -485,10 +442,6 @@ pub fn semantic_tokens(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec
 /// indexed (the rest of the file is never resolved). Not a Salsa query — keying
 /// on the range would blow the cache; the underlying per-scope indices and name
 /// resolution it calls *are* memoized.
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
 pub fn semantic_tokens_in_range(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -496,16 +449,16 @@ pub fn semantic_tokens_in_range(
     end: u32,
 ) -> Vec<SemanticToken> {
     let range = TextRange::new(start.into(), end.into());
-    let root = baml_compiler_parser::syntax_tree(db, file);
     let walk = Walk {
         db,
         file,
+        tree: baml_parser::typed_tree(db, file),
+        index: baml_parser::tree_index(db, file),
         resolve: Box::new(move |r| index::resolve_token_class(db, file, r)),
-        range: Some(range),
     };
     let mut out = Vec::new();
-    walk.run(&root, &mut out);
-    // The range gate is per-subtree; trim the boundary tokens to exactly `range`.
+    walk.run(Some(range), &mut out);
+    // A token's runs are emitted whole; trim to exactly `range`.
     out.retain(|t| range.intersect(t.range).is_some());
     out.sort_by_key(|token| (token.range.start(), token.range.end()));
     out
@@ -513,582 +466,449 @@ pub fn semantic_tokens_in_range(
 
 // ── Walker ─────────────────────────────────────────────────────────────────────
 
-/// A document-order CST walk that classifies each token exactly once.
+/// The untyped id of a typed node id.
+fn any<T: baml_syntax::tree::NodeKindOf>(id: Id<T>) -> AnyNodeId {
+    id.any_node_id()
+        .unwrap_or_else(|| unreachable!("a typed id is a node"))
+}
+
+/// A document-order walk over the token array that classifies each token
+/// exactly once.
 ///
 /// `resolve` resolves an identifier inside an expression body to its
-/// classification; a declaration name is classified by its declaring node;
-/// every other token is syntactic. For a full-document walk `resolve` is the
-/// merged whole-file index; a range walk resolves on demand per scope
+/// classification; a declaration name is classified by the node that owns
+/// it; every other token is syntactic. For a full-document walk `resolve` is
+/// the merged whole-file index; a range walk resolves on demand per scope
 /// (rust-analyzer's `Semantics::resolve` model — only visited scopes pay).
 struct Walk<'db> {
     db: &'db dyn baml_compiler2_hir::Db,
     file: SourceFile,
+    tree: Arc<FileTree>,
+    index: Arc<TreeIndex>,
     resolve: Box<dyn Fn(TextRange) -> Option<Class> + 'db>,
-    /// For a viewport request: subtrees that don't intersect this range are
-    /// skipped entirely, so their scopes are never resolved.
-    range: Option<TextRange>,
 }
 
 impl Walk<'_> {
-    /// The single document-order driver: a flat `preorder_with_tokens()` walk
-    /// (rust-analyzer's `traverse`). Each `Enter(Node)` either hands a complex
-    /// subtree to its wholesale handler and skips it, or descends; each
-    /// `Enter(Token)` is classified from its parent kind ([`classify_token`])
-    /// with a syntactic fallback ([`Self::token`]).
-    fn run(&self, root: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let mut preorder = root.preorder_with_tokens();
-        while let Some(event) = preorder.next() {
-            match event {
-                WalkEvent::Enter(NodeOrToken::Node(node)) => {
-                    // Both the file-wide and viewport walks funnel through
-                    // here and re-classify every token they visit, so give
-                    // salsa one cancellation probe per subtree: an edit
-                    // landing mid-walk unwinds (`salsa::Cancelled`) instead
-                    // of finishing a stale highlight.
-                    self.db.unwind_if_revision_cancelled();
-                    // Range gate: a subtree disjoint from the viewport is skipped
-                    // wholesale, so its tokens are never classified and its scope
-                    // never resolved.
-                    if let Some(r) = self.range
-                        && r.intersect(node.text_range()).is_none()
-                    {
-                        preorder.skip_subtree();
-                        continue;
-                    }
-                    // A node whose classification spans its whole subtree with
-                    // custom traversal (strings, comments, type exprs, object
-                    // literals, generators) is handled wholesale; skipping it
-                    // prevents the flat loop from re-visiting its descendants.
-                    if self.wholesale(&node, out) {
-                        preorder.skip_subtree();
-                    }
-                }
-                WalkEvent::Enter(NodeOrToken::Token(token)) => {
-                    if token.kind().is_whitespace() {
-                        continue;
-                    }
-                    match classify_token(&token) {
-                        Some(class) => emit(token.text_range(), class, out),
-                        None => self.token(&token, out),
-                    }
-                }
-                WalkEvent::Leave(_) => {}
+    /// Every token, or those intersecting `range`, in order.
+    fn run(&self, range: Option<TextRange>, out: &mut Vec<SemanticToken>) {
+        let tokens = self.tree.tokens();
+        // Tokens a multi-token operator already covered.
+        let mut skip = 0;
+        for (n, idx) in tokens.iter().enumerate() {
+            if skip > 0 {
+                skip -= 1;
+                continue;
             }
+            // Both the file-wide and viewport walks re-classify every token
+            // they visit, so give salsa a cancellation probe now and then: an
+            // edit landing mid-walk unwinds (`salsa::Cancelled`) instead of
+            // finishing a stale highlight.
+            if n % 256 == 0 {
+                self.db.unwind_if_revision_cancelled();
+            }
+            let token_range = tokens.range(idx);
+            if range.is_some_and(|range| range.intersect(token_range).is_none()) {
+                continue;
+            }
+            skip = self.token(idx, out);
         }
     }
 
-    /// Classify a node whose logic spans its entire subtree, emitting all of its
-    /// descendant tokens. Returns `true` if `node` was such a node (the caller
-    /// then skips the subtree), `false` to let the flat loop descend normally.
-    fn wholesale(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) -> bool {
-        if node.kind().is_comment() {
-            emit_node(node, SemanticTokenType::Comment, out);
-            return true;
-        }
-        match node.kind() {
-            // Escape-processing literals: split out `\n`, `\xNN`, `\u{..}`, ...
-            SyntaxKind::STRING_LITERAL | SyntaxKind::BYTE_STRING_LITERAL => {
-                string_with_escapes(node, out);
-            }
-            // Raw / unquoted strings do not process escapes.
-            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
-            | SyntaxKind::RAW_STRING_LITERAL
-            | SyntaxKind::UNQUOTED_STRING => {
-                emit_node(node, SemanticTokenType::String, out);
-            }
-            SyntaxKind::BACKTICK_STRING_LITERAL => self.backtick_string(node, out),
-            SyntaxKind::TYPE_EXPR => self.type_expr(node, out),
-            SyntaxKind::OBJECT_LITERAL => self.object_literal(node, out),
-            SyntaxKind::GENERATOR_DEF => self.generator_def(node, out),
-            SyntaxKind::INTERFACE_FIELD_LINK => self.interface_field_link(node, out),
-            _ => return false,
-        }
-        true
+    fn text(&self, idx: TokenIdx) -> &str {
+        self.tree.token_text(idx)
     }
 
-    /// Classify a single leaf token. A WORD consults the resolution index (an
-    /// unresolved one is left neutral, never guessed); every other token is
-    /// purely syntactic.
-    fn token(&self, token: &SyntaxToken, out: &mut Vec<SemanticToken>) {
-        let kind = token.kind();
-        if kind.is_whitespace() {
-            return;
+    fn range(&self, idx: TokenIdx) -> TextRange {
+        self.tree.tokens().range(idx)
+    }
+
+    fn parent(&self, id: AnyNodeId) -> Option<AnyNodeId> {
+        self.index.parent(id)
+    }
+
+    /// Whether any ancestor of `id` (itself excluded) satisfies `test`.
+    fn enclosed_by(&self, id: AnyNodeId, test: impl Fn(AnyNodeId) -> bool) -> bool {
+        self.index.ancestors(id).skip(1).any(test)
+    }
+
+    /// Classify one token: by its kind where that settles it, by its owner
+    /// for a name, with the resolution index as the fallback for a name in
+    /// value position. Returns how many further tokens the classification
+    /// covered (a multi-token operator such as `>>=`).
+    fn token(&self, idx: TokenIdx, out: &mut Vec<SemanticToken>) -> usize {
+        let tokens = self.tree.tokens();
+        let kind = tokens.kind(idx);
+        let range = self.range(idx);
+        if CommentToken::KINDS.contains(kind) {
+            emit(range, plain(SemanticTokenType::Comment), out);
+            return 0;
         }
-        // Boolean / null literals: a dedicated `KW_TRUE`/`KW_FALSE`/`KW_NULL`
-        // token (value position, re-lexed by the parser). `true`/`false` ->
-        // `boolean`. `null` is the null type's literal, so it goes through the
-        // shared builtin classification (defaultLibrary `type`) — matching its
-        // type position and every other builtin, instead of reading as a keyword.
+        if kind.is_trivia() {
+            return 0;
+        }
         match kind {
-            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE => {
-                emit(token.text_range(), plain(SemanticTokenType::Boolean), out);
-                return;
+            // Escape-processing literals: split out `\n`, `\xNN`, `\u{..}`, ...
+            TokenKind::String
+            | TokenKind::ByteString
+            | TokenKind::UnclosedString
+            | TokenKind::UnclosedByteString => {
+                emit_string_runs(self.text(idx), range.start(), out);
+                return 0;
             }
-            SyntaxKind::KW_NULL => {
-                let class = classify::classify_primitive(token.text())
+            // Raw strings process no escapes; a template's literal text,
+            // delimiters included, is string too.
+            TokenKind::RawString
+            | TokenKind::LegacyHashString
+            | TokenKind::UnclosedRawString
+            | TokenKind::UnclosedHashString
+            | TokenKind::TemplateChunk
+            | TokenKind::BacktickStart
+            | TokenKind::BacktickEnd => {
+                emit(range, plain(SemanticTokenType::String), out);
+                return 0;
+            }
+            // `true`/`false` -> `boolean`. `null` is the null type's literal,
+            // so it goes through the shared builtin classification
+            // (defaultLibrary `type`) — matching its type position and every
+            // other builtin, instead of reading as a keyword.
+            TokenKind::True | TokenKind::False => {
+                emit(range, plain(SemanticTokenType::Boolean), out);
+                return 0;
+            }
+            TokenKind::Null => {
+                let class = classify::classify_primitive(self.text(idx))
                     .unwrap_or_else(|| plain(SemanticTokenType::Keyword));
-                emit(token.text_range(), class, out);
-                return;
+                emit(range, class, out);
+                return 0;
+            }
+            TokenKind::Integer | TokenKind::Float | TokenKind::Bigint => {
+                emit(range, plain(SemanticTokenType::Number), out);
+                return 0;
+            }
+            TokenKind::At | TokenKind::AtAt => {
+                emit(range, plain(SemanticTokenType::Decorator), out);
+                return 0;
+            }
+            TokenKind::Dot => {
+                if let Some(class) = self.path_namespace_separator(idx) {
+                    emit(range, class, out);
+                }
+                return 0;
+            }
+            // `?.` is member access, not an operator the grammar tables, but
+            // it reads as one.
+            TokenKind::QuestionDot => {
+                emit(range, plain(SemanticTokenType::Operator), out);
+                return 0;
             }
             _ => {}
         }
-        if kind == SyntaxKind::WORD {
-            if let Some(class) = (self.resolve)(token.text_range()) {
-                emit(token.text_range(), class, out);
+        if kind == TokenKind::Word || kind.is_contextual_keyword() {
+            if let Some(class) = self.word(idx) {
+                emit(range, class, out);
             }
-            return;
+            return 0;
         }
-        if kind == SyntaxKind::DOT
-            && let Some(class) = self.path_namespace_separator(token)
-        {
-            emit(token.text_range(), class, out);
-            return;
+        if kind.is_keyword() {
+            // A keyword the grammar accepted as a name (`client = …` as a
+            // named argument, `x.client`, a field called `client`) is that
+            // name; the LLM body's `client:` key declares a property.
+            let as_name = self.index.token_owner(idx).is_some_and(|owner| {
+                owner.cast::<NameNode>().is_some() || owner.cast::<ClientField>().is_some()
+            });
+            if as_name {
+                if let Some(class) = self.word(idx) {
+                    emit(range, class, out);
+                }
+                return 0;
+            }
+            emit(range, plain(SemanticTokenType::Keyword), out);
+            return 0;
         }
-        let token_type = if kind.is_keyword() {
-            SemanticTokenType::Keyword
-        } else if kind.is_operator() {
-            SemanticTokenType::Operator
-        } else if kind.is_comment() {
-            SemanticTokenType::Comment
-        } else if matches!(
-            kind,
-            SyntaxKind::INTEGER_LITERAL | SyntaxKind::FLOAT_LITERAL | SyntaxKind::BIGINT_LITERAL
-        ) {
-            SemanticTokenType::Number
-        } else {
-            return;
+        // An operator of any family, spelled by one or more adjacent tokens
+        // (`??`, `>>`, `>=`, `>>=`), painted as one run.
+        if let Some(op) = OpTok::<AnyOperator>::at(tokens, idx) {
+            let last = op
+                .tokens()
+                .last()
+                .unwrap_or_else(|| unreachable!("an operator has at least one token"));
+            emit(
+                TextRange::new(range.start(), tokens.range(last).end()),
+                plain(SemanticTokenType::Operator),
+                out,
+            );
+            return op.op().token_len() - 1;
+        }
+        0
+    }
+
+    /// The class of a word, from the node that owns it.
+    fn word(&self, idx: TokenIdx) -> Option<Class> {
+        let range = self.range(idx);
+        let Some(owner) = self.index.token_owner(idx) else {
+            return (self.resolve)(range);
         };
-        emit(token.text_range(), plain(token_type), out);
+        let Some(name) = owner.cast::<NameNode>() else {
+            // A contextual keyword used as one (`type`, `with`, …), or a
+            // word the parser could not place.
+            return self.keyword_word(idx, owner);
+        };
+        let Some(parent) = self.parent(owner) else {
+            return (self.resolve)(range);
+        };
+        let class = if let Some(class_def) = parent.cast::<ClassDef>() {
+            (self.tree.get(class_def).name == Ok(name)).then_some(decl(SemanticTokenType::Class))
+        } else if let Some(enum_def) = parent.cast::<EnumDef>() {
+            (self.tree.get(enum_def).name == Ok(name)).then_some(decl(SemanticTokenType::Enum))
+        } else if parent.cast::<EnumVariant>().is_some() {
+            Some(decl(SemanticTokenType::EnumMember))
+        } else if let Some(iface) = parent.cast::<InterfaceDef>() {
+            (self.tree.get(iface).name == Ok(name)).then_some(decl(SemanticTokenType::Interface))
+        } else if parent.cast::<Field>().is_some() {
+            Some(decl(SemanticTokenType::Property))
+        } else if parent.cast::<Param>().is_some() {
+            Some(decl(SemanticTokenType::Parameter))
+        } else if parent.cast::<BindingPattern>().is_some() {
+            // `let x`, match-arm bindings, etc.: the bound name is a
+            // declaration — a `readonly` one for a global variable, which
+            // cannot be reassigned.
+            let (ty, modifiers) = decl(SemanticTokenType::Variable);
+            let global = self.enclosed_by(parent, |a| a.cast::<LetItem>().is_some());
+            Some(if global {
+                (ty, modifiers | ModifierSet::READONLY)
+            } else {
+                (ty, modifiers)
+            })
+        } else if parent.cast::<CatchClause>().is_some() {
+            // The catch binding(s) `catch (e, stack) { … }` — parameter-like
+            // locals bound by the clause and scoped to its body.
+            Some(decl(SemanticTokenType::Parameter))
+        } else if parent.cast::<FunctionDef>().is_some() || parent.cast::<MethodSig>().is_some() {
+            // The name as a `Function`, or a `Method` inside a class /
+            // interface / implements block.
+            let method = self.enclosed_by(parent, |a| {
+                a.cast::<ClassDef>().is_some()
+                    || a.cast::<InterfaceDef>().is_some()
+                    || a.cast::<ImplementsBlock>().is_some()
+                    || a.cast::<ImplementsFor>().is_some()
+            });
+            Some(decl(if method {
+                SemanticTokenType::Method
+            } else {
+                SemanticTokenType::Function
+            }))
+        } else if parent.cast::<TypeAliasDef>().is_some()
+            || parent.cast::<AssocTypeDecl>().is_some()
+            || parent.cast::<AssocTypeDef>().is_some()
+            || parent.cast::<AssocTypeBinding>().is_some()
+        {
+            // An alias, an interface's associated type, and its binding in
+            // an implementation (`type Item = …`) or among generic arguments
+            // (`Item = …`) each declare the name they bind.
+            Some(decl(SemanticTokenType::Type))
+        } else if parent.cast::<GenericParam>().is_some()
+            || parent.cast::<TypeBindingStmt>().is_some()
+        {
+            Some(decl(SemanticTokenType::TypeParameter))
+        } else if parent.cast::<Arg>().is_some() {
+            // A named argument `name = value` at a call site: the name
+            // refers to the callee's parameter.
+            Some(plain(SemanticTokenType::Parameter))
+        } else if parent.cast::<ClientValueDef>().is_some()
+            || parent.cast::<RemovedItem>().is_some()
+        {
+            Some(decl(SemanticTokenType::Struct))
+        } else if let Some(link) = parent.cast::<InterfaceFieldLink>() {
+            self.interface_field_link(link, name, idx)
+        } else if let Some(dotted) = parent.cast::<DottedName>() {
+            let grandparent = self.parent(any(dotted))?;
+            if grandparent.cast::<Attribute>().is_some()
+                || grandparent.cast::<BlockAttr>().is_some()
+            {
+                Some(plain(SemanticTokenType::Decorator))
+            } else if grandparent.cast::<ObjectField>().is_some() {
+                // A bare-word key (before the `:`) is a `Property`.
+                Some(plain(SemanticTokenType::Property))
+            } else {
+                None
+            }
+        } else if let Some(path) = parent.cast::<PathType>() {
+            Some(self.type_path_name(path, name, idx))
+        } else if let Some(path) = parent.cast::<PathExpr>() {
+            // The constructed type name of `Foo { … }` / `Foo<int> { … }` as
+            // a `Class` reference; any other value path resolves.
+            if self.constructs(any(path)) && self.tree.get(path).head == name {
+                Some(plain(SemanticTokenType::Class))
+            } else {
+                (self.resolve)(range)
+            }
+        } else if parent.cast::<QualifiedPath>().is_some() {
+            // `(B as Shows).show`: the base and interface are type nodes of
+            // their own; the only name owned directly is the projected
+            // member, which resolves like any value-position name.
+            (self.resolve)(range)
+        } else {
+            None
+        };
+        class.or_else(|| (self.resolve)(range))
+    }
+
+    /// Whether `path` is the constructor of an object literal, directly or
+    /// as the base of its generic application.
+    fn constructs(&self, path: AnyNodeId) -> bool {
+        let Some(parent) = self.parent(path) else {
+            return false;
+        };
+        if let Some(literal) = parent.cast::<ObjectLiteral>() {
+            return matches!(self.tree.get(literal).ctor, AnyObjectCtor::Path(_));
+        }
+        if let Some(apply) = parent.cast::<GenericApplyExpr>() {
+            return self
+                .parent(any(apply))
+                .and_then(AnyNodeId::cast::<ObjectLiteral>)
+                .is_some_and(|literal| {
+                    matches!(self.tree.get(literal).ctor, AnyObjectCtor::Generic(_))
+                });
+        }
+        false
+    }
+
+    /// A contextual keyword's token owned by a node other than a `Name`:
+    /// the LLM body's field keys are properties, every other spelling is the
+    /// keyword it reads as.
+    fn keyword_word(&self, idx: TokenIdx, owner: AnyNodeId) -> Option<Class> {
+        if owner.cast::<PromptField>().is_some()
+            || owner.cast::<ClientField>().is_some()
+            || owner.cast::<ToolsField>().is_some()
+        {
+            // The key of an LLM body field declares the body's property.
+            return Some(decl(SemanticTokenType::Property));
+        }
+        if self.tree.tokens().kind(idx).is_contextual_keyword() {
+            return Some(plain(SemanticTokenType::Keyword));
+        }
+        (self.resolve)(self.range(idx))
     }
 
     /// Classify a `.` inside a value-position path as part of the namespace
     /// prefix only when everything to its left resolves as a real namespace.
     /// Member/enum/associated-type separators remain ordinary operators.
-    fn path_namespace_separator(&self, token: &SyntaxToken) -> Option<Class> {
-        let parent = token.parent()?;
-        if parent.kind() != SyntaxKind::PATH_EXPR {
-            return None;
-        }
-
-        let mut names = Vec::new();
-        for element in parent.children_with_tokens() {
-            match element {
-                NodeOrToken::Token(t) if t.text_range() == token.text_range() => break,
-                NodeOrToken::Token(t) if t.kind().is_trivia() || t.kind() == SyntaxKind::DOT => {}
-                NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD => {
-                    names.push(Name::new(t.text()));
-                }
-                // A generic argument list or any other structure before this
-                // separator means its left side is a type/value, not a namespace.
-                _ => return None,
-            }
-        }
-
-        (!names.is_empty())
-            .then(|| resolve_namespace_prefix(self.db, self.file, &names))
-            .flatten()
-            .map(classify::namespace_class)
-    }
-
-    /// A structural primitive for the wholesale handlers: walk a node's direct
-    /// children, classifying each direct token by `classify` (with a syntactic
-    /// fallback) and recursing each child node through [`Self::run`]. A `None`
-    /// result falls back to the token's own classification ([`Self::token`]).
-    fn tokens(
-        &self,
-        node: &SyntaxNode,
-        out: &mut Vec<SemanticToken>,
-        mut classify: impl FnMut(&SyntaxToken) -> Option<Class>,
-    ) {
-        for child in node.children_with_tokens() {
-            match child {
-                NodeOrToken::Node(n) => self.run(&n, out),
-                NodeOrToken::Token(t) => match classify(&t) {
-                    Some(class) => emit(t.text_range(), class, out),
-                    None => self.token(&t, out),
-                },
-            }
-        }
-    }
-
-    /// A `TYPE_EXPR` — each (possibly dotted) type name resolved to what it
-    /// names. A qualified name like `baml.iter.Iterator` resolves the whole path:
-    /// the leaf is the resolved type, earlier segments are namespaces. Builtins
-    /// (stdlib types, primitives) are marked `defaultLibrary`.
-    fn type_expr(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let children: Vec<_> = node.children_with_tokens().collect();
-        let mut i = 0;
-        while i < children.len() {
-            // A type name starts at a WORD; gather any dotted continuation.
-            if let NodeOrToken::Token(t) = &children[i]
-                && t.kind() == SyntaxKind::WORD
-            {
-                let mut segments = vec![t.clone()];
-                let mut separators = Vec::new();
-                let mut j = i + 1;
-                while let (Some(NodeOrToken::Token(dot)), Some(NodeOrToken::Token(word))) =
-                    (children.get(j), children.get(j + 1))
-                {
-                    if dot.kind() != SyntaxKind::DOT || word.kind() != SyntaxKind::WORD {
-                        break;
-                    }
-                    separators.push(dot.clone());
-                    segments.push(word.clone());
-                    j += 2;
-                }
-                self.type_run(&segments, &separators, out);
-                i = j;
-                continue;
-            }
-            match &children[i] {
-                NodeOrToken::Node(n) => self.run(n, out),
-                NodeOrToken::Token(t) => self.token(t, out),
-            }
-            i += 1;
-        }
-    }
-
-    /// Classify one (possibly dotted) type name run.
-    fn type_run(
-        &self,
-        segments: &[SyntaxToken],
-        separators: &[SyntaxToken],
-        out: &mut Vec<SemanticToken>,
-    ) {
-        debug_assert_eq!(separators.len() + 1, segments.len());
-        let (prefix, leaf) = match segments {
-            [] => {
-                // `type_expr` gathers a run starting from a WORD, so a run is
-                // never empty; stay total rather than panic on a walker bug.
-                debug_assert!(false, "a type-name run starts at a WORD token");
-                return;
-            }
-            [single] => {
-                let class = classify_type_token(
-                    self.db,
-                    self.file,
-                    single.text(),
-                    single.text_range().start(),
-                );
-                emit(single.text_range(), class, out);
-                return;
-            }
-            [prefix @ .., leaf] => (prefix, leaf),
+    fn path_namespace_separator(&self, idx: TokenIdx) -> Option<Class> {
+        let owner = self.index.token_owner(idx)?;
+        // A namespace prefix paints its dots the same way in a value path
+        // (`baml.random.Rng.new`) and in a type path (`baml.random.Rng`).
+        let (head, segments) = if let Some(path) = owner.cast::<PathExpr>() {
+            let path = self.tree.get(path);
+            (path.head, path.segments)
+        } else {
+            let path = self.tree.get(owner.cast::<PathType>()?);
+            (path.head, path.segments)
         };
-        // Qualified `a.b.Type`: resolve each prefix segment the same way the
-        // value-position index does — a real namespace (builtin-flagged) or, if
-        // not a namespace (e.g. the base type of an associated-type path), a
-        // type. Never a blindly-guessed namespace.
-        let names: Vec<Name> = segments.iter().map(|t| Name::new(t.text())).collect();
-        for (i, (seg, separator)) in prefix.iter().zip(separators).enumerate() {
-            let namespace = resolve_namespace_prefix(self.db, self.file, &names[0..=i]);
-            let class = match namespace {
-                Some(builtin) => classify::namespace_class(builtin),
-                None => {
-                    classify_type_token(self.db, self.file, seg.text(), seg.text_range().start())
-                }
-            };
-            emit(seg.text_range(), class, out);
-            emit(
-                separator.text_range(),
-                namespace
-                    .map(classify::namespace_class)
-                    .unwrap_or_else(|| plain(SemanticTokenType::Operator)),
-                out,
-            );
-        }
-        let resolved = resolve_path_at(self.db, self.file, leaf.text_range().start(), &names, None);
-        let class = classify::classify_resolved(&resolved).unwrap_or_else(|| {
-            // An unresolved qualified leaf: a verified enum variant (the prefix
-            // resolves to an enum and the leaf is one of its variants) is an
-            // `enumMember` — e.g. `Direction.North` in a match pattern, which is
-            // a type expression. Otherwise it is still a type.
-            if resolve_enum_variant(self.db, self.file, leaf.text_range().start(), &names) {
-                plain(SemanticTokenType::EnumMember)
-            } else {
-                plain(SemanticTokenType::Type)
+        let mut names = vec![Name::new(self.text(self.tree.get(head).token.idx))];
+        for segment in self.tree.list(segments) {
+            if segment.dot.idx == idx {
+                break;
             }
-        });
-        emit(leaf.text_range(), class, out);
+            let name = segment.name.ok()?;
+            names.push(Name::new(self.text(self.tree.get(name).token.idx)));
+        }
+        resolve_namespace_prefix(self.db, self.file, &names).map(classify::namespace_class)
+    }
+
+    /// The names of a type path, head first.
+    fn type_path_names(&self, path: Id<PathType>) -> Vec<(Id<NameNode>, Name)> {
+        let path = self.tree.get(path);
+        let mut names = vec![(
+            path.head,
+            Name::new(self.text(self.tree.get(path.head).token.idx)),
+        )];
+        for segment in self.tree.list(path.segments) {
+            if let Ok(name) = segment.name {
+                names.push((name, Name::new(self.text(self.tree.get(name).token.idx))));
+            }
+        }
+        names
+    }
+
+    /// One name of a (possibly dotted) type path: a prefix segment is a
+    /// namespace (builtin-flagged) or, if not a namespace (e.g. the base type
+    /// of an associated-type path), a type; the leaf resolves as a whole.
+    fn type_path_name(&self, path: Id<PathType>, name: Id<NameNode>, idx: TokenIdx) -> Class {
+        let range = self.range(idx);
+        let text = self.text(idx);
+        let names = self.type_path_names(path);
+        let position = names.iter().position(|(id, _)| *id == name);
+        let names: Vec<Name> = names.into_iter().map(|(_, name)| name).collect();
+        match position {
+            Some(i) if i + 1 < names.len() => {
+                match resolve_namespace_prefix(self.db, self.file, &names[0..=i]) {
+                    Some(builtin) => classify::namespace_class(builtin),
+                    None => classify_type_token(self.db, self.file, text, range.start()),
+                }
+            }
+            Some(_) if names.len() > 1 => {
+                let resolved = resolve_path_at(self.db, self.file, range.start(), &names, None);
+                classify::classify_resolved(&resolved).unwrap_or_else(|| {
+                    // An unresolved qualified leaf: a verified enum variant (the
+                    // prefix resolves to an enum and the leaf is one of its
+                    // variants) is an `enumMember` — e.g. `Direction.North` in a
+                    // match pattern. Otherwise it is still a type.
+                    if resolve_enum_variant(self.db, self.file, range.start(), &names) {
+                        plain(SemanticTokenType::EnumMember)
+                    } else {
+                        plain(SemanticTokenType::Type)
+                    }
+                })
+            }
+            _ => classify_type_token(self.db, self.file, text, range.start()),
+        }
     }
 
     /// An `interface_field as class_field` link inside an `implements` block.
     /// The interface field resolves against the implemented interface and the
     /// class field against the enclosing class; each highlights as a `Property`
-    /// only when it actually resolves (the `as` keyword stays syntactic).
-    fn interface_field_link(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let link = InterfaceFieldLink::cast(node.clone());
-        // The class field's owning type is the enclosing class.
-        let class_name: Option<Name> = node
-            .ancestors()
-            .find_map(ClassDef::cast)
-            .and_then(|c| c.name())
-            .map(|t| Name::new(t.text()));
-        // The interface field's owning type is the implements-block target.
-        let iface_segments: Vec<Name> = node
-            .ancestors()
-            .find_map(ImplementsBlock::cast)
-            .and_then(|b| b.syntax().children().find_map(ImplementsTarget::cast))
-            .and_then(|t| t.type_expr())
-            .map(|te| type_path_segments(&te))
-            .unwrap_or_default();
-        let field_of = |segments: &[Name], tok: &SyntaxToken| {
-            resolve_field(
-                self.db,
-                self.file,
-                tok.text_range().start(),
-                segments,
-                &Name::new(tok.text()),
-            )
-            .then_some(plain(SemanticTokenType::Property))
+    /// only when it actually resolves.
+    fn interface_field_link(
+        &self,
+        link: Id<InterfaceFieldLink>,
+        name: Id<NameNode>,
+        idx: TokenIdx,
+    ) -> Option<Class> {
+        let link_node = self.tree.get(link);
+        let owner_segments: Vec<Name> = if link_node.iface_field == name {
+            // The interface field's owning type is the implements-block target.
+            let block = self
+                .index
+                .ancestors(any(link))
+                .find_map(AnyNodeId::cast::<ImplementsBlock>)?;
+            match self.tree.get(block).target.ok()? {
+                baml_syntax::nodes::AnyType::Path(path) => self
+                    .type_path_names(path)
+                    .into_iter()
+                    .map(|(_, name)| name)
+                    .collect(),
+                _ => return None,
+            }
+        } else if link_node.class_field == Ok(name) {
+            // The class field's owning type is the enclosing class.
+            let class = self
+                .index
+                .ancestors(any(link))
+                .find_map(AnyNodeId::cast::<ClassDef>)?;
+            let class_name = self.tree.get(class).name.ok()?;
+            vec![Name::new(self.text(self.tree.get(class_name).token.idx))]
+        } else {
+            return None;
         };
-        self.tokens(node, out, |t| {
-            let here = Some(t.text_range());
-            if link
-                .as_ref()
-                .and_then(InterfaceFieldLink::interface_field)
-                .map(|x| x.text_range())
-                == here
-            {
-                return field_of(&iface_segments, t);
-            }
-            if link
-                .as_ref()
-                .and_then(InterfaceFieldLink::class_field)
-                .map(|x| x.text_range())
-                == here
-            {
-                return class_name
-                    .as_ref()
-                    .and_then(|cn| field_of(std::slice::from_ref(cn), t));
-            }
-            None
-        });
+        resolve_field(
+            self.db,
+            self.file,
+            self.range(idx).start(),
+            &owner_segments,
+            &Name::new(self.text(idx)),
+        )
+        .then_some(plain(SemanticTokenType::Property))
     }
-
-    /// An `OBJECT_LITERAL` — the constructed type name as a `Class` reference,
-    /// then the body dispatched (field keys + value expressions). The name is a
-    /// bare WORD for `Foo { … }` but a leading `PATH_EXPR` (`Foo<int>`) when the
-    /// construction is generic.
-    fn object_literal(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let mut typed = false; // classified the constructed type name yet
-        for child in node.children_with_tokens() {
-            match child {
-                NodeOrToken::Token(t) if !typed && t.kind() == SyntaxKind::WORD => {
-                    typed = true;
-                    emit(t.text_range(), plain(SemanticTokenType::Class), out);
-                }
-                // `Foo<int> { … }` — name + generic args are a leading `PATH_EXPR`.
-                NodeOrToken::Node(n) if !typed && n.kind() == SyntaxKind::PATH_EXPR => {
-                    typed = true;
-                    self.object_type_path(&n, out);
-                }
-                NodeOrToken::Node(n) => self.run(&n, out),
-                NodeOrToken::Token(t) => self.token(&t, out),
-            }
-        }
-    }
-
-    /// The leading `Foo<...>` of a generic object construction: the type name as
-    /// a `Class`; the `GENERIC_ARGS` dispatched so their type args resolve.
-    fn object_type_path(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let mut named = false;
-        self.tokens(node, out, |t| {
-            (!named && t.kind() == SyntaxKind::WORD).then(|| {
-                named = true;
-                plain(SemanticTokenType::Class)
-            })
-        });
-    }
-
-    /// A `BACKTICK_STRING_LITERAL` (BEP-049 interpolated string) — literal content
-    /// (delimiters, text, punctuation) as `String`; interpolations (`${ expr }`)
-    /// and block tags (`${for ...}`, `${if ...}`) are child nodes holding real
-    /// code, dispatched so their identifiers resolve through the index.
-    fn backtick_string(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        self.tokens(node, out, |t| {
-            (!t.kind().is_whitespace()).then_some(plain(SemanticTokenType::String))
-        });
-    }
-
-    /// A `GENERATOR_DEF` — the name as a `Struct` declaration. The `{ … }` body
-    /// is parsed opaquely (generators are deprecated) into raw tokens, so the
-    /// value strings aren't `STRING_LITERAL` nodes; classify by shape — `key:`
-    /// words as `Property`, value tokens as `String`.
-    fn generator_def(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let mut body = false; // past the opening `{`
-        let mut value = false; // after `:`, before `,` / `}`
-        let mut named = false;
-        self.tokens(node, out, |t| match t.kind() {
-            SyntaxKind::KW_GENERATOR => Some(plain(SemanticTokenType::Keyword)),
-            SyntaxKind::L_BRACE => {
-                body = true;
-                None
-            }
-            SyntaxKind::R_BRACE => {
-                value = false;
-                None
-            }
-            SyntaxKind::COLON if body => {
-                value = true;
-                None
-            }
-            SyntaxKind::COMMA if body => {
-                value = false;
-                None
-            }
-            SyntaxKind::WORD if !body && !named => {
-                named = true;
-                Some(decl(SemanticTokenType::Struct))
-            }
-            SyntaxKind::WORD if body && !value => Some(plain(SemanticTokenType::Property)),
-            k if body && value && !k.is_whitespace() && !k.is_comment() => {
-                Some(plain(SemanticTokenType::String))
-            }
-            _ => None,
-        });
-    }
-}
-
-/// The leading dotted path segments of a type expression (`baml.x.Iface` ->
-/// `[baml, x, Iface]`), stopping at any generic arguments.
-fn type_path_segments(te: &TypeExpr) -> Vec<Name> {
-    let mut segments = Vec::new();
-    for element in te.syntax().children_with_tokens() {
-        match element {
-            NodeOrToken::Token(t) if t.kind().is_trivia() => {}
-            NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD => {
-                segments.push(Name::new(t.text()));
-            }
-            NodeOrToken::Token(t) if t.kind() == SyntaxKind::DOT => {}
-            // Stop at generics (`<...>`) or anything past the path.
-            _ => break,
-        }
-    }
-    segments
-}
-
-/// Classify a single leaf token from its parent kind, reproducing what the old
-/// per-node handlers emitted for direct child tokens. Stateful position checks
-/// (which WORD is the name, a key before its `:`) are read off the typed AST or
-/// preceding siblings. Returns `None` for tokens with no parent-driven class, so
-/// the caller falls back to the syntactic classification ([`Walk::token`]).
-fn classify_token(token: &SyntaxToken) -> Option<Class> {
-    let parent = token.parent()?;
-    let kind = token.kind();
-    let word = kind == SyntaxKind::WORD;
-    match parent.kind() {
-        SyntaxKind::ATTRIBUTE | SyntaxKind::BLOCK_ATTRIBUTE => {
-            (matches!(kind, SyntaxKind::AT_AT | SyntaxKind::AT | SyntaxKind::WORD)
-                || kind.is_keyword())
-            .then_some(plain(SemanticTokenType::Decorator))
-        }
-        SyntaxKind::CLIENT_TYPE => word.then_some(plain(SemanticTokenType::Type)),
-        SyntaxKind::CONFIG_ITEM => {
-            (kind.is_keyword() || word).then_some(plain(SemanticTokenType::Property))
-        }
-        SyntaxKind::CLIENT_FIELD => {
-            (kind == SyntaxKind::KW_CLIENT).then_some(plain(SemanticTokenType::Property))
-        }
-        // A generic parameter declaration (`T` in `class Box<T>`, `<T: Bound>`):
-        // the leading name as a `TypeParameter` declaration; a bound is a child
-        // `TYPE_EXPR` and classifies on its own.
-        SyntaxKind::GENERIC_PARAM => GenericParam::cast(parent)
-            .and_then(|p| p.name())
-            .filter(|name| name.text_range() == token.text_range())
-            .map(|_| decl(SemanticTokenType::TypeParameter)),
-        // `let type T = …`: the first word is the bound type parameter's
-        // declaration (the operand is an expression and classifies on its
-        // own).
-        SyntaxKind::TYPE_BINDING_STMT => parent
-            .children_with_tokens()
-            .filter_map(NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::WORD)
-            .filter(|name| name.text_range() == token.text_range())
-            .map(|_| decl(SemanticTokenType::TypeParameter)),
-        SyntaxKind::ENUM_DEF => word.then_some(decl(SemanticTokenType::Enum)),
-        SyntaxKind::ENUM_VARIANT => word.then_some(decl(SemanticTokenType::EnumMember)),
-        SyntaxKind::CLASS_DEF => word.then_some(decl(SemanticTokenType::Class)),
-        SyntaxKind::INTERFACE_DEF => word.then_some(decl(SemanticTokenType::Interface)),
-        SyntaxKind::FIELD | SyntaxKind::PROMPT_FIELD => {
-            word.then_some(decl(SemanticTokenType::Property))
-        }
-        SyntaxKind::PARAMETER => word.then_some(decl(SemanticTokenType::Parameter)),
-        // `let x`, match-arm bindings, etc.: the bound name is a declaration —
-        // a `readonly` one for a global variable, which cannot be reassigned.
-        SyntaxKind::BINDING_PATTERN => word.then(|| {
-            let (ty, modifiers) = decl(SemanticTokenType::Variable);
-            if declares_global(&parent) {
-                (ty, modifiers | ModifierSet::READONLY)
-            } else {
-                (ty, modifiers)
-            }
-        }),
-        // The catch binding(s) `catch (e, stack) { … }` — parameter-like locals
-        // bound by the clause and scoped to its body (consistent with uses,
-        // which resolve via DefinitionSite::CatchBinding -> parameter).
-        SyntaxKind::CATCH_BINDING | SyntaxKind::CATCH_STACK_TRACE_BINDING => {
-            word.then_some(decl(SemanticTokenType::Parameter))
-        }
-        SyntaxKind::CLIENT_DEF | SyntaxKind::RETRY_POLICY_DEF => {
-            word.then_some(decl(SemanticTokenType::Struct))
-        }
-        SyntaxKind::TEMPLATE_STRING_DEF => word.then_some(decl(SemanticTokenType::Function)),
-        // The name as a `Function`, or a `Method` inside a class / interface /
-        // implements block.
-        SyntaxKind::FUNCTION_DEF | SyntaxKind::METHOD_SIG => word.then(|| {
-            decl(if in_method_context(&parent) {
-                SemanticTokenType::Method
-            } else {
-                SemanticTokenType::Function
-            })
-        }),
-        SyntaxKind::TYPE_ALIAS_DEF | SyntaxKind::ASSOCIATED_TYPE_DECL => {
-            classify_type_decl_word(token)
-        }
-        // A bare-word key (before the `:`) is a `Property`; a string key and the
-        // value expression are dispatched as nodes.
-        SyntaxKind::OBJECT_FIELD => ObjectField::cast(parent)
-            .and_then(|f| f.key())
-            .filter(|key| key.text_range() == token.text_range())
-            .map(|_| plain(SemanticTokenType::Property)),
-        // A named argument `name = value` at a call site: the name refers to the
-        // callee's parameter.
-        SyntaxKind::CALL_ARG => CallArg::cast(parent)
-            .and_then(|a| a.name())
-            .filter(|name| name.text_range() == token.text_range())
-            .map(|_| plain(SemanticTokenType::Parameter)),
-        _ => None,
-    }
-}
-
-/// Classify a WORD inside a `TYPE_ALIAS_DEF` (`type X = …`), an associated-type
-/// *declaration* (`type Item [extends Bound] [= Default]`), or an associated-type
-/// *binding* (`Item = string` inside `Iterator<…>`). The leading `type` keywords
-/// (WORDs in the grammar) are `Keyword`; the type name is `Type` — a declaration
-/// when introduced by `type`, otherwise a reference (a binding names an existing
-/// associated type). Bounds / values are child `TYPE_EXPR`s classified on their
-/// own.
-fn classify_type_decl_word(token: &SyntaxToken) -> Option<Class> {
-    if token.kind() != SyntaxKind::WORD {
-        return None;
-    }
-    let parent = token.parent()?;
-    // The name is the first direct WORD (bounds/values are child TYPE_EXPRs).
-    let first_word = parent
-        .children_with_tokens()
-        .filter_map(NodeOrToken::into_token)
-        .find(|t| t.kind() == SyntaxKind::WORD)?;
-    if first_word.text_range() != token.text_range() {
-        return None;
-    }
-    // Introduced by a `type` keyword => a declaration; otherwise a binding.
-    let is_decl = parent
-        .children_with_tokens()
-        .filter_map(NodeOrToken::into_token)
-        .any(|t| t.kind() == SyntaxKind::KW_TYPE);
-    let ty = SemanticTokenType::Type;
-    Some(if is_decl { decl(ty) } else { plain(ty) })
 }
 
 // ── Type-name classification (annotations) ──────────────────────────────────────
@@ -1261,6 +1081,60 @@ function f(t: reflect.Type) -> reflect.Type {
                 "missing `{expected}` in:\n{rendered}"
             );
         }
+    }
+
+    /// The names the grammar admits in a keyword's spelling are names: a
+    /// field, named argument or member called `client`; an LLM body's keys
+    /// declare properties; a type path's dots are its namespace's; an
+    /// associated type's binding declares the name it binds.
+    #[test]
+    fn keywords_in_name_positions_and_type_paths_are_classified() {
+        let (db, file) = test_db(
+            r#"interface Source { type Item }
+
+class Bag { client string }
+
+implements Source for Bag { type Item = int }
+
+function ask(x: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${x}`
+}
+
+function take(client: string, s: Source<Item = int>) -> reflect.Type {
+    reflect.Type.of<int>()
+}
+
+function use(b: Bag) -> string { take(client = b.client, s = b); b.client }
+"#,
+        );
+        let tokens = semantic_tokens(&db, file);
+        let rendered = render(&db, file, tokens);
+        for expected in [
+            "property       [declaration] \"client\"",
+            "property       [declaration] \"prompt\"",
+            "type           [declaration] \"Item\"",
+            "parameter      [declaration] \"client\"",
+            "parameter      \"client\"",
+            "property       \"client\"",
+            "namespace      [defaultLibrary] \".\"",
+        ] {
+            assert!(
+                rendered.contains(expected),
+                "missing `{expected}` in:\n{rendered}"
+            );
+        }
+        assert!(
+            !rendered.contains("keyword        \"client\""),
+            "a `client` in a name position is not a keyword:\n{rendered}"
+        );
+        let item_declarations = rendered
+            .matches("type           [declaration] \"Item\"")
+            .count();
+        assert_eq!(
+            item_declarations, 3,
+            "the interface, the impl and the binding:\n{rendered}"
+        );
     }
 
     fn test_db(source: &str) -> (ProjectDatabase, SourceFile) {

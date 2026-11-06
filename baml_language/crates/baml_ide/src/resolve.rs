@@ -20,7 +20,7 @@ use baml_compiler2_hir::{
     semantic_index::{BindingId, BindingKind, FileSemanticIndex},
 };
 use baml_compiler2_hir_ty::extern_loc::{DefinitionRef, ExternDefinition, extern_definition_named};
-use baml_syntax::token::{KindSet, TokenKind};
+use baml_syntax::token::{KindSet, TokenIdx, TokenKind};
 use text_size::{TextRange, TextSize};
 
 use crate::syntax;
@@ -119,7 +119,10 @@ pub fn symbol_at(
     // A dispatching operator token (`+`, `<`, `[`) addresses the method the
     // operation invokes: the matching impl's override when the receiver's
     // static type pins one, else the `baml.ops` interface's declaration.
-    if let Some(target) = operator_target_at(db, file, offset, token.kind()) {
+    // `>=`, `>>` and `>>=` are `>` tokens and an `=` joined by adjacency: a
+    // cursor on their tail is on the operator that begins at the first.
+    let (operator_offset, operator_kind) = operator_head(&token, offset);
+    if let Some(target) = operator_target_at(db, file, operator_offset, operator_kind) {
         return Some(target);
     }
 
@@ -1143,6 +1146,26 @@ fn llm_prompt_position_at(
         Some(Definition::Function(func)) => Some(TemplatePosition::Driver(func)),
         _ => Some(TemplatePosition::DefaultText),
     }
+}
+
+/// The first token of the adjacency-joined operator `token` is part of
+/// (`>=`, `>>`, `>>=`), with its offset; `token` itself when it begins one
+/// or is none.
+fn operator_head(token: &syntax::TokenRef, offset: TextSize) -> (TextSize, TokenKind) {
+    use baml_syntax::ops::{AnyOperator, OpTok};
+    let tokens = token.tree().tokens();
+    for back in 1..=2u32 {
+        let Some(start) = token.idx().0.checked_sub(back) else {
+            break;
+        };
+        let start = TokenIdx(start);
+        if let Some(op) = OpTok::<AnyOperator>::at(tokens, start)
+            && op.tokens().any(|t| t == token.idx())
+        {
+            return (tokens.range(start).start(), tokens.kind(start));
+        }
+    }
+    (offset, token.kind())
 }
 
 /// Cursor on a dispatching operator token: the method the operation

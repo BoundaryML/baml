@@ -34,14 +34,6 @@
 //! - `ResolvedName::Unknown` or cursor not on a WORD token — returns `None`.
 
 use baml_base::{Name, SourceFile, SourceRoot};
-use baml_syntax::{
-    index::TreeIndex,
-    nodes::{Attribute, BlockAttr, DottedName, Name as NameNode, TemplateInterp},
-    token::{TokenKind, TokenSet as _, sets::StringToken},
-    tree::AnyNodeIdOf,
-};
-
-use crate::syntax::TokenRef;
 use baml_compiler2_hir::{
     contributions::Definition,
     item_data,
@@ -49,11 +41,20 @@ use baml_compiler2_hir::{
     package::ROOT_SEGMENT,
 };
 use baml_compiler2_hir_ty::package_interface::ExportedFunction;
+use baml_syntax::{
+    index::TreeIndex,
+    nodes::{Attribute, BlockAttr, DottedName, Name as NameNode, TemplateInterp},
+    token::{TokenKind, TokenSet as _, sets::StringToken},
+    tree::AnyNodeIdOf,
+};
 use baml_type::BuiltinTypeName;
 use serde::Serialize;
 use text_size::{TextRange, TextSize};
 
-use crate::render::{self, FnSigParts, SigSlot, SigStyle, TypeForm};
+use crate::{
+    render::{self, FnSigParts, SigSlot, SigStyle, TypeForm},
+    syntax::TokenRef,
+};
 
 // ── TypeInfo ──────────────────────────────────────────────────────────────────
 
@@ -2808,6 +2809,42 @@ implements Yielding for Widget {
             "`<=` names `Compare.le`, got: {declaration}"
         );
         assert_eq!(owner.as_deref(), Some("baml.ops.Compare"));
+    }
+
+    /// `>=` is a `>` token and an `=` token joined by adjacency: a cursor on
+    /// the `=` is on the operator.
+    #[test]
+    fn cursor_on_the_tail_of_a_joined_operator_hovers_the_operator() {
+        let test = CursorTest::new(
+            r#"function example(a: int, b: int) -> bool {
+    a ><[CURSOR]= b
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function ge(self"),
+            "`>=` names `Compare.ge`, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("baml.ops.Compare"));
+    }
+
+    /// The end of a file without a trailing newline belongs to its last
+    /// token: a cursor there hovers that token.
+    #[test]
+    fn cursor_at_the_end_of_the_file_hovers_the_last_token() {
+        let test = CursorTest::new(
+            r#"enum Status {
+    Active
+}
+
+let current = Status.Active<[CURSOR]"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("Active"),
+            "the variant under the cursor, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("Status"));
     }
 
     #[test]

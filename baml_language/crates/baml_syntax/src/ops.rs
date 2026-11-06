@@ -209,6 +209,41 @@ pub trait Operator: Copy {
     fn token_len(self) -> usize;
 }
 
+/// An operator of any family: what a tool that paints or counts operators
+/// without parsing asks for. Assignment is tried first so `>>=` is one
+/// operator rather than `>>` and a stray `=`; a one-token spelling shared by
+/// two families (`-`) reads as the binary one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnyOperator {
+    Binary(BinaryOp),
+    Assign(AssignOp),
+    Unary(UnaryOp),
+}
+
+impl Operator for AnyOperator {
+    fn at(tokens: &Tokens, idx: TokenIdx) -> Option<Self> {
+        AssignOp::at(tokens, idx)
+            .map(Self::Assign)
+            .or_else(|| BinaryOp::at(tokens, idx).map(Self::Binary))
+            .or_else(|| {
+                let kind = tokens.get(idx)?;
+                UnaryOp::ALL
+                    .iter()
+                    .copied()
+                    .find(|op| op.token() == kind)
+                    .map(Self::Unary)
+            })
+    }
+
+    fn token_len(self) -> usize {
+        match self {
+            Self::Binary(op) => op.token_len(),
+            Self::Assign(op) => op.token_len(),
+            Self::Unary(_) => 1,
+        }
+    }
+}
+
 /// An operator as it sits in the token array: which one, and its first
 /// token (the others are the adjacent tokens after it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -674,6 +674,10 @@ pub mod sets {
         /// A `///` line or a `//baml:` directive: what a declaration may own
         /// before its attributes and keyword.
         DocToken = DocComment | DirectiveComment;
+        /// A comment of any spelling, whichever group the grammar files it
+        /// under (`//#` is a statement, `///` a doc, the rest trivia).
+        CommentToken = LineComment | BlockComment | UnclosedBlockComment | DocComment
+            | DirectiveComment | HeaderComment;
     }
 
     /// Any token that may name something: a word, a contextual keyword, or a
@@ -903,10 +907,17 @@ impl Tokens {
             .find(|&i| !self.kind(i).is_trivia())
     }
 
-    /// The token containing `offset`, or the pair it sits between.
+    /// The token containing `offset`, or the pair it sits between. The end
+    /// of the text belongs to the last token: a cursor there (after the final
+    /// identifier of a file with no trailing newline) is on that token.
     pub fn token_at_offset(&self, offset: TextSize) -> TokenAtOffset {
-        if self.is_empty() || offset >= self.starts[self.len()] {
+        if self.is_empty() || offset > self.starts[self.len()] {
             return TokenAtOffset::None;
+        }
+        if offset == self.starts[self.len()] {
+            let last = u32::try_from(self.len() - 1)
+                .unwrap_or_else(|_| unreachable!("bounded by the token count"));
+            return TokenAtOffset::Single(TokenIdx(last));
         }
         // The last token whose start is <= offset.
         let idx = match self.starts[..self.len()].binary_search(&offset) {

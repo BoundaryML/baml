@@ -9,9 +9,9 @@
 //! Salsa-cached queries (`file_outline`, the `item_data` firewall, `syntax_tree`,
 //! etc.).
 
-use baml_base::SourceFile;
 use std::sync::Arc;
 
+use baml_base::SourceFile;
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     scope::{FileScopeId, ScopeKind},
