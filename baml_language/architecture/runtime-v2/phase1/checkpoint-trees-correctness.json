@@ -1,0 +1,32 @@
+[
+  {
+    "stress": "0",
+    "results": {
+      "v2": {
+        "stdout": "3222190\n",
+        "stderr": "",
+        "status": 0
+      },
+      "oracle": {
+        "stdout": "3222190\n",
+        "stderr": "",
+        "status": 0
+      }
+    }
+  },
+  {
+    "stress": "1",
+    "results": {
+      "v2": {
+        "stdout": "3222190\n",
+        "stderr": "",
+        "status": 0
+      },
+      "oracle": {
+        "stdout": "3222190\n",
+        "stderr": "",
+        "status": 0
+      }
+    }
+  }
+]

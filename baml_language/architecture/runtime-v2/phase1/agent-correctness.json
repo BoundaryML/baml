@@ -1,0 +1,40 @@
+[
+  {
+    "stress": "0",
+    "v2": {
+      "command": [
+        "target/phase1/agent-v2"
+      ],
+      "status": 0,
+      "stdout": "592308425\n",
+      "stderr": ""
+    },
+    "bytecode": {
+      "command": [
+        "target/phase1/agent-oracle"
+      ],
+      "status": 0,
+      "stdout": "592308425\n",
+      "stderr": ""
+    }
+  },
+  {
+    "stress": "1",
+    "v2": {
+      "command": [
+        "target/phase1/agent-v2"
+      ],
+      "status": 0,
+      "stdout": "592308425\n",
+      "stderr": ""
+    },
+    "bytecode": {
+      "command": [
+        "target/phase1/agent-oracle"
+      ],
+      "status": 0,
+      "stdout": "592308425\n",
+      "stderr": ""
+    }
+  }
+]

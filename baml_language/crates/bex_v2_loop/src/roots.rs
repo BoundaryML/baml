@@ -15,6 +15,53 @@ impl RootSource for TaskLoop {
         self.core.borrow().precise_roots(visit);
     }
 }
+/// Loop-owned synchronous root access for runtime integration. The task context
+/// is deliberately not a RootSource. Root ranges cannot escape the callback.
+pub struct IntegrationRoots(Rc<RefCell<Core>>);
+/// A precise pointer slot registered with the owning loop. Dropping the lease
+/// releases the root without borrowing the loop (including during fiber unwind).
+/// The lease never provides access to the loop's root enumeration.
+pub struct IntegrationRoot(Rc<Cell<usize>>);
+impl IntegrationRoot {
+    pub fn get(&self) -> usize {
+        self.0.get()
+    }
+}
+impl IntegrationRoots {
+    /// Shared owner-thread checkpoint word. Bit 0 is maintained by the loop;
+    /// bit 1 is reserved for the integrated heap. Callers must preserve bit 0.
+    pub fn poll_word(&self) -> Rc<Cell<u8>> {
+        self.0.borrow().poll_word.clone()
+    }
+
+    /// Register a managed pointer held outside the conservatively scanned stacks.
+    ///
+    /// # Safety
+    /// `pointer` must be null or a live pointer in this loop's heap. The pointee
+    /// may be accessed only while both this lease and that heap remain alive.
+    pub unsafe fn root(&self, pointer: usize) -> IntegrationRoot {
+        let slot = Rc::new(Cell::new(pointer));
+        let mut core = self.0.borrow_mut();
+        core.integration_slots
+            .retain(|slot| slot.strong_count() != 0);
+        core.integration_slots.push(Rc::downgrade(&slot));
+        IntegrationRoot(slot)
+    }
+
+    /// Stack bound for a task owned by this loop, for generated-code guards.
+    pub fn stack_limit(&self, task: usize) -> usize {
+        self.0.borrow().tasks[&task].stack_limit
+    }
+
+    pub fn with_roots<R>(&self, visit: impl FnOnce(&dyn RootSource) -> R) -> R {
+        visit(&*self.0.borrow())
+    }
+}
+impl TaskLoop {
+    pub fn integration_roots(&self) -> IntegrationRoots {
+        IntegrationRoots(self.core.clone())
+    }
+}
 impl RootSource for Core {
     fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize)) {
         // This non-inlined call spills callee-saved registers before visiting.
@@ -36,6 +83,11 @@ impl RootSource for Core {
         });
     }
     fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+        for slot in &self.integration_slots {
+            if let Some(slot) = slot.upgrade() {
+                visit(slot.as_ptr());
+            }
+        }
         for task in self.tasks.values() {
             for value in &task.roots {
                 value.roots(visit);

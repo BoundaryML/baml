@@ -132,9 +132,23 @@ releases storage; shutdown cleanup scheduling belongs to the owner.
 No header layout, movement, root-trait signature, mark metadata geometry,
 collection trigger, or barrier semantics were changed. Allocation retries a
 full collection on backing-allocation failure, retries reclaimed line runs, and
-panics with `BAML out of memory` if allocation still fails. Connecting that panic
-to the interpreter-equivalent language error belongs to the task-loop boundary;
-actual OS allocation failure and the future error translation are untested.
+returns `AllocFailure { bytes }` from `try_alloc` if allocation still fails.
+The legacy `alloc` wrapper retains its infallible signature and panic behaviour;
+both share the same successful bump path. Arithmetic/layout overflow also
+returns refusal instead of panicking in the fallible path.
+
+`set_capacity_limit(bytes)` bounds usable ordinary 32 KiB block capacity plus
+large-object backing. Set it before ordinary allocation for a hard test limit.
+It is not an RSS cap: unused slab reservation, metadata and the emergency block
+are excluded. A refusal collects and retries reclaimed runs before returning.
+
+`reserve_emergency()` reserves one separate, collector-traced 32 KiB block before
+execution. Ordinary allocation cannot consume it. `alloc_emergency` publishes
+zeroed objects there without requesting host backing or collecting; normal GC
+reclaims dead emergency objects and traces their edges. Its finite capacity is
+intended for the uncaught allocation-error path, not indefinitely retained error
+objects. Metadata/collector/host Rust allocations are not made fallible by this
+API; process-wide allocator exhaustion is not simulated by the capacity limit.
 
 ## Verification
 
@@ -234,3 +248,12 @@ historical Immix result. The original decision 3 approximately-10%-of-semispace
 gate is still not met; these improvements do not establish full phase-one
 acceptance or the unmeasured memory/fragmentation gate. There are no new interface
 or collector-semantic deviations in this optimization.
+
+### Integrated checkpoint word
+
+`bind_poll_word` attaches the loop's owner-thread word; the heap owns bit 1 and
+preserves the scheduler's bit 0. Budget-crossing small/large allocations request
+collection, collection clears the request, and GC stress keeps it set. The
+cached layout's budget guard sends the crossing object through the cold path;
+the bump fast path gains no post-allocation branch. Ordinary collection still
+occurs at the next allocation or safepoint, with unchanged byte accounting.

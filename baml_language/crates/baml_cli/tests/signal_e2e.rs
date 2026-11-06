@@ -27,7 +27,7 @@ function main() -> never {
 const SIGNALS: [i32; 3] = [libc::SIGINT, libc::SIGTERM, libc::SIGHUP];
 
 fn wait_for_file(path: &Path, child: &mut Child) {
-    let deadline = Instant::now() + Duration::from_secs(60);
+    let deadline = Instant::now() + Duration::from_mins(1);
     while !path.exists() {
         if let Some(status) = child.try_wait().unwrap() {
             panic!(
@@ -45,7 +45,7 @@ fn wait_for_file(path: &Path, child: &mut Child) {
 }
 
 fn wait_with_timeout(child: &mut Child) -> ExitStatus {
-    let deadline = Instant::now() + Duration::from_secs(60);
+    let deadline = Instant::now() + Duration::from_mins(1);
     loop {
         if let Some(status) = child.try_wait().unwrap() {
             return status;

@@ -64,6 +64,8 @@ One static, immutable descriptor per concrete heap type, emitted at pack time:
 | `fields` | declaration-order table: name, offset, slot kind, field type id (reflection, JSON, printing) |
 | `finalizer` | `cleanup` method, if the class has one |
 
+`Kind::InlineElement` describes a headerless record used only as the `elem` of a list/map buffer. Its pointer and tagged ranges are validated relative to the element, so offset 0 is valid. It cannot be allocated independently or carry a finalizer; all allocatable kinds retain their header checks. Inline elements never receive object-start bits: conservative references into an element resolve to its containing buffer, which traces the element through its descriptor.
+
 Because of the layout rule in 1.2, a class's pointer map is always two ranges, never a bitmap.
 
 ### 1.4 Dynamic boundary

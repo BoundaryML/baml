@@ -1,0 +1,62 @@
+[
+  {
+    "stress": "0",
+    "commands": {
+      "v2": [
+        "target/phase1/lists-v2"
+      ],
+      "bytecode": [
+        "target/debug/baml-cli",
+        "--agent-skill-check",
+        "off",
+        "--no-progress",
+        "--color",
+        "never",
+        "run",
+        "--file",
+        "baml_language/architecture/runtime-v2/phase1/lists.baml",
+        "main"
+      ]
+    },
+    "v2": {
+      "status": 0,
+      "stdout": "6836\n",
+      "stderr": ""
+    },
+    "bytecode": {
+      "status": 0,
+      "stdout": "6836\n",
+      "stderr": ""
+    }
+  },
+  {
+    "stress": "1",
+    "commands": {
+      "v2": [
+        "target/phase1/lists-v2"
+      ],
+      "bytecode": [
+        "target/debug/baml-cli",
+        "--agent-skill-check",
+        "off",
+        "--no-progress",
+        "--color",
+        "never",
+        "run",
+        "--file",
+        "baml_language/architecture/runtime-v2/phase1/lists.baml",
+        "main"
+      ]
+    },
+    "v2": {
+      "status": 0,
+      "stdout": "6836\n",
+      "stderr": ""
+    },
+    "bytecode": {
+      "status": 0,
+      "stdout": "6836\n",
+      "stderr": ""
+    }
+  }
+]

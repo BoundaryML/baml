@@ -472,22 +472,7 @@ impl OpenSet {
 
 /// Decode signed decimal text without passing through `f64`. Check the size
 /// before parsing so untrusted JSON cannot allocate an unbounded integer.
-fn parse_decimal_bigint(text: &str) -> Option<num_bigint::BigInt> {
-    let (negative, digits) = match text.as_bytes().first() {
-        Some(b'-') => (true, &text[1..]),
-        Some(b'+') => (false, &text[1..]),
-        _ => (false, text),
-    };
-    if digits.is_empty()
-        || digits.len() > baml_type::MAX_BIGINT_DECIMAL_DIGITS
-        || !digits.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return None;
-    }
-    let magnitude = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)?;
-    let value = if negative { -magnitude } else { magnitude };
-    (value.bits() <= baml_type::MAX_BIGINT_BITS).then_some(value)
-}
+use bex_vm_types::json_text::parse_decimal_bigint;
 
 /// The members a value of `ty` may decode as at one JSON node: with each
 /// union flattened and each recursive alias other than `json` replaced by its

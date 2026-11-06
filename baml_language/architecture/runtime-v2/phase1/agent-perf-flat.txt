@@ -1,0 +1,47 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 19K of event 'armv8_pmuv3_0/cycles/P'
+# Event count (approx.): 12924178973
+#
+# Overhead  Command          Shared Object          Symbol                                                                                                                                                                                            
+# ........  ...............  .....................  ..................................................................................................................................................................................................
+#
+    25.13%  agent-v2         agent-v2               [.] <indexmap::map::IndexMap<alloc::string::String, serde_json::value::Value>>::get_index_of::<str>
+     5.68%  agent-v2         agent-v2               [.] <indexmap::map::IndexMap<alloc::string::String, serde_json::value::Value>>::insert_full
+     4.66%  agent-v2         agent-v2               [.] baml_rust_program::entry
+     4.65%  agent-v2         libc.so.6              [.] _int_free_chunk
+     4.39%  agent-v2         libc.so.6              [.] malloc
+     4.12%  agent-v2         agent-v2               [.] <core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write
+     4.10%  agent-v2         agent-v2               [.] <bex_vm_types::json_text::Reader>::string_span
+     3.75%  agent-v2         libc.so.6              [.] realloc
+     3.62%  agent-v2         libc.so.6              [.] cfree@GLIBC_2.17
+     3.39%  agent-v2         agent-v2               [.] bex_v2_runtime::json::owned
+     3.16%  agent-v2         agent-v2               [.] <bex_v2_heap::Heap>::alloc_slow
+     2.99%  agent-v2         libc.so.6              [.] __aarch64_cas8_acq
+     2.82%  agent-v2         libc.so.6              [.] _int_malloc
+     2.53%  agent-v2         agent-v2               [.] <bex_vm_types::json_text::Reader>::next_key
+     2.41%  agent-v2         libc.so.6              [.] __aarch64_cas4_acq
+     1.51%  agent-v2         libc.so.6              [.] __memcpy_sve
+     1.32%  agent-v2         agent-v2               [.] <std::thread::local::LocalKey<core::cell::Cell<*mut bex_v2_heap::Heap>>>::with::<bex_v2_runtime::try_alloc::{closure#0}, core::result::Result<*mut u8, bex_v2_heap::AllocFailure>>
+     1.22%  agent-v2         agent-v2               [.] alloc::fmt::format::format_inner
+     1.14%  agent-v2         libc.so.6              [.] memcmp
+     1.10%  agent-v2         agent-v2               [.] bex_v2_runtime::json::check
+     1.05%  agent-v2         agent-v2               [.] <str as core::fmt::Debug>::fmt
+     1.04%  agent-v2         agent-v2               [.] <hashbrown::raw::RawTable<usize>>::reserve_rehash::<indexmap::inner::get_hash<alloc::string::String, serde_json::value::Value>::{closure#0}>
+     0.92%  agent-v2         agent-v2               [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.91%  agent-v2         agent-v2               [.] core::fmt::write
+     0.90%  agent-v2         agent-v2               [.] <alloc::string::String as core::fmt::Write>::write_str.66
+     0.65%  agent-v2         agent-v2               [.] <bex_vm_types::json_text::Reader>::skip_value
+     0.65%  agent-v2         libc.so.6              [.] _int_realloc
+     0.63%  agent-v2         libc.so.6              [.] __libc_malloc2
+     0.56%  agent-v2         agent-v2               [.] <bex_vm_types::json_text::Reader>::span_str
+     0.53%  agent-v2         agent-v2               [.] bex_v2_runtime::strings::concat
+     0.52%  agent-v2         libc.so.6              [.] __memset_sve_zva64
+
+
+#
+# (Tip: Sample related events with: perf record -e '{cycles,instructions}:S')
+#

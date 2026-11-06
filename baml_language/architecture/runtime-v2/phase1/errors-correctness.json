@@ -1,0 +1,34 @@
+[
+  {
+    "probe": "overflow",
+    "stress": "0",
+    "bytecode_status": 1,
+    "v2_status": 1,
+    "bytecode_stderr": "error: Traceback (most recent call last):\n  File \"overflow.baml\", line 2, in user.main\n  File \"overflow.baml\", line 1, in user.add_one\nuncaught throw: baml.panics.IntegerOverflow {message: \"4611686018427387903 + 1 overflows int\"}\n",
+    "v2_stderr": "error: Traceback (most recent call last):\n  File \"overflow.baml\", line 2, in user.main\n  File \"overflow.baml\", line 1, in user.add_one\nuncaught throw: baml.panics.IntegerOverflow {message: \"4611686018427387903 + 1 overflows int\"}\n"
+  },
+  {
+    "probe": "overflow",
+    "stress": "1",
+    "bytecode_status": 1,
+    "v2_status": 1,
+    "bytecode_stderr": "error: Traceback (most recent call last):\n  File \"overflow.baml\", line 2, in user.main\n  File \"overflow.baml\", line 1, in user.add_one\nuncaught throw: baml.panics.IntegerOverflow {message: \"4611686018427387903 + 1 overflows int\"}\n",
+    "v2_stderr": "error: Traceback (most recent call last):\n  File \"overflow.baml\", line 2, in user.main\n  File \"overflow.baml\", line 1, in user.add_one\nuncaught throw: baml.panics.IntegerOverflow {message: \"4611686018427387903 + 1 overflows int\"}\n"
+  },
+  {
+    "probe": "negative-shift",
+    "stress": "0",
+    "bytecode_status": 1,
+    "v2_status": 1,
+    "bytecode_stderr": "error: Traceback (most recent call last):\n  File \"negative-shift.baml\", line 2, in user.main\n  File \"negative-shift.baml\", line 1, in user.shift\nuncaught throw: baml.panics.NegativeBitShift {message: \"bit shift count is negative: -1\"}\n",
+    "v2_stderr": "error: Traceback (most recent call last):\n  File \"negative-shift.baml\", line 2, in user.main\n  File \"negative-shift.baml\", line 1, in user.shift\nuncaught throw: baml.panics.NegativeBitShift {message: \"bit shift count is negative: -1\"}\n"
+  },
+  {
+    "probe": "negative-shift",
+    "stress": "1",
+    "bytecode_status": 1,
+    "v2_status": 1,
+    "bytecode_stderr": "error: Traceback (most recent call last):\n  File \"negative-shift.baml\", line 2, in user.main\n  File \"negative-shift.baml\", line 1, in user.shift\nuncaught throw: baml.panics.NegativeBitShift {message: \"bit shift count is negative: -1\"}\n",
+    "v2_stderr": "error: Traceback (most recent call last):\n  File \"negative-shift.baml\", line 2, in user.main\n  File \"negative-shift.baml\", line 1, in user.shift\nuncaught throw: baml.panics.NegativeBitShift {message: \"bit shift count is negative: -1\"}\n"
+  }
+]

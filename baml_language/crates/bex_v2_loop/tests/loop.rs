@@ -767,3 +767,49 @@ fn deep_cancel_ancestry_is_released_on_a_small_fiber_without_recursion() {
     });
     assert_eq!(lp.run_until(&f).unwrap().as_int(), 1);
 }
+
+#[test]
+fn integration_root_leases_are_loop_owned_and_released_without_borrowing() {
+    let rt = runtime();
+    let lp = scheduler(&rt);
+    let integration = lp.integration_roots();
+    let root = unsafe { integration.root(0) };
+    let mut slots = Vec::new();
+    lp.precise_roots(&mut |slot| slots.push(slot));
+    assert_eq!(slots.len(), 1);
+    assert_eq!(root.get(), 0);
+    integration.with_roots(|source| {
+        // Drop may occur while the loop is borrowed during forced fiber unwind.
+        drop(root);
+        source.precise_roots(&mut |_| panic!("released root still visited"));
+    });
+    for _ in 0..1000 {
+        let root = unsafe { integration.root(0) };
+        let mut count = 0;
+        integration.with_roots(|source| source.precise_roots(&mut |_| count += 1));
+        assert_eq!(count, 1);
+        drop(root);
+    }
+    lp.precise_roots(&mut |_| panic!("expired integration root"));
+}
+
+#[test]
+fn idle_poll_word_is_clear_and_local_cancellation_is_immediate_and_sticky() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let word = lp.integration_roots().poll_word();
+    let word_in = word.clone();
+    let future = lp.spawn(move |cx| {
+        assert_eq!(word_in.get() & 1, 0);
+        for _ in 0..1000 {
+            cx.poll()?;
+        }
+        assert_eq!(word_in.get() & 1, 0);
+        cx.cancel().cancel();
+        assert_eq!(word_in.get() & 1, 1);
+        assert!(matches!(cx.poll(), Err(Err::Cancelled)));
+        assert!(matches!(cx.poll(), Err(Err::Cancelled)));
+        Ok(Value::int(1))
+    });
+    lp.run_until(&future).unwrap();
+}

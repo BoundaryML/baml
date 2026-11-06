@@ -39,6 +39,30 @@ fn render(
 }
 
 #[test]
+fn mir_inventory_keeps_direct_reachable_bodies_before_admission() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "inventory.baml",
+        "function main() -> int { helper() }\nfunction helper() -> int { 42 }\nfunction unused() -> int { 7 }",
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, function)| function.name() == "main")
+        .unwrap();
+    let report = baml_db::rust_backend::inventory_program(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        &[entry],
+    )
+    .unwrap();
+    assert!(report.contains("## user.main"));
+    assert!(report.contains("## user.helper"));
+    assert!(!report.contains("## user.unused"));
+    assert!(report.contains("same-name candidates"));
+}
+
+#[test]
 fn unrelated_iteration_interfaces_are_compiled_with_virtual_dispatch() {
     let db = baml_test_support::setup_multi_file_db(&[(
         "iteration_identity.baml",
@@ -774,4 +798,220 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
             }
         }
     }
+}
+
+#[test]
+fn v2_trees_and_fail_closed_admission() {
+    fn emit(source: &str) -> Result<String, String> {
+        let db = baml_test_support::setup_multi_file_db(&[("v2.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, function)| function.name() == "main")
+            .unwrap();
+        baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+    }
+    let trees = emit(include_str!(
+        "../../../tools/speedtest/workloads/memory/binary-trees-14/main.baml"
+    ))
+    .unwrap();
+    assert!(trees.contains("size:24,ptr_slots:(8,2)"));
+    assert!(trees.contains("rt::observe("));
+    assert!(trees.contains("rt::shl("));
+    assert!(trees.contains("rt::Source"));
+    assert!(trees.contains("bex_v2_heap::write_ptr("));
+    assert!(!trees.contains("BexVm"));
+    let richards = emit(include_str!(
+        "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
+    ))
+    .unwrap();
+    assert!(richards.contains("match a0.tag"));
+    assert!(richards.contains("rt::write_dyn("));
+    assert!(richards.contains("rt::list_slot("));
+    assert!(richards.contains("ElementLayout::Pointer"));
+    for source in [
+        "function main() -> string { \"hello\" }",
+        "function main() -> int { let a = [[1], [2]]; a[0][0] }",
+        "const X = 1; function main() -> int { X }",
+    ] {
+        assert!(
+            emit(source)
+                .unwrap_err()
+                .contains("unsupported in runtime v2"),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn allocation_failure_constructor_matches_interpreter_exception() {
+    use std::sync::{Arc, atomic::AtomicBool};
+    let program = baml_test_support::compile_source("function main() -> int { 0 }");
+    let mut vm = bex_vm::BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+    let value = vm.panic_to_exception_value(bex_vm_types::errors::VmPanic::allocation_failure(16));
+    let Object::Instance(instance) = vm.get_object(value.as_object_ptr().unwrap()) else {
+        panic!("exception instance")
+    };
+    let Object::Class(class) = vm.get_object(instance.class) else {
+        panic!("exception class")
+    };
+    let field = instance.try_load_field(0).unwrap();
+    let Object::String(message) = vm.get_object(field.as_object_ptr().unwrap()) else {
+        panic!("message field")
+    };
+    // Paired with the v2 runtime's forced-limit test. The two corosensei builds
+    // export the same asm ABI, so the runtime tests use separate executables.
+    assert_eq!(format!("baml.{}", class.path), "baml.panics.AllocFailure");
+    assert_eq!(message.as_str(), "Allocation of 16 bytes failed");
+}
+
+#[test]
+fn v2_string_receiver_storage_and_function_value_rejection() {
+    for (source, accepted) in [
+        (
+            include_str!("../../../architecture/runtime-v2/phase1/strings.baml"),
+            true,
+        ),
+        (
+            "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
+            false,
+        ),
+        ("function main() -> int { \"x\".trim().length() }", false),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let before = fingerprint(&program);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, function)| function.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if accepted {
+            let source = result.unwrap();
+            assert!(source.contains("fn v2_string_slice("));
+            assert!(source.contains("fn v2_string_char_count("));
+        } else {
+            assert!(result.unwrap_err().contains("unsupported in runtime v2"));
+        }
+        assert_eq!(before, fingerprint(&program));
+    }
+}
+
+#[test]
+fn v2_growing_lists_and_fail_closed_mutation() {
+    for (source, accepted) in [
+        (
+            include_str!("../../../architecture/runtime-v2/phase1/lists.baml"),
+            true,
+        ),
+        (
+            "function main() -> int { let xs: string[] = [\"a\"]; xs[0] = \"b\"; xs.length() }",
+            false,
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("lists.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let before = fingerprint(&program);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if accepted {
+            let source = result.unwrap();
+            assert!(source.contains("rt::lists::buffer_descriptor::<rt::strings::Str>"));
+            assert!(source.contains("fn v2_array_push"));
+        } else {
+            assert!(result.unwrap_err().contains("unsupported in runtime v2"));
+        }
+        assert_eq!(before, fingerprint(&program));
+    }
+}
+
+#[test]
+fn v2_agent_maps_iteration_catch_and_json_admission() {
+    for (source, accepted) in [
+        (
+            include_str!("../../../architecture/runtime-v2/phase1/maps.baml"),
+            true,
+        ),
+        (
+            include_str!("../../../architecture/runtime-v2/phase1/catches.baml"),
+            true,
+        ),
+        (
+            include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
+            true,
+        ),
+        (
+            r#"class A { x: int } class B { y: int } function main() -> int { let a = baml.json.decode<A | B>("x") catch(e) { baml.json.ParseError => null }; 0 }"#,
+            false,
+        ),
+        (
+            "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
+            false,
+        ),
+        (
+            "function main() -> int { let m: map<string,string> = {}; m[\"a\"] = \"b\"; 0 }",
+            false,
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("agent.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let before = fingerprint(&program);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if accepted {
+            result.unwrap();
+        } else {
+            assert!(result.unwrap_err().contains("unsupported in runtime v2"));
+        }
+        assert_eq!(before, fingerprint(&program));
+    }
+}
+
+#[test]
+fn v2_json_streaming_specializations_and_per_type_fallback() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "json.baml",
+        include_str!("../../../architecture/runtime-v2/phase1/json-stream-layouts.baml"),
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_v2(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    assert!(source.contains("rt::json::Stream::<"));
+    assert!(source.contains("json_specialized_4_0"));
+    assert!(source.contains("Tree fallback: aliased @skip"));
 }

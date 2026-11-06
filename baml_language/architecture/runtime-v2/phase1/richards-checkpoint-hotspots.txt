@@ -1,0 +1,52 @@
+Final Richards perf recording: hottest eight annotated instructions.
+Local-period percentages; sampling skid prevents exact causal attribution.
+Source: target/phase1/richards-checkpoint-after.perf.data
+
+    0.87 :   13200:  cmp     x10, #0x10, lsl #12
+    0.07 :   13204:  b.cc    1485c <baml_rust_program::entry+0x1f70>  // b.lo, b.ul, b.last
+         : 785   'b2:{ l5=(*((rt::nonnull(l1)).map_err(|e|e.at(&S4192,1))? as *const C4180)).f5;
+    8.72 :   13208:  ldr     x10, [x9, #56]
+         : 787   c0=l3;if c0{l2=l3;
+
+         : 785   'b2:{ l5=(*((rt::nonnull(l1)).map_err(|e|e.at(&S4192,1))? as *const C4180)).f5;
+    8.72 :   13208:  ldr     x10, [x9, #56]
+         : 787   c0=l3;if c0{l2=l3;
+    4.28 :   1320c:  tbnz    w10, #2, 13198 <baml_rust_program::entry+0x8ac>
+    2.27 :   13210:  cmp     x10, #0x2
+
+    8.72 :   13208:  ldr     x10, [x9, #56]
+         : 787   c0=l3;if c0{l2=l3;
+    4.28 :   1320c:  tbnz    w10, #2, 13198 <baml_rust_program::entry+0x8ac>
+    2.27 :   13210:  cmp     x10, #0x2
+    0.00 :   13214:  b.eq    13198 <baml_rust_program::entry+0x8ac>  // b.none
+
+    0.00 :   131bc:  b       13e24 <baml_rust_program::entry+0x1538>
+    0.09 :   131c0:  ldr     x24, [sp, #16]
+    0.00 :   131c4:  mov     x12, #0xffffffffffffffff        // #-1
+    2.22 :   131c8:  adrp    x21, b0000 <__dso_handle>
+    0.10 :   131cc:  ldr     x8, [x24]
+
+    0.06 :   13710:  ldr     x24, [x9, #16]
+    0.19 :   13714:  mov     x9, xzr
+         : 1265  if c1{ l0=0usize;
+    1.65 :   13718:  cbz     x24, 1319c <baml_rust_program::entry+0x8b0>
+         : 1267  }else{ l8=(*((rt::nonnull(l1)).map_err(|e|e.at(&S4197,9))? as *const C4181)).f4;
+
+         : 1620  l5=(*((rt::nonnull(l4)).map_err(|e|e.at(&S4188,9))? as *const C4179)).f0;
+    0.03 :   13b1c:  ldr     x8, [x24, #8]
+         : 1622  if c4{ {let value=l1;let object=(rt::nonnull(l4)).map_err(|e|e.at(&S4188,13))?;bex_v2_heap::write_ptr(object as *mut u8,&raw mut (*(object as *mut C4179)).f0,value);}
+    1.53 :   13b20:  add     w23, w23, #0x1
+    0.03 :   13b24:  cbz     x8, 13d98 <baml_rust_program::entry+0x14ac>
+
+    2.22 :   131c8:  adrp    x21, b0000 <__dso_handle>
+    0.10 :   131cc:  ldr     x8, [x24]
+         : 764   pub unsafe fn safepoint() -> Result<(), bex_v2_loop::Err> {
+    1.47 :   131d0:  cbz     x8, 142fc <baml_rust_program::entry+0x1a10>
+    0.33 :   131d4:  ldrb    w8, [x8]
+
+    0.03 :   13a18:  ldr     x8, [x8, #16]
+    0.29 :   13a1c:  cmp     x0, x9
+         : 1532  intrinsics::write_via_move(dst, src)
+    1.43 :   13a20:  str     x8, [x27, #40]
+    0.20 :   13a24:  b.le    15248 <baml_rust_program::entry+0x295c>
+

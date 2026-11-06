@@ -1,3 +1,5 @@
+mod codegen_v2;
+pub use codegen_v2::{generate_v2, supports_v2};
 mod codegen;
 mod codegen_errors;
 mod codegen_io;
