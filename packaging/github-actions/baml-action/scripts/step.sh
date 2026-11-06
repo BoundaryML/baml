@@ -18,7 +18,7 @@ run_fmt() {
   # Capture instead of piping into `grep -q`: under pipefail, grep exiting
   # early can fail the pipeline with SIGPIPE.
   local help
-  help="$(baml fmt --help 2>/dev/null)" || help=""
+  help="$(baml fmt --help 2>/dev/null || true)"
   if [[ "$help" != *--check* ]]; then
     echo "::error::baml fmt --check is not available in BAML $(baml --version 2>/dev/null); use a newer toolchain or set fmt: false"
     return 1

@@ -17,8 +17,13 @@
 # baml-action uses setup-baml. Here it uses the setup-baml next to it, so a PR
 # tests both together. The published baml-action pins setup-baml by commit
 # SHA, so mirror/sync.sh rewrites that `uses:` to the setup-baml mirror commit
-# this run published (or found already matching). Each action syncs only
-# after its own tests pass, and baml-action only after setup-baml has synced.
+# this run published (or found already matching). baml-action's tests also
+# exercise setup-baml, so neither mirror moves unless every test passes, and
+# baml-action syncs only after setup-baml has.
+#
+# Only canary publishes: a manual run from another branch tests but skips both
+# syncs. sync.sh also refuses to publish a source commit older than the one a
+# mirror was last synced from, so rerunning an old run can't roll `v1` back.
 #
 # Auth: uses the shared GitHub token synced from Infisical's
 # gh-baml-language-release environment. The token needs Contents write access
@@ -48,26 +53,17 @@ env:
   MAJOR: v1
 
 jobs:
-  test-setup-baml:
-    name: Test setup-baml
+  test:
+    name: Test actions
     uses: ./.github/workflows/github-actions-ci.yml
-    with:
-      action: setup-baml
-    permissions:
-      contents: read
-
-  test-baml-action:
-    name: Test baml-action
-    uses: ./.github/workflows/github-actions-ci.yml
-    with:
-      action: baml-action
     permissions:
       contents: read
       pull-requests: write
 
   sync-setup-baml:
     name: Sync to BoundaryML/setup-baml
-    needs: test-setup-baml
+    needs: test
+    if: github.ref == 'refs/heads/canary'
     runs-on: ubuntu-latest
     environment: infisical-github-baml-language-release
     outputs:
@@ -95,7 +91,8 @@ jobs:
 
   sync-baml-action:
     name: Sync to BoundaryML/baml-action
-    needs: [test-baml-action, sync-setup-baml]
+    needs: [test, sync-setup-baml]
+    if: github.ref == 'refs/heads/canary'
     runs-on: ubuntu-latest
     environment: infisical-github-baml-language-release
     steps:

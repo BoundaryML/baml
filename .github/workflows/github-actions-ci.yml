@@ -1,7 +1,7 @@
 # Tests the public GitHub Actions in packaging/github-actions. Also called by
-# sync-github-actions-mirror.yml once per action, so each mirror moves only
-# after its own tests pass. baml-action is tested with the setup-baml next to
-# it, which is the setup-baml its published copy pins.
+# sync-github-actions-mirror.yml, so a mirror only moves after these pass.
+# baml-action is tested with the setup-baml next to it, which is the setup-baml
+# its published copy pins, so its jobs are also setup-baml integration tests.
 
 name: GitHub Actions CI
 
@@ -12,11 +12,6 @@ on:
       - ".github/workflows/github-actions-ci.yml"
       - ".github/workflows/sync-github-actions-mirror.yml"
   workflow_call:
-    inputs:
-      action:
-        description: "Which action's tests to run: setup-baml, baml-action, or all"
-        type: string
-        default: all
   workflow_dispatch:
 
 permissions:
@@ -28,7 +23,6 @@ concurrency:
 
 jobs:
   setup-baml-lint-and-test:
-    if: inputs.action != 'baml-action'
     name: setup-baml lint and test
     runs-on: ubuntu-latest
     steps:
@@ -60,7 +54,6 @@ jobs:
           if ($errors.Count -gt 0) { throw ($errors | Out-String) }
 
   setup-baml-cross-platform:
-    if: inputs.action != 'baml-action'
     name: setup-baml exact version (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -101,7 +94,6 @@ jobs:
           if (-not (Test-Path -LiteralPath $env:TOOLCHAIN_PATH -PathType Leaf)) { throw "toolchain output does not exist" }
 
   setup-baml-project-selector:
-    if: inputs.action != 'baml-action'
     name: setup-baml resolves baml.toml
     runs-on: ubuntu-latest
     steps:
@@ -127,7 +119,6 @@ jobs:
           baml --version
 
   setup-baml-canary-selector:
-    if: inputs.action != 'baml-action'
     name: setup-baml installs canary
     runs-on: ubuntu-latest
     steps:
@@ -155,7 +146,6 @@ jobs:
           baml --version
 
   baml-action-lint-and-test:
-    if: inputs.action != 'setup-baml'
     name: baml-action lint and test
     runs-on: ubuntu-latest
     steps:
@@ -187,7 +177,6 @@ jobs:
           args: -color .github/workflows/github-actions-ci.yml .github/workflows/sync-github-actions-mirror.yml
 
   baml-action-passing:
-    if: inputs.action != 'setup-baml'
     name: baml-action passing project (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -223,7 +212,6 @@ jobs:
         run: test -n "$VERSION"
 
   baml-action-failing:
-    if: inputs.action != 'setup-baml'
     name: baml-action failing projects report each failure
     runs-on: ubuntu-latest
     steps:
