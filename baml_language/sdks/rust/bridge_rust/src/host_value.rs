@@ -1117,6 +1117,16 @@ thread_local! { static SYNC_FRAME: std::cell::RefCell<Option<Arc<CallbackFrame>>
 tokio::task_local! { static ASYNC_FRAME: Arc<CallbackFrame>; }
 
 pub(crate) fn current_invocation_state() -> u64 {
+    let frame = current_frame_state();
+    #[cfg(feature = "tracing")]
+    if let Some(state) = crate::tracing_layer::current_span_state(frame) {
+        return state;
+    }
+    frame
+}
+
+/// The running host callback's invocation state, 0 outside a callback.
+pub(crate) fn current_frame_state() -> u64 {
     SYNC_FRAME
         .with(|slot| {
             slot.borrow()

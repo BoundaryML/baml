@@ -36,6 +36,24 @@ impl BexEngine {
         self.begin_host_with_reservation(definition, inherited, options, caller, inputs, None)
     }
 
+    /// A span whose lifetime the host owns outright, such as one long-lived
+    /// enough to outlast the program's work. Admission is checked as usual,
+    /// but the open span is not executable work, so shutdown does not wait
+    /// for it. An owner still open at shutdown is abandoned.
+    pub fn begin_detached_host_invocation(
+        self: &Arc<Self>,
+        definition: &HostDefinition,
+        inherited: Option<&InheritedInvocationState>,
+        options: &bex_vm_types::trace::TraceOptionsData,
+        caller: &HostCallSite,
+        inputs: Option<&btel_snapshot::host::HostValue>,
+    ) -> Result<HostInvocation, EngineError> {
+        let mut invocation =
+            self.begin_host_with_reservation(definition, inherited, options, caller, inputs, None)?;
+        invocation.registration = None;
+        Ok(invocation)
+    }
+
     pub(crate) fn begin_host_with_reservation(
         self: &Arc<Self>,
         definition: &HostDefinition,
@@ -294,6 +312,17 @@ impl HostInvocation {
             self.output
         } else {
             self.error
+        }
+    }
+
+    /// End without asserting success, failure, or cancellation.
+    pub fn close(mut self) {
+        if let Some(mut telemetry) = self.telemetry.take() {
+            let _scope = telemetry.host_recording_scope();
+            if let Some(frame) = self.frame.take() {
+                telemetry.close_host(frame);
+            }
+            telemetry.complete_thread(InvocationOutcome::Ok);
         }
     }
 
