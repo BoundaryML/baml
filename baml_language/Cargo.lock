@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.25.1"
+version = "0.25.2"
 dependencies = [
  "hex",
  "indexmap",
