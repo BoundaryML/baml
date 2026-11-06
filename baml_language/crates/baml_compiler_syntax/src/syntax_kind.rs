@@ -219,7 +219,10 @@ pub enum SyntaxKind {
     ARRAY_TYPE,
     MAP_TYPE,
     TYPE_ARGS,
-    STRING_LITERAL_TYPE, // "user" | "assistant"
+    /// A literal type atom: a string, signed number, or boolean keyword.
+    LITERAL_TYPE,
+    /// Grouping: `(`, one complete `TYPE_EXPR`, `)`. Not a parameter list.
+    PAREN_TYPE,
     /// Callable type syntax: parameters, arrow, return annotation, and effects.
     FUNCTION_TYPE,
     FUNCTION_TYPE_PARAM, // x: int (or just int)
@@ -265,6 +268,9 @@ pub enum SyntaxKind {
     FIELD_ACCESS_EXPR,
     /// Explicit interface/static upcast projection: `<expr>.as<T>`.
     UPCAST_EXPR,
+    /// The angle-delimited single target of `.as<T>`. Invalid target lists
+    /// are retained under an `ERROR` child, not exposed as usable targets.
+    UPCAST_TARGET,
     /// Fully-qualified item reference: `(Base as Interface).item`.
     ///
     /// Structure: `L_PAREN TYPE_EXPR KW_AS TYPE_EXPR R_PAREN DOT WORD` — the

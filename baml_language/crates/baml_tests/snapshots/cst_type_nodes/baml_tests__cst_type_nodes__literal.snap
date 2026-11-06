@@ -1,0 +1,96 @@
+---
+source: crates/baml_tests/src/cst_type_nodes.rs
+---
+TYPE_ALIAS_DEF@0..31
+  KW_TYPE@0..4 "type"
+  WHITESPACE@4..5 " "
+  WORD@5..11 "Scalar"
+  WHITESPACE@11..12 " "
+  EQUALS@12..13 "="
+  TYPE_EXPR@13..31
+    ERROR@13..31
+      LITERAL_TYPE@13..18
+        WHITESPACE@13..14 " "
+        KW_TRUE@14..18 "true"
+      TYPE_ARGS@18..31
+        LESS@18..19 "<"
+        TYPE_EXPR@19..30
+          WORD@19..30 "MissingType"
+        GREATER@30..31 ">"
+
+TYPE_ALIAS_DEF@31..71
+  NEWLINE@31..32 "\n"
+  KW_TYPE@32..36 "type"
+  WHITESPACE@36..37 " "
+  WORD@37..44 "InUnion"
+  WHITESPACE@44..45 " "
+  EQUALS@45..46 "="
+  TYPE_EXPR@46..71
+    TYPE_EXPR@46..50
+      WHITESPACE@46..47 " "
+      WORD@47..50 "int"
+    WHITESPACE@50..51 " "
+    PIPE@51..52 "|"
+    TYPE_EXPR@52..71
+      ERROR@52..71
+        LITERAL_TYPE@52..58
+          WHITESPACE@52..53 " "
+          KW_FALSE@53..58 "false"
+        TYPE_ARGS@58..71
+          LESS@58..59 "<"
+          TYPE_EXPR@59..70
+            WORD@59..70 "MissingType"
+          GREATER@70..71 ">"
+
+TYPE_ALIAS_DEF@71..125
+  NEWLINE@71..72 "\n"
+  KW_TYPE@72..76 "type"
+  WHITESPACE@76..77 " "
+  WORD@77..83 "Nested"
+  WHITESPACE@83..84 " "
+  EQUALS@84..85 "="
+  TYPE_EXPR@85..125
+    WHITESPACE@85..86 " "
+    WORD@86..89 "map"
+    TYPE_ARGS@89..125
+      LESS@89..90 "<"
+      TYPE_EXPR@90..96
+        WORD@90..96 "string"
+      COMMA@96..97 ","
+      TYPE_EXPR@97..124
+        ERROR@97..122
+          LITERAL_TYPE@97..102
+            WHITESPACE@97..98 " "
+            KW_TRUE@98..102 "true"
+          TYPE_ARGS@102..122
+            LESS@102..103 "<"
+            ASSOCIATED_TYPE_DECL@103..121
+              WORD@103..107 "Item"
+              WHITESPACE@107..108 " "
+              EQUALS@108..109 "="
+              TYPE_EXPR@109..121
+                WHITESPACE@109..110 " "
+                WORD@110..121 "MissingType"
+            GREATER@121..122 ">"
+        L_BRACKET@122..123 "["
+        R_BRACKET@123..124 "]"
+      GREATER@124..125 ">"
+
+TYPE_ALIAS_DEF@125..158
+  NEWLINE@125..126 "\n"
+  KW_TYPE@126..130 "type"
+  WHITESPACE@130..131 " "
+  WORD@131..143 "AfterLiteral"
+  WHITESPACE@143..144 " "
+  EQUALS@144..145 "="
+  TYPE_EXPR@145..158
+    TYPE_EXPR@145..150
+      LITERAL_TYPE@145..150
+        WHITESPACE@145..146 " "
+        KW_TRUE@146..150 "true"
+    WHITESPACE@150..151 " "
+    PIPE@151..152 "|"
+    TYPE_EXPR@152..158
+      LITERAL_TYPE@152..158
+        WHITESPACE@152..153 " "
+        KW_FALSE@153..158 "false"

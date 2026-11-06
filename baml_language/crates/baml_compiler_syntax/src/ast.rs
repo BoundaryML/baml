@@ -168,6 +168,9 @@ ast_node!(BacktickText, BACKTICK_TEXT);
 ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
 ast_node!(TypeExpr, TYPE_EXPR);
+ast_node!(LiteralType, LITERAL_TYPE);
+ast_node!(ParenType, PAREN_TYPE);
+ast_node!(UpcastTarget, UPCAST_TARGET);
 ast_node!(FunctionType, FUNCTION_TYPE);
 ast_node!(FunctionTypeReturnType, FUNCTION_TYPE_RETURN_TYPE);
 ast_node!(Attribute, ATTRIBUTE);
@@ -302,58 +305,13 @@ impl TypeExpr {
         )
     }
 
-    /// Check if this type is wrapped in parentheses (e.g., `(int | string)`).
-    pub fn is_parenthesized(&self) -> bool {
-        let first_token = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| !t.kind().is_trivia());
-
-        first_token.is_some_and(|t| t.kind() == SyntaxKind::L_PAREN)
+    /// An explicitly grouped type; a callable has its own `FUNCTION_TYPE` node.
+    pub fn paren_type(&self) -> Option<ParenType> {
+        self.syntax.children().find_map(ParenType::cast)
     }
 
-    /// Get the inner `TypeExpr` for parenthesized types like `(int | string)`.
-    ///
-    /// Returns None if this is not a parenthesized type or if it's a function type.
-    /// Inspect callable syntax through `function_type()` instead.
-    pub fn inner_type_expr(&self) -> Option<TypeExpr> {
-        if !self.is_parenthesized() {
-            return None;
-        }
-        // If this is a function type, don't return the inner type
-        // (use function_type instead)
-        if self.is_function_type() {
-            return None;
-        }
-
-        // First, try to find a direct TYPE_EXPR child (legacy structure)
-        if let Some(n) = self
-            .syntax
-            .children()
-            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-        {
-            return Some(TypeExpr { syntax: n });
-        }
-
-        // With the new parser, parenthesized types have FUNCTION_TYPE_PARAM children
-        // that wrap the inner TYPE_EXPR. If there's exactly one FUNCTION_TYPE_PARAM
-        // (and no arrow, which we already checked above), get its inner type.
-        let params: Vec<_> = self
-            .syntax
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
-            .collect();
-
-        if params.len() == 1 {
-            // Get the TYPE_EXPR from inside the FUNCTION_TYPE_PARAM
-            return params[0]
-                .children()
-                .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-                .map(|n| TypeExpr { syntax: n });
-        }
-
-        None
+    pub fn literal_type(&self) -> Option<LiteralType> {
+        self.syntax.children().find_map(LiteralType::cast)
     }
 
     /// Get the `TYPE_ARGS` node for generic types like `map<K, V>`.
@@ -413,6 +371,36 @@ impl TypeExpr {
         extract_dotted_name(tokens.iter())
     }
 
+    /// Complete operands of a union, in source order. Each child owns its
+    /// primary type and postfix modifiers; separators remain on the union.
+    pub fn union_members(&self) -> impl Iterator<Item = TypeExpr> + '_ {
+        self.syntax.children().filter_map(TypeExpr::cast)
+    }
+
+    /// The callable syntax owned by this type expression, if present.
+    pub fn function_type(&self) -> Option<FunctionType> {
+        self.syntax.children().find_map(FunctionType::cast)
+    }
+
+    pub fn is_function_type(&self) -> bool {
+        self.function_type().is_some()
+    }
+}
+
+impl ParenType {
+    pub fn ty(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+}
+
+impl UpcastTarget {
+    /// Invalid argument lists live inside `ERROR` and expose no direct target.
+    pub fn ty(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+}
+
+impl LiteralType {
     /// Check if this is a string literal type like `"user"`.
     pub fn string_literal(&self) -> Option<String> {
         self.syntax
@@ -454,40 +442,15 @@ impl TypeExpr {
         scan_signed_literal_token(tokens, SyntaxKind::FLOAT_LITERAL)
     }
 
-    /// Check if this is a boolean literal (`true` or `false`).
+    /// Boolean type atoms use literal keywords, never type-path identifiers.
     pub fn bool_literal(&self) -> Option<bool> {
-        let name = self.base_name()?;
-        match name.as_str() {
-            "true" => Some(true),
-            "false" => Some(false),
-            _ => None,
-        }
-    }
-
-    /// Complete operands of a union, in source order. Each child owns its
-    /// primary type and postfix modifiers; separators remain on the union.
-    pub fn union_members(&self) -> impl Iterator<Item = TypeExpr> + '_ {
-        self.syntax.children().filter_map(TypeExpr::cast)
-    }
-
-    /// The callable syntax owned by this type expression, if present.
-    pub fn function_type(&self) -> Option<FunctionType> {
-        self.syntax.children().find_map(FunctionType::cast)
-    }
-
-    pub fn is_function_type(&self) -> bool {
-        self.function_type().is_some()
-    }
-
-    /// Function parameters, or the inner operand of a parenthesized type.
-    pub fn function_type_params(&self) -> Vec<FunctionTypeParam> {
-        if let Some(function) = self.function_type() {
-            return function.params();
-        }
         self.syntax
-            .children()
-            .filter_map(FunctionTypeParam::cast)
-            .collect()
+            .children_with_tokens()
+            .find_map(|element| match element.kind() {
+                SyntaxKind::KW_TRUE => Some(true),
+                SyntaxKind::KW_FALSE => Some(false),
+                _ => None,
+            })
     }
 }
 

@@ -1,0 +1,5 @@
+type Comma = (int, string)
+type Trailing = (int,)
+type Named = (x: int)
+type AfterGrouping = (int | string)
+type AtEof = string | (x?: int)
