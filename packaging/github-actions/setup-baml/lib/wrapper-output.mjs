@@ -34,8 +34,12 @@ export function resolveSelector(output) {
   return validateSelector(selector);
 }
 
+// Wrapper 0.3+ prints `baml wrapper X` and then passes --version through to the
+// selected toolchain (`baml-cli X`); wrapper 0.2 printed `baml toolchain X (...)`.
 export function resolveVersion(output) {
-  const match = output.match(/^baml toolchain ([^\s(]+)(?:\s|$)/m);
+  const match =
+    output.match(/^baml-cli ([^\s(]+)(?:\s|$)/m) ??
+    output.match(/^baml toolchain (?:baml-cli )?([^\s(]+)(?:\s|$)/m);
   if (!match || match[1] === "not") {
     throw new Error("the BAML wrapper did not report a resolved concrete toolchain version");
   }

@@ -1948,7 +1948,14 @@ jobs:
           export BAML_HOME="$RUNNER_TEMP/developer-docs-baml"
           scripts/install.sh --version "$VERSION" --no-modify-path
           baml_binary="$BAML_HOME/bin/baml"
-          actual_version="$("$baml_binary" --version | sed -n 's/^baml toolchain \([^ ]*\).*/\1/p')"
+          # Wrapper 0.3+ prints `baml wrapper X` and passes --version through to
+          # the toolchain (`baml-cli X`); wrapper 0.2 printed `baml toolchain X`.
+          version_output="$("$baml_binary" --version)"
+          printf '%s\n' "$version_output"
+          actual_version="$(sed -n \
+            -e 's/^baml-cli \([^ ]*\).*/\1/p' \
+            -e 's/^baml toolchain \(baml-cli \)\{0,1\}\([^ ]*\).*/\2/p' \
+            <<<"$version_output")"
           if [[ "$actual_version" != "$VERSION" ]]; then
             echo "::error::installed BAML toolchain is $actual_version, expected $VERSION"
             exit 1

@@ -156,10 +156,10 @@ jobs:
         with:
           toolchain: nightly
 
-      # Unset BAML_VERSION so the renderer's own baml.toml picks its toolchain,
+      # Unset BAML_TOOLCHAIN so the renderer's own baml.toml picks its toolchain,
       # as it does when the action runs it.
       - name: Test comment rendering
-        run: env -u BAML_VERSION baml --agent-skill-check off --color never --no-progress --project packaging/github-actions/baml-action/codequality test
+        run: env -u BAML_TOOLCHAIN baml --agent-skill-check off --color never --no-progress --project packaging/github-actions/baml-action/codequality test
 
       - name: Lint Bash
         working-directory: packaging/github-actions/baml-action
