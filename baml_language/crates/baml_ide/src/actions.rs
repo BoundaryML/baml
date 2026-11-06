@@ -21,15 +21,13 @@
 //!   test in the set.
 
 use baml_base::SourceFile;
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
-use baml_compiler_parser::syntax_tree;
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, ast::StringLiteral};
 use baml_compiler2_ast::ast::FunctionOrigin;
 use baml_compiler2_hir::{contributions::Definition, file_symbol_contributions};
-use rowan::ast::AstNode;
+use baml_syntax::{
+    nodes::{AnyExpr, FileTree, TestDef},
+    token::TokenKind,
+    tree::AnyNode as _,
+};
 use text_size::TextRange;
 
 // ── FileActionKind ────────────────────────────────────────────────────────────
@@ -73,10 +71,6 @@ pub struct FileAction {
 ///
 /// Returns one action per function (Run in Playground) and one per test (Run
 /// Test), in the order they appear in the contributions list.
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
 pub fn file_actions(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<FileAction> {
     let contribs = file_symbol_contributions(db, file);
     let mut actions = Vec::new();
@@ -121,74 +115,63 @@ pub fn file_actions(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Fi
     // item survives for them. The firewall consequently has no structural
     // record of a test block's *name and name span*: the name may even be a
     // computed expression (`"prefix:" + topic`), and the string-literal
-    // spelling lives only in the CST. Until the compiler records a per-file
-    // test-registration index, enumerate the blocks directly from the syntax
-    // tree.
-    let tree = syntax_tree(db, file);
-    collect_expr_body_test_actions(&tree, &mut actions);
+    // spelling lives only in the syntax tree. Until the compiler records a
+    // per-file test-registration index, enumerate the blocks directly from
+    // the tree.
+    let tree = baml_parser::typed_tree(db, file);
+    collect_test_actions(&tree, &mut actions);
 
     actions
 }
 
-fn collect_expr_body_test_actions(node: &SyntaxNode, actions: &mut Vec<FileAction>) {
-    let action = match node.kind() {
-        SyntaxKind::TEST_EXPR_DEF => Some((SyntaxKind::KW_TEST, FileActionKind::RunTest)),
-        SyntaxKind::TESTSET_DEF => Some((SyntaxKind::KW_TESTSET, FileActionKind::RunTestSet)),
-        _ => None,
-    };
-
-    if let Some((keyword, kind)) = action
-        && let Some(name_el) = test_name_element(node, keyword)
-    {
-        let name = match name_el.as_node() {
-            Some(n) => StringLiteral::cast(n.clone())
-                .map(|s| s.value())
-                .unwrap_or_else(|| n.text().to_string()),
-            None => name_el
-                .as_token()
-                .map(|t| t.text().to_string())
-                .unwrap_or_default(),
-        };
-        actions.push(FileAction {
-            name,
-            name_span: name_el.text_range(),
-            kind,
-        });
-    }
-
-    for child in node.children() {
-        collect_expr_body_test_actions(&child, actions);
-    }
+/// Every `test`/`testset` block of the tree, wherever it sits, in source
+/// order of its name.
+fn collect_test_actions(tree: &FileTree, actions: &mut Vec<FileAction>) {
+    let tokens = tree.tokens();
+    let mut found: Vec<FileAction> = tree
+        .arenas()
+        .ids::<TestDef>()
+        .filter_map(|id| {
+            let test = tree.get(id);
+            let kind = if tokens.kind(test.kw.idx) == TokenKind::Test {
+                FileActionKind::RunTest
+            } else {
+                FileActionKind::RunTestSet
+            };
+            let name = test.name.ok()?;
+            let name_id = name
+                .any_node_id()
+                .unwrap_or_else(|| unreachable!("every alternative of `AnyExpr` is a node"));
+            let name_span = tokens.text_range(tree.arenas().span(name_id));
+            let text = match name {
+                AnyExpr::String(lit) => string_value(tree.token_text(tree.get(lit).token.idx)),
+                _ => tree.text()[name_span].to_string(),
+            };
+            Some(FileAction {
+                name: text,
+                name_span,
+                kind,
+            })
+        })
+        .collect();
+    found.sort_by_key(|action| action.name_span.start());
+    actions.extend(found);
 }
 
-/// Find the name element of a `test`/`testset` CST node: the first non-trivia
-/// element after the keyword, stopping at a `with` clause or the body block.
-fn test_name_element(node: &SyntaxNode, keyword: SyntaxKind) -> Option<SyntaxElement> {
-    let mut past_keyword = false;
-    for child in node.children_with_tokens() {
-        let k = child.kind();
-        if matches!(
-            k,
-            SyntaxKind::WHITESPACE
-                | SyntaxKind::NEWLINE
-                | SyntaxKind::LINE_COMMENT
-                | SyntaxKind::BLOCK_COMMENT
-                | SyntaxKind::HEADER_COMMENT
-        ) {
-            continue;
-        }
-        if k == keyword {
-            past_keyword = true;
-            continue;
-        }
-        if k == SyntaxKind::KW_WITH || k == SyntaxKind::BLOCK_EXPR {
-            break;
-        }
-        if past_keyword {
-            return Some(child);
-        }
+/// The value of a string literal token: its body with escapes decoded, or
+/// the raw body of an `r"…"`/`b"…"` literal.
+fn string_value(text: &str) -> String {
+    if let Some(body) = text.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        baml_base::escape::unescape_string_literal(body)
+    } else if let Some(body) = text
+        .strip_prefix("r\"")
+        .or_else(|| text.strip_prefix("b\""))
+        .and_then(|s| s.strip_suffix('"'))
+    {
+        body.to_string()
+    } else {
+        text.to_string()
     }
-    None
 }
 
 #[cfg(test)]

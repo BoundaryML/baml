@@ -10,10 +10,20 @@
 //! etc.).
 
 use baml_base::SourceFile;
-use baml_compiler_syntax::SyntaxKind;
+use std::sync::Arc;
+
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     scope::{FileScopeId, ScopeKind},
+};
+use baml_syntax::{
+    index::TreeIndex,
+    nodes::{
+        ClassDef, ClientValueDef, EnumDef, EnumVariant, Field, FileTree, FunctionDef, InterfaceDef,
+        LetItem, RemovedItem, TestDef, TypeAliasDef,
+    },
+    token::{TokenAtOffset, TokenKind},
+    tree::{AnyNode as _, AnyNodeId},
 };
 use serde::Serialize;
 use text_size::TextRange;
@@ -1067,83 +1077,76 @@ fn make_function_dep(
 
 // ── CST body extraction ──────────────────────────────────────────────────────
 
-/// Map from `DefinitionKind` to the set of `SyntaxKinds` that represent item-level
-/// CST nodes for that kind.
-fn is_item_node(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::CLASS_DEF
-            | SyntaxKind::INTERFACE_DEF
-            | SyntaxKind::FUNCTION_DEF
-            | SyntaxKind::ENUM_DEF
-            | SyntaxKind::CLIENT_DEF
-            | SyntaxKind::TEST_EXPR_DEF
-            | SyntaxKind::TESTSET_DEF
-            | SyntaxKind::RETRY_POLICY_DEF
-            | SyntaxKind::TEMPLATE_STRING_DEF
-            | SyntaxKind::TYPE_ALIAS_DEF
-            // A global variable (file-scope `const`) and a `client Name = …`
-            // declaration: top-level bindings.
-            | SyntaxKind::LET_STMT
-            | SyntaxKind::CLIENT_VALUE_DEF
-    )
+/// Whether `id` is an item: a declaration the description shows whole. A
+/// method is a function definition like any other.
+fn is_item_node(id: AnyNodeId) -> bool {
+    id.cast::<ClassDef>().is_some()
+        || id.cast::<InterfaceDef>().is_some()
+        || id.cast::<FunctionDef>().is_some()
+        || id.cast::<EnumDef>().is_some()
+        || id.cast::<TestDef>().is_some()
+        || id.cast::<TypeAliasDef>().is_some()
+        // A global variable (file-scope `const`) and a `client Name = …`
+        // declaration: top-level bindings.
+        || id.cast::<LetItem>().is_some()
+        || id.cast::<ClientValueDef>().is_some()
+        || id.cast::<RemovedItem>().is_some()
 }
 
-/// Find the text range of a member CST node (FIELD, `ENUM_VARIANT`) for a name span.
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
+/// The node owning the token at the start of `name_span`, with the file's
+/// tree and index.
+fn node_at_name(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    name_span: TextRange,
+) -> Option<(Arc<FileTree>, Arc<TreeIndex>, AnyNodeId)> {
+    let tree = baml_parser::typed_tree(db, file);
+    let index = baml_parser::tree_index(db, file);
+    let token = match tree.tokens().token_at_offset(name_span.start()) {
+        TokenAtOffset::Single(token) => token,
+        TokenAtOffset::Between { right, .. } => right,
+        TokenAtOffset::None => return None,
+    };
+    let owner = index.token_owner(token)?;
+    Some((tree, index, owner))
+}
+
+/// The text range of a node.
+fn node_range(tree: &FileTree, id: AnyNodeId) -> TextRange {
+    tree.tokens().text_range(tree.arenas().span(id))
+}
+
+/// Find the text range of a member node (a field or an enum variant) for a
+/// name span.
 fn find_member_range(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     name_span: TextRange,
     kind: DefinitionKind,
 ) -> Option<TextRange> {
-    let target_syntax_kind = match kind {
-        DefinitionKind::Field => SyntaxKind::FIELD,
-        DefinitionKind::Variant => SyntaxKind::ENUM_VARIANT,
+    let (tree, index, owner) = node_at_name(db, file, name_span)?;
+    let member = match kind {
+        DefinitionKind::Field => index
+            .ancestors(owner)
+            .find(|id| id.cast::<Field>().is_some())?,
+        DefinitionKind::Variant => index
+            .ancestors(owner)
+            .find(|id| id.cast::<EnumVariant>().is_some())?,
         _ => return None,
     };
-
-    let tree = baml_compiler_parser::syntax_tree(db, file);
-
-    let token = match tree.token_at_offset(name_span.start()) {
-        rowan::TokenAtOffset::Single(t) => t,
-        rowan::TokenAtOffset::Between(_, right) => right,
-        rowan::TokenAtOffset::None => return None,
-    };
-
-    token
-        .parent_ancestors()
-        .find(|n| n.kind() == target_syntax_kind)
-        .map(|n| n.text_range())
+    Some(node_range(&tree, member))
 }
 
-/// Find the text range of the enclosing item CST node for a name span.
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
+/// Find the text range of the enclosing item node for a name span.
 fn find_item_range(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     name_span: TextRange,
     _kind: DefinitionKind,
 ) -> Option<TextRange> {
-    let tree = baml_compiler_parser::syntax_tree(db, file);
-
-    let token = match tree.token_at_offset(name_span.start()) {
-        rowan::TokenAtOffset::Single(t) => t,
-        rowan::TokenAtOffset::Between(_, right) => right,
-        rowan::TokenAtOffset::None => return None,
-    };
-
-    // Walk up to the enclosing item-level node.
-    token
-        .parent_ancestors()
-        .find(|n| is_item_node(n.kind()))
-        .map(|n| n.text_range())
+    let (tree, index, owner) = node_at_name(db, file, name_span)?;
+    let item = index.ancestors(owner).find(|&id| is_item_node(id))?;
+    Some(node_range(&tree, item))
 }
 
 // ── Shape generation ─────────────────────────────────────────────────────────
@@ -1735,31 +1738,20 @@ fn describe_type_method_at(
 /// The byte range of a method's name token within its `FUNCTION_DEF` node.
 /// `span` is the method's full source span. Used to anchor reference search at
 /// the name (not the leading `function` keyword / trivia).
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
 fn function_def_name_span(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     span: TextRange,
     name: &str,
 ) -> Option<TextRange> {
-    let tree = baml_compiler_parser::syntax_tree(db, file);
-    let node = match tree.covering_element(span) {
-        rowan::NodeOrToken::Node(n) => n,
-        rowan::NodeOrToken::Token(t) => t.parent()?,
-    };
-    let func = if node.kind() == SyntaxKind::FUNCTION_DEF {
-        node
-    } else {
-        node.ancestors()
-            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)?
-    };
-    func.children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .find(|t| t.kind() == SyntaxKind::WORD && t.text() == name)
-        .map(|t| t.text_range())
+    let tree = baml_parser::typed_tree(db, file);
+    let index = baml_parser::tree_index(db, file);
+    let covering = index.covering_node(&tree, span);
+    let func = index
+        .ancestors(covering)
+        .find_map(AnyNodeId::cast::<FunctionDef>)?;
+    let name_token = tree.get(tree.get(func).name.ok()?).token.idx;
+    (tree.token_text(name_token) == name).then(|| tree.tokens().range(name_token))
 }
 
 /// Collect dependency types referenced in a class's method signatures
@@ -2452,10 +2444,6 @@ fn docstring_prefixed_body(docstring: Option<&str>, body: &str) -> String {
 /// comment token, so it is never touched. A whole-line comment is removed with
 /// its indentation and trailing newline; a trailing inline comment is removed
 /// in place, keeping the code before it. `///` doc comments are kept.
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
 fn clean_body_source(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -2479,19 +2467,22 @@ fn clean_body_source(
     };
 
     // Deletion intervals, relative to `src`, for every non-doc comment token.
-    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let tree = baml_parser::typed_tree(db, file);
+    let tokens = tree.tokens();
     let mut deletions: Vec<(usize, usize)> = Vec::new();
-    for token in tree
-        .descendants_with_tokens()
-        .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
-    {
-        if !token.kind().is_comment() {
+    for idx in tokens.iter() {
+        // Every comment but a `///` doc line.
+        if !matches!(
+            tokens.kind(idx),
+            TokenKind::LineComment
+                | TokenKind::BlockComment
+                | TokenKind::UnclosedBlockComment
+                | TokenKind::HeaderComment
+                | TokenKind::DirectiveComment
+        ) {
             continue;
         }
-        if token.kind() == SyntaxKind::LINE_COMMENT && token.text().starts_with("///") {
-            continue; // keep doc comments
-        }
-        let tr = token.text_range();
+        let tr = tokens.range(idx);
         let (ts, te): (usize, usize) = (tr.start().into(), tr.end().into());
         if ts < start || te > end {
             continue;
@@ -2536,10 +2527,6 @@ fn clean_body_source(
 ///
 /// Returns `None` for user functions (whose body is meaningful and shown) and
 /// non-function symbols.
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
 fn builtin_signature_range(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -2562,28 +2549,20 @@ fn builtin_signature_range(
         return None;
     }
 
-    // Find the body block node and cut the range just before it.
-    let tree = baml_compiler_parser::syntax_tree(db, file);
-    let token = match tree.token_at_offset(sym.name_span.start()) {
-        rowan::TokenAtOffset::Single(t) => t,
-        rowan::TokenAtOffset::Between(_, right) => right,
-        rowan::TokenAtOffset::None => return None,
-    };
-    let func_node = token
-        .parent_ancestors()
-        .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)?;
-    let body_node = func_node.descendants().find(|n| {
-        matches!(
-            n.kind(),
-            SyntaxKind::EXPR_FUNCTION_BODY
-                | SyntaxKind::LLM_FUNCTION_BODY
-                | SyntaxKind::FUNCTION_BODY
-        )
-    })?;
-
+    // Find the body node and cut the range just before it.
+    let (tree, index, owner) = node_at_name(db, file, sym.name_span)?;
+    let func = index
+        .ancestors(owner)
+        .find_map(AnyNodeId::cast::<FunctionDef>)?;
+    let body = tree
+        .get(func)
+        .body
+        .ok()?
+        .any_node_id()
+        .unwrap_or_else(|| unreachable!("every alternative of `AnyFunctionBody` is a node"));
     Some(TextRange::new(
         item_range.start(),
-        body_node.text_range().start(),
+        node_range(&tree, body).start(),
     ))
 }
 

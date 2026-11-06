@@ -430,9 +430,7 @@ fn qualifier_chain(
     dot: TextSize,
 ) -> Option<Vec<baml_base::Name>> {
     let token = syntax::find_token_at_offset(db, file, dot)?;
-    let last = token
-        .prev_token()
-        .filter(|prev| prev.kind() == SyntaxKind::WORD)?;
+    let last = token.prev().filter(syntax::TokenRef::is_ident)?;
     Some(syntax::dotted_chain_to(&last))
 }
 

@@ -31,7 +31,6 @@
 //! span count nobody can read.
 
 use baml_base::{Name, SourceFile};
-use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_hir::{
     item_data::{self, MethodOwner},
     loc::{ClassLoc, DeclRef, ImplLoc, InterfaceLoc},
@@ -193,12 +192,12 @@ fn renameable(
     // The cursor must sit on the name itself — a rename replaces an
     // identifier, and nothing else is one.
     let token = find_token_at_offset(db, file, offset).ok_or(RenameError::NotASymbol)?;
-    if token.kind() != SyntaxKind::WORD {
+    if !token.is_ident() {
         return Err(RenameError::NotASymbol);
     }
     let cursor = Location {
         file,
-        range: token.text_range(),
+        range: token.range(),
     };
     let name = token.text().to_string();
 

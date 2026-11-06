@@ -10,7 +10,6 @@
 //! addressed.
 
 use baml_base::{Name, SourceFile};
-use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::Expr;
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -21,6 +20,7 @@ use baml_compiler2_hir::{
     semantic_index::{BindingId, BindingKind, FileSemanticIndex},
 };
 use baml_compiler2_hir_ty::extern_loc::{DefinitionRef, ExternDefinition, extern_definition_named};
+use baml_syntax::token::{KindSet, TokenKind};
 use text_size::{TextRange, TextSize};
 
 use crate::syntax;
@@ -126,7 +126,7 @@ pub fn symbol_at(
     // WORD tokens and keyword tokens may both be names in member position
     // (`obj.implements()`), so let the resolvers decide whether the text is
     // actually a symbol.
-    if token.kind() != SyntaxKind::WORD && !token.kind().is_keyword() {
+    if !token.is_ident() && !token.kind().is_keyword() {
         return None;
     }
 
@@ -191,7 +191,7 @@ fn qualified_item_at<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
-    token: &baml_compiler_syntax::SyntaxToken,
+    token: &crate::syntax::TokenRef,
 ) -> Option<SymbolTarget<'db>> {
     let chain = crate::syntax::dotted_chain_to(token);
     if chain.len() < 2 {
@@ -1155,46 +1155,44 @@ fn operator_target_at(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
-    kind: SyntaxKind,
+    kind: TokenKind,
 ) -> Option<SymbolTarget<'_>> {
     use baml_compiler2_ast::Expr;
     use baml_compiler2_hir_ty::ops;
 
-    // Token kinds that can spell a dispatching operator. Everything else
-    // exits before any body walk. `<`/`>`/`[`/`]` are ambiguous with
-    // generics and array syntax; the enclosing-expression check below
-    // disambiguates (only an operator sits in an operator expression's gap).
-    if !matches!(
-        kind,
-        SyntaxKind::PLUS
-            | SyntaxKind::MINUS
-            | SyntaxKind::STAR
-            | SyntaxKind::SLASH
-            | SyntaxKind::PERCENT
-            | SyntaxKind::AND
-            | SyntaxKind::PIPE
-            | SyntaxKind::CARET
-            | SyntaxKind::LESS_LESS
-            | SyntaxKind::GREATER_GREATER
-            | SyntaxKind::EQUALS_EQUALS
-            | SyntaxKind::NOT_EQUALS
-            | SyntaxKind::LESS
-            | SyntaxKind::GREATER
-            | SyntaxKind::LESS_EQUALS
-            | SyntaxKind::GREATER_EQUALS
-            | SyntaxKind::PLUS_EQUALS
-            | SyntaxKind::MINUS_EQUALS
-            | SyntaxKind::STAR_EQUALS
-            | SyntaxKind::SLASH_EQUALS
-            | SyntaxKind::PERCENT_EQUALS
-            | SyntaxKind::AND_EQUALS
-            | SyntaxKind::PIPE_EQUALS
-            | SyntaxKind::CARET_EQUALS
-            | SyntaxKind::LESS_LESS_EQUALS
-            | SyntaxKind::GREATER_GREATER_EQUALS
-            | SyntaxKind::L_BRACKET
-            | SyntaxKind::R_BRACKET
-    ) {
+    // Token kinds that can begin a dispatching operator (`>>`, `>=` and
+    // `>>=` are `>` tokens joined by adjacency). Everything else exits before
+    // any body walk. `<`/`>`/`[`/`]` are ambiguous with generics and array
+    // syntax; the enclosing-expression check below disambiguates (only an
+    // operator sits in an operator expression's gap).
+    const OPERATOR_START: KindSet = KindSet::new(&[
+        TokenKind::Plus,
+        TokenKind::Minus,
+        TokenKind::Star,
+        TokenKind::Slash,
+        TokenKind::Percent,
+        TokenKind::And,
+        TokenKind::Pipe,
+        TokenKind::Caret,
+        TokenKind::LessLess,
+        TokenKind::EqualsEquals,
+        TokenKind::NotEquals,
+        TokenKind::Less,
+        TokenKind::Greater,
+        TokenKind::LessEquals,
+        TokenKind::PlusEquals,
+        TokenKind::MinusEquals,
+        TokenKind::StarEquals,
+        TokenKind::SlashEquals,
+        TokenKind::PercentEquals,
+        TokenKind::AndEquals,
+        TokenKind::PipeEquals,
+        TokenKind::CaretEquals,
+        TokenKind::LessLessEquals,
+        TokenKind::LBracket,
+        TokenKind::RBracket,
+    ]);
+    if !OPERATOR_START.contains(kind) {
         return None;
     }
 
