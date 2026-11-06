@@ -141,6 +141,47 @@ stream.must_exist:
   details: |
     A class field normally has a default the partial parse uses before the field arrives, `""` for a string. `@stream.must_exist` makes that default `never`, and a class with any `never` field has no partial parse, so nothing is produced for `Invoice` until `currency` is present. Reach for it when a partial object missing that field would mislead. Applies to class fields only. Takes no arguments, at most once per declaration.
 
+json.rename:
+  summary: "Sets a field's JSON key, or an enum variant's JSON string. Takes the key."
+  syntax: |
+    class Network {
+      vpcId string @json.rename("vpc_id")
+    }
+  details: |
+    The field reads from and writes to this key under every naming, in `baml.json` and in the Rust SDK's `serde` impls. `@alias` stays the name a model is shown. A field with both uses `@json.rename` as its JSON key, and a model's answer may use either. A class with a `baml.ToJson` or `baml.FromJson` override can't use `@json` attributes.
+
+json.flatten:
+  summary: "Makes a `map<string, json>` field hold every key no other field took. Takes no arguments."
+  syntax: |
+    class Config {
+      id string
+      extra map<string, json> @json.flatten
+    }
+  details: |
+    The field writes its keys next to the class's other fields. If the map holds a key a declared field also writes, the declared field wins and the map entry is skipped. A class has one `@json.flatten` or `@json.fallback` field.
+
+json.fallback:
+  summary: "Makes a class the union member for objects no other member's literals match. Takes no arguments."
+  syntax: |
+    class NetworkOther {
+      type "UNKNOWN"
+      raw map<string, json> @json.fallback
+    }
+  details: |
+    The field holds the whole object, and writes it back and nothing else. The class's other fields must be literals, and each names a key the object must have: an object with no `type` is an error. A member whose literals match is the one, and failing there is an error rather than a fall through to the fallback. The compiler rejects a union with a fallback and another member that can read any object: a class with no literal field, or a map.
+
+json.omit_nulls:
+  summary: "Leaves a class's optional fields out of its JSON while they hold `null`. Takes no arguments."
+  syntax: |
+    class Request {
+      name string
+      note string?
+
+      @@json.omit_nulls
+    }
+  details: |
+    Reading doesn't change: a missing optional field reads as `null`. It applies to the class's own fields, not to nested classes. A `json` field keeps its `null`, because there `null` is a value.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |
