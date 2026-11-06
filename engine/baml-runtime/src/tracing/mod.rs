@@ -146,8 +146,6 @@ mod tests {
     /// directly, so this test never panics while it holds BAML_TRACER.
     #[test]
     #[serial_test::serial]
-    // Documents the bug in #3424; the next commit fixes it and removes should_panic.
-    #[should_panic(expected = "a collector exposed a call id without a FunctionStart event")]
     fn test_start_call_stores_function_start_before_collector_sees_id() {
         use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -522,14 +520,6 @@ impl BamlTracer {
         // println!("---- {} ctx {:#?}", function_name, ctx);
         // baml_log::info!("---- {} ctx {:#?}", function_name, ctx);
 
-        // This must happen before the first event is sent.
-        if let Some(collectors) = collectors {
-            // log::debug!("collectors: {:#?}", collectors);
-            for collector in collectors.iter() {
-                collector.track_function(call.curr_call_id());
-            }
-        }
-
         // Add function start trace event
         // log::info!("Creating trace event for {}", function_name);
         let trace_event = TraceEvent::new_function_start(
@@ -549,7 +539,31 @@ impl BamlTracer {
             function_type,
             is_stream,
         );
-        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+        let trace_event = Arc::new(trace_event);
+
+        match collectors {
+            Some(collectors) if !collectors.is_empty() => {
+                let call_id = call.curr_call_id();
+                // `put` drops events of untracked calls, so the call must be
+                // tracked before the first event is sent. But another thread can
+                // read a collector's logs at any time, and a log without a
+                // FunctionStart event panics. So we store FunctionStart under a
+                // temporary ref first, and only then let the collectors track the
+                // call.
+                {
+                    let mut tracer = BAML_TRACER.lock().unwrap();
+                    tracer.inc_ref(&call_id);
+                    tracer.put(trace_event);
+                }
+                for collector in collectors.iter() {
+                    collector.track_function(call_id.clone());
+                }
+                BAML_TRACER.lock().unwrap().dec_ref(&call_id);
+            }
+            _ => {
+                BAML_TRACER.lock().unwrap().put(trace_event);
+            }
+        }
 
         call
     }

@@ -542,9 +542,11 @@ impl FunctionLog {
             let maybe_arc = {
                 let tracer = BAML_TRACER.lock().unwrap();
                 build_function_log(&tracer, &self.id)
-                    .expect("Function log expected to be present (no FunctionStart event?). Did you forget to track_function()?")
             };
-            self.inner = Some(maybe_arc);
+            // Panic only after the guard is dropped. A panic while we hold the
+            // guard poisons BAML_TRACER, and then every later tracing call panics.
+            let arc = maybe_arc.expect("Function log expected to be present (no FunctionStart event?). Did you forget to track_function()?");
+            self.inner = Some(arc);
         }
         self.inner.as_ref().unwrap()
     }
@@ -1614,8 +1616,6 @@ mod tests {
     /// poisons BAML_TRACER, only the child sees it.
     #[test]
     #[serial]
-    // Documents the bug in #3424; the next commit fixes it and removes should_panic.
-    #[should_panic(expected = "the panic must not poison BAML_TRACER")]
     fn test_missing_function_start_does_not_poison_tracer() {
         const CHILD_ENV: &str = "BAML_TEST_TRACER_POISON_CHILD";
         // Not 0: the harness also exits 0 when the filter matches no test, and
