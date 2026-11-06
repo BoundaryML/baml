@@ -99,6 +99,7 @@ fn companion_def(
         docstring: parent.docstring.clone(),
         header_title: None,
         is_tagged_template_tag: parent.is_tagged_template_tag,
+        directives: crate::ast::NativeDirectives::default(),
         trace_hook: None,
         span: parent.span,
         name_span: parent.name_span,

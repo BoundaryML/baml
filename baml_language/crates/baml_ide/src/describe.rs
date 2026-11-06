@@ -580,8 +580,8 @@ fn describe_top_level(
     // ── Shape generation ─────────────────────────────────────────────────────
     let shape = build_shape(db, viewer, sym, definition);
 
-    // ── Docstring extraction ─────────────────────────────────────────────────
-    let docstring = extract_docstring(db, file, item_range);
+    // ── Docstring ────────────────────────────────────────────────────────────
+    let docstring = item_docstring(db, definition);
 
     // ── Dependency discovery ─────────────────────────────────────────────────
     let dependencies = find_dependencies(db, viewer, files, file, sym, definition);
@@ -749,8 +749,7 @@ fn describe_member(
         full_body.trim().to_string()
     };
 
-    // Docstring from the member's CST node.
-    let docstring = extract_docstring(db, file, member_range);
+    let docstring = member_docstring(db, file, sym);
 
     // The containing class/enum is a dependency.
     let mut dependencies = Vec::new();
@@ -1941,25 +1940,82 @@ fn resolve_type_for_item(
 // ── Docstring extraction ─────────────────────────────────────────────────────
 
 /// Extract leading `///` doc comments from the CST node preceding the item.
-#[expect(
-    deprecated,
-    reason = "reads the rowan tree until this consumer moves to the typed tree"
-)]
-fn extract_docstring(
+/// The `///` docstring of a top-level definition, as HIR lowered it.
+fn item_docstring(
+    db: &dyn baml_compiler2_hir::Db,
+    definition: Option<Definition<'_>>,
+) -> Option<String> {
+    use baml_compiler2_hir::item_data;
+    match definition? {
+        Definition::Class(loc) => item_data::class_data(db, loc).docstring.clone(),
+        Definition::Enum(loc) => item_data::enum_data(db, loc).docstring.clone(),
+        Definition::Interface(loc) => item_data::interface_data(db, loc).docstring.clone(),
+        Definition::TypeAlias(loc) => item_data::type_alias_data(db, loc).docstring.clone(),
+        Definition::Function(loc) => item_data::function_data(db, loc).docstring.clone(),
+        Definition::Let(loc) => item_data::let_data(db, loc).docstring.clone(),
+    }
+}
+
+/// The `///` docstring of a member, found through its container's HIR data:
+/// a field or method of a class or interface, or a variant of an enum.
+fn member_docstring(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
-    item_range: TextRange,
+    sym: &SymbolInfo,
 ) -> Option<String> {
-    let tree = baml_compiler_parser::syntax_tree(db, file);
-
-    let token = match tree.token_at_offset(item_range.start()) {
-        rowan::TokenAtOffset::Single(t) => t,
-        rowan::TokenAtOffset::Between(_, right) => right,
-        rowan::TokenAtOffset::None => return None,
+    use baml_compiler2_hir::{item_data, resolve::ResolvedName};
+    let container_name = baml_base::Name::new(sym.container_name.as_ref()?);
+    let (ResolvedName::Item(container) | ResolvedName::Builtin(container)) =
+        baml_compiler2_hir::resolve::resolve_name_at(
+            db,
+            file,
+            sym.name_span.start(),
+            &container_name,
+        )
+    else {
+        return None;
     };
-
-    let item_node = token.parent_ancestors().find(|n| is_item_node(n.kind()))?;
-    baml_compiler2_ast::extract_docstring(&item_node)
+    let name = sym.name.as_str();
+    let method_docstring = |methods: &[baml_compiler2_hir::loc::FunctionLoc<'_>]| {
+        methods
+            .iter()
+            .map(|method| item_data::function_data(db, *method))
+            .find(|method| method.name.as_str() == name)
+            .and_then(|method| method.docstring.clone())
+    };
+    match (sym.kind, container) {
+        (DefinitionKind::Field, Definition::Class(loc)) => item_data::class_data(db, loc)
+            .fields
+            .iter()
+            .find(|field| field.name.as_str() == name)
+            .and_then(|field| field.docstring.clone()),
+        (DefinitionKind::Field, Definition::Interface(loc)) => item_data::interface_data(db, loc)
+            .fields
+            .iter()
+            .find(|field| field.name.as_str() == name)
+            .and_then(|field| field.docstring.clone()),
+        (DefinitionKind::Variant, Definition::Enum(loc)) => item_data::enum_data(db, loc)
+            .variants
+            .iter()
+            .find(|variant| variant.name.as_str() == name)
+            .and_then(|variant| variant.docstring.clone()),
+        (DefinitionKind::Method, Definition::Class(loc)) => {
+            method_docstring(&item_data::class_data(db, loc).methods)
+        }
+        (DefinitionKind::Method, Definition::Interface(loc)) => {
+            let interface = item_data::interface_data(db, loc);
+            method_docstring(&interface.methods)
+                .or_else(|| method_docstring(&interface.default_methods))
+                .or_else(|| {
+                    interface
+                        .required_methods
+                        .iter()
+                        .find(|method| method.name.as_str() == name)
+                        .and_then(|method| method.docstring.clone())
+                })
+        }
+        _ => None,
+    }
 }
 
 // ── Dependency discovery ─────────────────────────────────────────────────────

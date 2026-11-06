@@ -1694,10 +1694,57 @@ pub struct FunctionDef {
     /// tags (a tag name immediately followed by a backtick literal), and
     /// their first parameter must be `body: (...) -> TaggedString`.
     pub is_tagged_template_tag: bool,
+    /// The `//baml:` directives a native function is declared with.
+    pub directives: NativeDirectives,
     /// Declaration-only trace policy; resolved in the declaration scope.
     pub trace_hook: Option<TraceHookDirective>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+/// A `//baml:` directive a native function is declared with, read by the
+/// builtin codegen: how its `$rust_function` glue is bound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeDirective {
+    /// `//baml:mut_self`: the glue takes `&mut self`.
+    MutSelf,
+    /// `//baml:vm`: the glue takes the VM.
+    Vm,
+    /// `//baml:mut_vm`: the glue takes the VM mutably.
+    MutVm,
+    /// `//baml:may_yield`: the glue may yield.
+    MayYield,
+    /// `//baml:fallible`: the glue may fail.
+    Fallible,
+    /// `//baml:local_twin`: the function has a local twin.
+    LocalTwin,
+}
+
+impl NativeDirective {
+    const fn bit(self) -> u8 {
+        1 << (self as u8)
+    }
+}
+
+/// The set of [`NativeDirective`]s written on a function. Each is a fact of
+/// the declaration; the codegen combines them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NativeDirectives(u8);
+
+impl NativeDirectives {
+    /// No directives.
+    pub const NONE: Self = Self(0);
+
+    /// This set with `directive` in it.
+    #[must_use]
+    pub const fn with(self, directive: NativeDirective) -> Self {
+        Self(self.0 | directive.bit())
+    }
+
+    /// Whether `directive` was written.
+    pub const fn has(self, directive: NativeDirective) -> bool {
+        self.0 & directive.bit() != 0
+    }
 }
 
 /// What produced a [`LambdaDef`], where that changes how TIR types it.

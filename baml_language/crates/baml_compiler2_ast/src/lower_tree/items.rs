@@ -217,6 +217,27 @@ impl<'t> Items<'t> {
         (!lines.is_empty()).then(|| lines.join("\n"))
     }
 
+    /// The native-binding directives among a function's docs.
+    fn native_directives(&self, docs: List<AnyDoc>) -> ast::NativeDirectives {
+        let mut directives = ast::NativeDirectives::NONE;
+        for doc in self.v.tree.list(docs) {
+            let AnyDoc::Directive(id) = doc else { continue };
+            let directive = match self.v.node(*id).kind {
+                DirectiveKind::MutSelf => ast::NativeDirective::MutSelf,
+                DirectiveKind::Vm => ast::NativeDirective::Vm,
+                DirectiveKind::MutVm => ast::NativeDirective::MutVm,
+                DirectiveKind::MayYield => ast::NativeDirective::MayYield,
+                DirectiveKind::Fallible => ast::NativeDirective::Fallible,
+                DirectiveKind::LocalTwin => ast::NativeDirective::LocalTwin,
+                DirectiveKind::TaggedString
+                | DirectiveKind::TracePassthrough
+                | DirectiveKind::Trace => continue,
+            };
+            directives = directives.with(directive);
+        }
+        directives
+    }
+
     /// Whether a `//baml:<kind>` directive is among the declaration's docs.
     fn has_directive(&self, docs: List<AnyDoc>, kind: DirectiveKind) -> bool {
         self.v
@@ -446,6 +467,7 @@ impl<'t> Items<'t> {
         let docstring = self.docstring(func.docs);
         let header_title = self.header_title(func.docs);
         let is_tagged_template_tag = self.has_directive(func.docs, DirectiveKind::TaggedString);
+        let directives = self.native_directives(func.docs);
         let trace_hook = self.trace_hook(func.docs);
         let explicit_trace_passthrough =
             self.has_directive(func.docs, DirectiveKind::TracePassthrough);
@@ -468,6 +490,7 @@ impl<'t> Items<'t> {
             docstring,
             header_title,
             is_tagged_template_tag,
+            directives,
             trace_hook,
             span,
             name_span,
@@ -480,7 +503,7 @@ impl<'t> Items<'t> {
     /// becomes the agent run.
     #[expect(
         clippy::too_many_arguments,
-        reason = "the pieces of one declaration, built in the rowan lowering's order"
+        reason = "the pieces of one declaration, built in the order the arenas expect"
     )]
     fn llm_function(
         &mut self,

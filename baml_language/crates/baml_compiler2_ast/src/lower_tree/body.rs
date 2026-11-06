@@ -219,7 +219,8 @@ fn statement(ctx: &mut LoweringContext, v: View<'_>, stmt: AnyStmt) -> Option<St
         }
         // A nested `test`/`testset` registers against the enclosing
         // testset's collector; anywhere else there is nothing to register
-        // against and the declaration is dropped (reported by the parser).
+        // against and the declaration is dropped, reported here as
+        // `TestOutsideTestset`.
         AnyStmt::Test(id) => match ctx.testset_collector_var.clone() {
             Some(collector) => {
                 let call = nested_test_register_call(ctx, v, id, collector);
@@ -775,10 +776,8 @@ fn expression_in_chain(ctx: &mut LoweringContext, v: View<'_>, expr: AnyExpr) ->
         AnyExpr::Spec(id) => {
             let node = *v.node(id);
             let (AnyExpr::Path(base), Ok(selector)) = (node.base, node.selector) else {
-                ctx.diags.push(LoweringDiagnostic::UnparseableType {
-                    context: "companion target (expected an LLM function reference)".to_string(),
-                    span,
-                });
+                ctx.diags
+                    .push(LoweringDiagnostic::SpecTargetNotFunctionName { span });
                 return ctx.alloc_expr(Expr::Missing, span);
             };
             let base = *v.node(base);
@@ -1620,6 +1619,7 @@ fn else_body(ctx: &mut LoweringContext, v: View<'_>, body: AnyElse) -> ExprId {
 fn if_let_expr(ctx: &mut LoweringContext, v: View<'_>, id: Id<IfLetExpr>) -> ExprId {
     let node = *v.node(id);
     let span = v.range_of(id);
+    warn_const_introducer(ctx, v, node.introducer);
     let pattern = match node.pattern {
         Ok(pattern) => self::pattern(ctx, v, pattern),
         Err(_) => ctx.alloc_pattern(Pattern::Wildcard, span),

@@ -830,8 +830,8 @@ fn rowan_error_entry(error: &baml_compiler_diagnostics::ParseError) -> Entry {
     }
 }
 
-/// `None` for an error the rowan pipeline reports from its lowering, not its
-/// parser: those are compared by `ast_dump::moved_diagnostics_match_rowan`.
+/// `None` for an error the rowan parser never reported (its lowering did,
+/// and that lowering is gone): the formatter's parser has no counterpart.
 fn typed_error_entry(error: &baml_parser::ParseError) -> Option<Entry> {
     use baml_parser::ParseError as E;
     Some(match error {
