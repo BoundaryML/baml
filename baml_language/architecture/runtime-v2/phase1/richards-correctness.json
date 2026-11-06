@@ -1,0 +1,126 @@
+[
+  {
+    "fixture": "richards",
+    "gc_stress": "0",
+    "results": {
+      "v2": {
+        "command": [
+          "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-codegen/target/phase1/richards-v2"
+        ],
+        "status": 0,
+        "stdout": "1161046400\n",
+        "stderr": ""
+      },
+      "bytecode": {
+        "command": [
+          "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-codegen/target/debug/baml-cli",
+          "--agent-skill-check",
+          "off",
+          "--no-progress",
+          "--color",
+          "never",
+          "run",
+          "--file",
+          "baml_language/tools/speedtest/workloads/programs/richards-50/main.baml",
+          "main"
+        ],
+        "status": 0,
+        "stdout": "1161046400\n",
+        "stderr": ""
+      }
+    }
+  },
+  {
+    "fixture": "index-error",
+    "gc_stress": "0",
+    "results": {
+      "v2": {
+        "command": [
+          "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-codegen/target/phase1/index-error-v2"
+        ],
+        "status": 1,
+        "stdout": "",
+        "stderr": "error: Traceback (most recent call last):\n  File \"index-error.baml\", line 5, in user.main\n  File \"index-error.baml\", line 2, in user.read_at\nuncaught throw: baml.panics.IndexOutOfBounds {index: -3, length: 2}\n"
+      },
+      "bytecode": {
+        "command": [
+          "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-codegen/target/debug/baml-cli",
+          "--agent-skill-check",
+          "off",
+          "--no-progress",
+          "--color",
+          "never",
+          "run",
+          "--file",
+          "baml_language/architecture/runtime-v2/phase1/index-error.baml",
+          "main"
+        ],
+        "status": 1,
+        "stdout": "",
+        "stderr": "error: Traceback (most recent call last):\n  File \"index-error.baml\", line 5, in user.main\n  File \"index-error.baml\", line 2, in user.read_at\nuncaught throw: baml.panics.IndexOutOfBounds {index: -3, length: 2}\n"
+      }
+    }
+  },
+  {
+    "fixture": "richards",
+    "gc_stress": "1",
+    "results": {
+      "v2": {
+        "command": [
+          "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-codegen/target/phase1/richards-v2"
+        ],
+        "status": 0,
+        "stdout": "1161046400\n",
+        "stderr": ""
+      },
+      "bytecode": {
+        "command": [
+          "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-codegen/target/debug/baml-cli",
+          "--agent-skill-check",
+          "off",
+          "--no-progress",
+          "--color",
+          "never",
+          "run",
+          "--file",
+          "baml_language/tools/speedtest/workloads/programs/richards-50/main.baml",
+          "main"
+        ],
+        "status": 0,
+        "stdout": "1161046400\n",
+        "stderr": ""
+      }
+    }
+  },
+  {
+    "fixture": "index-error",
+    "gc_stress": "1",
+    "results": {
+      "v2": {
+        "command": [
+          "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-codegen/target/phase1/index-error-v2"
+        ],
+        "status": 1,
+        "stdout": "",
+        "stderr": "error: Traceback (most recent call last):\n  File \"index-error.baml\", line 5, in user.main\n  File \"index-error.baml\", line 2, in user.read_at\nuncaught throw: baml.panics.IndexOutOfBounds {index: -3, length: 2}\n"
+      },
+      "bytecode": {
+        "command": [
+          "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-codegen/target/debug/baml-cli",
+          "--agent-skill-check",
+          "off",
+          "--no-progress",
+          "--color",
+          "never",
+          "run",
+          "--file",
+          "baml_language/architecture/runtime-v2/phase1/index-error.baml",
+          "main"
+        ],
+        "status": 1,
+        "stdout": "",
+        "stderr": "error: Traceback (most recent call last):\n  File \"index-error.baml\", line 5, in user.main\n  File \"index-error.baml\", line 2, in user.read_at\nuncaught throw: baml.panics.IndexOutOfBounds {index: -3, length: 2}\n"
+      }
+    }
+  }
+]

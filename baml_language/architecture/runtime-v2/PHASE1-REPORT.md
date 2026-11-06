@@ -1,7 +1,7 @@
-# Phase 1 gate: M1 workload checkpoint; overall NO-GO
+# Phase 1 gate: M1 and M2 checkpoints; overall NO-GO
 
 Binary-trees-14 now compiles from BAML MIR to typed Rust and runs on the v2 heap
-and loop. M2 Richards and M3 agent-loop remain unsupported. This is not approval
+and loop. M2 Richards now also runs end to end. M3 agent-loop remains unsupported. This is not approval
 to advance past the three-workload phase-1 gate. M1 now also has fallible allocation and a tested emergency exception reserve.
 General process-wide allocator exhaustion is not claimed by the managed-heap test limit.
 
@@ -104,7 +104,7 @@ Important transitive details visible in the full census/current owners:
 | Milestone | Normal | GC stress | Status |
 |---|---|---|---|
 | M1 binary-trees-14 | Bytecode = v2: stdout `3222190\n`, empty stderr, exit 0 | Same exact output/status | Verified, including forced managed-heap allocation failure |
-| M2 richards-50 | Not run | Not run | Pack rejects nullable-class lists; dispatch/lists not implemented |
+| M2 richards-50 | Bytecode = v2: stdout `1161046400\n`, empty stderr, exit 0 | Same exact output/status | Verified; see M2 checkpoint below |
 | M3 agent-loop-300 | Not run | Not run | Pack rejects nested string lists; unions/JSON/catches not implemented |
 
 The oracle is a locally built current Rust pack with `BAML_COMPILED_BODIES=0`.
@@ -363,3 +363,104 @@ in debug and release; runtime 4 tests pass in debug/release; compiler 9 unit
 tests and VM types 128 tests pass; native regression/exception conversion
 11 pass with the existing full-corpus test ignored. Strict clippy passes for
 heap, runtime, compiler, VM types and the rust_backend test target.
+
+
+## M2 Richards checkpoint
+
+M2 adds seven typed class layouts, `int[]`, nullable-class lists, negative
+subscripts, boolean short circuit, bitwise operators/right shift, and 16-byte
+interface slots. `Task.run` resolves **only the four implementations in the
+linked Task implementation rules**, rather than every method named `run`.
+There are 16 emitted user bodies, including those four methods; the only stdlib
+edge is the existing lowered null-equality intrinsic. Lists have a header,
+eight-byte length and inline typed slots. These fixed-capacity lists suffice
+for Richards; growth and the M3 container builtins remain unsupported.
+
+Pointer fields precede interface tagged fields, then scalar fields. Descriptors
+retain declaration-order field metadata. Pointer lists and tagged class slots
+are traced by the real heap; pointer stores use the barrier hook. A collecting
+runtime test covers both kinds together. Results, observation branches, i63
+checks, source-line side tables, root tasks and loop-owned roots remain in use.
+
+`phase1/richards-correctness.json` records exact stdout, stderr and exit-status
+comparisons against **direct CLI bytecode execution**, normally and under v2 GC
+stress. Both return `1161046400`. The signed-index error probe also matches the
+interpreter's actual `IndexOutOfBounds` object fields and traceback. Negative
+indices within range count from the end, as in bytecode. No v2 backend builder
+has appeared in the sibling differential harness; direct comparison remains
+necessary. As for M1, its stress environment does not force the bytecode heap's
+collection frequency.
+
+### M2 gate and profile
+
+Spark aarch64, CPU 12, telemetry off, five interleaved Node/native/v2/spike
+rounds, **10 jobs/trial**, one warmup, all results checked. One-minute host load
+was **11.34–12.07**, with five-minute load around 18. The spike is the same rebuilt
+arena executable used for M1, not its GC ablation. Commands and all observations
+are in `phase1/richards-benchmark.jsonl`; generated code is
+`phase1/richards.generated.rs`.
+
+| Workload | Node ms/job | Native ms/job | V2 ms/job | Spike ms/job | V2 / spike |
+|---|---:|---:|---:|---:|---:|
+| binary-trees-14 (allocation checkpoint) | 39.145 | 419.181 | 36.277 | 37.922 | **0.957×** |
+| richards-50 | 5.632 | 82.922 | 3.936 | 2.670 | **1.474×** |
+| agent-loop-300 | — | — | Unsupported | — | — |
+
+Richards min–max ms/job: Node 5.521–6.699, native 82.610–83.845,
+v2 3.922–3.940, spike 2.664–2.682. An earlier complete run, before fixing
+negative indexing, measured 4.132/86.415/5.222/5.432 (0.961×); it is retained as
+`phase1/richards-benchmark-first.jsonl`, not mixed into the final set.
+
+Richards is the worst current ratio. Although below the 1.5 trigger, it was
+profiled for 1,000 checked jobs using `perf record -e cycles:u -F 997 -g
+--call-graph dwarf`. No samples were lost. The final flat profile is
+`phase1/richards-v2-perf-report.txt`:
+
+- **47.31%** in the inlined scheduler/task-dispatch body (`entry`). The generated
+  interface is a tag plus a pointer to a separately allocated implementation;
+  the handwritten spike embeds its task enum and fields in Tcb. This introduces
+  an additional pointer load in generated dispatch. Null checks, per-function
+  observation loads and stack-bound checks are also present in the inlined body.
+- **36.74%** across enqueue (14.97), suspend (6.46), queue walk (6.31), release
+  (5.79) and hold (3.21). These direct-call bodies retain Result and language
+  checks; the profile does not separate each check's individual cost.
+- **15.57%** in runtime safepoint (6.51), loop maintenance (4.63) and task
+  checkpoint (4.43). The spike poll only reads its cancellation flag; generated
+  code also performs the real scheduler/collector checkpoint contract.
+
+These are cost centers plus source-supported differences, **not an additive
+ablation of the 47.4% gap**. No required checks were disabled for the gate.
+
+Validation: compiler 9 units, runtime 5 tests in debug/release, and existing
+native regression target 11 passing tests (one existing ignored full-corpus
+test). Strict all-target clippy for compiler/runtime passes. The M1 CLI suite
+was not repeated because M2 does not change CLI code. Unsupported nested lists,
+optional scalars, strings, catches and generic interfaces still fail admission.
+
+Reproduce from this worktree, with the M1 environment exports:
+
+```sh
+uv run --no-project python baml_language/architecture/runtime-v2/phase1/prepare_richards.py
+target/debug/baml-cli --agent-skill-check off --no-progress --color never \
+  pack --rust --rust-workspace "$PWD/baml_language" \
+  --rust-build-dir "$PWD/target/phase1/trees-native-build" \
+  --from target/phase1/richards-native-project speedtest_driver \
+  -o target/phase1/richards-native
+target/debug/baml-cli --agent-skill-check off --no-progress --color never \
+  pack --rust --runtime v2 --rust-workspace "$PWD/baml_language" \
+  --rust-build-dir "$PWD/target/phase1/richards-v2-build" \
+  --file baml_language/tools/speedtest/workloads/programs/richards-50/main.baml \
+  main -o target/phase1/richards-v2
+BAML_TELEMETRY=off target/phase1/richards-v2
+BAML_TELEMETRY=off BAML_GC_STRESS=1 target/phase1/richards-v2
+BAML_TELEMETRY=off target/debug/baml-cli --agent-skill-check off \
+  --no-progress --color never run \
+  --file baml_language/tools/speedtest/workloads/programs/richards-50/main.baml main
+PHASE1_JOBS=10 uv run --no-project python \
+  baml_language/architecture/runtime-v2/phase1/bench_richards.py
+# Index-error: repeat pack/run using phase1/index-error.baml.
+```
+
+No new interface deviation is requested in M2. M3's rooted caught errors,
+container growth, string/JSON builtins and specialized decoder remain pending;
+the overall phase-1 gate is still NO-GO.

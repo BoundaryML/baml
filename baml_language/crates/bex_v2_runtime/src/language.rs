@@ -4,6 +4,7 @@ use crate::Instance;
 use baml_type::Int63;
 use bex_v2_heap::{Descriptor, ElementLayout, Elements, Field, Header, Kind, SlotKind};
 use std::sync::atomic::{AtomicU8, Ordering};
+pub type Dyn = bex_v2_heap::TaggedSlot;
 pub type R<T> = Result<T, Box<Error>>;
 
 pub const STRING_DESC: Descriptor = Descriptor {
@@ -15,7 +16,7 @@ pub const STRING_DESC: Descriptor = Descriptor {
         offset: 16,
         layout: ElementLayout::Scalar,
     }),
-    type_id: 0,
+    type_id: 3,
     fields: &[],
     finalizer: None,
 };
@@ -23,7 +24,7 @@ const MESSAGE_FIELDS: &[Field] = &[Field {
     name: "message",
     offset: 8,
     slot: SlotKind::Pointer,
-    type_id: 0,
+    type_id: 3,
 }];
 pub const OVERFLOW_DESC: Descriptor = Descriptor {
     kind: Kind::Class,
@@ -31,24 +32,24 @@ pub const OVERFLOW_DESC: Descriptor = Descriptor {
     ptr_slots: (8, 1),
     tagged_slots: (0, 0),
     elem: None,
-    type_id: 1,
+    type_id: 4,
     fields: MESSAGE_FIELDS,
     finalizer: None,
 };
 pub const SHIFT_DESC: Descriptor = Descriptor {
-    type_id: 2,
-    ..OVERFLOW_DESC
-};
-pub const CANCEL_DESC: Descriptor = Descriptor {
-    type_id: 3,
-    ..OVERFLOW_DESC
-};
-pub const ALLOC_DESC: Descriptor = Descriptor {
     type_id: 5,
     ..OVERFLOW_DESC
 };
+pub const CANCEL_DESC: Descriptor = Descriptor {
+    type_id: 6,
+    ..OVERFLOW_DESC
+};
+pub const ALLOC_DESC: Descriptor = Descriptor {
+    type_id: 8,
+    ..OVERFLOW_DESC
+};
 pub const STACK_DESC: Descriptor = Descriptor {
-    type_id: 4,
+    type_id: 7,
     ..OVERFLOW_DESC
 };
 
@@ -87,6 +88,7 @@ pub struct Error {
     pub class: &'static str,
     pub message: String,
     pub frames: Vec<Frame>,
+    pub display_value: Option<String>,
 }
 impl Error {
     #[cold]
@@ -96,6 +98,7 @@ impl Error {
             class: "InternalError",
             message,
             frames: Vec::new(),
+            display_value: None,
         })
     }
     #[cold]
@@ -129,6 +132,7 @@ fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
             class,
             message,
             frames: Vec::new(),
+            display_value: None,
         })
     }
 }
@@ -237,10 +241,10 @@ pub fn driver(descriptors: &'static [Descriptor], entry: fn() -> R<i64>) -> std:
             if error.value == 0 {
                 eprintln!("error: {traceback}VM internal error: {}", error.message);
             } else {
-                eprintln!(
-                    "error: {traceback}uncaught throw: {} {{message: {:?}}}",
-                    error.class, error.message
-                );
+                let value = error
+                    .display_value
+                    .unwrap_or_else(|| format!("{} {{message: {:?}}}", error.class, error.message));
+                eprintln!("error: {traceback}uncaught throw: {value}");
             }
             std::process::ExitCode::FAILURE
         }
@@ -275,7 +279,9 @@ fn driver_inner(descriptors: &'static [Descriptor], entry: fn() -> R<i64>) -> R<
                 .ok_or_else(|| Error::internal("invalid --jobs".into()))?,
         );
     }
-    let pointers = Box::leak(vec![true; descriptors.len()].into_boxed_slice());
+    let mut pointers = vec![false; 3];
+    pointers.extend(vec![true; descriptors.len()]);
+    let pointers = Box::leak(pointers.into_boxed_slice());
     let mut instance = Instance::new(descriptors, pointers);
     // SAFETY: compiler admission and descriptor construction enforce this ABI.
     let result = unsafe { instance.run_baml(entry) }?;
@@ -356,7 +362,8 @@ mod tests {
             }
             Ok(0)
         }
-        let mut instance = Instance::new(DESCRIPTORS, &[true; 4]);
+        let mut instance =
+            Instance::new(DESCRIPTORS, &[false, false, false, true, true, true, true]);
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 0);
         assert!(instance.stats().collections >= 4);
@@ -384,6 +391,7 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
             class: "baml.panics.AllocFailure",
             message,
             frames: Vec::new(),
+            display_value: None,
         })
     }
 }
@@ -421,7 +429,10 @@ mod allocation_tests {
             }
             Ok(42)
         }
-        let mut instance = Instance::new(DESCRIPTORS, &[true; 6]);
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[false, false, false, true, true, true, true, true, true],
+        );
         instance.set_heap_limit(0);
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 42);
@@ -432,5 +443,182 @@ mod allocation_tests {
             Ok(7)
         }
         assert_eq!(unsafe { instance.run_baml(recover) }.unwrap(), 7);
+    }
+}
+
+pub const INDEX_DESC: Descriptor = Descriptor {
+    kind: Kind::Class,
+    size: 24,
+    ptr_slots: (0, 0),
+    tagged_slots: (0, 0),
+    elem: None,
+    type_id: 9,
+    fields: &[
+        Field {
+            name: "index",
+            offset: 8,
+            slot: SlotKind::Scalar,
+            type_id: 0,
+        },
+        Field {
+            name: "length",
+            offset: 16,
+            slot: SlotKind::Scalar,
+            type_id: 0,
+        },
+    ],
+    finalizer: None,
+};
+
+#[cold]
+fn index_error(index: i64, length: usize) -> Box<Error> {
+    let message = bex_vm_types::errors::VmPanic::IndexOutOfBounds { index, length }.to_string();
+    unsafe {
+        let object = match crate::try_alloc(6, 24) {
+            Ok(p) => p,
+            Err(e) => return e,
+        };
+        object.add(8).cast::<i64>().write(index);
+        object.add(16).cast::<i64>().write(length as i64);
+        Box::new(Error {
+            value: object as usize,
+            class: "baml.panics.IndexOutOfBounds",
+            message,
+            frames: Vec::new(),
+            display_value: Some(format!(
+                "baml.panics.IndexOutOfBounds {{index: {index}, length: {length}}}"
+            )),
+        })
+    }
+}
+
+/// Fixed-size typed list element access. Lists carry their logical length at 8.
+/// # Safety
+/// `list` is a rooted list with eight-byte elements, or null. The resulting
+/// address must not be used after its owning list becomes unreachable.
+#[inline(always)]
+pub unsafe fn list_slot(list: usize, index: i64) -> R<*mut u8> {
+    if list == 0 {
+        use bex_vm_types::{
+            Value,
+            errors::VmInternalError,
+            types::{ObjectType, Type},
+        };
+        return Err(Error::internal(
+            VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: Type::of(&Value::NULL, |_| unreachable!()),
+            }
+            .to_string(),
+        ));
+    }
+    let len = unsafe { ((list + 8) as *const usize).read() };
+    // Match bex_vm::array_index::resolve_index_inline: negative subscripts
+    // count from the end, while errors retain the original signed index.
+    let resolved = i64::try_from(len)
+        .ok()
+        .and_then(|n| usize::try_from(if index < 0 { index + n } else { index }).ok())
+        .filter(|&i| i < len);
+    match resolved {
+        Some(i) => Ok(unsafe { (list as *mut u8).add(16 + i * 8) }),
+        None => Err(index_error(index, len)),
+    }
+}
+
+/// # Safety
+/// `slot` belongs to `object`, whose descriptor traces this tagged slot.
+#[inline(always)]
+pub unsafe fn write_dyn(object: *mut u8, slot: *mut Dyn, value: Dyn) {
+    unsafe {
+        (*slot).tag = value.tag;
+        bex_v2_heap::write_ptr(
+            object,
+            (&raw mut (*slot).payload).cast(),
+            value.payload as usize,
+        );
+    }
+}
+
+#[cfg(test)]
+mod list_tests {
+    use super::*;
+    static DESCRIPTORS: &[Descriptor] = &[
+        STRING_DESC,
+        OVERFLOW_DESC,
+        SHIFT_DESC,
+        CANCEL_DESC,
+        STACK_DESC,
+        ALLOC_DESC,
+        INDEX_DESC,
+        Descriptor {
+            kind: Kind::List,
+            size: 8,
+            ptr_slots: (0, 0),
+            tagged_slots: (0, 0),
+            elem: Some(Elements {
+                offset: 16,
+                layout: ElementLayout::Pointer,
+            }),
+            type_id: 10,
+            fields: &[],
+            finalizer: None,
+        },
+        Descriptor {
+            kind: Kind::Class,
+            size: 24,
+            ptr_slots: (0, 0),
+            tagged_slots: (8, 1),
+            elem: None,
+            type_id: 11,
+            fields: &[],
+            finalizer: None,
+        },
+    ];
+    #[test]
+    fn pointer_lists_and_interface_slots_survive_collection() {
+        fn entry() -> R<i64> {
+            unsafe {
+                let list = crate::try_alloc(7, 24)?;
+                list.add(8).cast::<usize>().write(1);
+                let owner = crate::try_alloc(8, 24)?;
+                write_dyn(
+                    owner,
+                    owner.add(8).cast(),
+                    Dyn {
+                        tag: 10,
+                        payload: list as u64,
+                    },
+                );
+                let child = crate::try_alloc(6, 24)?;
+                child.add(8).cast::<i64>().write(123);
+                bex_v2_heap::write_ptr(list, list_slot(list as usize, 0)?.cast(), child as usize);
+                crate::safepoint().unwrap();
+                let slot = owner.add(8).cast::<Dyn>().read();
+                let child =
+                    list_slot(slot.payload as usize, 0)?.cast::<usize>().read() as *const u8;
+                assert_eq!(child.add(8).cast::<i64>().read(), 123);
+                assert_eq!(
+                    list_slot(slot.payload as usize, -1)?,
+                    list_slot(slot.payload as usize, 0)?
+                );
+                for index in [-2, 1] {
+                    let e = list_slot(slot.payload as usize, index).unwrap_err();
+                    assert_eq!(e.class, "baml.panics.IndexOutOfBounds");
+                    let value = e.value as *const u8;
+                    assert_eq!(value.add(8).cast::<i64>().read(), index);
+                    assert_eq!(value.add(16).cast::<i64>().read(), 1);
+                }
+            }
+            Ok(123)
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[
+                false, false, false, true, true, true, true, true, true, true, true, true,
+            ],
+        );
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 123);
+        assert!(instance.stats().collections > 0);
     }
 }

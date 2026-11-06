@@ -826,9 +826,17 @@ fn v2_trees_and_fail_closed_admission() {
     assert!(trees.contains("rt::Source"));
     assert!(trees.contains("bex_v2_heap::write_ptr("));
     assert!(!trees.contains("BexVm"));
+    let richards = emit(include_str!(
+        "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
+    ))
+    .unwrap();
+    assert!(richards.contains("match a0.tag"));
+    assert!(richards.contains("rt::write_dyn("));
+    assert!(richards.contains("rt::list_slot("));
+    assert!(richards.contains("ElementLayout::Pointer"));
     for source in [
         "function main() -> string { \"hello\" }",
-        "function main() -> int { let a = [1, 2]; a[0] }",
+        "function main() -> int { let a = [[1], [2]]; a[0][0] }",
         "class C { x: int? } function main() -> int { let c = C { x: 1 }; c.x ?? 0 }",
         "const X = 1; function main() -> int { X }",
     ] {

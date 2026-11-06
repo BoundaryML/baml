@@ -1,0 +1,25 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'armv8_pmuv3_0/cycles/u'
+# Event count (approx.): 11007219235
+#
+# Overhead  Symbol                                                                                                                                                                                  IPC   [IPC Coverage]
+# ........  ......................................................................................................................................................................................  ....................
+#
+    47.31%  [.] baml_rust_program::entry                                                                                                                                                            -      -            
+    14.97%  [.] baml_rust_program::f4197                                                                                                                                                            -      -            
+     6.51%  [.] bex_v2_runtime::safepoint                                                                                                                                                           -      -            
+     6.46%  [.] baml_rust_program::f4196                                                                                                                                                            -      -            
+     6.31%  [.] baml_rust_program::f4188                                                                                                                                                            -      -            
+     5.79%  [.] baml_rust_program::f4194                                                                                                                                                            -      -            
+     4.63%  [.] bex_v2_loop::maintenance                                                                                                                                                            -      -            
+     4.43%  [.] <bex_v2_loop::TaskCx>::checkpoint                                                                                                                                                   -      -            
+     3.21%  [.] baml_rust_program::f4195                                                                                                                                                            -      -            
+
+
+#
+# (Tip: When collecting LBR backtraces use --stitch-lbr to handle more than 32 deep entries: perf record --call-graph lbr ; perf report --stitch-lbr)
+#

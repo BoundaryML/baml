@@ -20,11 +20,14 @@ type Gen<T> = Result<T, String>;
 fn no(what: impl std::fmt::Display) -> String {
     format!("unsupported in runtime v2: {what}")
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Repr {
     Int,
     Bool,
     Ptr(usize),
+    ListInt,
+    ListPtr(usize),
+    Dyn(usize),
     Null,
 }
 impl Repr {
@@ -32,14 +35,19 @@ impl Repr {
         match self {
             Self::Int => "i64",
             Self::Bool => "bool",
+            Self::Dyn(_) => "rt::Dyn",
             _ => "usize",
         }
     }
     fn zero(self) -> &'static str {
-        if self == Self::Bool { "false" } else { "0" }
+        match self {
+            Self::Bool => "false",
+            Self::Dyn(_) => "rt::Dyn{tag:2,payload:0}",
+            _ => "0",
+        }
     }
     fn pointer(self) -> bool {
-        matches!(self, Self::Ptr(_))
+        matches!(self, Self::Ptr(_) | Self::ListInt | Self::ListPtr(_))
     }
 }
 struct Layout {
@@ -47,18 +55,126 @@ struct Layout {
     offsets: Vec<usize>,
     bytes: usize,
     pointers: usize,
+    tagged: usize,
 }
 struct Plan<'a> {
     index: ProgramIndex<'a>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
+    lists: BTreeSet<Repr>,
 }
 impl Plan<'_> {
+    fn class_tag(&self, tag: baml_type::typetag::TypeTag) -> Gen<usize> {
+        self.program
+            .objects
+            .iter()
+            .enumerate()
+            .find_map(|(i, o)| match o {
+                Object::Class(c) if c.type_tag == tag => Some(i),
+                _ => None,
+            })
+            .ok_or_else(|| no("unlinked class tag"))
+    }
+    fn implementors(
+        &self,
+        interface: usize,
+    ) -> Gen<Vec<(usize, &bex_vm_types::types::ProgramImplRule)>> {
+        let Object::Interface(def) =
+            &self.program.objects[bex_vm_types::ObjectIndex::from_raw(interface)]
+        else {
+            return Err(no("non-interface dispatch"));
+        };
+        if def.structural_default.is_some()
+            || !def.args.is_empty()
+            || !def.assoc.is_empty()
+            || !def.requires.is_empty()
+        {
+            return Err(no("generic or structural interface"));
+        }
+        let mut result = Vec::new();
+        for package in &self.program.packages {
+            if let Some(rules) = package
+                .impl_rules
+                .get(&bex_vm_types::ObjectIndex::from_raw(interface))
+            {
+                for rule in rules {
+                    if !rule.generic_param_bounds.is_empty()
+                        || !rule.interface_args.is_empty()
+                        || !rule.interface_assoc.is_empty()
+                    {
+                        return Err(no("generic interface implementation"));
+                    }
+                    let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
+                        return Err(no("non-class implementation"));
+                    };
+                    if !args.is_empty() {
+                        return Err(no("generic implementor"));
+                    }
+                    result.push((self.class_tag(head.tag())?, rule));
+                }
+            }
+        }
+        if result.is_empty() {
+            return Err(no("interface without concrete implementations"));
+        }
+        Ok(result)
+    }
+    fn targets(&self, interface: usize, method: &str) -> Gen<Vec<(usize, usize)>> {
+        self.implementors(interface)?
+            .into_iter()
+            .map(|(c, rule)| {
+                let body = rule
+                    .methods
+                    .get(method)
+                    .ok_or_else(|| no("adopted interface default"))?;
+                if !body.frame.is_empty() {
+                    return Err(no("generic dispatch frame"));
+                }
+                Ok((c, body.fqn.raw()))
+            })
+            .collect()
+    }
+    fn record(&mut self, repr: Repr) -> Gen<()> {
+        match repr {
+            Repr::Ptr(c) => self.add(c)?,
+            Repr::ListPtr(c) => {
+                self.lists.insert(repr);
+                self.add(c)?;
+            }
+            Repr::ListInt => {
+                self.lists.insert(repr);
+            }
+            Repr::Dyn(i) => {
+                let classes: Vec<_> = self.implementors(i)?.iter().map(|(c, _)| *c).collect();
+                for c in classes {
+                    self.add(c)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::Null => Repr::Null,
+            RuntimeTy::List(element) => match element.as_ref() {
+                RuntimeTy::Int => Repr::ListInt,
+                RuntimeTy::Union(_) => match self.repr(element)? {
+                    Repr::Ptr(c) => Repr::ListPtr(c),
+                    _ => return Err(no("list element")),
+                },
+                _ => return Err(no("list element")),
+            },
+            RuntimeTy::Interface(head, args, assoc) if args.is_empty() && assoc.is_empty() => {
+                Repr::Dyn(
+                    self.index
+                        .interface_at(head)
+                        .ok_or_else(|| no("interface"))?,
+                )
+            }
             RuntimeTy::Class(head, args) if args.is_empty() => Repr::Ptr(
                 self.index
                     .class_at(head)
@@ -86,6 +202,25 @@ impl Plan<'_> {
         Ok(match ty {
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
+            T::List(element) => match element.as_ref() {
+                T::Int => Repr::ListInt,
+                T::Union(_) => match self.field_repr(element)? {
+                    Repr::Ptr(c) => Repr::ListPtr(c),
+                    _ => return Err(no("list field element")),
+                },
+                _ => return Err(no("list field element")),
+            },
+            T::Interface(head, args, assoc) if args.is_empty() && assoc.is_empty() => Repr::Dyn(
+                self.program
+                    .objects
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, o)| match o {
+                        Object::Interface(d) if d.type_tag == head.tag() => Some(i),
+                        _ => None,
+                    })
+                    .ok_or_else(|| no("interface field"))?,
+            ),
             T::Class(head, args) if args.is_empty() => {
                 let object = self
                     .program
@@ -128,29 +263,34 @@ impl Plan<'_> {
             .collect::<Gen<Vec<_>>>()?;
         let mut offsets = vec![0; fields.len()];
         let mut offset = 8;
-        for pointer in [true, false] {
+        for group in 0..3 {
             for (i, repr) in fields.iter().enumerate() {
-                if repr.pointer() == pointer {
+                let g = if repr.pointer() {
+                    0
+                } else if matches!(repr, Repr::Dyn(_)) {
+                    1
+                } else {
+                    2
+                };
+                if g == group {
                     offsets[i] = offset;
-                    offset += 8;
+                    offset += if g == 1 { 16 } else { 8 };
                 }
             }
         }
-        let children: Vec<_> = fields
-            .iter()
-            .filter_map(|r| if let Repr::Ptr(c) = r { Some(*c) } else { None })
-            .collect();
+        let children = fields.clone();
         self.layouts.insert(
             object,
             Layout {
-                pointers: children.len(),
+                pointers: fields.iter().filter(|r| r.pointer()).count(),
+                tagged: fields.iter().filter(|r| matches!(r, Repr::Dyn(_))).count(),
                 fields,
                 offsets,
                 bytes: offset,
             },
         );
         for child in children {
-            self.add(child)?;
+            self.record(child)?;
         }
         Ok(())
     }
@@ -169,6 +309,7 @@ pub fn compile_v2(
         index: ProgramIndex::new(db, root, program),
         program,
         layouts: BTreeMap::new(),
+        lists: BTreeSet::new(),
     };
     let mut all = BTreeMap::new();
     for &file in world_files(db, root) {
@@ -211,9 +352,7 @@ pub fn compile_v2(
             if local.is_captured {
                 return Err(no("captured local"));
             }
-            if let Repr::Ptr(c) = plan.repr(&local.ty)? {
-                plan.add(c)?;
-            }
+            plan.record(plan.repr(&local.ty)?)?;
         }
         for block in &body.blocks {
             if block.unwind.is_some() || block.landing.is_some() || block.shielded {
@@ -234,7 +373,28 @@ pub fn compile_v2(
                         queue.push_back(callee);
                     }
                 }
-                Some(Terminator::Goto { .. } | Terminator::Branch { .. } | Terminator::Return) => {}
+                Some(Terminator::VirtualCall {
+                    iface,
+                    method,
+                    ntypeargs: 0,
+                    has_trace: false,
+                    self_arg: 0,
+                    ..
+                }) if iface.generics.is_empty() => {
+                    let i = plan
+                        .index
+                        .interface_at(&iface.name)
+                        .ok_or_else(|| no("virtual interface"))?;
+                    for (_, target) in plan.targets(i, method)? {
+                        queue.push_back(target);
+                    }
+                }
+                Some(
+                    Terminator::Goto { .. }
+                    | Terminator::Branch { .. }
+                    | Terminator::ShortCircuit { .. }
+                    | Terminator::Return,
+                ) => {}
                 other => return Err(no(format!("terminator {other:?}"))),
             }
         }
@@ -255,7 +415,13 @@ pub fn compile_v2(
         .enumerate()
         .map(|(i, c)| (*c, i + rt_descriptors()))
         .collect();
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,\n");
+    let lists: BTreeMap<_, _> = plan
+        .lists
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (*r, i + descriptors.len() + rt_descriptors()))
+        .collect();
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,\n");
     for (&object, layout) in &plan.layouts {
         let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
         else {
@@ -272,20 +438,32 @@ pub fn compile_v2(
                     layout.offsets[i],
                     if layout.fields[i].pointer() {
                         "Pointer"
+                    } else if matches!(layout.fields[i], Repr::Dyn(_)) {
+                        "Tagged"
                     } else {
                         "Scalar"
                     },
                     match layout.fields[i] {
-                        Repr::Ptr(c) => descriptors[&c],
-                        Repr::Int => descriptors.len() + rt_descriptors(),
-                        Repr::Bool => descriptors.len() + rt_descriptors() + 1,
+                        Repr::Ptr(c) => descriptors[&c] + 3,
+                        r @ (Repr::ListInt | Repr::ListPtr(_)) => lists[&r] + 3,
+                        Repr::Dyn(i) => rt_descriptors() + descriptors.len() + lists.len() + i + 3,
+                        Repr::Int => 0,
+                        Repr::Bool => 1,
                         Repr::Null => unreachable!("null fields are rejected"),
                     }
                 )
             })
             .collect::<Vec<_>>()
             .join(",");
-        writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:(0,0),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,descriptors[&object]).unwrap();
+        writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
+    }
+    for (repr, desc) in &lists {
+        let elem = if *repr == Repr::ListInt {
+            "Scalar"
+        } else {
+            "Pointer"
+        };
+        writeln!(&mut out, "Descriptor{{kind:Kind::List,size:8,ptr_slots:(0,0),tagged_slots:(0,0),elem:Some(bex_v2_heap::Elements{{offset:16,layout:bex_v2_heap::ElementLayout::{elem}}}),type_id:{},fields:&[],finalizer:None}},", desc+3).unwrap();
     }
     out.push_str("];\n");
     for (&object, layout) in &plan.layouts {
@@ -321,6 +499,7 @@ pub fn compile_v2(
             body,
             object,
             descriptors: &descriptors,
+            lists: &lists,
             all: &all,
             sites: Vec::new(),
             site: 0,
@@ -341,7 +520,7 @@ pub fn compile_v2(
     Ok(out)
 }
 fn rt_descriptors() -> usize {
-    6
+    7
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -349,6 +528,7 @@ struct Emitter<'a, 'db> {
     body: &'a MirFunctionBody<'db>,
     object: usize,
     descriptors: &'a BTreeMap<usize, usize>,
+    lists: &'a BTreeMap<Repr, usize>,
     all: &'a BTreeMap<usize, &'db MirFunction<'db>>,
     sites: Vec<usize>,
     site: usize,
@@ -374,6 +554,33 @@ impl Emitter<'_, '_> {
             self.object, self.site
         )
     }
+    fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
+        let (value, source) = value;
+        if source == target || (source == Repr::Null && target.pointer()) {
+            return Ok(value);
+        }
+        if let (Repr::Ptr(c), Repr::Dyn(i)) = (source, target) {
+            if self
+                .plan
+                .implementors(i)?
+                .iter()
+                .any(|(class, _)| *class == c)
+            {
+                return Ok(format!(
+                    "rt::Dyn{{tag:{},payload:({value}) as u64}}",
+                    self.descriptors[&c] + 3
+                ));
+            }
+        }
+        Err(no(format!("conversion {source:?} to {target:?}")))
+    }
+    fn element(repr: Repr) -> Gen<Repr> {
+        match repr {
+            Repr::ListInt => Ok(Repr::Int),
+            Repr::ListPtr(c) => Ok(Repr::Ptr(c)),
+            _ => Err(no("indexed non-list")),
+        }
+    }
     fn place(&self, p: &Place) -> Gen<(String, Repr)> {
         match p {
             Place::Local(l) => Ok((format!("l{}", l.0), self.local(l.0)?)),
@@ -395,6 +602,19 @@ impl Emitter<'_, '_> {
                     repr,
                 ))
             }
+            Place::Index {
+                base,
+                index,
+                kind: baml_compiler2_mir::IndexKind::Array,
+            } => {
+                let (base, repr) = self.place(base)?;
+                let element = Self::element(repr)?;
+                if self.local(index.0)? != Repr::Int {
+                    return Err(no("non-int list index"));
+                }
+                let slot = self.fallible(&format!("rt::list_slot({base},l{})", index.0));
+                Ok((format!("*({slot} as *const {})", element.rust()), element))
+            }
             _ => Err(no(format!("place {p:?}"))),
         }
     }
@@ -409,10 +629,7 @@ impl Emitter<'_, '_> {
     }
     fn assign(&self, p: &Place, value: (String, Repr)) -> Gen<String> {
         let (dst, repr) = self.place(p)?;
-        let (src, source) = value;
-        if repr != source && !(repr.pointer() && source == Repr::Null) {
-            return Err(no(format!("conversion {source:?} to {repr:?}")));
-        }
+        let src = self.coerce(value, repr)?;
         match p {
             Place::Local(_) => Ok(format!("{dst}={src};\n")),
             Place::Field { base, field } => {
@@ -420,19 +637,81 @@ impl Emitter<'_, '_> {
                     return Err(no("field store"));
                 };
                 let obj = self.fallible(&format!("rt::nonnull({obj})"));
-                let slot = format!("&raw mut (*({obj} as *mut C{c})).f{field}");
-                Ok(if repr.pointer() {
-                    format!("bex_v2_heap::write_ptr({obj} as *mut u8,{slot},{src});\n")
+                let slot = format!("&raw mut (*(object as *mut C{c})).f{field}");
+                let write = if repr.pointer() {
+                    format!("bex_v2_heap::write_ptr(object as *mut u8,{slot},value);")
+                } else if matches!(repr, Repr::Dyn(_)) {
+                    format!("rt::write_dyn(object as *mut u8,{slot},value);")
                 } else {
-                    format!("({slot}).write({src} as _);\n")
-                })
+                    format!("({slot}).write(value as _);")
+                };
+                Ok(format!("{{let value={src};let object={obj};{write}}}\n"))
+            }
+            Place::Index {
+                base,
+                index,
+                kind: baml_compiler2_mir::IndexKind::Array,
+            } => {
+                let (obj, _) = self.place(base)?;
+                let slot = self.fallible(&format!("rt::list_slot(object,l{})", index.0));
+                let write = if repr.pointer() {
+                    "bex_v2_heap::write_ptr(object as *mut u8,slot.cast(),value);".to_owned()
+                } else {
+                    format!("slot.cast::<{}>().write(value);", repr.rust())
+                };
+                Ok(format!(
+                    "{{let value={src};let object={obj};let slot={slot};{write}}}\n"
+                ))
             }
             _ => Err(no("store")),
         }
     }
-    fn value(&self, r: &Rvalue<'_>) -> Gen<(String, Repr)> {
+    fn value(&self, r: &Rvalue<'_>, expected: Repr) -> Gen<(String, Repr)> {
         match r {
             Rvalue::Use(o) => self.operand(o),
+            Rvalue::Aggregate {
+                kind: AggregateKind::Array,
+                fields,
+            }
+            | Rvalue::Array(_, fields) => {
+                let element = Self::element(expected)?;
+                let desc = self
+                    .lists
+                    .get(&expected)
+                    .ok_or_else(|| no("unplanned list"))?;
+                let mut code = String::from("{");
+                for (i, v) in fields.iter().enumerate() {
+                    let v = self.coerce(self.operand(v)?, element)?;
+                    write!(&mut code, "let a{i}={v};").unwrap();
+                }
+                let alloc =
+                    self.fallible(&format!("rt::try_alloc({desc},{})", 16 + fields.len() * 8));
+                write!(
+                    &mut code,
+                    "let p={alloc};p.add(8).cast::<usize>().write({});",
+                    fields.len()
+                )
+                .unwrap();
+                for i in 0..fields.len() {
+                    if element.pointer() {
+                        write!(
+                            &mut code,
+                            "bex_v2_heap::write_ptr(p,p.add({}).cast(),a{i});",
+                            16 + i * 8
+                        )
+                        .unwrap();
+                    } else {
+                        write!(
+                            &mut code,
+                            "p.add({}).cast::<i64>().write(a{i});",
+                            16 + i * 8
+                        )
+                        .unwrap();
+                    }
+                }
+                code.push_str("p as usize}");
+                Ok((code, expected))
+            }
             Rvalue::BinaryOp { op, left, right } => {
                 let (l, lt) = self.operand(left)?;
                 let (r, rt) = self.operand(right)?;
@@ -489,10 +768,7 @@ impl Emitter<'_, '_> {
                 let mut init = String::from("{");
                 // Bind every input before allocation: roots stay in addressable Rust locals.
                 for (i, v) in fields.iter().enumerate() {
-                    let (v, t) = self.operand(v)?;
-                    if t != layout.fields[i] && !(t == Repr::Null && layout.fields[i].pointer()) {
-                        return Err(no("class field conversion"));
-                    }
+                    let v = self.coerce(self.operand(v)?, layout.fields[i])?;
                     write!(&mut init, "let a{i}={v};").unwrap();
                 }
                 write!(
@@ -509,6 +785,12 @@ impl Emitter<'_, '_> {
                         write!(
                             &mut init,
                             "bex_v2_heap::write_ptr(p.cast(),(&raw mut (*p).f{i}).cast(),a{i});"
+                        )
+                        .unwrap();
+                    } else if matches!(t, Repr::Dyn(_)) {
+                        write!(
+                            &mut init,
+                            "rt::write_dyn(p.cast(),&raw mut (*p).f{i},a{i});"
                         )
                         .unwrap();
                     } else {
@@ -530,9 +812,9 @@ impl Emitter<'_, '_> {
                 .blocks
                 .iter()
                 .map(|b| match b.terminator.as_ref().unwrap() {
-                    Terminator::Goto { target } | Terminator::Call { target, .. } => {
-                        Ok(Flow::Goto(target.0))
-                    }
+                    Terminator::Goto { target }
+                    | Terminator::Call { target, .. }
+                    | Terminator::VirtualCall { target, .. } => Ok(Flow::Goto(target.0)),
                     Terminator::Branch {
                         then_block,
                         else_block,
@@ -540,6 +822,10 @@ impl Emitter<'_, '_> {
                     } => Ok(Flow::Branch {
                         then_block: then_block.0,
                         else_block: else_block.0,
+                    }),
+                    Terminator::ShortCircuit { eval_rhs, join, .. } => Ok(Flow::Branch {
+                        then_block: join.0,
+                        else_block: eval_rhs.0,
                     }),
                     Terminator::Return => Ok(Flow::Exit),
                     _ => Err(no("control flow")),
@@ -570,7 +856,10 @@ impl Emitter<'_, '_> {
             writeln!(&mut code, "let mut l{i}:{}={};", t.rust(), t.zero()).unwrap();
         }
         for b in &self.body.blocks {
-            if matches!(b.terminator, Some(Terminator::Branch { .. })) {
+            if matches!(
+                b.terminator,
+                Some(Terminator::Branch { .. } | Terminator::ShortCircuit { .. })
+            ) {
                 writeln!(&mut code, "let mut c{}=false;", b.id.0).unwrap();
             }
         }
@@ -644,7 +933,10 @@ impl Emitter<'_, '_> {
             self.mark(pcs.statements.get(i).copied().flatten());
             match &s.kind {
                 StatementKind::Assign { destination, value } => {
-                    out.push_str(&self.assign(destination, self.value(value)?)?);
+                    out.push_str(
+                        &self
+                            .assign(destination, self.value(value, self.place(destination)?.1)?)?,
+                    );
                 }
                 StatementKind::Nop => {}
                 _ => return Err(no(format!("statement {:?}", s.kind))),
@@ -652,6 +944,24 @@ impl Emitter<'_, '_> {
         }
         self.mark(pcs.terminator);
         match block.terminator.as_ref().unwrap() {
+            Terminator::ShortCircuit {
+                operand,
+                kind,
+                destination,
+                ..
+            } => {
+                let (v, t) = self.operand(operand)?;
+                if t != Repr::Bool {
+                    return Err(no("non-boolean short circuit"));
+                }
+                let short = match kind {
+                    baml_compiler2_mir::ShortCircuitKind::And => format!("!({v})"),
+                    baml_compiler2_mir::ShortCircuitKind::Or => v.clone(),
+                    baml_compiler2_mir::ShortCircuitKind::Coalesce => return Err(no("coalesce")),
+                };
+                let store = self.assign(destination, (v, t))?;
+                writeln!(&mut out, "c{b}={short};if c{b}{{{store}}}").unwrap();
+            }
             Terminator::Branch { condition, .. } => {
                 let (v, t) = self.operand(condition)?;
                 if t != Repr::Bool {
@@ -700,11 +1010,9 @@ impl Emitter<'_, '_> {
                     if values.len() != mir.arity {
                         return Err(no("call arity"));
                     }
-                    for (i, (_, ty)) in values.iter().enumerate() {
+                    for (i, value) in values.iter_mut().enumerate() {
                         let expected = self.plan.repr(&body.locals[i + 1].ty)?;
-                        if *ty != expected && !(*ty == Repr::Null && expected.pointer()) {
-                            return Err(no("call type conversion"));
-                        }
+                        *value = (self.coerce(value.clone(), expected)?, expected);
                     }
                     (
                         self.fallible(&format!(
@@ -723,6 +1031,103 @@ impl Emitter<'_, '_> {
                     unreachable!()
                 };
                 out.push_str(&self.assign(destination, expression)?);
+            }
+            Terminator::VirtualCall {
+                iface,
+                method,
+                args,
+                destination,
+                argument_layout,
+                self_arg: 0,
+                ntypeargs: 0,
+                has_trace: false,
+                ..
+            } if iface.generics.is_empty() => {
+                let interface = self
+                    .plan
+                    .index
+                    .interface_at(&iface.name)
+                    .ok_or_else(|| no("virtual interface"))?;
+                let targets = self.plan.targets(interface, method)?;
+                let mut expr = String::from("{");
+                let mut reps = Vec::new();
+                for (i, arg) in args.iter().enumerate() {
+                    let value = self.operand(arg)?;
+                    let (v, repr) = if i == 0 {
+                        (
+                            self.coerce(value, Repr::Dyn(interface))?,
+                            Repr::Dyn(interface),
+                        )
+                    } else {
+                        value
+                    };
+                    write!(&mut expr, "let a{i}={v};").unwrap();
+                    reps.push(repr);
+                }
+                expr.push_str("match a0.tag{");
+                let mut returned = None;
+                for (class, callee) in targets {
+                    let mir = self
+                        .all
+                        .get(&callee)
+                        .ok_or_else(|| no("dispatch body missing"))?;
+                    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+                        return Err(no("non-bytecode dispatch body"));
+                    };
+                    let mut values: Vec<_> = reps
+                        .iter()
+                        .enumerate()
+                        .map(|(i, t)| {
+                            if i == 0 {
+                                ("a0.payload as usize".into(), Repr::Ptr(class))
+                            } else {
+                                (format!("a{i}"), *t)
+                            }
+                        })
+                        .collect();
+                    if let Some(layout) = argument_layout {
+                        let mapping = layout
+                            .map_to(&self.plan.index.info(callee).argument_layout())
+                            .map_err(no)?;
+                        values = mapping
+                            .into_iter()
+                            .map(|i| {
+                                i.map(|i| values[i].clone())
+                                    .ok_or_else(|| no("omitted dispatch argument"))
+                            })
+                            .collect::<Gen<_>>()?;
+                    }
+                    if values.len() != mir.arity {
+                        return Err(no("dispatch arity"));
+                    }
+                    let arguments = values
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, v)| self.coerce(v, self.plan.repr(&body.locals[i + 1].ty)?))
+                        .collect::<Gen<Vec<_>>>()?
+                        .join(",");
+                    let ty = self.plan.repr(&body.locals[0].ty)?;
+                    if returned.is_some_and(|r| r != ty) {
+                        return Err(no("dispatch return conversion"));
+                    }
+                    returned = Some(ty);
+                    write!(
+                        &mut expr,
+                        "{}=>f{callee}({arguments}),",
+                        self.descriptors[&class] + 3
+                    )
+                    .unwrap();
+                }
+                expr.push_str(
+                    "_=>Err(rt::Error::internal(\"invalid closed-world interface tag\".into()))}}",
+                );
+                out.push_str(&self.assign(
+                    destination,
+                    (
+                        self.fallible(&expr),
+                        returned.ok_or_else(|| no("empty dispatch"))?,
+                    ),
+                )?);
             }
             Terminator::Return | Terminator::Goto { .. } => {}
             _ => return Err(no("terminator")),
