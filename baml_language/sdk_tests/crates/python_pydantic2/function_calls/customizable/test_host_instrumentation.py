@@ -738,3 +738,20 @@ def test_host_capture_wire_stays_decodable_python_only():
     # Base-class checks never call an application metaclass's __eq__.
     assert json.loads(_host_capture.capture(MetaCompared())) == ["unavailable"]
     assert CountingMeta.compared == 0
+
+
+def test_host_instrumented_function_survives_runtime_replacement():
+    from baml_bridge import BamlRuntime
+    from baml_sdk import _inlinedbaml
+
+    # The options are read once, when the function is instrumented: a call
+    # reads nothing of the runtime that built them.
+    @trace.instrument(trace.span(output=True))
+    def double(value):
+        return value * 2
+
+    assert double(2) == 4
+    BamlRuntime.initialize_runtime_from_blob(
+        _inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML
+    )
+    assert double(3) == 6

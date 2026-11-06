@@ -153,12 +153,17 @@ class BamlPdf:
 
 @typing.final
 class BamlPyHandle:
-    def __new__(cls, handle_key: builtins.int, handle_type: builtins.int) -> BamlPyHandle: ...
+    def __new__(cls, handle_key: builtins.int, handle_type: builtins.int) -> BamlPyHandle:
+        r"""
+        Adopt the engine reference `handle_key` transfers, or take a reference
+        to the host value `handle_key` names, which must still be registered.
+        """
     def __copy__(self) -> BamlPyHandle: ...
     def __deepcopy__(self, _memo: typing.Any) -> BamlPyHandle: ...
     def _clone_key_for_wire(self) -> tuple[builtins.int, builtins.int]:
         r"""
-        Clone this handle for inbound wire ownership.
+        Clone this handle for inbound wire ownership: the key carries one
+        reference of its own, which the receiver takes over.
         """
     def _key_for_invocation(self) -> builtins.int: ...
     def _key_for_call(self) -> builtins.int:
@@ -271,13 +276,22 @@ class FunctionResult:
 class _HostExecution:
     def finish(self, outcome: builtins.str, value: typing.Optional[typing.Any]) -> None: ...
 
-def _begin_host_invocation(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], inherited: typing.Optional[BamlPyHandle], options: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
+@typing.final
+class _HostMarker:
+    r"""
+    The marker of an instrumented function, which the decorator keeps beside
+    the function and the bridge reads when the function is registered as a
+    callback.
+    """
+    ...
+
+def _begin_host_invocation(marker: _HostMarker, inherited: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
 
 def _complete_host_call_error(call_id: builtins.int, error: typing.Any) -> None: ...
 
 def _complete_host_call_success(call_id: builtins.int, value: typing.Any) -> None: ...
 
-def _define_host_marker(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], options: typing.Optional[BamlPyHandle] = None) -> BamlPyHandle: ...
+def _define_host_marker(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], options: typing.Optional[BamlPyHandle] = None) -> _HostMarker: ...
 
 def _discard_host_call_args(args: typing.Sequence[builtins.int]) -> None: ...
 
@@ -299,7 +313,7 @@ def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
 def _host_value_registry_len() -> builtins.int:
     r"""
     How many Python objects BAML currently holds through the registry. For
-    tests that check a failed encode released what it registered.
+    tests that check every reference to a registered object was given back.
     """
 
 def _invocation_context(handle: typing.Optional[BamlPyHandle]) -> builtins.list[builtins.int]: ...
@@ -368,18 +382,14 @@ def invocation_clock_ns(call_id: builtins.int) -> builtins.int: ...
 
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
-    Look up the host-registered Python object referenced by a
-    `BamlPyHandle` whose `handle_type` is `HOST_VALUE_CALLABLE` /
-    `HOST_VALUE_OPAQUE`, returning a fresh strong reference if the entry
-    is still live. Used by the outbound error decoder in
-    `baml_bridge.proto` to rehydrate a `baml.errors.HostCallable` thrown
-    by BAML back to the original Python exception object on same-host
-    round-trip.
+    The host-registered Python object a `BamlPyHandle` of `handle_type`
+    `HOST_VALUE_CALLABLE` / `HOST_VALUE_OPAQUE` references, as a fresh strong
+    reference. Used by the outbound error decoder in `baml_bridge.proto` to
+    rehydrate a `baml.errors.HostCallable` thrown by BAML back to the original
+    Python exception object.
     
-    Returns `None` if the handle is the wrong kind, the entry has been
-    released (last `HostValueArc` clone already dropped), or the key
-    never existed in this runtime's registry (cross-runtime handle):
-    callers should fall back to a metadata-built exception in that case.
+    A handle to a host value holds its key, so this is `None` only for a
+    handle of another kind.
     """
 
 def new_function_call() -> builtins.int: ...

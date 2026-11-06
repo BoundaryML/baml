@@ -320,12 +320,17 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
     }
 }
 
-/** A leaf's payload as the bridge takes it from {@link hostAdapter.leafOf}: an `InboundValue`. */
-interface HostLeaf {
-    bytes: Uint8Array;
-    /** The handle key cloned for the wire, as a decimal string, so the bridge can release it if the call never goes out. */
-    cloned?: string;
-}
+/**
+ * A leaf's payload as the bridge takes it from {@link hostAdapter.leafOf}: an
+ * `InboundValue`, and what its wire occurrence took, so the bridge can give it
+ * back if the call never goes out.
+ */
+type HostLeaf =
+    | { bytes: Uint8Array }
+    /** The engine handle key cloned for the wire, as a decimal string. */
+    | { bytes: Uint8Array; cloned: string }
+    /** The host-value key sent again, which took one of its references, as a decimal string. */
+    | { bytes: Uint8Array; sentAgain: string };
 
 /** The leaf kinds {@link hostAdapter.leafKindOf} answers, as the bridge numbers them. */
 const LEAF_HANDLE = 0;
@@ -346,12 +351,13 @@ const HOST_VALUE_HANDLE_TYPES: ReadonlySet<number> = new Set([
 ]);
 
 function handleLeaf(handle: BamlHandle): HostLeaf {
+    // A host value is the engine's reference to the host's own object: its key
+    // goes as it is, taking one more of its references (refused once the key
+    // is no longer registered). An engine handle goes as a clone. Either is
+    // the bridge's to give back if the call never goes out.
     const key = handle._cloneKeyForWire();
     const bytes = InboundValue.encode(InboundValue.create({ handle: { key, handleType: handle.handleType } })).finish();
-    // A host value is the engine's reference to the host's own object: its key
-    // goes as it is, nothing was cloned and nothing is owed if the call never
-    // goes out. An engine handle's clone is the bridge's to release.
-    if (HOST_VALUE_HANDLE_TYPES.has(handle.handleType)) return { bytes };
+    if (HOST_VALUE_HANDLE_TYPES.has(handle.handleType)) return { bytes, sentAgain: keyToDecimal(key) };
     return { bytes, cloned: keyToDecimal(key) };
 }
 
@@ -459,7 +465,7 @@ export const hostAdapter = {
     },
     /** Bind a user function as a host callable; what comes back is the platform's (see `registerCallableDispatch`). */
     dispatchFor(fn: (...args: unknown[]) => unknown): unknown {
-        return registerCallableDispatch(makeHostCallableDispatch(fn), hostMarker(fn)?.handle);
+        return registerCallableDispatch(makeHostCallableDispatch(fn), hostMarker(fn)?.marker);
     },
     /** A short rendering for error messages, bounded in work as in length: a container by its size, never stringified whole. */
     describe(value: unknown): string {
@@ -937,7 +943,33 @@ export function decodeOutboundValue(data: Buffer | Uint8Array): unknown {
     const ownership = new Set<baml_bridge.cffi.v1.IBamlOutboundHandle>();
     collectHostCallHandles(msg, ownership);
     try { return decodeValueHolder(msg, getTypeMap(), ownership); }
-    finally { for (const handle of ownership) { try { _releaseWireHandle(handle.key as HandleKey); } catch { /* Preserve decoding failure. */ } } }
+    finally { releaseOwnership(ownership); }
+}
+
+/**
+ * The pin a host value arrived with, as an ownership record: the engine's
+ * hold on the key while the host reads it, released with the value that
+ * carried it. `undefined` for a host value sent without one.
+ */
+function pinRecord(handle: baml_bridge.cffi.v1.IBamlOutboundHandle): baml_bridge.cffi.v1.IBamlOutboundHandle | undefined {
+    const pin = handle.pin;
+    if (pin == null) return undefined;
+    if (typeof pin === 'number' ? pin === 0 : (pin.low === 0 && pin.high === 0)) return undefined;
+    return { key: pin, handleType: BamlHandleType.HOST_VALUE_PIN };
+}
+
+/**
+ * Release every engine row `ownership` still records, keeping the first
+ * failure from being masked by cleanup.
+ */
+function releaseOwnership(ownership: Iterable<baml_bridge.cffi.v1.IBamlOutboundHandle>): void {
+    for (const handle of ownership) {
+        try {
+            _releaseWireHandle(handle.key as HandleKey);
+        } catch {
+            // Cleanup must preserve the original decode failure.
+        }
+    }
 }
 
 /**
@@ -946,29 +978,70 @@ export function decodeOutboundValue(data: Buffer | Uint8Array): unknown {
  */
 const liveRecords = new WeakMap<baml_bridge.cffi.v1.IBamlTy, baml_bridge.cffi.v1.IBamlOutboundHandle[]>();
 
+/**
+ * Visit every holder of `holder`'s tree that carries an engine row: a handle
+ * or a type value.
+ */
+function forEachReference(
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue,
+    visit: (holder: baml_bridge.cffi.v1.IBamlOutboundValue) => void,
+): void {
+    if (holder.handleValue || holder.tyValue) {
+        visit(holder);
+    } else if (holder.listValue) {
+        for (const item of holder.listValue.items ?? []) forEachReference(item, visit);
+    } else if (holder.mapValue || holder.classValue) {
+        const entries = holder.mapValue?.entries ?? holder.classValue?.fields ?? [];
+        for (const entry of entries) {
+            if (entry.value) forEachReference(entry.value, visit);
+        }
+    } else if (holder.unionVariantValue?.value) {
+        forEachReference(holder.unionVariantValue.value, visit);
+    }
+}
+
+/**
+ * Record every engine row `holder` carries in `ownership`, for a decode that
+ * hands each to the wrapper that takes it and releases the rest.
+ */
 function collectHostCallHandles(
     holder: baml_bridge.cffi.v1.IBamlOutboundValue,
     ownership: Set<baml_bridge.cffi.v1.IBamlOutboundHandle>,
 ): void {
-    if (holder.handleValue) {
-        const ht = holder.handleValue.handleType;
-        if (ht !== BamlHandleType.HOST_VALUE_CALLABLE && ht !== BamlHandleType.HOST_VALUE_OPAQUE) {
-            ownership.add(holder.handleValue);
+    forEachReference(holder, (found) => {
+        if (found.handleValue) {
+            if (HOST_VALUE_HANDLE_TYPES.has(found.handleValue.handleType ?? 0)) {
+                // The host owns the value itself; the engine's pin on it is
+                // released once the decode is done, whatever the decode keeps.
+                const pin = pinRecord(found.handleValue);
+                if (pin) ownership.add(pin);
+            } else {
+                ownership.add(found.handleValue);
+            }
+        } else if (found.tyValue) {
+            const records = liveKeys(found.tyValue).map((key) => ({ key }));
+            liveRecords.set(found.tyValue, records);
+            for (const record of records) ownership.add(record);
         }
-    } else if (holder.listValue) {
-        for (const item of holder.listValue.items ?? []) collectHostCallHandles(item, ownership);
-    } else if (holder.mapValue || holder.classValue) {
-        const entries = holder.mapValue?.entries ?? holder.classValue?.fields ?? [];
-        for (const entry of entries) {
-            if (entry.value) collectHostCallHandles(entry.value, ownership);
+    });
+}
+
+/**
+ * The pins of every host value `holder` carries. A call result's engine rows
+ * belong to the wrappers decoded from them; its pins are released once the
+ * result has been read.
+ */
+function collectPins(
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined,
+    pins: baml_bridge.cffi.v1.IBamlOutboundHandle[],
+): void {
+    if (!holder) return;
+    forEachReference(holder, (found) => {
+        if (found.handleValue && HOST_VALUE_HANDLE_TYPES.has(found.handleValue.handleType ?? 0)) {
+            const pin = pinRecord(found.handleValue);
+            if (pin) pins.push(pin);
         }
-    } else if (holder.unionVariantValue?.value) {
-        collectHostCallHandles(holder.unionVariantValue.value, ownership);
-    } else if (holder.tyValue) {
-        const records = liveKeys(holder.tyValue).map((key) => ({ key }));
-        liveRecords.set(holder.tyValue, records);
-        for (const record of records) ownership.add(record);
-    }
+    });
 }
 
 /**
@@ -1003,13 +1076,7 @@ export function decodeHostCall(data: Buffer | Uint8Array): {
         }
         return { positional, optional };
     } finally {
-        for (const handle of ownership) {
-            try {
-                _releaseWireHandle(handle.key as HandleKey);
-            } catch {
-                // Cleanup must preserve the original decode failure.
-            }
-        }
+        releaseOwnership(ownership);
     }
 }
 
@@ -1118,6 +1185,20 @@ function errorForClassName(formatted: string, detail: BamlErrorDetail): BamlErro
 export function decodeCallResult(data: Buffer | Uint8Array): unknown {
     const buf = data instanceof Buffer ? data : Buffer.from(data);
     const result = BamlOutboundResult.decode(buf);
+    // The host values the result carries stay pinned until it has been read,
+    // including the rehydration of a host error from its key.
+    const pins: baml_bridge.cffi.v1.IBamlOutboundHandle[] = [];
+    collectPins(result.ok, pins);
+    collectPins(result.error?.value, pins);
+    collectPins(result.panic?.value, pins);
+    try {
+        return decodeCallResultBody(result);
+    } finally {
+        releaseOwnership(pins);
+    }
+}
+
+function decodeCallResultBody(result: baml_bridge.cffi.v1.BamlOutboundResult): unknown {
     switch (result.result) {
         case 'error': {
             const { value, className, message } = decodeThrown(result.error?.value);

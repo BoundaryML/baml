@@ -578,6 +578,26 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     .ptr();
                 self.rust_instance(class, bex_vm_types::RustPayload::media(media.clone()))
             }
+            // A token this runtime issued to a host body becomes the
+            // instance it stands for; one from another runtime died with it.
+            BexExternalValue::Adt(BexExternalAdt::CancelToken(token)) => {
+                if !self.engine.issued(token) {
+                    return Err(self.malformed(
+                        "a cancel token is stale or belongs to a different BAML runtime",
+                    ));
+                }
+                let class = self
+                    .vm()
+                    .lang_head(bex_vm::lang_items::BAML_SPAWN_CANCEL_TOKEN)
+                    .ok_or_else(|| {
+                        self.malformed("the program declares no `baml.spawn.CancelToken`")
+                    })?
+                    .ptr();
+                self.rust_instance(
+                    class,
+                    bex_vm_types::RustPayload::CancelToken(std::sync::Arc::clone(&token.state)),
+                )
+            }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt)) => {
                 let class = self
                     .vm()

@@ -94,12 +94,15 @@ impl bex_project::BexRustData for TraceReservationHandle {
 #[derive(Clone, Debug)]
 pub enum CffiHandleTableEntry {
     BexHeapHandle(Handle),
-    Adt(BexExternalAdt),
-    /// A host's registration of a traced callback, which it passes back when
-    /// it registers the callback.
-    HostMarker(Arc<bex_project::HostMarker>),
+    Adt(TableAdt),
     InvocationState(InvocationStateHandle),
     TraceReservation(TraceReservationHandle),
+    /// The engine's hold on a host value it sent the host
+    /// ([`HOST_VALUE_PIN`](BamlHandleType::HostValuePin)): the host releases
+    /// it with the result that carried the value, after it has read the
+    /// value's key, so the engine cannot give the key's references back
+    /// first. Never a value.
+    HostValuePin(Arc<bex_project::HostValueArc>),
 }
 
 pub struct CffiHandleTableOptions<'a> {
@@ -126,11 +129,73 @@ impl CffiHandleTableOptions<'_> {
     }
 }
 
+/// What a table row holds of the engine's ADTs: a payload a host holds by
+/// key (a media value, a rendered prompt's tree), a host body's cancel token,
+/// or a rooted engine object. A type never: it crosses as itself, a
+/// `ty_value`.
+#[derive(Clone, Debug)]
+pub enum TableAdt {
+    PromptAst(Arc<bex_project::PromptAst>),
+    Media(Arc<bex_project::MediaValue>),
+    /// A host body's `baml.spawn.CancelToken`, which a host holds as a
+    /// reference to a `CancelToken` and the issuing runtime builds when it
+    /// comes back.
+    CancelToken(bex_project::CancelTokenCapability),
+    TaggedHeapHandle {
+        kind: bex_project::TaggedHeapHandleKind,
+        ty: bex_project::AnnotationTy,
+        heap_handle: Handle,
+    },
+}
+
+impl TryFrom<BexExternalAdt> for TableAdt {
+    type Error = &'static str;
+
+    fn try_from(adt: BexExternalAdt) -> Result<Self, Self::Error> {
+        match adt {
+            BexExternalAdt::PromptAst(prompt) => Ok(Self::PromptAst(prompt)),
+            BexExternalAdt::Media(media) => Ok(Self::Media(media)),
+            BexExternalAdt::CancelToken(token) => Ok(Self::CancelToken(token)),
+            BexExternalAdt::TaggedHeapHandle {
+                kind,
+                ty,
+                heap_handle,
+            } => Ok(Self::TaggedHeapHandle {
+                kind,
+                ty,
+                heap_handle,
+            }),
+            BexExternalAdt::Type(_) | BexExternalAdt::WireType(_) => {
+                Err("a type crosses as itself, never as a handle")
+            }
+        }
+    }
+}
+
+impl From<TableAdt> for BexExternalAdt {
+    fn from(adt: TableAdt) -> Self {
+        match adt {
+            TableAdt::PromptAst(prompt) => Self::PromptAst(prompt),
+            TableAdt::Media(media) => Self::Media(media),
+            TableAdt::CancelToken(token) => Self::CancelToken(token),
+            TableAdt::TaggedHeapHandle {
+                kind,
+                ty,
+                heap_handle,
+            } => Self::TaggedHeapHandle {
+                kind,
+                ty,
+                heap_handle,
+            },
+        }
+    }
+}
+
 impl CffiHandleTableEntry {
     /// The engine object this entry names, if it names one: a heap handle,
     /// bare or tagged with the engine's proxy kind. Such an entry carries the
     /// object's identity, so one object has one live key. A payload (media, a
-    /// prompt, a type) or a capability carries none.
+    /// prompt) or a capability carries none.
     ///
     /// A function value carries none either: it crosses as the type of the
     /// slot it crosses through, and a host names its arguments by that type,
@@ -139,7 +204,7 @@ impl CffiHandleTableEntry {
     fn identity(&self) -> Option<&Handle> {
         match self {
             Self::BexHeapHandle(handle) => Some(handle),
-            Self::Adt(BexExternalAdt::TaggedHeapHandle {
+            Self::Adt(TableAdt::TaggedHeapHandle {
                 kind, heap_handle, ..
             }) => match kind {
                 bex_project::TaggedHeapHandleKind::Stream
@@ -148,15 +213,10 @@ impl CffiHandleTableEntry {
                 | bex_project::TaggedHeapHandleKind::TraceControl(_) => Some(heap_handle),
                 bex_project::TaggedHeapHandleKind::Callable => None,
             },
-            Self::Adt(
-                BexExternalAdt::Type(_)
-                | BexExternalAdt::WireType(_)
-                | BexExternalAdt::PromptAst(_)
-                | BexExternalAdt::Media(_),
-            )
-            | Self::HostMarker(_)
+            Self::Adt(TableAdt::PromptAst(_) | TableAdt::Media(_) | TableAdt::CancelToken(_))
             | Self::InvocationState(_)
-            | Self::TraceReservation(_) => None,
+            | Self::TraceReservation(_)
+            | Self::HostValuePin(_) => None,
         }
     }
 
@@ -164,20 +224,22 @@ impl CffiHandleTableEntry {
     pub fn handle_type(&self) -> BamlHandleType {
         match self {
             Self::BexHeapHandle(_) => BamlHandleType::UntaggedBexHeap,
-            Self::HostMarker(_) => BamlHandleType::UntaggedRustData,
             Self::InvocationState(_) => BamlHandleType::InvocationState,
             Self::TraceReservation(_) => BamlHandleType::TraceReservation,
+            Self::HostValuePin(_) => BamlHandleType::HostValuePin,
             Self::Adt(adt) => match adt {
-                BexExternalAdt::Type(_) | BexExternalAdt::WireType(_) => BamlHandleType::AdtType,
-                BexExternalAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
-                BexExternalAdt::Media(media) => match media.kind {
+                TableAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
+                // A host holds it as it holds any reference to a runtime
+                // value: the row, not the tag, says what it is.
+                TableAdt::CancelToken(_) => BamlHandleType::AdtRuntimeValue,
+                TableAdt::Media(media) => match media.kind {
                     MediaKind::Image => BamlHandleType::AdtMediaImage,
                     MediaKind::Audio => BamlHandleType::AdtMediaAudio,
                     MediaKind::Video => BamlHandleType::AdtMediaVideo,
                     MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
                     MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
                 },
-                BexExternalAdt::TaggedHeapHandle { kind, .. } => match kind {
+                TableAdt::TaggedHeapHandle { kind, .. } => match kind {
                     bex_project::TaggedHeapHandleKind::Callable => BamlHandleType::FunctionRef,
                     bex_project::TaggedHeapHandleKind::Stream => {
                         BamlHandleType::AdtTaggedHeapHandle
@@ -201,7 +263,7 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
     fn try_from(value: BexExternalValue) -> Result<Self, Self::Error> {
         match value {
             BexExternalValue::Handle(h) => Ok(Self::BexHeapHandle(h)),
-            BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
+            BexExternalValue::Adt(adt) => TableAdt::try_from(adt).map(Self::Adt),
             // Host values use a separate per-bridge registry, not HANDLE_TABLE.
             BexExternalValue::HostValue(_)
             | BexExternalValue::HostCallable { .. }
@@ -224,14 +286,14 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
 }
 
 impl CffiHandleTableEntry {
-    /// The value this entry holds, if it holds one. A capability (a host
-    /// marker, invocation state, a trace reservation) is control-channel data
+    /// The value this entry holds, if it holds one. A capability (invocation
+    /// state, a trace reservation) is control-channel data
     /// the bridge reads itself: it is never an application value.
     pub fn value(&self) -> Option<BexExternalValue> {
         match self {
             Self::BexHeapHandle(handle) => Some(BexExternalValue::Handle(handle.clone())),
-            Self::Adt(adt) => Some(BexExternalValue::Adt(adt.clone())),
-            Self::HostMarker(_) | Self::InvocationState(_) | Self::TraceReservation(_) => None,
+            Self::Adt(adt) => Some(BexExternalValue::Adt(adt.clone().into())),
+            Self::InvocationState(_) | Self::TraceReservation(_) | Self::HostValuePin(_) => None,
         }
     }
 }
@@ -466,7 +528,7 @@ mod tests {
 
     /// Any engine row a test can mint without a heap: a media value.
     fn media_row() -> CffiHandleTableEntry {
-        CffiHandleTableEntry::Adt(BexExternalAdt::Media(MediaValue::from_url(
+        CffiHandleTableEntry::Adt(TableAdt::Media(MediaValue::from_url(
             MediaKind::Generic,
             "https://example.com/",
             None,
@@ -480,7 +542,7 @@ mod tests {
         let resolved = table.resolve(key).unwrap();
         assert!(matches!(
             &*resolved,
-            CffiHandleTableEntry::Adt(BexExternalAdt::Media(_))
+            CffiHandleTableEntry::Adt(TableAdt::Media(_))
         ));
     }
 
@@ -548,7 +610,7 @@ mod tests {
         let drained = table.drain(key).expect("drain should return entry");
         assert!(matches!(
             &*drained,
-            CffiHandleTableEntry::Adt(BexExternalAdt::Media(_))
+            CffiHandleTableEntry::Adt(TableAdt::Media(_))
         ));
         assert!(table.resolve(key).is_none());
         assert!(table.drain(key).is_none());
@@ -569,7 +631,7 @@ mod tests {
         let back = CffiHandleTableEntry::try_from(bex).unwrap();
         assert!(matches!(
             back,
-            CffiHandleTableEntry::Adt(BexExternalAdt::Media(_))
+            CffiHandleTableEntry::Adt(TableAdt::Media(_))
         ));
     }
 
@@ -683,25 +745,10 @@ mod tests {
     #[test]
     fn identity_free_entries_never_dedup() {
         let table = CffiHandleTable::new();
-        let marker = Arc::new(bex_project::HostMarker {
-            definition: bex_project::HostDefinition {
-                language: "test".into(),
-                module: "test".into(),
-                qualified_name: "test.callback".into(),
-                source_file: "test".into(),
-                definition_line: 0,
-                wrapper_line: 0,
-                display_name: "callback".into(),
-            },
-            options: bex_project::TraceOptionsData::default(),
-        });
-        let key1 = table.insert(CffiHandleTableEntry::HostMarker(Arc::clone(&marker)));
-        let key2 = table.insert(CffiHandleTableEntry::HostMarker(marker));
-        assert_ne!(key1, key2, "a host marker carries no identity");
-        let key3 = table.insert(media_row());
-        let key4 = table.insert(media_row());
-        assert_ne!(key3, key4, "a media payload carries no identity");
-        for key in [key1, key2, key3, key4] {
+        let key1 = table.insert(media_row());
+        let key2 = table.insert(media_row());
+        assert_ne!(key1, key2, "a media payload carries no identity");
+        for key in [key1, key2] {
             assert!(table.release(key));
         }
     }
@@ -713,7 +760,7 @@ mod tests {
         let table = CffiHandleTable::new();
         let handle = bex_project::Handle::new(7, stub_heap());
         let tagged = |h: &bex_project::Handle| {
-            CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+            CffiHandleTableEntry::Adt(TableAdt::TaggedHeapHandle {
                 kind: bex_project::TaggedHeapHandleKind::RuntimeValue,
                 ty: bex_project::AnnotationTy::int(),
                 heap_handle: h.clone(),
@@ -749,7 +796,7 @@ mod tests {
         let table = CffiHandleTable::new();
         let handle = bex_project::Handle::new(7, stub_heap());
         let callable = |ty: bex_project::AnnotationTy| {
-            CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle {
+            CffiHandleTableEntry::Adt(TableAdt::TaggedHeapHandle {
                 kind: bex_project::TaggedHeapHandleKind::Callable,
                 ty,
                 heap_handle: handle.clone(),
@@ -759,7 +806,7 @@ mod tests {
         let second = table.insert(callable(bex_project::AnnotationTy::string()));
         assert_ne!(first, second, "each crossing is its own row");
         let ty_of = |key| match &*table.resolve(key).expect("live") {
-            CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) => ty.clone(),
+            CffiHandleTableEntry::Adt(TableAdt::TaggedHeapHandle { ty, .. }) => ty.clone(),
             other => panic!("not a callable row: {:?}", other.handle_type()),
         };
         assert_eq!(ty_of(first), bex_project::AnnotationTy::int());

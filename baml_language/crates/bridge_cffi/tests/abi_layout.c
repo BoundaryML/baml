@@ -21,8 +21,10 @@ static void BAML_CFFI_CALL expected_host_dispatch_callback(
   (void)length;
 }
 
-static void BAML_CFFI_CALL expected_host_release_callback(uint64_t host_value_key) {
+static void BAML_CFFI_CALL expected_host_release_callback(uint64_t host_value_key,
+                                                            uint64_t count) {
   (void)host_value_key;
+  (void)count;
 }
 
 static void BAML_CFFI_CALL expected_unhandled_spawn_error_callback(

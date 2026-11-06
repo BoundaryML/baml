@@ -25,7 +25,11 @@ use crate::Buffer;
 /// payload a `HostCallCompletion` with one of five outcomes; the `is_error`
 /// flag is gone. The slot changed in place, which is why the revision is
 /// required exactly rather than as a minimum.
-pub const BAML_API_V1_ABI_VERSION: u32 = 5;
+///
+/// Revision 6: host-value keys are counted. The release callback takes
+/// `(host_value_key, count)` and gives back that many references; an
+/// outbound host value carries a `HOST_VALUE_PIN` row the host releases.
+pub const BAML_API_V1_ABI_VERSION: u32 = 6;
 
 /// Valid `media_kind` values for media constructors.
 ///
@@ -44,13 +48,12 @@ pub enum BamlCffiMediaKind {
 
 /// Handle-type values returned by media constructors and carried on the wire.
 ///
-/// Values 3 and 4 are permanently reserved. Host-value handle keys use their
+/// Values 1, 3, 4 and 13 are permanently reserved. Host-value handle keys use their
 /// own registry and release callback rather than `handle_release`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(i32)]
 pub enum BamlCffiHandleType {
     Unspecified = 0,
-    UntaggedRustData = 1,
     UntaggedBexHeap = 2,
     FunctionRef = 5,
     MediaImage = 6,
@@ -59,7 +62,6 @@ pub enum BamlCffiHandleType {
     MediaPdf = 9,
     MediaGeneric = 10,
     PromptAst = 11,
-    Type = 13,
     TaggedHeapHandle = 14,
     HostValueCallable = 15,
     HostValueOpaque = 16,
@@ -67,6 +69,7 @@ pub enum BamlCffiHandleType {
     RuntimeValue = 18,
     InvocationState = 19,
     TraceReservation = 20,
+    HostValuePin = 21,
 }
 
 /// Receives the completed result of `call_function`.
@@ -90,12 +93,17 @@ pub type BamlResultCallback = extern "C" fn(call_id: u32, content: *const i8, le
 pub type BamlHostDispatchCallback =
     extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
 
-/// Notifies the host that a host-owned value key can be released.
+/// Gives a host back `count` references to the host value `host_value_key`.
+///
+/// A host counts references per key: it takes one each time it sends the key
+/// to the engine (a fresh registration or a key it sends again), and drops its
+/// object when the engine has given them all back. A notification may batch
+/// several references to one key.
 ///
 /// Notifications are deferred until an engine safepoint, may occur on any
 /// runtime thread, and may be concurrent. The callback must not unwind or
 /// throw across the C boundary.
-pub type BamlHostReleaseCallback = extern "C" fn(host_value_key: u64);
+pub type BamlHostReleaseCallback = extern "C" fn(host_value_key: u64, count: u64);
 
 /// Receives an error from spawned work whose future became unreachable.
 ///
@@ -397,9 +405,8 @@ mod tests {
 
     #[test]
     fn a_changed_contract_uses_a_new_abi_revision() {
-        // Revision 5: `complete_host_call` takes a `HostCallCompletion` and
-        // no `is_error` flag.
-        assert_eq!(BAML_API_V1_ABI_VERSION, 5);
+        // Revision 6: counted host-value keys and pins.
+        assert_eq!(BAML_API_V1_ABI_VERSION, 6);
     }
 
     #[test]
@@ -514,10 +521,6 @@ mod tests {
                 BamlHandleType::HandleUnspecified,
             ),
             (
-                BamlCffiHandleType::UntaggedRustData,
-                BamlHandleType::UntaggedRustData,
-            ),
-            (
                 BamlCffiHandleType::UntaggedBexHeap,
                 BamlHandleType::UntaggedBexHeap,
             ),
@@ -540,7 +543,6 @@ mod tests {
                 BamlHandleType::AdtMediaGeneric,
             ),
             (BamlCffiHandleType::PromptAst, BamlHandleType::AdtPromptAst),
-            (BamlCffiHandleType::Type, BamlHandleType::AdtType),
             (
                 BamlCffiHandleType::TaggedHeapHandle,
                 BamlHandleType::AdtTaggedHeapHandle,
@@ -560,6 +562,18 @@ mod tests {
             (
                 BamlCffiHandleType::RuntimeValue,
                 BamlHandleType::AdtRuntimeValue,
+            ),
+            (
+                BamlCffiHandleType::InvocationState,
+                BamlHandleType::InvocationState,
+            ),
+            (
+                BamlCffiHandleType::TraceReservation,
+                BamlHandleType::TraceReservation,
+            ),
+            (
+                BamlCffiHandleType::HostValuePin,
+                BamlHandleType::HostValuePin,
             ),
         ];
         for (public, wire) in handle_pairs {

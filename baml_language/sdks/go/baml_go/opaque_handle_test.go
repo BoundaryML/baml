@@ -11,37 +11,42 @@ import (
 	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
-func rustTypeWireHandle(key uint64) *cffi.BamlOutboundHandle {
-	return &cffi.BamlOutboundHandle{Key: key, HandleType: cffi.BamlHandleType_UNTAGGED_RUST_DATA}
-}
-
-func rustTypeWireValue(handle *cffi.BamlOutboundHandle) Value {
+func handleWireValue(handle *cffi.BamlOutboundHandle) Value {
 	return Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: handle}}}
 }
 
-func TestRustTypeDecodeOwnsCloneAndFinalizesExactlyOnce(t *testing.T) {
-	originalClone := cloneOutboundRustTypeHandle
-	originalRelease := releaseRustTypeHandle
-	t.Cleanup(func() {
-		cloneOutboundRustTypeHandle = originalClone
-		releaseRustTypeHandle = originalRelease
-	})
+func sessionWireHandle(key uint64) *cffi.BamlOutboundHandle {
+	return &cffi.BamlOutboundHandle{
+		Key:        key,
+		HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE,
+		Ty:         &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Head: &cffi.BamlTyClass_Name{Name: "reflect.Session"}}}},
+	}
+}
 
-	cloneOutboundRustTypeHandle = func(key uint64) (uint64, error) {
+// A decode owns its own clone of the handle; Go copies share it, and it is
+// released exactly once.
+func TestOpaqueHandleDecodeOwnsCloneAndFinalizesExactlyOnce(t *testing.T) {
+	originalClone := cloneOutboundHandle
+	originalRelease := releaseOutboundHandle
+	t.Cleanup(func() {
+		cloneOutboundHandle = originalClone
+		releaseOutboundHandle = originalRelease
+	})
+	cloneOutboundHandle = func(key uint64) (uint64, error) {
 		if key != 41 {
 			t.Fatalf("cloned key %d, want 41", key)
 		}
 		return 42, nil
 	}
 	var releases atomic.Int32
-	releaseRustTypeHandle = func(key uint64) {
+	releaseOutboundHandle = func(key uint64) {
 		if key != 42 {
 			t.Errorf("released key %d, want 42", key)
 		}
 		releases.Add(1)
 	}
 
-	decoded, err := rustTypeWireValue(rustTypeWireHandle(41)).RustType()
+	decoded, err := handleWireValue(sessionWireHandle(41)).OpaqueHandle("reflect.Session")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,34 +54,33 @@ func TestRustTypeDecodeOwnsCloneAndFinalizesExactlyOnce(t *testing.T) {
 	if decoded.handle == nil || copyOfDecoded.handle != decoded.handle {
 		t.Fatal("Go copies must share one owned handle")
 	}
-	finalizeRustTypeHandle(decoded.handle)
-	finalizeRustTypeHandle(copyOfDecoded.handle)
+	finalizeOpaqueHandle(decoded.handle)
+	finalizeOpaqueHandle(copyOfDecoded.handle)
 	if got := releases.Load(); got != 1 {
 		t.Fatalf("released %d times, want exactly once", got)
 	}
-	if input := RustTypeInput(decoded); input.err == nil {
-		t.Fatal("released RustType must be rejected on re-entry")
+	if input := OpaqueHandleInput(decoded); input.err == nil {
+		t.Fatal("a released OpaqueHandle must be rejected on re-entry")
 	}
 }
 
-func TestRustTypeFinalizerEventuallyReleasesOwnedClone(t *testing.T) {
-	originalClone := cloneOutboundRustTypeHandle
-	originalRelease := releaseRustTypeHandle
+func TestOpaqueHandleFinalizerEventuallyReleasesOwnedClone(t *testing.T) {
+	originalClone := cloneOutboundHandle
+	originalRelease := releaseOutboundHandle
 	t.Cleanup(func() {
-		cloneOutboundRustTypeHandle = originalClone
-		releaseRustTypeHandle = originalRelease
+		cloneOutboundHandle = originalClone
+		releaseOutboundHandle = originalRelease
 	})
-
-	cloneOutboundRustTypeHandle = func(uint64) (uint64, error) { return 52, nil }
+	cloneOutboundHandle = func(uint64) (uint64, error) { return 52, nil }
 	released := make(chan uint64, 1)
-	releaseRustTypeHandle = func(key uint64) { released <- key }
+	releaseOutboundHandle = func(key uint64) { released <- key }
 	func() {
-		value, err := rustTypeWireValue(rustTypeWireHandle(51)).RustType()
+		value, err := handleWireValue(sessionWireHandle(51)).OpaqueHandle("reflect.Session")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if value.handle == nil {
-			t.Fatal("decoded RustType has no handle")
+			t.Fatal("decoded OpaqueHandle has no handle")
 		}
 	}()
 
@@ -90,16 +94,16 @@ func TestRustTypeFinalizerEventuallyReleasesOwnedClone(t *testing.T) {
 			}
 			return
 		case <-deadline:
-			t.Fatal("RustType finalizer did not release its handle")
+			t.Fatal("OpaqueHandle finalizer did not release its handle")
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
 }
 
-func TestRustTypeDecodeRejectsMalformedAndForeignHandles(t *testing.T) {
-	originalClone := cloneOutboundRustTypeHandle
-	t.Cleanup(func() { cloneOutboundRustTypeHandle = originalClone })
-	cloneOutboundRustTypeHandle = func(uint64) (uint64, error) {
+func TestOpaqueHandleDecodeRejectsMalformedAndForeignHandles(t *testing.T) {
+	originalClone := cloneOutboundHandle
+	t.Cleanup(func() { cloneOutboundHandle = originalClone })
+	cloneOutboundHandle = func(uint64) (uint64, error) {
 		t.Fatal("malformed handles must be rejected before cloning")
 		return 0, nil
 	}
@@ -109,48 +113,51 @@ func TestRustTypeDecodeRejectsMalformedAndForeignHandles(t *testing.T) {
 		handle *cffi.BamlOutboundHandle
 	}{
 		{"missing", nil},
-		{"zero", rustTypeWireHandle(0)},
-		{"wrong kind", &cffi.BamlOutboundHandle{Key: 1, HandleType: cffi.BamlHandleType_ADT_MEDIA_IMAGE}},
-		{"tagged metadata", &cffi.BamlOutboundHandle{Key: 1, HandleType: cffi.BamlHandleType_UNTAGGED_RUST_DATA, Ty: RustTypeBAMLType().value}},
+		{"zero", sessionWireHandle(0)},
+		{"wrong kind", &cffi.BamlOutboundHandle{Key: 1, HandleType: cffi.BamlHandleType_ADT_MEDIA_IMAGE, Ty: sessionWireHandle(1).Ty}},
+		{"other class", &cffi.BamlOutboundHandle{
+			Key:        1,
+			HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE,
+			Ty:         &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Head: &cffi.BamlTyClass_Name{Name: "reflect.Package"}}}},
+		}},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := rustTypeWireValue(test.handle).RustType(); err == nil {
+			if _, err := handleWireValue(test.handle).OpaqueHandle("reflect.Session"); err == nil {
 				t.Fatal("expected malformed handle rejection")
 			}
 		})
 	}
 
-	if _, err := (Value{}).RustType(); err == nil {
+	if _, err := (Value{}).OpaqueHandle("reflect.Session"); err == nil {
 		t.Fatal("uninitialized Value must be rejected")
 	}
-	if _, err := (Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "not a handle"}}}).RustType(); err == nil {
+	if _, err := (Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "not a handle"}}}).OpaqueHandle("reflect.Session"); err == nil {
 		t.Fatal("non-handle value must be rejected")
 	}
 }
 
-func TestRustTypeDecodeRejectsCloneFailureAndZeroClone(t *testing.T) {
-	originalClone := cloneOutboundRustTypeHandle
-	t.Cleanup(func() { cloneOutboundRustTypeHandle = originalClone })
+func TestOpaqueHandleDecodeRejectsCloneFailureAndZeroClone(t *testing.T) {
+	originalClone := cloneOutboundHandle
+	t.Cleanup(func() { cloneOutboundHandle = originalClone })
 
-	cloneOutboundRustTypeHandle = func(uint64) (uint64, error) { return 0, errors.New("stale") }
-	if _, err := rustTypeWireValue(rustTypeWireHandle(61)).RustType(); err == nil {
+	cloneOutboundHandle = func(uint64) (uint64, error) { return 0, errors.New("stale") }
+	if _, err := handleWireValue(sessionWireHandle(61)).OpaqueHandle("reflect.Session"); err == nil {
 		t.Fatal("stale native handle must be rejected")
 	}
-	cloneOutboundRustTypeHandle = func(uint64) (uint64, error) { return 0, nil }
-	if _, err := rustTypeWireValue(rustTypeWireHandle(61)).RustType(); err == nil {
+	cloneOutboundHandle = func(uint64) (uint64, error) { return 0, nil }
+	if _, err := handleWireValue(sessionWireHandle(61)).OpaqueHandle("reflect.Session"); err == nil {
 		t.Fatal("zero native clone must be rejected")
 	}
 }
 
-func TestRustTypeInputClonesTransactionallyAndRollsBack(t *testing.T) {
+func TestOpaqueHandleInputClonesTransactionallyAndRollsBack(t *testing.T) {
 	originalClone := cloneInboundHandle
 	originalRelease := releaseInboundHandle
 	t.Cleanup(func() {
 		cloneInboundHandle = originalClone
 		releaseInboundHandle = originalRelease
 	})
-
 	cloneInboundHandle = func(key uint64) (uint64, error) {
 		if key != 71 {
 			t.Fatalf("cloned key %d, want 71", key)
@@ -159,14 +166,14 @@ func TestRustTypeInputClonesTransactionallyAndRollsBack(t *testing.T) {
 	}
 	var released []uint64
 	releaseInboundHandle = func(key uint64) { released = append(released, key) }
-	input := RustTypeInput(RustType{handle: &rustTypeHandle{key: 71}})
+
 	transaction := &inputTransaction{}
-	encoded, err := input.encodeValue(transaction)
+	encoded, err := OpaqueHandleInput(OpaqueHandle{handle: &opaqueHandle{key: 71}}).encodeValue(transaction)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handle := encoded.GetHandle()
-	if handle == nil || handle.Key != 72 || handle.HandleType != cffi.BamlHandleType_UNTAGGED_RUST_DATA {
+	if handle == nil || handle.Key != 72 || handle.HandleType != cffi.BamlHandleType_ADT_RUNTIME_VALUE {
 		t.Fatalf("unexpected inbound handle: %#v", handle)
 	}
 	if len(transaction.keys) != 1 || transaction.keys[0] != 72 {
@@ -179,14 +186,13 @@ func TestRustTypeInputClonesTransactionallyAndRollsBack(t *testing.T) {
 	}
 }
 
-func TestRustTypeInputIsSafeForConcurrentRepeatedUse(t *testing.T) {
+func TestOpaqueHandleInputIsSafeForConcurrentRepeatedUse(t *testing.T) {
 	originalClone := cloneInboundHandle
 	originalRelease := releaseInboundHandle
 	t.Cleanup(func() {
 		cloneInboundHandle = originalClone
 		releaseInboundHandle = originalRelease
 	})
-
 	var next atomic.Uint64
 	next.Store(100)
 	cloneInboundHandle = func(key uint64) (uint64, error) {
@@ -197,16 +203,16 @@ func TestRustTypeInputIsSafeForConcurrentRepeatedUse(t *testing.T) {
 	}
 	var released atomic.Int32
 	releaseInboundHandle = func(uint64) { released.Add(1) }
-	value := RustType{handle: &rustTypeHandle{key: 81}}
+	value := OpaqueHandle{handle: &opaqueHandle{key: 81}}
 
 	const uses = 64
 	var group sync.WaitGroup
-	for index := 0; index < uses; index++ {
+	for range uses {
 		group.Add(1)
 		go func() {
 			defer group.Done()
 			transaction := &inputTransaction{}
-			encoded, err := RustTypeInput(value).encodeValue(transaction)
+			encoded, err := OpaqueHandleInput(value).encodeValue(transaction)
 			if err != nil {
 				t.Error(err)
 				return
@@ -223,30 +229,17 @@ func TestRustTypeInputIsSafeForConcurrentRepeatedUse(t *testing.T) {
 	}
 }
 
-func TestRustTypeDescriptorAndDynamicInputAreExact(t *testing.T) {
-	if !RustTypeBAMLType().Equal(BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_RustType{RustType: &cffi.BamlTyRustType{}}}}) {
-		t.Fatal("RustType descriptor is not the canonical wire leaf")
-	}
-	if RustTypeBAMLType().Equal(MetaTypeBAMLType()) {
-		t.Fatal("RustType descriptor must not equal the type metatype")
-	}
-	zero := RustType{}
-	if input := Any(zero); input.err == nil {
-		t.Fatal("dynamic zero RustType must be rejected")
-	}
-}
-
 // Every engine-built instance decodes as a dynamic value, whatever names its
 // class: an instance of a run-time declaration is labelled, not named.
 func TestRuntimeValueOfAnyDeclarationDecodesDynamically(t *testing.T) {
-	originalClone := cloneOutboundRustTypeHandle
-	originalRelease := releaseRustTypeHandle
+	originalClone := cloneOutboundHandle
+	originalRelease := releaseOutboundHandle
 	t.Cleanup(func() {
-		cloneOutboundRustTypeHandle = originalClone
-		releaseRustTypeHandle = originalRelease
+		cloneOutboundHandle = originalClone
+		releaseOutboundHandle = originalRelease
 	})
-	cloneOutboundRustTypeHandle = func(key uint64) (uint64, error) { return key + 100, nil }
-	releaseRustTypeHandle = func(uint64) {}
+	cloneOutboundHandle = func(key uint64) (uint64, error) { return key + 100, nil }
+	releaseOutboundHandle = func(uint64) {}
 	previousInboundClone := cloneInboundHandle
 	cloneInboundHandle = func(key uint64) (uint64, error) { return key + 1, nil }
 	t.Cleanup(func() { cloneInboundHandle = previousInboundClone })
@@ -256,7 +249,7 @@ func TestRuntimeValueOfAnyDeclarationDecodesDynamically(t *testing.T) {
 		{Ty: &cffi.BamlTy_Enum{Enum: &cffi.BamlTyEnum{Head: &cffi.BamlTyEnum_AnonymousLabel{AnonymousLabel: "Category"}}}},
 		{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Head: &cffi.BamlTyClass_Name{Name: "reflect.Session"}}}},
 	} {
-		value := rustTypeWireValue(&cffi.BamlOutboundHandle{Key: 7, HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE, Ty: ty})
+		value := handleWireValue(&cffi.BamlOutboundHandle{Key: 7, HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE, Ty: ty})
 		decoded, err := DecodeAs[any](value)
 		if err != nil {
 			t.Fatalf("decode %v: %v", ty, err)
@@ -276,18 +269,18 @@ func TestRuntimeValueOfAnyDeclarationDecodesDynamically(t *testing.T) {
 // held, so two decodes of one instance are Equal and another instance's are
 // not.
 func TestOpaqueHandleEqualityIsInstanceIdentity(t *testing.T) {
-	originalClone := cloneOutboundRustTypeHandle
-	originalRelease := releaseRustTypeHandle
+	originalClone := cloneOutboundHandle
+	originalRelease := releaseOutboundHandle
 	t.Cleanup(func() {
-		cloneOutboundRustTypeHandle = originalClone
-		releaseRustTypeHandle = originalRelease
+		cloneOutboundHandle = originalClone
+		releaseOutboundHandle = originalRelease
 	})
-	cloneOutboundRustTypeHandle = func(key uint64) (uint64, error) { return key, nil }
-	releaseRustTypeHandle = func(uint64) {}
+	cloneOutboundHandle = func(key uint64) (uint64, error) { return key, nil }
+	releaseOutboundHandle = func(uint64) {}
 
 	decode := func(key uint64) OpaqueHandle {
 		t.Helper()
-		value := rustTypeWireValue(&cffi.BamlOutboundHandle{
+		value := handleWireValue(&cffi.BamlOutboundHandle{
 			Key:        key,
 			HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE,
 			Ty:         &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Head: &cffi.BamlTyClass_Name{Name: "reflect.Session"}}}},

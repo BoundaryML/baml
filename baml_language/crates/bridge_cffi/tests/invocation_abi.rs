@@ -54,7 +54,7 @@ fn request(name: &str) -> CallFunctionArgs {
 }
 /// An ordinary value row: a handle a host may pass as an application value.
 fn ordinary_row() -> CffiHandleTableEntry {
-    CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::Media(
+    CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(
         bex_project::MediaValue::from_url(
             bex_project::MediaKind::Generic,
             "https://example.com/",
@@ -159,7 +159,7 @@ async fn raw_invocation_and_callback_lifecycles() {
         panic!("a ReservedSpan crosses as a reference")
     };
     let entry = HANDLE_TABLE.resolve(table_key(handle.key)).unwrap();
-    let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+    let CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::TaggedHeapHandle {
         kind:
             bex_project::TaggedHeapHandleKind::TraceControl(bex_project::TraceControl::Reservation(
                 reservation,

@@ -819,7 +819,7 @@ mod injected_argument_tests {
 /// callable `@spec`/`@stream` companions continue to ordinary function
 /// emission.
 /// Whether the class `name` is a host's own value, which crosses as the
-/// host's handle to it: an instance is the runtime's `::baml::rust_type`.
+/// host's handle to it: an instance is the runtime's `::baml::host_value`.
 fn is_host_value(pool: &SymbolPool, name: &Name) -> bool {
     match pool.get(name) {
         Some(Symbol::Class(class_def)) => match class_def.crossing {
@@ -1005,7 +1005,7 @@ enum ClassForm<'a> {
     /// and the class contributes nothing.
     Proxied,
     /// A host's own value (`baml.host.Value`): an instance is the host's
-    /// handle to it, the runtime's `::baml::rust_type` ([`translate_ty`]
+    /// handle to it, the runtime's `::baml::host_value` ([`translate_ty`]
     /// names it), and the class contributes nothing.
     Handle,
 }
@@ -1649,7 +1649,7 @@ fn incomplete_stored_type_issue(
     complete_types: &BTreeSet<Name>,
 ) -> Option<String> {
     match ty {
-        // A host's own value is the runtime's `::baml::rust_type`, which is
+        // A host's own value is the runtime's `::baml::host_value`, which is
         // always complete.
         Ty::Class(name, _) if !complete_types.contains(name) && !is_host_value(pool, name) => {
             Some(format!("stores incomplete class `{name}`"))
@@ -1816,7 +1816,7 @@ fn translate_ty(
                 ClassCrossing::FunctionSpec => return proxied("function_spec"),
                 ClassCrossing::Stream => return proxied("stream"),
                 // A host's own value is the host's handle to it.
-                ClassCrossing::HostValue => return carried("::baml::rust_type"),
+                ClassCrossing::HostValue => return carried("::baml::host_value"),
                 ClassCrossing::Fields | ClassCrossing::Opaque => {}
             }
             // Type args occur only on generic-class instantiations, and
@@ -2336,8 +2336,12 @@ fn render_header(
             }
             // The engine keys one instance by one handle while any reference
             // to it is held, so two references name one instance exactly when
-            // they hold the same key.
-            EmittedShape::Opaque => Some(format!("a.{state}->key == b.{state}->key")),
+            // they hold the same key. A moved-from reference holds none and
+            // equals only another that holds none.
+            EmittedShape::Opaque => Some(format!(
+                "a.{state} && b.{state} ? a.{state}->key == b.{state}->key \
+                 : a.{state} == b.{state}"
+            )),
             EmittedShape::Carried => None,
         };
         if let Some(eq_expr) = eq_expr {
@@ -3061,7 +3065,10 @@ mod opaque_class_tests {
         );
         // Equal when both reference one engine instance: one key.
         assert!(
-            header.contains("return a.state_->key == b.state_->key;"),
+            header.contains(
+                "return a.state_ && b.state_ ? a.state_->key == b.state_->key \
+                 : a.state_ == b.state_;"
+            ),
             "{header}"
         );
         // It crosses as the handle both ways, never as a `class_value`.
@@ -3127,10 +3134,10 @@ mod opaque_class_tests {
         }
     }
 
-    /// A host's own value is the runtime's handle type, `::baml::rust_type`, in
+    /// A host's own value is the runtime's handle type, `::baml::host_value`, in
     /// every position a type names it, and its class emits nothing.
     #[test]
-    fn host_value_class_is_the_rust_type_handle() {
+    fn host_value_class_is_the_host_value_handle() {
         let host_value = Name::new(
             BaseName::new("baml"),
             vec![BaseName::new("host")],
@@ -3201,7 +3208,7 @@ mod opaque_class_tests {
 
         let header = PathBuf::from("include/baml_sdk.h");
         assert!(
-            host_value[&header].contains("::baml::rust_type handle"),
+            host_value[&header].contains("::baml::host_value handle"),
             "{}",
             host_value[&header]
         );

@@ -14,28 +14,20 @@ pub struct BamlHandle {
 ///
 /// Stdlib symbols with special host-side decoding rules today:
 ///    - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
-///    - baml.llm.PromptAst                     -> ADT_PROMPT_AST
+///    - ai.Prompt                              -> ADT_PROMPT_AST
 ///    - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///    - ai.FunctionSpec                        -> ADT_FUNCTION_SPEC
-///    - runtime-created nominal values         -> ADT_RUNTIME_VALUE
+///    - `@@rust_type` and run-time instances  -> ADT_RUNTIME_VALUE
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
 /// engine-side `BexExternalAdt` is a `TaggedHeapHandle { ty, heap_handle }`."
 /// The outbound `BamlOutboundHandle.name` field carries the underlying
 /// class + concrete generic args.
-///
-/// Stdlib symbols TODO (decode to bare BamlPyHandle today):
-///    - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
-///    - baml.glob.Glob, baml.sap.ParseCache
-///
-/// To enumerate all candidates: `rg '\$rust_type' baml_language/crates/baml_builtins2/`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum BamlHandleType {
     HandleUnspecified = 0,
-    /// CffiHandleTableEntry::RustData(_)
-    UntaggedRustData = 1,
     /// CffiHandleTableEntry::BexHeapHandle(_)
     UntaggedBexHeap = 2,
     FunctionRef = 5,
@@ -45,7 +37,6 @@ pub enum BamlHandleType {
     AdtMediaPdf = 9,
     AdtMediaGeneric = 10,
     AdtPromptAst = 11,
-    AdtType = 13,
     AdtTaggedHeapHandle = 14,
     /// Host-owned callable referenced via per-bridge HostValueRegistry.
     /// Lifetime: Rust drop notifies host via HostReleaseFn (not via
@@ -75,6 +66,10 @@ pub enum BamlHandleType {
     /// cannot be supplied as ordinary application values.
     InvocationState = 19,
     TraceReservation = 20,
+    /// The engine's hold on a host value it sent the host: the `pin` of a
+    /// `BamlOutboundHandle`, released with the result that carried it. Never a
+    /// value.
+    HostValuePin = 21,
 }
 impl BamlHandleType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -84,7 +79,6 @@ impl BamlHandleType {
     pub fn as_str_name(&self) -> &'static str {
         match self {
             Self::HandleUnspecified => "HANDLE_UNSPECIFIED",
-            Self::UntaggedRustData => "UNTAGGED_RUST_DATA",
             Self::UntaggedBexHeap => "UNTAGGED_BEX_HEAP",
             Self::FunctionRef => "FUNCTION_REF",
             Self::AdtMediaImage => "ADT_MEDIA_IMAGE",
@@ -93,7 +87,6 @@ impl BamlHandleType {
             Self::AdtMediaPdf => "ADT_MEDIA_PDF",
             Self::AdtMediaGeneric => "ADT_MEDIA_GENERIC",
             Self::AdtPromptAst => "ADT_PROMPT_AST",
-            Self::AdtType => "ADT_TYPE",
             Self::AdtTaggedHeapHandle => "ADT_TAGGED_HEAP_HANDLE",
             Self::HostValueCallable => "HOST_VALUE_CALLABLE",
             Self::HostValueOpaque => "HOST_VALUE_OPAQUE",
@@ -101,13 +94,13 @@ impl BamlHandleType {
             Self::AdtRuntimeValue => "ADT_RUNTIME_VALUE",
             Self::InvocationState => "INVOCATION_STATE",
             Self::TraceReservation => "TRACE_RESERVATION",
+            Self::HostValuePin => "HOST_VALUE_PIN",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
             "HANDLE_UNSPECIFIED" => Some(Self::HandleUnspecified),
-            "UNTAGGED_RUST_DATA" => Some(Self::UntaggedRustData),
             "UNTAGGED_BEX_HEAP" => Some(Self::UntaggedBexHeap),
             "FUNCTION_REF" => Some(Self::FunctionRef),
             "ADT_MEDIA_IMAGE" => Some(Self::AdtMediaImage),
@@ -116,7 +109,6 @@ impl BamlHandleType {
             "ADT_MEDIA_PDF" => Some(Self::AdtMediaPdf),
             "ADT_MEDIA_GENERIC" => Some(Self::AdtMediaGeneric),
             "ADT_PROMPT_AST" => Some(Self::AdtPromptAst),
-            "ADT_TYPE" => Some(Self::AdtType),
             "ADT_TAGGED_HEAP_HANDLE" => Some(Self::AdtTaggedHeapHandle),
             "HOST_VALUE_CALLABLE" => Some(Self::HostValueCallable),
             "HOST_VALUE_OPAQUE" => Some(Self::HostValueOpaque),
@@ -124,6 +116,7 @@ impl BamlHandleType {
             "ADT_RUNTIME_VALUE" => Some(Self::AdtRuntimeValue),
             "INVOCATION_STATE" => Some(Self::InvocationState),
             "TRACE_RESERVATION" => Some(Self::TraceReservation),
+            "HOST_VALUE_PIN" => Some(Self::HostValuePin),
             _ => None,
         }
     }
@@ -135,7 +128,7 @@ impl BamlHandleType {
 /// the type of a function's arg (which, for a generic function, is a TypeVar).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlTy {
-    #[prost(oneof = "baml_ty::Ty", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24")]
+    #[prost(oneof = "baml_ty::Ty", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 22, 23, 24")]
     pub ty: ::core::option::Option<baml_ty::Ty>,
 }
 /// Nested message and enum types in `BamlTy`.
@@ -175,8 +168,6 @@ pub mod baml_ty {
         Function(::prost::alloc::boxed::Box<super::BamlTyFunction>),
         #[prost(message, tag = "15")]
         Future(::prost::alloc::boxed::Box<super::BamlTyFuture>),
-        #[prost(message, tag = "16")]
-        RustType(super::BamlTyRustType),
         /// `meta_type` (not `type`) — `type` is a reserved word in TypeScript;
         /// mirrors `RuntimeTy::Type`, the `type` metatype.
         #[prost(message, tag = "17")]
@@ -397,10 +388,6 @@ pub struct BamlTyFuture {
     pub value: ::core::option::Option<::prost::alloc::boxed::Box<BamlTy>>,
     #[prost(message, optional, boxed, tag = "2")]
     pub error: ::core::option::Option<::prost::alloc::boxed::Box<BamlTy>>,
-}
-/// Opaque Rust-managed state (`RuntimeTy::RustType`).
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyRustType {
 }
 /// The `type` metatype — a runtime value wrapping a `BamlTy` (`RuntimeTy::Type`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -692,8 +679,16 @@ pub mod baml_outbound_value {
 /// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries an
 /// extra `ty` describing the underlying tagged type as a full `BamlTy` — the
 /// faithful wire form, so an interface keeps its associated-type bindings even
-/// though readers only consume the class FQN for typed-wrapper dispatch. Only
-/// `ADT_TAGGED_HEAP_HANDLE` populates it; other handle types leave it unset.
+/// though readers only consume the class FQN for typed-wrapper dispatch. A
+/// reference to an engine value (a callable, a stream, a function spec, a
+/// runtime value, a host body's cancel token) populates it; other handle types
+/// leave it unset.
+///
+/// A host value (`HOST_VALUE_CALLABLE`, `HOST_VALUE_OPAQUE`) goes back to its
+/// host by the host's own `key`, and carries a `pin`: a `HOST_VALUE_PIN` row
+/// that keeps the engine's references to that key while the host reads the
+/// value. The host releases the pin, as it releases any engine row, with the
+/// result (or callback arguments) that carried it; it never sends one back.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlOutboundHandle {
     #[prost(uint64, tag = "1")]
@@ -702,6 +697,8 @@ pub struct BamlOutboundHandle {
     pub handle_type: i32,
     #[prost(message, optional, tag = "3")]
     pub ty: ::core::option::Option<BamlTy>,
+    #[prost(uint64, tag = "4")]
+    pub pin: u64,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlValueNull {

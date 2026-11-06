@@ -37,13 +37,14 @@ def _options_handle(options):
     return options._to_pyhandle()
 
 
-def _enter(definition, options, caller, inputs):
+def _enter(marker, caller, inputs):
     active = _current_execution_context.get()
     try:
+        # The marker holds the definition and options, read once when the
+        # function was instrumented.
         execution, state, cancel = _begin_host_invocation(
-            definition,
+            marker,
             active._state if active is not None else None,
-            options,
             caller,
             inputs,
         )
@@ -169,7 +170,7 @@ def instrument(function_or_options=None, *, name=None):
                     if consume_adoption(marker):
                         return await function(*args, **kwargs)
                     execution, token = _enter(
-                        definition, options, _caller_site(), inputs(args, kwargs)
+                        marker, _caller_site(), inputs(args, kwargs)
                     )
                     outcome = "ok"
                     result = None
@@ -194,9 +195,7 @@ def instrument(function_or_options=None, *, name=None):
             with _trace_options_scope(options):
                 if consume_adoption(marker):
                     return function(*args, **kwargs)
-                execution, token = _enter(
-                    definition, options, _caller_site(), inputs(args, kwargs)
-                )
+                execution, token = _enter(marker, _caller_site(), inputs(args, kwargs))
                 outcome = "ok"
                 result = None
                 try:

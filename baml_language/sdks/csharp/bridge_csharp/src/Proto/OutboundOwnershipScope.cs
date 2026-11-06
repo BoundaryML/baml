@@ -10,6 +10,10 @@ internal sealed class OutboundOwnershipScope : IDisposable
     // A returned type value's `live` heads, one reference per occurrence.
     private readonly Dictionary<BamlTy, BamlSafeHandle[]> typeRows =
         new(ReferenceEqualityComparer.Instance);
+    // A returned host value's pin, one per occurrence: the engine's hold on
+    // the host key while the host reads it. Nothing claims one; each is
+    // released with the scope.
+    private readonly List<BamlSafeHandle> pins = [];
     private bool disposed;
 
     private OutboundOwnershipScope(IEnumerable<BamlOutboundValue?> roots, NativeApi? api)
@@ -26,7 +30,11 @@ internal sealed class OutboundOwnershipScope : IDisposable
             typeRows.Add(type, new BamlSafeHandle[typeKeys.Count]);
         }
         int rowCount = types.Sum(type => type.Keys.Count);
-        if (handles.Count == 0 && rowCount == 0)
+        // A host value owns its pin, not its key; an encoding with no engine
+        // behind it carries no pin and owns nothing.
+        int ownedCount = handles.Count(handle => !IsHostValue(handle.HandleType) || handle.Pin != 0)
+            + rowCount;
+        if (ownedCount == 0)
         {
             return;
         }
@@ -34,7 +42,7 @@ internal sealed class OutboundOwnershipScope : IDisposable
         {
             throw new BamlProtocolException(
                 "The native bridge returned an owned handle outside a native call context.",
-                $"The result contained {handles.Count + rowCount} owned handle(s), but no native API owner was supplied.");
+                $"The result contained {ownedCount} owned handle(s), but no native API owner was supplied.");
         }
 
         // Each occurrence of an engine key is one reference, and the engine
@@ -45,11 +53,14 @@ internal sealed class OutboundOwnershipScope : IDisposable
         {
             foreach (BamlOutboundHandle handle in handles)
             {
-                if (IsHostValue(handle.HandleType))
+                if (!IsHostValue(handle.HandleType))
                 {
-                    continue;
+                    owners.Add(handle, api.OwnHandle(handle.Key));
                 }
-                owners.Add(handle, api.OwnHandle(handle.Key));
+                else if (handle.Pin != 0)
+                {
+                    pins.Add(api.OwnHandle(handle.Pin));
+                }
             }
 
             foreach ((BamlTy type, List<ulong> typeKeys) in types)
@@ -149,6 +160,12 @@ internal sealed class OutboundOwnershipScope : IDisposable
         }
 
         typeRows.Clear();
+        foreach (BamlSafeHandle pin in pins)
+        {
+            pin.Dispose();
+        }
+
+        pins.Clear();
     }
 
     private static bool IsHostValue(BamlHandleType handleType) =>

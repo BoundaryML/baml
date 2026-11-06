@@ -82,6 +82,7 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(invocation::_trace_selection))?;
     m.add_wrapped(wrap_pyfunction!(invocation::_invocation_context))?;
     m.add_class::<invocation::_HostExecution>()?;
+    m.add_class::<invocation::_HostMarker>()?;
     m.add_wrapped(wrap_pyfunction!(invocation::_validate_host_options))?;
     m.add_wrapped(wrap_pyfunction!(invocation::_begin_host_invocation))?;
     m.add_wrapped(wrap_pyfunction!(invocation::_define_host_marker))?;

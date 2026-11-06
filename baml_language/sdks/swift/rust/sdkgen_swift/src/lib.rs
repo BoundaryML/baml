@@ -480,7 +480,7 @@ fn render_supported_class(
             ty: translate_ty(&prop.ty, ctx).ok_or_else(unrepresentable)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
-            is_rust: translate_ty::is_handle(&prop.ty, ctx),
+            is_handle: translate_ty::is_handle(&prop.ty, ctx),
             slot: slot_expr(&prop.ty, ctx, &class_argument).ok_or_else(unrepresentable)?,
         });
     }
@@ -571,8 +571,8 @@ fn media_handle_field() -> RenderedField {
         ty: translate_ty::HANDLE.to_string(),
         boxed: false,
         doc: Some("The engine's handle to the media.".to_string()),
-        is_rust: true,
-        slot: translate_ty::handle_slot(),
+        is_handle: true,
+        slot: translate_ty::engine_handle_slot(),
     }
 }
 
@@ -1467,7 +1467,7 @@ mod tests {
     /// A host's own value is the host's handle, `BamlHandle?`, in every
     /// position a type names it, and its class emits nothing.
     #[test]
-    fn host_value_class_is_the_rust_type_handle() {
+    fn host_value_class_is_the_host_handle() {
         let host_value = Name::new("baml".into(), vec!["host".into()], "Value".into());
         let class = |name: Name, crossing, properties: Vec<(&str, Ty)>| {
             Symbol::Class(baml_sdkgen_types::Class {

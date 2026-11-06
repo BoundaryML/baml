@@ -271,7 +271,7 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
             let entry = TableKey::new(*key).and_then(|key| HANDLE_TABLE.resolve(key));
             let signature = match entry.as_deref() {
                 Some(bridge_ctypes::CffiHandleTableEntry::Adt(
-                    bex_project::BexExternalAdt::TaggedHeapHandle {
+                    bridge_ctypes::TableAdt::TaggedHeapHandle {
                         ty:
                             bex_project::AnnotationTy::Function {
                                 params,
@@ -456,19 +456,17 @@ impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
             dispatch.get(0)?.ok_or_else(|| {
                 napi::Error::new(Status::GenericFailure, "dispatchFor gave no function")
             })?;
-        let marker: Option<&crate::handle::BamlHandle> = match dispatch.get::<Unknown>(1)? {
+        let marker = match dispatch.get::<Unknown>(1)? {
             Some(marker)
                 if !matches!(marker.get_type()?, ValueType::Null | ValueType::Undefined) =>
             {
-                Some(<&crate::handle::BamlHandle>::from_unknown(marker)?)
+                Some(std::sync::Arc::clone(
+                    &<&crate::host_instrumentation::HostMarker>::from_unknown(marker)?.marker,
+                ))
             }
             Some(_) | None => None,
         };
-        crate::host_value::register_callable(
-            dispatch_fn,
-            marker.map(crate::handle::BamlHandle::key_u64),
-            signature.clone(),
-        )
+        crate::host_value::register_callable(dispatch_fn, marker, signature.clone())
     }
 
     fn leaf(
@@ -480,13 +478,29 @@ impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
         let bytes: Uint8Array = found.get_named_property("bytes")?;
         let value = InboundValue::decode(bytes.as_ref())
             .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?;
-        let owner = match found.get::<String>("cloned")? {
-            Some(cloned) => Some(Owner::Handle(
+        // What the leaf took for its wire occurrence: a cloned engine
+        // reference, or one more reference to a host value it sends again.
+        let owner = match (
+            found.get::<String>("cloned")?,
+            found.get::<String>("sentAgain")?,
+        ) {
+            (Some(cloned), None) => Some(Owner::Handle(
                 cloned.parse().ok().and_then(TableKey::new).ok_or_else(|| {
                     napi::Error::new(Status::InvalidArg, "cloned handle key is not a live key")
                 })?,
             )),
-            None => None,
+            (None, Some(sent)) => Some(Owner::Callable(
+                sent.parse().ok().and_then(HostKey::new).ok_or_else(|| {
+                    napi::Error::new(Status::InvalidArg, "a host value sent again has key 0")
+                })?,
+            )),
+            (None, None) => None,
+            (Some(_), Some(_)) => {
+                return Err(napi::Error::new(
+                    Status::GenericFailure,
+                    "the host adapter answered a leaf that is both an engine and a host reference",
+                ));
+            }
         };
         Ok((leaf_wire(kind, value)?, owner))
     }
@@ -501,7 +515,9 @@ impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
 
     fn release(&self, owner: Owner) {
         match owner {
-            Owner::Callable(key) => crate::host_value::release_registered(key),
+            // One reference to a host value: registered for this send, or
+            // taken to send it again.
+            Owner::Callable(key) => crate::host_value::release(key, 1),
             // Best effort: a key the engine never saw has no other owner.
             Owner::Handle(key) => {
                 let _ = handle_cffi::release_handle(key.get());

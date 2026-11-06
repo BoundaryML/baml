@@ -22,10 +22,12 @@
 //      TS decoder (proto.ts) inspects a decoded `HostCallable` instance,
 //      reads `_handle.key`, calls `lookupHostValue(key)` here, and re-throws
 //      the original JS error.
-//   5. When the engine drops its last `Arc<HostValueArc>(key)`, the Rust
-//      `host_release_callback` fires the TS-installed release callback
-//      (`native.registerHostValueReleaseCallback`), which calls `_releaseHostValue`
-//      here to remove the map entry.
+//   5. Rust counts the references to the key it handed the engine (one for
+//      the send it was minted for, one more each time a decoded handle
+//      carrying it is sent again). When the engine has given back the last
+//      one, Rust fires the TS-installed release callback
+//      (`native.registerHostValueReleaseCallback`), which calls
+//      `_releaseHostValue` here to remove the map entry.
 //
 // Foreign runtimes (a different Node process, the Python bridge, etc.) see
 // a `_handle` whose key doesn't resolve in their local registry; the
@@ -35,7 +37,7 @@
 // "no JS callable for this key"); `_releaseHostValue(0n)` is a benign
 // no-op since `mintHostValueKey` never returns `0`.
 
-import { mintHostValueKey, registerHostValueReleaseCallback, BamlHandle, type HandleKey } from './native.js';
+import { mintHostValueKey, registerHostValueReleaseCallback, releaseHostValueKey, BamlHandle, type HandleKey } from './native.js';
 import { baml_bridge } from './proto/baml_cffi.js';
 
 const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
@@ -83,31 +85,26 @@ export function registerHostOpaque(value: unknown): HandleKey {
     return key;
 }
 
-/** Roll back an opaque registration that was never transferred to Rust. */
+/**
+ * Roll back an opaque registration whose send never reached the engine: give
+ * back the reference it was minted with. The map entry goes with the key's
+ * last reference.
+ */
 export function releaseHostOpaque(key: HandleKey): void {
-    hostValueMap.delete(handleKeyToBigint(key));
+    releaseHostValueKey(key);
 }
 
 /**
  * Look up a host-registered JS value by key. Returns `undefined` when:
  * - the key is the reserved sentinel `0n` (no real value was registered);
- * - the engine has already released the entry (last `HostValueArc` clone
- *   dropped → Rust `host_release_callback` fired → `_releaseHostValue`
- *   removed the entry);
+ * - every reference to the key has been given back, so the entry is gone;
  * - the key was minted by a different Node process (cross-runtime handle).
  *
  * Callers should fall back to a metadata-built exception in those cases.
  *
- * GC/decode race: a release notification and a rehydrating decode can be
- * scheduled on the libuv loop concurrently in principle, but in practice
- * the same `HostValueArc` cannot drop *while* the engine is actively
- * emitting an outbound proto referencing its key — the outbound encode
- * holds a strong handle through proto serialization, and the release tsfn
- * isn't fired until that strong handle drops. By the time the TS decoder
- * runs `tryRehydrateHostValueByKey`, the only way the map entry is gone is if
- * a *prior* outbound completed and the engine has since dropped its last
- * Arc; in that case the user has already observed the original throw at
- * least once, so a second lookup-miss → metadata-fallback is acceptable.
+ * A key the engine sends out comes with a pin that holds the engine's
+ * references to it until the decode that carried it is done, so a key
+ * decoded from a result of this process always resolves here.
  */
 export function lookupHostValue(key: bigint): unknown {
     return hostValueMap.get(key);
@@ -131,9 +128,8 @@ export function tryRehydrateHostValueByKey(handle: unknown): unknown {
 
 /**
  * Internal: remove the map entry for `key`. Wired at module init as the
- * Rust-side release callback. Idempotent and absent-key-safe so the same
- * callback can be invoked for *every* `HostValueArc` release (including
- * callable keys, which never have a TS-side host-value entry).
+ * Rust-side release callback, which fires once per opaque key, when its last
+ * reference has been given back.
  */
 function _releaseHostValue(key: HandleKey): void {
     hostValueMap.delete(handleKeyToBigint(key));

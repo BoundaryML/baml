@@ -2920,10 +2920,10 @@ mod tests {
         assert!(lib.contains("Throws=CbError"), "{lib}");
     }
 
-    /// A host's own value is the `baml_bridge::RustType` handle, stated as the
-    /// `RustType` wire type, and its class emits nothing.
+    /// A host's own value is the `baml_bridge::HostValue` handle, stated as the
+    /// `baml.host.Value` class, and its class emits nothing.
     #[test]
-    fn host_value_class_is_the_rust_type_handle() {
+    fn host_value_class_is_the_host_value_handle() {
         let host_value = name("baml", &["host"], "Value");
         let holder = name("user", &[], "Holder");
         let round_trip = name("user", &[], "round_trip");
@@ -2960,10 +2960,13 @@ mod tests {
             .collect::<std::collections::BTreeMap<_, _>>();
         let flat_lib = flat(&files[std::path::Path::new("src/lib.rs")]);
         assert!(
-            flat_lib.contains("pubhandle:::baml_bridge::RustType"),
+            flat_lib.contains("pubhandle:::baml_bridge::HostValue"),
             "{flat_lib}"
         );
-        assert!(flat_lib.contains("BamlTyRustType"), "{flat_lib}");
+        assert!(
+            flat_lib.contains("class_ty(\"baml.host.Value\""),
+            "{flat_lib}"
+        );
         let host = &files[std::path::Path::new("src/baml/host/mod.rs")];
         assert!(!flat(host).contains("structValue"), "{host}");
     }

@@ -99,7 +99,7 @@ export const supportsSyncStreamPulls = true;
 /**
  * How the bridge binds a user function as a host callable on this platform.
  * On Node the bridge builds the threadsafe function itself, so it is handed
- * the dispatch wrapper and the host marker handle.
+ * the dispatch wrapper and the host marker.
  */
 export function registerCallableDispatch(dispatch, marker) {
     return [dispatch, marker ?? null];

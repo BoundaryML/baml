@@ -265,20 +265,13 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
             }
         }
         Ty::Never => "None".to_string(),
-        // `$rust_type` fields in stdlib stubs (Response._body, SseStream._handle, …).
-        // The host-language opaque-handle wrapper is `BamlPyHandle` from the
-        // bridge runtime, imported as `_BamlPyHandle` to keep `baml` (the
-        // local relative module) from shadowing it. The single-underscore
-        // field name still triggers Pydantic v2's private-attribute handling
-        // regardless of the annotation; `_decode_class` injects the value
-        // into `__pydantic_private__` post-construction.
     }
 }
 
 /// Whether the class `name` is a host's own value, which crosses as the
-/// host's handle to it and so renders as the runtime's `_BamlPyHandle`, like
-/// `Ty::RustType`. Without the declaration projection (translator-only unit
-/// tests) no class is.
+/// host's handle to it and so renders as the runtime's `_BamlPyHandle`.
+/// Without the declaration projection (translator-only unit tests) no class
+/// is.
 pub(crate) fn is_host_value(name: &Name, names: Option<&PythonNames>) -> bool {
     match names.and_then(|names| names.crossing(name)) {
         Some(ClassCrossing::HostValue) => true,

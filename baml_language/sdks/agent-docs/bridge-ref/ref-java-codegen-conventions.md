@@ -188,7 +188,7 @@ rules digest, not the rationale log).
   - **[decided]** token grammar (owner: "do B now"): FULL —
     list/map/optional/union/literal tokens with wire round-trip; the
     side-table binds whenever every wire arg is representable (residual
-    skips: media/function/rust_type/etc. arms and null/bytes primitive
+    skips: media/function/etc. arms and null/bytes primitive
     kinds, still all-or-nothing to keep positions aligned).
   - Known wart: `BamlType.toWireTy()`/`fromWireTy` are `public` only
     because the codec lives in `baml_bridge.internal`; hiding them needs
@@ -270,14 +270,14 @@ rules digest, not the rationale log).
   (`collect_raises_names`, `emit.rs:110-135`; rendered at
   `emit.rs:434-439`). There are no checked exceptions on the JVM side.
 - **Handle-backed value encode** **[decided]** (shipped): when a
-  handle-backed value is encoded inbound, its key is **freshly cloned**
-  (`BamlHandle.cloneKeyForWire`, `BamlHandle.java:120`) because the engine
-  **drains** the sent key on decode while the Java object keeps its own.
-  This covers both a media value's `_data` handle
-  (`class_value(baml.media.X)`) and a bare `$rust_type` shell's private
-  handle field (`baml.fs.File._handle`, `baml.http.Response._body` →
-  `InboundValue.handle{key, handle_type}`) — same drain contract for both
-  (`ProtoWriter.java:200-210`, `259-260`).
+  handle-backed value is encoded inbound, it takes one more ownership of its
+  row (`BamlHandle.cloneKeyForWire`) because the engine **drains** the sent
+  ownership on decode while the Java object keeps its own.
+  This covers an opaque `@@rust_type` instance (`baml.fs.File`, or the
+  `_ResponseBody` that the plain class `baml.http.Response` holds in its
+  `_body` field → `InboundValue.handle{key, ADT_RUNTIME_VALUE}`) and the
+  `BamlStream` receiver (`ProtoWriter.encodeInboundValue`). A media value
+  goes as its portable `media_value`, not as a handle.
 - **Host callables** **[open]** (TestHostCallables — nothing in place
   Java-side yet; the whole slice, decisions A–F, awaits the owner). Load
   the decisions doc for the end-to-end Python reference and the option

@@ -389,8 +389,16 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
 /// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries an
 /// extra `ty` describing the underlying tagged type as a full `BamlTy` — the
 /// faithful wire form, so an interface keeps its associated-type bindings even
-/// though readers only consume the class FQN for typed-wrapper dispatch. Only
-/// `ADT_TAGGED_HEAP_HANDLE` populates it; other handle types leave it unset.
+/// though readers only consume the class FQN for typed-wrapper dispatch. A
+/// reference to an engine value (a callable, a stream, a function spec, a
+/// runtime value, a host body's cancel token) populates it; other handle types
+/// leave it unset.
+///
+/// A host value (`HOST_VALUE_CALLABLE`, `HOST_VALUE_OPAQUE`) goes back to its
+/// host by the host's own `key`, and carries a `pin`: a `HOST_VALUE_PIN` row
+/// that keeps the engine's references to that key while the host reads the
+/// value. The host releases the pin, as it releases any engine row, with the
+/// result (or callback arguments) that carried it; it never sends one back.
 nonisolated struct BamlBridge_Cffi_V1_BamlOutboundHandle: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -408,6 +416,8 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundHandle: Sendable {
   var hasTy: Bool {self._ty != nil}
   /// Clears the value of `ty`. Subsequent reads from it will return its default value.
   mutating func clearTy() {self._ty = nil}
+
+  var pin: UInt64 = 0
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1487,7 +1497,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlOutboundValue: SwiftProtobuf.Messag
 
 nonisolated extension BamlBridge_Cffi_V1_BamlOutboundHandle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlOutboundHandle"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{3}handle_type\0\u{1}ty\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{3}handle_type\0\u{1}ty\0\u{1}pin\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1498,6 +1508,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlOutboundHandle: SwiftProtobuf.Messa
       case 1: try { try decoder.decodeSingularUInt64Field(value: &self.key) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.handleType) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._ty) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.pin) }()
       default: break
       }
     }
@@ -1517,6 +1528,9 @@ nonisolated extension BamlBridge_Cffi_V1_BamlOutboundHandle: SwiftProtobuf.Messa
     try { if let v = self._ty {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    if self.pin != 0 {
+      try visitor.visitSingularUInt64Field(value: self.pin, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1524,6 +1538,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlOutboundHandle: SwiftProtobuf.Messa
     if lhs.key != rhs.key {return false}
     if lhs.handleType != rhs.handleType {return false}
     if lhs._ty != rhs._ty {return false}
+    if lhs.pin != rhs.pin {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

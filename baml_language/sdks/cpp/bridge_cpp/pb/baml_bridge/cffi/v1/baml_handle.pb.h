@@ -72,7 +72,6 @@ namespace cffi {
 namespace v1 {
 enum BamlHandleType : int {
   HANDLE_UNSPECIFIED = 0,
-  UNTAGGED_RUST_DATA = 1,
   UNTAGGED_BEX_HEAP = 2,
   FUNCTION_REF = 5,
   ADT_MEDIA_IMAGE = 6,
@@ -81,7 +80,6 @@ enum BamlHandleType : int {
   ADT_MEDIA_PDF = 9,
   ADT_MEDIA_GENERIC = 10,
   ADT_PROMPT_AST = 11,
-  ADT_TYPE = 13,
   ADT_TAGGED_HEAP_HANDLE = 14,
   HOST_VALUE_CALLABLE = 15,
   HOST_VALUE_OPAQUE = 16,
@@ -89,6 +87,7 @@ enum BamlHandleType : int {
   ADT_RUNTIME_VALUE = 18,
   INVOCATION_STATE = 19,
   TRACE_RESERVATION = 20,
+  HOST_VALUE_PIN = 21,
   BamlHandleType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   BamlHandleType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -99,11 +98,11 @@ extern const uint32_t BamlHandleType_internal_data_[];
 inline constexpr BamlHandleType BamlHandleType_MIN =
     static_cast<BamlHandleType>(0);
 inline constexpr BamlHandleType BamlHandleType_MAX =
-    static_cast<BamlHandleType>(20);
+    static_cast<BamlHandleType>(21);
 inline bool BamlHandleType_IsValid(int value) {
-  return 0 <= value && value <= 20 && ((2093031u >> value) & 1) != 0;
+  return 0 <= value && value <= 21 && ((4181989u >> value) & 1) != 0;
 }
-inline constexpr int BamlHandleType_ARRAYSIZE = 20 + 1;
+inline constexpr int BamlHandleType_ARRAYSIZE = 21 + 1;
 const ::std::string& BamlHandleType_Name(BamlHandleType value);
 template <typename T>
 const ::std::string& BamlHandleType_Name(T value) {

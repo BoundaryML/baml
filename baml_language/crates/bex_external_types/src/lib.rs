@@ -29,9 +29,9 @@ mod json_alias;
 mod runtime_ty_identity;
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
-    AnnotationTy, AsBexExternalValue, BexExternalAdt, BexExternalValue, RuntimeTy,
-    TaggedHeapHandleKind, TraceControl, TypeName, UnionMetadata, WireFunctionParamTy, WireHead,
-    WireTy, payload_value,
+    AnnotationTy, AsBexExternalValue, BexExternalAdt, BexExternalValue, CancelTokenCapability,
+    RuntimeTy, TaggedHeapHandleKind, TraceControl, TypeName, UnionMetadata, WireFunctionParamTy,
+    WireHead, WireTy, payload_value,
 };
 pub use bex_resource_types::{
     HostKey, HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,

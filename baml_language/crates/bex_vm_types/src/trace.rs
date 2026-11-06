@@ -144,10 +144,6 @@ impl ReservedSpanData {
     }
 }
 
-impl crate::BexRustData for SpanId {
-    fn measure(&self, _: &mut crate::Meter) {}
-}
-
 impl TraceOptionsData {
     /// What the options keep alive: a context patch, shared with every span
     /// that carries it.
@@ -171,13 +167,6 @@ impl crate::BexRustData for TraceOptionsData {
 
 impl crate::BexRustData for ReservedSpanData {
     fn measure(&self, meter: &mut crate::Meter) {
-        self.options.measure_into(meter);
-    }
-}
-
-impl crate::BexRustData for HostMarker {
-    fn measure(&self, meter: &mut crate::Meter) {
-        meter.bytes(self.definition.retained_bytes());
         self.options.measure_into(meter);
     }
 }

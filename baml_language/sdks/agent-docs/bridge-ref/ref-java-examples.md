@@ -848,9 +848,10 @@ public static java.lang.String call_with_typed_throws_propagating(
 **LANDED** (commit `202883518`, per the owner-accepted A1–F1 brief). The whole
 slice is wired end-to-end — `function_calls` is 154/0:
 
-- **Registry (A1):** a Java-side `ConcurrentHashMap<Long,Object>` in `HostCalls`
-  holds callables *and* opaque throwables under one keyspace
-  (`registerCallable` / `lookup` / `release`, reached from `BamlFfi.hostRelease`);
+- **Registry (A1):** a Java-side `ConcurrentHashMap` in `HostCalls` holds
+  callables *and* opaque throwables under one keyspace, each with a count of the
+  references to its key that are out (`registerCallable` / `sendAgain` /
+  `lookup` / `release(key, count)`, the last reached from `BamlFfi.hostRelease`);
   Rust is a pure router. `assertSame` identity is free
   (objects never leave the JVM).
 - **Executor (B1):** a dedicated cached **daemon `ExecutorService`**

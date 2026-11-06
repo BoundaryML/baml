@@ -26,7 +26,7 @@ internal static unsafe class NativeCallbacks
     internal static delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void>
         HostDispatchPointer => &OnHostDispatchV1;
 
-    internal static delegate* unmanaged[Cdecl]<ulong, void> HostReleasePointer => &OnHostRelease;
+    internal static delegate* unmanaged[Cdecl]<ulong, ulong, void> HostReleasePointer => &OnHostRelease;
 
     internal static void Register(NativeApi api)
     {
@@ -187,15 +187,25 @@ internal static unsafe class NativeCallbacks
     private static global::BamlBridge.Cffi.V1.BamlOutboundValue CloneControl(global::BamlBridge.Cffi.V1.BamlOutboundValue value, NativeApi api)
     {
         var result = value.Clone(); var owners = new List<BamlSafeHandle>();
+        ulong CloneRow(ulong source)
+        {
+            ulong key = 0;
+            if (api.Table->HandleClone(source, &key) != BamlCffiStatus.Ok || key == 0) throw new InvalidDataException("Inactive invocation control handle.");
+            owners.Add(api.OwnHandle(key));
+            return key;
+        }
         void Clone(global::BamlBridge.Cffi.V1.BamlOutboundValue item)
         {
             switch (item.ValueCase)
             {
                 case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.HandleValue:
-                    if (item.HandleValue.HandleType is global::BamlBridge.Cffi.V1.BamlHandleType.HostValueCallable or global::BamlBridge.Cffi.V1.BamlHandleType.HostValueOpaque) break;
-                    ulong key = 0;
-                    if (api.Table->HandleClone(item.HandleValue.Key, &key) != BamlCffiStatus.Ok || key == 0) throw new InvalidDataException("Inactive invocation control handle.");
-                    owners.Add(api.OwnHandle(key)); item.HandleValue.Key = key; break;
+                    // A host value's own key is the host's; the clone takes its own pin.
+                    if (item.HandleValue.HandleType is global::BamlBridge.Cffi.V1.BamlHandleType.HostValueCallable or global::BamlBridge.Cffi.V1.BamlHandleType.HostValueOpaque)
+                    {
+                        if (item.HandleValue.Pin != 0) item.HandleValue.Pin = CloneRow(item.HandleValue.Pin);
+                        break;
+                    }
+                    item.HandleValue.Key = CloneRow(item.HandleValue.Key); break;
                 case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.ClassValue:
                     foreach (var field in item.ClassValue.Fields) Clone(field.Value); break;
                 case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.ListValue:
@@ -269,11 +279,11 @@ internal static unsafe class NativeCallbacks
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnHostRelease(ulong hostKey)
+    private static void OnHostRelease(ulong hostKey, ulong count)
     {
         try
         {
-            HostValueRegistry.Shared.Release(hostKey);
+            HostValueRegistry.Shared.Release(hostKey, count);
         }
         catch
         {

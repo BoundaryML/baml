@@ -7,7 +7,8 @@ import * as baml from './baml_sdk/host_callable_tests/index.js';
 import * as contextBaml from './baml_sdk/execution_context_tests/index.js';
 import { isTestRuntime } from './test_runtime.js';
 import { CancelToken } from './baml_sdk/baml/spawn/index.js';
-import { BamlAbortError } from '@boundaryml/baml-bridge';
+import { BamlAbortError, initializeRuntimeFromBlob } from '@boundaryml/baml-bridge';
+import { BYTECODE } from './baml_sdk/_inlinedbaml.js';
 
 // The same overlay is compiled for Web, where host instrumentation is not
 // exported yet. The runtime gate below restricts execution to Node.
@@ -339,5 +340,14 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     expect(await baml.call_configured_callback_async(callback as unknown as (value: number) => number, 7,
       trace.context({ metadata: { stage: 'call' } }))).toBe(7);
     expect(trace.current_cancel_token()).toBe(null);
+  });
+
+  it('host_instrumented_function_survives_runtime_replacement', () => {
+    // The options are read once, when the function is instrumented: a call
+    // reads nothing of the runtime that built them.
+    const double = instrument(trace.span({ output: true }), (value: number) => value * 2);
+    expect(double(2)).toBe(4);
+    initializeRuntimeFromBlob(BYTECODE);
+    expect(double(3)).toBe(6);
   });
 });

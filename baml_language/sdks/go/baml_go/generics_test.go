@@ -109,7 +109,7 @@ func TestTypeOfCoversEverySupportedGenericLeaf(t *testing.T) {
 	assert("Audio", TypeOf[Audio](), AudioBAMLType())
 	assert("Video", TypeOf[Video](), VideoBAMLType())
 	assert("Pdf", TypeOf[Pdf](), PdfBAMLType())
-	assert("RustType", TypeOf[RustType](), RustTypeBAMLType())
+	assert("HostValue", TypeOf[HostValue](), HostValueBAMLType())
 	assert("enum", TypeOf[genericTestEnum](), EnumBAMLType("user.tests.Enum"))
 	assert(
 		"class",

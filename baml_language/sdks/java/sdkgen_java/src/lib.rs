@@ -2062,7 +2062,7 @@ mod tests {
     /// A host's own value is the host's handle, `baml_bridge.BamlHandle`, in
     /// every position a type names it, and its class emits nothing.
     #[test]
-    fn host_value_class_is_the_rust_type_handle() {
+    fn host_value_class_is_the_host_handle() {
         use baml_sdkgen_types::{CallableParam, ClassCrossing, CodegenFunctionParamMode};
         let host_value = name("baml", &["host"], "Value");
         let holder = name("user", &[], "Holder");

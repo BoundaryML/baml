@@ -252,13 +252,6 @@ func UnknownBAMLType() BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Unknown{Unknown: &cffi.BamlTyUnknown{}}}}
 }
 
-// RustTypeBAMLType describes BAML's opaque `$rust_type` leaf. Values of this
-// type are native-owned handle-table entries and never expose their payload to
-// Go.
-func RustTypeBAMLType() BAMLType {
-	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_RustType{RustType: &cffi.BamlTyRustType{}}}}
-}
-
 // Equal compares complete BAML type descriptors. Optionality is significant
 // at every level, while union member order is not.
 func (value BAMLType) Equal(other BAMLType) bool {
@@ -582,10 +575,6 @@ func validateBAMLTypeAt(value *cffi.BamlTy, position typePosition, depth int) er
 		}
 		if err := validateBAMLTypeAt(item.Future.Error, position, depth+1); err != nil {
 			return fmt.Errorf("future error: %w", err)
-		}
-	case *cffi.BamlTy_RustType:
-		if item.RustType == nil {
-			return fmt.Errorf("rust type descriptor is missing")
 		}
 	case *cffi.BamlTy_MetaType:
 		if item.MetaType == nil {

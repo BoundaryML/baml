@@ -80,8 +80,8 @@ func fakeImageInput() Input {
 	}})
 }
 
-func fakeRustTypeInput() Input {
-	return RustTypeInput(RustType{handle: &rustTypeHandle{key: 77}})
+func fakeOpaqueInput() Input {
+	return OpaqueHandleInput(OpaqueHandle{handle: &opaqueHandle{key: 77}})
 }
 
 func TestMediaInputDoesNotCloneBeforeTransactionalEncoding(t *testing.T) {
@@ -201,8 +201,8 @@ func TestTransactionalEncodingRollsBackEarlierArgumentsAndCloneFailures(t *testi
 	lifecycle = installInputHandleLifecycle(t)
 	lifecycle.failAt = 2
 	if _, transaction, err := encodeCallForDispatch(42, map[string]Input{
-		"a": fakeRustTypeInput(),
-		"b": fakeRustTypeInput(),
+		"a": fakeOpaqueInput(),
+		"b": fakeOpaqueInput(),
 	}); err == nil || transaction != nil || !strings.Contains(err.Error(), "injected clone failure") {
 		t.Fatalf("encode = transaction %#v, error %v; want clone failure", transaction, err)
 	}
@@ -265,8 +265,8 @@ func TestDeferredClassCapturesFieldInputsBeforeCallerMutatesMap(t *testing.T) {
 func TestRollbackReleasesEveryCloneOfAnUnsentRequest(t *testing.T) {
 	lifecycle := installInputHandleLifecycle(t)
 	_, transaction, err := encodeCallForDispatch(42, map[string]Input{
-		"a": fakeRustTypeInput(),
-		"z": fakeRustTypeInput(),
+		"a": fakeOpaqueInput(),
+		"z": fakeOpaqueInput(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -282,8 +282,8 @@ func TestRollbackReleasesEveryCloneOfAnUnsentRequest(t *testing.T) {
 func TestCommittedRequestReleasesNothing(t *testing.T) {
 	lifecycle := installInputHandleLifecycle(t)
 	_, transaction, err := encodeCallForDispatch(42, map[string]Input{
-		"a": fakeRustTypeInput(),
-		"z": fakeRustTypeInput(),
+		"a": fakeOpaqueInput(),
+		"z": fakeOpaqueInput(),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -194,8 +194,8 @@ Path Overview → Cancellation** detail under **Decoder Implementation Details**
 > hidden `_handle` (a `HOST_VALUE_OPAQUE` `BamlHandle`; `hostOpaqueHandle`
 > reflectively invokes the registered class's `_handle()` accessor, or a `Map`
 > fallback, `:377-390`), looks the key up in the Java-side registry via
-> `HostCalls.lookup(key)`, and — on a same-runtime hit —
-> re-throws the **original** `Throwable` *unwrapped* through `sneakyThrow`
+> `HostCalls.lookup(key)`, and — on a same-runtime hit — releases the handle's
+> pin and re-throws the **original** `Throwable` *unwrapped* through `sneakyThrow`
 > (`:265, 400-403`) so `assertSame` holds for any `Throwable` kind (checked,
 > unchecked, `Error`). A foreign/released key (`HostCalls.lookup` returns `null`
 > or a non-`Throwable`) falls through to the metadata `BamlError`. The mirror is
@@ -654,9 +654,10 @@ accessor (which reads them back from the side-table).
 
 Inbound and outbound share the `BamlHandleType` enum. Java handle decoding uses
 the outbound `handle_type` discriminator; `decodeHandle`
-reads `key` (field 1), `handle_type` (field 2), and the root class FQN from
-`ty.class_ty.name` (field 3). It builds a
-`BamlHandle(key, handleType, classFqn)`, then dispatches:
+reads `key` (field 1), `handle_type` (field 2), the root class FQN from
+`ty.class_ty.name` (field 3), and a host value's `pin` (field 4). It builds a
+`BamlHandle(key, handleType, classFqn)` (for a host value,
+`BamlHandle.hostValue(key, handleType, classFqn, pin)`), then dispatches:
 
 | Handle type (wire) | Java decode |
 | --- | --- |
@@ -697,13 +698,26 @@ engine-minted `key` — `new BamlHandle(key, handleType, classFqn)` takes owners
 (ordinary handles use the two-argument overload) and a
 `Cleaner` calls `baml_handle_release(key)` exactly once when the wrapper becomes
 unreachable (`BamlHandle.java:35-103`, per-instance atomic latch at `:61-91`).
-On the *inbound* (encode) direction, `cloneKeyForWire()` mints a **fresh** owned
-key via `baml_handle_clone` so "the engine can `drain` its copy on decode while
-this object keeps its own — never sharing a key would double-release"
-(`BamlHandle.java:19-27, 120-122`). Host-owned handles
-(`HOST_VALUE_CALLABLE` = 15, `HOST_VALUE_OPAQUE` = 16) are **not** tracked in
-`HANDLE_TABLE`, so the release path skips them (`BamlHandle.java:30-34, 78-81`) —
-the same guard as Python's `BamlPyHandle`.
+On the *inbound* (encode) direction, `cloneKeyForWire()` takes one more
+ownership via `baml_handle_clone` for the engine to `drain` on decode, while
+this object keeps its own: the **same** key for a row naming an engine object
+(the row's refcount grows), a **fresh** key for an identity-free row (media).
+
+**Host values** (`HOST_VALUE_CALLABLE` = 15, `HOST_VALUE_OPAQUE` = 16) carry the
+host's own registry key, never a `HANDLE_TABLE` key, plus a `pin`: a
+`HOST_VALUE_PIN` (21) row that keeps the engine's references to the key (and so
+its registration) while Java reads it. Exactly one decode owns each pin and
+releases it once with `baml_handle_release`:
+
+- a host value decoded to a `BamlHandle` (`BamlHandle.hostValue`) owns its pin,
+  released with the handle (`close()` / `Cleaner`), so the key stays registered
+  and re-sendable while Java holds the handle;
+- a host callable resolved to the host's own object (`decodeCallable`) and a
+  host throwable rehydrated on the error arm (`rehydrateHostThrowable`) release
+  the pin as soon as the key is resolved.
+
+The same applies to call results, stream items, error/panic envelopes, and a
+host callback's arguments: all decode through `decodeHandle` / `decodeCallable`.
 
 `BamlStream` is a runtime-owned Java class wrapping a `BamlHandle` (the JVM
 analog of Python's `baml_bridge/_stream.py`); the outbound decode **now

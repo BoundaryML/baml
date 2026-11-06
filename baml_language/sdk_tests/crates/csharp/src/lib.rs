@@ -180,6 +180,15 @@ mod tests {
         assert_stdout_contains(&output, "host_callable_hof_receives_a_baml_closure=ok");
     }
 
+    // SDK_PARITY_LINT(skip): observes the C# host registry draining through the native release callback
+    #[test]
+    fn test_host_callables_host_values_are_given_back_once_unreferenced() {
+        let manifest = manifest_dir();
+        let project = manifest.join("host_callables").join("HostCallables.csproj");
+        let output = run_project(&project, &["--", "given-back"]);
+        assert_stdout_contains(&output, "host_values_are_given_back_once_unreferenced=ok");
+    }
+
     // SDK_PARITY_LINT(skip): C# completion-contract coverage executes through its native integration harness
     #[test]
     fn test_host_callables_callback_faults_complete_by_whose_they_are() {

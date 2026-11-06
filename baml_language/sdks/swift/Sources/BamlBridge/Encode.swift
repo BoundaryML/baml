@@ -199,11 +199,9 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
         return BamlTypeDescriptor(ty)
     }
 
-    /// Opaque engine-owned state: a `$rust_type` field.
-    public static var rustType: BamlTypeDescriptor {
-        var ty = BamlBridge_Cffi_V1_BamlTy()
-        ty.rustType = BamlBridge_Cffi_V1_BamlTyRustType()
-        return BamlTypeDescriptor(ty)
+    /// A host's own value: a `baml.host.Value`.
+    public static var hostValue: BamlTypeDescriptor {
+        classType("baml.host.Value")
     }
 
     private static func literal(
@@ -574,7 +572,7 @@ enum BamlWireDepth {
         func deepest(_ types: [BamlBridge_Cffi_V1_BamlTy]) -> Int { types.map(nested).max() ?? 0 }
         guard let arm = type.ty else { return 0 }
         switch arm {
-        case .primitive, .enum, .literal, .unknown, .media, .enumVariant, .rustType, .metaType,
+        case .primitive, .enum, .literal, .unknown, .media, .enumVariant, .metaType,
             .resource, .promptAst, .typeVar, .never:
             return 1
         case .classTy(let cls):
@@ -643,14 +641,15 @@ extension BamlBridge_Cffi_V1_InboundMapEntry {
     }
 }
 
-/// Release every engine handle clone `value` holds. Host values (callables
-/// and opaque errors) are this host's own registry keys, not engine handles.
+/// Release what `value`, encoded for a send that never reached the engine,
+/// holds: each engine handle clone, and the reference each host value
+/// (callable or opaque error) took to this host's own key.
 func releaseInbound(_ value: BamlBridge_Cffi_V1_InboundValue) {
     switch value.value {
     case .handle(let handle):
         switch BamlHandle.keySpace(of: handle.handleType) {
         case .engine: _ = BamlApi.handleRelease(handle.key)
-        case .host: break
+        case .host: HostCallableRegistry.shared.release(handle.key, count: 1)
         }
     case .classValue(let cls): for field in cls.fields { releaseInbound(field.value) }
     case .listValue(let list): for item in list.values { releaseInbound(item) }
@@ -930,7 +929,7 @@ extension BamlInboundValue {
     /// A struct built without a handle has no media to send and goes as
     /// null, which no media slot admits.
     public static func baml_media(_ data: BamlHandle?) throws -> BamlInboundValue {
-        try data?._bamlEncode(as: ._leaf(.rustType)) ?? BamlInboundValue()
+        try data?._bamlEncode(as: ._leaf(.unknown)) ?? BamlInboundValue()
     }
 
     /// Build an enum value: `name` is the BAML enum FQN, `variant`
@@ -954,9 +953,7 @@ public struct BamlArgument {
     enum Source {
         /// A value, which may be refused.
         case value(() throws -> BamlInboundValue)
-        /// A host callable (or null), whose encoding registers it. The engine
-        /// releases the registration once it holds the handle, so a call that
-        /// fails before then releases it itself.
+        /// A host callable (or null), whose encoding registers it.
         case callable(BamlHostCallable?)
     }
 
@@ -989,25 +986,13 @@ public struct BamlArgument {
 
     /// An engine handle used as a receiver: its type is the engine's.
     init(_ name: String, handle: BamlHandle) {
-        self.init(name: name) { try handle._bamlEncode(as: ._leaf(.rustType)) }
+        self.init(name: name) { try handle._bamlEncode(as: ._leaf(.unknown)) }
     }
 
     func encode() throws -> BamlInboundValue {
         switch source {
         case .value(let encode): return try encode()
         case .callable(let callable): return callable?._bamlEncode() ?? BamlInboundValue()
-        }
-    }
-
-    /// Release what `encoded`, this argument's encoding, holds, for a call
-    /// the engine never receives.
-    func release(_ encoded: BamlBridge_Cffi_V1_InboundValue) {
-        switch source {
-        case .value: releaseInbound(encoded)
-        case .callable:
-            if case .handle(let handle)? = encoded.value {
-                HostCallableRegistry.shared.release(handle.key)
-            }
         }
     }
 }
@@ -1082,7 +1067,7 @@ func encodeCallArgs(
     } catch {
         if case .reservation(let owner)? = msg.invocation.trace.selection { _ = BamlApi.handleRelease(owner) }
         if msg.invocation.hasCancel { releaseInbound(msg.invocation.cancel) }
-        for (argument, entry) in zip(args, msg.kwargs) { argument.release(entry.value) }
+        for entry in msg.kwargs { releaseInbound(entry.value) }
         _ = BamlApi.releaseFunctionCall(callId)
         throw error
     }

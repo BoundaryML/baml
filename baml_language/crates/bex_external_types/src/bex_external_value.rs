@@ -94,6 +94,53 @@ impl UnionMetadata {
     }
 }
 
+/// A `baml.spawn.CancelToken` the runtime issued to a host body without
+/// building one on its heap: the token's state, which every holder shares, and
+/// the heap of the runtime that issued it. It crosses to the host as a
+/// reference to a `CancelToken` (`ty` names the class); sent back into BAML,
+/// the issuing runtime builds the instance, and any other refuses it.
+#[derive(Clone)]
+pub struct CancelTokenCapability {
+    pub state: std::sync::Arc<bex_vm_types::cancellation::CancelTokenState>,
+    pub ty: AnnotationTy,
+    issuer: std::sync::Weak<dyn crate::WeakHeapRef>,
+}
+
+impl CancelTokenCapability {
+    pub fn new(
+        state: std::sync::Arc<bex_vm_types::cancellation::CancelTokenState>,
+        ty: AnnotationTy,
+        issuer: &std::sync::Arc<dyn crate::WeakHeapRef>,
+    ) -> Self {
+        Self {
+            state,
+            ty,
+            issuer: std::sync::Arc::downgrade(issuer),
+        }
+    }
+
+    /// Whether `heap`'s runtime issued this token.
+    pub fn issued_by(&self, heap: &std::sync::Arc<dyn crate::WeakHeapRef>) -> bool {
+        std::ptr::addr_eq(self.issuer.as_ptr(), std::sync::Arc::as_ptr(heap))
+    }
+}
+
+impl std::fmt::Debug for CancelTokenCapability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CancelTokenCapability")
+            .field("ty", &self.ty)
+            .finish_non_exhaustive()
+    }
+}
+
+/// One token: the same shared state, issued by the same runtime.
+impl PartialEq for CancelTokenCapability {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.state, &other.state)
+            && std::ptr::addr_eq(self.issuer.as_ptr(), other.issuer.as_ptr())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
     /// A reflected type, carried at the sys-op lane's head so a definition
@@ -113,6 +160,9 @@ pub enum BexExternalAdt {
     PromptAst(std::sync::Arc<bex_vm_types::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<bex_vm_types::MediaValue>),
+    /// A host body's `baml.spawn.CancelToken`, which the runtime issues
+    /// without a heap object.
+    CancelToken(CancelTokenCapability),
     /// GC-rooted reference to an engine-owned heap value, with its boundary
     /// kind and the engine's statement of its type.
     ///
@@ -484,6 +534,7 @@ impl BexExternalAdt {
             BexExternalAdt::Type(_) | BexExternalAdt::WireType(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
+            BexExternalAdt::CancelToken(_) => "cancel_token",
             BexExternalAdt::TaggedHeapHandle { .. } => "tagged_heap_handle",
         }
     }

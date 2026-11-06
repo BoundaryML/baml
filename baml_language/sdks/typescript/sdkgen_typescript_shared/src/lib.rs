@@ -410,7 +410,7 @@ mod tests {
     /// A host's own value renders as the host's handle, `_BamlHandle`, and has
     /// no definition of its own.
     #[test]
-    fn host_value_class_renders_as_rust_type() {
+    fn host_value_class_renders_as_the_host_handle() {
         let host_value = name("baml", &["host"], "Value");
         let holder = name("baml", &["errors"], "HostCallable");
         let pool_with = |handle: Ty| {

@@ -1537,8 +1537,8 @@ fn renderable_class_names(pool: &SymbolPool, projection: &GoTypeProjection<'_>) 
                 ClassCrossing::Fields | ClassCrossing::Prompt => Some(name.clone()),
                 // Every other class crosses as something the projection
                 // spells (its reference wrapper, a `Stream`, a
-                // `FunctionSpec`, a media value, the runtime's `RustType`
-                // handle), never as its fields.
+                // `FunctionSpec`, a media value, the runtime's `HostValue`),
+                // never as its fields.
                 ClassCrossing::Opaque
                 | ClassCrossing::Stream
                 | ClassCrossing::FunctionSpec
@@ -2598,7 +2598,7 @@ fn add_function_surface_imports(
 ) {
     match ty {
         GoTy::Bigint => imports.add_generator(GeneratorIdent::BigPackage, "math/big"),
-        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::RustType | GoTy::Prompt(_) => {
+        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::HostValue | GoTy::Prompt(_) => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
         GoTy::Literal(literal) => add_function_surface_imports(
@@ -2675,7 +2675,7 @@ fn add_projected_type_imports(
 ) {
     match ty {
         GoTy::Bigint => imports.add_generator(GeneratorIdent::BigPackage, "math/big"),
-        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::RustType | GoTy::Prompt(_) => {
+        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::HostValue | GoTy::Prompt(_) => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
         GoTy::Json => {}
@@ -2716,8 +2716,8 @@ fn add_projected_type_imports(
             {
                 // Cross-package classes own their transitive imports in their
                 // own types.go. Only recurse through a class rendered into the
-                // current file; otherwise opaque fields such as `$rust_type`
-                // can add an unused runtime import here.
+                // current file; otherwise opaque fields such as a host's own
+                // value can add an unused runtime import here.
                 for field in &class.properties {
                     add_projected_type_imports(
                         &context.projection.project(&field.ty),
@@ -2774,7 +2774,7 @@ fn add_projected_surface_imports(
         GoTy::Bigint | GoTy::Literal(GoLiteral::Bigint(_)) => {
             imports.add_generator(GeneratorIdent::BigPackage, "math/big");
         }
-        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::RustType | GoTy::Prompt(_) => {
+        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::HostValue | GoTy::Prompt(_) => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
         GoTy::Literal(literal) => {
@@ -2921,7 +2921,7 @@ fn add_input_encoder_imports(
         | GoTy::Media(_)
         | GoTy::Json
         | GoTy::ReflectedType
-        | GoTy::RustType
+        | GoTy::HostValue
         | GoTy::Prompt(_)
         | GoTy::TypeVar(_)
         | GoTy::Literal(_)
@@ -3059,7 +3059,7 @@ fn render_projected_go_type(
         ),
         GoTy::Json => "any".to_string(),
         GoTy::ReflectedType => format!("{}.BAMLType", GeneratorIdent::RuntimePackage),
-        GoTy::RustType => format!("{}.RustType", GeneratorIdent::RuntimePackage),
+        GoTy::HostValue => format!("{}.HostValue", GeneratorIdent::RuntimePackage),
         GoTy::Prompt(_) => format!("{}.Prompt", GeneratorIdent::RuntimePackage),
         GoTy::FunctionSpec { output } => format!(
             "{}.FunctionSpec[{}]",
@@ -3313,7 +3313,7 @@ fn projected_input_encoder(
         GoTy::ReflectedType => {
             format!("{runtime}.{}", GeneratorIdent::ReflectedTypeInputMethod)
         }
-        GoTy::RustType => format!("{runtime}.RustTypeInput"),
+        GoTy::HostValue => format!("{runtime}.HostValueInput"),
         GoTy::Prompt(_) => format!("{runtime}.PromptInput"),
         GoTy::FunctionSpec { .. } | GoTy::Stream { .. } => format!(
             "{runtime}.AnyEncoder[{}]",
@@ -3476,7 +3476,7 @@ fn projected_output_decoder(
             "{runtime}.Value.{}",
             GeneratorIdent::ReflectedTypeOutputMethod
         ),
-        GoTy::RustType => format!("{runtime}.Value.RustType"),
+        GoTy::HostValue => format!("{runtime}.Value.HostValue"),
         GoTy::Prompt(_) => format!("{runtime}.Value.Prompt"),
         // The wrapper's own decoder checks the instance's class and type
         // arguments against the Go type.
@@ -3642,7 +3642,7 @@ fn collect_projected_type_vars(ty: &GoTy, out: &mut Vec<BaseName>) {
         | GoTy::Uint8Array
         | GoTy::Json
         | GoTy::ReflectedType
-        | GoTy::RustType
+        | GoTy::HostValue
         | GoTy::Media(_)
         | GoTy::Prompt(_)
         | GoTy::Literal(_)
@@ -4349,7 +4349,7 @@ fn projected_contains_named_type_var(ty: &GoTy, parameter: &BaseName) -> bool {
         | GoTy::Uint8Array
         | GoTy::Json
         | GoTy::ReflectedType
-        | GoTy::RustType
+        | GoTy::HostValue
         | GoTy::Prompt(_)
         | GoTy::Media(_)
         | GoTy::Literal(_)
@@ -4873,7 +4873,7 @@ fn baml_type_descriptor_with(
         GoTy::Media(kind) => format!("{runtime}.{}BAMLType()", media_go_type(*kind)),
         GoTy::Json => format!("{runtime}.TypeAliasBAMLType(\"baml.json.json\")"),
         GoTy::ReflectedType => format!("{runtime}.MetaTypeBAMLType()"),
-        GoTy::RustType => format!("{runtime}.RustTypeBAMLType()"),
+        GoTy::HostValue => format!("{runtime}.HostValueBAMLType()"),
         GoTy::Prompt(_) => format!("{runtime}.PromptBAMLType()"),
         GoTy::FunctionSpec { output } => format!(
             "{runtime}.ClassBAMLType(\"ai.FunctionSpec\", {})",
@@ -7167,13 +7167,13 @@ mod tests {
         assert!(!root.contains("github.com/boundaryml/baml-go"));
         let models = &files[&PathBuf::from("packages/models/types.go")];
         assert!(models.contains("github.com/boundaryml/baml-go"));
-        assert!(models.contains("Native baml_go.RustType"));
+        assert!(models.contains("Native baml_go.HostValue"));
     }
 
-    /// A host's own value is the runtime's `RustType` handle, with its codecs,
+    /// A host's own value is the runtime's `HostValue`, with its codecs,
     /// and its class emits nothing.
     #[test]
-    fn host_value_class_is_the_rust_type_handle() {
+    fn host_value_class_is_the_host_value_handle() {
         let host_value = Name::new(
             BaseName::new("baml"),
             vec![BaseName::new("host")],
@@ -7208,9 +7208,9 @@ mod tests {
         pool.insert(name, class);
         let host_value = generate(&pool);
 
-        assert!(host_value[&PathBuf::from("types.go")].contains("Native baml_go.RustType"));
+        assert!(host_value[&PathBuf::from("types.go")].contains("Native baml_go.HostValue"));
         assert!(
-            host_value[&PathBuf::from("functions.go")].contains("baml_go.RustTypeInput(value)")
+            host_value[&PathBuf::from("functions.go")].contains("baml_go.HostValueInput(value)")
         );
         let definitions: Vec<_> = host_value
             .iter()
@@ -8374,7 +8374,7 @@ mod tests {
         let name = Name::new(
             BaseName::new("user"),
             vec![],
-            BaseName::new("round_trip_rust_type"),
+            BaseName::new("round_trip_host_value"),
         );
         let pool = SymbolPool::from([
             round_trip_function(name, "value", ty_host_value()),
@@ -8388,11 +8388,11 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func RoundTripRustType(ctx_ context.Context, value baml_go.RustType, options_ ...baml_go.CallOption) (baml_go.RustType, error)"
+            "func RoundTripHostValue(ctx_ context.Context, value baml_go.HostValue, options_ ...baml_go.CallOption) (baml_go.HostValue, error)"
         ));
-        assert!(functions.contains("baml_go.RustTypeInput(value)"));
-        assert!(functions.contains("baml_go.Value.RustType"));
-        assert!(!functions.contains("UNTAGGED_RUST_DATA"));
+        assert!(functions.contains("baml_go.HostValueInput(value)"));
+        assert!(functions.contains("baml_go.Value.HostValue"));
+        assert!(!functions.contains("HOST_VALUE_OPAQUE"));
     }
 
     #[test]

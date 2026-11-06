@@ -195,7 +195,7 @@ struct RenderState {
     uses_define_function: bool,
     uses_define_instance: bool,
     /// Set when any rendered type expression references the runtime opaque
-    /// handle token `_BamlHandle` (`Ty::RustType`).
+    /// handle token `_BamlHandle` (a host's own value).
     uses_baml_handle: bool,
     /// Set when a generic class/call emits `$types`, which accepts both opaque
     /// reflected definitions and statically-known host tokens.

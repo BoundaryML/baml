@@ -133,7 +133,6 @@ internal static class BamlGeneratedTypeMetadata
             type.Interface.TypeArgs),
         BamlTy.TyOneofCase.EnumVariant =>
             $"{RequireName(type.EnumVariant.Name, type)}.{RequireName(type.EnumVariant.Variant, type)}",
-        BamlTy.TyOneofCase.RustType => "$rust_type",
         BamlTy.TyOneofCase.MetaType => "type",
         BamlTy.TyOneofCase.Resource => "baml.llm.Resource",
         BamlTy.TyOneofCase.PromptAst => "baml.llm.PromptAst",

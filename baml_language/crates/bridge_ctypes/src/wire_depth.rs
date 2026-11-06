@@ -112,7 +112,6 @@ pub fn baml_ty_depth(ty: &BamlTy) -> usize {
             | Ty::Unknown(_)
             | Ty::Media(_)
             | Ty::EnumVariant(_)
-            | Ty::RustType(_)
             | Ty::MetaType(_)
             | Ty::Resource(_)
             | Ty::PromptAst(_)

@@ -1791,7 +1791,6 @@ export namespace baml_bridge {
             /** BamlHandleType enum. */
             enum BamlHandleType {
                 HANDLE_UNSPECIFIED = 0,
-                UNTAGGED_RUST_DATA = 1,
                 UNTAGGED_BEX_HEAP = 2,
                 FUNCTION_REF = 5,
                 ADT_MEDIA_IMAGE = 6,
@@ -1800,14 +1799,14 @@ export namespace baml_bridge {
                 ADT_MEDIA_PDF = 9,
                 ADT_MEDIA_GENERIC = 10,
                 ADT_PROMPT_AST = 11,
-                ADT_TYPE = 13,
                 ADT_TAGGED_HEAP_HANDLE = 14,
                 HOST_VALUE_CALLABLE = 15,
                 HOST_VALUE_OPAQUE = 16,
                 ADT_FUNCTION_SPEC = 17,
                 ADT_RUNTIME_VALUE = 18,
                 INVOCATION_STATE = 19,
-                TRACE_RESERVATION = 20
+                TRACE_RESERVATION = 20,
+                HOST_VALUE_PIN = 21
             }
 
             /** Properties of a BamlHandle. */
@@ -1961,9 +1960,6 @@ export namespace baml_bridge {
                 /** BamlTy future */
                 future?: (baml_bridge.cffi.v1.IBamlTyFuture|null);
 
-                /** BamlTy rustType */
-                rustType?: (baml_bridge.cffi.v1.IBamlTyRustType|null);
-
                 /** BamlTy metaType */
                 metaType?: (baml_bridge.cffi.v1.IBamlTyMetaType|null);
 
@@ -2037,9 +2033,6 @@ export namespace baml_bridge {
                 /** BamlTy future. */
                 public future?: (baml_bridge.cffi.v1.IBamlTyFuture|null);
 
-                /** BamlTy rustType. */
-                public rustType?: (baml_bridge.cffi.v1.IBamlTyRustType|null);
-
                 /** BamlTy metaType. */
                 public metaType?: (baml_bridge.cffi.v1.IBamlTyMetaType|null);
 
@@ -2059,7 +2052,7 @@ export namespace baml_bridge {
                 public never?: (baml_bridge.cffi.v1.IBamlTyNever|null);
 
                 /** BamlTy ty. */
-                public ty?: ("primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"Function"|"future"|"rustType"|"metaType"|"resource"|"promptAst"|"typeVar"|"associatedTypeProjection"|"never");
+                public ty?: ("primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"Function"|"future"|"metaType"|"resource"|"promptAst"|"typeVar"|"associatedTypeProjection"|"never");
 
                 /**
                  * Creates a new BamlTy instance using the specified properties.
@@ -3991,97 +3984,6 @@ export namespace baml_bridge {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlTyRustType. */
-            interface IBamlTyRustType {
-            }
-
-            /** Represents a BamlTyRustType. */
-            class BamlTyRustType implements IBamlTyRustType {
-
-                /**
-                 * Constructs a new BamlTyRustType.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml_bridge.cffi.v1.IBamlTyRustType);
-
-                /**
-                 * Creates a new BamlTyRustType instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlTyRustType instance
-                 */
-                public static create(properties?: baml_bridge.cffi.v1.IBamlTyRustType): baml_bridge.cffi.v1.BamlTyRustType;
-
-                /**
-                 * Encodes the specified BamlTyRustType message. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyRustType.verify|verify} messages.
-                 * @param message BamlTyRustType message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml_bridge.cffi.v1.IBamlTyRustType, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlTyRustType message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyRustType.verify|verify} messages.
-                 * @param message BamlTyRustType message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml_bridge.cffi.v1.IBamlTyRustType, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlTyRustType message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlTyRustType
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.BamlTyRustType;
-
-                /**
-                 * Decodes a BamlTyRustType message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlTyRustType
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.BamlTyRustType;
-
-                /**
-                 * Verifies a BamlTyRustType message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlTyRustType message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlTyRustType
-                 */
-                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.BamlTyRustType;
-
-                /**
-                 * Creates a plain object from a BamlTyRustType message. Also converts values to other types if specified.
-                 * @param message BamlTyRustType
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml_bridge.cffi.v1.BamlTyRustType, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlTyRustType to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlTyRustType
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
             /** Properties of a BamlTyMetaType. */
             interface IBamlTyMetaType {
             }
@@ -5195,6 +5097,9 @@ export namespace baml_bridge {
 
                 /** BamlOutboundHandle ty */
                 ty?: (baml_bridge.cffi.v1.IBamlTy|null);
+
+                /** BamlOutboundHandle pin */
+                pin?: (number|Long|null);
             }
 
             /** Represents a BamlOutboundHandle. */
@@ -5214,6 +5119,9 @@ export namespace baml_bridge {
 
                 /** BamlOutboundHandle ty. */
                 public ty?: (baml_bridge.cffi.v1.IBamlTy|null);
+
+                /** BamlOutboundHandle pin. */
+                public pin: (number|Long);
 
                 /**
                  * Creates a new BamlOutboundHandle instance using the specified properties.

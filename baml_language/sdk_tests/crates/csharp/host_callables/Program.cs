@@ -29,6 +29,26 @@ if (args is ["depth-argument"])
     return 0;
 }
 
+if (args is ["given-back"])
+{
+    // Once nothing in BAML holds them, the engine gives back every reference
+    // it took to a host value: a callable it called, and a rethrown
+    // exception, whose pin the host released with the error that carried it.
+    Require(
+        Functions.InvokeDeferred(BamlCallback.FromSync<long, long>(value => value), 1L) == 2L,
+        "the callback's result changed");
+    var thrown = new InvalidOperationException("given back");
+    Exception restored = ExpectSynchronousFault(
+        () => Functions.PropagateHostThrow(
+            BamlCallback.FromSync<long, string>(_ => throw thrown),
+            1L));
+    Require(ReferenceEquals(restored, thrown), "the exception was not restored");
+    Functions.CollectGarbage();
+    await RequireRegistryIdleAfterCollection("host values the engine no longer holds");
+    Console.WriteLine("host_values_are_given_back_once_unreferenced=ok");
+    return 0;
+}
+
 if (args is ["hof"])
 {
     await RequireCallbacksReceiveBamlClosures();
@@ -718,6 +738,20 @@ static async Task RequireDispatchIdleAfterCompletion(string operation)
 static bool DispatchIdle() =>
     HostValueRegistry.Shared.InvocationCount == 0
     && NativeCallbacks.PendingCount == 0;
+
+static async Task RequireRegistryIdleAfterCollection(string operation)
+{
+    // A release is delivered at the engine's next safepoint.
+    DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+    while (!RegistryIdle())
+    {
+        Require(
+            DateTime.UtcNow < deadline,
+            $"{operation} left {HostValueRegistry.Shared.EntryCount} host value(s) registered");
+        Require(Functions.Ping() == 42L, $"{operation} safepoint call failed");
+        await Task.Delay(1);
+    }
+}
 
 static bool RegistryIdle() =>
     HostValueRegistry.Shared.EntryCount == 0

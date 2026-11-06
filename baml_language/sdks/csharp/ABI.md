@@ -9,11 +9,13 @@ release, and free operations. Tests cover truncated prefixes, missing entries,
 callback and cancellation lifetimes, buffer ownership, media ownership, and
 exact handle release.
 
-The function table is at ABI revision 5, which every host requires exactly:
-revision 2 unified `call_function(encoded_args, length, callback_id)`, and
+The function table is at ABI revision 6, which every host requires exactly:
+revision 2 unified `call_function(encoded_args, length, callback_id)`,
 revision 5 changed `complete_host_call` in place to
-`(call_id, content, length)` with a `HostCallCompletion` payload. A host built
-against another revision rejects the table before reading either slot.
+`(call_id, content, length)` with a `HostCallCompletion` payload, and
+revision 6 changed the host-release callback to `(host_value_key, count)`. A
+host built against another revision rejects the table before reading any of
+those slots.
 
 The canonical protobuf schemas live in
 `crates/bridge_ctypes/types/baml_bridge/cffi/v1`. Field numbers are stable and
@@ -32,12 +34,11 @@ and one party checks it. The sections that follow give the rules in full.
 | `int`, `float`, `bigint`, `string`, `bool`, `uint8array`, `null` | its scalar arm | the same arm, no `value_type` | decoder (arm), engine (membership in the slot) | a `value_type` is present, or the slot does not admit the type |
 | enum variant | `enum_value` naming enum and variant | the same, no `value_type` | engine | the variant is not one of the enum's, or the slot does not admit it |
 | list, map, class that crosses by fields | `list_value` / `map_value` / `class_value` with its type | the same with `value_type` stating `E[]`, `map<K, V>` or the class with every type argument | decoder (statement well-formed and of the node's shape), engine (every child against the structure its parent states, the root against the slot) | the statement is missing, malformed, unrealized or of another shape; a child is not a member; the class is not one that crosses by fields |
-| `$rust_type` field payload | `UNTAGGED_RUST_DATA` handle | the handle it received | engine (the table row) | a host builds the field from a value of its own |
-| an instance of a `@@rust_type` class; `reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`; an instance of a run-time declaration | `ADT_RUNTIME_VALUE` handle with `ty` naming the class and its type arguments | the handle it received | engine | a `class_value` names such a class; the handle names an object of another runtime; the handle is not a first-class value (a declaration, a raw package) |
+| an instance of a `@@rust_type` class (`reflect.CompileArtifact` among them); `reflect.Package`, `reflect.Session`; an instance of a run-time declaration | `ADT_RUNTIME_VALUE` handle with `ty` naming the class and its type arguments | the handle it received | engine | a `class_value` names such a class; the handle names an object of another runtime; the handle is not a first-class value (a declaration, a raw package) |
 | media, `ai.Prompt` | `media_value`, `prompt_ast_value` | the same | decoder (shape), engine (the slot) | a slot of another type; a media value of no particular kind |
 | BAML callable (closure, bound method, generic instantiation, `ai.FunctionSpec`) | callable handle stating its specialized function type | the handle it received, no `type_args` | engine (the stated type against the slot) | the stated type is not a member of the slot's; an argument the host passes through the handle is not a member of the specialized parameter |
 | host callable | — | `HOST_VALUE_CALLABLE` key with `value_type` stating the function type, open effect as `unknown` | decoder (one kind per key per request), engine | the key arrives under two kinds, or the function type does not inhabit the slot |
-| host opaque value | its own key, back as it arrived | `HOST_VALUE_OPAQUE` key, no `value_type` | decoder | the key arrives under two kinds |
+| host opaque value (`baml.host.Value`) | its own key, back as it arrived, with a `pin` | `HOST_VALUE_OPAQUE` key, no `value_type` | decoder | the key arrives under two kinds |
 | type value | `ty_value` tree; compiled heads by name, run-time heads as `live` rows, `anonymous_label` only in annotations | `ty_value` tree; `name` resolved against the program's tables, `live` followed by handle | decoder (realized, no `anonymous_label`), engine (every head resolves) | a `type_var` or projection anywhere; a name that resolves to nothing; an `anonymous_label` |
 | declaration, raw package | never | never | engine | a handle to one is sent |
 | generic call's type arguments | — | `type_args` by name, the rest inferred from the landed values | engine | a variable is left unbound (nothing arrived for it); a bounded parameter is not one concrete type implementing every bound at the bound's arguments; a variable a fixed sibling absorbed is `never`, not a refusal. An empty container states its element type: a static host states the declared one and binds from it, a dynamic host has none and refuses under an open variable |
@@ -82,22 +83,37 @@ to objects the host registered, numbered by the host; every other key is the
 host's reference to an engine object, numbered by the engine. The two spaces
 may share numbers and are never compared. Each occurrence of an engine key
 transfers one reference, which the engine drains or, on a refusal anywhere in
-the request, releases; a host key is one registration however often it occurs,
-and keeps the kind it first arrived under: a key under two host kinds in one
-request, or under a kind other than the one the engine already holds for it,
-is refused. A host never clones or releases a host key through the handle API.
+the request, releases. Each occurrence of a host key likewise hands the engine
+one reference, and the host counts them per key: a registration starts at one,
+and every further send of a key the host still has registered takes one more.
+The engine gives references back through the host-release callback,
+`(host_value_key, count)`, possibly several at once, including those of a
+request it refused; a send that never reached the engine gives back its own.
+The host drops its object when the count reaches zero. A host key keeps the
+kind it first arrived under: a key under two host kinds in one request, or
+under a kind other than the one the engine already holds for it, is refused.
+A host never clones or releases a host key through the handle API.
+
+A host value the engine sends (`HOST_VALUE_CALLABLE`, `HOST_VALUE_OPAQUE`, in a
+result, a stream item, an error, a panic or a callback's arguments) carries a
+`pin`: the key of a `HOST_VALUE_PIN` row that keeps the engine's references to
+the host key while the host reads it. The host releases each pin once with
+`handle_release`, together with the result or arguments that carried it, and
+never sends one back. A pin of 0 is none and owns nothing. The C# host
+registers each callable once per send and restores a raised exception from
+its `baml.errors.HostCallable` once; the registration lives until the engine
+has given back its references.
 
 How an instance of a class crosses is decided once per declaration. A class
-crosses by its fields, a host reads and builds it as plain data, and a field of
-`$rust_type` (an HTTP body, a random generator's state) is an
-`UNTAGGED_RUST_DATA` handle to the engine's own payload, which the host passes
-back as it received it. A class tagged `@@rust_type` keeps all of its state in
-the runtime (a hasher, a cipher, a compiled regex, a cancel token, trace
-options and spans, an open file, a socket) and has no fields to read or build.
+crosses by its fields unless it says otherwise: a host reads and builds it as
+plain data. A class tagged
+`@@rust_type` keeps all of its state in the runtime (a hasher, a cipher, a
+compiled regex, a cancel token, trace options and spans, an open file, a
+socket, a compile artifact) and has no fields to read or build.
 Its instance crosses as an `ADT_RUNTIME_VALUE` handle to the engine's own
 instance, and so do a standard-library capability whose fields are the
-runtime's internals (`reflect.Package`, `reflect.Session`,
-`reflect.CompileArtifact`) and an instance of any class or enum declared at
+runtime's internals (`reflect.Package`, `reflect.Session`) and an instance of
+any class or enum declared at
 run time. A host holds such a reference, passes it back as the handle it
 received, and never builds one; a `class_value` naming such a class is
 refused. A handle a host sends lands only a value: a handle to a declaration
@@ -128,13 +144,13 @@ element type) and creates no reference. A stated type that carries one is
 refused, and so is an instance stated by fields whose class is a runtime
 declaration: such an instance is passed back as the handle it arrived as.
 
-A class with a `$rust_type` field holds native data only the runtime creates
-(a media wrapper's payload, an HTTP body, a running process). A host passes
-such an instance back as it received it, the field holding a handle to the
-runtime's data; a value of the host's own in that field is refused. The
-exception is `baml.errors.HostCallable`, whose payload is the host's own
-handle to the exception it raised: the runtime builds that class from a
-callback's `raised` outcome and only carries it back.
+A class with a field holding a `@@rust_type` instance (an HTTP response's
+body, a CSV reader's state) is built only by the runtime. A host passes such
+an instance back as it received it, the field holding a handle to the
+runtime's instance; a value of the host's own in that field is refused. A
+host's own value is a `baml.host.Value`: `baml.errors.HostCallable`, whose
+`_handle` is the host's own key to the exception it raised, is one the runtime
+builds from a callback's `raised` outcome and only carries back.
 
 Map keys, class field names and keyword-argument names cross the boundary as
 strings only. The decoder refuses an `int_key`, `bool_key` or `enum_key`

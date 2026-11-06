@@ -284,6 +284,17 @@ pub(crate) fn forget_signature(key: HostKey) {
     SIGNATURES.with(|cell| cell.borrow_mut().remove(&key));
 }
 
+/// Give back one reference to the host value `key` for a send that never
+/// reached the engine. At the last one the key is gone, and with it the
+/// signature of a callable. Returns whether that was the last.
+pub(crate) fn release_host_value(key: HostKey) -> bool {
+    let last = sys_wasm::release_host_value(key, 1);
+    if last {
+        forget_signature(key);
+    }
+    last
+}
+
 /// The signature a call target declares: from the descriptor for a named
 /// function, from the live handle for a BAML callable, or none, in which
 /// case every argument goes as the type its value has.
@@ -304,7 +315,7 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
             let entry = TableKey::new(*key).and_then(|key| HANDLE_TABLE.resolve(key));
             let signature = match entry.as_deref() {
                 Some(bridge_ctypes::CffiHandleTableEntry::Adt(
-                    bex_project::BexExternalAdt::TaggedHeapHandle {
+                    bridge_ctypes::TableAdt::TaggedHeapHandle {
                         ty:
                             bex_project::AnnotationTy::Function {
                                 params,
@@ -506,15 +517,31 @@ impl Host<Js<View<'_>>> for Cx {
         let bytes = Uint8Array::new(&Reflect::get(&found, &JsValue::from_str("bytes"))?).to_vec();
         let value = InboundValue::decode(bytes.as_slice())
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let owner = match Reflect::get(&found, &JsValue::from_str("cloned"))?.as_string() {
-            Some(cloned) => Some(Owner::Handle(
+        // What the leaf took for its wire occurrence: a cloned engine
+        // reference, or one more reference to a host value it sends again.
+        let owner = match (
+            Reflect::get(&found, &JsValue::from_str("cloned"))?.as_string(),
+            Reflect::get(&found, &JsValue::from_str("sentAgain"))?.as_string(),
+        ) {
+            (Some(cloned), None) => Some(Owner::Handle(
                 cloned
                     .parse()
                     .ok()
                     .and_then(TableKey::new)
                     .ok_or_else(|| JsValue::from_str("cloned handle key is not a live key"))?,
             )),
-            None => None,
+            (None, Some(sent)) => Some(Owner::Callable(
+                sent.parse()
+                    .ok()
+                    .and_then(HostKey::new)
+                    .ok_or_else(|| JsValue::from_str("a host value sent again has key 0"))?,
+            )),
+            (None, None) => None,
+            (Some(_), Some(_)) => {
+                return Err(JsValue::from_str(
+                    "the host adapter answered a leaf that is both an engine and a host reference",
+                ));
+            }
         };
         Ok((leaf_wire(kind, value)?, owner))
     }
@@ -529,9 +556,10 @@ impl Host<Js<View<'_>>> for Cx {
 
     fn release(&self, owner: Owner) {
         match owner {
+            // One reference to a host value: registered for this send, or
+            // taken to send it again.
             Owner::Callable(key) => {
-                sys_wasm::release_host_callable(key.get());
-                forget_signature(key);
+                release_host_value(key);
             }
             // Best effort: a key the engine never saw has no other owner.
             Owner::Handle(key) => {

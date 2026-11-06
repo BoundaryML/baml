@@ -215,7 +215,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 }
                 // A host's own value is the host's handle to it.
                 (Some(ClassCrossing::HostValue), []) => {
-                    return Ok(quote! { ::baml_bridge::RustType });
+                    return Ok(quote! { ::baml_bridge::HostValue });
                 }
                 (
                     Some(

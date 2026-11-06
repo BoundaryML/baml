@@ -25,9 +25,9 @@ pub(crate) type CallbackFn = extern "C" fn(call_id: u32, content: *const c_char,
 pub(crate) type HostDispatchFn =
     extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
 
-/// The engine's host-value release callback: the engine dropped its last
-/// reference to a host-owned value.
-pub(crate) type HostReleaseFn = extern "C" fn(host_value_key: u64);
+/// The engine's host-value release callback: the engine gives back `count`
+/// of the references it holds to the host value `host_value_key`.
+pub(crate) type HostReleaseFn = extern "C" fn(host_value_key: u64, count: u64);
 pub(crate) type HostDispatchV2 = extern "C" fn(*const u8, usize);
 pub(crate) type HostCancelFn = extern "C" fn(u32);
 
@@ -274,10 +274,10 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     // contract returns a process-lifetime table.
     #[expect(unsafe_code)]
     let table = unsafe { &*table_ptr };
-    if table.abi_version != 5 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
+    if table.abi_version != 6 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
         return Err(LoaderError::LoadLibrary(format!(
             "{} exposes an incompatible BAML C API (abi_version {}, {} bytes; \
-             baml_bridge needs ABI revision 5 with at least {} bytes)",
+             baml_bridge needs ABI revision 6 with at least {} bytes)",
             path.display(),
             table.abi_version,
             table.struct_size,

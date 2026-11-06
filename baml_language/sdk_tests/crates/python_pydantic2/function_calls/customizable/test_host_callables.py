@@ -2,10 +2,10 @@
 
 The BAML fixture declares three functions whose first parameter is a
 typed `Callable`. The Python test passes a normal Python callable; the
-bridge auto-registers it via `register_host_callable` and emits the
+bridge registers it (`host_value::register_callable`) and emits the
 appropriate `Handle{HOST_VALUE_CALLABLE}` wire entry; the engine binds
 it to an `Object::HostClosure`; when BAML invokes it the
-`call_host_value` sysop fires the dispatch FFI; the Python dispatch
+`_call_host_value` sysop fires the dispatch FFI; the Python dispatch
 callback in `bridge_python::host_value` invokes the user function and
 encodes the result back to the engine.
 """

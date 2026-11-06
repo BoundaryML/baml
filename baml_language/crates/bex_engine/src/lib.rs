@@ -3240,41 +3240,44 @@ impl BexEngine {
         self.heap.owns_handle(handle)
     }
 
-    /// A `baml.spawn.CancelToken` holding `state`, allocated outside any VM
-    /// call, as the live reference a host receives: for a host frame that
-    /// runs no BAML (a traced host function) but holds a token.
+    /// A `baml.spawn.CancelToken` holding `state`, for a host frame that runs
+    /// no BAML (a traced host function) but holds a token: issued without a
+    /// heap object, so a host thread never waits on the heap for one. Sent
+    /// back into BAML, it becomes an instance here ([`Self::issued`]).
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) async fn alloc_cancel_token(
+    pub(crate) fn issue_cancel_token(
         &self,
         state: bex_vm_types::cancellation::CancelTokenState,
     ) -> Result<BexExternalValue, EngineError> {
-        use bex_heap::TlabHolder as _;
-
         let class = self
             .packages
             .lang_declaration(bex_vm::lang_items::BAML_SPAWN_CANCEL_TOKEN)
             .ok_or_else(|| EngineError::TypeMismatch {
                 message: format!("the program declares no `{CANCEL_TOKEN_CLASS}`"),
             })?;
-        let instance = bex_vm_types::RustInstance::new(
-            class,
+        // SAFETY: a standard-library class is a compile-time object, which
+        // never moves.
+        let bex_vm_types::Object::Class(declaration) = (unsafe { class.get() }) else {
+            panic!("the CancelToken lang item is not a class")
+        };
+        let ty = crate::conversion::to_annotation(&bex_vm_types::RealizedTy::Class(
+            bex_vm_types::TypeHead::new(class, declaration.type_tag),
             Box::new([]),
-            bex_vm_types::RustPayload::CancelToken(Arc::new(state)),
-        );
-        // The future manager is the engine's allocator outside a VM. Its
-        // permit keeps the collector away until the reference roots the
-        // instance.
-        let permit = self
-            .heap_permit_manager
-            .new_permit(())
-            .await
-            .acquire()
-            .await;
-        let mut futures = self.futures.acquire(permit.proof()).await;
-        let ptr = futures
-            .tlab_mut()
-            .alloc(bex_vm_types::Object::RustInstance(instance.clone()));
-        self.rust_instance_reference(ptr, &instance)
+        ))?;
+        Ok(BexExternalValue::Adt(
+            bex_external_types::BexExternalAdt::CancelToken(
+                bex_external_types::CancelTokenCapability::new(
+                    Arc::new(state),
+                    ty,
+                    &(Arc::clone(&self.heap) as Arc<dyn bex_external_types::WeakHeapRef>),
+                ),
+            ),
+        ))
+    }
+
+    /// Whether this runtime issued `token`: a token dies with its runtime.
+    pub(crate) fn issued(&self, token: &bex_external_types::CancelTokenCapability) -> bool {
+        token.issued_by(&(Arc::clone(&self.heap) as Arc<dyn bex_external_types::WeakHeapRef>))
     }
 
     /// Explicitly trigger garbage collection.

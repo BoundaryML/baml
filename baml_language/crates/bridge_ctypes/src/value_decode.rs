@@ -112,8 +112,9 @@ pub struct InboundOwners<'a> {
     table: &'a CffiHandleTable,
     /// Engine references not yet drained, counted per occurrence.
     engine: HashMap<TableKey, usize>,
-    /// Host registrations not yet interned, with the kind each arrived under.
-    host: HashMap<HostKey, HostValueKind>,
+    /// Host references not yet interned, counted per occurrence: each one the
+    /// host handed the engine, which a refusal gives back.
+    host: HashMap<HostKey, usize>,
 }
 
 impl<'a> InboundOwners<'a> {
@@ -220,13 +221,10 @@ impl<'a> InboundOwners<'a> {
     fn record(&mut self, handle: &BamlHandle) -> Result<(), CtypesError> {
         match WireHandle::try_from(handle)? {
             WireHandle::Engine(key) => *self.engine.entry(key).or_insert(0) += 1,
-            WireHandle::Host(key, kind) => match self.host.entry(key) {
-                Entry::Vacant(slot) => {
-                    slot.insert(kind);
-                }
-                Entry::Occupied(slot) if *slot.get() == kind => {}
-                Entry::Occupied(_) => return Err(CtypesError::HandleKindConflict(key.get())),
-            },
+            // Every occurrence is one reference the host transferred, whatever
+            // its kind: a request that names one key under two kinds is
+            // refused when it is interned, and gives every occurrence back.
+            WireHandle::Host(key, _) => *self.host.entry(key).or_insert(0) += 1,
         }
         Ok(())
     }
@@ -241,9 +239,15 @@ impl<'a> InboundOwners<'a> {
         }
     }
 
-    /// `key` was interned into a value; the engine now holds the registration.
+    /// One occurrence of `key` was interned into a value; the engine's
+    /// identity for it now holds that reference.
     fn interned(&mut self, key: HostKey) {
-        self.host.remove(&key);
+        if let Entry::Occupied(mut slot) = self.host.entry(key) {
+            *slot.get_mut() -= 1;
+            if *slot.get() == 0 {
+                slot.remove();
+            }
+        }
     }
 
     /// Decode one collected value.
@@ -314,13 +318,10 @@ impl Drop for InboundOwners<'_> {
                 self.table.release(key);
             }
         }
-        // A key never interned owes the host one release: a fresh identity
-        // dropped at once fires it. A key the engine already holds, under this
-        // kind or another, was never this request's to release.
-        for (key, kind) in self.host.drain() {
-            if let Ok(arc) = HostValueArc::try_intern(key, kind) {
-                drop(arc);
-            }
+        // An occurrence never interned is a reference the host handed over
+        // that no identity took in: give it back.
+        for (key, occurrences) in self.host.drain() {
+            bex_project::host_release_dispatch::fire(key, occurrences as u64);
         }
     }
 }
@@ -769,7 +770,7 @@ mod tests {
 
     /// Any engine row a test can mint without a heap: a media value.
     fn media_row() -> CffiHandleTableEntry {
-        CffiHandleTableEntry::Adt(BexExternalAdt::Media(MediaValue::from_url(
+        CffiHandleTableEntry::Adt(crate::TableAdt::Media(MediaValue::from_url(
             MediaKind::Generic,
             "https://example.com/",
             None,

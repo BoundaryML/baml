@@ -110,12 +110,24 @@ export interface EncodedCall {
  * path blocks the event loop the callback would need.
  */
 export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): EncodedCall;
-/** A leaf's payload as the bridge takes it from {@link hostAdapter.leafOf}: an `InboundValue`. */
-interface HostLeaf {
+/**
+ * A leaf's payload as the bridge takes it from {@link hostAdapter.leafOf}: an
+ * `InboundValue`, and what its wire occurrence took, so the bridge can give it
+ * back if the call never goes out.
+ */
+type HostLeaf = {
     bytes: Uint8Array;
-    /** The handle key cloned for the wire, as a decimal string, so the bridge can release it if the call never goes out. */
-    cloned?: string;
 }
+/** The engine handle key cloned for the wire, as a decimal string. */
+ | {
+    bytes: Uint8Array;
+    cloned: string;
+}
+/** The host-value key sent again, which took one of its references, as a decimal string. */
+ | {
+    bytes: Uint8Array;
+    sentAgain: string;
+};
 export declare const hostAdapter: {
     /**
      * Is `value` a plain object: one whose prototype is `Object.prototype` or

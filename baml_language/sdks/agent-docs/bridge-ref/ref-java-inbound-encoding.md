@@ -305,10 +305,10 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 > separately walks `__pydantic_private__` for handle-backed private fields. Java
 > reads a **fixed, registered field list in declaration order via public
 > zero-arg accessor methods** (`ClassEntry.encode:516-528`,
-> `TypeRegistry.registerClass:84-108`). A handle-backed `$rust_type` shell
-> (`baml.fs.File`, `baml.http.Response`) exposes its handle as a field whose
-> accessor returns a `BamlHandle`, which then rides the bare-`handle` arm — the
-> Java analog of Python's `__pydantic_private__` handle walk.
+> `TypeRegistry.registerClass:84-108`). A field holding a host's own value
+> (`baml.host.Value`) has an accessor returning a `BamlHandle`, which then
+> rides the bare-`handle` arm — the Java analog of Python's
+> `__pydantic_private__` handle walk.
 
 > ⚠ **Deviation from Python (inbound generic reification) — on parity
 > (landed `861414d55`; wire location moved to `value_type` in `ceae8ea6c`).**
@@ -439,9 +439,14 @@ arm-fidelity contract, exercised end to end by the `TestUnions`
   declared function type; the encoder checks its Java shape (`HostAdapter`),
   registers the carrier (`HostCalls.registerCallable`) and emits
   `handle{key, HOST_VALUE_CALLABLE}` stating that type. The registry is one
-  `ConcurrentHashMap<Long,Object>` keyspace (callables + raised throwables) in
-  `HostCalls`; `BamlFfi` holds the daemon dispatch `ExecutorService` and the
-  `hostDispatch` / `hostRelease` / `nativeCompleteHostCall` trampolines. A
+  `ConcurrentHashMap` keyspace (callables + raised throwables) in `HostCalls`,
+  each entry counting the references to its key that are out: a registration
+  takes 1 (its send), each send of a key already registered (a host-value
+  `BamlHandle` the engine sent back) takes 1 more via `HostCalls.sendAgain`
+  under the same atomic update that checks the key is still registered (a dead
+  key is refused, never sent), and `hostRelease(key, count)` gives `count` back;
+  the entry goes at zero. `BamlFfi` holds the daemon dispatch `ExecutorService`
+  and the `hostDispatch` / `hostRelease` / `nativeCompleteHostCall` trampolines. A
   dispatch binds the arguments against the declared parameters
   (`HostCalls.bind`) and completes with one `HostCallCompletion` outcome
   (`HostCalls.returnedCompletion` / `failedCompletion`), per ABI.md's
@@ -452,22 +457,23 @@ arm-fidelity contract, exercised end to end by the `TestUnions`
 
 ### Handle ownership: clone-for-wire + drain contract
 
-Both handle-bearing arms (media `class_value` and the bare `handle`) mint a
-**fresh** wire key via `BamlHandle.cloneKeyForWire()` →
-`nativeHandleClone(key)` (`ProtoWriter.java:199, 208-209, 258-264`;
-`BamlHandle.java:115-122`). The contract (mirrors `bridge_python`'s
-`_clone_key_for_wire`): the engine `drain`s its copy of the cloned key on decode,
-while the Java `BamlHandle` keeps its own key, so the original media/handle value
-stays valid after the call — never sharing a key avoids a double-release
-(`BamlHandle.java:16-33`). Release is `Cleaner`-driven (or eager via `close()`),
-guarded by a per-instance atomic latch, and skips the `HOST_VALUE_*` keyspaces
-(`BamlHandle.java:35-103`).
+Both handle-bearing arms (media `class_value` and the bare `handle`) take one
+more ownership of the row via `BamlHandle.cloneKeyForWire()` →
+`nativeHandleClone(key)`: the same key for a row naming an engine object, a
+fresh key for an identity-free row (media). The contract (mirrors
+`bridge_python`'s `_clone_key_for_wire`): the engine `drain`s that ownership on
+decode, while the Java `BamlHandle` keeps its own, so the original media/handle
+value stays valid after the call. A host-value `BamlHandle` goes under its own
+key and takes one more registry count instead (`HostCalls.sendAgain`). Release
+is `Cleaner`-driven (or eager via `close()`), guarded by a per-instance atomic
+latch; a host-value handle releases only the engine pin it owns, if any.
 
 > **Encode-failure rollback.** Every reference a request takes while it is
-> encoded (a handle cloned for the wire, a host callable registered for it) is
-> recorded in the active `EncodingScope`; a request that never reaches the
-> engine (a later argument refused, the wire's depth exceeded) takes them all
-> back. A host callback's result or thrown value is encoded in a scope of its
+> encoded (a handle cloned for the wire, a host callable registered for it, a
+> registry count a re-sent host key took) is recorded in the active
+> `EncodingScope`; a request that never reaches the engine (a later argument
+> refused, the wire's depth exceeded) takes them all back — exactly one count
+> per occurrence, never the whole registry entry. A host callback's result or thrown value is encoded in a scope of its
 > own, taken back unless the completion that carries it is delivered.
 
 ## Typemap Role
@@ -544,8 +550,8 @@ exercises are marked:
 | `enum_value` | `BexExternalValue::Variant { enum_name, variant_name }` | yes |
 | `ty_value` | the type, each `live` head followed by handle | yes (`BamlType`) |
 | `handle` with `HOST_VALUE_CALLABLE` (15) | `BexExternalValue::HostCallable` with its stated function type; bypasses `HANDLE_TABLE` | yes (host callable — `HostCalls.registerCallable`) |
-| `handle` with `HOST_VALUE_OPAQUE` (16) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | no — a raised exception's registration travels as `HostException.handle` in the `HostCallCompletion`, and the engine builds the `baml.errors.HostCallable` around it |
-| other `handle` | drains the key from `HANDLE_TABLE` and converts the entry | yes (media `_data`, bare handle, stream receiver) |
+| `handle` with `HOST_VALUE_OPAQUE` (16) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | a `BamlHandle` the engine sent back (one registry count per send); a raised exception's registration travels as `HostException.handle` in the `HostCallCompletion`, and the engine builds the `baml.errors.HostCallable` around it |
+| other `handle` | drains the key from `HANDLE_TABLE` and converts the entry | yes (opaque `@@rust_type` instance, bare handle, stream receiver) |
 
 The engine receives the decoded kwargs and the called function FQN. Any missing
 required arg, extra arg, or structural type mismatch is an engine-boundary
@@ -577,12 +583,12 @@ encoder error.
   because `WireWriter.writeMessage` always emits the tag + length
   (`WireWriter.java:77-90`).
 - Handle-backed values are wire keys with clone-for-wire + drain lifetime rules,
-  not ordinary class serialization (`BamlHandle.java:16-33, 115-122`): media
-  (`_data`), bare `$rust_type` shells, and the `BamlStream` receiver clone their
-  key on the way out; **host callables** register in the Java-side registry and
-  ride `handle{HOST_VALUE_CALLABLE}` (no clone — the registry owns them, released
-  via `hostRelease`), and an opaque host throwable rides `HOST_VALUE_OPAQUE` on the
-  throw-back path.
+  not ordinary class serialization (`BamlHandle.java:16-33, 115-122`): opaque
+  `@@rust_type` instances and the `BamlStream` receiver clone their key on the
+  way out (a media value goes as its portable `media_value` instead); **host callables** register in the Java-side registry and
+  ride `handle{HOST_VALUE_CALLABLE}` (no clone — each send takes a registry
+  count, given back via `hostRelease(key, count)`), and an opaque host throwable
+  rides `HOST_VALUE_OPAQUE` on the throw-back path.
 - **Java explicitly rejects everything it cannot encode** — there is no silent
   drop on the inbound value path; a value the encoder cannot map raises
   `IllegalArgumentException` naming the argument (`ProtoWriter.java:269-276`). Host

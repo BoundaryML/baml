@@ -13,6 +13,16 @@ export declare class _HostExecution {
 }
 export type HostExecution = _HostExecution
 
+/**
+ * The marker of an instrumented function, which the wrapper keeps beside the
+ * function and the bridge reads when the function is registered as a
+ * callback. JavaScript holds it but cannot build or look into one.
+ */
+export declare class _HostMarker {
+
+}
+export type HostMarker = _HostMarker
+
 export declare class BamlAudio {
   static fromUrl(url: string, mimeType?: string | undefined | null): BamlAudio
   /**
@@ -51,11 +61,19 @@ export declare class BamlHandle {
   constructor(key: HandleKey, handleType: number)
   get key(): HandleKey
   get handleType(): number
+  /**
+   * Another wrapper of the same reference: a fresh engine reference for
+   * an engine object; for a host value, which no wrapper owns, the key
+   * itself.
+   */
   clone(): BamlHandle
   /**
-   * Clone this handle for inbound wire ownership. A host value is the
-   * engine's reference to the host's own object: its key goes as it is,
-   * nothing is cloned.
+   * The key one more wire occurrence of this handle carries: a fresh
+   * engine reference for an engine object. A host value is the engine's
+   * reference to the host's own object: its key goes as it is, taking one
+   * more of the host's references to it, and is refused once the key is
+   * no longer registered. Either is the caller's to give back if the
+   * occurrence never reaches the engine.
    */
   _cloneKeyForWire(): HandleKey
   /**
@@ -184,9 +202,9 @@ export declare class BamlVideo {
   _toHandle(): BamlHandle
 }
 
-export declare function _beginHostInvocation(definition: HostDefinition, inherited: BamlHandle | undefined | null, options: BamlHandle | undefined | null, caller: HostCallSite, inputs?: string | undefined | null): [_HostExecution, BamlHandle, Buffer]
+export declare function _beginHostInvocation(marker: HostMarker, inherited: BamlHandle | undefined | null, caller: HostCallSite, inputs?: string | undefined | null): [_HostExecution, BamlHandle, Buffer]
 
-export declare function _defineHostMarker(definition: HostDefinition, options?: BamlHandle | undefined | null): BamlHandle
+export declare function _defineHostMarker(definition: HostDefinition, options?: BamlHandle | undefined | null): _HostMarker
 
 export declare function _discardHostCallArgs(args: Buffer): void
 
@@ -214,6 +232,12 @@ export declare function _handleRefcount(key: HandleKey): number | null
 export declare function _hostCaptureRequested(execution: object, outcome: string): boolean
 
 export declare function _hostInvocationFrame(execution: object): [BamlHandle, Buffer]
+
+/** Test-only: how many host-value keys (callable and opaque) are registered. */
+export declare function _hostValueCount(): number
+
+/** Test-only: whether `key` is registered. */
+export declare function _hostValueRegistered(key: HandleKey): boolean
 
 export declare function _invocationContext(handle?: BamlHandle | undefined | null): Buffer
 
@@ -370,9 +394,8 @@ export declare function registerHostAdapter(adapter: object): void
 /**
  * Install the TS-side release callback. First-call-wins; subsequent
  * calls are a no-op (matching the bridge_cffi dispatch-registration
- * semantics). The callback fires for *every* `HostValueArc` release —
- * for callable keys it's a TS-side no-op (`Map.delete(key)` on an absent
- * key), so Rust doesn't need to distinguish kinds here.
+ * semantics). The callback fires once per opaque key, when its last
+ * reference is given back.
  *
  * The tsfn is built with `weak::<true>()` (i.e. `napi_unref_threadsafe_
  * function`). Holding it strong would pin the libuv loop for the
@@ -381,9 +404,8 @@ export declare function registerHostAdapter(adapter: object): void
  * host work is done. Weak is correct here: the callback is a *release*
  * notification — purely informational from the engine's side. Pending
  * notifications that never deliver because the loop has already exited
- * are harmless; the engine has already dropped its `Arc<HostValueArc>`,
- * and the TS-side map entry would be torn down with the process
- * anyway.
+ * are harmless; the key is already unregistered, and the TS-side map
+ * entry would be torn down with the process anyway.
  *
  * Note this is the inverse of `register_callable`'s dispatch tsfn,
  * which is `weak::<false>()` — that one pins the loop because a hung
@@ -404,6 +426,14 @@ export declare function registerProgramDescriptor(descriptor?: string | undefine
 export declare function registerUnhandledSpawnErrorCallback(callback: (errorBytes: Buffer, cancelled: boolean) => void): void
 
 export declare function releaseFunctionCall(callId: string): boolean
+
+/**
+ * Give back one reference to a host value JS registered or sent again but
+ * never handed to the engine — the rollback of a send.
+ *
+ * Exposed to JS as `releaseHostValueKey(key)`.
+ */
+export declare function releaseHostValueKey(key: HandleKey): void
 
 /**
  * Finalize the SDK lifetime, drain work and finish telemetry delivery.

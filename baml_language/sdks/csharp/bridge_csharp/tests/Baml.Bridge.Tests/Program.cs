@@ -2857,7 +2857,7 @@ internal static unsafe class Program
 
     private static BamlApiV1 CreateValidTable() => new()
     {
-        AbiVersion = 5,
+        AbiVersion = 6,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
         InitializeRuntimeFromBlob = &Initialize,
@@ -3051,7 +3051,7 @@ internal static unsafe class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void RegisterHostRelease(delegate* unmanaged[Cdecl]<ulong, void> callback)
+    private static void RegisterHostRelease(delegate* unmanaged[Cdecl]<ulong, ulong, void> callback)
     {
     }
 

@@ -502,3 +502,152 @@ def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():
     )
 
 
+
+
+# ---------------------------------------------------------------------------
+# Host values BAML sends back: each key counts its references, and a decoded
+# handle holds one of its own.
+# ---------------------------------------------------------------------------
+
+# The descriptor states `ConsumeUnknownCb`'s parameters; the body here hands
+# back the host value inside the host error the callback raised.
+HOST_VALUE_BAML = """\
+function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> unknown {
+    callback(x) catch (e) {
+        let thrown: baml.errors.HostCallable => thrown._handle,
+        _ => null,
+    }
+}
+
+function TakeUnknown(value: unknown) -> int {
+    0
+}
+
+function Collect() -> int {
+    baml.sys.collect_garbage();
+    0
+}
+"""
+
+
+def _host_value_runtime() -> BamlRuntime:
+    return BamlRuntime.initialize_runtime(".", {"main.baml": HOST_VALUE_BAML})
+
+
+def _collect(rt: BamlRuntime) -> None:
+    call_function_sync(rt, "Collect", {})
+    gc.collect()
+
+
+def _raising(error: BaseException):
+    def callback(_x: int):
+        raise error
+
+    return callback
+
+
+def test_a_returned_host_value_outlives_the_engine_and_goes_back_in():
+    """The decoded handle holds the key after the engine let go of it, so it
+    can be sent again; once the handle is gone every reference is given
+    back."""
+    from baml_bridge.baml_py import _host_value_registry_len, lookup_host_value
+
+    rt = _host_value_runtime()
+    _collect(rt)
+    before = _host_value_registry_len()
+    error = ValueError("kept")
+    handle = call_function_sync(
+        rt, "ConsumeUnknownCb", {"callback": _raising(error), "x": 0}
+    ).result()
+    assert isinstance(handle, BamlPyHandle)
+    _collect(rt)
+    assert lookup_host_value(handle) is error
+    for _ in range(3):
+        assert call_function_sync(rt, "TakeUnknown", {"value": handle}).result() == 0
+    _collect(rt)
+    assert lookup_host_value(handle) is error
+    del handle
+    _collect(rt)
+    assert _host_value_registry_len() == before
+
+
+def test_a_host_value_decoded_twice_is_the_same_object():
+    from baml_bridge.baml_py import _host_value_registry_len, lookup_host_value
+
+    rt = _host_value_runtime()
+    _collect(rt)
+    before = _host_value_registry_len()
+    error = ValueError("one")
+    callback = _raising(error)
+    first = call_function_sync(
+        rt, "ConsumeUnknownCb", {"callback": callback, "x": 0}
+    ).result()
+    second = call_function_sync(
+        rt, "ConsumeUnknownCb", {"callback": callback, "x": 0}
+    ).result()
+    assert lookup_host_value(first) is error
+    assert lookup_host_value(second) is error
+    del first, second
+    _collect(rt)
+    assert _host_value_registry_len() == before
+
+
+def test_an_outbound_host_value_is_pinned_until_it_is_decoded():
+    """A collection between the engine sending a host value and Python
+    reading it cannot give the key back: the pin holds it, and decoding lets
+    go of exactly that one row."""
+    from baml_bridge.baml_py import (
+        _host_value_registry_len,
+        lookup_host_value,
+        new_function_call,
+    )
+
+    rt = _host_value_runtime()
+    _collect(rt)
+    before = _host_value_registry_len()
+    error = ValueError("pinned")
+    args = _proto.encode_call_args(
+        {"callback": _raising(error), "x": 0},
+        new_function_call(),
+        function_name="ConsumeUnknownCb",
+    )
+    result = rt.call_function_sync(args, args.kwargs, args.cancel)
+    del args
+    _collect(rt)
+    rows = _live_handle_count()
+    handle = _proto.decode_call_result(result)
+    assert _live_handle_count() == rows - 1
+    assert lookup_host_value(handle) is error
+    del handle
+    _collect(rt)
+    assert _host_value_registry_len() == before
+
+
+def test_a_refused_send_of_a_received_key_gives_back_only_its_reference():
+    """A later value failing to ship rolls back the reference the earlier
+    send of a received key took, and nothing more: the handle still holds
+    its own."""
+    from baml_bridge.baml_py import _host_value_registry_len, lookup_host_value
+
+    rt = _host_value_runtime()
+    _collect(rt)
+    before = _host_value_registry_len()
+    error = ValueError("rolled back")
+    handle = call_function_sync(
+        rt, "ConsumeUnknownCb", {"callback": _raising(error), "x": 0}
+    ).result()
+    _collect(rt)
+    # An engine handle whose row is gone: cloning it for the wire fails after
+    # the host value earlier in the list has shipped.
+    key, kind = _seed_generic_media_handle()
+    _proto._release_wire_handle(key)
+    stale = BamlPyHandle(key, kind)
+    for _ in range(3):
+        with pytest.raises(RuntimeError, match="invalid handle"):
+            call_function_sync(rt, "TakeUnknown", {"value": [handle, stale]})
+        assert _host_value_registry_len() == before + 1
+    assert lookup_host_value(handle) is error
+    assert call_function_sync(rt, "TakeUnknown", {"value": handle}).result() == 0
+    del handle
+    _collect(rt)
+    assert _host_value_registry_len() == before

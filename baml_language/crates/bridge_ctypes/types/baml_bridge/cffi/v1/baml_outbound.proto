@@ -92,12 +92,21 @@ message BamlOutboundValue {
 // Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries an
 // extra `ty` describing the underlying tagged type as a full `BamlTy` — the
 // faithful wire form, so an interface keeps its associated-type bindings even
-// though readers only consume the class FQN for typed-wrapper dispatch. Only
-// `ADT_TAGGED_HEAP_HANDLE` populates it; other handle types leave it unset.
+// though readers only consume the class FQN for typed-wrapper dispatch. A
+// reference to an engine value (a callable, a stream, a function spec, a
+// runtime value, a host body's cancel token) populates it; other handle types
+// leave it unset.
+//
+// A host value (`HOST_VALUE_CALLABLE`, `HOST_VALUE_OPAQUE`) goes back to its
+// host by the host's own `key`, and carries a `pin`: a `HOST_VALUE_PIN` row
+// that keeps the engine's references to that key while the host reads the
+// value. The host releases the pin, as it releases any engine row, with the
+// result (or callback arguments) that carried it; it never sends one back.
 message BamlOutboundHandle {
   uint64 key = 1;
   BamlHandleType handle_type = 2;
   BamlTy ty = 3;
+  uint64 pin = 4;
 }
 
 message BamlValueNull {}

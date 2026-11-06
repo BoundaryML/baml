@@ -230,13 +230,14 @@ const HOST_VALUE_HANDLE_TYPES = new Set([
     baml_bridge.cffi.v1.BamlHandleType.HOST_VALUE_OPAQUE,
 ]);
 function handleLeaf(handle) {
+    // A host value is the engine's reference to the host's own object: its key
+    // goes as it is, taking one more of its references (refused once the key
+    // is no longer registered). An engine handle goes as a clone. Either is
+    // the bridge's to give back if the call never goes out.
     const key = handle._cloneKeyForWire();
     const bytes = InboundValue.encode(InboundValue.create({ handle: { key, handleType: handle.handleType } })).finish();
-    // A host value is the engine's reference to the host's own object: its key
-    // goes as it is, nothing was cloned and nothing is owed if the call never
-    // goes out. An engine handle's clone is the bridge's to release.
     if (HOST_VALUE_HANDLE_TYPES.has(handle.handleType))
-        return { bytes };
+        return { bytes, sentAgain: keyToDecimal(key) };
     return { bytes, cloned: keyToDecimal(key) };
 }
 /** The engine handle a runtime-owned value wraps, if it wraps one. */
@@ -355,7 +356,7 @@ export const hostAdapter = {
     },
     /** Bind a user function as a host callable; what comes back is the platform's (see `registerCallableDispatch`). */
     dispatchFor(fn) {
-        return registerCallableDispatch(makeHostCallableDispatch(fn), hostMarker(fn)?.handle);
+        return registerCallableDispatch(makeHostCallableDispatch(fn), hostMarker(fn)?.marker);
     },
     /** A short rendering for error messages, bounded in work as in length: a container by its size, never stringified whole. */
     describe(value) {
@@ -822,11 +823,33 @@ export function decodeOutboundValue(data) {
         return decodeValueHolder(msg, getTypeMap(), ownership);
     }
     finally {
-        for (const handle of ownership) {
-            try {
-                _releaseWireHandle(handle.key);
-            }
-            catch { /* Preserve decoding failure. */ }
+        releaseOwnership(ownership);
+    }
+}
+/**
+ * The pin a host value arrived with, as an ownership record: the engine's
+ * hold on the key while the host reads it, released with the value that
+ * carried it. `undefined` for a host value sent without one.
+ */
+function pinRecord(handle) {
+    const pin = handle.pin;
+    if (pin == null)
+        return undefined;
+    if (typeof pin === 'number' ? pin === 0 : (pin.low === 0 && pin.high === 0))
+        return undefined;
+    return { key: pin, handleType: BamlHandleType.HOST_VALUE_PIN };
+}
+/**
+ * Release every engine row `ownership` still records, keeping the first
+ * failure from being masked by cleanup.
+ */
+function releaseOwnership(ownership) {
+    for (const handle of ownership) {
+        try {
+            _releaseWireHandle(handle.key);
+        }
+        catch {
+            // Cleanup must preserve the original decode failure.
         }
     }
 }
@@ -835,33 +858,70 @@ export function decodeOutboundValue(data) {
  * records, so a failed decode releases them like any other handle.
  */
 const liveRecords = new WeakMap();
-function collectHostCallHandles(holder, ownership) {
-    if (holder.handleValue) {
-        const ht = holder.handleValue.handleType;
-        if (ht !== BamlHandleType.HOST_VALUE_CALLABLE && ht !== BamlHandleType.HOST_VALUE_OPAQUE) {
-            ownership.add(holder.handleValue);
-        }
+/**
+ * Visit every holder of `holder`'s tree that carries an engine row: a handle
+ * or a type value.
+ */
+function forEachReference(holder, visit) {
+    if (holder.handleValue || holder.tyValue) {
+        visit(holder);
     }
     else if (holder.listValue) {
         for (const item of holder.listValue.items ?? [])
-            collectHostCallHandles(item, ownership);
+            forEachReference(item, visit);
     }
     else if (holder.mapValue || holder.classValue) {
         const entries = holder.mapValue?.entries ?? holder.classValue?.fields ?? [];
         for (const entry of entries) {
             if (entry.value)
-                collectHostCallHandles(entry.value, ownership);
+                forEachReference(entry.value, visit);
         }
     }
     else if (holder.unionVariantValue?.value) {
-        collectHostCallHandles(holder.unionVariantValue.value, ownership);
+        forEachReference(holder.unionVariantValue.value, visit);
     }
-    else if (holder.tyValue) {
-        const records = liveKeys(holder.tyValue).map((key) => ({ key }));
-        liveRecords.set(holder.tyValue, records);
-        for (const record of records)
-            ownership.add(record);
-    }
+}
+/**
+ * Record every engine row `holder` carries in `ownership`, for a decode that
+ * hands each to the wrapper that takes it and releases the rest.
+ */
+function collectHostCallHandles(holder, ownership) {
+    forEachReference(holder, (found) => {
+        if (found.handleValue) {
+            if (HOST_VALUE_HANDLE_TYPES.has(found.handleValue.handleType ?? 0)) {
+                // The host owns the value itself; the engine's pin on it is
+                // released once the decode is done, whatever the decode keeps.
+                const pin = pinRecord(found.handleValue);
+                if (pin)
+                    ownership.add(pin);
+            }
+            else {
+                ownership.add(found.handleValue);
+            }
+        }
+        else if (found.tyValue) {
+            const records = liveKeys(found.tyValue).map((key) => ({ key }));
+            liveRecords.set(found.tyValue, records);
+            for (const record of records)
+                ownership.add(record);
+        }
+    });
+}
+/**
+ * The pins of every host value `holder` carries. A call result's engine rows
+ * belong to the wrappers decoded from them; its pins are released once the
+ * result has been read.
+ */
+function collectPins(holder, pins) {
+    if (!holder)
+        return;
+    forEachReference(holder, (found) => {
+        if (found.handleValue && HOST_VALUE_HANDLE_TYPES.has(found.handleValue.handleType ?? 0)) {
+            const pin = pinRecord(found.handleValue);
+            if (pin)
+                pins.push(pin);
+        }
+    });
 }
 /**
  * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
@@ -895,14 +955,7 @@ export function decodeHostCall(data) {
         return { positional, optional };
     }
     finally {
-        for (const handle of ownership) {
-            try {
-                _releaseWireHandle(handle.key);
-            }
-            catch {
-                // Cleanup must preserve the original decode failure.
-            }
-        }
+        releaseOwnership(ownership);
     }
 }
 /**
@@ -1004,6 +1057,20 @@ function errorForClassName(formatted, detail) {
 export function decodeCallResult(data) {
     const buf = data instanceof Buffer ? data : Buffer.from(data);
     const result = BamlOutboundResult.decode(buf);
+    // The host values the result carries stay pinned until it has been read,
+    // including the rehydration of a host error from its key.
+    const pins = [];
+    collectPins(result.ok, pins);
+    collectPins(result.error?.value, pins);
+    collectPins(result.panic?.value, pins);
+    try {
+        return decodeCallResultBody(result);
+    }
+    finally {
+        releaseOwnership(pins);
+    }
+}
+function decodeCallResultBody(result) {
     switch (result.result) {
         case 'error': {
             const { value, className, message } = decodeThrown(result.error?.value);

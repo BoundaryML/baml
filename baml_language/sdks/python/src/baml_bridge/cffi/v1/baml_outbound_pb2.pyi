@@ -93,14 +93,16 @@ class BamlOutboundValue(_message.Message):
     def __init__(self, null_value: _Optional[_Union[BamlValueNull, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., class_value: _Optional[_Union[BamlValueClass, _Mapping]] = ..., enum_value: _Optional[_Union[BamlValueEnum, _Mapping]] = ..., literal_value: _Optional[_Union[BamlLiteralValue, _Mapping]] = ..., list_value: _Optional[_Union[BamlValueList, _Mapping]] = ..., map_value: _Optional[_Union[BamlValueMap, _Mapping]] = ..., union_variant_value: _Optional[_Union[BamlValueUnionVariant, _Mapping]] = ..., handle_value: _Optional[_Union[BamlOutboundHandle, _Mapping]] = ..., media_value: _Optional[_Union[BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[BamlValuePromptAst, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
 
 class BamlOutboundHandle(_message.Message):
-    __slots__ = ("key", "handle_type", "ty")
+    __slots__ = ("key", "handle_type", "ty", "pin")
     KEY_FIELD_NUMBER: _ClassVar[int]
     HANDLE_TYPE_FIELD_NUMBER: _ClassVar[int]
     TY_FIELD_NUMBER: _ClassVar[int]
+    PIN_FIELD_NUMBER: _ClassVar[int]
     key: int
     handle_type: _baml_handle_pb2.BamlHandleType
     ty: _baml_type_pb2.BamlTy
-    def __init__(self, key: _Optional[int] = ..., handle_type: _Optional[_Union[_baml_handle_pb2.BamlHandleType, str]] = ..., ty: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
+    pin: int
+    def __init__(self, key: _Optional[int] = ..., handle_type: _Optional[_Union[_baml_handle_pb2.BamlHandleType, str]] = ..., ty: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., pin: _Optional[int] = ...) -> None: ...
 
 class BamlValueNull(_message.Message):
     __slots__ = ()

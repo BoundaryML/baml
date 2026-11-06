@@ -70,42 +70,43 @@ pub fn begin(
     Ok((execution, key.get()))
 }
 
-/// A marker retains immutable declaration data only, not a runtime or parent.
-pub fn define_marker(definition: HostDefinition, options_key: u64) -> Result<u64, BridgeError> {
-    let marker = bex_project::HostMarker {
+/// The marker of an instrumented host function: its declaration and trace
+/// options, validated once. It retains immutable declaration data only, not
+/// a runtime or parent. The host adapter holds it beside the function and
+/// hands it back when it registers the function as a callback.
+pub fn define_marker(
+    definition: HostDefinition,
+    options_key: u64,
+) -> Result<Arc<bex_project::HostMarker>, BridgeError> {
+    Ok(Arc::new(bex_project::HostMarker {
         definition,
         options: options(options_key)?,
-    };
-    Ok(HANDLE_TABLE
-        .insert(CffiHandleTableEntry::HostMarker(Arc::new(marker)))
-        .get())
+    }))
 }
 
+/// The marker a callback registers under: its own when it is an instrumented
+/// function, otherwise the anonymous callback's.
 pub fn registration_marker(
-    key: u64,
+    marker: Option<&Arc<bex_project::HostMarker>>,
     language: &str,
-) -> Result<Arc<bex_project::HostMarker>, BridgeError> {
-    let Some(key) = TableKey::new(key) else {
-        return Ok(Arc::new(bex_project::HostMarker {
-            definition: HostDefinition {
-                language: language.into(),
-                module: "<host>".into(),
-                qualified_name: "<unmarked-callback>".into(),
-                source_file: "<native>".into(),
-                definition_line: 0,
-                wrapper_line: 0,
-                display_name: "<callback>".into(),
-            },
-            options: TraceOptionsData::default(),
-        }));
-    };
-    let entry = HANDLE_TABLE
-        .resolve(key)
-        .ok_or_else(|| invalid("host marker is no longer live"))?;
-    let CffiHandleTableEntry::HostMarker(marker) = &*entry else {
-        return Err(invalid("expected a host marker"));
-    };
-    Ok(Arc::clone(marker))
+) -> Arc<bex_project::HostMarker> {
+    marker.map_or_else(
+        || {
+            Arc::new(bex_project::HostMarker {
+                definition: HostDefinition {
+                    language: language.into(),
+                    module: "<host>".into(),
+                    qualified_name: "<unmarked-callback>".into(),
+                    source_file: "<native>".into(),
+                    definition_line: 0,
+                    wrapper_line: 0,
+                    display_name: "<callback>".into(),
+                },
+                options: TraceOptionsData::default(),
+            })
+        },
+        Arc::clone,
+    )
 }
 
 pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>> {
@@ -118,26 +119,20 @@ pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>
 }
 
 /// The `baml.spawn.CancelToken` a host body holds, encoded as the outbound
-/// value a host decodes: a live reference to an engine instance observing the
-/// execution's effective cancellation.
-pub async fn encode_cancel_token(execution: &HostInvocation) -> Result<Vec<u8>, BridgeError> {
+/// value a host decodes: a reference to a token observing the execution's
+/// effective cancellation. Issuing one touches no heap, so a host thread
+/// calls this without waiting on the runtime.
+pub fn cancel_token(execution: &HostInvocation) -> Result<Vec<u8>, BridgeError> {
     use prost::Message as _;
 
     let token = execution
         .cancel_token()
-        .await
         .map_err(bex_project::RuntimeError::from)?;
     Ok(bridge_ctypes::external_to_outbound(
         &token,
         &bridge_ctypes::CffiHandleTableOptions::for_wire(),
     )?
     .encode_to_vec())
-}
-
-/// [`encode_cancel_token`], blocking the calling thread while the engine
-/// allocates the token.
-pub fn cancel_token(execution: &HostInvocation) -> Result<Vec<u8>, BridgeError> {
-    futures::executor::block_on(encode_cancel_token(execution))
 }
 
 #[cfg(test)]

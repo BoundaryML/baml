@@ -53,6 +53,10 @@ const SOURCE: &str = r#"
         token.is_cancelled()
     }
 
+    function same_token(a: baml.spawn.CancelToken, b: baml.spawn.CancelToken) -> bool {
+        a == b
+    }
+
     function open_file(path: string) -> baml.fs.File {
         baml.fs.open(path, "r")
     }
@@ -176,6 +180,22 @@ fn assert_cancel_token_reference(value: &BexExternalValue) {
     assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
     assert_eq!(
         *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.spawn.CancelToken")),
+            Box::new([]),
+        )
+    );
+}
+
+/// The value is a token the runtime issued a host body: a `CancelToken` the
+/// host holds by reference, with no heap object behind it.
+#[track_caller]
+fn assert_issued_cancel_token(value: &BexExternalValue) {
+    let BexExternalValue::Adt(BexExternalAdt::CancelToken(token)) = value else {
+        panic!("a host body's cancel token is issued without a heap object, got {value:?}");
+    };
+    assert_eq!(
+        token.ty,
         baml_type::RealizedTy::Class(
             WireHead::Static(TypeName::from_dotted_path("baml.spawn.CancelToken")),
             Box::new([]),
@@ -405,8 +425,11 @@ async fn a_host_body_holds_a_cancel_token_reference() {
             None,
         )
         .unwrap();
-    let token = host.cancel_token().await.unwrap();
-    assert_cancel_token_reference(&token);
+    let token = host.cancel_token().unwrap();
+    assert_issued_cancel_token(&token);
+    // Each crossing into BAML is the same token.
+    let same = call(&engine, "same_token", vec![token.clone(), token.clone()]).await;
+    assert_eq!(same.unwrap(), BexExternalValue::Bool(true));
     let cancelled = call(&engine, "is_cancelled", vec![token.clone()]).await;
     assert_eq!(cancelled.unwrap(), BexExternalValue::Bool(false));
     assert!(!host.inherited_state().is_cancelled());
@@ -417,6 +440,45 @@ async fn a_host_body_holds_a_cancel_token_reference() {
     assert_eq!(cancelled.unwrap(), BexExternalValue::Bool(true));
     assert!(host.inherited_state().is_cancelled());
     host.finish(btel_types::InvocationOutcome::Cancelled);
+}
+
+/// A host body's token dies with the runtime that issued it: another runtime
+/// refuses it rather than building a token for an execution it does not run.
+#[tokio::test]
+async fn a_host_body_cancel_token_dies_with_its_runtime() {
+    let issuer = engine();
+    let host = issuer
+        .begin_host_invocation(
+            &bex_engine::HostDefinition {
+                language: "python".into(),
+                module: "application".into(),
+                qualified_name: "request".into(),
+                source_file: "application.py".into(),
+                definition_line: 10,
+                wrapper_line: 9,
+                display_name: "request".into(),
+            },
+            None,
+            &bex_vm_types::trace::TraceOptionsData::default(),
+            &bex_engine::HostCallSite {
+                source_file: "caller.py".into(),
+                line: 20,
+            },
+            None,
+        )
+        .unwrap();
+    let token = host.cancel_token().unwrap();
+    let other = engine();
+    let refused = call(&other, "is_cancelled", vec![token])
+        .await
+        .expect_err("another runtime refuses the token");
+    assert!(
+        refused
+            .to_string()
+            .contains("belongs to a different BAML runtime"),
+        "{refused}"
+    );
+    host.finish(btel_types::InvocationOutcome::Ok);
 }
 
 /// An instance of a `@@rust_type` class keeps all its state in the runtime,

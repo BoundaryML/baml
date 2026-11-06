@@ -596,9 +596,11 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { _HostExecution, HostExecution, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _encodeInbound, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCallBridgeFailure, completeHostCallRaised, completeHostCallThrow, completeHostCallValue, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostAdapter, registerHostValueReleaseCallback, registerProgramDescriptor, registerUnhandledSpawnErrorCallback, releaseFunctionCall, shutdownRuntime } = nativeBinding
+const { _HostExecution, HostExecution, _HostMarker, HostMarker, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _encodeInbound, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _hostValueCount, _hostValueRegistered, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCallBridgeFailure, completeHostCallRaised, completeHostCallThrow, completeHostCallValue, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostAdapter, registerHostValueReleaseCallback, registerProgramDescriptor, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostValueKey, shutdownRuntime } = nativeBinding
 export { _HostExecution }
 export { HostExecution }
+export { _HostMarker }
+export { HostMarker }
 export { BamlAudio }
 export { BamlHandle }
 export { BamlImage }
@@ -614,6 +616,8 @@ export { _getHostCallOrigin }
 export { _handleRefcount }
 export { _hostCaptureRequested }
 export { _hostInvocationFrame }
+export { _hostValueCount }
+export { _hostValueRegistered }
 export { _invocationContext }
 export { _isInvocationCancelled }
 export { _liveHandleCount }
@@ -642,4 +646,5 @@ export { registerHostValueReleaseCallback }
 export { registerProgramDescriptor }
 export { registerUnhandledSpawnErrorCallback }
 export { releaseFunctionCall }
+export { releaseHostValueKey }
 export { shutdownRuntime }

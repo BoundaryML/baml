@@ -684,13 +684,13 @@ public final class BamlFfi {
     // hostDispatch; the call's one outcome flows back via nativeCompleteHostCall.
 
     /**
-     * Engine-driven release: drop the registry entry for {@code key} (the engine
-     * dropped the last reference to the host value). Called from the Rust release
-     * trampoline; a stale/absent key is a harmless no-op. Rarely fires per call
-     * (GC-driven) — hence the {@code @Disabled} release test.
+     * Engine-driven release: the engine gives back {@code count} references to
+     * the host value {@code key} ({@link HostCalls#release}). Called from the
+     * Rust release trampoline after the engine collects the values holding
+     * them; an absent key is ignored.
      */
-    static void hostRelease(long key) {
-        HostCalls.release(key);
+    static void hostRelease(long key, long count) {
+        HostCalls.release(key, count);
     }
 
     /**

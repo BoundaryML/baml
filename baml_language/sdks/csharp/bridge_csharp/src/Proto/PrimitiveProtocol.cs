@@ -270,9 +270,6 @@ internal static class PrimitiveProtocol
         NativeApi? api = null)
     {
         BamlOutboundResult envelope = ParseCallResult(bytes, "BAML result");
-
-        HostCallableProtocol.ThrowIfHostCallbackError(envelope);
-
         using OutboundOwnershipScope ownership = OutboundOwnershipScope.Create(envelope, api);
         var budget = new BamlDecodeBudget();
         return envelope.ResultCase switch
@@ -527,6 +524,8 @@ internal static class PrimitiveProtocol
                 "BamlOutboundError.value was absent.");
         }
 
+        // Read while the scope still holds the exception's pin.
+        HostCallableProtocol.ThrowIfHostCallbackError(error);
         var thrownValue = new BamlValue(
             Decode(error.Value, "$error", ownership, api, budget, depth: 0));
         var trace = new BamlTrace(error.Trace);
@@ -1078,7 +1077,6 @@ internal static class PrimitiveProtocol
         string fqn = wire.HandleType switch
         {
             BamlHandleType.FunctionRef => "baml.internal.Function",
-            BamlHandleType.UntaggedRustData => "baml.internal.RustData",
             BamlHandleType.UntaggedBexHeap => "baml.internal.HeapValue",
             BamlHandleType.AdtPromptAst => "baml.llm.PromptAst",
             BamlHandleType.AdtFunctionSpec => "ai.FunctionSpec",

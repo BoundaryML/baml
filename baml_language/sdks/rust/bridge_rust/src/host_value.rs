@@ -30,8 +30,10 @@
 //!   callback cancelled before it ran), which the engine surfaces as an SDK
 //!   panic rather than a catchable throw.
 //!
-//! The engine releases registry entries through the release callback at
-//! its safepoints.
+//! The registry counts the references to each value it hands out: one each
+//! time a key crosses into the engine. The engine gives them back through
+//! the release callback at its safepoints, and an entry lives while any is
+//! out.
 
 use std::{
     any::Any,
@@ -39,7 +41,7 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{
-        Arc, LazyLock, Mutex,
+        Arc, LazyLock, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -115,7 +117,9 @@ pub enum HostThrow {
 pub struct Raise {
     class_name: String,
     message: String,
-    original: Arc<dyn Any + Send + Sync>,
+    /// The exception, sent as the `_handle` of the
+    /// `baml.errors.HostCallable` the engine builds.
+    value: HostValue,
 }
 
 /// One callback's completion: its outcome, and the encoding whose creations
@@ -192,7 +196,7 @@ impl Completion {
                     // would only lose info.
                     class_name: std::any::type_name::<E>().to_string(),
                     message: error.to_string(),
-                    original: Arc::new(error),
+                    value: HostValue::new(error),
                 },
                 Encoder::new(),
             ),
@@ -200,8 +204,7 @@ impl Completion {
     }
 
     fn raised(raise: Raise, mut encoder: Encoder) -> Self {
-        let handle = insert(raise.original);
-        encoder.registered(handle);
+        let handle = raise.value.send(&mut encoder);
         Self {
             outcome: Outcome::Raised(wire::HostException {
                 message: raise.message,
@@ -242,8 +245,7 @@ pub type DispatchFuture = Pin<Box<dyn Future<Output = Completion> + Send>>;
 pub type ErasedCall =
     Box<dyn Fn(Vec<wire::BamlToHostArg>) -> Result<DispatchFuture, String> + Send + Sync>;
 
-/// A registered host closure. A concrete type (not a `dyn Fn` alias) so the
-/// registry can hold it as `dyn Any` and downcast it back.
+/// A registered host closure, and the type it was sent under.
 struct ErasedCallable {
     call: ErasedCall,
     /// The function type the callable was sent under. A callable has no
@@ -252,20 +254,110 @@ struct ErasedCallable {
     function_type: wire::BamlTy,
 }
 
+/// A value this process registered, by the kind of handle it is sent as.
+#[derive(Clone)]
+enum Registered {
+    /// A host closure, sent as `HOST_VALUE_CALLABLE`.
+    Callable(Arc<ErasedCallable>),
+    /// A [`HostValue`] or a raised host error, sent as `HOST_VALUE_OPAQUE`.
+    Opaque(Arc<HostValueInner>),
+}
+
+impl Registered {
+    fn into_callable(self) -> Option<Arc<ErasedCallable>> {
+        match self {
+            Self::Callable(callable) => Some(callable),
+            Self::Opaque(_) => None,
+        }
+    }
+}
+
+/// One registered value and how many references to it are out: one per
+/// send of its key to the engine, each given back by the engine's release
+/// (or by a rollback of a send that never happened).
+struct Entry {
+    value: Registered,
+    references: u64,
+}
+
 struct Registry {
     next_key: AtomicU64,
-    /// Every host value — a registered [`ErasedCallable`] or an opaque
-    /// original error — is stored type-erased. Each key has exactly one
-    /// use site (fixed at registration: a dispatch key is always a
-    /// callable, a raise's handle always an error), which downcasts to
-    /// the type it expects, so the table needs no per-entry tag.
-    table: Mutex<HashMap<u64, Arc<dyn Any + Send + Sync>>>,
+    table: Mutex<HashMap<u64, Entry>>,
 }
 
 static REGISTRY: LazyLock<Registry> = LazyLock::new(|| Registry {
     next_key: AtomicU64::new(1),
     table: Mutex::new(HashMap::new()),
 });
+
+impl Registry {
+    /// Every update leaves the table whole, so a panic elsewhere while it
+    /// was locked leaves nothing to repair.
+    fn table(&self) -> MutexGuard<'_, HashMap<u64, Entry>> {
+        self.table.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Register `value` under a new key, holding the one reference the send
+    /// it is registered for takes.
+    fn register(&self, value: Registered) -> u64 {
+        let key = loop {
+            let key = self.next_key.fetch_add(1, Ordering::Relaxed);
+            if key != 0 {
+                break key;
+            }
+        };
+        self.table().insert(
+            key,
+            Entry {
+                value,
+                references: 1,
+            },
+        );
+        key
+    }
+
+    /// Take one more reference to `key` for sending it again, and the value
+    /// it names; `None` when it is no longer registered. Under the registry
+    /// lock, so a release racing this send cannot remove the key between the
+    /// check and the send.
+    fn send_again(&self, key: u64) -> Option<Registered> {
+        let mut table = self.table();
+        let entry = table.get_mut(&key)?;
+        entry.references += 1;
+        Some(entry.value.clone())
+    }
+
+    /// Give back `count` references to `key`. The last one removes the entry,
+    /// whose value is dropped outside the lock.
+    fn release(&self, key: u64, count: u64) {
+        let removed = {
+            let mut table = self.table();
+            let Some(entry) = table.get_mut(&key) else {
+                drop(table);
+                log::warn(&format!(
+                    "host-value release of {count} references to key {key}, which is not registered"
+                ));
+                return;
+            };
+            debug_assert!(
+                count <= entry.references,
+                "{count} references given back to key {key}, which has {}",
+                entry.references
+            );
+            entry.references = entry.references.saturating_sub(count);
+            if entry.references > 0 {
+                return;
+            }
+            table.remove(&key)
+        };
+        drop(removed);
+    }
+
+    /// The value `key` names, while it is registered.
+    fn lookup(&self, key: u64) -> Option<Registered> {
+        self.table().get(&key).map(|entry| entry.value.clone())
+    }
+}
 
 /// The bridge-owned runtime that runs user closures. The engine's own
 /// tokio lives inside the dylib (a separate tokio instance), so its
@@ -284,54 +376,32 @@ static DISPATCH_RT: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
         .unwrap_or_else(|e| unreachable!("building the host-dispatch runtime cannot fail: {e}"))
 });
 
-fn next_key() -> u64 {
-    loop {
-        let k = REGISTRY.next_key.fetch_add(1, Ordering::Relaxed);
-        if k != 0 {
-            return k;
-        }
-    }
+/// Give back one reference to `key` taken for a send that never happened.
+pub(crate) fn give_back(key: u64) {
+    REGISTRY.release(key, 1);
 }
 
-/// Register a host value (callable or opaque error) and return its key.
-/// The entry stays until the engine's release callback fires.
-fn insert(value: Arc<dyn Any + Send + Sync>) -> u64 {
-    let key = next_key();
-    match REGISTRY.table.lock() {
-        Ok(mut table) => {
-            table.insert(key, value);
-        }
-        Err(e) => {
-            // Poisoned: an earlier panic happened while holding the lock.
-            // The entry is dropped; the engine-side handle will dangle and
-            // surface as a bridge failure on dispatch — loud, not silent.
-            log::warn(&format!(
-                "host-value registry mutex poisoned while inserting key {key}: {e}"
-            ));
-        }
-    }
-    key
+/// Take one more reference to `key`, a host value the engine sent this
+/// process, for sending it again with `encoder`; and the type it is stated
+/// under: a host callable's function type, nothing for an opaque value.
+pub(crate) fn send_again(
+    key: u64,
+    encoder: &mut Encoder,
+) -> Result<Option<wire::BamlTy>, EncodeError> {
+    let registered = REGISTRY
+        .send_again(key)
+        .ok_or(EncodeError::ReleasedHostValue)?;
+    encoder.host_reference(key);
+    Ok(match registered {
+        Registered::Callable(callable) => Some(callable.function_type.clone()),
+        Registered::Opaque(_) => None,
+    })
 }
 
-/// Drop a registration the engine never received: the value it was
-/// registered for was never sent.
-pub(crate) fn unregister(key: u64) {
-    host_release_callback(key);
-}
-
-/// Look up a host value by key, if this process registered it and the
-/// engine has not yet released it. The caller downcasts to the kind it
-/// expects.
-fn lookup(key: u64) -> Option<Arc<dyn Any + Send + Sync>> {
-    match REGISTRY.table.lock() {
-        Ok(table) => table.get(&key).map(Arc::clone),
-        Err(e) => {
-            log::warn(&format!(
-                "host-value registry mutex poisoned during lookup of key {key}: {e}"
-            ));
-            None
-        }
-    }
+/// How many references to `key` are out, while it is registered.
+#[cfg(test)]
+pub(crate) fn references(key: u64) -> Option<u64> {
+    REGISTRY.table().get(&key).map(|entry| entry.references)
 }
 
 /// Register `cb` (via its [`HostCallback`] erasure) with `encoder`, which
@@ -352,11 +422,11 @@ pub(crate) fn callable_handle<Args, Ret: BamlValue, Marker, Cb: HostCallback<Arg
 ) -> wire::InboundValue {
     let stated = function_type.to_wire();
     let CallableTy { ret, throws, .. } = function_type;
-    let key = insert(Arc::new(ErasedCallable {
+    let key = REGISTRY.register(Registered::Callable(Arc::new(ErasedCallable {
         call: cb.erase(params, ret, throws),
         function_type: stated.clone(),
-    }));
-    encoder.registered(key);
+    })));
+    encoder.host_reference(key);
     wire::InboundValue {
         value_type: Some(stated),
         value: Some(In::Handle(wire::BamlHandle {
@@ -366,23 +436,14 @@ pub(crate) fn callable_handle<Args, Ret: BamlValue, Marker, Cb: HostCallback<Arg
     }
 }
 
-/// The function type a host callable this process registered was sent
-/// under, while the engine holds it.
-pub(crate) fn registered_function_type(key: u64) -> Option<wire::BamlTy> {
-    lookup(key)?
-        .downcast::<ErasedCallable>()
-        .ok()
-        .map(|callable| callable.function_type.clone())
-}
-
 /// Install the dispatch + release callbacks with the engine, once. Called
 /// on every host→engine dispatch (alongside the result callback) so they
 /// are always in place before the engine could hold a callable handle.
 pub(crate) fn ensure_callbacks_registered(api: &'static capi::Api) {
     static REGISTERED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     REGISTERED.get_or_init(|| {
-        // SAFETY: both callbacks match the engine's ABI and never unwind
-        // (dispatch catches panics; release only takes a mutex).
+        // SAFETY: the callbacks match the engine's ABI and never unwind
+        // (dispatch catches panics; release only takes a mutex and logs).
         #[expect(unsafe_code)]
         unsafe {
             (api.register_host_dispatch_v2)(host_dispatch_callback);
@@ -392,20 +453,10 @@ pub(crate) fn ensure_callbacks_registered(api: &'static capi::Api) {
     });
 }
 
-/// Engine → bridge: a host-owned value was released at an engine
-/// safepoint. Drop the registry entry (callable or opaque alike).
-extern "C" fn host_release_callback(host_value_key: u64) {
-    match REGISTRY.table.lock() {
-        Ok(mut table) => {
-            table.remove(&host_value_key);
-        }
-        Err(e) => {
-            log::warn(&format!(
-                "host-value registry mutex poisoned during release of key \
-                 {host_value_key}: {e}; entry leaked"
-            ));
-        }
-    }
+/// Engine → bridge: at an engine safepoint, the engine gives back `count`
+/// of its references to a host value (callable or opaque alike).
+extern "C" fn host_release_callback(host_value_key: u64, count: u64) {
+    REGISTRY.release(host_value_key, count);
 }
 
 /// What preparing a callback for its closure came to.
@@ -453,11 +504,15 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
             return;
         }
     };
+    // Held until the arguments are decoded or released.
+    let pins = crate::outbound::Pins::of(call.args.iter().filter_map(|arg| arg.value.as_ref()));
 
     // Resolve before spawning so a missing entry surfaces as a bridge
     // failure now — the engine holding a handle the bridge cannot find is
     // a bridge bug, not a user error.
-    let Some(callable) = lookup(host_value_key).and_then(|v| v.downcast::<ErasedCallable>().ok())
+    let Some(callable) = REGISTRY
+        .lookup(host_value_key)
+        .and_then(Registered::into_callable)
     else {
         log::warn(&format!(
             "no host callable registered for key {host_value_key}"
@@ -480,6 +535,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
         let sync_frame = frame.clone();
         let prepared = handle
             .spawn_blocking(move || {
+                let _pins = pins;
                 if sync_frame.cancelled.load(Ordering::Acquire) {
                     release_args(call.args);
                     return Prepared::Cancelled;
@@ -596,14 +652,15 @@ fn complete_bridge_failure(call_id: u32, message: String) {
 /// Only the runtime builds a `baml.errors.HostCallable`, around a
 /// callback's raised exception: a `HostCallable` cannot be sent as an
 /// argument or returned as a value. A callback that fails with one raises
-/// its original again, and the runtime builds a fresh instance around it.
+/// its original again, under the registration it came back with, and the
+/// runtime builds a fresh instance around it.
 ///
 /// The original is never absent: exactly one bridge exists per process
 /// (bridge registration is first-call-wins), so every `_handle` was
-/// minted by this registry, and the entry lives until the engine's
-/// release fires — after the value can no longer arrive. A dead handle
-/// at decode is therefore a lifetime bug and fails decode loudly rather
-/// than degrading to metadata.
+/// minted by this registry, and the engine keeps the entry registered
+/// while the value carrying it is read. A dead handle at decode is
+/// therefore a lifetime bug and fails decode loudly rather than degrading
+/// to metadata.
 ///
 /// [`from_baml`]: crate::baml_value::internal::__BamlValuePrivate::from_baml
 pub struct HostCallable<T: ?Sized + Send + Sync = dyn Any + Send + Sync> {
@@ -612,6 +669,8 @@ pub struct HostCallable<T: ?Sized + Send + Sync = dyn Any + Send + Sync> {
     /// The rehydrated original host error, typed `Arc<T>` (the default
     /// `dyn Any + Send + Sync` is the wire-erased form).
     original: Arc<T>,
+    /// The registration `_handle` names, around `original`.
+    value: HostValue,
 }
 
 impl<T: ?Sized + Send + Sync> HostCallable<T> {
@@ -641,10 +700,12 @@ impl HostCallable {
             Ok(original) => Ok(HostCallable {
                 message: self.message,
                 original,
+                value: self.value,
             }),
             Err(original) => Err(HostCallable {
                 message: self.message,
                 original,
+                value: self.value,
             }),
         }
     }
@@ -666,12 +727,141 @@ impl<T: ?Sized + Send + Sync> std::fmt::Display for HostCallable<T> {
     }
 }
 
+/// A `baml.host.Value`: a value this host owns, which BAML holds by
+/// reference and cannot look into. Sent to the engine, it is registered in
+/// this host's registry; back from the engine, it is the same value again.
+///
+/// One `HostValue` sent several times is one value to BAML (`==` holds) for
+/// as long as the engine holds it: every send after the first reuses the
+/// first's registration while it is live. One that comes back is the
+/// `HostValue` that was sent, registration included.
+#[derive(Clone)]
+pub struct HostValue(Arc<HostValueInner>);
+
+struct HostValueInner {
+    original: Arc<dyn Any + Send + Sync>,
+    /// The registration this value was last sent under. The engine may
+    /// have given it back since.
+    key: Mutex<Option<u64>>,
+}
+
+impl HostValue {
+    /// A host value around `value`.
+    pub fn new<T: Any + Send + Sync>(value: T) -> Self {
+        Self::from_arc(Arc::new(value))
+    }
+
+    /// A host value around a value already shared.
+    pub fn from_arc(original: Arc<dyn Any + Send + Sync>) -> Self {
+        Self(Arc::new(HostValueInner {
+            original,
+            key: Mutex::new(None),
+        }))
+    }
+
+    /// A shared clone of the value.
+    pub fn original(&self) -> Arc<dyn Any + Send + Sync> {
+        Arc::clone(&self.0.original)
+    }
+
+    /// Borrow the value as a `T`; `None` when it is some other type.
+    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+        self.0.original.downcast_ref::<T>()
+    }
+
+    /// The key to send this value under, taking one reference to it for
+    /// `encoder`'s send: its registration while that is live, else a new one.
+    fn send(&self, encoder: &mut Encoder) -> u64 {
+        let mut key = self.0.key.lock().unwrap_or_else(PoisonError::into_inner);
+        let again = key.and_then(|live| REGISTRY.send_again(live).map(|value| (live, value)));
+        let sent = match again {
+            Some((live, value)) => {
+                debug_assert!(
+                    matches!(&value, Registered::Opaque(inner) if Arc::ptr_eq(inner, &self.0)),
+                    "key {live} names another value"
+                );
+                live
+            }
+            None => {
+                let fresh = REGISTRY.register(Registered::Opaque(Arc::clone(&self.0)));
+                *key = Some(fresh);
+                fresh
+            }
+        };
+        encoder.host_reference(sent);
+        sent
+    }
+
+    /// The registered value `key`, a host value the engine sent this process,
+    /// names.
+    fn registered(key: u64) -> Result<Self, crate::DecodeError> {
+        // Only this host registers its values, and the engine keeps the entry
+        // registered while the value carrying it is read: a miss is a
+        // lifetime bug.
+        match REGISTRY.lookup(key) {
+            Some(Registered::Opaque(inner)) => Ok(Self(inner)),
+            Some(Registered::Callable(_)) => Err(crate::DecodeError::WrongType {
+                expected: "an opaque host value",
+                got: "host callable",
+            }),
+            None => Err(crate::DecodeError::DeadHostHandle { key }),
+        }
+    }
+}
+
+impl PartialEq for HostValue {
+    /// The same value: the one this host sent.
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0.original, &other.0.original)
+    }
+}
+
+impl std::fmt::Debug for HostValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("HostValue { .. }")
+    }
+}
+
+impl __BamlValuePrivate for HostValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(wire::InboundValue {
+            value_type: None,
+            value: Some(In::Handle(wire::BamlHandle {
+                key: self.send(encoder),
+                handle_type: wire::BamlHandleType::HostValueOpaque as i32,
+            })),
+        })
+    }
+
+    fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, crate::DecodeError> {
+        use crate::wire::baml_outbound_value::Value as Out;
+        let value = crate::decode::unwrap(value);
+        let Some(Out::HandleValue(handle)) = value.value else {
+            return Err(crate::DecodeError::WrongType {
+                expected: "baml.host.Value",
+                got: crate::baml_value::wire_variant_kind(&value),
+            });
+        };
+        if handle.handle_type != wire::BamlHandleType::HostValueOpaque as i32 {
+            return Err(crate::DecodeError::WrongType {
+                expected: "baml.host.Value",
+                got: "handle",
+            });
+        }
+        Self::registered(handle.key)
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        crate::baml_value::internal::class_ty("baml.host.Value", vec![])
+    }
+}
+
 /// Decode the shared shell of a `baml.errors.HostCallable` wire value: its
 /// `message` and the original rehydrated behind `_handle`. The wire
 /// `class_name` is ignored (see the type docs).
 fn decode_host_callable_shell(
     v: wire::BamlOutboundValue,
-) -> Result<(String, Arc<dyn Any + Send + Sync>), crate::DecodeError> {
+) -> Result<(String, HostValue), crate::DecodeError> {
     use crate::wire::baml_outbound_value::Value as Out;
     const FQN: &str = "baml.errors.HostCallable";
     let v = crate::decode::unwrap(v);
@@ -708,12 +898,7 @@ fn decode_host_callable_shell(
             });
         }
     };
-    // One bridge per process + engine-managed entry lifetime ⇒ the handle
-    // must resolve; a miss is a lifetime bug, never a normal outcome —
-    // fail decode loudly.
-    let original =
-        lookup(handle_key).ok_or(crate::DecodeError::DeadHostHandle { key: handle_key })?;
-    Ok((message, original))
+    Ok((message, HostValue::registered(handle_key)?))
 }
 
 // Deliberately NOT `std::error::Error`: that would make a closure erroring
@@ -744,13 +929,17 @@ impl crate::baml_value::internal::__BamlValuePrivate for HostCallable<dyn Any + 
         Ok(HostThrow::Raised(Raise {
             class_name: std::any::type_name::<dyn Any + Send + Sync>().to_string(),
             message: self.message.clone(),
-            original: Arc::clone(&self.original),
+            value: self.value.clone(),
         }))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, crate::DecodeError> {
-        let (message, original) = decode_host_callable_shell(v)?;
-        Ok(HostCallable { message, original })
+        let (message, value) = decode_host_callable_shell(v)?;
+        Ok(HostCallable {
+            message,
+            original: value.original(),
+            value,
+        })
     }
 
     fn baml_ty() -> wire::BamlTy {
@@ -780,14 +969,18 @@ impl<T: Any + Send + Sync> crate::baml_value::internal::__BamlValuePrivate for H
         Ok(HostThrow::Raised(Raise {
             class_name: std::any::type_name::<T>().to_string(),
             message: self.message.clone(),
-            original: Arc::clone(&self.original) as Arc<dyn Any + Send + Sync>,
+            value: self.value.clone(),
         }))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, crate::DecodeError> {
-        let (message, original) = decode_host_callable_shell(v)?;
-        match Arc::downcast::<T>(original) {
-            Ok(original) => Ok(HostCallable { message, original }),
+        let (message, value) = decode_host_callable_shell(v)?;
+        match Arc::downcast::<T>(value.original()) {
+            Ok(original) => Ok(HostCallable {
+                message,
+                original,
+                value,
+            }),
             Err(_) => Err(crate::DecodeError::HostCallableTypeMismatch {
                 expected: std::any::type_name::<T>(),
             }),
@@ -1335,9 +1528,11 @@ mod tests {
     /// a value, and a callback that throws one raises its original again.
     #[test]
     fn host_callables_are_raised_never_encoded() {
+        let value = HostValue::new(7_u8);
         let error = HostCallable {
             message: "boom".to_string(),
-            original: Arc::new(7_u8) as Arc<dyn Any + Send + Sync>,
+            original: value.original(),
+            value,
         };
         assert!(matches!(
             error.to_baml(&mut Encoder::new()),
@@ -1348,6 +1543,278 @@ mod tests {
             panic!("a HostCallable is raised");
         };
         assert_eq!(raise.message, "boom");
-        assert!(Arc::ptr_eq(&raise.original, &error.original));
+        assert_eq!(raise.value, error.value);
+    }
+
+    /// A host value as the engine sends it back: its key, with no pin.
+    fn opaque(key: u64) -> wire::BamlOutboundValue {
+        wire::BamlOutboundValue {
+            value: Some(wire::baml_outbound_value::Value::HandleValue(
+                wire::BamlOutboundHandle {
+                    key,
+                    handle_type: wire::BamlHandleType::HostValueOpaque as i32,
+                    ty: None,
+                    pin: 0,
+                },
+            )),
+        }
+    }
+
+    /// `value` sent once, its encoding taken over by the engine.
+    fn sent(value: &HostValue) -> u64 {
+        let mut encoder = Encoder::new();
+        let key = value.send(&mut encoder);
+        encoder.commit();
+        key
+    }
+
+    /// Each send takes a reference and each release gives some back; a
+    /// rolled-back send gives back exactly the references it took.
+    #[test]
+    fn sends_take_references_and_rollbacks_give_back_only_theirs() {
+        let value = HostValue::new("mine");
+        let key = sent(&value);
+        assert_eq!(references(key), Some(1));
+        // Sent again while live: the same registration, one more reference.
+        assert_eq!(sent(&value), key);
+        assert_eq!(references(key), Some(2));
+
+        // A received key sent back twice in one value takes two references,
+        // which a rollback gives back.
+        let mut encoder = Encoder::new();
+        crate::outbound::to_inbound(&opaque(key), &mut encoder).unwrap();
+        crate::outbound::to_inbound(&opaque(key), &mut encoder).unwrap();
+        assert_eq!(references(key), Some(4));
+        drop(encoder);
+        assert_eq!(references(key), Some(2));
+
+        host_release_callback(key, 2);
+        assert_eq!(references(key), None);
+        // Negative control: a released key is never sent again.
+        assert_eq!(
+            crate::outbound::to_inbound(&opaque(key), &mut Encoder::new()),
+            Err(EncodeError::ReleasedHostValue)
+        );
+        // The value itself is sent under a fresh registration.
+        let fresh = sent(&value);
+        assert_ne!(fresh, key);
+        host_release_callback(fresh, 1);
+    }
+
+    /// A fresh registration rolled back is gone.
+    #[test]
+    fn a_rolled_back_registration_is_gone() {
+        let value = HostValue::new(1_u8);
+        let mut encoder = Encoder::new();
+        let key = value.send(&mut encoder);
+        drop(encoder);
+        assert_eq!(references(key), None);
+    }
+
+    /// A send racing the engine's release either takes its reference first,
+    /// so the key survives the release, or finds the key gone and refuses.
+    #[test]
+    fn a_release_racing_a_re_send_does_not_lose_the_key() {
+        for _ in 0..200 {
+            let key = sent(&HostValue::new(()));
+            let sender = std::thread::spawn(move || {
+                let mut encoder = Encoder::new();
+                let resent = crate::outbound::to_inbound(&opaque(key), &mut encoder);
+                encoder.commit();
+                resent.map(|_| ())
+            });
+            host_release_callback(key, 1);
+            match sender.join().unwrap() {
+                Ok(()) => {
+                    assert_eq!(references(key), Some(1));
+                    host_release_callback(key, 1);
+                    assert_eq!(references(key), None);
+                }
+                Err(error) => {
+                    assert_eq!(error, EncodeError::ReleasedHostValue);
+                    assert_eq!(references(key), None);
+                }
+            }
+        }
+    }
+
+    /// A host value decoded twice is the value that was sent, registration
+    /// included: equality and sends do not depend on when the engine gives
+    /// its references back.
+    #[test]
+    fn a_host_value_decoded_twice_is_the_same_value() {
+        let original = HostValue::new(String::from("mine"));
+        let key = sent(&original);
+        let first = HostValue::from_baml(opaque(key)).unwrap();
+        let second = HostValue::from_baml(opaque(key)).unwrap();
+        assert!(Arc::ptr_eq(&first.0, &original.0));
+        assert!(Arc::ptr_eq(&second.0, &original.0));
+
+        host_release_callback(key, 1);
+        assert_eq!(references(key), None);
+        assert_eq!(first, second);
+        assert_eq!(
+            first.downcast_ref::<String>().map(String::as_str),
+            Some("mine")
+        );
+        // One registration again for every copy.
+        let fresh = sent(&first);
+        assert_ne!(fresh, key);
+        assert_eq!(sent(&second), fresh);
+        assert_eq!(references(fresh), Some(2));
+        host_release_callback(fresh, 2);
+        // Negative control: a released key no longer decodes.
+        assert_eq!(
+            HostValue::from_baml(opaque(key)).unwrap_err(),
+            crate::DecodeError::DeadHostHandle { key }
+        );
+    }
+}
+
+/// Host values crossing a live engine: the pins that keep an outbound value
+/// readable, and the references the engine gives back once it is read.
+#[cfg(test)]
+mod live_tests {
+    use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
+
+    use super::*;
+    use crate::{baml_value::internal::function_param, dynamic, runtime};
+
+    const BAML_SRC: &str = r#"
+function echo(value: baml.host.Value) -> baml.host.Value { value }
+function throw_back(value: baml.host.Value) -> int throws baml.host.Value { throw value }
+function call_back(cb: (value: baml.host.Value) -> int, value: baml.host.Value) -> int {
+  cb(value)
+}
+"#;
+
+    fn ensure_runtime() {
+        static INIT: OnceLock<()> = OnceLock::new();
+        INIT.get_or_init(|| {
+            crate::test_support::locate_dev_engine();
+            let files = HashMap::from([("main.baml".to_string(), BAML_SRC.to_string())]);
+            // The vfs rejects trailing slashes (macOS's temp_dir ends in one).
+            let root = std::env::temp_dir();
+            let root = root.to_string_lossy();
+            runtime::initialize_from_files(root.trim_end_matches('/'), &files)
+                .expect("runtime initializes");
+        });
+    }
+
+    /// Collect the engine's garbage; the engine gives back the references it
+    /// dropped when the collection ends.
+    fn collect_garbage() {
+        runtime::invoke_sync::<(), Infallible>("baml.sys.collect_garbage", |_| Ok(vec![]))
+            .expect("the collection runs");
+    }
+
+    fn echo<R: BamlValue>(value: &HostValue) -> R {
+        runtime::invoke_sync::<R, Infallible>("user.echo", |args| {
+            args.value("value", value, &HostValue::baml_ty())?;
+            Ok(vec![])
+        })
+        .expect("echo returns its argument")
+    }
+
+    /// The key `value` was last sent under.
+    fn key_of(value: &HostValue) -> u64 {
+        value.0.key.lock().unwrap().expect("the value was sent")
+    }
+
+    /// A host value held as it came back stays readable through a
+    /// collection that drops every other engine reference to it: its pin
+    /// holds them. Released, the pin gives them back.
+    #[test]
+    fn a_held_host_value_decodes_after_a_collection() {
+        ensure_runtime();
+        let sent = HostValue::new(String::from("mine"));
+        let held: dynamic::Value = echo(&sent);
+        let key = key_of(&sent);
+        collect_garbage();
+        assert!(references(key).is_some(), "the pin keeps the key");
+        let back = held.decode::<HostValue>().expect("the key resolves");
+        assert_eq!(back, sent);
+        assert!(Arc::ptr_eq(&back.0, &sent.0));
+
+        drop(held);
+        collect_garbage();
+        assert_eq!(references(key), None, "the released pin gave the key back");
+        // Sent again, the value is registered afresh.
+        let again: HostValue = echo(&back);
+        assert_eq!(again, sent);
+        assert_ne!(key_of(&again), key);
+    }
+
+    /// A host value decoded straight from a result releases its pin: once
+    /// the engine collects the call, nothing keeps the key.
+    #[test]
+    fn a_decoded_result_releases_its_pin() {
+        ensure_runtime();
+        let sent = HostValue::new(7_u32);
+        let back: HostValue = echo(&sent);
+        let key = key_of(&sent);
+        assert!(Arc::ptr_eq(&back.0, &sent.0));
+        collect_garbage();
+        assert_eq!(references(key), None);
+        assert_eq!(back.downcast_ref::<u32>(), Some(&7));
+    }
+
+    /// An error carrying a host value holds its pin, which outlives a
+    /// failed decode of the declared error, and releases it when dropped.
+    #[test]
+    fn a_thrown_host_value_releases_its_pin_when_dropped() {
+        ensure_runtime();
+        let sent = HostValue::new(3_i32);
+        let error = runtime::invoke_sync::<i64, Infallible>("user.throw_back", |args| {
+            args.value("value", &sent, &HostValue::baml_ty())?;
+            Ok(vec![])
+        })
+        .expect_err("the value is thrown");
+        let key = key_of(&sent);
+        let crate::Error::Runtime { thrown, .. } = error else {
+            panic!("an undeclared throw is a runtime error: {error:?}");
+        };
+        collect_garbage();
+        assert_eq!(thrown.value().decode::<HostValue>().unwrap(), sent);
+        drop(thrown);
+        collect_garbage();
+        assert_eq!(references(key), None);
+    }
+
+    /// A host callback's host value argument decodes as the value sent, and
+    /// its pin is released with the arguments.
+    #[test]
+    fn a_callback_argument_releases_its_pin() {
+        const PARAMS: &[HostParam] = &[HostParam {
+            name: "value",
+            optional: false,
+        }];
+        ensure_runtime();
+        let sent = HostValue::new(5_i64);
+        let expected = sent.clone();
+        let result = runtime::invoke_sync::<i64, Infallible>("user.call_back", |args| {
+            args.callable(
+                "cb",
+                move |value: HostValue| {
+                    assert_eq!(value, expected);
+                    *value.downcast_ref::<i64>().unwrap() + 1
+                },
+                PARAMS,
+                CallableTy::new(
+                    vec![function_param(None, HostValue::baml_ty())],
+                    i64::baml_ty(),
+                    crate::baml_value::internal::leaf_ty(wire::baml_ty::Ty::Unknown(
+                        wire::BamlTyUnknown {},
+                    )),
+                ),
+            )?;
+            args.value("value", &sent, &HostValue::baml_ty())?;
+            Ok(vec![])
+        })
+        .expect("the callback runs");
+        assert_eq!(result, 6);
+        let key = key_of(&sent);
+        collect_garbage();
+        assert_eq!(references(key), None);
     }
 }

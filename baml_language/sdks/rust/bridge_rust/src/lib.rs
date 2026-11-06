@@ -24,8 +24,6 @@ pub mod encode;
 pub mod error;
 mod function;
 mod handle;
-mod rust_type;
-pub use rust_type::RustType;
 pub mod host_value;
 #[doc(hidden)]
 pub mod invocation;
@@ -44,7 +42,7 @@ pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
 pub use encode::{ArgumentError, EncodeError};
 pub use error::{DecodeError, Error, SdkError, ThrownValue};
 pub use function::{BamlFunction, FunctionArgs};
-pub use host_value::{HostCallable, HostCallback, HostParam};
+pub use host_value::{HostCallable, HostCallback, HostParam, HostValue};
 // reexports
 pub use indexmap::IndexMap;
 pub use json::Json;

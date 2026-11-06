@@ -27,8 +27,11 @@
 //! [`complete_host_call_throw`], [`complete_host_call_raised`] or
 //! [`complete_host_call_bridge_failure`].
 //!
-//! When the engine drops its last clone of the corresponding `HostValueArc`,
-//! [`host_release_callback`] fires and removes the registry entry — the
+//! The registry counts the references to each key it handed the engine: one
+//! for the send a key is registered for, one more for each later send of a
+//! key it still holds ([`send_again`]). The engine gives references back
+//! through [`host_release_callback`]; a rolled-back send gives back its own
+//! ([`release`]). When the count reaches zero the entry is removed — the
 //! `ThreadsafeFunction`'s `Drop` releases the underlying JS reference, which
 //! lets the user's callable become GC-eligible.
 //!
@@ -49,7 +52,7 @@ use std::{
 };
 
 use bridge_ctypes::{
-    HostKey,
+    HostKey, Released,
     baml_bridge::cffi::{BamlHandleType, BamlToHostCall, HostCallCompletion},
 };
 use bridge_encode::{Completion, Encoded};
@@ -228,9 +231,10 @@ struct Registered {
 
 /// Process-wide table of JS dispatch wrappers handed to BAML.
 ///
-/// The key is a freshly-allocated `u64` (never 0). Removal happens in
-/// [`host_release_callback`] when Rust drops its last clone of the
-/// corresponding `HostValueArc`.
+/// The key is a freshly-allocated `u64` (never 0). An opaque value's key is
+/// registered here with no value (the value lives in the TS-side map), so
+/// both kinds share one keyspace and one reference count per key. Removal
+/// happens in [`release`] when the last reference is given back.
 static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Registered>> =
     LazyLock::new(bridge_ctypes::HostValueRegistry::default);
 
@@ -248,22 +252,19 @@ fn take_callback_signature(call_id: u32) -> Option<bex_project::WireTy> {
 }
 
 /// Register a JS dispatch wrapper in the host-value table, bound to
-/// `signature`, and return its key. `marker_key` is the host marker's handle
-/// when the user function was defined through the instrumentation surface.
+/// `signature`, and return its key. `marker` is the host marker when the user
+/// function was defined through the instrumentation surface.
 ///
 /// The `Function` is converted into a `ThreadsafeFunction` so it can outlive
 /// the napi call scope and be invoked from any thread (the engine's tokio
 /// runtime calls into this entry point from a worker thread).
 pub(crate) fn register_callable(
     callable: Function<'_, DispatchArgs, ()>,
-    marker_key: Option<u64>,
+    marker: Option<std::sync::Arc<bex_project::HostMarker>>,
     signature: bex_project::WireTy,
 ) -> napi::Result<HostKey> {
-    let descriptor = bridge_cffi::host_instrumentation::registration_marker(
-        marker_key.unwrap_or(0),
-        "typescript",
-    )
-    .map_err(crate::errors::bridge_error_to_napi)?;
+    let descriptor =
+        bridge_cffi::host_instrumentation::registration_marker(marker.as_ref(), "typescript");
     let tsfn: DispatchTsfn = callable
         .build_threadsafe_function()
         .callee_handled::<false>()
@@ -383,65 +384,90 @@ fn complete(call_id: u32, completion: &HostCallCompletion) {
     bridge_cffi::complete_host_call(call_id, bytes.as_ptr() as *const i8, bytes.len());
 }
 
-/// Remove and drop the registry entry for `host_value_key` (if present).
-///
-/// Dropping the `ThreadsafeFunction` releases the underlying napi reference
-/// (and its strong `weak::<false>` libuv ref), allowing the user's JS
-/// callable to become GC-eligible and unpinning the event loop. Shared by the
-/// engine-driven release path ([`host_release_callback`]) and the walker's
-/// rollback path (`release_registered`).
-fn drop_registry_entry(host_value_key: HostKey) {
-    bex_project::HostValueArc::discard_annotation(host_value_key);
-    let popped: Option<Registered> = match REGISTRY.lock() {
-        Ok(mut t) => t.remove(&host_value_key),
-        Err(e) => {
-            // Poisoning means an earlier panic occurred while holding the
-            // lock; the table is in an unknown state. Don't try to mutate
-            // it (could double-drop), but log so the underlying panic is
-            // attributable. We accept the leak: the engine has already
-            // dropped its `Arc<HostValueArc>` (we're on the release path),
-            // and a poisoned global registry implies the process is in a
-            // failing state anyway.
-            log::warn!(
-                "host-callable registry mutex poisoned during release of key \
-                 {host_value_key}: {e}; entry leaked"
-            );
-            return;
-        }
-    };
-    drop(popped);
+/// Take one more reference to `key` for sending it to the engine again (a key
+/// JS received back and passes in). Refused when every reference has been
+/// given back: the key names nothing any more.
+pub(crate) fn send_again(key: HostKey) -> napi::Result<()> {
+    REGISTRY
+        .send_again(key)
+        .map_err(|dead| napi::Error::new(Status::InvalidArg, dead.to_string()))
 }
 
-/// Drop the JS dispatch wrapper / host-value-map entry associated with
-/// `host_value_key`.
+/// Give back `count` references to `key`: the engine's release, or a send
+/// rolled back before it reached the engine.
 ///
-/// Fires when the last Rust clone of the corresponding `HostValueArc` is
-/// dropped — see `bex_external_types::host_value::host_release_dispatch`.
-/// We don't track *which* kind (callable vs opaque) the key referred to:
-/// every release attempts both the Rust-side callable drop and the
-/// TS-side host-value-map delete. Whichever one of the two registries actually
-/// held the entry cleans it up; the other is a benign no-op.
-pub extern "C" fn host_release_callback(host_value_key: u64) {
-    if let Some(key) = HostKey::new(host_value_key) {
-        drop_registry_entry(key);
-    }
-    if let Some(tsfn) = HOST_VALUE_RELEASE_CALLBACK.get() {
-        // Fire-and-forget: the TS callback removes the map entry on the
-        // libuv loop. `QueueFull` would mean an enormous backlog of
-        // releases — log it (so it's visible in stress tests) and move
-        // on. The dropped Arc has no further engine-side state and a
-        // missed map entry just delays JS-error GC by an extra cycle.
-        let status = tsfn.call(
-            HandleKey::from_u64(host_value_key),
-            ThreadsafeFunctionCallMode::NonBlocking,
-        );
-        if status != Status::Ok {
-            log::warn!(
-                "host_release_callback: host-value-release tsfn returned {status:?} \
-                 for key {host_value_key}; TS-side map entry will leak until next GC",
-            );
+/// At the last one the entry is removed. A callable's `ThreadsafeFunction`
+/// drops, releasing the underlying napi reference (and its strong
+/// `weak::<false>` libuv ref), so the user's JS callable becomes GC-eligible
+/// and the event loop is unpinned. An opaque value's TS-side map entry is
+/// deleted on the libuv loop.
+pub(crate) fn release(key: HostKey, count: u64) {
+    match REGISTRY.release(key, count) {
+        Released::Held => {}
+        Released::Last(Some(registered)) => {
+            bex_project::HostValueArc::discard_annotation(key);
+            drop(registered);
+        }
+        Released::Last(None) => forget_opaque(key),
+        Released::Unknown => {
+            log::warn!("host value {key} released {count} more time(s) than it was sent");
         }
     }
+}
+
+/// Delete the TS-side map entry of an opaque value whose last reference was
+/// given back.
+fn forget_opaque(key: HostKey) {
+    let Some(tsfn) = HOST_VALUE_RELEASE_CALLBACK.get() else {
+        return;
+    };
+    // Fire-and-forget: the TS callback removes the map entry on the libuv
+    // loop. The key is already unregistered, so it can never be sent again
+    // in between. `QueueFull` would mean an enormous backlog of releases —
+    // log it (so it's visible in stress tests) and move on.
+    let status = tsfn.call(
+        HandleKey::from_u64(key.get()),
+        ThreadsafeFunctionCallMode::NonBlocking,
+    );
+    if status != Status::Ok {
+        log::warn!(
+            "host-value-release tsfn returned {status:?} for key {key}; \
+             TS-side map entry will leak",
+        );
+    }
+}
+
+/// The engine giving back `count` references to `host_value_key`; see
+/// `bex_project::host_release_dispatch`.
+pub extern "C" fn host_release_callback(host_value_key: u64, count: u64) {
+    match HostKey::new(host_value_key) {
+        Some(key) => release(key, count),
+        None => log::warn!("host value release for the reserved key 0"),
+    }
+}
+
+/// Give back one reference to a host value JS registered or sent again but
+/// never handed to the engine — the rollback of a send.
+///
+/// Exposed to JS as `releaseHostValueKey(key)`.
+#[napi(js_name = "releaseHostValueKey")]
+pub fn release_host_value_key(key: HandleKey) {
+    match HostKey::new(key.to_u64()) {
+        Some(key) => release(key, 1),
+        None => log::warn!("host value release for the reserved key 0"),
+    }
+}
+
+/// Test-only: how many host-value keys (callable and opaque) are registered.
+#[napi(js_name = "_hostValueCount")]
+pub fn host_value_count() -> u32 {
+    u32::try_from(REGISTRY.len()).unwrap_or(u32::MAX)
+}
+
+/// Test-only: whether `key` is registered.
+#[napi(js_name = "_hostValueRegistered")]
+pub fn host_value_registered(key: HandleKey) -> bool {
+    HostKey::new(key.to_u64()).is_some_and(|key| REGISTRY.contains(key))
 }
 
 // ============================================================================
@@ -454,17 +480,14 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
 // pair). The TS bridge owns the storage (a `Map<bigint, unknown>` of JS
 // values) because napi-rs has no zero-overhead persistent reference type for
 // arbitrary JS values; Rust owns the key minting (so callable + opaque keys
-// share a single globally-unique counter and never collide) and the release
-// signal (the engine's `host_release_dispatch::fire(key)` fires Rust's
-// `host_release_callback`, which notifies TS to remove its map entry).
+// share a single globally-unique counter and never collide) and the
+// reference count of each key ([`REGISTRY`], with no value stored), and
+// tells TS to remove its map entry when the last reference is given back.
 //
 // Release is a fire-and-forget tsfn call on the libuv loop — TS removes the
-// entry once napi schedules the callback. A lookup that races a release
-// returns the (about-to-be-released) reference, which only delays GC of
-// that value by one tick; no correctness issue. The TS map never
-// silently leaks: every key minted via `mint_host_value_key` corresponds
-// to an `Arc<HostValueArc>` on the engine side whose `Drop` is guaranteed
-// to fire the release callback.
+// entry once napi schedules the callback. By then the key is unregistered,
+// so it can never be sent again; and the engine pins a key it sends out
+// until the host has decoded it, so a decode never reads a removed entry.
 
 /// Threadsafe handle to the TS-installed release callback. Set once at
 /// module load via [`register_host_value_release_callback`].
@@ -482,8 +505,7 @@ type HostValueReleaseTsfn = ThreadsafeFunction<
 /// Generous because each notification is tiny (one `HandleKey`) and bursts
 /// can happen during engine GC sweeps. `Status::QueueFull` from
 /// `tsfn.call` is logged but not otherwise surfaced — the TS map entry
-/// stays until the process exits, but the engine's `HostValueArc` has
-/// already dropped so there's no further engine state to clean up.
+/// stays until the process exits; the key itself is already unregistered.
 const HOST_VALUE_RELEASE_QUEUE_SIZE: usize = 4096;
 
 static HOST_VALUE_RELEASE_CALLBACK: OnceLock<Arc<HostValueReleaseTsfn>> = OnceLock::new();
@@ -503,9 +525,8 @@ pub fn mint_host_value_key() -> HandleKey {
 
 /// Install the TS-side release callback. First-call-wins; subsequent
 /// calls are a no-op (matching the bridge_cffi dispatch-registration
-/// semantics). The callback fires for *every* `HostValueArc` release —
-/// for callable keys it's a TS-side no-op (`Map.delete(key)` on an absent
-/// key), so Rust doesn't need to distinguish kinds here.
+/// semantics). The callback fires once per opaque key, when its last
+/// reference is given back.
 ///
 /// The tsfn is built with `weak::<true>()` (i.e. `napi_unref_threadsafe_
 /// function`). Holding it strong would pin the libuv loop for the
@@ -514,9 +535,8 @@ pub fn mint_host_value_key() -> HandleKey {
 /// host work is done. Weak is correct here: the callback is a *release*
 /// notification — purely informational from the engine's side. Pending
 /// notifications that never deliver because the loop has already exited
-/// are harmless; the engine has already dropped its `Arc<HostValueArc>`,
-/// and the TS-side map entry would be torn down with the process
-/// anyway.
+/// are harmless; the key is already unregistered, and the TS-side map
+/// entry would be torn down with the process anyway.
 ///
 /// Note this is the inverse of `register_callable`'s dispatch tsfn,
 /// which is `weak::<false>()` — that one pins the loop because a hung
@@ -539,18 +559,6 @@ pub fn register_host_value_release_callback(
     // (caller is responsible for not re-registering).
     let _ = HOST_VALUE_RELEASE_CALLBACK.set(Arc::new(tsfn));
     Ok(())
-}
-
-/// Release a host callable the inbound encoder registered but never handed to
-/// the engine — the encode-error rollback path.
-///
-/// When an encode registers a callable for an early argument and a later
-/// argument fails, the request is never sent, so the engine never decodes
-/// (and so never releases) that key. Without this, the registry entry — and
-/// its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
-/// would leak for the life of the process.
-pub(crate) fn release_registered(key: HostKey) {
-    drop_registry_entry(key);
 }
 
 /// Dispatch a BAML→host call into JavaScript.
@@ -644,32 +652,19 @@ fn dispatch_host_callable(
     };
 
     // Look up the dispatch wrapper. The `Arc::clone` is cheap (refcount bump);
-    // we drop the registry mutex before scheduling the JS call so a long
+    // the registry lock is released before scheduling the JS call so a long
     // dispatch never blocks `register_callable` / `host_release_callback`.
-    let tsfn: Option<Arc<DispatchTsfn>> = match REGISTRY.lock() {
-        Ok(t) => HostKey::new(host_value_key)
-            .and_then(|key| t.get(&key))
-            .map(|entry| {
-                // The result is encoded against the slot's signature once the
-                // callable returns; keep it by callback id until then.
-                CALLBACK_SIGNATURES
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(call_id, entry.signature.clone());
-                Arc::clone(&entry.tsfn)
-            }),
-        Err(e) => {
-            // Treat poisoning as a "no callable" condition for this
-            // dispatch (the engine call must still complete), but log so
-            // the originating panic is attributable instead of being
-            // swallowed silently as an opaque `no-callable` error.
-            log::warn!(
-                "host-callable registry mutex poisoned during dispatch of key \
-                 {host_value_key}: {e}; treating as no-callable"
-            );
-            None
-        }
-    };
+    let tsfn: Option<Arc<DispatchTsfn>> = HostKey::new(host_value_key).and_then(|key| {
+        REGISTRY.with(key, |entry| {
+            // The result is encoded against the slot's signature once the
+            // callable returns; keep it by callback id until then.
+            CALLBACK_SIGNATURES
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(call_id, entry.signature.clone());
+            Arc::clone(&entry.tsfn)
+        })
+    });
     let Some(tsfn) = tsfn else {
         discard_host_call_args(&bytes);
         send_dispatch_error_no_callable(call_id, host_value_key);

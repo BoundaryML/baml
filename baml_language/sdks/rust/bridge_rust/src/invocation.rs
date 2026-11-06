@@ -8,7 +8,7 @@ use crate::{
     baml_value::internal::RuntimeInstance,
     capi,
     encode::{ArgumentError, Encoder},
-    rust_type::OwnedHandle,
+    handle::OwnedHandle,
     wire,
 };
 
@@ -135,5 +135,6 @@ pub fn current_context<T: crate::BamlValue>() -> Result<T, crate::Error<std::con
     let bytes = api.copy_and_free(output);
     let value = wire::BamlOutboundValue::decode(bytes.as_slice())
         .map_err(|error| crate::Error::Sdk(SdkError::new(error.to_string())))?;
+    let _pins = crate::outbound::Pins::of([&value]);
     T::from_baml(value).map_err(crate::Error::Decode)
 }

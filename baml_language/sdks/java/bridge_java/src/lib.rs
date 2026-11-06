@@ -21,7 +21,7 @@ use std::{
     sync::{Arc, Mutex, Once, OnceLock},
 };
 
-use bex_project::{BexExternalAdt, MediaKind, MediaValue};
+use bex_project::{MediaKind, MediaValue};
 use bridge_cffi::handle_cffi::media_kind_from_proto;
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, TableKey};
 use jni::{
@@ -227,9 +227,9 @@ const COMPLETE_CALL_SIG: &str = "(J[B)V";
 /// The Java host-dispatch route: `static void hostDispatch(long, long, byte[])`.
 const HOST_DISPATCH_METHOD: &str = "hostDispatch";
 const HOST_DISPATCH_SIG: &str = "(JJ[BJ[B)V";
-/// The Java host-release route: `static void hostRelease(long)`.
+/// The Java host-release route: `static void hostRelease(long key, long count)`.
 const HOST_RELEASE_METHOD: &str = "hostRelease";
-const HOST_RELEASE_SIG: &str = "(J)V";
+const HOST_RELEASE_SIG: &str = "(JJ)V";
 const UNHANDLED_SPAWN_ERROR_METHOD: &str = "unhandledSpawnError";
 const UNHANDLED_SPAWN_ERROR_SIG: &str = "([BZ)V";
 
@@ -472,10 +472,10 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCancelFunctionCall(
 // than a tokio spawn). The Java side reports the result via
 // `nativeCompleteHostCall` → `bridge_cffi::complete_host_call`. Release fires
 // when the engine drops the last `HostValueArc`; the trampoline forwards the key
-// to `BamlFfi.hostRelease`.
+// and the count of references it gives back to `BamlFfi.hostRelease`.
 //
 // The registry (callable + opaque-throwable objects) lives entirely Java-side
-// (BamlFfi.HOST_VALUES); Rust is a pure router, so identity is a plain JVM
+// (HostCalls.HOST_VALUES); Rust is a pure router, so identity is a plain JVM
 // reference (no GlobalRef bookkeeping) and `assertSame` round-trips for free.
 // ===========================================================================
 
@@ -581,23 +581,25 @@ fn dispatch_into_java(
     })
 }
 
-/// Notify Java that a host-value key can be released (the engine dropped the
-/// last `HostValueArc`). Best-effort — a failure to reach Java only delays the
-/// registry entry's removal (a leak until process exit), matching the
-/// `xfail`/`@Disabled` release semantics across bridges.
-extern "C" fn host_release_trampoline(host_value_key: u64) {
-    if let Err(e) = release_into_java(host_value_key) {
-        eprintln!("bridge_java: host release for key {host_value_key} failed: {e}");
+/// Give Java back `count` references to the host value `host_value_key`
+/// (`BamlFfi.hostRelease`). A failure to reach Java leaves the registry entry
+/// in place: a leak until process exit, never a lost key.
+extern "C" fn host_release_trampoline(host_value_key: u64, count: u64) {
+    if let Err(e) = release_into_java(host_value_key, count) {
+        eprintln!("bridge_java: host release of {count} for key {host_value_key} failed: {e}");
     }
 }
 
-fn release_into_java(host_value_key: u64) -> Result<(), String> {
+fn release_into_java(host_value_key: u64, count: u64) -> Result<(), String> {
     with_java_callback("host release", |env, class| {
         env.call_static_method(
             class,
             HOST_RELEASE_METHOD,
             HOST_RELEASE_SIG,
-            &[JValue::Long(host_value_key as jlong)],
+            &[
+                JValue::Long(host_value_key as jlong),
+                JValue::Long(count as jlong),
+            ],
         )
         .map(|_| ())
         .map_err(|error| format!("hostRelease invocation failed: {error}"))
@@ -797,7 +799,7 @@ fn optional_string_to_jstring<'local>(
 fn resolve_media(key: jlong) -> Option<Arc<MediaValue>> {
     let entry = HANDLE_TABLE.resolve(TableKey::new(key as u64)?)?;
     match &*entry {
-        CffiHandleTableEntry::Adt(BexExternalAdt::Media(media)) => Some(media.clone()),
+        CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(media)) => Some(media.clone()),
         _ => None,
     }
 }
@@ -865,7 +867,9 @@ fn media_from<'local>(
     };
     let media = make(media_kind, &value, mime.as_deref());
     HANDLE_TABLE
-        .insert(CffiHandleTableEntry::Adt(BexExternalAdt::Media(media)))
+        .insert(CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(
+            media,
+        )))
         .get() as jlong
 }
 

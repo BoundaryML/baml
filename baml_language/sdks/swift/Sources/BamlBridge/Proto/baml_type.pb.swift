@@ -310,14 +310,6 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTy: @unchecked Sendable {
     set {_uniqueStorage()._ty = .future(newValue)}
   }
 
-  var rustType: BamlBridge_Cffi_V1_BamlTyRustType {
-    get {
-      if case .rustType(let v)? = _storage._ty {return v}
-      return BamlBridge_Cffi_V1_BamlTyRustType()
-    }
-    set {_uniqueStorage()._ty = .rustType(newValue)}
-  }
-
   /// `meta_type` (not `type`) — `type` is a reserved word in TypeScript;
   /// mirrors `RuntimeTy::Type`, the `type` metatype.
   var metaType: BamlBridge_Cffi_V1_BamlTyMetaType {
@@ -389,7 +381,6 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTy: @unchecked Sendable {
     case enumVariant(BamlBridge_Cffi_V1_BamlTyEnumVariant)
     case function(BamlBridge_Cffi_V1_BamlTyFunction)
     case future(BamlBridge_Cffi_V1_BamlTyFuture)
-    case rustType(BamlBridge_Cffi_V1_BamlTyRustType)
     /// `meta_type` (not `type`) — `type` is a reserved word in TypeScript;
     /// mirrors `RuntimeTy::Type`, the `type` metatype.
     case metaType(BamlBridge_Cffi_V1_BamlTyMetaType)
@@ -956,17 +947,6 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyFuture: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-/// Opaque Rust-managed state (`RuntimeTy::RustType`).
-nonisolated struct BamlBridge_Cffi_V1_BamlTyRustType: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  init() {}
-}
-
 /// The `type` metatype — a runtime value wrapping a `BamlTy` (`RuntimeTy::Type`).
 nonisolated struct BamlBridge_Cffi_V1_BamlTyMetaType: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -1086,7 +1066,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyFunctionParamMode: SwiftProtobuf.
 
 nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlTy"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}primitive\0\u{3}class_ty\0\u{1}enum\0\u{1}list\0\u{1}map\0\u{1}optional\0\u{1}union\0\u{1}literal\0\u{3}type_alias\0\u{1}unknown\0\u{1}media\0\u{1}interface\0\u{3}enum_variant\0\u{1}function\0\u{1}future\0\u{3}rust_type\0\u{3}meta_type\0\u{1}resource\0\u{3}prompt_ast\0\u{4}\u{3}type_var\0\u{3}associated_type_projection\0\u{1}never\0\u{b}void\0\u{c}\u{14}\u{1}")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}primitive\0\u{3}class_ty\0\u{1}enum\0\u{1}list\0\u{1}map\0\u{1}optional\0\u{1}union\0\u{1}literal\0\u{3}type_alias\0\u{1}unknown\0\u{1}media\0\u{1}interface\0\u{3}enum_variant\0\u{1}function\0\u{1}future\0\u{4}\u{2}meta_type\0\u{1}resource\0\u{3}prompt_ast\0\u{4}\u{3}type_var\0\u{3}associated_type_projection\0\u{1}never\0\u{b}void\0\u{b}rust_type\0\u{c}\u{14}\u{1}\u{c}\u{10}\u{1}")
 
   fileprivate class _StorageClass {
     var _ty: BamlBridge_Cffi_V1_BamlTy.OneOf_Ty?
@@ -1314,19 +1294,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftPro
             _storage._ty = .future(v)
           }
         }()
-        case 16: try {
-          var v: BamlBridge_Cffi_V1_BamlTyRustType?
-          var hadOneofValue = false
-          if let current = _storage._ty {
-            hadOneofValue = true
-            if case .rustType(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._ty = .rustType(v)
-          }
-        }()
         case 17: try {
           var v: BamlBridge_Cffi_V1_BamlTyMetaType?
           var hadOneofValue = false
@@ -1477,10 +1444,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftPro
       case .future?: try {
         guard case .future(let v)? = _storage._ty else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
-      }()
-      case .rustType?: try {
-        guard case .rustType(let v)? = _storage._ty else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
       }()
       case .metaType?: try {
         guard case .metaType(let v)? = _storage._ty else { preconditionFailure() }
@@ -2558,25 +2521,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyFuture: SwiftProtobuf.Message, Sw
       }
       if !storagesAreEqual {return false}
     }
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension BamlBridge_Cffi_V1_BamlTyRustType: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BamlTyRustType"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap()
-
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    // Load everything into unknown fields
-    while try decoder.nextFieldNumber() != nil {}
-  }
-
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  static func ==(lhs: BamlBridge_Cffi_V1_BamlTyRustType, rhs: BamlBridge_Cffi_V1_BamlTyRustType) -> Bool {
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

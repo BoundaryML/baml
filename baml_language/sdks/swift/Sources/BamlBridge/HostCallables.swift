@@ -31,8 +31,9 @@ import Foundation
 ///     it ran.
 ///   A value the engine finds not to inhabit its declared type is the
 ///   callable's breach of contract, which the engine reports itself.
-/// - `HostReleaseFn` fires when the engine drops its last reference;
-///   the registry entry (closure or stored error) is evicted.
+/// - Every send of a key takes one reference to it in the registry; the
+///   engine gives them back through `HostReleaseFn`, and the last one evicts
+///   the entry (closure or stored error).
 
 /// The bridge's own failure while it serves a callback: a fault in the
 /// arguments it was handed or in the value it was to send back. Only the
@@ -231,9 +232,9 @@ public struct BamlHostCallable: Sendable {
         } catch {
             return .bridgeFailure("the callback's arguments could not be read: \(error)")
         }
-        // Swift keeps no type value, so the arguments' rows go back at once,
-        // whatever happens to the call.
-        for arg in call.args { releaseTypeValues(arg.value) }
+        // The rows Swift keeps no owner for go back at once, whatever happens
+        // to the call.
+        for arg in call.args { releaseUnownedRows(arg.value) }
         // The engine drops a call it cancelled; one that never ran has no
         // outcome of the callable's.
         guard !Task.isCancelled else {
@@ -318,6 +319,11 @@ private func cancelledPanic() -> BamlBridge_Cffi_V1_InboundValue {
 /// references to: registered callables and opaque thrown errors —
 /// the same single-registry design as bridge_python. Keys are
 /// process-unique and never 0.
+///
+/// Each key counts the references to it this host handed out: a
+/// registration holds the one its first send takes, each further send takes
+/// one more, and the engine's release, or the rollback of a send that never
+/// reached it, gives them back. The last one removes the entry.
 final class HostCallableRegistry: @unchecked Sendable {
     static let shared = HostCallableRegistry()
 
@@ -326,29 +332,71 @@ final class HostCallableRegistry: @unchecked Sendable {
         case opaqueError(any Error)
     }
 
+    /// A registered key: its entry, and how many references to the key are
+    /// out.
+    private struct Registration {
+        let entry: Entry
+        var count: UInt64
+    }
+
     private let lock = NSLock()
-    private var entries: [UInt64: Entry] = [:]
+    private var registrations: [UInt64: Registration] = [:]
     private var nextKey: UInt64 = 1
 
+    /// Register `entry` under a fresh key, holding the one reference the send
+    /// it is registered for takes.
     func register(_ entry: Entry) -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
         let key = nextKey
         nextKey &+= 1
-        entries[key] = entry
+        registrations[key] = Registration(entry: entry, count: 1)
         return key
+    }
+
+    /// Take one more reference to `key`, for sending it again. The check and
+    /// the count are one step under the lock, so a release racing the send
+    /// either comes after the count or refuses the send.
+    func sendAgain(_ key: UInt64) throws(BamlHostKeyGone) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard registrations[key] != nil else { throw BamlHostKeyGone(key: key) }
+        registrations[key]!.count += 1
+    }
+
+    /// Give back `count` references to `key`; the last one removes it. A key
+    /// that is not registered is ignored: a reference given back twice is
+    /// the giver's bug, never applied to another key.
+    func release(_ key: UInt64, count: UInt64) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let registration = registrations[key] else { return }
+        assert(count > 0 && count <= registration.count, "released \(count) of \(registration.count) references to host key \(key)")
+        if count >= registration.count {
+            registrations.removeValue(forKey: key)
+        } else {
+            registrations[key]!.count -= count
+        }
     }
 
     func lookup(_ key: UInt64) -> Entry? {
         lock.lock()
         defer { lock.unlock() }
-        return entries[key]
+        return registrations[key]?.entry
     }
 
-    func release(_ key: UInt64) {
+    /// How many references to `key` are out; 0 when it is not registered.
+    func references(to key: UInt64) -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
-        entries.removeValue(forKey: key)
+        return registrations[key]?.count ?? 0
+    }
+
+    /// Every key registered now.
+    var registeredKeys: Set<UInt64> {
+        lock.lock()
+        defer { lock.unlock() }
+        return Set(registrations.keys)
     }
 
     /// Engine → host invocation, already off the engine thread.
@@ -377,6 +425,14 @@ final class HostCallableRegistry: @unchecked Sendable {
     }
 }
 
+/// A send of a host key whose references were all given back: sent, it would
+/// hand the engine a key this host no longer resolves.
+struct BamlHostKeyGone: Error, CustomStringConvertible {
+    let key: UInt64
+
+    var description: String { "host value \(key) is no longer registered" }
+}
+
 /// Send `outcome` for `callId`.
 private func completeHostCall(
     callId: UInt32,
@@ -390,7 +446,8 @@ private func completeHostCall(
     } catch {
         switch outcome {
         case .returned(let value), .thrown(let value): releaseInbound(value)
-        case .raised, .contractViolation, .bridgeFailure: break
+        case .raised(let exception): HostCallableRegistry.shared.release(exception.handle, count: 1)
+        case .contractViolation, .bridgeFailure: break
         }
         var failure = BamlBridge_Cffi_V1_HostCallCompletion()
         failure.outcome = .bridgeFailure("the callback's completion could not be serialized: \(error)")
@@ -419,19 +476,13 @@ enum HostInvocationScope {
     @TaskLocal static var current: BamlInvocationCapture?
 }
 
+/// Release every engine row `value`, a control value this process kept,
+/// holds.
 func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
-    switch value.value {
-    case .handleValue(let handle):
-        switch BamlHandle.keySpace(of: handle.handleType) {
-        case .engine: _ = BamlApi.handleRelease(handle.key)
-        case .host: break
+    for row in engineRows(value) {
+        switch row {
+        case .handle(let key), .pin(let key), .typeValue(let key): _ = BamlApi.handleRelease(key)
         }
-    case .listValue(let list): for item in list.items { releaseControlValue(item) }
-    case .mapValue(let map): for item in map.entries { releaseControlValue(item.value) }
-    case .classValue(let cls): for item in cls.fields { releaseControlValue(item.value) }
-    case .unionVariantValue(let variant): releaseControlValue(variant.value)
-    case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
-    default: break
     }
 }
 
@@ -483,8 +534,8 @@ let bamlHostCancel: BamlHostCancel = { callbackID in
     HostInvocationTasks.shared.cancel(callbackID)
 }
 
-let bamlHostRelease: BamlHostReleaseCallback = { key in
-    HostCallableRegistry.shared.release(key)
+let bamlHostRelease: BamlHostReleaseCallback = { key, count in
+    HostCallableRegistry.shared.release(key, count: count)
 }
 
 /// Same-process rehydration: if a thrown `baml.errors.HostCallable`
@@ -514,9 +565,10 @@ func rehydrateHostError(_ payload: BamlBridge_Cffi_V1_BamlOutboundValue) -> (any
 /// each list, map and class states the exact type the engine gave it, a
 /// union selection is its selected value, and each engine handle is a fresh
 /// clone (the received key stays with the error that carried it, which may
-/// be forwarded again). A value that cannot be restated (a runtime
-/// declaration, whose rows went back on arrival, or a map keyed by other
-/// than strings) is refused, its clones released.
+/// be forwarded again), and each host value takes one more reference to its
+/// key. A value that cannot be restated (a runtime declaration, whose rows
+/// went back on arrival, a host value no longer registered, or a map keyed
+/// by other than strings) is refused, its clones and references released.
 func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault) -> BamlBridge_Cffi_V1_InboundValue {
     var restated = BamlBridge_Cffi_V1_InboundValue()
     guard let arm = value.value else { return restated }
@@ -556,7 +608,8 @@ func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault
         var inbound = BamlBridge_Cffi_V1_BamlHandle()
         inbound.handleType = handle.handleType
         inbound.key = handle.key
-        // A host value is this host's own registration and goes as it is.
+        // A host value is this host's own registration and goes under its
+        // own key; its pin stays with the value that carried it.
         switch BamlHandle.keySpace(of: handle.handleType) {
         case .engine:
             let status = BamlApi.handleClone(handle.key, &inbound.key)
@@ -564,7 +617,11 @@ func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault
                 throw BamlHostFault(message: "handle_clone failed with status \(status)")
             }
         case .host:
-            break
+            do throws(BamlHostKeyGone) {
+                try HostCallableRegistry.shared.sendAgain(handle.key)
+            } catch {
+                throw BamlHostFault(message: error.description)
+            }
         }
         restated.handle = inbound
     case .listValue(let list):

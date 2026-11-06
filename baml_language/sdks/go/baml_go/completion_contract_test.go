@@ -40,8 +40,8 @@ func runCallback(t *testing.T, ctx context.Context, callable HostCallableFunc, a
 	completeNativeHostCall = func(_ uint32, payload []byte) { completions <- payload }
 	t.Cleanup(func() { completeNativeHostCall = previous })
 
-	key := registerHostValue(hostValue{callable: callable})
-	t.Cleanup(func() { unregisterHostValue(key) })
+	key := registerHostCallable(callable)
+	t.Cleanup(func() { releaseHostValue(key, 1) })
 	frame := &hostInvocationFrame{ctx: ctx, finish: func() {}}
 	dispatchHostCall(key, 1, marshalHostDispatch(t, args...), frame)
 	var payload []byte
@@ -159,6 +159,8 @@ func TestForwardedBamlErrorIsThrownAsItArrived(t *testing.T) {
 	t.Cleanup(func() { cloneInboundHandle = previousClone })
 
 	itemType := &cffi.BamlTy{Ty: &cffi.BamlTy_Primitive{Primitive: &cffi.BamlTyPrimitive{Kind: cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_STRING}}}
+	_, originKey := registerHostCell("origin")
+	t.Cleanup(func() { releaseHostValue(originKey, 2) })
 	received := &BamlError{Kind: "panic", ClassName: "user.Boxed", payload: &errorPayload{
 		value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_UnionVariantValue{UnionVariantValue: &cffi.BamlValueUnionVariant{
 			Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_ClassValue{ClassValue: &cffi.BamlValueClass{
@@ -171,10 +173,11 @@ func TestForwardedBamlErrorIsThrownAsItArrived(t *testing.T) {
 						},
 					}}}},
 					{Key: "state", Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: &cffi.BamlOutboundHandle{
-						Key: 7, HandleType: cffi.BamlHandleType_UNTAGGED_RUST_DATA,
+						Key: 7, HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE,
+						Ty: ClassBAMLType("reflect.Session").value,
 					}}}},
 					{Key: "origin", Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: &cffi.BamlOutboundHandle{
-						Key: 9, HandleType: cffi.BamlHandleType_HOST_VALUE_OPAQUE,
+						Key: originKey, HandleType: cffi.BamlHandleType_HOST_VALUE_OPAQUE,
 					}}}},
 				},
 			}}},
@@ -196,11 +199,14 @@ func TestForwardedBamlErrorIsThrownAsItArrived(t *testing.T) {
 		items.GetListValue().GetValues()[0].GetStringValue() != "a" {
 		t.Fatalf("thrown list = %v, want string[] stated beside it", items)
 	}
-	if state := fields[1].GetValue().GetHandle(); state.GetKey() != 1007 || state.GetHandleType() != cffi.BamlHandleType_UNTAGGED_RUST_DATA {
+	if state := fields[1].GetValue().GetHandle(); state.GetKey() != 1007 || state.GetHandleType() != cffi.BamlHandleType_ADT_RUNTIME_VALUE {
 		t.Fatalf("thrown engine handle = %v, want a fresh clone of its own kind", state)
 	}
-	if origin := fields[2].GetValue().GetHandle(); origin.GetKey() != 9 || origin.GetHandleType() != cffi.BamlHandleType_HOST_VALUE_OPAQUE {
+	if origin := fields[2].GetValue().GetHandle(); origin.GetKey() != originKey || origin.GetHandleType() != cffi.BamlHandleType_HOST_VALUE_OPAQUE {
 		t.Fatalf("thrown host key = %v, want the key as it arrived", origin)
+	}
+	if count := hostKeyCount(originKey); count != 2 {
+		t.Fatalf("forwarded host key count = %d, want 2 (the throw took one more)", count)
 	}
 }
 
@@ -232,11 +238,11 @@ func TestResultHandleCloneFailureIsABridgeFailureAndReleasesEarlierClones(t *tes
 	releaseInboundHandle = func(key uint64) { released = append(released, key) }
 	t.Cleanup(func() { cloneInboundHandle, releaseInboundHandle = previousClone, previousRelease })
 
-	first := RustType{handle: &rustTypeHandle{key: 1}}
-	second := RustType{handle: &rustTypeHandle{key: 2}}
+	first := OpaqueHandle{handle: &opaqueHandle{key: 1}}
+	second := OpaqueHandle{handle: &opaqueHandle{key: 2}}
 	completion := runCallback(t, context.Background(), func(HostCallArguments) (Input, error) {
-		itemType := RustTypeBAMLType()
-		return listInput([]Input{RustTypeInput(first), RustTypeInput(second)}, &itemType), nil
+		itemType := ClassBAMLType("reflect.Session")
+		return listInput([]Input{OpaqueHandleInput(first), OpaqueHandleInput(second)}, &itemType), nil
 	})
 	if got := completionOutcome(t, completion); got != "bridge_failure" {
 		t.Fatalf("outcome = %s (%v), want bridge_failure", got, completion)
@@ -323,10 +329,10 @@ func TestResultTooDeepForTheWireReleasesItsClones(t *testing.T) {
 	releaseInboundHandle = func(key uint64) { released = append(released, key) }
 	t.Cleanup(func() { cloneInboundHandle, releaseInboundHandle = previousClone, previousRelease })
 
-	leaf := RustType{handle: &rustTypeHandle{key: 5}}
+	leaf := OpaqueHandle{handle: &opaqueHandle{key: 5}}
 	completion := runCallback(t, context.Background(), func(HostCallArguments) (Input, error) {
-		value := RustTypeInput(leaf)
-		itemType := RustTypeBAMLType()
+		value := OpaqueHandleInput(leaf)
+		itemType := ClassBAMLType("reflect.Session")
 		for range 49 {
 			value = listInput([]Input{value}, &itemType)
 			itemType = ListBAMLType(itemType)

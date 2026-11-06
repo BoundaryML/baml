@@ -22,8 +22,8 @@ public final class BamlInvocationCapture: @unchecked Sendable {
     public func run<R>(_ body: () async throws -> R) async rethrows -> R { try await HostInvocationScope.$current.withValue(self, operation: body) }
 }
 
-/// A copy whose engine handles are its own. Its type values stay borrowed
-/// from `value`: Swift keeps none.
+/// A copy whose engine handles are its own. Its type values and host values'
+/// pins stay borrowed from `value`: Swift keeps none.
 func cloneControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws -> BamlBridge_Cffi_V1_BamlOutboundValue {
     var owned: [UInt64] = []
     func clone(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws -> BamlBridge_Cffi_V1_BamlOutboundValue {
@@ -50,7 +50,7 @@ extension BamlRuntime {
         var buffer = BamlBuffer()
         guard BamlApi.invocationContext(HostInvocationScope.current?.state.key ?? 0, &buffer) == BAML_CFFI_STATUS_OK.rawValue else { throw BamlDecodeError.unsupported("inactive invocation") }
         let context = try BamlBridge_Cffi_V1_BamlOutboundValue(serializedBytes: BamlApi.takeBuffer(buffer))
-        releaseTypeValues(context)
+        releaseUnownedRows(context)
         return try R._bamlDecode(BamlOutboundValue(context))
     }
 }

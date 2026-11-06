@@ -136,10 +136,6 @@ class BamlTyResource;
 struct BamlTyResourceDefaultTypeInternal;
 extern BamlTyResourceDefaultTypeInternal _BamlTyResource_default_instance_;
 extern const ::google::protobuf::internal::ClassDataLite<35> BamlTyResource_class_data_;
-class BamlTyRustType;
-struct BamlTyRustTypeDefaultTypeInternal;
-extern BamlTyRustTypeDefaultTypeInternal _BamlTyRustType_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<35> BamlTyRustType_class_data_;
 class BamlTyTypeAlias;
 struct BamlTyTypeAliasDefaultTypeInternal;
 extern BamlTyTypeAliasDefaultTypeInternal _BamlTyTypeAlias_default_instance_;
@@ -487,7 +483,7 @@ class BamlTyTypeVar final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyTypeVar*>(
         &_BamlTyTypeVar_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(BamlTyTypeVar& a, BamlTyTypeVar& b) { a.Swap(&b); }
   inline void Swap(BamlTyTypeVar* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -637,170 +633,6 @@ class BamlTyTypeVar final : public ::google::protobuf::MessageLite
 extern const ::google::protobuf::internal::ClassDataLite<34> BamlTyTypeVar_class_data_;
 // -------------------------------------------------------------------
 
-class BamlTyRustType final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlTyRustType) */ {
- public:
-  inline BamlTyRustType() : BamlTyRustType(nullptr) {}
-  ~BamlTyRustType() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlTyRustType* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlTyRustType));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlTyRustType(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlTyRustType(const BamlTyRustType& from) : BamlTyRustType(nullptr, from) {}
-  inline BamlTyRustType(BamlTyRustType&& from) noexcept
-      : BamlTyRustType(nullptr, ::std::move(from)) {}
-  inline BamlTyRustType& operator=(const BamlTyRustType& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlTyRustType& operator=(BamlTyRustType&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlTyRustType& default_instance() {
-    return *reinterpret_cast<const BamlTyRustType*>(
-        &_BamlTyRustType_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 18;
-  friend void swap(BamlTyRustType& a, BamlTyRustType& b) { a.Swap(&b); }
-  inline void Swap(BamlTyRustType* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlTyRustType* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlTyRustType* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlTyRustType>(arena);
-  }
-  void CopyFrom(const BamlTyRustType& from);
-  void MergeFrom(const BamlTyRustType& from) { BamlTyRustType::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlTyRustType* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlTyRustType"; }
-
- protected:
-  explicit BamlTyRustType(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlTyRustType(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlTyRustType& from);
-  BamlTyRustType(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlTyRustType&& from) noexcept
-      : BamlTyRustType(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyRustType)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 0,
-                                   0, 0,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlTyRustType& from_msg);
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<35> BamlTyRustType_class_data_;
-// -------------------------------------------------------------------
-
 class BamlTyResource final : public ::google::protobuf::MessageLite
 /* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlTyResource) */ {
  public:
@@ -847,7 +679,7 @@ class BamlTyResource final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyResource*>(
         &_BamlTyResource_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(BamlTyResource& a, BamlTyResource& b) { a.Swap(&b); }
   inline void Swap(BamlTyResource* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1011,7 +843,7 @@ class BamlTyPromptAst final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyPromptAst*>(
         &_BamlTyPromptAst_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(BamlTyPromptAst& a, BamlTyPromptAst& b) { a.Swap(&b); }
   inline void Swap(BamlTyPromptAst* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1354,7 +1186,7 @@ class BamlTyNever final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyNever*>(
         &_BamlTyNever_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(BamlTyNever& a, BamlTyNever& b) { a.Swap(&b); }
   inline void Swap(BamlTyNever* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1518,7 +1350,7 @@ class BamlTyMetaType final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyMetaType*>(
         &_BamlTyMetaType_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(BamlTyMetaType& a, BamlTyMetaType& b) { a.Swap(&b); }
   inline void Swap(BamlTyMetaType* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2629,7 +2461,6 @@ class BamlTy final : public ::google::protobuf::MessageLite
     kEnumVariant = 13,
     kFunction = 14,
     kFuture = 15,
-    kRustType = 16,
     kMetaType = 17,
     kResource = 18,
     kPromptAst = 19,
@@ -2738,7 +2569,6 @@ class BamlTy final : public ::google::protobuf::MessageLite
     kEnumVariantFieldNumber = 13,
     kFunctionFieldNumber = 14,
     kFutureFieldNumber = 15,
-    kRustTypeFieldNumber = 16,
     kMetaTypeFieldNumber = 17,
     kResourceFieldNumber = 18,
     kPromptAstFieldNumber = 19,
@@ -3031,25 +2861,6 @@ class BamlTy final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTyFuture* PROTOBUF_NONNULL _internal_mutable_future();
 
   public:
-  // .baml_bridge.cffi.v1.BamlTyRustType rust_type = 16;
-  bool has_rust_type() const;
-  private:
-  bool _internal_has_rust_type() const;
-
-  public:
-  void clear_rust_type() ;
-  const ::baml_bridge::cffi::v1::BamlTyRustType& rust_type() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NULLABLE release_rust_type();
-  ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NONNULL mutable_rust_type();
-  void set_allocated_rust_type(::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_rust_type(::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NULLABLE unsafe_arena_release_rust_type();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTyRustType& _internal_rust_type() const;
-  ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NONNULL _internal_mutable_rust_type();
-
-  public:
   // .baml_bridge.cffi.v1.BamlTyMetaType meta_type = 17;
   bool has_meta_type() const;
   private:
@@ -3184,7 +2995,6 @@ class BamlTy final : public ::google::protobuf::MessageLite
   void set_has_enum_variant();
   void set_has_function();
   void set_has_future();
-  void set_has_rust_type();
   void set_has_meta_type();
   void set_has_resource();
   void set_has_prompt_ast();
@@ -3194,8 +3004,8 @@ class BamlTy final : public ::google::protobuf::MessageLite
   inline bool has_ty() const;
   inline void clear_has_ty();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 22,
-                                   22, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 21,
+                                   21, 0,
                                    2>
       _table_;
 
@@ -3232,7 +3042,6 @@ class BamlTy final : public ::google::protobuf::MessageLite
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE enum_variant_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE function_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE future_;
-      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE rust_type_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE meta_type_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE resource_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE prompt_ast_;
@@ -3498,7 +3307,7 @@ class BamlTyAssociatedTypeProjection final : public ::google::protobuf::MessageL
     return *reinterpret_cast<const BamlTyAssociatedTypeProjection*>(
         &_BamlTyAssociatedTypeProjection_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(BamlTyAssociatedTypeProjection& a, BamlTyAssociatedTypeProjection& b) { a.Swap(&b); }
   inline void Swap(BamlTyAssociatedTypeProjection* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7118,89 +6927,6 @@ inline ::baml_bridge::cffi::v1::BamlTyFuture* PROTOBUF_NONNULL BamlTy::mutable_f
   return _msg;
 }
 
-// .baml_bridge.cffi.v1.BamlTyRustType rust_type = 16;
-inline bool BamlTy::has_rust_type() const {
-  return ty_case() == kRustType;
-}
-inline bool BamlTy::_internal_has_rust_type() const {
-  return ty_case() == kRustType;
-}
-inline void BamlTy::set_has_rust_type() {
-  _impl_._oneof_case_[0] = kRustType;
-}
-inline void BamlTy::clear_rust_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (ty_case() == kRustType) {
-    if (GetArena() == nullptr) {
-      delete _impl_.ty_.rust_type_;
-    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-      if (_impl_.ty_.rust_type_ != nullptr) {
-        _impl_.ty_.rust_type_->Clear();
-      }
-    }
-    clear_has_ty();
-  }
-}
-inline ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NULLABLE BamlTy::release_rust_type() {
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTy.rust_type)
-  if (ty_case() == kRustType) {
-    clear_has_ty();
-    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyRustType*>(_impl_.ty_.rust_type_);
-    if (GetArena() != nullptr) {
-      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.ty_.rust_type_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::baml_bridge::cffi::v1::BamlTyRustType& BamlTy::_internal_rust_type() const {
-  return ty_case() == kRustType ? *reinterpret_cast<::baml_bridge::cffi::v1::BamlTyRustType*>(_impl_.ty_.rust_type_) : reinterpret_cast<::baml_bridge::cffi::v1::BamlTyRustType&>(::baml_bridge::cffi::v1::_BamlTyRustType_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTyRustType& BamlTy::rust_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTy.rust_type)
-  return _internal_rust_type();
-}
-inline ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NULLABLE BamlTy::unsafe_arena_release_rust_type() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.BamlTy.rust_type)
-  if (ty_case() == kRustType) {
-    clear_has_ty();
-    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyRustType*>(_impl_.ty_.rust_type_);
-    _impl_.ty_.rust_type_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void BamlTy::unsafe_arena_set_allocated_rust_type(
-    ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NULLABLE value) {
-  // We rely on the oneof clear method to free the earlier contents
-  // of this oneof. We can directly use the pointer we're given to
-  // set the new value.
-  clear_ty();
-  if (value) {
-    set_has_rust_type();
-    _impl_.ty_.rust_type_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlTy.rust_type)
-}
-inline ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NONNULL BamlTy::_internal_mutable_rust_type() {
-  if (ty_case() != kRustType) {
-    clear_ty();
-    set_has_rust_type();
-    _impl_.ty_.rust_type_ = reinterpret_cast<::google::protobuf::MessageLite*>(
-        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyRustType>(GetArena()));
-  }
-  return reinterpret_cast<::baml_bridge::cffi::v1::BamlTyRustType*>(_impl_.ty_.rust_type_);
-}
-inline ::baml_bridge::cffi::v1::BamlTyRustType* PROTOBUF_NONNULL BamlTy::mutable_rust_type()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::baml_bridge::cffi::v1::BamlTyRustType* _msg = _internal_mutable_rust_type();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTy.rust_type)
-  return _msg;
-}
-
 // .baml_bridge.cffi.v1.BamlTyMetaType meta_type = 17;
 inline bool BamlTy::has_meta_type() const {
   return ty_case() == kMetaType;
@@ -10780,10 +10506,6 @@ inline void BamlTyFuture::set_allocated_error(::baml_bridge::cffi::v1::BamlTy* P
   _impl_.error_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyFuture.error)
 }
-
-// -------------------------------------------------------------------
-
-// BamlTyRustType
 
 // -------------------------------------------------------------------
 

@@ -64,14 +64,14 @@ export function instrument(optionsOrBody, body, display) {
         sourceFile: site.sourceFile, definitionLine: site.line,
         wrapperLine: site.line, displayName: display?.name ?? name ?? '<anonymous>',
     };
-    const marker = { handle: _defineHostMarker(definition, options), identity: {} };
+    const marker = { marker: _defineHostMarker(definition, options), identity: {} };
     const wrapped = function (...args) {
         if (consumeHostAdoption(marker.identity))
             return Reflect.apply(target, this, args);
         let execution;
         let active;
         try {
-            const entered = _beginHostInvocation(definition, current()?.state, options, callerSite(), requests[0] ? capture(args) : undefined);
+            const entered = _beginHostInvocation(marker.marker, current()?.state, callerSite(), requests[0] ? capture(args) : undefined);
             execution = entered[0];
             active = new ExecutionContext(entered[1], entered[2]);
         }

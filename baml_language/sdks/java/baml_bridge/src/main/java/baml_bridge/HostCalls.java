@@ -26,29 +26,50 @@ public final class HostCalls {
      * process-unique {@code long}. Rust is a pure router — it forwards a key back
      * to {@code BamlFfi.hostDispatch}/{@code BamlFfi.hostRelease}; storing the objects here (not
      * behind a JNI {@code GlobalRef}) makes identity a plain JVM reference, so a
-     * rehydrated exception is {@code ==} the original (design points A + D).
-     * Callables and thrown objects share one keyspace ({@link #HOST_VALUE_KEY}) so
-     * keys never collide and a single {@link #release} clears either kind.
+     * rehydrated exception is {@code ==} the original. Callables and thrown
+     * objects share one keyspace ({@link #HOST_VALUE_KEY}) so keys never collide
+     * and a single {@link #release} gives back either kind.
+     *
+     * <p>Each entry counts the references to its key handed out: one per send to
+     * the engine, each given back by the engine's release or by the rollback of
+     * a send that never reached it. The entry goes at zero. Every update is one
+     * {@link ConcurrentHashMap#compute} on the key, so a send of a held key and
+     * a release racing it cannot both see a live entry and leave a dead one.
      */
-    private static final ConcurrentHashMap<Long, Object> HOST_VALUES = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Long, Registered> HOST_VALUES = new ConcurrentHashMap<>();
 
     /** Shared key source for {@link #HOST_VALUES}; starts at 1 (0 is reserved). */
     private static final AtomicLong HOST_VALUE_KEY = new AtomicLong(1);
 
+    /** A registered host value and how many references to its key are out (always at least one). */
+    private record Registered(Object value, long count) {
+        Registered {
+            assert count != 0 : "a registered host value has a reference out";
+        }
+
+        /** This entry with one more reference out. */
+        Registered sentAgain() {
+            return new Registered(value, count + 1);
+        }
+
+        /** This entry with {@code given} references given back, or {@code null} when none remain. */
+        Registered givenBack(long given) {
+            return Long.compareUnsigned(count, given) > 0 ? new Registered(value, count - given) : null;
+        }
+    }
+
     /**
      * Register a host callable handed to BAML as a function argument; returns its
      * process-unique key (emitted as {@code Handle{key, HOST_VALUE_CALLABLE}} by
-     * {@code ProtoWriter}). The engine binds the key to an {@code Object::HostClosure},
-     * dispatches back through {@code BamlFfi.hostDispatch} when BAML invokes it,
-     * and retires the registration through {@link #release}. A request that never
-     * reaches the engine retires it itself ({@link EncodingScope}).
+     * {@code ProtoWriter}), holding the one reference that send takes. The engine
+     * binds the key to an {@code Object::HostClosure}, dispatches back through
+     * {@code BamlFfi.hostDispatch} when BAML invokes it, and gives the reference
+     * back through {@link #release}. A request that never reaches the engine
+     * gives it back itself ({@link EncodingScope}).
      */
     public static long registerCallable(BamlTypedCallable callable) {
         Objects.requireNonNull(callable, "callable");
-        long key = HOST_VALUE_KEY.getAndIncrement();
-        HOST_VALUES.put(key, callable);
-        EncodingScope.onRollback(() -> HOST_VALUES.remove(key));
-        return key;
+        return register(callable);
     }
 
     /**
@@ -58,10 +79,31 @@ public final class HostCalls {
      * with callables so keys never collide.
      */
     private static long registerThrowable(Throwable error) {
+        return register(error);
+    }
+
+    /** Register {@code value} under a fresh key for the one send of the active request. */
+    private static long register(Object value) {
         long key = HOST_VALUE_KEY.getAndIncrement();
-        HOST_VALUES.put(key, error);
-        EncodingScope.onRollback(() -> HOST_VALUES.remove(key));
+        HOST_VALUES.put(key, new Registered(value, 1));
+        EncodingScope.onRollback(() -> release(key, 1));
         return key;
+    }
+
+    /**
+     * Take one more reference to {@code key} for sending it again (a host value
+     * the engine sent back, passed in again), given back like any other: by the
+     * engine's release, or by the active request's rollback. Refused when the
+     * key is no longer registered: the engine would intern a key nothing backs.
+     *
+     * @throws ProtoWriter.WireFaultException when {@code key} is not registered
+     */
+    public static void sendAgain(long key) {
+        if (HOST_VALUES.computeIfPresent(key, (k, held) -> held.sentAgain()) == null) {
+            throw new ProtoWriter.WireFaultException(
+                    "host value " + Long.toUnsignedString(key) + " is no longer registered", null);
+        }
+        EncodingScope.onRollback(() -> release(key, 1));
     }
 
     /**
@@ -72,15 +114,29 @@ public final class HostCalls {
      * state.
      */
     public static Object lookup(long key) {
-        return HOST_VALUES.get(key);
+        Registered held = HOST_VALUES.get(key);
+        return held == null ? null : held.value();
     }
 
     /**
-     * Engine-driven release: drop the registry entry for {@code key}. A
-     * stale/absent key is a harmless no-op.
+     * Whether {@code value} is registered under any key: as itself, or as the
+     * callable a registered {@link BamlTypedCallable} carries. Reads every entry.
      */
-    static void release(long key) {
-        HOST_VALUES.remove(key);
+    public static boolean holds(Object value) {
+        return HOST_VALUES.values().stream()
+                .map(Registered::value)
+                .anyMatch(held -> held == value
+                        || (held instanceof BamlTypedCallable typed && typed.callable() == value));
+    }
+
+    /**
+     * Give back {@code count} references to {@code key} (the engine's release,
+     * or the rollback of sends that never reached it); the entry goes with the
+     * last. A key that is not registered is ignored: giving a reference back
+     * twice is the caller's fault, and never applied to another key.
+     */
+    public static void release(long key, long count) {
+        HOST_VALUES.computeIfPresent(key, (k, held) -> held.givenBack(count));
     }
 
     /** A dispatched call, bound: ready to run, or refused before it ran. */

@@ -189,7 +189,113 @@ class HostCallCompletionTest {
         assertNull(HostCalls.lookup(before + 1));
         // A registration outside any request stays until the engine releases it.
         assertSame(probe, HostCalls.lookup(before));
-        HostCalls.release(before);
+        HostCalls.release(before, 1);
+        assertNull(HostCalls.lookup(before));
+    }
+
+    /** A callable registered for one send, as the encoder registers one. */
+    private static long registered(Object callable) {
+        return HostCalls.registerCallable(new BamlTypedCallable(callable, function(List.of())));
+    }
+
+    @Test
+    void a_key_lives_until_every_reference_to_it_is_given_back() {
+        Supplier<Long> callable = () -> 1L;
+        long key = registered(callable);
+        BamlHandle received = new BamlHandle(key, BamlHandle.HOST_VALUE_CALLABLE);
+        assertEquals(key, received.cloneKeyForWire());
+        assertEquals(key, received.cloneKeyForWire());
+        HostCalls.release(key, 2);
+        assertTrue(HostCalls.holds(callable), "one reference is still out");
+        HostCalls.release(key, 1);
+        assertTrue(!HostCalls.holds(callable), "the last reference removes the key");
+        assertNull(HostCalls.lookup(key));
+        // A release of a key that is gone is ignored.
+        HostCalls.release(key, 1);
+    }
+
+    @Test
+    void a_key_that_is_no_longer_registered_is_not_sent() {
+        long key = registered((Supplier<Long>) () -> 1L);
+        HostCalls.release(key, 1);
+        BamlHandle stale = new BamlHandle(key, BamlHandle.HOST_VALUE_OPAQUE);
+        baml_bridge.internal.ProtoWriter.WireFaultException refused = assertThrows(
+                baml_bridge.internal.ProtoWriter.WireFaultException.class,
+                () -> baml_bridge.internal.ProtoWriter.encodeInboundValue(stale));
+        assertTrue(refused.getMessage().contains("no longer registered"), refused.getMessage());
+        assertNull(HostCalls.lookup(key));
+    }
+
+    @Test
+    void a_request_that_is_never_sent_gives_back_only_the_counts_it_took() {
+        Supplier<Long> callable = () -> 1L;
+        long key = registered(callable);
+        BamlHandle received = new BamlHandle(key, BamlHandle.HOST_VALUE_CALLABLE);
+        try (baml_bridge.internal.EncodingScope encoding = new baml_bridge.internal.EncodingScope()) {
+            // Two occurrences in one refused request: two counts taken, two given back.
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> baml_bridge.internal.ProtoWriter.encodeCallFunctionArgs(
+                            new String[] {"a", "b", "c"}, new Object[] {received, received, nested(5000)}, 1L));
+        }
+        // The registration's own reference is still out: the key stays.
+        assertTrue(HostCalls.holds(callable));
+        HostCalls.release(key, 1);
+        assertTrue(!HostCalls.holds(callable));
+
+        // A request that reaches the engine keeps its counts for the engine to give back.
+        long sent = registered(callable);
+        BamlHandle again = new BamlHandle(sent, BamlHandle.HOST_VALUE_CALLABLE);
+        try (baml_bridge.internal.EncodingScope encoding = new baml_bridge.internal.EncodingScope()) {
+            baml_bridge.internal.ProtoWriter.encodeCallFunctionArgs(new String[] {"a"}, new Object[] {again}, 1L);
+            encoding.submitted();
+        }
+        HostCalls.release(sent, 1);
+        assertTrue(HostCalls.holds(callable), "the submitted send's count is the engine's");
+        HostCalls.release(sent, 1);
+        assertTrue(!HostCalls.holds(callable));
+    }
+
+    @Test
+    void a_release_racing_sends_of_a_held_key_never_loses_it() throws Exception {
+        // The engine holds one reference throughout (as a pin does); a sender
+        // re-sends the key while the engine gives each send back. Every send
+        // succeeds, and the key outlives them all.
+        Supplier<Long> callable = () -> 1L;
+        long key = registered(callable);
+        BamlHandle received = new BamlHandle(key, BamlHandle.HOST_VALUE_CALLABLE);
+        int sends = 10_000;
+        java.util.concurrent.BlockingQueue<Long> inFlight = new java.util.concurrent.LinkedBlockingQueue<>();
+        Thread engine = new Thread(() -> {
+            try {
+                for (int i = 0; i < sends; i++) {
+                    HostCalls.release(inFlight.take(), 1);
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        engine.start();
+        for (int i = 0; i < sends; i++) {
+            inFlight.add(received.cloneKeyForWire());
+        }
+        engine.join(60_000);
+        assertTrue(!engine.isAlive());
+        assertSame(callable, ((BamlTypedCallable) HostCalls.lookup(key)).callable());
+        HostCalls.release(key, 1);
+        assertNull(HostCalls.lookup(key));
+    }
+
+    @Test
+    void a_host_value_the_engine_sent_releases_its_pin_and_never_its_key() {
+        Supplier<Long> callable = () -> 1L;
+        long key = registered(callable);
+        // Pin 0: no engine row behind it, so nothing native is touched.
+        BamlHandle received = BamlHandle.hostValue(key, BamlHandle.HOST_VALUE_CALLABLE, null, 0);
+        received.close();
+        assertTrue(HostCalls.holds(callable), "closing the handle gives back no count of the key");
+        assertThrows(IllegalArgumentException.class, () -> BamlHandle.hostValue(1, BamlHandle.FUNCTION_REF, null, 0));
+        HostCalls.release(key, 1);
     }
 
     /** A {@code BamlToHostCall} passing {@code positional} ints, then each named optional int. */

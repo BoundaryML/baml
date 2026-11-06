@@ -231,7 +231,6 @@ pub(crate) fn live_keys(ty: &BamlTy, f: &mut impl FnMut(TableKey)) {
         | TyVariant::Literal(_)
         | TyVariant::Unknown(_)
         | TyVariant::Media(_)
-        | TyVariant::RustType(_)
         | TyVariant::MetaType(_)
         | TyVariant::Resource(_)
         | TyVariant::PromptAst(_)
@@ -336,12 +335,6 @@ pub fn proto_ty_to_wire_ty(ty: &BamlTy) -> Result<ParsedTy, CtypesError> {
         TyVariant::Future(fut) => RealizedTy::Future(
             Box::new(opt_to_wire_ty(fut.value.as_deref(), "future's value type")?),
             Box::new(opt_to_wire_ty(fut.error.as_deref(), "future's error type")?),
-        ),
-        // A host states its own value's slot this way: the slot of a
-        // `baml.host.Value`, named as a host names any class.
-        TyVariant::RustType(_) => RealizedTy::Class(
-            WireHead::Static(TypeName::from_dotted_path("baml.host.Value")),
-            Box::new([]),
         ),
         TyVariant::MetaType(_) => RealizedTy::Type,
         TyVariant::Resource(_) => RealizedTy::Resource,

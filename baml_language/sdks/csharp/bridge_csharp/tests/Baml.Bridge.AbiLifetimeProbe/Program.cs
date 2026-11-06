@@ -7,7 +7,7 @@ using System.Text;
 internal static unsafe partial class Program
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint BamlApiV1AbiVersion = 5;
+    private const uint BamlApiV1AbiVersion = 6;
     private const uint BamlBridgeLanguageCSharp = 5;
     private const uint BamlBridgeLanguageRust = 4;
     private const uint StatusOk = 0;
@@ -1027,7 +1027,7 @@ internal static unsafe partial class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnHostRelease(ulong hostValueKey)
+    private static void OnHostRelease(ulong hostValueKey, ulong count)
     {
         try
         {
@@ -1035,6 +1035,12 @@ internal static unsafe partial class Program
             {
                 throw new InvalidDataException(
                     "host-release callback supplied key zero");
+            }
+
+            if (count == 0)
+            {
+                throw new InvalidDataException(
+                    "host-release callback gave back no references");
             }
         }
         catch (Exception error)
@@ -1087,7 +1093,7 @@ internal static unsafe partial class Program
             delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void>,
             void> RegisterHostDispatchCallback;
         public readonly delegate* unmanaged[Cdecl]<
-            delegate* unmanaged[Cdecl]<ulong, void>,
+            delegate* unmanaged[Cdecl]<ulong, ulong, void>,
             void> RegisterHostReleaseCallback;
         public readonly delegate* unmanaged[Cdecl]<
             uint,

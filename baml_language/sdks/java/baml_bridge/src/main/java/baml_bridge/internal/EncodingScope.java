@@ -6,9 +6,10 @@ import java.util.List;
 
 /**
  * The references one request hands the engine, taken back if the request
- * never reaches it: a handle cloned for the wire is released, and a host
- * callable registered for it is retired. Once the engine has the request it
- * owns them ({@link #submitted}), and nothing is taken back.
+ * never reaches it: a handle cloned for the wire is released, and each count
+ * a send of a host key took is given back to the host registry. Once the
+ * engine has the request it owns them ({@link #submitted}), and nothing is
+ * taken back.
  */
 public final class EncodingScope implements AutoCloseable {
     private static final ThreadLocal<EncodingScope> CURRENT = new ThreadLocal<>();

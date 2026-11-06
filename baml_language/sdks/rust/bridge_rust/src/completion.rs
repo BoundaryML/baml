@@ -236,6 +236,7 @@ fn release_result(bytes: &[u8]) {
         None => None,
     };
     if let Some(value) = value {
+        let _pins = crate::outbound::Pins::of([&value]);
         crate::outbound::release(value);
     }
 }

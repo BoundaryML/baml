@@ -68,6 +68,34 @@ def test_discarded_args_do_not_release_borrowed_host_registry_keys():
     assert _handle_refcount(key) is None
 
 
+def test_discarded_args_release_the_pin_of_each_host_value():
+    kind = baml_handle_pb2.BamlHandleType
+    call = baml_outbound_pb2.BamlToHostCall()
+    pins = []
+    for host_kind in (kind.HOST_VALUE_CALLABLE, kind.HOST_VALUE_OPAQUE):
+        pin, _ = _seed_generic_media_handle()
+        pins.append(pin)
+        handle = call.args.add().value.handle_value
+        handle.key = 1
+        handle.handle_type = host_kind
+        handle.pin = pin
+    _discard_host_call_args(call.SerializeToString())
+    assert [_handle_refcount(pin) for pin in pins] == [None, None]
+
+
+def test_decode_failure_releases_the_pin_of_an_unread_host_value(decoding_models):
+    pin, _ = _seed_generic_media_handle()
+    call = baml_outbound_pb2.BamlToHostCall()
+    reject_argument(call.args.add().value)
+    handle = call.args.add().value.handle_value
+    handle.key = 1
+    handle.handle_type = baml_handle_pb2.HOST_VALUE_OPAQUE
+    handle.pin = pin
+    with pytest.raises(pydantic.ValidationError, match="deliberate argument"):
+        _invoke_host_callable(lambda *args: None, call.SerializeToString())
+    assert _handle_refcount(pin) is None
+
+
 @pytest.fixture
 def decoding_models(monkeypatch):
     captured = []

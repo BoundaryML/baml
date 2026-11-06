@@ -97,9 +97,22 @@ func HostCallableReturnedFromNever() error {
 
 var errNeverReturned = errors.New("BAML host callable declared to return never returned")
 
-type hostValue struct {
-	callable HostCallableFunc
-	opaque   any
+// hostObject is what a host key names: a callable, or the cell of a host
+// value. The set is closed.
+type hostObject interface{ isHostObject() }
+
+// hostCallable is a registered host callable.
+type hostCallable struct{ call HostCallableFunc }
+
+func (hostCallable) isHostObject()   {}
+func (*hostValueCell) isHostObject() {}
+
+// hostRegistration is one registered key: its object and how many references
+// to the key Go has handed out. Each send of the key takes one; the engine's
+// release, or the rollback of a send that never reached it, gives them back.
+type hostRegistration struct {
+	object hostObject
+	count  uint64
 }
 
 type hostCallablePanicError struct {
@@ -112,8 +125,8 @@ func (err *hostCallablePanicError) Error() string { return err.message }
 var hostValues = struct {
 	sync.Mutex
 	next  atomic.Uint64
-	table map[uint64]hostValue
-}{table: make(map[uint64]hostValue)}
+	table map[uint64]*hostRegistration
+}{table: make(map[uint64]*hostRegistration)}
 
 var completeNativeHostCall = nativeCompleteHostCall
 
@@ -126,28 +139,75 @@ func nextHostValueKey() uint64 {
 	}
 }
 
-func registerHostValue(value hostValue) uint64 {
+// registerHostObject registers object under a fresh key, holding the one
+// reference the send it is registered for takes.
+func registerHostObject(object hostObject) uint64 {
 	key := nextHostValueKey()
 	hostValues.Lock()
-	hostValues.table[key] = value
+	hostValues.table[key] = &hostRegistration{object: object, count: 1}
 	hostValues.Unlock()
 	return key
 }
 
-func unregisterHostValue(key uint64) {
-	if key == 0 {
+// registerHostCallable registers callable for one send.
+func registerHostCallable(callable HostCallableFunc) uint64 {
+	return registerHostObject(hostCallable{call: callable})
+}
+
+// hostKeyGoneError refuses a send of a key whose references were all given
+// back: sending it would hand the engine a key Go no longer resolves.
+type hostKeyGoneError struct{ key uint64 }
+
+func (err *hostKeyGoneError) Error() string {
+	return fmt.Sprintf("host value %d is no longer registered", err.key)
+}
+
+// retainHostValue takes one more reference to key for sending it again. The
+// check and the count are one step under the registry lock, so a release
+// racing the send either comes after the count or makes the send fail.
+func retainHostValue(key uint64) error {
+	hostValues.Lock()
+	defer hostValues.Unlock()
+	registration, ok := hostValues.table[key]
+	if !ok {
+		return &hostKeyGoneError{key: key}
+	}
+	registration.count++
+	return nil
+}
+
+// releaseHostValue gives back count references to key; the last one removes
+// it. A key that is not registered is ignored: giving back a reference twice
+// is a bug of whoever gave it, never applied to another key.
+func releaseHostValue(key, count uint64) {
+	hostValues.Lock()
+	defer hostValues.Unlock()
+	registration, ok := hostValues.table[key]
+	if !ok {
 		return
 	}
+	if count >= registration.count {
+		delete(hostValues.table, key)
+		return
+	}
+	registration.count -= count
+}
+
+// lookupHostObject is the object registered under key.
+func lookupHostObject(key uint64) (hostObject, bool) {
 	hostValues.Lock()
-	delete(hostValues.table, key)
-	hostValues.Unlock()
+	defer hostValues.Unlock()
+	registration, ok := hostValues.table[key]
+	if !ok {
+		return nil, false
+	}
+	return registration.object, true
 }
 
 func lookupHostCallable(key uint64) (HostCallableFunc, bool) {
-	hostValues.Lock()
-	value, ok := hostValues.table[key]
-	hostValues.Unlock()
-	return value.callable, ok && value.callable != nil
+	object, ok := lookupHostObject(key)
+	callable, isCallable := object.(hostCallable)
+	return callable.call, ok && isCallable
 }
 
 // HostCallable registers callable for the engine to invoke and sends its
@@ -156,9 +216,9 @@ func lookupHostCallable(key uint64) (HostCallableFunc, bool) {
 //
 // Registration is deferred until the containing call is encoded, so a failed
 // argument encoding cannot leak the Go closure. Once the request reaches the
-// engine, the engine's reference owns the registration: the host-release
-// callback removes it, idempotently, when the engine drops its last
-// reference, which may be a garbage-collection cycle after the call returns.
+// engine, the engine owns the reference the send took: the host-release
+// callback gives it back when the engine drops it, which may be a
+// garbage-collection cycle after the call returns.
 func HostCallable(callable HostCallableFunc, functionType BAMLType) Input {
 	if callable == nil {
 		return InvalidInput("BAML host callable is nil")
@@ -174,7 +234,7 @@ func HostCallable(callable HostCallableFunc, functionType BAMLType) Input {
 		if err != nil {
 			return nil, fmt.Errorf("BAML host callable function type: %w", err)
 		}
-		key := registerHostValue(hostValue{callable: callable})
+		key := registerHostCallable(callable)
 		transaction.ownHostValue(key)
 		value := hostValueInput(key, cffi.BamlHandleType_HOST_VALUE_CALLABLE)
 		value.ValueType = stated
@@ -359,15 +419,15 @@ func completeHostCallFailure(callID uint32, err error, traceback string) {
 
 // completeHostCallRaised completes the call as an exception of the host's
 // own. Go registers err under a fresh key and sends that key, its identity;
-// the engine builds the baml.errors.HostCallable around it and releases the
-// registration when it lets the exception go. Go does not recover err from
+// the engine builds the baml.errors.HostCallable around it and gives the
+// reference back when it lets the exception go. Go does not recover err from
 // the key when the exception comes back: it arrives as a *BamlError naming
 // baml.errors.HostCallable.
 func completeHostCallRaised(callID uint32, err error, traceback string) {
 	if err == nil {
 		err = errors.New("Go host callable failed")
 	}
-	key := registerHostValue(hostValue{opaque: err})
+	_, key := registerHostCell(err)
 	raised := &cffi.HostException{
 		Message:   err.Error(),
 		ClassName: hostErrorClassName(err),
@@ -376,7 +436,7 @@ func completeHostCallRaised(callID uint32, err error, traceback string) {
 		Handle:    key,
 	}
 	if !completeHostCall(callID, &cffi.HostCallCompletion{Outcome: &cffi.HostCallCompletion_Raised{Raised: raised}}) {
-		unregisterHostValue(key)
+		releaseHostValue(key, 1)
 	}
 }
 
