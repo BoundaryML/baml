@@ -88,6 +88,37 @@ disappearing.
 ## Rows
 
 `src/speedtest/rows.py` defines the rows: `vm-off`, `vm-low`, `vm-medium`,
-`vm-high`, `node`, `bun`, `python`. A new implementation, such as a natively
+`vm-high`, `native-off`, `native-medium`, `rt-off`, `rt-medium`, `node`, `bun`, `python`. A new implementation, such as a natively
 compiled BAML backend, is one more `Row` plus how to build and invoke it;
 every chart, table and the report pick it up.
+
+### Compiled backends
+
+`native-off` / `native-medium` pack with `--rust` (compiled bodies on the VM).
+`rt-off` / `rt-medium` pack with `--rust --rt` (baml_rt, no VM). Each backend
+packs once per workload; levels share that executable via `BAML_TELEMETRY`.
+Native packs use the release profile and one Cargo build directory per backend
+across workloads. Pack time includes compilation with that progressively warm
+cache; the first admitted workload pays the cold dependency build cost.
+`--rust-build-dir DIR` retains that cache across runs (backend subdirectories;
+only one run may use it at a time). Cached dependencies affect pack time, so
+record whether the cache was warm when comparing build KPIs.
+
+VM/native pack the BAML speedtest driver. RT packs `main` and uses its native
+`--jobs` / `--warmup` JSON driver, retaining its runtime instance across jobs.
+Both protocols verify once, warm up, then time complete jobs; RT additionally
+checks each timed result and uses a monotonic clock. A future admitted workload
+with `setup`/`run` fails explicitly until RT can preserve its setup state.
+Only an unsuccessful RT pack with the compiler's `unsupported in baml_rt:`
+diagnostic is marked **unsupported by baml_rt**. Other build, verification and
+trial errors remain failures. Unsupported cells have no numeric values or ratios.
+
+Explicit `--rows` is respected with `--kpi`; without it, KPI runs include every
+BAML row. The terminal and report show **rt speedup vs VM(off)** and **rt speedup
+vs Node**: comparison time divided by rt-off time, so above 1x means RT is faster.
+The report JSON includes per-backend build records and the sampled one-minute
+load range. `--cpu N` pins all verification and timed subprocesses to that CPU;
+trial order remains interleaved with a reproducible shuffle.
+
+Tests: `uv run --project tools/speedtest python -m unittest discover -s tools/speedtest/tests`
+(from `baml_language`).

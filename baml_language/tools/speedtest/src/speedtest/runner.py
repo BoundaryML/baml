@@ -55,9 +55,9 @@ def _cli_env():
     return {**os.environ, "DEV_BAML_CLI_DISABLE_AGENT_DETECTION": "1"}
 
 
-def build_baml(cli, workload, stage):
+def build_baml(cli, workload, stage, backend="vm", rust_build_dir=None):
     """Pack main.baml plus the driver into one executable. Returns a build record."""
-    project = stage / workload["id"].replace("/", "__")
+    project = stage / backend / workload["id"].replace("/", "__")
     src = project / "baml_src"
     src.mkdir(parents=True)
     # A packed executable records at the level baked in at pack time unless
@@ -67,12 +67,27 @@ def build_baml(cli, workload, stage):
         '[pack.env_var_names]\nBAML_TELEMETRY = "BAML_TELEMETRY"\n'
     )
     shutil.copy(workload["files"]["baml"], src / "main.baml")
-    shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
+    if backend != "rt":
+        shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
     out = project / "workload"
+    out.unlink(missing_ok=True)
+    command = [str(cli), "--no-progress", "--color", "never", "pack",
+               "main" if backend == "rt" else "speedtest_driver", "-o", str(out)]
+    if backend != "vm":
+        command += ["--rust", "--rust-workspace", str(_repo_root()),
+                    "--rust-build-dir", str((rust_build_dir or stage / "rust-build") / backend)]
+    if backend == "rt":
+        command += ["--rt"]
     start = time.perf_counter()
-    r = subprocess.run([str(cli), "--no-progress", "--color", "never", "pack", "speedtest_driver", "-o", str(out)],
+    r = subprocess.run(command,
                        cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
     seconds = time.perf_counter() - start
+    (project / "pack.log").write_text(r.stdout + r.stderr)
+    if r.returncode != 0 and backend == "rt":
+        for line in (r.stdout + r.stderr).splitlines():
+            if "unsupported in baml_rt:" in line:
+                return {"status": "unsupported", "error": "unsupported by baml_rt: " +
+                        line.split("unsupported in baml_rt:", 1)[1].strip(), "seconds": seconds}
     if r.returncode != 0 or not out.exists():
         lines = [l for l in r.stderr.strip().splitlines() if l.strip() and not l.startswith("warning:")]
         return {"status": "failed", "error": (lines[-1] if lines else f"exit {r.returncode}")[:400]}
@@ -104,7 +119,7 @@ class Cell:
     def summary(self):
         ok = [t for t in self.trials if t.ok]
         out = {"status": self.status, "reason": self.reason, "trials": len(self.trials), "failed_trials": len(self.trials) - len(ok)}
-        if ok:
+        if ok and self.status == "ok":
             out.update(per_job_ns=_stats([t.per_job_ns for t in ok]), process_ns=_stats([t.process_ns for t in ok]),
                        cpu_ns=_stats([t.cpu_ns for t in ok]), peak_rss_bytes=_stats([t.peak_rss_bytes for t in ok]),
                        jobs=ok[0].jobs)
@@ -136,26 +151,52 @@ def _fmt_ns(ns):
     return f"{ns / 1e3:.1f}µs"
 
 
+def _cell_status(cell):
+    return "unsupported by baml_rt" if cell["status"] == "unsupported" else cell["status"]
+
+
+def _cell_median(cell):
+    return cell.get("per_job_ns", {}).get("median") if cell["status"] == "ok" else None
+
+
 def print_table(workloads, row_list, cells):
     primary = next((r for r in row_list if r.key == rowmod.PRIMARY), row_list[0])
     others = [r for r in row_list if r is not primary]
     head = ["workload", primary.label] + [c for r in others for c in (r.label, f"vs {r.label}")]
+    comparisons = [(key, label) for key, label in (("vm-off", "rt speedup vs VM"), ("node", "rt speedup vs Node"))
+                   if "rt-off" in {r.key for r in row_list} and key in {r.key for r in row_list}]
+    if comparisons:
+        head = ["workload"] + [label for _, label in comparisons] + [r.label for r in row_list]
     table = [head]
     for w in workloads:
         p = cells[(w["id"], primary.key)].summary()
         pm = p.get("per_job_ns", {}).get("median") if p.get("per_job_ns") else None
-        line = [w["name"], _fmt_ns(pm) if pm else p["status"]]
+        line = [w["name"], _fmt_ns(pm) if pm else _cell_status(p)]
         for r in others:
             s = cells[(w["id"], r.key)].summary()
             m = s["per_job_ns"]["median"] if s.get("per_job_ns") else None
-            line += [_fmt_ns(m) if m else s["status"], fmt_ratio(pm, m) if pm and m else "—"]
+            line += [_fmt_ns(m) if m else _cell_status(s), fmt_ratio(pm, m) if pm and m else "—"]
+        ratios = []
+        for key, _ in comparisons:
+            a = _cell_median(cells[(w["id"], key)].summary())
+            b = _cell_median(cells[(w["id"], "rt-off")].summary())
+            ratios.append(fmt_ratio(a, b) if a is not None and b else "—")
+        if comparisons:
+            line = [w["name"]] + ratios
+            for r in row_list:
+                cell = cells[(w["id"], r.key)].summary()
+                m = _cell_median(cell)
+                line.append(_fmt_ns(m) if m is not None else _cell_status(cell))
         table.append(line)
     widths = [max(len(str(row[i])) for row in table) for i in range(len(head))]
     for i, row in enumerate(table):
         print("  ".join(str(c).ljust(widths[j]) if j == 0 else str(c).rjust(widths[j]) for j, c in enumerate(row)))
         if i == 0:
             print("  ".join("-" * w for w in widths))
-    print(f"\nper-job time, median of trials; 'vs X' is {primary.label} time over X's (above 1x: BAML is slower).")
+    if comparisons:
+        print("Per-job time, median of trials; rt speedup = comparison time / rt-off time; above 1x means rt is faster.")
+    else:
+        print(f"\nper-job time, median of trials; 'vs X' is {primary.label} time over X's (above 1x: BAML is slower).")
 
 
 def _machine():
@@ -167,9 +208,10 @@ def _machine():
                 break
     except OSError:
         pass
-    if "cpu" not in info:
+    if "cpu" not in info and shutil.which("sysctl") and sys.platform == "darwin":
         r = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True)
         info["cpu"] = r.stdout.strip() or os.uname().machine
+    info.setdefault("cpu", os.uname().machine)
     return info
 
 
@@ -195,37 +237,51 @@ def cmd_run(args):
     if not workloads:
         sys.exit(f"no workloads match {args.filter}")
 
-    row_list = rowmod.resolve(args.rows.split(",") if args.rows else None, telemetry=args.telemetry or args.kpi)
+    row_list = rowmod.resolve(args.rows.split(",") if args.rows else None, telemetry=args.telemetry or (args.kpi and not args.rows))
     versions = {}
     for r in row_list:
         if not r.is_baml and r.kind not in versions:
             versions[r.kind] = rowmod.toolchain_version(r.kind)
     trials_n = args.trials or 5
 
-    stage = Path(tempfile.mkdtemp(prefix="speedtest-"))
+    (repo / "target").mkdir(exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix="speedtest-", dir=repo / "target"))
     cells = {(w["id"], r.key): Cell(w, r) for w in workloads for r in row_list}
     builds = {}
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     load_start = os.getloadavg()
+    loads = [load_start[0]]
     if load_start[0] > (os.cpu_count() or 1) / 4:
         _log(f"warning: load average {load_start[0]:.1f} on {os.cpu_count()} cores; results will be noisy")
     try:
         _log(f"building {len(workloads)} workloads with {cli}")
+        backends = list(dict.fromkeys(r.backend for r in row_list if r.is_baml))
         for w in workloads:
-            builds[w["id"]] = build_baml(cli, w, stage)
-            b = builds[w["id"]]
-            if b["status"] != "ok":
-                _log(f"  {w['name']}: pack failed: {b['error']}")
+            builds[w["id"]] = {}
+            for backend in backends:
+                b = build_baml(cli, w, stage, backend,
+                               Path(args.rust_build_dir).resolve() if args.rust_build_dir else None)
+                loads.append(os.getloadavg()[0])
+                builds[w["id"]][backend] = b
+                _log(f"  {w['name']} [{backend}]: {b['status']} ({b.get('seconds', 0):.1f}s)" +
+                     (f": {b['error']}" if b.get("error") else ""))
 
         _log(f"verifying {len(cells)} (workload, row) pairs")
         for (wid, _), cell in cells.items():
             if not cell.row.is_baml and versions.get(cell.row.kind) is None:
                 cell.status, cell.reason = "unavailable", f"{cell.row.kind} is not installed"
                 continue
-            if cell.row.is_baml and builds[wid]["status"] != "ok":
-                cell.fail(f"pack failed: {builds[wid]['error']}")
+            b = builds[wid].get(cell.row.backend, {})
+            if cell.row.is_baml and b["status"] != "ok":
+                cell.status = b["status"]
+                cell.reason = b["error"]
                 continue
-            t = _trial(cell, builds[wid].get("artifact"), 1, 0, stage, args.cpu)
+            if cell.row.kind == "rt" and _has_setup(cell.workload["baml"]):
+                cell.fail("rt driver cannot retain setup() state between jobs")
+                _log(f"  {cell.workload['name']} [{cell.row.key}]: {cell.reason}")
+                continue
+            t = _trial(cell, b.get("artifact"), 1, 0, stage, args.cpu)
+            loads.append(os.getloadavg()[0])
             if t.ok:
                 cell.status = "ok"
             else:
@@ -241,9 +297,11 @@ def cmd_run(args):
             for cell in order:
                 w = cell.workload
                 jobs = args.jobs or w["jobs"]
-                t = _trial(cell, builds[w["id"]].get("artifact"), jobs, w["warmup"], stage, args.cpu)
+                t = _trial(cell, builds[w["id"]].get(cell.row.backend, {}).get("artifact"), jobs, w["warmup"], stage, args.cpu)
+                loads.append(os.getloadavg()[0])
                 cell.trials.append(t)
                 if not t.ok:
+                    cell.fail(t.error)
                     _log(f"  trial {i + 1}: {w['name']} [{cell.row.key}]: {t.error}")
             _log(f"  round {i + 1}/{trials_n} done")
 
@@ -256,7 +314,7 @@ def cmd_run(args):
     print_table(workloads, row_list, cells)
     _save(args, cli, workloads, row_list, cells, builds, versions, trials_n,
           {"started": started, "finished": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-           "loadavg_start": load_start, "loadavg_end": os.getloadavg()})
+           "loadavg_1m_range": [min(loads), max(loads)], "loadavg_start": load_start, "loadavg_end": os.getloadavg()})
 
 
 def _profile(args, cli, workloads, stage):
@@ -297,7 +355,7 @@ def _save(args, cli, workloads, row_list, cells, builds, versions, trials_n, tim
     rdir = results_dir(args)
     run_path = save_run(rdir, data, getattr(args, "_profile_files", None))
     with open(run_path / "trials.csv", "w", newline="") as f:
-        out = csv.writer(f)
+        out = csv.writer(f, lineterminator="\n")
         out.writerow(["workload", "row", "trial", "ok", "jobs", "per_job_ns", "elapsed_ns", "process_ns", "cpu_ns",
                       "peak_rss_bytes", "recording_bytes", "error"])
         for (wid, key), cell in cells.items():
