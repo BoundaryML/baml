@@ -1498,5 +1498,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "snapshot_v2_tests.rs"]
-mod v2_tests;
+#[path = "snapshot_rt_tests.rs"]
+mod rt_tests;

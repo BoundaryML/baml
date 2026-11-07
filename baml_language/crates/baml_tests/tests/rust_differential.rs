@@ -126,10 +126,10 @@ struct Backend {
     artifact_key: &'static str,
     env: &'static [(&'static str, &'static str)],
 }
-type Artifacts = std::collections::BTreeMap<String, Result<std::path::PathBuf, v2::Rejection>>;
+type Artifacts = std::collections::BTreeMap<String, Result<std::path::PathBuf, rt::Rejection>>;
 
-#[path = "../rust_diff/v2.rs"]
-mod v2;
+#[path = "../rust_diff/rt.rs"]
+mod rt;
 const BACKENDS: &[Backend] = &[
     Backend {
         name: "bytecode",
@@ -166,15 +166,15 @@ const BACKENDS: &[Backend] = &[
         ],
     },
     Backend {
-        name: "v2",
-        build: v2::build,
-        artifact_key: "v2",
+        name: "rt",
+        build: rt::build,
+        artifact_key: "rt",
         env: &[],
     },
     Backend {
-        name: "v2-gc-stress",
-        build: v2::build,
-        artifact_key: "v2",
+        name: "rt-gc-stress",
+        build: rt::build,
+        artifact_key: "rt",
         env: &[("BAML_GC_STRESS", "1")],
     },
 ];
@@ -368,7 +368,7 @@ fn pack_result<'a>(
     source: &Path,
     executable: &Path,
     functions: impl IntoIterator<Item = &'a str>,
-    v2: bool,
+    rt: bool,
 ) -> Result<(), String> {
     // Never accept an executable left over from a previous successful pack.
     if executable.exists() {
@@ -401,14 +401,14 @@ fn pack_result<'a>(
         if !seen.insert(function) {
             continue;
         }
-        if v2 {
+        if rt {
             argv.push(function.into());
         } else {
             argv.extend(["--function".into(), function.into()]);
         }
     }
-    if v2 {
-        argv.extend(["--runtime".into(), "v2".into()]);
+    if rt {
+        argv.push("--rt".into());
     }
     let result = baml_cli::run_cli(argv).map_err(|error| format!("{error:#}"))?;
     if !matches!(result, baml_cli::ExitCode::Success) {
@@ -477,7 +477,7 @@ fn rust_differential() {
             .is_none_or(|s| s.split(',').any(|p| p == probe))
     });
     assert!(!probes.is_empty(), "no probes selected");
-    let mut coverage = v2::Coverage::new(&artifacts["v2"]);
+    let mut coverage = rt::Coverage::new(&artifacts["rt"]);
     let mut failures = coverage.build_failures();
     for probe in probes {
         let failures_before = failures.len();
@@ -491,8 +491,8 @@ fn rust_differential() {
             let mut outputs = Vec::new();
             let mut traces = Vec::new();
             for backend in BACKENDS {
-                if backend.artifact_key == "v2"
-                    && (!v2::supports_level(level) || artifacts["v2"][&probe].is_err())
+                if backend.artifact_key == "rt"
+                    && (!rt::supports_level(level) || artifacts["rt"][&probe].is_err())
                 {
                     outputs.push(None);
                     traces.push(String::new());
@@ -516,8 +516,8 @@ fn rust_differential() {
                 let home = tempfile::tempdir_in(&build).unwrap();
                 let mut command =
                     Command::new(artifacts[backend.artifact_key][&probe].as_ref().unwrap());
-                if backend.artifact_key == "v2" {
-                    // V2 packs have one entry, not a subcommand dispatcher.
+                if backend.artifact_key == "rt" {
+                    // RT packs have one entry, not a subcommand dispatcher.
                 } else if probe.contains("::") {
                     command.arg("main");
                 } else if !initializer_probes::collects_tests(&probe) {
@@ -543,7 +543,7 @@ fn rust_differential() {
                     Ok(output) => {
                         eprintln!("{probe}/{mode}: {} ({:?})", output.status, start.elapsed());
                         let stderr = String::from_utf8_lossy(&output.stderr);
-                        if backend.artifact_key == "v2" && output.status.code().is_none() {
+                        if backend.artifact_key == "rt" && output.status.code().is_none() {
                             failures.push(format!("{probe}/{mode}: terminated by signal"));
                         }
                         if stderr.contains("panicked at") {
@@ -639,7 +639,7 @@ fn rust_differential() {
                     ));
                 }
                 if traces[reference] != traces[index] {
-                    if backend.artifact_key == "v2" {
+                    if backend.artifact_key == "rt" {
                         failures.push(format!(
                             "{probe}/{mode}: telemetry mismatch\n{}",
                             diff(&traces[reference], &traces[index], &mode)

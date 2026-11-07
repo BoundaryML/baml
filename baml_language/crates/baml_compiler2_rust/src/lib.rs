@@ -14,5 +14,5 @@ mod structure;
 
 pub use admit::{CompiledFunction, Rejection, RustModule, compile_program};
 
-mod v2;
-pub use v2::compile_v2;
+mod rt;
+pub use rt::compile_rt;

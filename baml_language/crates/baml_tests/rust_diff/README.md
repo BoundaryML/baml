@@ -23,7 +23,7 @@ name-to-build-result map (executable or explicit rejection), using the same
 probe and KPI sources. A distinct artifact
 key invokes that builder once; entries sharing a key reuse artifacts. Bytecode
 is selected by name as the reference, independently of environment variables.
-V2 bypasses the existing telemetry allowlist entirely. Existing compiled-body,
+The rt backend shares only the GC maintenance exception. Existing compiled-body,
 GC-stress and VM-frame environment switches remain in the existing entries.
 
 The probe matrix includes default, off, low, explicit medium and high. KPI
@@ -83,8 +83,8 @@ Other current compiled-backend exceptions:
   `<builtin>/testing/registry.baml:609` is exempt; function counts, task tree,
   cancellation outcomes and other sysops remain compared.
 
-All exceptions are restricted to the existing compiled backend variants.
-Runtime v2 starts with no exceptions.
+These other exceptions are restricted to the existing compiled backend variants.
+The runtime uses only the GC maintenance exception.
 
 ## Cost and isolation
 
@@ -111,36 +111,37 @@ roots, so unrelated probe bodies are not repeatedly compiled. Use the examples
 above for quick iteration before the full
 gate; do not treat a subset as full backend acceptance.
 
-## Runtime v2 coverage / phase 2 queue
+## BAML runtime coverage
 
-`v2` and `v2-gc-stress` pack each selected fixture separately with
-`--rust --runtime v2`, using the same complete source project as the oracle.
+`rt` and `rt-gc-stress` pack each selected fixture separately with
+`--rust --rt`, using the same complete source project as the oracle.
 Single-entry executables receive no subcommand argument. Both modes run every
 admitted probe and all admitted KPI workloads, including GC stress on KPIs.
-No process or telemetry divergence allowance applies to v2.
+Process output must match exactly. Telemetry allows only the successful root
+GC maintenance exception described above.
 
-Only a failed pack containing `unsupported in runtime v2:` is unsupported;
+Only a failed pack containing `unsupported in baml_rt:` is unsupported;
 its first diagnostic construct is recorded. Every other pack/run error,
 crash, or mismatch fails the gate. Stale output executables are removed before
-packing. V2's closed-world compiler rejects unsupported reachable code rather
+packing. RT's closed-world compiler rejects unsupported reachable code rather
 than emitting a partial bytecode fallback. The shared probe project currently
 contains top-level initializers: their rejection is a project-level blocker,
 not evidence that each probe's individual body is unsupported. Synthetic
-initializer/registry fixtures also require a v2 host adapter once admitted;
+initializer/registry fixtures also require an rt host adapter once admitted;
 the harness fails explicitly rather than running an unmodified variant.
 
-`rust-differential/v2-coverage.txt` records one row per selected probe/workload,
+`rust-differential/rt-coverage.txt` records one row per selected probe/workload,
 with pass (both modes), unsupported (first construct), or fail, plus totals and
 construct counts sorted by the number of fixtures blocked. The report is also
 printed at the end, before the final failure assertion. Legacy-only failures
-still fail the gate but do not change v2 coverage. Subset runs report only
-the selected fixtures; run the full gate to regenerate the complete work queue.
+still fail the gate but do not change rt coverage. Subset runs report only
+the selected fixtures; run the full gate to regenerate the complete coverage report.
 
-V2 telemetry off is required now. Low/medium/high/default are explicitly
-reported as **not yet supported**. Flip the single `TELEMETRY_SUPPORTED` constant
-in `v2.rs` when the producer lands: all existing applicable matrix cells become
+RT telemetry off is required now. Low/medium/high/default are explicitly
+reported as **not yet supported**. `TELEMETRY_SUPPORTED` in `rt.rs` controls
+whether all existing applicable matrix cells become
 required, including recording integrity, non-empty telemetry, and exact
-normalized equality. No allowlist changes are needed or permitted for v2.
+normalized equality. All other telemetry records remain strict.
 
 The initializer registration fixture runs collected test bodies without a deadline
 task (`testing._run_test(..., 0)`). The harness process timeout still bounds it.

@@ -1,16 +1,16 @@
 //! Narrow, visible exceptions for today's compiled backend only. A new backend
-//! does not inherit these except for the explicit C5 GC exception.
+//! does not inherit these except for the explicit GC exception.
 //! Never allow process-output differences here.
 use serde_json::Value;
 
 pub const GC_REASON: &str = "GC scheduling and heap occupancy differ (especially under BAML_GC_STRESS); only successful root baml.gc maintenance tasks are exempt";
 
-// Runtime-v2 CONTRACTS.md C5: collector maintenance counts/context describe
+// Collector maintenance counts/context describe
 // the collector, not the program. All other records remain strict.
 pub fn without_gc(trace: &str, backend: &str) -> String {
     if !matches!(
         backend,
-        "compiled" | "gc-stress" | "vm-frames" | "vm-frames-gc-stress" | "runtime-v2" | "v2"
+        "compiled" | "gc-stress" | "vm-frames" | "vm-frames-gc-stress" | "rt"
     ) {
         return trace.to_owned();
     }
@@ -85,8 +85,7 @@ mod tests {
         };
         let gc = record("baml.gc", 1);
         assert!(without_gc(&gc, "gc-stress").is_empty());
-        assert!(without_gc(&gc, "runtime-v2").is_empty());
-        assert!(without_gc(&gc, "v2").is_empty());
+        assert!(without_gc(&gc, "rt").is_empty());
         assert_eq!(without_gc(&gc, "unknown-backend"), gc);
         for retained in [
             record("user.task", 1),
@@ -94,7 +93,7 @@ mod tests {
             record("baml.gc", 3),
         ] {
             assert_eq!(without_gc(&retained, "compiled"), retained);
-            assert_eq!(without_gc(&retained, "v2"), retained);
+            assert_eq!(without_gc(&retained, "rt"), retained);
         }
     }
 }
@@ -369,7 +368,7 @@ mod scope_tests {
             without_log_locations(&a, "Logs", "compiled"),
             without_log_locations(&b, "Logs", "compiled")
         );
-        assert_eq!(without_log_locations(&a, "Logs", "runtime-v2"), a);
+        assert_eq!(without_log_locations(&a, "Logs", "rt"), a);
         for changed in [
             record(1, "changed", 2, 3),
             record(1, "hello", 4, 3),
@@ -397,7 +396,7 @@ mod scope_tests {
         let success = record("FunctionCompletion", 167, 1, Value::Null);
         assert!(without_readiness_poll(&success, "RecursiveCancellation", "compiled").is_empty());
         assert_eq!(
-            without_readiness_poll(&success, "RecursiveCancellation", "runtime-v2"),
+            without_readiness_poll(&success, "RecursiveCancellation", "rt"),
             success
         );
         for kept in [
@@ -429,7 +428,7 @@ mod scope_tests {
             }, 0]}, "count"])
             );
             assert!(without_readiness_poll(&row, probe, "compiled").is_empty());
-            for backend in ["runtime-v2", "v2", "v2-gc-stress"] {
+            for backend in ["rt", "rt", "rt-gc-stress"] {
                 assert_eq!(without_readiness_poll(&row, probe, backend), row);
             }
         }
@@ -447,10 +446,7 @@ mod scope_tests {
         };
         let a = record("aggregate.sysop_times", 609);
         assert!(without_timeout_wait(&a, "InitializerTests", "compiled").is_empty());
-        assert_eq!(
-            without_timeout_wait(&a, "InitializerTests", "runtime-v2"),
-            a
-        );
+        assert_eq!(without_timeout_wait(&a, "InitializerTests", "rt"), a);
         assert_eq!(without_timeout_wait(&a, "OtherProbe", "compiled"), a);
         for retained in [
             record("aggregate.entries", 609),
@@ -461,7 +457,7 @@ mod scope_tests {
                 retained
             );
         }
-        assert!(fixture_exception("FrameLimit", "high", "runtime-v2").is_none());
+        assert!(fixture_exception("FrameLimit", "high", "rt").is_none());
         assert!(fixture_exception("FrameLimit", "off", "compiled").is_none());
     }
 }

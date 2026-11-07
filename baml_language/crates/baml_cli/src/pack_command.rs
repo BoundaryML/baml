@@ -105,9 +105,9 @@ pub struct PackArgs {
     #[arg(long, help_heading = "Build options")]
     pub rust: bool,
 
-    /// Runtime for Rust packs. V2 is a closed-world experimental backend.
-    #[arg(long, value_enum, default_value_t = PackRuntime::Current, requires = "rust")]
-    pub runtime: PackRuntime,
+    /// Run compiled Rust with baml_rt instead of the VM.
+    #[arg(long, requires = "rust", help_heading = "Build options")]
+    pub rt: bool,
 
     /// The `baml_language` workspace checkout the generated host is built from.
     #[arg(
@@ -177,13 +177,6 @@ pub struct PackArgs {
     pub expression: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
-pub enum PackRuntime {
-    #[default]
-    Current,
-    V2,
-}
-
 /// The cargo profile a `--rust` build compiles the generated crate under.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum RustProfile {
@@ -211,8 +204,8 @@ impl PackArgs {
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         self.validate_flags()?;
         let manifest = self.artifact_manifest()?;
-        if self.runtime == PackRuntime::V2 && self.telemetry.embed_telemetry {
-            anyhow::bail!("unsupported in runtime v2: embedded telemetry");
+        if self.rt && self.telemetry.embed_telemetry {
+            anyhow::bail!("unsupported in baml_rt: embedded telemetry");
         }
         let mut telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
             &manifest,
@@ -279,15 +272,15 @@ impl PackArgs {
                         .map(|callable| callable.object.raw())
                 })
                 .collect();
-            if self.runtime == PackRuntime::V2 {
+            if self.rt {
                 if self.target.is_none() || targets.len() != 1 {
-                    anyhow::bail!("unsupported in runtime v2: subcommand packs");
+                    anyhow::bail!("unsupported in baml_rt: subcommand packs");
                 }
                 let entry = entries
                     .as_ref()
                     .and_then(|e| e.first())
-                    .ok_or_else(|| anyhow!("v2 entry not linked"))?;
-                let source = baml_db::rust_backend::compile_v2(
+                    .ok_or_else(|| anyhow!("rt entry not linked"))?;
+                let source = baml_db::rust_backend::compile_rt(
                     &db,
                     root,
                     &envelope.program,
@@ -472,12 +465,12 @@ impl PackArgs {
         let src_dir = build_dir.join("src");
         std::fs::create_dir_all(&src_dir)
             .with_context(|| format!("failed to create {}", src_dir.display()))?;
-        let manifest = if self.runtime == PackRuntime::V2 {
+        let manifest = if self.rt {
             let mut manifest =
                 rust_manifest(&workspace, self.rust_profile).parse::<toml::Value>()?;
             let dependencies = manifest["dependencies"].as_table_mut().unwrap();
             dependencies.clear();
-            for name in ["bex_v2_runtime", "bex_v2_heap"] {
+            for name in ["baml_rt", "baml_rt_gc"] {
                 dependencies.insert(
                     name.into(),
                     toml::Value::Table(toml::map::Map::from_iter([(
@@ -509,7 +502,7 @@ impl PackArgs {
             ("src/program.bexa", serialized),
             (
                 "src/lib.rs",
-                if self.runtime == PackRuntime::V2 {
+                if self.rt {
                     b""
                 } else {
                     module.source.as_bytes()
@@ -517,7 +510,7 @@ impl PackArgs {
             ),
             (
                 "src/main.rs",
-                if self.runtime == PackRuntime::V2 {
+                if self.rt {
                     module.source.as_bytes()
                 } else {
                     main.as_slice()
@@ -1078,7 +1071,7 @@ mod tests {
             file: None,
             output: None,
             rust: false,
-            runtime: PackRuntime::Current,
+            rt: false,
             rust_workspace: None,
             rust_build_dir: None,
             rust_profile: RustProfile::Release,
