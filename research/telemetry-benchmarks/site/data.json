@@ -2816,5 +2816,753 @@
    "pending_spans": 0,
    "stored_records": 8200
   }
+ ],
+ "anatomy": [
+  {
+   "content": "random",
+   "pattern": "independent",
+   "size": 1024,
+   "calls": 10,
+   "sent": 12807,
+   "decoded": 45194,
+   "lzma": 12272,
+   "doc_gzip_alone": 8033,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 11396,
+    "prompt in model span": 12870,
+    "other attributes": 16652,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1436
+   },
+   "gap_median": 16554,
+   "gap_min": 3883,
+   "gap_max": 22639
+  },
+  {
+   "content": "random",
+   "pattern": "independent",
+   "size": 4096,
+   "calls": 10,
+   "sent": 63650,
+   "decoded": 112801,
+   "lzma": 37868,
+   "doc_gzip_alone": 30930,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 45188,
+    "prompt in model span": 46662,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1439
+   },
+   "gap_median": 38511,
+   "gap_min": 14505,
+   "gap_max": 44606
+  },
+  {
+   "content": "random",
+   "pattern": "independent",
+   "size": 10240,
+   "calls": 10,
+   "sent": 167148,
+   "decoded": 237838,
+   "lzma": 88980,
+   "doc_gzip_alone": 76920,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 102554,
+    "prompt in model span": 114246,
+    "other attributes": 16757,
+    "span ids, names and times": 2841,
+    "resource and batch envelope": 1440
+   },
+   "gap_median": 77860,
+   "gap_min": 42741,
+   "gap_max": 82744
+  },
+  {
+   "content": "random",
+   "pattern": "independent",
+   "size": 32768,
+   "calls": 10,
+   "sent": 557963,
+   "decoded": 743674,
+   "lzma": 275612,
+   "doc_gzip_alone": 245859,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 360602,
+    "prompt in model span": 362076,
+    "other attributes": 16672,
+    "span ids, names and times": 2862,
+    "resource and batch envelope": 1462
+   },
+   "gap_median": 303109,
+   "gap_min": 66565,
+   "gap_max": 309214
+  },
+  {
+   "content": "random",
+   "pattern": "independent",
+   "size": 102400,
+   "calls": 10,
+   "sent": 1553508,
+   "decoded": 2069294,
+   "lzma": 775352,
+   "doc_gzip_alone": 768751,
+   "spans": 20,
+   "pending_spans": 0,
+   "categories": {
+    "prompt as function argument": 1024140,
+    "prompt in model span": 1025480,
+    "other attributes": 15620,
+    "span ids, names and times": 2600,
+    "resource and batch envelope": 1454
+   },
+   "gap_median": 930146,
+   "gap_min": 102978,
+   "gap_max": 935042
+  },
+  {
+   "content": "random",
+   "pattern": "suffix",
+   "size": 1024,
+   "calls": 10,
+   "sent": 3297,
+   "decoded": 41016,
+   "lzma": 2892,
+   "doc_gzip_alone": 8070,
+   "spans": 20,
+   "pending_spans": 0,
+   "categories": {
+    "prompt as function argument": 10390,
+    "prompt in model span": 11730,
+    "other attributes": 15570,
+    "span ids, names and times": 2580,
+    "resource and batch envelope": 746
+   },
+   "gap_median": 1601,
+   "gap_min": 1407,
+   "gap_max": 2626
+  },
+  {
+   "content": "random",
+   "pattern": "suffix",
+   "size": 4096,
+   "calls": 10,
+   "sent": 11285,
+   "decoded": 112867,
+   "lzma": 10012,
+   "doc_gzip_alone": 30940,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 45221,
+    "prompt in model span": 46695,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1439
+   },
+   "gap_median": 5556,
+   "gap_min": 4479,
+   "gap_max": 5700
+  },
+  {
+   "content": "random",
+   "pattern": "suffix",
+   "size": 10240,
+   "calls": 10,
+   "sent": 22120,
+   "decoded": 248036,
+   "lzma": 19392,
+   "doc_gzip_alone": 76950,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 112805,
+    "prompt in model span": 114279,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1440
+   },
+   "gap_median": 11701,
+   "gap_min": 10623,
+   "gap_max": 11844
+  },
+  {
+   "content": "random",
+   "pattern": "suffix",
+   "size": 32768,
+   "calls": 10,
+   "sent": 557994,
+   "decoded": 743740,
+   "lzma": 53432,
+   "doc_gzip_alone": 245880,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 360635,
+    "prompt in model span": 362109,
+    "other attributes": 16672,
+    "span ids, names and times": 2862,
+    "resource and batch envelope": 1462
+   },
+   "gap_median": 34233,
+   "gap_min": 33155,
+   "gap_max": 34376
+  },
+  {
+   "content": "random",
+   "pattern": "suffix",
+   "size": 102400,
+   "calls": 10,
+   "sent": 1864202,
+   "decoded": 2482681,
+   "lzma": 237180,
+   "doc_gzip_alone": 768820,
+   "spans": 24,
+   "pending_spans": 4,
+   "categories": {
+    "prompt as function argument": 1229004,
+    "prompt in model span": 1230612,
+    "other attributes": 17784,
+    "span ids, names and times": 3124,
+    "resource and batch envelope": 2157
+   },
+   "gap_median": 103323,
+   "gap_min": 102787,
+   "gap_max": 104011
+  },
+  {
+   "content": "random",
+   "pattern": "identical",
+   "size": 1024,
+   "calls": 10,
+   "sent": 5587,
+   "decoded": 45194,
+   "lzma": 5172,
+   "doc_gzip_alone": 8000,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 11396,
+    "prompt in model span": 12870,
+    "other attributes": 16652,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1436
+   },
+   "gap_median": 2479,
+   "gap_min": 1404,
+   "gap_max": 2623
+  },
+  {
+   "content": "random",
+   "pattern": "identical",
+   "size": 4096,
+   "calls": 10,
+   "sent": 11225,
+   "decoded": 112801,
+   "lzma": 9996,
+   "doc_gzip_alone": 30970,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 45188,
+    "prompt in model span": 46662,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1439
+   },
+   "gap_median": 5553,
+   "gap_min": 4476,
+   "gap_max": 5697
+  },
+  {
+   "content": "random",
+   "pattern": "identical",
+   "size": 10240,
+   "calls": 10,
+   "sent": 21541,
+   "decoded": 247968,
+   "lzma": 19040,
+   "doc_gzip_alone": 76810,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 112772,
+    "prompt in model span": 114246,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1438
+   },
+   "gap_median": 11698,
+   "gap_min": 10620,
+   "gap_max": 11841
+  },
+  {
+   "content": "random",
+   "pattern": "identical",
+   "size": 32768,
+   "calls": 10,
+   "sent": 558392,
+   "decoded": 743674,
+   "lzma": 53476,
+   "doc_gzip_alone": 246080,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 360602,
+    "prompt in model span": 362076,
+    "other attributes": 16672,
+    "span ids, names and times": 2862,
+    "resource and batch envelope": 1462
+   },
+   "gap_median": 34230,
+   "gap_min": 33152,
+   "gap_max": 34373
+  },
+  {
+   "content": "random",
+   "pattern": "identical",
+   "size": 102400,
+   "calls": 10,
+   "sent": 1553639,
+   "decoded": 2069294,
+   "lzma": 158332,
+   "doc_gzip_alone": 768880,
+   "spans": 20,
+   "pending_spans": 0,
+   "categories": {
+    "prompt as function argument": 1024140,
+    "prompt in model span": 1025480,
+    "other attributes": 15620,
+    "span ids, names and times": 2600,
+    "resource and batch envelope": 1454
+   },
+   "gap_median": 102978,
+   "gap_min": 102784,
+   "gap_max": 104008
+  },
+  {
+   "content": "english",
+   "pattern": "independent",
+   "size": 1024,
+   "calls": 10,
+   "sent": 8456,
+   "decoded": 45443,
+   "lzma": 7780,
+   "doc_gzip_alone": 4765,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 11396,
+    "prompt in model span": 13119,
+    "other attributes": 16652,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1436
+   },
+   "gap_median": null,
+   "gap_min": null,
+   "gap_max": null
+  },
+  {
+   "content": "english",
+   "pattern": "independent",
+   "size": 4096,
+   "calls": 10,
+   "sent": 25682,
+   "decoded": 113759,
+   "lzma": 21528,
+   "doc_gzip_alone": 17143,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 45188,
+    "prompt in model span": 47619,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1440
+   },
+   "gap_median": null,
+   "gap_min": null,
+   "gap_max": null
+  },
+  {
+   "content": "english",
+   "pattern": "independent",
+   "size": 10240,
+   "calls": 10,
+   "sent": 78213,
+   "decoded": 249851,
+   "lzma": 44296,
+   "doc_gzip_alone": 39036,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 112772,
+    "prompt in model span": 116127,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1440
+   },
+   "gap_median": null,
+   "gap_min": null,
+   "gap_max": null
+  },
+  {
+   "content": "english",
+   "pattern": "independent",
+   "size": 32768,
+   "calls": 10,
+   "sent": 256855,
+   "decoded": 750075,
+   "lzma": 131756,
+   "doc_gzip_alone": 119857,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 360602,
+    "prompt in model span": 368477,
+    "other attributes": 16672,
+    "span ids, names and times": 2862,
+    "resource and batch envelope": 1462
+   },
+   "gap_median": null,
+   "gap_min": null,
+   "gap_max": null
+  },
+  {
+   "content": "english",
+   "pattern": "independent",
+   "size": 102400,
+   "calls": 10,
+   "sent": 672769,
+   "decoded": 2090510,
+   "lzma": 349084,
+   "doc_gzip_alone": 337674,
+   "spans": 20,
+   "pending_spans": 0,
+   "categories": {
+    "prompt as function argument": 1024140,
+    "prompt in model span": 1046696,
+    "other attributes": 15620,
+    "span ids, names and times": 2600,
+    "resource and batch envelope": 1454
+   },
+   "gap_median": null,
+   "gap_min": null,
+   "gap_max": null
+  },
+  {
+   "content": "english",
+   "pattern": "suffix",
+   "size": 1024,
+   "calls": 10,
+   "sent": 3009,
+   "decoded": 41216,
+   "lzma": 2652,
+   "doc_gzip_alone": 5676,
+   "spans": 20,
+   "pending_spans": 0,
+   "categories": {
+    "prompt as function argument": 10390,
+    "prompt in model span": 11930,
+    "other attributes": 15570,
+    "span ids, names and times": 2580,
+    "resource and batch envelope": 746
+   },
+   "gap_median": 1407,
+   "gap_min": 1407,
+   "gap_max": 1407
+  },
+  {
+   "content": "english",
+   "pattern": "suffix",
+   "size": 4096,
+   "calls": 10,
+   "sent": 8813,
+   "decoded": 114143,
+   "lzma": 7572,
+   "doc_gzip_alone": 16946,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 45221,
+    "prompt in model span": 47971,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1439
+   },
+   "gap_median": 4479,
+   "gap_min": 4479,
+   "gap_max": 4489
+  },
+  {
+   "content": "english",
+   "pattern": "suffix",
+   "size": 10240,
+   "calls": 10,
+   "sent": 14171,
+   "decoded": 249576,
+   "lzma": 11372,
+   "doc_gzip_alone": 35149,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 112805,
+    "prompt in model span": 115819,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1440
+   },
+   "gap_median": 10623,
+   "gap_min": 10623,
+   "gap_max": 10633
+  },
+  {
+   "content": "english",
+   "pattern": "suffix",
+   "size": 32768,
+   "calls": 10,
+   "sent": 209155,
+   "decoded": 749878,
+   "lzma": 26608,
+   "doc_gzip_alone": 102273,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 360635,
+    "prompt in model span": 368247,
+    "other attributes": 16672,
+    "span ids, names and times": 2862,
+    "resource and batch envelope": 1462
+   },
+   "gap_median": 33155,
+   "gap_min": 33155,
+   "gap_max": 33165
+  },
+  {
+   "content": "english",
+   "pattern": "suffix",
+   "size": 102400,
+   "calls": 10,
+   "sent": 818212,
+   "decoded": 2510425,
+   "lzma": 118776,
+   "doc_gzip_alone": 339024,
+   "spans": 24,
+   "pending_spans": 4,
+   "categories": {
+    "prompt as function argument": 1229004,
+    "prompt in model span": 1258356,
+    "other attributes": 17784,
+    "span ids, names and times": 3124,
+    "resource and batch envelope": 2157
+   },
+   "gap_median": 102787,
+   "gap_min": 102787,
+   "gap_max": 102797
+  },
+  {
+   "content": "english",
+   "pattern": "identical",
+   "size": 1024,
+   "calls": 10,
+   "sent": 2986,
+   "decoded": 41166,
+   "lzma": 2632,
+   "doc_gzip_alone": 5700,
+   "spans": 20,
+   "pending_spans": 0,
+   "categories": {
+    "prompt as function argument": 10360,
+    "prompt in model span": 11910,
+    "other attributes": 15570,
+    "span ids, names and times": 2580,
+    "resource and batch envelope": 746
+   },
+   "gap_median": 1404,
+   "gap_min": 1404,
+   "gap_max": 1404
+  },
+  {
+   "content": "english",
+   "pattern": "identical",
+   "size": 4096,
+   "calls": 10,
+   "sent": 8599,
+   "decoded": 113460,
+   "lzma": 7408,
+   "doc_gzip_alone": 17740,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 45188,
+    "prompt in model span": 47322,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1438
+   },
+   "gap_median": 4476,
+   "gap_min": 4476,
+   "gap_max": 4486
+  },
+  {
+   "content": "english",
+   "pattern": "identical",
+   "size": 10240,
+   "calls": 10,
+   "sent": 12097,
+   "decoded": 249796,
+   "lzma": 9496,
+   "doc_gzip_alone": 24640,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 112772,
+    "prompt in model span": 116072,
+    "other attributes": 16672,
+    "span ids, names and times": 2840,
+    "resource and batch envelope": 1440
+   },
+   "gap_median": 10620,
+   "gap_min": 10620,
+   "gap_max": 10630
+  },
+  {
+   "content": "english",
+   "pattern": "identical",
+   "size": 32768,
+   "calls": 10,
+   "sent": 224207,
+   "decoded": 751209,
+   "lzma": 27296,
+   "doc_gzip_alone": 106220,
+   "spans": 22,
+   "pending_spans": 2,
+   "categories": {
+    "prompt as function argument": 360602,
+    "prompt in model span": 369611,
+    "other attributes": 16672,
+    "span ids, names and times": 2862,
+    "resource and batch envelope": 1462
+   },
+   "gap_median": 33152,
+   "gap_min": 33152,
+   "gap_max": 33152
+  },
+  {
+   "content": "english",
+   "pattern": "identical",
+   "size": 102400,
+   "calls": 10,
+   "sent": 679707,
+   "decoded": 2088964,
+   "lzma": 77160,
+   "doc_gzip_alone": 337850,
+   "spans": 20,
+   "pending_spans": 0,
+   "categories": {
+    "prompt as function argument": 1024140,
+    "prompt in model span": 1045150,
+    "other attributes": 15620,
+    "span ids, names and times": 2600,
+    "resource and batch envelope": 1454
+   },
+   "gap_median": 102784,
+   "gap_min": 102784,
+   "gap_max": 102784
+  }
+ ],
+ "wire_english": [
+  {
+   "stack": "otel",
+   "size": 10240,
+   "calls": 10,
+   "bytes": 36301,
+   "billed": null
+  },
+  {
+   "stack": "baml",
+   "size": 1024,
+   "calls": 10,
+   "bytes": 212230,
+   "billed": 35226
+  },
+  {
+   "stack": "logfire",
+   "size": 102400,
+   "calls": 10,
+   "bytes": 649720,
+   "billed": null
+  },
+  {
+   "stack": "logfire",
+   "size": 1024,
+   "calls": 10,
+   "bytes": 7635,
+   "billed": null
+  },
+  {
+   "stack": "otel",
+   "size": 102400,
+   "calls": 10,
+   "bytes": 332370,
+   "billed": null
+  },
+  {
+   "stack": "datadog",
+   "size": 102400,
+   "calls": 10,
+   "bytes": 2134295,
+   "billed": null
+  },
+  {
+   "stack": "logfire",
+   "size": 10240,
+   "calls": 10,
+   "bytes": 80537,
+   "billed": null
+  },
+  {
+   "stack": "baml",
+   "size": 10240,
+   "calls": 10,
+   "bytes": 398702,
+   "billed": 221632
+  },
+  {
+   "stack": "otel",
+   "size": 1024,
+   "calls": 10,
+   "bytes": 5627,
+   "billed": null
+  },
+  {
+   "stack": "baml",
+   "size": 102400,
+   "calls": 10,
+   "bytes": 2201372,
+   "billed": 2079665
+  },
+  {
+   "stack": "datadog",
+   "size": 10240,
+   "calls": 10,
+   "bytes": 232106,
+   "billed": null
+  },
+  {
+   "stack": "datadog",
+   "size": 1024,
+   "calls": 10,
+   "bytes": 42096,
+   "billed": null
+  }
  ]
 }

@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "lab"))
 sys.path.insert(0, str(ROOT / "env" / "proto"))
+from corpus import document  # noqa: E402
 from servers import DATADOG_LLMOBS, LOGFIRE_INTAKE, bcs_relay, mock_llm, relay  # noqa: E402
 
 SECRETS = dict(line.strip().split("=", 1) for line in open(ROOT / ".env") if "=" in line)
@@ -28,13 +29,6 @@ PY = str(ROOT / "env" / "py" / "bin" / "python")
 BAML = str(ROOT / "bin" / "baml")
 
 APPS = {"hello": "Hello", "classify": "Classify", "extract": "Extract", "agent": "Agent"}
-
-
-def document(size, seed):
-    """Low-repetition printable text of exactly `size` bytes, so compression can't hide size."""
-    rng = random.Random(seed)
-    alphabet = string.ascii_letters + string.digits + "     "
-    return "".join(rng.choice(alphabet) for _ in range(size))
 
 
 def agent_rule():
@@ -123,6 +117,8 @@ def main():
     p.add_argument("--batches", nargs="+", default=["1", "10v", "10s"],
                    help="1 = one call; 10v = ten calls with independent documents; 10s = ten identical calls")
     p.add_argument("--hosted", action="store_true")
+    p.add_argument("--content", default="random", choices=["random", "english"],
+                   help="random characters (gzip saves ~22%%) or English prose (gzip saves ~60%%)")
     p.add_argument("--seed", type=int, default=int(time.time()))
     p.add_argument("--out", required=True)
     args = p.parse_args()
@@ -144,9 +140,9 @@ def main():
         # A fresh seed per run keeps hosted content-addressed storage from reusing earlier uploads.
         if vary and size:
             # Ten independent documents, so neither gzip nor content hashing can match one call to another.
-            text = "|".join(document(size, seed=(args.seed * 1000 + i) * 100 + k) for k in range(n))
+            text = "|".join(document(size, (args.seed * 1000 + i) * 100 + k, args.content) for k in range(n))
         else:
-            text = document(size, seed=args.seed * 1000 + i) if size else ""
+            text = document(size, args.seed * 1000 + i, args.content) if size else ""
         model = mock_llm(rule=agent_rule()) if app == "agent" else mock_llm()
         meter = tele = bcs = None
         started = datetime.now(timezone.utc).isoformat()
@@ -182,7 +178,7 @@ def main():
             for server in (model, tele, bcs):
                 if server:
                     server.shutdown()
-        row = dict(stack=stack, app=app, size=size, batch=batch, calls=n, vary=vary, hosted=args.hosted,
+        row = dict(stack=stack, app=app, size=size, batch=batch, calls=n, vary=vary, hosted=args.hosted, content=args.content,
                    utc=started, wall_ms=wall, timing=timing, telemetry=telemetry,
                    model_http={"requests": len(model.requests), "sent": sum(r["sent"] for r in model.requests),
                                "received": sum(r["received"] for r in model.requests),

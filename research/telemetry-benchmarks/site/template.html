@@ -103,6 +103,9 @@ select { font: inherit; padding: 0.35rem; border-radius: 6px; border: 1px solid 
 .tabs button { font: 600 0.8rem var(--f-mono); border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); padding: 0.35rem 0.7rem; border-radius: 6px; cursor: pointer; }
 .tabs button[aria-pressed=true] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cp { background: color-mix(in srgb, var(--s-logfire) 22%, transparent); color: var(--ink); border-radius: 3px; padding: 0 0.15em; }
+section h3 { margin-top: 0.8rem; }
+.callout ul.plain { gap: 0.5rem; }
 .scrub td:nth-child(2) { font-family: var(--f-mono); font-size: 0.8rem; }
 .hero svg { width: 100%; height: auto; display: block; }
 .hero .chart svg { min-width: 40rem; }
@@ -163,13 +166,59 @@ logfire.instrument_openai()
 <section>
   <span class="eyebrow">Bytes on the wire</span>
   <h2>BAML records the whole exchange, so it sends more</h2>
-  <p class="col">BAML records every model call's raw HTTP request and response next to the function's inputs and output. The others record less by default: Logfire keeps function arguments and the chat messages but not return values, and OpenTelemetry's OpenAI instrumentation keeps no message text on spans at all. Logfire and OpenTelemetry also gzip what they send; Datadog and BAML send it uncompressed. Pick a document size to see bytes sent per call.</p>
+  <p class="col">BAML records every model call's raw HTTP request and response next to the function's inputs and output. The others record less by default: Logfire keeps function arguments and the chat messages but not return values, and OpenTelemetry's OpenAI instrumentation keeps no message text on spans at all. Logfire and OpenTelemetry also gzip what they send; Datadog and BAML send it uncompressed. Pick a document size to see bytes sent per call. <a href="#logfire-bytes">Why Logfire's numbers move so much</a> is explained further down.</p>
   <div class="tabs" role="group" aria-label="Document size" id="sizeTabs"></div>
   <div class="chart" id="wire"></div>
   <div class="legend" id="wireLegend"></div>
   <div class="callout col">
     <h3>Repeated input is nearly free on the wire</h3>
     <p>BCS stores content by hash. Ten identical 100 KiB calls sent <b id="dedupSame"></b> from BAML versus <b id="dedupVary"></b> for ten different ones. Logfire's gzip gets part of that saving (<b id="lfSame"></b> vs <b id="lfVary"></b>). Datadog sends uncompressed JSON, about 207 KB per call either way. The <b>bill</b> does not shrink: BCS counts every reference.</p>
+  </div>
+</section>
+
+<section id="logfire-bytes">
+  <span class="eyebrow">Deep dive · Logfire's payload</span>
+  <h2>Why Logfire's byte counts swing so much</h2>
+  <p class="col">The same 10 KiB prompt cost Logfire 2.2 KB per call in our first run and 15.9 KB in the second. Neither number was a measuring error. We decoded every export Logfire sent and found that three things decide its size: how many copies of the prompt each call carries, how far apart those copies sit in the export, and how well the text compresses.</p>
+
+  <h3>1. Each call carries the prompt twice</h3>
+  <p class="col">A traced <code>classify</code> call becomes two spans. The function span records the argument, and the model span records the chat messages, which contain the same document after the instruction line. About 2 KB of metadata comes on top: a JSON schema for the attributes, the message template, tags and code location.</p>
+  <pre aria-label="Decoded Logfire spans for one call"><span class="c"># scope: logfire</span>
+<span class="k">Calling __main__.classify</span>
+  text                  = "<span class="cp">Kq3 vXa9 LmZ0 …</span>"                       <span class="c">← copy 1 (10,240 B)</span>
+  logfire.json_schema   = {"type":"object","properties":{"text":{}}}
+  code.filepath, code.lineno, logfire.msg_template, …
+
+<span class="c"># scope: logfire.openai</span>
+<span class="k">Chat Completion with 'gpt-4.1-mini'</span>
+  gen_ai.input.messages = [{"role":"user","parts":[{"type":"text","content":
+                           "Is this document an invoice? …\n<span class="cp">Kq3 vXa9 LmZ0 …</span>"}]}]  <span class="c">← copy 2</span>
+  gen_ai.output.messages, gen_ai.usage.raw, logfire.json_schema (485 B), …</pre>
+  <p class="muted col">Bytes per call before compression, split by what they hold. Ten calls with ten different documents of random characters, decoded from the exact export bodies.</p>
+  <div class="chart" id="lfAnatomy"></div>
+  <div class="legend" id="lfAnatomyLegend"></div>
+  <p class="muted col">A third copy appears only for a span that is still open when an export fires. Logfire then sends a "pending" placeholder with the arguments. That happened to 2 of 22 spans in most of our runs and to none at 100 KiB.</p>
+
+  <h3>2. gzip only looks back 32 KB</h3>
+  <p class="col">Logfire gzips each export. gzip saves bytes by pointing back to text it has already seen, but only within the last 32 KB. The export groups spans by instrumentation scope, so all the model spans come first and all the function spans after them. The two copies of one prompt end up several spans apart. The diagram shows one export holding ten 10 KiB calls.</p>
+  <div class="chart" id="lfWindow"></div>
+  <p class="col">Real exports split the ten calls over two requests, but the effect is the same: with ten different 10 KiB prompts, the copies were 43 to 83 KB apart and gzip paid for both. At 1 KiB some copies land inside the window, which is why the red line starts lower. When every call sends the same prompt, each copy has an identical neighbor one span back, and gzip makes it almost free, until the document reaches 32 KiB and the neighbor falls out of the window. The chart shows how many gzipped copies of the prompt each call costs.</p>
+  <div class="chart" id="lfCliff"></div>
+  <div class="legend" id="lfCliffLegend"></div>
+  <p class="muted col">The y-axis divides bytes sent per call by the size of one gzipped document. The dashed line recompresses the same exports with lzma, whose window is 8 MB: it finds the duplicates at every size. Our first run varied only a short suffix on one document, so at 1 and 10 KiB it measured the cheap case.</p>
+
+  <h3>3. Prose compresses, random characters don't</h3>
+  <p class="col">Our main tests use random characters, the worst case for gzip, so text can't hide size. Real prompts are mostly prose. We reran the comparison with English text from Python's documentation, which gzips to about a third of its size. Logfire and OpenTelemetry sent about half as much. Datadog and BAML send uncompressed, so they didn't change.</p>
+  <div class="tabs" role="group" aria-label="Document size" id="lfContentTabs"></div>
+  <div class="chart" id="lfContent"></div>
+  <div class="callout col">
+    <h3>What this means</h3>
+    <ul class="plain">
+      <li><b>Expect the gap to be wider with real prompts.</b> With 10 KiB of prose, BAML sends about <b id="lfRatio10"></b> Logfire's bytes per call, against 2.5× with random characters.</li>
+      <li><b>Repeated context is cheap only when it is small.</b> A fixed system prompt or few-shot block under about 10 KiB costs Logfire almost nothing on the wire after the first call. From 32 KiB it costs full price every time.</li>
+      <li><b>None of this changes Logfire's bill.</b> Logfire charges per record, two per <code>classify</code> call at any size. It does matter for network egress and for Logfire's soft guideline of about 5 KB per span: the model span holds the whole prompt.</li>
+      <li><b>BCS's bill doesn't move either.</b> BCS bills uncompressed captured bytes, so prose and random characters bill the same (<b id="lfBcsRandom"></b> vs <b id="lfBcsEnglish"></b> for ten 10 KiB calls).</li>
+    </ul>
   </div>
 </section>
 
@@ -246,6 +295,7 @@ logfire.instrument_openai()
     <li>BCS billed bytes are computed by replaying BCS's billing rules (<code>logical_bytes_approx_v1</code>) over the upload bodies. The Billing page then showed exactly the predicted change: 5,457 spans and 34 MB.</li>
     <li>Python stacks are set up the way each vendor's docs describe: Logfire 5.4, ddtrace 4.16 (LLM Observability, agentless), OpenTelemetry SDK 1.45 with <code>opentelemetry-instrumentation-openai-v2</code>, OpenAI SDK with <code>max_retries=1</code>.</li>
     <li>The model is a local fake that answers instantly, so speed numbers show tracing cost only. A real model call takes hundreds of milliseconds, which dwarfs every difference on this page except process startup.</li>
+    <li>Test documents are random printable characters, so compression can't hide size. The Logfire deep dive also uses English prose: unique lines from Python's own docstrings, with words that trigger Logfire's scrubbing removed.</li>
     <li>Everything (code, raw results, a running log) is in <code>research/telemetry-benchmarks/</code>.</li>
   </ul>
 </section>
@@ -460,6 +510,116 @@ function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === 
   let t = `<thead><tr><th>Ticket</th><th>Stored function argument</th></tr></thead><tbody>`;
   for (const r of D.scrub) t += `<tr><td>${esc(r.ticket)}</td><td style="color:${r.argument_scrubbed ? "var(--bad)" : "var(--good)"}">${esc(r.argument_scrubbed ? r.stored_argument : "kept in full")}</td></tr>`;
   document.getElementById("scrub").innerHTML = t + "</tbody>";
+})();
+
+// ---- Logfire deep dive
+const anat = (content, pattern, size) => D.anatomy.find(r => r.content === content && r.pattern === pattern && r.size === size);
+// The model-span copy is drawn as a hatched version of Logfire's orange, so both copies keep one identity.
+const hatch = id => `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--bg)"/><rect width="2.5" height="6" fill="var(--s-logfire)"/></pattern></defs>`;
+const paint = (c, id) => c === "hatch" ? `url(#${id})` : css(c);
+const kib = s => s >= 1024 ? (s / 1024) + " KiB" : s + " B";
+(function lfAnatomy() {
+  const cats = [["prompt as function argument", "--s-logfire", "Prompt as function argument"], ["prompt in model span", "hatch", "Prompt in model span"],
+    ["other attributes", "--ink-3", "Other attributes"], ["span ids, names and times", "--rule", "Span ids, names, times and envelope"]];
+  const W = 720, labelW = 80, valW = 150, plotW = W - labelW - valW, rowH = 40, sizes = [1024, 10240, 102400];
+  let s = `<svg viewBox="0 0 ${W} ${sizes.length * rowH + 8}" role="img" aria-label="Logfire bytes per call before compression, by category">` + hatch("hA");
+  sizes.forEach((size, i) => {
+    const r = anat("random", "independent", size), c = r.categories, n = r.calls;
+    const parts = cats.map(([k]) => k === "span ids, names and times" ? c[k] + c["resource and batch envelope"] : c[k]);
+    const total = parts.reduce((a, b) => a + b, 0), y = 4 + i * rowH;
+    s += `<text x="${labelW - 10}" y="${y + rowH / 2 + 4}" text-anchor="end">${kib(size)}</text>`;
+    let x = labelW;
+    parts.forEach((v, j) => {
+      const w = v / total * plotW;
+      s += `<rect x="${x}" y="${y + 7}" width="${Math.max(w - 2, 1)}" height="${rowH - 14}" rx="2" fill="${paint(cats[j][1], "hA")}" stroke="${css("--s-logfire")}" stroke-width="${cats[j][1] === "hatch" ? 1 : 0}" data-tip="${esc(cats[j][2])}: ${fmtB(v / n)} per call (${Math.round(v / total * 100)}%)"/>`;
+      x += w;
+    });
+    s += `<text class="val" x="${labelW + plotW + 10}" y="${y + rowH / 2 + 4}">${fmtB(r.decoded / n)} raw</text>`;
+  });
+  const el = document.getElementById("lfAnatomy"); el.innerHTML = s + "</svg>"; bindTips(el);
+  document.getElementById("lfAnatomyLegend").innerHTML = cats.map(([, c, l]) => `<span class="chip"><span class="dot" style="${c === "hatch" ? "background:repeating-linear-gradient(45deg,var(--s-logfire) 0 2px,transparent 2px 4px);border:1px solid var(--s-logfire)" : "background:" + css(c)}"></span>${l}</span>`).join("");
+})();
+
+(function lfWindow() {
+  // Mechanism: one export of ten 10 KiB calls. Each block is one span (~11 KB); gzip's window covers ~3 blocks.
+  const W = 720, x0 = 110, bw = 29, gap = 1, rowY = [44, 162];
+  const r10 = anat("random", "independent", 10240), same = anat("random", "identical", 10240);
+  const spanKB = r10.decoded / (r10.spans || 20) / 1000;
+  const winBlocks = 32.768 / spanKB;
+  let s = `<svg viewBox="0 0 ${W} 272" role="img" aria-label="Where the two copies of each prompt sit in one Logfire export">` + hatch("hB");
+  const rows = [["Ten different prompts", "--bad", `no match: the copy is ${Math.round(r10.gap_min / 1000)}–${Math.round(r10.gap_max / 1000)} KB back`], ["Same prompt every call", "--good", `match: the copy is ${Math.round(same.gap_median / 1000)} KB back`]];
+  rows.forEach(([label, col, note], ri) => {
+    const y = rowY[ri];
+    s += `<text x="${x0 - 10}" y="${y + 19}" text-anchor="end" class="val">${label.split(" ").slice(0, 2).join(" ")}</text><text x="${x0 - 10}" y="${y + 33}" text-anchor="end">${label.split(" ").slice(2).join(" ")}</text>`;
+    for (let k = 0; k < 20; k++) {
+      const x = x0 + k * (bw + gap), model = k < 10, idx = (k % 10) + 1;
+      const hit = ri === 0 ? idx === 3 : (k === 12 || k === 13);
+      s += `<rect x="${x}" y="${y + 6}" width="${bw}" height="30" rx="3" fill="${model ? "url(#hB)" : css("--s-logfire")}" stroke="${css("--s-logfire")}" stroke-width="${model ? 1 : 0}" opacity="${hit ? 1 : 0.5}"/>`;
+      s += `<text x="${x + bw / 2}" y="${y + 26}" text-anchor="middle" style="fill:${model ? "var(--ink)" : "var(--bg)"};font-size:10px;font-weight:600">${model ? "M" : "F"}${ri === 0 ? idx : ""}</text>`;
+    }
+    // arc from source copy to the copy gzip would need
+    const from = ri === 0 ? 12 : 13, to = ri === 0 ? 2 : 12;
+    const xa = x0 + to * (bw + gap) + bw / 2, xb = x0 + from * (bw + gap) + bw / 2, top = y - (ri === 0 ? 30 : 12);
+    s += `<path d="M${xb} ${y + 4} C${xb} ${top}, ${xa} ${top}, ${xa} ${y + 4}" fill="none" stroke="${css(col)}" stroke-width="2" ${ri === 0 ? 'stroke-dasharray="4 3"' : ""}/>`;
+    // gzip window bracket, ending at the span being compressed
+    const wx1 = xb - bw / 2, wx0 = Math.max(x0, wx1 - winBlocks * (bw + gap));
+    s += `<path d="M${wx0} ${y + 44} v6 H${wx1} v-6" fill="none" stroke="${css("--ink-3")}" stroke-width="1.5"/>`;
+    s += `<text x="${(wx0 + wx1) / 2}" y="${y + 64}" text-anchor="middle">gzip window, 32 KB</text>`;
+    s += `<text x="${x0}" y="${y + 84}" style="fill:${css(col)};font-weight:600">${note}</text>`;
+  });
+  s += `<text x="${x0}" y="266">M (hatched) = model span · F = function span · one block ≈ ${spanKB.toFixed(0)} KB</text>`;
+  document.getElementById("lfWindow").innerHTML = s + "</svg>";
+})();
+
+(function lfCliff() {
+  const sizes = [1024, 4096, 10240, 32768, 102400];
+  const series = [
+    ["Ten different prompts, gzip", "--bad", r => r.sent, "independent", false],
+    ["Same prompt every call, gzip", "--good", r => r.sent, "identical", false],
+    ["Same prompt every call, lzma (8 MB window)", "--ink-3", r => r.lzma, "identical", true],
+  ];
+  const W = 720, L = 60, R = 30, T = 16, B = 44, H = 280, pw = W - L - R, ph = H - T - B, ymax = 2.5;
+  const sx = s => L + (Math.log2(s / 1024) / Math.log2(100)) * pw, sy = v => T + ph - (v / ymax) * ph;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gzipped prompt copies paid per call, by document size">`;
+  for (let v = 0; v <= ymax; v += 0.5) s += `<line class="gl" x1="${L}" x2="${W - R}" y1="${sy(v)}" y2="${sy(v)}"/><text x="${L - 8}" y="${sy(v) + 4}" text-anchor="end">${v}×</text>`;
+  sizes.forEach(z => s += `<text x="${sx(z)}" y="${H - B + 18}" text-anchor="middle">${kib(z)}</text>`);
+  s += `<text x="${L + pw / 2}" y="${H - 6}" text-anchor="middle">document size per call</text>`;
+  const xw = sx(32768) - 14;
+  s += `<line x1="${xw}" x2="${xw}" y1="${T}" y2="${T + ph}" stroke="${css("--ink-3")}" stroke-dasharray="3 3"/><text x="${xw - 6}" y="${T + 12}" text-anchor="end">gzip window</text>`;
+  series.forEach(([label, col, f, pat, dashed]) => {
+    const pts = sizes.map(z => { const r = anat("random", pat, z); return [z, f(r) / r.doc_gzip_alone, r]; });
+    s += `<polyline fill="none" stroke="${css(col)}" stroke-width="2" ${dashed ? 'stroke-dasharray="5 4"' : ""} points="${pts.map(([z, v]) => sx(z) + "," + sy(v)).join(" ")}"/>`;
+    pts.forEach(([z, v, r]) => {
+      s += `<circle cx="${sx(z)}" cy="${sy(v)}" r="4.5" fill="${css(col)}" stroke="${css("--bg")}" stroke-width="2" pointer-events="none"/>`;
+      s += `<circle cx="${sx(z)}" cy="${sy(v)}" r="14" fill="transparent" data-tip="${esc(label)}, ${kib(z)}: ${fmtB((dashed ? r.lzma : r.sent) / r.calls)} per call = ${v.toFixed(2)}× one gzipped document (${fmtB(r.doc_gzip_alone / r.calls)})"/>`;
+    });
+  });
+  const el = document.getElementById("lfCliff"); el.innerHTML = s + "</svg>"; bindTips(el);
+  document.getElementById("lfCliffLegend").innerHTML = series.map(([l, c, , , d]) => `<span class="chip"><span class="dot" style="background:${d ? "transparent" : css(c)};border:2px ${d ? "dashed" : "solid"} ${css(c)}"></span>${l}</span>`).join("");
+})();
+
+(function lfContent() {
+  const tabs = document.getElementById("lfContentTabs");
+  const sizes = [[10240, "10 KiB document"], [102400, "100 KiB document"]];
+  tabs.innerHTML = sizes.map(([z, l], i) => `<button type="button" id="lfc-${z}" aria-pressed="${i === 0}" data-s="${z}">${l}</button>`).join("");
+  const en = (stack, size) => D.wire_english.find(r => r.stack === stack && r.size === size);
+  function draw(size) {
+    const rows = [];
+    for (const st of ["baml", "datadog", "logfire", "otel"]) {
+      const a = wireRow(st, "classify", size, "10v"), b = en(st, size); if (!a || !b) continue;
+      rows.push({label: `${STACKS[st].name} · random`, value: a.bytes / a.calls, color: STACKS[st].c, text: fmtB(a.bytes / a.calls)});
+      rows.push({label: `${STACKS[st].name} · English`, value: b.bytes / b.calls, color: STACKS[st].c, text: fmtB(b.bytes / b.calls),
+        tip: `${STACKS[st].name}, English prose: ${fmtB(b.bytes / b.calls)} per call vs ${fmtB(a.bytes / a.calls)} with random characters (${Math.round((1 - b.bytes / a.bytes) * 100)}% less)`});
+    }
+    hbars(document.getElementById("lfContent"), rows, {labelW: 230, valW: 90, rowH: 26});
+  }
+  tabs.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    tabs.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); draw(+b.dataset.s); });
+  draw(10240);
+  const b10 = en("baml", 10240), l10 = en("logfire", 10240);
+  document.getElementById("lfRatio10").textContent = (b10.bytes / l10.bytes).toFixed(1) + "×";
+  document.getElementById("lfBcsRandom").textContent = fmtB(wireRow("baml", "classify", 10240, "10v").billed);
+  document.getElementById("lfBcsEnglish").textContent = fmtB(b10.billed);
 })();
 
 // ---- searchable

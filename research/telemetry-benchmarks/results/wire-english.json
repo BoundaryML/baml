@@ -1,0 +1,6846 @@
+[
+ {
+  "stack": "otel",
+  "app": "classify",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:38.096403+00:00",
+  "wall_ms": 850.9217910468578,
+  "timing": {
+   "setup_ms": 706.6940001677722,
+   "call_ms": [
+    11.473125,
+    1.098708,
+    0.716583,
+    0.638333,
+    0.769667,
+    0.773,
+    0.769375,
+    0.647458,
+    0.592458,
+    0.788375
+   ],
+   "flush_ms": 37.214916,
+   "maxrss_mb": 91.265625
+  },
+  "telemetry": {
+   "requests": 1,
+   "telemetry_bytes": 36301,
+   "decoded_bytes": 109717,
+   "spans": 20,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": [
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "classify",
+     "input",
+     10457
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10451
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10475
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10457
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10487
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10466
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10433
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10462
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10411
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     10423
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ]
+   ]
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 105752,
+   "received": 2580,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "baml",
+  "app": "classify",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:39.347765+00:00",
+  "wall_ms": 141.07562485150993,
+  "timing": {
+   "result": 10
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 212230,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 3974,
+    "upload": 208142
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 34,
+    "logical_bytes": 35226,
+    "capture_references": 53,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b520aacb70ef866034a5a7426d0d"
+    ],
+    "events": {
+     "thread_announcement": 4,
+     "thread_completion": 4,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 34
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 12000,
+   "received": 2560,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "logfire",
+  "app": "classify",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:39.998117+00:00",
+  "wall_ms": 1024.6950830332935,
+  "timing": {
+   "setup_ms": 691.1627498921007,
+   "call_ms": [
+    37.204333,
+    14.407875,
+    13.965916,
+    13.254666,
+    13.178541,
+    13.28775,
+    12.199958,
+    13.013125,
+    12.301666,
+    13.037833
+   ],
+   "flush_ms": 53.736917,
+   "maxrss_mb": 119.375
+  },
+  "telemetry": {
+   "requests": 2,
+   "telemetry_bytes": 649720,
+   "decoded_bytes": 2089399,
+   "spans": 20,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": [
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104483
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     102400
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104411
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104105
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104218
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104716
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104661
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104700
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104951
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104590
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     104440
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     66
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ]
+   ]
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1045375,
+   "received": 2600,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "logfire",
+  "app": "classify",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:41.299974+00:00",
+  "wall_ms": 837.168833008036,
+  "timing": {
+   "setup_ms": 701.4063748065382,
+   "call_ms": [
+    24.841916,
+    1.51025,
+    1.226917,
+    1.263667,
+    1.112625,
+    1.178167,
+    0.977708,
+    1.019958,
+    1.11575,
+    0.954
+   ],
+   "flush_ms": 3.14575,
+   "maxrss_mb": 92.65625
+  },
+  "telemetry": {
+   "requests": 1,
+   "telemetry_bytes": 7635,
+   "decoded_bytes": 41173,
+   "spans": 20,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": [
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     1024
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1156
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1168
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1160
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1160
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1164
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1158
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1157
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1161
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1166
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     1177
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     62
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ]
+   ]
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 11727,
+   "received": 2560,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "otel",
+  "app": "classify",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:42.567492+00:00",
+  "wall_ms": 914.8251658771187,
+  "timing": {
+   "setup_ms": 723.0009168852121,
+   "call_ms": [
+    12.576625,
+    2.127375,
+    1.416666,
+    1.554334,
+    1.284333,
+    1.178416,
+    1.244375,
+    1.258958,
+    1.336959,
+    1.665917
+   ],
+   "flush_ms": 36.025625,
+   "maxrss_mb": 113.71875
+  },
+  "telemetry": {
+   "requests": 1,
+   "telemetry_bytes": 332370,
+   "decoded_bytes": 1050133,
+   "spans": 20,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": [
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     17
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "classify",
+     "input",
+     104477
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104327
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104422
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104541
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104327
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104586
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104410
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104570
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104750
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     104478
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ]
+   ]
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1046118,
+   "received": 2600,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "datadog",
+  "app": "classify",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:43.905332+00:00",
+  "wall_ms": 2467.6104590762407,
+  "timing": {
+   "setup_ms": 1282.3364168871194,
+   "call_ms": [
+    15.596792,
+    2.17875,
+    1.811584,
+    1.729041,
+    1.7155,
+    1.585666,
+    1.483667,
+    1.666042,
+    1.7495,
+    1.502542
+   ],
+   "flush_ms": 6.787625,
+   "maxrss_mb": 157.875
+  },
+  "telemetry": {
+   "requests": 1,
+   "telemetry_bytes": 2134295,
+   "decoded_bytes": 2134295,
+   "spans": 20,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": []
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1046118,
+   "received": 2600,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "logfire",
+  "app": "classify",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:46.774759+00:00",
+  "wall_ms": 853.132416959852,
+  "timing": {
+   "setup_ms": 692.2361659817398,
+   "call_ms": [
+    28.246708,
+    3.111625,
+    2.9855,
+    2.487083,
+    2.957125,
+    2.426167,
+    2.150542,
+    2.306042,
+    2.220916,
+    2.0515
+   ],
+   "flush_ms": 6.5345,
+   "maxrss_mb": 93.15625
+  },
+  "telemetry": {
+   "requests": 2,
+   "telemetry_bytes": 80537,
+   "decoded_bytes": 250010,
+   "spans": 22,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": [
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     12
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.pending_parent_id",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10528
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10570
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10569
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     215
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.pending_parent_id",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10569
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10543
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10545
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10523
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10546
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10516
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10519
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.filepath",
+     15
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.function",
+     3
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "code.lineno",
+     14
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "request_data",
+     24
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.system",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.input.messages",
+     10539
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "async",
+     18
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg_template",
+     44
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.msg",
+     35
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.tags",
+     55
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.input_tokens",
+     16
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.usage.raw",
+     64
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.output.messages",
+     88
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "gen_ai.response.finish_reasons",
+     8
+    ],
+    [
+     "Chat Completion with {request_data[model]!r}",
+     "logfire.json_schema",
+     458
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ],
+    [
+     "Calling __main__.classify",
+     "code.function",
+     8
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg_template",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "code.lineno",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "code.filepath",
+     15
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.msg",
+     25
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.json_schema",
+     42
+    ],
+    [
+     "Calling __main__.classify",
+     "text",
+     10240
+    ],
+    [
+     "Calling __main__.classify",
+     "logfire.span_type",
+     4
+    ]
+   ]
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 105498,
+   "received": 2580,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "baml",
+  "app": "classify",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:48.041116+00:00",
+  "wall_ms": 138.9757920987904,
+  "timing": {
+   "result": 10
+  },
+  "telemetry": {
+   "requests": 7,
+   "telemetry_bytes": 398702,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4038,
+    "upload": 394550
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 34,
+    "logical_bytes": 221632,
+    "capture_references": 53,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b520ccb77057a19d73e65d6fc05d"
+    ],
+    "events": {
+     "thread_announcement": 4,
+     "thread_completion": 4,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 34
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 106226,
+   "received": 2580,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "otel",
+  "app": "classify",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:48.683407+00:00",
+  "wall_ms": 872.3924581427127,
+  "timing": {
+   "setup_ms": 742.8942080587149,
+   "call_ms": [
+    12.036292,
+    0.992125,
+    0.682458,
+    0.629208,
+    0.7025,
+    0.805958,
+    0.622167,
+    0.588709,
+    0.553708,
+    0.763
+   ],
+   "flush_ms": 2.797459,
+   "maxrss_mb": 91.015625
+  },
+  "telemetry": {
+   "requests": 1,
+   "telemetry_bytes": 5627,
+   "decoded_bytes": 15686,
+   "spans": 20,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": [
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.operation.name",
+     4
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.request.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.provider.name",
+     6
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.finish_reasons",
+     56
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.model",
+     12
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.response.id",
+     10
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.input_tokens",
+     15
+    ],
+    [
+     "chat gpt-4.1-mini",
+     "gen_ai.usage.output_tokens",
+     13
+    ],
+    [
+     "classify",
+     "input",
+     1048
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1048
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1045
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1047
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1046
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1053
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1046
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1050
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1050
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ],
+    [
+     "classify",
+     "input",
+     1060
+    ],
+    [
+     "classify",
+     "output",
+     4
+    ]
+   ]
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 11723,
+   "received": 2560,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "baml",
+  "app": "classify",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:49.980622+00:00",
+  "wall_ms": 170.61950010247529,
+  "timing": {
+   "result": 10
+  },
+  "telemetry": {
+   "requests": 18,
+   "telemetry_bytes": 2201372,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6645,
+    "upload": 2194613
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 34,
+    "logical_bytes": 2079665,
+    "capture_references": 54,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b520d45f7cc1b3fec0b8cf531734"
+    ],
+    "events": {
+     "thread_announcement": 4,
+     "thread_completion": 4,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 34
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1042548,
+   "received": 2600,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "datadog",
+  "app": "classify",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:50.644470+00:00",
+  "wall_ms": 2154.811334097758,
+  "timing": {
+   "setup_ms": 1278.8427921477705,
+   "call_ms": [
+    14.4225,
+    1.785875,
+    1.0505,
+    0.9685,
+    0.847291,
+    0.841291,
+    0.93925,
+    0.954292,
+    0.891041,
+    0.918875
+   ],
+   "flush_ms": 1.373917,
+   "maxrss_mb": 132.125
+  },
+  "telemetry": {
+   "requests": 1,
+   "telemetry_bytes": 232106,
+   "decoded_bytes": 232106,
+   "spans": 20,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": []
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 105670,
+   "received": 2580,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "datadog",
+  "app": "classify",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "content": "english",
+  "utc": "2026-11-07T08:29:53.477206+00:00",
+  "wall_ms": 2112.057749880478,
+  "timing": {
+   "setup_ms": 1275.1826250459999,
+   "call_ms": [
+    16.183917,
+    1.723417,
+    1.095958,
+    0.997208,
+    0.858083,
+    0.859708,
+    0.755333,
+    0.797583,
+    0.742167,
+    0.835041
+   ],
+   "flush_ms": 0.923292,
+   "maxrss_mb": 131.625
+  },
+  "telemetry": {
+   "requests": 1,
+   "telemetry_bytes": 42096,
+   "decoded_bytes": 42096,
+   "spans": 20,
+   "statuses": [
+    200
+   ],
+   "rejections": [],
+   "fields": []
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 11674,
+   "received": 2560,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ }
+]

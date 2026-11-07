@@ -82,10 +82,28 @@ def searchable():
     return {v: {"median": statistics.median(s), "min": min(s), "max": max(s), "n": len(s)} for v, s in by.items()}
 
 
+def anatomy():
+    out = []
+    for r in load("logfire-anatomy.json"):
+        gaps = r["copy_gaps"]
+        out.append({k: r[k] for k in ("content", "pattern", "size", "calls", "sent", "decoded", "lzma",
+                                      "doc_gzip_alone", "spans", "pending_spans", "categories")}
+                   | {"gap_median": gaps[len(gaps) // 2] if gaps else None,
+                      "gap_min": gaps[0] if gaps else None, "gap_max": gaps[-1] if gaps else None})
+    return out
+
+
+def wire_english():
+    return [{"stack": r["stack"], "size": r["size"], "calls": r["calls"], "bytes": r["telemetry"]["telemetry_bytes"],
+             "billed": (r["telemetry"].get("billing") or {}).get("logical_bytes")}
+            for r in load("wire-english.json") if not r.get("error")]
+
+
 def main():
     data = {
         "wire": wire(), "overhead": overhead(), "crash": crash(), "searchable": searchable(),
         "loc": load("loc.json"), "scrub": load("scrub.json"), "pipeline": load("pipeline.json"),
+        "anatomy": anatomy(), "wire_english": wire_english(),
     }
     out = ROOT / "site" / "data.json"
     out.parent.mkdir(exist_ok=True)

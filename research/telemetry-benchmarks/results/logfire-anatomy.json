@@ -1,0 +1,7010 @@
+[
+ {
+  "content": "random",
+  "pattern": "independent",
+  "size": 1024,
+  "calls": 10,
+  "doc_bytes": 1024,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 3548,
+  "sent": 12807,
+  "decoded": 45194,
+  "regzip": 12807,
+  "lzma": 12272,
+  "doc_gzip_alone": 8033,
+  "categories": {
+   "prompt as function argument": 11396,
+   "prompt in model span": 12870,
+   "other attributes": 16652,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1436
+  },
+  "copy_gaps": [
+   3883,
+   5102,
+   12897,
+   14116,
+   15335,
+   16554,
+   17773,
+   18992,
+   20211,
+   21430,
+   22639
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 11510
+ },
+ {
+  "content": "random",
+  "pattern": "independent",
+  "size": 4096,
+  "calls": 10,
+  "doc_bytes": 4096,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 9692,
+  "sent": 63650,
+  "decoded": 112801,
+  "regzip": 63653,
+  "lzma": 37868,
+  "doc_gzip_alone": 30930,
+  "categories": {
+   "prompt as function argument": 45188,
+   "prompt in model span": 46662,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1439
+  },
+  "copy_gaps": [
+   14505,
+   15726,
+   16947,
+   36069,
+   37290,
+   38511,
+   39732,
+   40953,
+   42174,
+   43395,
+   44606
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 42230
+ },
+ {
+  "content": "random",
+  "pattern": "independent",
+  "size": 10240,
+  "calls": 10,
+  "doc_bytes": 10240,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 21980,
+  "sent": 167148,
+  "decoded": 237838,
+  "regzip": 167148,
+  "lzma": 88980,
+  "doc_gzip_alone": 76920,
+  "categories": {
+   "prompt as function argument": 102554,
+   "prompt in model span": 114246,
+   "other attributes": 16757,
+   "span ids, names and times": 2841,
+   "resource and batch envelope": 1440
+  },
+  "copy_gaps": [
+   42741,
+   43962,
+   45183,
+   46394,
+   76639,
+   77860,
+   79081,
+   80302,
+   81523,
+   82744
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 103670
+ },
+ {
+  "content": "random",
+  "pattern": "independent",
+  "size": 32768,
+  "calls": 10,
+  "doc_bytes": 32768,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 67042,
+  "sent": 557963,
+  "decoded": 743674,
+  "regzip": 557963,
+  "lzma": 275612,
+  "doc_gzip_alone": 245859,
+  "categories": {
+   "prompt as function argument": 360602,
+   "prompt in model span": 362076,
+   "other attributes": 16672,
+   "span ids, names and times": 2862,
+   "resource and batch envelope": 1462
+  },
+  "copy_gaps": [
+   66565,
+   67776,
+   299446,
+   300667,
+   301888,
+   303109,
+   304330,
+   305551,
+   306772,
+   307993,
+   309214
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 328950
+ },
+ {
+  "content": "random",
+  "pattern": "independent",
+  "size": 102400,
+  "calls": 10,
+  "doc_bytes": 102400,
+  "requests": 2,
+  "spans": 20,
+  "pending_spans": 0,
+  "pending_bytes": 0,
+  "sent": 1553508,
+  "decoded": 2069294,
+  "regzip": 1553508,
+  "lzma": 775352,
+  "doc_gzip_alone": 768751,
+  "categories": {
+   "prompt as function argument": 1024140,
+   "prompt in model span": 1025480,
+   "other attributes": 15620,
+   "span ids, names and times": 2600,
+   "resource and batch envelope": 1454
+  },
+  "copy_gaps": [
+   102978,
+   925250,
+   926474,
+   927698,
+   928922,
+   930146,
+   931370,
+   932594,
+   933818,
+   935042
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   }
+  ],
+  "model_sent": 1025270
+ },
+ {
+  "content": "random",
+  "pattern": "suffix",
+  "size": 1024,
+  "calls": 10,
+  "doc_bytes": 1027,
+  "requests": 1,
+  "spans": 20,
+  "pending_spans": 0,
+  "pending_bytes": 0,
+  "sent": 3297,
+  "decoded": 41016,
+  "regzip": 3290,
+  "lzma": 2892,
+  "doc_gzip_alone": 8070,
+  "categories": {
+   "prompt as function argument": 10390,
+   "prompt in model span": 11730,
+   "other attributes": 15570,
+   "span ids, names and times": 2580,
+   "resource and batch envelope": 746
+  },
+  "copy_gaps": [
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1601,
+   1601,
+   1601,
+   1601,
+   1601,
+   1601,
+   1601,
+   1601,
+   1601,
+   1601,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626,
+   2626
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   }
+  ],
+  "model_sent": 11540
+ },
+ {
+  "content": "random",
+  "pattern": "suffix",
+  "size": 4096,
+  "calls": 10,
+  "doc_bytes": 4099,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 9698,
+  "sent": 11285,
+  "decoded": 112867,
+  "regzip": 11285,
+  "lzma": 10012,
+  "doc_gzip_alone": 30940,
+  "categories": {
+   "prompt as function argument": 45221,
+   "prompt in model span": 46695,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1439
+  },
+  "copy_gaps": [
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4730,
+   4730,
+   4730,
+   4730,
+   4730,
+   4730,
+   4730,
+   4730,
+   4730,
+   4730,
+   5556,
+   5556,
+   5556,
+   5556,
+   5556,
+   5556,
+   5556,
+   5556,
+   5556,
+   5556,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700,
+   5700
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 42260
+ },
+ {
+  "content": "random",
+  "pattern": "suffix",
+  "size": 10240,
+  "calls": 10,
+  "doc_bytes": 10243,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 21986,
+  "sent": 22120,
+  "decoded": 248036,
+  "regzip": 22120,
+  "lzma": 19392,
+  "doc_gzip_alone": 76950,
+  "categories": {
+   "prompt as function argument": 112805,
+   "prompt in model span": 114279,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1440
+  },
+  "copy_gaps": [
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10874,
+   10874,
+   10874,
+   10874,
+   10874,
+   10874,
+   10874,
+   10874,
+   10874,
+   10874,
+   11701,
+   11701,
+   11701,
+   11701,
+   11701,
+   11701,
+   11701,
+   11701,
+   11701,
+   11701,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844,
+   11844
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 103700
+ },
+ {
+  "content": "random",
+  "pattern": "suffix",
+  "size": 32768,
+  "calls": 10,
+  "doc_bytes": 32771,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 67048,
+  "sent": 557994,
+  "decoded": 743740,
+  "regzip": 557994,
+  "lzma": 53432,
+  "doc_gzip_alone": 245880,
+  "categories": {
+   "prompt as function argument": 360635,
+   "prompt in model span": 362109,
+   "other attributes": 16672,
+   "span ids, names and times": 2862,
+   "resource and batch envelope": 1462
+  },
+  "copy_gaps": [
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33406,
+   33406,
+   33406,
+   33406,
+   33406,
+   33406,
+   33406,
+   33406,
+   33406,
+   33406,
+   34233,
+   34233,
+   34233,
+   34233,
+   34233,
+   34233,
+   34233,
+   34233,
+   34233,
+   34233,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376,
+   34376
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 328980
+ },
+ {
+  "content": "random",
+  "pattern": "suffix",
+  "size": 102400,
+  "calls": 10,
+  "doc_bytes": 102403,
+  "requests": 3,
+  "spans": 24,
+  "pending_spans": 4,
+  "pending_bytes": 412624,
+  "sent": 1864202,
+  "decoded": 2482681,
+  "regzip": 1864202,
+  "lzma": 237180,
+  "doc_gzip_alone": 768820,
+  "categories": {
+   "prompt as function argument": 1229004,
+   "prompt in model span": 1230612,
+   "other attributes": 17784,
+   "span ids, names and times": 3124,
+   "resource and batch envelope": 2157
+  },
+  "copy_gaps": [
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   103038,
+   103038,
+   103038,
+   103038,
+   103038,
+   103038,
+   103038,
+   103038,
+   103038,
+   103038,
+   103323,
+   103323,
+   103323,
+   103323,
+   103323,
+   103323,
+   103323,
+   103323,
+   103323,
+   103323,
+   103868,
+   103868,
+   103868,
+   103868,
+   103868,
+   103868,
+   103868,
+   103868,
+   103868,
+   103868,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011,
+   104011
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 1025300
+ },
+ {
+  "content": "random",
+  "pattern": "identical",
+  "size": 1024,
+  "calls": 10,
+  "doc_bytes": 1024,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 3548,
+  "sent": 5587,
+  "decoded": 45194,
+  "regzip": 5587,
+  "lzma": 5172,
+  "doc_gzip_alone": 8000,
+  "categories": {
+   "prompt as function argument": 11396,
+   "prompt in model span": 12870,
+   "other attributes": 16652,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1436
+  },
+  "copy_gaps": [
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1414,
+   1414,
+   1414,
+   1414,
+   1414,
+   1414,
+   1414,
+   1414,
+   1414,
+   1414,
+   1654,
+   1654,
+   1654,
+   1654,
+   1654,
+   1654,
+   1654,
+   1654,
+   1654,
+   1654,
+   2479,
+   2479,
+   2479,
+   2479,
+   2479,
+   2479,
+   2479,
+   2479,
+   2479,
+   2479,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623,
+   2623
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 11510
+ },
+ {
+  "content": "random",
+  "pattern": "identical",
+  "size": 4096,
+  "calls": 10,
+  "doc_bytes": 4096,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 9692,
+  "sent": 11225,
+  "decoded": 112801,
+  "regzip": 11225,
+  "lzma": 9996,
+  "doc_gzip_alone": 30970,
+  "categories": {
+   "prompt as function argument": 45188,
+   "prompt in model span": 46662,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1439
+  },
+  "copy_gaps": [
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4727,
+   4727,
+   4727,
+   4727,
+   4727,
+   4727,
+   4727,
+   4727,
+   4727,
+   4727,
+   5553,
+   5553,
+   5553,
+   5553,
+   5553,
+   5553,
+   5553,
+   5553,
+   5553,
+   5553,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697,
+   5697
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 42230
+ },
+ {
+  "content": "random",
+  "pattern": "identical",
+  "size": 10240,
+  "calls": 10,
+  "doc_bytes": 10240,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 21980,
+  "sent": 21541,
+  "decoded": 247968,
+  "regzip": 21541,
+  "lzma": 19040,
+  "doc_gzip_alone": 76810,
+  "categories": {
+   "prompt as function argument": 112772,
+   "prompt in model span": 114246,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1438
+  },
+  "copy_gaps": [
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10870,
+   10870,
+   10870,
+   10870,
+   10870,
+   10870,
+   10870,
+   10870,
+   10870,
+   10870,
+   11698,
+   11698,
+   11698,
+   11698,
+   11698,
+   11698,
+   11698,
+   11698,
+   11698,
+   11698,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841,
+   11841
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 103670
+ },
+ {
+  "content": "random",
+  "pattern": "identical",
+  "size": 32768,
+  "calls": 10,
+  "doc_bytes": 32768,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 67042,
+  "sent": 558392,
+  "decoded": 743674,
+  "regzip": 558392,
+  "lzma": 53476,
+  "doc_gzip_alone": 246080,
+  "categories": {
+   "prompt as function argument": 360602,
+   "prompt in model span": 362076,
+   "other attributes": 16672,
+   "span ids, names and times": 2862,
+   "resource and batch envelope": 1462
+  },
+  "copy_gaps": [
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33162,
+   33162,
+   33162,
+   33162,
+   33162,
+   33162,
+   33162,
+   33162,
+   33162,
+   33162,
+   33403,
+   33403,
+   33403,
+   33403,
+   33403,
+   33403,
+   33403,
+   33403,
+   33403,
+   33403,
+   34230,
+   34230,
+   34230,
+   34230,
+   34230,
+   34230,
+   34230,
+   34230,
+   34230,
+   34230,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373,
+   34373
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 328950
+ },
+ {
+  "content": "random",
+  "pattern": "identical",
+  "size": 102400,
+  "calls": 10,
+  "doc_bytes": 102400,
+  "requests": 2,
+  "spans": 20,
+  "pending_spans": 0,
+  "pending_bytes": 0,
+  "sent": 1553639,
+  "decoded": 2069294,
+  "regzip": 1553639,
+  "lzma": 158332,
+  "doc_gzip_alone": 768880,
+  "categories": {
+   "prompt as function argument": 1024140,
+   "prompt in model span": 1025480,
+   "other attributes": 15620,
+   "span ids, names and times": 2600,
+   "resource and batch envelope": 1454
+  },
+  "copy_gaps": [
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   102978,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008,
+   104008
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   }
+  ],
+  "model_sent": 1025270
+ },
+ {
+  "content": "english",
+  "pattern": "independent",
+  "size": 1024,
+  "calls": 10,
+  "doc_bytes": 1024,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 3572,
+  "sent": 8456,
+  "decoded": 45443,
+  "regzip": 8574,
+  "lzma": 7780,
+  "doc_gzip_alone": 4765,
+  "categories": {
+   "prompt as function argument": 11396,
+   "prompt in model span": 13119,
+   "other attributes": 16652,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1436
+  },
+  "copy_gaps": [],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 11735
+ },
+ {
+  "content": "english",
+  "pattern": "independent",
+  "size": 4096,
+  "calls": 10,
+  "doc_bytes": 4096,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 9770,
+  "sent": 25682,
+  "decoded": 113759,
+  "regzip": 25812,
+  "lzma": 21528,
+  "doc_gzip_alone": 17143,
+  "categories": {
+   "prompt as function argument": 45188,
+   "prompt in model span": 47619,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1440
+  },
+  "copy_gaps": [],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 43109
+ },
+ {
+  "content": "english",
+  "pattern": "independent",
+  "size": 10240,
+  "calls": 10,
+  "doc_bytes": 10240,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 22132,
+  "sent": 78213,
+  "decoded": 249851,
+  "regzip": 78378,
+  "lzma": 44296,
+  "doc_gzip_alone": 39036,
+  "categories": {
+   "prompt as function argument": 112772,
+   "prompt in model span": 116127,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1440
+  },
+  "copy_gaps": [],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 105399
+ },
+ {
+  "content": "english",
+  "pattern": "independent",
+  "size": 32768,
+  "calls": 10,
+  "doc_bytes": 32768,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 67628,
+  "sent": 256855,
+  "decoded": 750075,
+  "regzip": 257411,
+  "lzma": 131756,
+  "doc_gzip_alone": 119857,
+  "categories": {
+   "prompt as function argument": 360602,
+   "prompt in model span": 368477,
+   "other attributes": 16672,
+   "span ids, names and times": 2862,
+   "resource and batch envelope": 1462
+  },
+  "copy_gaps": [],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 334765
+ },
+ {
+  "content": "english",
+  "pattern": "independent",
+  "size": 102400,
+  "calls": 10,
+  "doc_bytes": 102400,
+  "requests": 2,
+  "spans": 20,
+  "pending_spans": 0,
+  "pending_bytes": 0,
+  "sent": 672769,
+  "decoded": 2090510,
+  "regzip": 674811,
+  "lzma": 349084,
+  "doc_gzip_alone": 337674,
+  "categories": {
+   "prompt as function argument": 1024140,
+   "prompt in model span": 1046696,
+   "other attributes": 15620,
+   "span ids, names and times": 2600,
+   "resource and batch envelope": 1454
+  },
+  "copy_gaps": [],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   }
+  ],
+  "model_sent": 1046486
+ },
+ {
+  "content": "english",
+  "pattern": "suffix",
+  "size": 1024,
+  "calls": 10,
+  "doc_bytes": 1027,
+  "requests": 1,
+  "spans": 20,
+  "pending_spans": 0,
+  "pending_bytes": 0,
+  "sent": 3009,
+  "decoded": 41216,
+  "regzip": 3009,
+  "lzma": 2652,
+  "doc_gzip_alone": 5676,
+  "categories": {
+   "prompt as function argument": 10390,
+   "prompt in model span": 11930,
+   "other attributes": 15570,
+   "span ids, names and times": 2580,
+   "resource and batch envelope": 746
+  },
+  "copy_gaps": [
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407,
+   1407
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   }
+  ],
+  "model_sent": 11740
+ },
+ {
+  "content": "english",
+  "pattern": "suffix",
+  "size": 4096,
+  "calls": 10,
+  "doc_bytes": 4099,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 9814,
+  "sent": 8813,
+  "decoded": 114143,
+  "regzip": 8825,
+  "lzma": 7572,
+  "doc_gzip_alone": 16946,
+  "categories": {
+   "prompt as function argument": 45221,
+   "prompt in model span": 47971,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1439
+  },
+  "copy_gaps": [
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4479,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489,
+   4489
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 43420
+ },
+ {
+  "content": "english",
+  "pattern": "suffix",
+  "size": 10240,
+  "calls": 10,
+  "doc_bytes": 10243,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 22126,
+  "sent": 14171,
+  "decoded": 249576,
+  "regzip": 14288,
+  "lzma": 11372,
+  "doc_gzip_alone": 35149,
+  "categories": {
+   "prompt as function argument": 112805,
+   "prompt in model span": 115819,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1440
+  },
+  "copy_gaps": [
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10623,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633,
+   10633
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 105100
+ },
+ {
+  "content": "english",
+  "pattern": "suffix",
+  "size": 32768,
+  "calls": 10,
+  "doc_bytes": 32771,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 67606,
+  "sent": 209155,
+  "decoded": 749878,
+  "regzip": 209996,
+  "lzma": 26608,
+  "doc_gzip_alone": 102273,
+  "categories": {
+   "prompt as function argument": 360635,
+   "prompt in model span": 368247,
+   "other attributes": 16672,
+   "span ids, names and times": 2862,
+   "resource and batch envelope": 1462
+  },
+  "copy_gaps": [
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33155,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165,
+   33165
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 334560
+ },
+ {
+  "content": "english",
+  "pattern": "suffix",
+  "size": 102400,
+  "calls": 10,
+  "doc_bytes": 102403,
+  "requests": 3,
+  "spans": 24,
+  "pending_spans": 4,
+  "pending_bytes": 417248,
+  "sent": 818212,
+  "decoded": 2510425,
+  "regzip": 820415,
+  "lzma": 118776,
+  "doc_gzip_alone": 339024,
+  "categories": {
+   "prompt as function argument": 1229004,
+   "prompt in model span": 1258356,
+   "other attributes": 17784,
+   "span ids, names and times": 3124,
+   "resource and batch envelope": 2157
+  },
+  "copy_gaps": [
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102787,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797,
+   102797
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 1048420
+ },
+ {
+  "content": "english",
+  "pattern": "identical",
+  "size": 1024,
+  "calls": 10,
+  "doc_bytes": 1024,
+  "requests": 1,
+  "spans": 20,
+  "pending_spans": 0,
+  "pending_bytes": 0,
+  "sent": 2986,
+  "decoded": 41166,
+  "regzip": 2986,
+  "lzma": 2632,
+  "doc_gzip_alone": 5700,
+  "categories": {
+   "prompt as function argument": 10360,
+   "prompt in model span": 11910,
+   "other attributes": 15570,
+   "span ids, names and times": 2580,
+   "resource and batch envelope": 746
+  },
+  "copy_gaps": [
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404,
+   1404
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   }
+  ],
+  "model_sent": 11720
+ },
+ {
+  "content": "english",
+  "pattern": "identical",
+  "size": 4096,
+  "calls": 10,
+  "doc_bytes": 4096,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 9752,
+  "sent": 8599,
+  "decoded": 113460,
+  "regzip": 8610,
+  "lzma": 7408,
+  "doc_gzip_alone": 17740,
+  "categories": {
+   "prompt as function argument": 45188,
+   "prompt in model span": 47322,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1438
+  },
+  "copy_gaps": [
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4476,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486,
+   4486
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 42830
+ },
+ {
+  "content": "english",
+  "pattern": "identical",
+  "size": 10240,
+  "calls": 10,
+  "doc_bytes": 10240,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 22146,
+  "sent": 12097,
+  "decoded": 249796,
+  "regzip": 12506,
+  "lzma": 9496,
+  "doc_gzip_alone": 24640,
+  "categories": {
+   "prompt as function argument": 112772,
+   "prompt in model span": 116072,
+   "other attributes": 16672,
+   "span ids, names and times": 2840,
+   "resource and batch envelope": 1440
+  },
+  "copy_gaps": [
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10620,
+   10630,
+   10630,
+   10630,
+   10630,
+   10630,
+   10630,
+   10630,
+   10630,
+   10630,
+   10630
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 105330
+ },
+ {
+  "content": "english",
+  "pattern": "identical",
+  "size": 32768,
+  "calls": 10,
+  "doc_bytes": 32768,
+  "requests": 2,
+  "spans": 22,
+  "pending_spans": 2,
+  "pending_bytes": 67727,
+  "sent": 224207,
+  "decoded": 751209,
+  "regzip": 224964,
+  "lzma": 27296,
+  "doc_gzip_alone": 106220,
+  "categories": {
+   "prompt as function argument": 360602,
+   "prompt in model span": 369611,
+   "other attributes": 16672,
+   "span ids, names and times": 2862,
+   "resource and batch envelope": 1462
+  },
+  "copy_gaps": [
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152,
+   33152
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": true
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   }
+  ],
+  "model_sent": 335800
+ },
+ {
+  "content": "english",
+  "pattern": "identical",
+  "size": 102400,
+  "calls": 10,
+  "doc_bytes": 102400,
+  "requests": 2,
+  "spans": 20,
+  "pending_spans": 0,
+  "pending_bytes": 0,
+  "sent": 679707,
+  "decoded": 2088964,
+  "regzip": 680558,
+  "lzma": 77160,
+  "doc_gzip_alone": 337850,
+  "categories": {
+   "prompt as function argument": 1024140,
+   "prompt in model span": 1045150,
+   "other attributes": 15620,
+   "span ids, names and times": 2600,
+   "resource and batch envelope": 1454
+  },
+  "copy_gaps": [
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784,
+   102784
+  ],
+  "order": [
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire",
+    "name": "Calling __main__.classify",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   },
+   {
+    "scope": "logfire.openai",
+    "name": "Chat Completion with {request_data[model",
+    "pending": false
+   }
+  ],
+  "model_sent": 1044940
+ }
+]

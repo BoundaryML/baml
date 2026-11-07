@@ -252,3 +252,45 @@ Method (`experiments/searchable.py --vendors bcs`): the BAML CLI runs `Classify`
 | Datadog APM (spans search) | 6 | 37.8 s | 34.9–54.7 s |
 
 A filter on a captured value (`input_args['text'] like 'abc%'`) took 6.3 s over the whole project because it loads values from content-addressed storage (336 loads, 6.2 MB read). Filters on span columns such as `process_id` answer in about 0.3–0.6 s.
+
+## 2026-11-07: E14 Logfire payload anatomy (`experiments/logfire_anatomy.py`, `results/logfire-anatomy.json`, `results/wire-english.json`)
+
+Question: why do Logfire's bytes per call jump around so much (2.2 KB vs 15.9 KB for the same 10 KiB prompt, and 1.6× the prompt at 100 KiB)? Method: the Python `classify` app with Logfire sends to a local sink that keeps every export body. Each body is gunzipped, decoded as OTLP, and split into categories by exact protobuf size (`KeyValue.ByteSize()`, `Span.ByteSize()`). The decoded bodies are then recompressed with gzip level 6 (which reproduces the SDK's bytes exactly) and with lzma (8 MB window) as a counterfactual. Sweep: 10 calls × {random, English} × {independent, suffix, identical} documents × {1, 4, 10, 32, 100} KiB, 30 runs.
+
+English documents are slices of unique docstring lines from the standard library and the venv's packages (`lab/corpus.py`, 5 MB, lines matching Logfire's scrub patterns removed), so gzip shrinks them to 31–50% instead of 75% for random characters. A first English run sliced a 491 KB corpus at random offsets, so ten 100 KiB documents overlapped; it was discarded and rerun with disjoint slices.
+
+**Where the bytes go before compression** (per call, random independent documents):
+
+| document | prompt as function argument | prompt in model span | other attributes | span ids, names, times | envelope | total |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 KiB | 1,140 | 1,287 | 1,665 | 284 | 144 | 4,519 |
+| 10 KiB | 10,255 | 11,425 | 1,676 | 284 | 144 | 23,783 |
+| 100 KiB | 102,414 | 102,548 | 1,562 | 260 | 145 | 206,929 |
+
+The prompt is carried twice: as the `text` argument on `Calling __main__.classify` and inside `gen_ai.input.messages` on the model span. Fixed metadata is about 2 KB per call (mostly `logfire.json_schema`, `logfire.msg_template`, tags, code location). Pending spans add a third copy only for spans still open when an export fires: 2 of 22 spans in most runs, 0 at 100 KiB.
+
+**Why gzip removes one copy in some runs and not others.** The OTLP body groups spans by instrumentation scope: all ten `logfire.openai` model spans first, then all ten `logfire` function spans. So the two copies of the same document sit about ten spans apart. gzip can only refer back 32 KB.
+
+| pattern | 1 KiB | 4 KiB | 10 KiB | 32 KiB | 100 KiB |
+|---|---:|---:|---:|---:|---:|
+| random, independent: sent per call | 1,281 | 6,365 | 16,715 | 55,796 | 155,351 |
+| random, suffix (old 10v): sent per call | 330 | 1,128 | 2,212 | 55,799 | 186,420 |
+| random, identical: sent per call | 559 | 1,122 | 2,154 | 55,839 | 155,364 |
+| random, identical: lzma per call | 517 | 1,000 | 1,904 | 5,348 | 15,833 |
+| median gap between copies, identical | 2.5 KB | 5.6 KB | 11.7 KB | 34.2 KB | 103 KB |
+
+- Independent documents: the copies are 16–930 KB apart, beyond the window, so gzip pays for both. At 100 KiB, 155 KB sent = 2.02 × the 76.9 KB of one gzipped document. lzma, which can see the earlier copy, sends 77.5 KB, one copy.
+- Identical or near-identical documents: up to 10 KiB the previous call's copy is within 32 KB, so each call after the first costs about 2 KB. At 32 KiB the gap reaches 34 KB and the saving disappears in one step (2.2 KB → 55.8 KB per call). This is the cliff that made the first E1 run look 4–8× too small at 1 and 10 KiB.
+
+**Content matters as much as size.** English independent documents: 846 / 2,568 / 7,821 / 25,686 / 67,277 B per call at 1/4/10/32/100 KiB, 34–60% less than random characters. The same switch across stacks (`wire.py --content english`, classify, 10 independent documents, per call):
+
+| stack | 10 KiB random → English | 100 KiB random → English |
+|---|---|---|
+| Logfire | 15.9 → 8.1 KB | 147.7 → 65.0 KB |
+| OTel | 7.9 → 3.6 KB | 77.2 → 33.2 KB |
+| Datadog | 22.6 → 23.2 KB | 206.9 → 213.4 KB |
+| BAML CLI | 39.6 → 39.9 KB | 218.4 → 220.1 KB |
+
+Datadog and BAML send uncompressed, so they don't shrink. BCS billed bytes don't change either (10 KiB: 219,346 → 221,632 B for ten calls; the English documents JSON-escape their newlines). With prose prompts BAML sends about 5× Logfire's bytes at 10 KiB and 3.4× at 100 KiB.
+
+None of this changes Logfire's bill. It bills 2 records per `classify` call whatever the size.
