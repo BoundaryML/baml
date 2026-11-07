@@ -1,0 +1,276 @@
+{
+  "023": [
+    {
+      "template_bench": {
+        "ms": 330.679,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 973.799583,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 145.949333,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 231.829042,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 23.17975
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 49.590858399999995
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 45.830525
+      }
+    },
+    {
+      "template_bench": {
+        "ms": 326.064583,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 992.369333,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 146.088458,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 230.496083,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 23.515508399999998
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 50.028033199999996
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 48.2713084
+      }
+    },
+    {
+      "template_bench": {
+        "ms": 329.341333,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 956.83975,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 144.632125,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 229.978375,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 23.1931166
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 49.6915084
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 45.48275
+      }
+    },
+    {
+      "template_bench": {
+        "ms": 318.356542,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 947.85925,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 148.391917,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 233.863917,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 24.4485082
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 52.08445
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 46.2307334
+      }
+    },
+    {
+      "template_bench": {
+        "ms": 332.680083,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 1058.935417,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 171.743208,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 274.429041,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 45.039766799999995
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 79.7926834
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 61.9363418
+      }
+    }
+  ],
+  "024": [
+    {
+      "template_bench": {
+        "ms": 8.281209,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 15.574,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 31.098042,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 140.954125,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 26.329566800000002
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 40.9732666
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 16.1213584
+      }
+    },
+    {
+      "template_bench": {
+        "ms": 8.749458,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 15.895042,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 31.097625,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 137.5315,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 25.7558416
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 41.8220918
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 16.3085332
+      }
+    },
+    {
+      "template_bench": {
+        "ms": 8.2445,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 15.388542,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 31.429958,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 138.644666,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 25.6509918
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 40.633233399999995
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 16.801025000000003
+      }
+    },
+    {
+      "template_bench": {
+        "ms": 8.500583,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 15.916625,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 32.776375,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 136.789583,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 25.793
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 41.733824999999996
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 16.6251
+      }
+    },
+    {
+      "template_bench": {
+        "ms": 8.997959,
+        "result": 1253253
+      },
+      "join_bench": {
+        "ms": 16.18925,
+        "result": 1253253
+      },
+      "enum_bench": {
+        "ms": 33.274834,
+        "result": 21847
+      },
+      "nbody_bench": {
+        "ms": 204.474125,
+        "result": -338164425
+      },
+      "python_sync_noop": {
+        "us_per_call": 68.58314999999999
+      },
+      "python_async_sequential_noop": {
+        "us_per_call": 117.938225
+      },
+      "python_async_gather_noop": {
+        "us_per_call": 28.9458916
+      }
+    }
+  ]
+}

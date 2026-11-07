@@ -1,81 +1,86 @@
-# BAML 0.23.0 release audit
+# BAML 0.24.0 release audit
 
-Prepared on 2026-10-25. The live canary manifest reports 0.22.2, released 2026-10-13.
+Prepared on 2026-11-05 (Pacific). These immutable boundaries apply to the inventory, effects, release post, and follow-up checklist.
 
-- Lower: `baml-language-0.22.2`, `01f5c412c73c213846ea8cb6ead89d303b053672`.
-- Upper: `origin/canary`, resolved once to `303930923cd3f2bfc68ebca79dee96f5779175a8`.
-- Range includes all 71 commits, across the entire repository.
-- Release metadata PR: https://github.com/BoundaryML/baml/pull/5411.
-- Exact upper-source compiler: published nightly `0.22.3-nightly.20261024.a` (its tag resolves to the upper SHA).
-- Release metadata changes do not change the compiler examples. If more product changes merge before the release, reconcile the range before publishing.
+- Lower: `baml-language-0.23.0`, `f0f0bb5135bba599c11a32cc4d631f2f66f1f96f`.
+- Upper: published `baml-language-0.24.0`, `dec4713a0e7c9699442bf5855b4f327063f769c5`.
+- Inventory: 84 commits/PRs across the entire repository, in chronological order.
+- Scope follows the user's just-published-release request: use the published tag rather than later `origin/canary` commits. At preparation, `origin/canary` was `853072242cf951cca227759a130b9cb91d60e9a0`; its 11 later commits are excluded, including `package_name` (#5532/#5533), BTELCAS v6 (#5543), and the Homebrew publication fix (#5546).
+- GitHub release: https://github.com/BoundaryML/baml/releases/tag/baml-language-0.24.0, published 2026-11-05T22:23:21Z. Paired wrapper: 0.3.0.
+- Publication is incomplete at audit time: https://github.com/BoundaryML/baml/actions/runs/42111122075 failed at Homebrew publishing. Go mirror publishing, manifest promotion, developer docs, and final artifact verification were skipped. The canary manifest still reports 0.23.0. This does not change the tagged source boundary. Recheck the checklist's publication gates before merging the public post or sending announcements.
+- `git fetch origin --tags` refreshed canary but reported two unrelated pre-existing v0 tag conflicts (`0.226.3`, `0.226.3-engine`); neither was overwritten. Both v1 release tags were resolved and checked against GitHub release metadata.
 
-Each numbered row is a distinct effect, classified once. A broad PR may have several independently classified effects.
+Each row is one effect with one classification. Broad PRs can have several distinct effects. Native compiler delivery and its in-range refinements aggregate into one headline; performance-only FEATURE rows use final-release measurements and scoped PR analysis in [the performance audit](changelog-0.24.0-performance.md). Source-level corrections and measured behavior were checked at the pinned upper.
 
-1. **FEATURE**, [#5200](https://github.com/BoundaryML/baml/pull/5200): OpenAI Decisions maps typed predicates, choices, and class leaves to the Decisions endpoint, including images.
-2. **BUGFIX**, [#5252](https://github.com/BoundaryML/baml/pull/5252): SAP uses realized generic return types when constructing the parse schema.
-3. **BUGFIX**, [#5243](https://github.com/BoundaryML/baml/pull/5243): Unresolved MIR members produce diagnostics instead of emitting unsafe fallback access; use map indexing instead of unresolved dot access.
-4. **FEATURE**, [#5225](https://github.com/BoundaryML/baml/pull/5225): Claude Code receives images/PDFs and long prompts through stream-JSON stdin; unsupported audio/video is rejected.
-5. **BUGFIX**, [#5223](https://github.com/BoundaryML/baml/pull/5223): Runtime directory initialization accepts trailing forward slashes.
-6. **BUGFIX**, [#5038](https://github.com/BoundaryML/baml/pull/5038): Generic arithmetic receiver inference no longer crashes on the reported method chains.
-7. **FEATURE**, [#5253](https://github.com/BoundaryML/baml/pull/5253): Cached string lengths and ASCII prefixes speed specific string microbenchmarks; publish the measured workload and regression limits.
-8. **BUGFIX**, [#5253](https://github.com/BoundaryML/baml/pull/5253): Deep appended strings no longer overflow the stack while being flattened or traversed.
-9. **BREAKING_CHANGE**, [#5254](https://github.com/BoundaryML/baml/pull/5254): Package-local cross-namespace paths require root; the configured self-name and partial namespace paths no longer substitute for it.
-10. **BUGFIX**, [#5254](https://github.com/BoundaryML/baml/pull/5254): JSON decoding uses an explicit stack and cyclic input conversion fails with a catchable error.
-11. **BUGFIX**, [#5271](https://github.com/BoundaryML/baml/pull/5271): Shipped Rust dependencies receive the documented networking/TLS/browser advisory updates.
-12. **BUGFIX**, [#5273](https://github.com/BoundaryML/baml/pull/5273): Generated persisted bytecode excludes tests/testsets and their absolute source paths; regenerate SDKs.
-13. **BUGFIX**, [#5275](https://github.com/BoundaryML/baml/pull/5275): SDK distributions include the Apache license and npm metadata declares it.
-14. **BUGFIX**, [#5280](https://github.com/BoundaryML/baml/pull/5280): Initial cloud telemetry failure warns and continues by default; explicit abort policies remain available.
-15. **BREAKING_CHANGE**, [#5268](https://github.com/BoundaryML/baml/pull/5268): Reflection kind views and constructors move to root classes; regenerate host bindings and rename calls.
-16. **FEATURE**, [#5272](https://github.com/BoundaryML/baml/pull/5272): Named concrete types expose static type(); Type.of<T>() remains for compound types and type parameters.
-17. **BREAKING_CHANGE**, [#5278](https://github.com/BoundaryML/baml/pull/5278): Replace body-level unreflect aliases with let type bindings.
-18. **BREAKING_CHANGE**, [#5276](https://github.com/BoundaryML/baml/pull/5276): Reflection get lookups throw NotFound; use find lookups to retain nullable misses.
-19. **BREAKING_CHANGE**, [#5277](https://github.com/BoundaryML/baml/pull/5277): Type-taking reflection APIs accept TypeView; update invariant collection annotations, metadata() readers, and assumptions about to_string().
-20. **FEATURE**, [#5279](https://github.com/BoundaryML/baml/pull/5279): Class.extends<I> builds runtime classes from interface fields and implementations.
-21. **FEATURE**, [#5269](https://github.com/BoundaryML/baml/pull/5269): Builder.fields_from copies field metadata and skip flags, but not class metadata or implementations.
-22. **BREAKING_CHANGE**, [#5270](https://github.com/BoundaryML/baml/pull/5270): Field.type is non-null; remove unreachable null fallbacks.
-23. **BREAKING_CHANGE**, [#5297](https://github.com/BoundaryML/baml/pull/5297): Bounded let type requires diverging else, pending builder types cannot be bound, and invalid native reflection arguments consistently use reflect.errors.InvalidArgument.
-24. **BUGFIX**, [#5297](https://github.com/BoundaryML/baml/pull/5297): Custom TypeView implementations are materialized through as_type in all supported reflection entry points.
-25. **HEADLINE_CHANGE**, [#5282](https://github.com/BoundaryML/baml/pull/5282): AI executions own one operation through specs and streaming, with manual start_span lifecycle APIs; wrapper spans are suppressed.
-26. **BREAKING_CHANGE**, [#5261](https://github.com/BoundaryML/baml/pull/5261): ModelCall replaces LLMCall, turns form a tree, usage counts become nullable, requested/resolved models are separate, and SQL usage/cost surfaces migrate.
-27. **BUGFIX**, [#5261](https://github.com/BoundaryML/baml/pull/5261): Swift wrappers avoid shadowing a parameter named args.
-28. **BUGFIX**, [#5310](https://github.com/BoundaryML/baml/pull/5310): Cloud telemetry delivers owned function operations and their captures/usage; collectors must support the closed completion flag.
-29. **BUGFIX**, [#5316](https://github.com/BoundaryML/baml/pull/5316): TextMate and tree-sitter recognize let type declarations.
-30. **FEATURE**, [#5319](https://github.com/BoundaryML/baml/pull/5319): BAML_CONTEXT supplies launch context to packed executables and baml run, with explicit flag and stdin precedence.
-31. **BREAKING_CHANGE**, [#5317](https://github.com/BoundaryML/baml/pull/5317): Enforce exhaustive catches, keep ordinary wildcard panic policy, and compose catch chains as successive recovery stages.
-32. **BUGFIX**, [#5335](https://github.com/BoundaryML/baml/pull/5335): Expression-client AI functions and entry futures retain the original function's trace name.
-33. **BUGFIX**, [#5333](https://github.com/BoundaryML/baml/pull/5333): Deep host-argument validation reports type errors instead of letting mismatched scalar/container/class values reach unsafe VM operations.
-34. **BREAKING_CHANGE**, [#5345](https://github.com/BoundaryML/baml/pull/5345): String/backtick escapes decode strictly; migrate literal backslashes to raw quoted strings or escaped backslashes and update unsupported byte escapes.
-35. **BUGFIX**, [#5320](https://github.com/BoundaryML/baml/pull/5320): Rust union arms with colliding short names gain namespace-qualified variants; regenerate and update matches.
-36. **BUGFIX**, [#5356](https://github.com/BoundaryML/baml/pull/5356): The v1 trust stores and TLS verifier receive updated compromised-CA distrust; mixed v0/dev-tool changes are not separately announced.
-37. **HEADLINE_CHANGE**, [#5325](https://github.com/BoundaryML/baml/pull/5325): File-scope const globals initialize once, share heap values, and cannot be rebound; globals use const and locals use let.
-38. **FEATURE**, [#5361](https://github.com/BoundaryML/baml/pull/5361): Package.globals/get_global/find_global discover global and client values, with existing initialization and type checks.
-39. **BUGFIX**, [#5364](https://github.com/BoundaryML/baml/pull/5364): The user lesson uses const for the global annotation and let inside a function.
-40. **BREAKING_CHANGE**, [#5357](https://github.com/BoundaryML/baml/pull/5357): Newlines separate ambiguous expression starts; parenthesize intended multiline subtraction/call/index continuations before reformatting.
-41. **FEATURE**, [#5371](https://github.com/BoundaryML/baml/pull/5371): OpenAI ChatClient and ResponsesClient optionally use native structured outputs.
-42. **BREAKING_CHANGE**, [#5371](https://github.com/BoundaryML/baml/pull/5371): Schema generation rejects unknown and corrects bigint schema representation; use JSON-compatible concrete types.
-43. **FEATURE**, [#5169](https://github.com/BoundaryML/baml/pull/5169): Record class/enum definitions and reconstruct recorded runtime type expressions with SQL baml_code.
-44. **BUGFIX**, [#5358](https://github.com/BoundaryML/baml/pull/5358): Instance methods resolve through aliases.
-45. **BUGFIX**, [#5020](https://github.com/BoundaryML/baml/pull/5020): Reject non-place assignments; assign individual variables, fields, or indices instead.
-46. **BUGFIX**, [#5291](https://github.com/BoundaryML/baml/pull/5291): Omitted nullable host class fields become null, while required/misspelled fields retain errors.
-47. **BREAKING_CHANGE**, [#5377](https://github.com/BoundaryML/baml/pull/5377): TypeScript nullable class keys become optional; strict reads must handle undefined.
-48. **BUGFIX**, [#5379](https://github.com/BoundaryML/baml/pull/5379): Bound final cloud delivery to five seconds; pending data can be discarded at the deadline and stdout is not closed early.
-49. **BUGFIX**, [#5380](https://github.com/BoundaryML/baml/pull/5380): Cloud telemetry uses proxy environment variables, including NO_PROXY exclusions.
-50. **FEATURE**, [#5293](https://github.com/BoundaryML/baml/pull/5293): Rust exit shutdown and explicit runtime::shutdown plus Node package-root shutdownRuntime finish in-flight work and telemetry.
-51. **FEATURE**, [#5372](https://github.com/BoundaryML/baml/pull/5372): Required Rust class arguments accept Borrow<Class> across generated call forms; async references must outlive the future.
-52. **BUGFIX**, [#5373](https://github.com/BoundaryML/baml/pull/5373): Native HTTP requests share a bounded client/connection pool keyed by timeout and proxy/TLS environment settings.
-53. **BUGFIX**, [#5374](https://github.com/BoundaryML/baml/pull/5374): Rust class cycles through aliases are boxed; update affected field construction to Box::new.
-54. **FEATURE**, [#5287](https://github.com/BoundaryML/baml/pull/5287): Rust emits json-backed types/functions using baml_bridge::Json; overlapping bare-json unions still skip.
-55. **FEATURE**, [#5375](https://github.com/BoundaryML/baml/pull/5375): Generated Rust serde feature supports eligible structural types; declaration-order union decoding differs from BAML best-match decoding.
-56. **FEATURE**, [#5389](https://github.com/BoundaryML/baml/pull/5389): Publisher http_bodies=false omits network bodies and error text; function captures and function errors remain independent.
-57. **BUGFIX**, [#5388](https://github.com/BoundaryML/baml/pull/5388): Generated artifacts tolerate unusable telemetry levels/empty destinations and fall back locally for malformed URLs, with documented credential/CLI exceptions.
-58. **BUGFIX**, [#5390](https://github.com/BoundaryML/baml/pull/5390): Release capture memory as delivery progresses, prepare/upload concurrently, and acknowledge only contiguous stored recordings.
-59. **BUGFIX**, [#5387](https://github.com/BoundaryML/baml/pull/5387): Union members preserve complete function type structure.
-60. **BUGFIX**, [#5405](https://github.com/BoundaryML/baml/pull/5405): Optional chaining expands nested nullable unions correctly.
-61. **FEATURE**, [#5398](https://github.com/BoundaryML/baml/pull/5398): LLM/SAP/tool schemas prune non-JSON union alternatives while rejecting entirely impossible outputs.
-62. **BREAKING_CHANGE**, [#5399](https://github.com/BoundaryML/baml/pull/5399): Remove redundant JSON/YAML names, honor FromJson in decode, change missing-field error paths, and allow stringify to throw SerializationError.
-63. **FEATURE**, [#5399](https://github.com/BoundaryML/baml/pull/5399): JSON naming, null omission, and configurable indent options operate on typed values while preserving null data in containers.
-64. **FEATURE**, [#5402](https://github.com/BoundaryML/baml/pull/5402): Direct JSON conversion improves measured release-build speedtest workloads; cache scope is one call.
-65. **BUGFIX**, [#5402](https://github.com/BoundaryML/baml/pull/5402): Serialization detects cycles and processes deeply nested values without the intermediate recursive serde tree.
-66. **BREAKING_CHANGE**, [#5404](https://github.com/BoundaryML/baml/pull/5404): Best-match JSON unions replace first-fit, non-finite JSON text throws, reason strings become specific, and null-admitting fields may be omitted.
-67. **BUGFIX**, [#5401](https://github.com/BoundaryML/baml/pull/5401): Inference failures preserve diagnostics, callbacks with unpinned throws default appropriately, plain-binding matches can infer, and checked emission cannot ignore invalid dependencies.
-68. **BUGFIX**, [#5386](https://github.com/BoundaryML/baml/pull/5386): VM threads use a 10 MiB stack budget instead of 256 frames; overflow remains a named catchable panic.
+1. **HEADLINE_CHANGE**, [#5264](https://github.com/BoundaryML/baml/pull/5264): Opt-in native Rust packing compiles admitted functions and retains bytecode fallback. Requires matching source checkout and Cargo; native targets only.
+2. **FEATURE**, [#5417](https://github.com/BoundaryML/baml/pull/5417): Default builds avoid lock deadlock bookkeeping. Release n-body measurement provides a scoped net comparison, not an isolated PR gain.
+3. **FEATURE**, [#5418](https://github.com/BoundaryML/baml/pull/5418): Interface resolution is cached across calls with invalidation for runtime witnesses, publication, and GC. Release enum benchmark verifies the combined effect.
+4. **FEATURE**, [#5414](https://github.com/BoundaryML/baml/pull/5414): baml.FromLlmOutput exposes an associated Shape for model schemas, output formats, SAP, structured outputs and tools; it remains separate from FromJson.
+5. **BREAKING_CHANGE**, [#5414](https://github.com/BoundaryML/baml/pull/5414): The five time types use model-facing string representations. Update model fixtures, schemas, prompts, tool payloads and structured-output integrations.
+6. **BUGFIX**, [#5414](https://github.com/BoundaryML/baml/pull/5414): VM failures returned after native callbacks reach catch directly around the native call.
+7. **FEATURE**, [#5415](https://github.com/BoundaryML/baml/pull/5415): reflect.Class.instantiate<T> and reflect.Enum.value_of<T> construct values using declared field/variant names and preserve identities.
+8. **BUGFIX**, [#5415](https://github.com/BoundaryML/baml/pull/5415): OpenAI Decisions and typesafeai retain enum identity in unions containing an equal string literal.
+9. **BUGFIX**, [#5420](https://github.com/BoundaryML/baml/pull/5420): Settled-future collectors honor pending cancellation before consuming an already settled input. Ordinary await on a settled future keeps its behavior.
+10. **BUGFIX**, [#5385](https://github.com/BoundaryML/baml/pull/5385): Bound methods can be assigned to class fields, array elements and map values without emission/stack-carry panics, including call-produced receivers.
+11. **FEATURE**, [#5429](https://github.com/BoundaryML/baml/pull/5429): Allocation removes slot-directory read locks and finalizer scans visit candidates. Isolated shared-array-push regression is retained in performance caveats.
+12. **FEATURE**, [#5430](https://github.com/BoundaryML/baml/pull/5430): Go generates generic functions with defaults/callback arguments. Go/Rust generation warns for skipped local symbols; --show-all-skips expands dependency/stdlib summaries.
+13. **FEATURE**, [#5431](https://github.com/BoundaryML/baml/pull/5431): VM operation-cache hashing avoids SipHash overhead; grouped interface measurement is a whole-release comparison.
+14. **FEATURE**, [#5432](https://github.com/BoundaryML/baml/pull/5432): Primitive/string interpolation avoids repeated generic conversion. Use final-release string data rather than the superseded intermediate template measurement.
+15. **FEATURE**, [#5433](https://github.com/BoundaryML/baml/pull/5433): Native join appends into one buffer and preserves ToString overrides and order. Final-release workload measures the complete join kernel.
+16. **BREAKING_CHANGE**, [#5359](https://github.com/BoundaryML/baml/pull/5359): Typed bridge encoding rejects ambiguous host collections instead of first-arm union guessing. Add concrete BAML boundary wrappers or nominal classes, upgrade bridges/toolchain together, regenerate artifacts, and migrate handwritten ABI4 consumers to ABI5 HostCallCompletion.
+17. **FEATURE**, [#5359](https://github.com/BoundaryML/baml/pull/5359): Python set_unhandled_spawn_error_handler lets hosts replace the default unobserved-task failure policy; callbacks run on a runtime thread and must not re-enter BAML.
+18. **BUGFIX**, [#5359](https://github.com/BoundaryML/baml/pull/5359): Inferred generic function-value specialization survives returned values, host handles and invocation.
+19. **BUGFIX**, [#5439](https://github.com/BoundaryML/baml/pull/5439): Whitespace-separated - value continues subtraction across a newline. Use -value or an explicit preceding semicolon for a separate negation, then format.
+20. **FEATURE**, [#5424](https://github.com/BoundaryML/baml/pull/5424): baml codequality reports project/file/function structure metrics; its final grouped effect includes numeric-first lists and exact NPath counts.
+21. **BUGFIX**, [#5446](https://github.com/BoundaryML/baml/pull/5446): Bundled agent examples and API names are corrected and compile/format/test checked.
+22. **FEATURE**, [#5449](https://github.com/BoundaryML/baml/pull/5449): Codequality lists put numbers first, default to the ten worst rows, and support --all and --metrics.
+23. **FEATURE**, [#5448](https://github.com/BoundaryML/baml/pull/5448): Bundled agent skill includes style guidance and language/workflow explanations. Refresh with baml agent install and reload.
+24. **FEATURE**, [#5452](https://github.com/BoundaryML/baml/pull/5452): Bundled skill incorporates ongoing complexity review with baml codequality, grouped with the shipped style guidance.
+25. **FEATURE**, [#5453](https://github.com/BoundaryML/baml/pull/5453): Codequality NPath uses unbounded counts including exact JSON integers beyond u64.
+26. **FEATURE**, [#5455](https://github.com/BoundaryML/baml/pull/5455): baml fmt --check writes nothing and returns1 for differences or4 for read/parse errors; conflicts with --dry-run.
+27. **BUGFIX**, [#5466](https://github.com/BoundaryML/baml/pull/5466): Multi-backtick strings accept code-like keywords, URLs, and comment/glob text without false termination errors.
+28. **BUGFIX**, [#5467](https://github.com/BoundaryML/baml/pull/5467): Formatter/LSP preserve first newline style; compilation normalizes CRLF/bareCR to LF. Write an explicit \r escape where a literal needs carriage returns.
+29. **FEATURE**, [#5470](https://github.com/BoundaryML/baml/pull/5470): The packed host drops the duplicate TLS provider. Combined final macOS ARM64 host is5.7% smaller than lower; no broad TLS security/speed claim.
+30. **BREAKING_CHANGE**, [#5471](https://github.com/BoundaryML/baml/pull/5471): Custom EventSource callbacks return nonempty Event[]|Done. Wrap events/batch backlog and never return an empty array; TurnStream.next already returned batches.
+31. **FEATURE**, [#5477](https://github.com/BoundaryML/baml/pull/5477): Chains of at least three string parts use one concatenation operation. Final-release measurements supersede earlier template-only numbers.
+32. **FEATURE**, [#5479](https://github.com/BoundaryML/baml/pull/5479): The packed host omits unused stdlib source text. Final published host byte sizes confirm the scoped release-level reduction.
+33. **FEATURE**, [#5481](https://github.com/BoundaryML/baml/pull/5481): Python/Rust naming_convention=language uses host naming and is the default for new configurations. Existing preserve-case remains valid. Opt-in requires updating generated imports/identifiers.
+34. **BUGFIX**, [#5480](https://github.com/BoundaryML/baml/pull/5480): Skill mismatch warnings show versions and refresh instructions. Reinstall/reload the skill; the hidden bypass still exists.
+35. **BUGFIX**, [#5482](https://github.com/BoundaryML/baml/pull/5482): Python bridge runtime metadata includes Pydantic; refresh package/lockfile for fresh generated SDK imports.
+36. **BREAKING_CHANGE**, [#5486](https://github.com/BoundaryML/baml/pull/5486): ai.Role in ordinary string interpolation is rejected, including nested containers/unions. Move markers into prompt templates, or use name/debug text intentionally.
+37. **BUGFIX**, [#5485](https://github.com/BoundaryML/baml/pull/5485): Local SDK traces use the enclosing cwd project. BAML_HOME overrides it; unwritable/missing project stores fall back home. Existing traces are not moved.
+38. **BREAKING_CHANGE**, [#5426](https://github.com/BoundaryML/baml/pull/5426): Wrapper0.3 replaces pin with project-local use; old user-default use needs --global. Remove --directory, update status consumers for JSON/local null versions and installation behavior, keep recorded channels until update. Wrapper telemetry controls are explicit.
+39. **BREAKING_CHANGE**, [#5456](https://github.com/BoundaryML/baml/pull/5456): exec/start_process/Process/ShellOutput become run/subprocess/Subprocess/ProcessOutput. Replace options structs, timeout_ms and stdin payloads; opt into capture/pipes and inherit_env=false when needed. Explicitly terminate background children; close/GC/cancel and wait timeouts leave them alive. signal becomes int?.
+40. **FEATURE**, [#5457](https://github.com/BoundaryML/baml/pull/5457): Filesystem metadata/rename/canonicalize/atomic-write/locking, host/path helpers, archive inspection/extraction, and comment-preserving TOML editing become available. write_atomic accepts bytes.
+41. **FEATURE**, [#5463](https://github.com/BoundaryML/baml/pull/5463): baml pack --host-binary selects a matching explicit host, supports a prebuilt cross target, and conflicts with --rust.
+42. **HEADLINE_CHANGE**, [#5422](https://github.com/BoundaryML/baml/pull/5422): Packed BAML implementation becomes the toolchain wrapper; installs missing managed CLIs and delegates language commands. Syntax/selection migration is covered under5426.
+43. **FEATURE**, [#5496](https://github.com/BoundaryML/baml/pull/5496): Runtime class first interface lookup scans only its own witnesses. Enum comparison is separately measured across full releases; no general dispatch speed claim.
+44. **BUGFIX**, [#5502](https://github.com/BoundaryML/baml/pull/5502): Stdlib documentation static calls include their baml namespace.
+45. **FEATURE**, [#5497](https://github.com/BoundaryML/baml/pull/5497): Idle-GC coordination avoids repeated wakeups between calls. Async/no-op release measurements are scoped; noisy slower sync control is disclosed.
+46. **BUGFIX**, [#5500](https://github.com/BoundaryML/baml/pull/5500): First termination signal cancels root execution so defer cleanup can run. Second signal/shutdown signal terminates immediately. Rebuild existing packs.
+47. **FEATURE**, [#5494](https://github.com/BoundaryML/baml/pull/5494): Vertex/Bedrock credential configuration accepts late-bound env references without credential-loading previews.
+48. **BREAKING_CHANGE**, [#5494](https://github.com/BoundaryML/baml/pull/5494): Partial explicit Bedrock credentials error; provide the complete pair or remove all overrides. Vertex project lookup respects selected identity; set project_id/GOOGLE_CLOUD_PROJECT if needed.
+49. **BREAKING_CHANGE**, [#5494](https://github.com/BoundaryML/baml/pull/5494): Captured ModelCall response bodies retain raw text instead of URL-secret scrubbing. Redact before storage or disable capture_wire. Native network-span http_bodies controls are a distinct scope.
+50. **BUGFIX**, [#5494](https://github.com/BoundaryML/baml/pull/5494): Credential-bearing URL/header/error diagnostics are scrubbed more consistently. Streaming failures preserve actual HTTP status classification.
+51. **BREAKING_CHANGE**, [#5509](https://github.com/BoundaryML/baml/pull/5509): Rust bridge stops forcing serde_json arbitrary_precision/preserve_order. Enable explicitly for exact wide JSON integers/key ordering; default numeric deserialization is restored. BAML map order and oversized Rust bigint-return limits remain.
+52. **BREAKING_CHANGE**, [#5491](https://github.com/BoundaryML/baml/pull/5491): Embedding verifies/copies an explicit single-environment ingestion key rather than minting a token. Set boundary.project plus producer.build.embed_telemetry_env/key-variable; remove old flag/settings; configure runtime override mappings explicitly and rebuild/regenerate.
+53. **BUGFIX**, [#5511](https://github.com/BoundaryML/baml/pull/5511): Go generic decoding restores generated class/enum/container union values after the within-range bridge change; regenerate decoder hooks.
+54. **FEATURE**, [#5508](https://github.com/BoundaryML/baml/pull/5508): Python loops with add_reader resolve completions on the loop thread in batches; other loops retain their previous path. Benchmark measures no-op scheduling/completion, not model work.
+55. **BREAKING_CHANGE**, [#5508](https://github.com/BoundaryML/baml/pull/5508): Shared native runtime broadens fork-after-parent-call restrictions across sync/async calls. Use spawn or start forked children before any parent BAML calls.
+56. **BUGFIX**, [#5518](https://github.com/BoundaryML/baml/pull/5518): Node early-exit cleanup no longer emits the misleading NAPI native-reference leak warning.
+57. **BUGFIX**, [#5521](https://github.com/BoundaryML/baml/pull/5521): Rust bridge diagnostics use log instead of stderr. Install/configure a logger and enable baml_bridge=debug when needed.
+58. **BUGFIX**, [#5516](https://github.com/BoundaryML/baml/pull/5516): POSIX/PowerShell installers fall back to plain toolchain use when older wrappers reject its help probe. Live script publication is separately gated.
+59. **BREAKING_CHANGE**, [#5519](https://github.com/BoundaryML/baml/pull/5519): Python/TS/Rust/Swift generated functions/methods/specs/streams use plain async names and _sync twins. Runtime helper Sync casing follows host conventions; regenerate and update calls. Other SDK conventions unchanged. Check generated collision suffixes, and keep Rust blocking calls outside entered Tokio runtimes, including spawn_blocking contexts.
+60. **HEADLINE_CHANGE**, [#5498](https://github.com/BoundaryML/baml/pull/5498): The new compiler uses task-local access for proven-local objects in native and optimized bytecode; shared/uncertain objects retain locks. Finalizer correction remains in upper. Aggregated with initial native compiler and5506, not a separate blanket speed claim.
+61. **FEATURE**, [#5503](https://github.com/BoundaryML/baml/pull/5503): Optimized bytecode array for-loops use live-length index walks. O0/native loop lowering unchanged; final released O2 array workload measures full kernel including setup.
+62. **HEADLINE_CHANGE**, [#5506](https://github.com/BoundaryML/baml/pull/5506): The first released native backend keeps hot arithmetic, heap and call checks inlinable with unchanged failure evidence. Part of native compilation headline; no unpinned benchmark ratio advertised.
+63. **FEATURE**, [#5524](https://github.com/BoundaryML/baml/pull/5524): Known compound words remain whole under Python/Rust language naming. This refines the new mode in5481, not the lower preserve-case default; nightly adopters may need identifier updates.
+64. **BREAKING_CHANGE**, [#5526](https://github.com/BoundaryML/baml/pull/5526): Returned callables use plain async invocation and call_sync/callSync blocking twins, matching generated APIs. Old call_async/callAsync removed; TS callback types admit promises.
+65. **FEATURE**, [#5527](https://github.com/BoundaryML/baml/pull/5527): Rust data constructors accept required fields and default optional fields to None. Existing new methods force a suffixed constructor; opaque handles receive none.
+66. **BUGFIX**, [#5531](https://github.com/BoundaryML/baml/pull/5531): The new task-local analysis shares values reachable by finalizers, preventing unsynchronized access during cleanup.
+67. **BUGFIX**, [#5537](https://github.com/BoundaryML/baml/pull/5537): Stable v1 action mirror tags are available. Sources move to packaging/github-actions while consumers retain BoundaryML/setup-baml@v1 and BoundaryML/baml-action@v1.
+68. **HEADLINE_CHANGE**, [#5483](https://github.com/BoundaryML/baml/pull/5483): Ships the BAML wrapper0.3.0 paired with language0.24.0, including package-manager artifacts. Version identity and publication are distinct from source completeness.
+
+## Validation
+
+Published 0.23.0/0.24.0 compilers and Python wheels/CFFI libraries were used for before/after execution. Generated Python, Rust, TypeScript and Go signatures were inspected. Rust blocking/async calls and returned callables were compiled and executed with both published bridge versions and matching shared libraries; the before fixture names the returned function parameter. TypeScript collision exports were generated with0.24.0. Language examples, process/event/time migrations, bound-method and newline regressions, and local captured-wire behavior were exercised. Role/prompt, cloud credential and capture declarations were compile-checked without live provider calls. New Rust-native packing and signal handling rely on final-source/merged-test inspection, not a new end-to-end run. Telemetry embedding packed and ran with a local mocked key-introspection server; no real key was embedded.
