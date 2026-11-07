@@ -28,7 +28,3 @@ baml_version.workspace = true
 
 [target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
 libc.workspace = true
-
-[features]
-# Opt-in measurement code; absent from shipped packs.
-telemetry-diagnostics = []

@@ -1,58 +1,41 @@
-# Runtime v2 integration and first typed backend
+# Runtime v2 integration
 
-`Instance` owns a heap and task loop. Generated parameterless integer entries
-run as root tasks with scoped TLS bindings. `alloc(desc, bytes)` and safepoints
-obtain roots through the loop-owned `IntegrationRoots` API; `TaskCx` does not
-implement `RootSource`. The loop retains responsibility for running-register
-capture, parked stacks and precise roots. TLS bindings restore on return/error.
-Only one root body is exposed at a time; child spawning needs task-switch-aware
-bindings before extending this adapter. Heap capacity survives successive jobs.
+`Instance` owns a non-moving heap and a stackful task loop. Generated native
+functions run as root tasks with scoped TLS bindings, restored on return/error.
+Allocation and safepoints obtain roots through loop-owned `IntegrationRoots`.
+Managed pointers must stay on scanned stacks, in traced objects or explicit root
+leases; host boxes and vectors are not implicit roots. Task-switch-aware bindings
+are required before exposing generated child tasks through this adapter.
 
-The binary-trees emission mode supports classes with nullable class links,
-i63 arithmetic and shifts, direct calls, loops and null tests. Descriptors use
-pointer-first fields and stores call `write_ptr`. Errors return boxed `Result`s,
-allocate the corresponding message-bearing BAML panic class in the v2 heap,
-and append source-side-table frames on failure. Shared `Int63`, `VmPanic`, and
-`format_traceback` retain the existing scalar and diagnostic conventions.
-This is not yet the general builtin error conversion API or catch support.
+The typed backend supports the three phase 1 workloads: classes, nullable and
+union values, finite interface dispatch, growing lists, string-keyed maps,
+strings, streaming typed JSON, checked i63 arithmetic, catches and rethrows.
+Unsupported constructs fail at pack time. Errors preserve source-side frames.
+Generated prologues enforce stack bounds with reserve for error construction.
+Fallible allocation uses a separate traced reserve for allocation-failure errors;
+host allocator failures and arbitrary retention of caught OOM values are outside
+that guarantee. Heap capacity survives successive jobs.
 
-Generated functions execute one observation-word branch on every call. Medium
-is the default; ordinary calls accumulate loop-local path/reentry deltas and
-flush through the existing processor at yields and task boundaries. Off and
-low skip function instrumentation. Constant Hidden hooks used by the supported
-stdlib wrappers resolve to a hidden observation word. Other declaration hooks,
-high and span/promotion policies remain unsupported until the span producer
-is implemented. `BAML_GC_STRESS=1`
-enables collection at heap stress points. Root fibers reserve 8 MiB. Generated
-prologues check the loop-provided stack bound with 64 KiB reserved for error
-construction/unwinding; bodies exceeding 1024 locals are rejected.
+Medium telemetry is the default. Off/low skip function instrumentation; medium
+records exact path/reentry counts and durations. High and promoted policies emit
+spans, captures and error evidence through the existing telemetry processor.
+Task boundaries and yields flush local deltas. See the phase 1 report for the
+measured medium performance gap; sampling is not part of the shipped contract.
 
-The experimental driver prints an integer for a plain invocation. With
-`--jobs N --warmup N` it emits the speedtest native JSON protocol, checking every
-return. It retains an instance across jobs and excludes startup from timing.
-Select it with `baml pack --rust --runtime v2 ... main`. Other entry signatures,
-containers, catches, virtual calls, generic classes, initializers and unsupported
-MIR fail at pack time; there is no fallback to the VM.
+Select with `baml pack --rust --runtime v2 ... main`. Plain execution prints an
+integer. `--jobs N --warmup N` uses the native speedtest JSON protocol and retains
+an instance across jobs. `BAML_GC_STRESS=1` forces collection at stress points;
+`BAML_V2_HEAP_LIMIT=<bytes>` limits ordinary usable heap capacity, not RSS.
 
-Managed pointers must remain on the fiber stack or in traced heap objects.
-Rust vectors and boxes are not implicit roots. The current uncaught-error path
-performs no managed allocation after storing the error in its host box; catches
-will need explicit exception rooting. Heap-valued host results, finalizers,
-and opaque ownership remain unimplemented. Generated allocation now calls
-`try_alloc` and propagates its Result with the same line-table rule as calls.
-`BAML_V2_HEAP_LIMIT=<bytes>` sets the ordinary usable-capacity limit before
-execution (32 KiB block granularity); it is a test knob, not an RSS limit.
-Every instance reserves a separate 32 KiB error block first. After ordinary
-allocation fails its full collection/retry, the runtime constructs the
-AllocFailure string and instance in that traced reserve. The message constructor
-is shared with `VmPanic`; the interpreter's actual exception conversion is
-checked separately because the two corosensei builds cannot share one executable.
-The reserve covers the admitted uncaught-error path. Arbitrarily retained caught
-OOM values and failure of host Rust bookkeeping allocations are not covered. See `architecture/runtime-v2/PHASE1-REPORT.md`.
-
-From the worktree root:
+From `baml_language`, with `CARGO_TARGET_DIR` inside your worktree:
 
 ```sh
-CARGO_TARGET_DIR="$PWD/target" cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_runtime
-CARGO_TARGET_DIR="$PWD/target" cargo test --manifest-path baml_language/Cargo.toml -p bex_v2_runtime --release
+cargo test -p bex_v2_runtime
+cargo test -p bex_v2_runtime --release
+BAML_RUST_DIFF_PROBES='programs::richards 50,memory::binary trees 14,programs::agent loop 300' cargo test -p baml_tests --test rust_differential -- --ignored
 ```
+
+Use packed workload binaries with `--jobs`/`--warmup` for benchmarks; pin a CPU
+and interleave variants. See `architecture/runtime-v2/PHASE1-REPORT.md` for
+results, reproduction scope and open items, and `INTERFACES.md` / `CONTRACTS.md`
+for ownership and runtime contracts.

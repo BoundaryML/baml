@@ -20,8 +20,6 @@ use std::{
 };
 
 pub mod capture;
-#[cfg(feature = "telemetry-diagnostics")]
-pub mod diagnostics;
 pub mod evidence;
 pub use btel_records::RaiseKind;
 pub use btel_types as types;
@@ -80,8 +78,6 @@ impl DeltaClock {
 }
 
 struct State {
-    #[cfg(feature = "telemetry-diagnostics")]
-    diagnostic: diagnostics::State,
     capture_metadata: Option<&'static capture::Metadata>,
     capture_scratch: Option<capture::Scratch>,
     evidence: bool,
@@ -152,8 +148,6 @@ impl State {
     }
 
     fn flush(&mut self) {
-        #[cfg(feature = "telemetry-diagnostics")]
-        diagnostics::prepare_flush(self);
         let mut batch = Vec::new();
         for slot in self.slots.iter_mut().flat_map(|pair| pair.iter_mut()) {
             if slot.count != 0 {
@@ -575,17 +569,9 @@ pub unsafe fn observed_captured<T>(
         return call();
     }
     if mode > 3 {
-        #[cfg(feature = "telemetry-diagnostics")]
-        return unsafe {
-            evidence::observe_diagnostic::<9, false, _>(site, mode & 3, inputs, output, call)
-        };
-        #[cfg(not(feature = "telemetry-diagnostics"))]
         return unsafe { evidence::observe_captured(site, mode & 3, inputs, output, call) };
     }
     match mode {
-        #[cfg(feature = "telemetry-diagnostics")]
-        1 => unsafe { diagnostics::observe_timing(site, call) },
-        #[cfg(not(feature = "telemetry-diagnostics"))]
         1 => {
             let frame = unsafe { enter_observed(site) };
             let mut result = call();
@@ -648,8 +634,6 @@ fn outcome(error: &Error) -> InvocationOutcome {
 }
 /// Flush before the task loop can suspend the current stack.
 pub fn before_yield() {
-    #[cfg(feature = "telemetry-diagnostics")]
-    diagnostics::invalidate();
     let ptr = CURRENT.get();
     if !ptr.is_null() {
         unsafe { &mut *ptr }.flush();
@@ -881,8 +865,6 @@ impl Session {
         };
         let clock = session.clocks.start_run();
         session.state = Some(Box::new(State {
-            #[cfg(feature = "telemetry-diagnostics")]
-            diagnostic: diagnostics::State::new(sites),
             capture_metadata: functions.first().and_then(|f| f.captures),
             capture_scratch: None,
             evidence,
@@ -991,8 +973,6 @@ impl Session {
         state.clock.attach_thread();
         state.thread = allocate_telemetry_id();
         state.started = state.read();
-        #[cfg(feature = "telemetry-diagnostics")]
-        state.diagnostic.reset();
         state.paths.clear();
         for history in &mut state.histories {
             history.clear();
@@ -1027,8 +1007,6 @@ impl Session {
         }
         drop(binding);
         state.flush();
-        #[cfg(feature = "telemetry-diagnostics")]
-        diagnostics::end_run(state);
         state.span(SpanRecord::ThreadSpanCompletion {
             id: state.thread,
             parent_id: None,
@@ -1179,44 +1157,6 @@ mod tests {
             3
         );
     }
-    #[cfg(feature = "telemetry-diagnostics")]
-    #[test]
-    fn diagnostic_shared_returns_and_work_barriers_preserve_populations() {
-        let pool = Pool::new(bex_chunkedringbuffer::Config::for_producers(
-            NonZeroUsize::new(1).unwrap(),
-        ))
-        .unwrap();
-        let mut processor = Processor::with_publisher(
-            pool.bind_consumer().unwrap(),
-            NonZeroUsize::new(8).unwrap(),
-            NoSinkPublisher::default(),
-        );
-        let mut state = test_state(&pool);
-        state.producer.write_timing(TimingRecord::ThreadSelected {
-            thread_id: state.thread,
-        });
-        CURRENT.set(&mut *state);
-        let root = unsafe { diagnostics::enter::<2, true>(0) };
-        let child = unsafe { diagnostics::enter::<2, true>(1) };
-        child.finish::<2, true, _>(&mut Ok(()));
-        root.finish::<2, true, _>(&mut Ok(()));
-        assert_eq!(diagnostics::audit_reads(&state), 3);
-        diagnostics::invalidate();
-        let root = unsafe { diagnostics::enter::<2, true>(0) };
-        let child = unsafe { diagnostics::enter::<2, true>(1) };
-        child.finish::<2, true, _>(&mut Ok(()));
-        diagnostics::invalidate();
-        root.finish::<2, true, _>(&mut Ok(()));
-        assert_eq!(diagnostics::audit_reads(&state), 7);
-        let root = unsafe { diagnostics::enter::<5, true>(0) };
-        root.finish::<5, true, _>(&mut Ok(()));
-        assert_eq!(diagnostics::audit_reads(&state), 7);
-        CURRENT.set(std::ptr::null_mut());
-        state.flush();
-        processor.process_available();
-        processor.flush();
-        assert_eq!(processor.publisher().stats().function_completions, 5);
-    }
     #[test]
     fn hidden_does_not_need_a_bound_loop() {
         assert!(unsafe { enter(&AtomicU8::new(0), usize::MAX) }.is_none());
@@ -1277,8 +1217,6 @@ mod tests {
         let allocator = btel_types::FunctionIdAllocator::default();
         let clock = ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
         Box::new(State {
-            #[cfg(feature = "telemetry-diagnostics")]
-            diagnostic: diagnostics::State::new(SITES),
             capture_metadata: None,
             capture_scratch: None,
             evidence: true,

@@ -39,8 +39,6 @@ members = [
   "tools_sccache",
 ]
 exclude = [
-  # Private accessor fork used only by the runtime-v2 task loop.
-  "crates/bex_v2_loop/vendor/corosensei",
   "vendor/quanta",
   # Live system-test harnesses are intentionally outside the workspace. They
   # enable native-only tokio/reqwest features such as `fs` and `rt-multi-thread`;
