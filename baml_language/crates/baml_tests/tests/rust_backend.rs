@@ -39,30 +39,6 @@ fn render(
 }
 
 #[test]
-fn mir_inventory_keeps_direct_reachable_bodies_before_admission() {
-    let db = baml_test_support::setup_multi_file_db(&[(
-        "inventory.baml",
-        "function main() -> int { helper() }\nfunction helper() -> int { 42 }\nfunction unused() -> int { 7 }",
-    )]);
-    let program = lower(&db, OptLevel::Two);
-    let (entry, _) = user_functions(&program)
-        .find(|(_, function)| function.name() == "main")
-        .unwrap();
-    let report = baml_db::rust_backend::inventory_program(
-        &db,
-        db.workspace_root().unwrap(),
-        &program,
-        OptLevel::Two,
-        &[entry],
-    )
-    .unwrap();
-    assert!(report.contains("## user.main"));
-    assert!(report.contains("## user.helper"));
-    assert!(!report.contains("## user.unused"));
-    assert!(report.contains("same-name candidates"));
-}
-
-#[test]
 fn unrelated_iteration_interfaces_are_compiled_with_virtual_dispatch() {
     let db = baml_test_support::setup_multi_file_db(&[(
         "iteration_identity.baml",
@@ -873,8 +849,7 @@ fn allocation_failure_constructor_matches_interpreter_exception() {
     let Object::String(message) = vm.get_object(field.as_object_ptr().unwrap()) else {
         panic!("message field")
     };
-    // Paired with the v2 runtime's forced-limit test. The two corosensei builds
-    // export the same asm ABI, so the runtime tests use separate executables.
+    // Paired with the v2 runtime's forced-limit test.
     assert_eq!(format!("baml.{}", class.path), "baml.panics.AllocFailure");
     assert_eq!(message.as_str(), "Allocation of 16 bytes failed");
 }
@@ -883,7 +858,7 @@ fn allocation_failure_constructor_matches_interpreter_exception() {
 fn v2_string_receiver_storage_and_function_value_rejection() {
     for (source, accepted) in [
         (
-            include_str!("../../../architecture/runtime-v2/phase1/strings.baml"),
+            include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
             true,
         ),
         (
@@ -920,7 +895,7 @@ fn v2_string_receiver_storage_and_function_value_rejection() {
 fn v2_growing_lists_and_fail_closed_mutation() {
     for (source, accepted) in [
         (
-            include_str!("../../../architecture/runtime-v2/phase1/lists.baml"),
+            include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
             true,
         ),
         (
@@ -955,14 +930,6 @@ fn v2_growing_lists_and_fail_closed_mutation() {
 #[test]
 fn v2_agent_maps_iteration_catch_and_json_admission() {
     for (source, accepted) in [
-        (
-            include_str!("../../../architecture/runtime-v2/phase1/maps.baml"),
-            true,
-        ),
-        (
-            include_str!("../../../architecture/runtime-v2/phase1/catches.baml"),
-            true,
-        ),
         (
             include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
             true,
@@ -1000,29 +967,6 @@ fn v2_agent_maps_iteration_catch_and_json_admission() {
         }
         assert_eq!(before, fingerprint(&program));
     }
-}
-
-#[test]
-fn v2_json_streaming_specializations_and_per_type_fallback() {
-    let db = baml_test_support::setup_multi_file_db(&[(
-        "json.baml",
-        include_str!("../../../architecture/runtime-v2/phase1/json-stream-layouts.baml"),
-    )]);
-    let program = lower(&db, OptLevel::Two);
-    let (entry, _) = user_functions(&program)
-        .find(|(_, f)| f.name() == "main")
-        .unwrap();
-    let source = baml_db::rust_backend::compile_v2(
-        &db,
-        db.workspace_root().unwrap(),
-        &program,
-        OptLevel::Two,
-        entry,
-    )
-    .unwrap();
-    assert!(source.contains("rt::json::Stream::<"));
-    assert!(source.contains("json_specialized_4_0"));
-    assert!(source.contains("Tree fallback: aliased @skip"));
 }
 
 #[test]

@@ -147,11 +147,6 @@ task (`testing._run_test(..., 0)`). The harness process timeout still bounds it.
 This avoids scheduler-dependent records from cancelling a losing timer before
 its body starts; initializer/capture assertions and exact telemetry checks remain.
 
-`v2-coverage-baseline.txt` preserves the initial full-run phase 2 queue in git.
-Regenerate it from the full gate's `rust-differential/v2-coverage.txt`; subset
-reports must not replace the baseline. The freshly generated report is the
-source of truth after compiler or telemetry support changes.
-
 `Async` passes settled inputs to `future.any`, keeping its result and task
 outcomes deterministic. `AnyWithFailure` still exercises pending inputs and
 error handling. No task cancellation outcome is normalized away.

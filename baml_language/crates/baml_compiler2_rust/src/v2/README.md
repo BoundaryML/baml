@@ -16,7 +16,7 @@ sites and output writes is intentional: the phase-one source bytes are preserved
 | Tasks and cleanup | `tasks.rs`: shielding/cleanup admission; future spawn/await/cancellation/defer lowering on `bex_v2_loop` |
 | Shared planning | `admission.rs`: ordered reachability walk; `layout.rs`: layout planning and descriptors; `repr.rs`: shared storage ABI |
 | Shared lowering | `body.rs`: function/structured-body core; `statements.rs`: block, statement and basic terminator core; `expressions.rs`, `places.rs`: scalar/class expressions, operands, coercions and stores; `calls.rs`: direct-call routing and reachability |
-| Errors | `errors.rs`: line/PC tables, raises and fallible expressions; `diagnostics.rs`: unsupported prefix and diagnostic markers |
+| Errors | `errors.rs`: line/PC tables, raises and fallible expressions; `diagnostics.rs`: unsupported prefix |
 | Telemetry / reflection | `telemetry.rs`: observation, metadata and hook admission; `capture_codegen.rs`: capture descriptors |
 | Adapters | `builtins.rs`: generated builtin adapters; `strings.rs`: string expressions; `json.rs`: typed JSON decoding; `host.rs`: executable entry |
 

@@ -105,19 +105,9 @@ pub struct PackArgs {
     #[arg(long, help_heading = "Build options")]
     pub rust: bool,
 
-    /// Runtime for Rust packs. V2 is a closed-world, telemetry-off experimental backend.
+    /// Runtime for Rust packs. V2 is a closed-world experimental backend.
     #[arg(long, value_enum, default_value_t = PackRuntime::Current, requires = "rust")]
     pub runtime: PackRuntime,
-
-    /// Write a conservative MIR census instead of building an executable.
-    /// Includes unsupported bodies; virtual edges are same-name candidates.
-    #[arg(
-        long,
-        value_name = "PATH",
-        requires = "rust",
-        help_heading = "Build options"
-    )]
-    pub rust_inventory: Option<PathBuf>,
 
     /// The `baml_language` workspace checkout the generated host is built from.
     #[arg(
@@ -289,23 +279,6 @@ impl PackArgs {
                         .map(|callable| callable.object.raw())
                 })
                 .collect();
-            if let Some(path) = &self.rust_inventory {
-                let entries = entries
-                    .as_deref()
-                    .ok_or_else(|| anyhow!("inventory entry point not found in linked program"))?;
-                let inventory = baml_db::rust_backend::inventory_program(
-                    &db,
-                    root,
-                    &envelope.program,
-                    crate::bytecode_cache::CLI_OPT_LEVEL,
-                    entries,
-                )
-                .map_err(|error| anyhow!(error))?;
-                std::fs::write(path, inventory)
-                    .with_context(|| format!("failed to write {}", path.display()))?;
-                reporter.finish("Finished", format!("MIR inventory: {}", path.display()));
-                return Ok(crate::ExitCode::Success);
-            }
             if self.runtime == PackRuntime::V2 {
                 if self.target.is_none() || targets.len() != 1 {
                     anyhow::bail!("unsupported in runtime v2: subcommand packs");
@@ -1106,7 +1079,6 @@ mod tests {
             output: None,
             rust: false,
             runtime: PackRuntime::Current,
-            rust_inventory: None,
             rust_workspace: None,
             rust_build_dir: None,
             rust_profile: RustProfile::Release,

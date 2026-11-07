@@ -79,7 +79,7 @@ mod statements;
 mod telemetry;
 
 use body::recursive;
-use diagnostics::{diagnostic_barrier, no};
+use diagnostics::no;
 use repr::Repr;
 
 pub use driver::compile_v2;

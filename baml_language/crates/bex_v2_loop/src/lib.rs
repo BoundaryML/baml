@@ -362,6 +362,7 @@ type Fiber = Coroutine<(), (), Outcome>;
 struct Task {
     fiber: Option<Fiber>,
     base: usize,
+    parked_sp: Option<usize>,
     stack_limit: usize,
     parent: Option<usize>,
     state: TaskState,
@@ -922,6 +923,7 @@ fn spawn(
         Task {
             fiber: Some(fiber),
             base,
+            parked_sp: None,
             stack_limit,
             parent,
             state: TaskState::Ready,
@@ -1002,6 +1004,25 @@ impl TaskCx<'_> {
         }
         Ok(())
     }
+    // Keep the spill frame alive until resume. No Core borrow crosses the switch.
+    #[inline(never)]
+    fn yield_with_roots(&self) {
+        roots::with_registers(|sp, _registers| {
+            self.core
+                .borrow_mut()
+                .tasks
+                .get_mut(&self.id)
+                .unwrap()
+                .parked_sp = Some(sp);
+            self.yielder.suspend(());
+            self.core
+                .borrow_mut()
+                .tasks
+                .get_mut(&self.id)
+                .unwrap()
+                .parked_sp = None;
+        });
+    }
     fn suspend(&mut self, reason: WaitReason) -> Result<(), Err> {
         self.core
             .borrow_mut()
@@ -1009,7 +1030,7 @@ impl TaskCx<'_> {
             .get_mut(&self.id)
             .unwrap()
             .state = TaskState::Parked(reason);
-        self.yielder.suspend(());
+        self.yield_with_roots();
         #[cfg(feature = "instrument")]
         {
             self.core.borrow_mut().metrics.slice_reads += 1;
@@ -1110,7 +1131,7 @@ impl TaskCx<'_> {
                 c.tasks.get_mut(&self.id).unwrap().state = TaskState::Ready;
                 c.ready.push_back(self.id);
             }
-            self.yielder.suspend(());
+            self.yield_with_roots();
             #[cfg(feature = "instrument")]
             {
                 self.core.borrow_mut().metrics.slice_reads += 1;

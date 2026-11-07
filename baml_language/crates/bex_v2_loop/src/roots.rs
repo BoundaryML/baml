@@ -74,8 +74,8 @@ impl RootSource for Core {
                 registers.as_ptr().wrapping_add(registers.len()),
             );
             for task in self.tasks.values() {
-                if let Some(fiber) = &task.fiber
-                    && let Some(sp) = fiber.saved_sp()
+                if task.fiber.is_some()
+                    && let Some(sp) = task.parked_sp
                 {
                     visit(sp as *const usize, task.base as *const usize);
                 }
@@ -126,7 +126,7 @@ fn native_stack_base() -> usize {
     }
 }
 #[inline(never)]
-fn with_registers(f: impl FnOnce(usize, &[usize])) {
+pub(super) fn with_registers(f: impl FnOnce(usize, &[usize])) {
     let mut regs = [0usize; 20];
     let sp: usize;
     // SAFETY: stores only within regs; observes the ABI's preserved registers.
@@ -150,6 +150,8 @@ fn with_registers(f: impl FnOnce(usize, &[usize])) {
             "mov {sp}, rsp", buf = in(reg) regs.as_mut_ptr(), sp = out(reg) sp,
         );
     }
+    // The parked range must include this still-live spill buffer.
+    debug_assert!(sp <= regs.as_ptr() as usize);
     f(sp, &regs);
     std::hint::black_box(regs);
 }

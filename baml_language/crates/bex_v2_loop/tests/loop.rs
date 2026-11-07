@@ -464,6 +464,48 @@ fn roots_cover_parked_and_running_stack_words_and_precise_slots() {
     lp.run_until(&f).unwrap_err();
 }
 #[test]
+fn roots_cover_ready_fiber_after_timeslice_yield_and_stack_reuse() {
+    let rt = runtime();
+    let addr = Rc::new(Cell::new(0));
+    let hits = Rc::new(Cell::new(0));
+    let heap = RootProbe {
+        word_addr: addr.clone(),
+        hits: hits.clone(),
+        precise: Rc::new(Cell::new(0)),
+    };
+    let mut lp = TaskLoop::new(
+        Config {
+            time_slice: Duration::ZERO,
+            ..Config::default()
+        },
+        rt.handle().clone(),
+        Rc::new(RefCell::new(heap)),
+    );
+    for round in 0..3 {
+        let address = addr.clone();
+        let owner = lp.spawn(move |cx| {
+            let word = std::hint::black_box(0x1234_abcdusize);
+            address.set(&word as *const usize as usize);
+            cx.poll()?;
+            std::hint::black_box(word);
+            Ok(Value::int(0))
+        });
+        // FIFO runs this collector while the owner is Ready, not sleeping.
+        let probe = lp.spawn(|cx| {
+            cx.collect();
+            Ok(Value::int(0))
+        });
+        lp.run_until(&probe).unwrap();
+        assert_eq!(hits.get(), round + 1);
+        lp.run_until(&owner).unwrap();
+        // Completed and pooled stacks must no longer contribute root ranges.
+        lp.conservative_ranges(&mut |lo, hi| {
+            assert!(!(lo as usize <= addr.get() && addr.get() < hi as usize));
+        });
+    }
+}
+
+#[test]
 fn ten_thousand_parked_tasks() {
     let rt = runtime();
     let mut lp = scheduler(&rt);

@@ -17,9 +17,6 @@ impl Emitter<'_, '_> {
         }
         for (i, s) in block.statements.iter().enumerate() {
             self.mark(pcs.statements.get(i).copied().flatten());
-            if !matches!(s.kind, StatementKind::Nop) {
-                out.push_str(diagnostic_barrier());
-            }
             if let Some(result) = registry::statement(self, &s.kind) {
                 out.push_str(&result?);
                 continue;
@@ -44,9 +41,6 @@ impl Emitter<'_, '_> {
         }
         self.mark(pcs.terminator);
         let term = block.terminator.as_ref().unwrap();
-        if !matches!(term, Terminator::Return) {
-            out.push_str(diagnostic_barrier());
-        }
         if let Some(result) = registry::terminator(self, term) {
             out.push_str(&result?);
             return Ok(out);

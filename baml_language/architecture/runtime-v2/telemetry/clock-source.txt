@@ -1,1 +1,0 @@
-quanta source=SystemCounter fallback=None calibration=CalibrationQuality { status: Converged, samples: 16100, elapsed_ns: 20000565, mean_residual_ns: -1.048944099378874, mean_error_ns: 0.08791854445597534 }
