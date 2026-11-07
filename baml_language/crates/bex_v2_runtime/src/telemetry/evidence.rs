@@ -21,6 +21,18 @@ pub struct Raise {
 /// The current session owns this stack and `site` belongs to its program.
 #[inline(never)]
 pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> R<T> {
+    unsafe { observe_captured(site, mode, InputCaptures::default, |_| None, call) }
+}
+/// # Safety
+/// Same session, site, and callback requirements as `super::observe_captured`.
+#[inline(never)]
+pub unsafe fn observe_captured<T>(
+    site: usize,
+    mode: u8,
+    inputs: impl FnOnce() -> InputCaptures,
+    output: impl FnOnce(&R<T>) -> Option<btel_snapshot::Snapshot>,
+    call: impl FnOnce() -> R<T>,
+) -> R<T> {
     let ptr = CURRENT.get();
     let state = unsafe { &mut *ptr };
     let site_info = state.sites[site];
@@ -54,7 +66,7 @@ pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> 
             timing.finish(&mut result);
             result
         }
-        _ => unsafe { super::observe(site, mode, call) },
+        _ => unsafe { super::observe_captured(site, mode, inputs, output, call) },
     };
     drop(restore);
     if let Err(error) = &mut result

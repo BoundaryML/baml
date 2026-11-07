@@ -77,6 +77,7 @@ impl Repr {
         )
     }
 }
+mod capture_codegen;
 struct Layout {
     fields: Vec<Repr>,
     offsets: Vec<usize>,
@@ -845,6 +846,12 @@ pub fn compile_v2(
         writeln!(&mut out, "Descriptor{{kind:Kind::List,size:8,ptr_slots:(0,0),tagged_slots:(0,0),elem:Some(bex_v2_heap::Elements{{offset:16,layout:bex_v2_heap::ElementLayout::{elem}}}),type_id:{},fields:&[],finalizer:None}},", desc+3).unwrap();
     }
     out.push_str("];\n");
+    out.push_str(&capture_codegen::emit(
+        &plan,
+        &descriptors,
+        &lists,
+        after_lists,
+    )?);
     for (&object, layout) in &plan.layouts {
         write!(
             &mut out,
@@ -1097,7 +1104,21 @@ pub fn compile_v2(
                     writeln!(&mut out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}],pcs:&[{decode_pc}],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
                 }
                 if !aliased {
-                    writeln!(&mut out,"unsafe fn f{callee}_json{code}(telemetry_site:usize,s:usize,naming:usize)->R<rt::Dyn>{{unsafe{{rt::telemetry::observed_call(&O{callee},telemetry_site,||{{rt::check_stack().map_err(|e|e.at(&S{callee},0))?;let aliased=rt::telemetry::observed_call(&O{alias_function},JSON_ALIAS_SITE,||Ok(naming!=0))?;(if !aliased{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}).map_err(|e|e.at(&S{callee},0))}})}}}}").unwrap();
+                    let members = json_classes
+                        .iter()
+                        .map(|class| {
+                            format!("rt::telemetry::capture::Type::Class(CAPTURE_D{class})")
+                        })
+                        .collect::<Vec<_>>();
+                    let ty = if members.len() == 1 {
+                        members[0].clone()
+                    } else {
+                        format!(
+                            "rt::telemetry::capture::Type::Union(&[{}])",
+                            members.join(",")
+                        )
+                    };
+                    writeln!(&mut out,"unsafe fn f{callee}_json{code}(telemetry_site:usize,s:usize,naming:usize,omitted:bool)->R<rt::Dyn>{{unsafe{{rt::telemetry::observed_captured(&O{callee},telemetry_site,||{{let mut c=rt::telemetry::capture_arguments(&[rt::Dyn{{tag:3,payload:s as u64}},rt::Dyn{{tag:if omitted{{u64::MAX}}else{{CAPTURE_NAMING_TAG}},payload:naming as u64}}]);c.types=rt::telemetry::capture_type_args(&[(\"T\",&{ty})]);c}},|r|match r{{Ok(v)=>rt::telemetry::capture_value(*v),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::check_stack().map_err(|e|e.at(&S{callee},0))?;let aliased=rt::telemetry::observed_captured(&O{alias_function},JSON_ALIAS_SITE,||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;(if !aliased{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}).map_err(|e|e.at(&S{callee},0))}})}}}}").unwrap();
                 }
             }
         }
@@ -1237,7 +1258,7 @@ pub fn compile_v2(
             MirFunctionKind::Bytecode(body) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
                 StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
 
-        writeln!(&mut out,"rt::telemetry::Function{{metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();
+        writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();
     }
     out.push_str("];\nstatic TELEMETRY_SITES:&[rt::telemetry::Site]=&[\n");
     for &(caller, pc, callee) in telemetry_sites.borrow().iter() {
@@ -1385,6 +1406,15 @@ impl Emitter<'_, '_> {
             format!("({})==0", value.0)
         } else {
             "false".into()
+        }
+    }
+    fn capture_value(&self, value: String, repr: Repr) -> Gen<String> {
+        match repr {
+            Repr::Dyn(_) | Repr::Tagged => Ok(value),
+            Repr::Naming => Ok(format!(
+                "rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:({value}) as u64}}"
+            )),
+            _ => self.coerce((value, repr), Repr::Tagged),
         }
     }
     fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
@@ -1886,8 +1916,16 @@ impl Emitter<'_, '_> {
             .map(|i| format!("l{i}"))
             .collect::<Vec<_>>()
             .join(",");
+        let captured_args = (1..=arity)
+            .map(|i| self.capture_value(format!("l{i}"), self.local(i)?))
+            .collect::<Gen<Vec<_>>>()?
+            .join(",");
+        let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
+        let captures = format!(
+            "||rt::telemetry::capture_arguments(&[{captured_args}]),|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
+        );
         let mut code = format!(
-            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{let mode=rt::telemetry::mode(&O{object});if mode==0{{return f{object}_body({arguments});}}if mode!=1{{return f{object}_observed(telemetry_site,mode,{arguments});}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n#[inline(never)] unsafe fn f{object}_observed(telemetry_site:usize,mode:u8,{params})->R<{returned}>{{unsafe{{if mode>3{{rt::telemetry::evidence::observe(telemetry_site,mode&3,||f{object}_body({arguments}))}}else{{rt::telemetry::observe(telemetry_site,mode,||f{object}_body({arguments}))}}}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
+            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{let mode=rt::telemetry::mode(&O{object});if mode==0{{return f{object}_body({arguments});}}if mode!=1{{return f{object}_observed(telemetry_site,mode,{arguments});}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n#[inline(never)] unsafe fn f{object}_observed(telemetry_site:usize,mode:u8,{params})->R<{returned}>{{unsafe{{if mode>3{{rt::telemetry::evidence::observe_captured(telemetry_site,mode&3,{captures},||f{object}_body({arguments}))}}else{{rt::telemetry::observe_captured(telemetry_site,mode,{captures},||f{object}_body({arguments}))}}}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
         );
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {
@@ -2148,7 +2186,8 @@ impl Emitter<'_, '_> {
                     if *ntypeargs != 1 || args.len() != 3 || code < 3 {
                         return Err(no("JSON decode specialization/naming"));
                     }
-                    let naming = if matches!(args[2], Operand::Constant(Constant::OmittedArg)) {
+                    let omitted = matches!(args[2], Operand::Constant(Constant::OmittedArg));
+                    let naming = if omitted {
                         "0usize".to_owned()
                     } else {
                         self.coerce(self.operand(&args[2])?, Repr::Naming)?
@@ -2160,7 +2199,7 @@ impl Emitter<'_, '_> {
                         destination,
                         (
                             self.fallible(&format!(
-                                "f{c}_json{code}({telemetry_site},{text},{naming})"
+                                "f{c}_json{code}({telemetry_site},{text},{naming},{omitted})"
                             )),
                             Repr::Tagged,
                         ),

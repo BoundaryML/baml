@@ -641,7 +641,9 @@ dependencies = [
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_type",
+ "bex_vm",
  "bex_vm_types",
+ "borsh",
  "btel_types",
 ]
 
@@ -1426,6 +1428,7 @@ dependencies = [
  "bex_v2_heap",
  "bex_v2_loop",
  "bex_vm_types",
+ "borsh",
  "btel_clock",
  "btel_file",
  "btel_processor",
@@ -1457,7 +1460,9 @@ dependencies = [
  "bex_heap",
  "bex_sap",
  "bex_str",
+ "bex_v2_heap",
  "bex_vm_types",
+ "borsh",
  "btel_clock",
  "btel_processor",
  "btel_records",

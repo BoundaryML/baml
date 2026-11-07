@@ -29,6 +29,7 @@ use btel_types::{FunctionId, allocate_telemetry_id};
 use rustc_hash::FxHashMap;
 
 mod errors;
+pub mod frozen;
 pub(crate) use errors::{ErrorBook, LandingMatch};
 mod network;
 mod policy;

@@ -88,6 +88,8 @@ wasm-bindgen-futures = { workspace = true }
 baml_builtins2_codegen = { workspace = true }
 
 [dev-dependencies]
+borsh = { workspace = true }
+bex_v2_heap = { path = "../bex_v2_heap" }
 baml_test_support = { workspace = true }
 indexmap = { workspace = true }
 

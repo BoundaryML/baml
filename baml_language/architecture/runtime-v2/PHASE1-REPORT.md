@@ -1687,3 +1687,82 @@ noncapturing promotion are verified; **exact policy captures remain pending**.
 No exemption was added to accommodate that remaining work. Diagnostic floor
 source regeneration now supplies empty error-PC tables to its preserved
 pre-error-evidence source; its off-level diagnostic variants never use them.
+
+## T2b: policy captures and canonical snapshot identity
+
+The span producer now captures inputs/type arguments before its entry clock,
+and output/error values after its exit clock, only when the resolved policy
+requests them. Captured entries select the existing `NeedsAnnouncement`
+completion variants. Late promotion captures the result/error only; it never
+invents an entry announcement or captures entry arguments. Span completion
+continues to contribute exactly one aggregate sample through the processor.
+The ordinary off/medium wrapper retains its separate outlined span dispatcher.
+
+Generated packs carry canonical declaration-definition blobs frozen by the
+compiler through the existing VM definition encoder. The private compiler
+image boxes float constants before binding, as engine loading does. The VM is
+a compiler dependency, not a dependency of the generated v2 pack. Runtime
+capture traverses the admitted v2 layouts without managed allocation, collection,
+or user code, then releases every managed address. It preserves aliasing,
+cycles, declaration identity across duplicate layout descriptors, nullable
+pointers, typed lists/maps and enum values. JSON specializations capture `T`
+and preserve omitted naming arguments; host stringify preserves its three
+omitted defaults instead of recording their substituted values.
+
+The capture oracle test compiles the actual v2 traversal next to the VM's
+existing traversal (without linking the two fiber runtimes). Snapshot content
+IDs agree for primitive/omitted arguments, instances, repeated aliases, enum
+variants, strings, typed lists/maps and generic class type arguments. Separate
+runtime tests cover cyclic graphs, duplicate class layouts, empty container
+buffers, nullable pointers, capture policy gating, announcement dependencies,
+late error promotion and exactly-once aggregate accounting.
+
+Declaration hooks remain unsupported with the standard v2 diagnostic, except
+for the existing constant-Hidden admission. These workloads do not reach
+other hooks. Capture-enabled policies are exercised through producer tests;
+the three workload parity runs exercise their original/default policies. This
+is not an assertion that arbitrary hooked BAML programs are supported.
+
+### T2b verification and final gate refresh
+
+Tests pass: compiler **10**, runtime **23**, VM **178**. Strict all-target
+clippy passes for all three touched crates. After the checked-index conversion
+cleanup, the capture-focused runtime/VM tests also pass. Logs:
+`target/t2b-tests.log`, `target/t2b-clippy.log`, and
+`target/t2b-capture-final-tests.log`.
+
+Five rotated/interleaved rounds on CPU 12, with the same job/warmup counts as
+T3. All 75 timed runs returned the expected results. Medians in ms/job:
+
+| Workload | v2 off | v2 medium | v2 high | Native medium | Node | Medium/off |
+|---|---:|---:|---:|---:|---:|---:|
+| binary-trees-14 | 42.170 | 320.709 | 1429.673 | 1031.116 | 39.971 | **7.605×** |
+| richards-50 | 3.737 | 85.852 | 413.782 | 291.230 | 5.642 | **22.976×** |
+| agent-loop-300 | 3.602 | 5.173 | 9.436 | 57.729 | 7.816 | **1.436×** |
+
+Host load ranges (1/5/15 minutes): **5.21–11.16 / 9.10–11.05 / 13.56–14.64**,
+20 CPUs, not isolated. Evidence, including every round and binary hashes:
+`telemetry/t2b-benchmark-{raw,summary,environment}.json`. The earlier clock-floor
+measurements remain the relevant diagnostic comparison: about 70–73 ms/job
+for two full-precision reads per Richards call, already far above the ~5.6 ms
+budget implied by 1.5× off. The Richards gate still **fails**; no precision,
+normalization, default-level, or policy relaxation was introduced to meet it.
+
+The refreshed Richards medium profile has **104,901 samples, zero lost**.
+Inlined source attribution: ECV clock read/return **52.10%**, parent/reentry
+Option comparisons **23.90%**, checked aggregate additions **20.37%**. Standalone
+hashing, aggregate merging and path lookup remain below the 0.5% reporting
+threshold. These are optimized source locations, not a causal decomposition.
+Evidence: `telemetry/richards-t2b-{profile.txt,lines.txt,profile-run.json}`.
+
+No additional spec deviation is requested. The remaining design question is
+unchanged: how should the Richards ≤1.5× gate be reconciled with the measured
+full-precision clock floor? This implementation keeps the contract and medium
+default while reporting the gate failure; it does not sample or batch clocks.
+
+Final rebuilt binaries pass **24/24** parity cases: all three workloads at
+off/low/medium/high, normal and GC-stressed. All six off cases also match
+without the GC filter. Only C5 collector-maintenance records are exempt; all
+other normalized published output stays strict. Evidence: `telemetry/parity.json`
+and `target/t2b-final-parity.log`. T1, T2 and T3 are complete for the requested
+subsets; the performance gate remains failed, as quantified above.

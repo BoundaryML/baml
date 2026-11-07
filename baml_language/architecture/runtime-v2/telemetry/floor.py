@@ -19,6 +19,8 @@ def build():
     baseline=OUT/'floor-baseline.rs'
     if not baseline.exists(): baseline.write_text((OUT/'v2-build/src/main.rs').read_text())
     original=baseline.read_text()
+    if 'captures:' not in original:
+        original=original.replace('rt::telemetry::Function{metadata:', 'rt::telemetry::Function{captures:None,metadata:')
     # The preserved diagnostic source predates recording-only error PCs.
     # These off-level variants never build error evidence.
     if 'pcs:' not in original:

@@ -23,5 +23,7 @@ baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_mir = { workspace = true }
 baml_type = { workspace = true }
+bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+borsh = { workspace = true }
 btel_types = { workspace = true }

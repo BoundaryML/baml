@@ -19,11 +19,13 @@ use std::{
     },
 };
 
+pub mod capture;
 pub mod evidence;
 pub use btel_records::RaiseKind;
 pub use btel_types as types;
 pub type Policy = btel_settings::policy::TelemetryPolicy<std::time::Duration>;
 pub struct Function {
+    pub captures: Option<&'static capture::Metadata>,
     pub metadata: fn(FunctionId) -> btel_types::FunctionMetadata,
     pub word: &'static AtomicU8,
     pub hidden: bool,
@@ -76,6 +78,8 @@ impl DeltaClock {
 }
 
 struct State {
+    capture_metadata: Option<&'static capture::Metadata>,
+    capture_scratch: Option<capture::Scratch>,
     evidence: bool,
     depth: u32,
     evidence_frame: *mut evidence::EvidenceFrame,
@@ -317,11 +321,84 @@ impl Frame {
         state.active_slot = self.saved_slot;
     }
 }
+#[derive(Default)]
+pub struct InputCaptures {
+    pub inputs: Option<btel_snapshot::Snapshot>,
+    pub types: Option<btel_snapshot::Snapshot>,
+}
+fn with_capture<T>(f: impl FnOnce(&mut capture::Scratch, &capture::Metadata) -> T) -> T {
+    let pointer = CURRENT.get();
+    assert!(!pointer.is_null(), "capture requires an active session");
+    let state = unsafe { &mut *pointer };
+    let metadata = state.capture_metadata.expect("compiler capture metadata");
+    f(
+        state.capture_scratch.get_or_insert_with(Default::default),
+        metadata,
+    )
+}
+/// # Safety
+/// Values must be live objects of the current session throughout capture.
+pub unsafe fn capture_arguments(values: &[crate::Dyn]) -> InputCaptures {
+    InputCaptures {
+        inputs: Some(with_capture(|s, m| unsafe {
+            s.arguments(m.shapes, values)
+        })),
+        types: None,
+    }
+}
+/// # Safety
+/// The value must be live in the current session throughout capture.
+pub unsafe fn capture_value(value: crate::Dyn) -> Option<btel_snapshot::Snapshot> {
+    Some(with_capture(|s, m| unsafe { s.value(m.shapes, value) }))
+}
+/// # Safety
+/// The error payload must be live in the current session.
+pub unsafe fn capture_error(error: &Error) -> Option<btel_snapshot::Snapshot> {
+    if error.value == 0 {
+        return None;
+    }
+    let desc = unsafe { (*(error.value as *const bex_v2_heap::Header)).desc };
+    unsafe {
+        capture_value(crate::Dyn {
+            tag: desc as u64 + 3,
+            payload: error.value as u64,
+        })
+    }
+}
+pub fn capture_text(value: &str) -> Option<btel_snapshot::Snapshot> {
+    Some(with_capture(|s, _| s.text(value)))
+}
+pub fn capture_type_args(args: &[(&str, &capture::Type)]) -> Option<btel_snapshot::Snapshot> {
+    Some(with_capture(|s, _| s.type_args(args)))
+}
 /// Span and promotion work is kept out of the ordinary timing frame.
 /// # Safety
 /// The same session and site requirements as `enter_observed` apply.
 #[inline(never)]
 pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> R<T> {
+    unsafe { observe_captured(site, mode, InputCaptures::default, |_| None, call) }
+}
+/// # Safety
+/// The same session and site requirements as `enter_observed` apply. Capture
+/// callbacks must not run managed code or trigger collection.
+#[inline(never)]
+pub unsafe fn observe_captured<T>(
+    site: usize,
+    mode: u8,
+    inputs: impl FnOnce() -> InputCaptures,
+    output: impl FnOnce(&R<T>) -> Option<btel_snapshot::Snapshot>,
+    call: impl FnOnce() -> R<T>,
+) -> R<T> {
+    let policy = unsafe {
+        let s = &*CURRENT.get();
+        s.policies[s.sites[site].callee]
+    };
+    let captured = if mode == 2 && policy.capture_inputs {
+        inputs()
+    } else {
+        InputCaptures::default()
+    };
+    let needs_announcement = captured.inputs.is_some() || captured.types.is_some();
     let frame = unsafe { enter_observed(site) };
     let state = unsafe { &mut *frame.state };
     let saved_span = state.active_span;
@@ -329,7 +406,6 @@ pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> 
     let id = (mode == 2).then(allocate_telemetry_id);
     let call_path = state.active;
     let entered_at = frame.entered_at;
-    let policy = state.policies[state.sites[site].callee];
     if mode == 2 {
         let id = id.unwrap();
         state.active_span = Some(id);
@@ -338,8 +414,8 @@ pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> 
             parent_id,
             call_path,
             entered_at,
-            captured_inputs: None,
-            captured_type_args: None,
+            captured_inputs: captured.inputs,
+            captured_type_args: captured.types,
         });
     }
     let mut result = call();
@@ -364,6 +440,14 @@ pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> 
                     .reached(duration, state.clock.domain())
             });
     if promoted {
+        let captured_value = if (result.is_ok() && policy.capture_output)
+            || (result.is_err() && policy.capture_error)
+        {
+            output(&result)
+        } else {
+            None
+        };
+        let state = unsafe { &mut *frame.state };
         let id = id.unwrap_or_else(allocate_telemetry_id);
         let await_time = frame.await_duration;
         macro_rules! completion {
@@ -375,56 +459,88 @@ pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> 
                     entered_at,
                     exited_at,
                     await_time,
-                    captured_value: None,
+                    captured_value,
                 }
             };
         }
-        let record = match (mode == 2, frame.flags != 0, outcome) {
-            (true, false, InvocationOutcome::Ok) => completion!(FunctionSpanCompletionOk),
-            (true, false, InvocationOutcome::Errored) => completion!(FunctionSpanCompletionErrored),
-            (true, false, InvocationOutcome::Cancelled) => {
-                completion!(FunctionSpanCompletionCancelled)
+        let record = if mode == 2 && needs_announcement {
+            match (frame.flags != 0, outcome) {
+                (false, InvocationOutcome::Ok) => {
+                    completion!(FunctionSpanCompletionOkNeedsAnnouncement)
+                }
+                (false, InvocationOutcome::Errored) => {
+                    completion!(FunctionSpanCompletionErroredNeedsAnnouncement)
+                }
+                (false, InvocationOutcome::Cancelled) => {
+                    completion!(FunctionSpanCompletionCancelledNeedsAnnouncement)
+                }
+                (false, InvocationOutcome::Panicked) => {
+                    completion!(FunctionSpanCompletionPanickedNeedsAnnouncement)
+                }
+                (true, InvocationOutcome::Ok) => {
+                    completion!(FunctionSpanCompletionOkReentryNeedsAnnouncement)
+                }
+                (true, InvocationOutcome::Errored) => {
+                    completion!(FunctionSpanCompletionErroredReentryNeedsAnnouncement)
+                }
+                (true, InvocationOutcome::Cancelled) => {
+                    completion!(FunctionSpanCompletionCancelledReentryNeedsAnnouncement)
+                }
+                (true, InvocationOutcome::Panicked) => {
+                    completion!(FunctionSpanCompletionPanickedReentryNeedsAnnouncement)
+                }
             }
-            (true, false, InvocationOutcome::Panicked) => {
-                completion!(FunctionSpanCompletionPanicked)
-            }
-            (true, true, InvocationOutcome::Ok) => completion!(FunctionSpanCompletionOkReentry),
-            (true, true, InvocationOutcome::Errored) => {
-                completion!(FunctionSpanCompletionErroredReentry)
-            }
-            (true, true, InvocationOutcome::Cancelled) => {
-                completion!(FunctionSpanCompletionCancelledReentry)
-            }
-            (true, true, InvocationOutcome::Panicked) => {
-                completion!(FunctionSpanCompletionPanickedReentry)
-            }
-            (false, false, InvocationOutcome::Ok) => completion!(LateFunctionSpanCompletionOk),
-            (false, false, InvocationOutcome::Errored) => {
-                completion!(LateFunctionSpanCompletionErrored)
-            }
-            (false, false, InvocationOutcome::Cancelled) => {
-                completion!(LateFunctionSpanCompletionCancelled)
-            }
-            (false, false, InvocationOutcome::Panicked) => {
-                completion!(LateFunctionSpanCompletionPanicked)
-            }
-            (false, true, InvocationOutcome::Ok) => {
-                completion!(LateFunctionSpanCompletionOkReentry)
-            }
-            (false, true, InvocationOutcome::Errored) => {
-                completion!(LateFunctionSpanCompletionErroredReentry)
-            }
-            (false, true, InvocationOutcome::Cancelled) => {
-                completion!(LateFunctionSpanCompletionCancelledReentry)
-            }
-            (false, true, InvocationOutcome::Panicked) => {
-                completion!(LateFunctionSpanCompletionPanickedReentry)
+        } else {
+            match (mode == 2, frame.flags != 0, outcome) {
+                (true, false, InvocationOutcome::Ok) => completion!(FunctionSpanCompletionOk),
+                (true, false, InvocationOutcome::Errored) => {
+                    completion!(FunctionSpanCompletionErrored)
+                }
+                (true, false, InvocationOutcome::Cancelled) => {
+                    completion!(FunctionSpanCompletionCancelled)
+                }
+                (true, false, InvocationOutcome::Panicked) => {
+                    completion!(FunctionSpanCompletionPanicked)
+                }
+                (true, true, InvocationOutcome::Ok) => completion!(FunctionSpanCompletionOkReentry),
+                (true, true, InvocationOutcome::Errored) => {
+                    completion!(FunctionSpanCompletionErroredReentry)
+                }
+                (true, true, InvocationOutcome::Cancelled) => {
+                    completion!(FunctionSpanCompletionCancelledReentry)
+                }
+                (true, true, InvocationOutcome::Panicked) => {
+                    completion!(FunctionSpanCompletionPanickedReentry)
+                }
+                (false, false, InvocationOutcome::Ok) => completion!(LateFunctionSpanCompletionOk),
+                (false, false, InvocationOutcome::Errored) => {
+                    completion!(LateFunctionSpanCompletionErrored)
+                }
+                (false, false, InvocationOutcome::Cancelled) => {
+                    completion!(LateFunctionSpanCompletionCancelled)
+                }
+                (false, false, InvocationOutcome::Panicked) => {
+                    completion!(LateFunctionSpanCompletionPanicked)
+                }
+                (false, true, InvocationOutcome::Ok) => {
+                    completion!(LateFunctionSpanCompletionOkReentry)
+                }
+                (false, true, InvocationOutcome::Errored) => {
+                    completion!(LateFunctionSpanCompletionErroredReentry)
+                }
+                (false, true, InvocationOutcome::Cancelled) => {
+                    completion!(LateFunctionSpanCompletionCancelledReentry)
+                }
+                (false, true, InvocationOutcome::Panicked) => {
+                    completion!(LateFunctionSpanCompletionPanickedReentry)
+                }
             }
         };
         state.span(record);
     } else {
         complete_unusual(state, frame.slot, duration, frame.await_duration, outcome);
     }
+    let state = unsafe { &mut *frame.state };
     evidence::frame_completed(state, &mut result);
     state.depth -= 1;
     state.active_span = saved_span;
@@ -437,12 +553,23 @@ pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> 
 /// # Safety
 /// The same session and site requirements as `enter_observed` apply.
 pub unsafe fn observed_call<T>(word: &AtomicU8, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
+    unsafe { observed_captured(word, site, InputCaptures::default, |_| None, call) }
+}
+/// # Safety
+/// Same session, site, and callback requirements as `observe_captured`.
+pub unsafe fn observed_captured<T>(
+    word: &AtomicU8,
+    site: usize,
+    inputs: impl FnOnce() -> InputCaptures,
+    output: impl FnOnce(&R<T>) -> Option<btel_snapshot::Snapshot>,
+    call: impl FnOnce() -> R<T>,
+) -> R<T> {
     let mode = mode(word);
     if mode == 0 {
         return call();
     }
     if mode > 3 {
-        return unsafe { evidence::observe(site, mode & 3, call) };
+        return unsafe { evidence::observe_captured(site, mode & 3, inputs, output, call) };
     }
     match mode {
         1 => {
@@ -451,7 +578,7 @@ pub unsafe fn observed_call<T>(word: &AtomicU8, site: usize, call: impl FnOnce()
             frame.finish(&mut result);
             result
         }
-        mode => unsafe { observe(site, mode, call) },
+        mode => unsafe { observe_captured(site, mode, inputs, output, call) },
     }
 }
 
@@ -638,15 +765,6 @@ impl Session {
             .iter()
             .map(|function| {
                 let word = observation(level, function.hidden, function.policy);
-                if word != 0
-                    && (function.policy.capture_inputs
-                        || function.policy.capture_output
-                        || function.policy.capture_error)
-                {
-                    return Err(Error::internal(
-                        "unsupported in runtime v2: policy captures (T2 pending)".into(),
-                    ));
-                }
                 Ok(word)
             })
             .collect::<R<Vec<_>>>()?;
@@ -747,6 +865,8 @@ impl Session {
         };
         let clock = session.clocks.start_run();
         session.state = Some(Box::new(State {
+            capture_metadata: functions.first().and_then(|f| f.captures),
+            capture_scratch: None,
             evidence,
             depth: 0,
             evidence_frame: std::ptr::null_mut(),
@@ -786,14 +906,60 @@ impl Session {
         };
         let word = state.words[state.sites[site].callee];
         let alias_word = state.words[state.sites[site + 1].callee];
+        let naming_tag = state.capture_metadata.map_or(0, |m| m.naming_tag);
         self.run_at(site, || {
             // Typed specialization of stringify(int, Declared, 0, false):
             // resolve the naming mode, then encode the scalar without a heap.
             unsafe {
-                observed_call(word, site, || {
-                    let aliased: R<bool> = observed_call(alias_word, site + 1, || Ok(false));
-                    aliased.map(|_| value.to_string())
-                })
+                observed_captured(
+                    word,
+                    site,
+                    || {
+                        capture_arguments(&[
+                            crate::Dyn {
+                                tag: 0,
+                                payload: value as u64,
+                            },
+                            crate::Dyn {
+                                tag: u64::MAX,
+                                payload: 0,
+                            },
+                            crate::Dyn {
+                                tag: u64::MAX,
+                                payload: 0,
+                            },
+                            crate::Dyn {
+                                tag: u64::MAX,
+                                payload: 0,
+                            },
+                        ])
+                    },
+                    |r: &R<String>| match r {
+                        Ok(v) => capture_text(v),
+                        Err(e) => capture_error(e),
+                    },
+                    || {
+                        let aliased: R<bool> = observed_captured(
+                            alias_word,
+                            site + 1,
+                            || {
+                                capture_arguments(&[crate::Dyn {
+                                    tag: naming_tag,
+                                    payload: 0,
+                                }])
+                            },
+                            |r| match r {
+                                Ok(v) => capture_value(crate::Dyn {
+                                    tag: 1,
+                                    payload: *v as u64,
+                                }),
+                                Err(e) => capture_error(e),
+                            },
+                            || Ok(false),
+                        );
+                        aliased.map(|_| value.to_string())
+                    },
+                )
             }
         })
     }
@@ -1051,6 +1217,8 @@ mod tests {
         let allocator = btel_types::FunctionIdAllocator::default();
         let clock = ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
         Box::new(State {
+            capture_metadata: None,
+            capture_scratch: None,
             evidence: true,
             depth: 0,
             evidence_frame: std::ptr::null_mut(),
@@ -1084,6 +1252,8 @@ mod tests {
         announcements: Vec<(TelemetryId, TelemetryId)>,
         completions: Vec<(TelemetryId, TelemetryId, bool, bool, InvocationOutcome)>,
         count: u64,
+        capture_counts: Vec<(bool, usize)>,
+        dependencies: Vec<bool>,
         raises: Vec<(btel_records::RaiseKind, u32, CallPathId)>,
         stacks: Vec<usize>,
         ends: Vec<(u32, Option<u32>)>,
@@ -1108,10 +1278,15 @@ mod tests {
                 } => self.ends.push((*unwound_frames, *handler_pc)),
                 _ => {}
             }
+            self.capture_counts.push((
+                matches!(record, SpanRecord::FunctionSpanAnnouncement { .. }),
+                record.captures().count(),
+            ));
             if let SpanRecord::FunctionSpanAnnouncement { id, parent_id, .. } = record {
                 self.announcements.push((*id, *parent_id));
             }
             if let Some(done) = record.completion() {
+                self.dependencies.push(done.requires_announcement);
                 self.completions.push((
                     done.id,
                     done.parent_id,
@@ -1175,6 +1350,86 @@ mod tests {
         assert!(published.completions[2].2);
         assert_eq!(published.completions[2].1, root);
         assert_eq!(published.completions[2].4, InvocationOutcome::Panicked);
+    }
+
+    #[test]
+    fn captures_are_policy_gated_and_late_spans_never_capture_inputs() {
+        let pool = Pool::new(bex_chunkedringbuffer::Config::for_producers(
+            NonZeroUsize::new(1).unwrap(),
+        ))
+        .unwrap();
+        let mut processor = Processor::with_publisher(
+            pool.bind_consumer().unwrap(),
+            NonZeroUsize::new(8).unwrap(),
+            Spans::default(),
+        );
+        let mut state = test_state(&pool);
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
+        CURRENT.set(&mut *state);
+        let calls = Cell::new(0);
+        let inputs = || {
+            calls.set(calls.get() + 1);
+            let mut scratch = capture::Scratch::default();
+            InputCaptures {
+                inputs: Some(unsafe {
+                    scratch.arguments(&[], &[crate::Dyn { tag: 0, payload: 7 }])
+                }),
+                types: Some(scratch.type_args(&[("T", &capture::Type::Int)])),
+            }
+        };
+        let outputs = |_: &R<()>| {
+            calls.set(calls.get() + 1);
+            Some(capture::Scratch::default().text("result"))
+        };
+        unsafe { observe_captured(0, 2, inputs, outputs, || Ok(())) }.unwrap();
+        assert_eq!(calls.get(), 0);
+        state.policies[0] = Policy {
+            capture_inputs: true,
+            capture_output: true,
+            capture_error: true,
+            promote_errors: true,
+            ..Policy::NONE
+        };
+        unsafe { observe_captured(0, 2, inputs, outputs, || Ok(())) }.unwrap();
+        assert_eq!(calls.get(), 2);
+        let failed = unsafe {
+            observe_captured(0, 3, inputs, outputs, || {
+                Err(Error::internal("promotion".into()))
+            })
+        };
+        assert!(failed.is_err());
+        assert_eq!(calls.get(), 3);
+        unsafe { observe_captured(0, 3, inputs, outputs, || Ok(())) }.unwrap();
+        assert_eq!(calls.get(), 3);
+        state.policies[0].capture_output = false;
+        unsafe { observe_captured(0, 2, inputs, outputs, || Ok(())) }.unwrap();
+        assert_eq!(calls.get(), 4);
+        CURRENT.set(std::ptr::null_mut());
+        state.flush();
+        processor.process_available();
+        processor.flush();
+        let p = processor.publisher();
+        assert_eq!(p.count, 5);
+        assert_eq!(p.announcements.len(), 3);
+        assert_eq!(p.dependencies, [false, true, false, true]);
+        assert_eq!(
+            p.capture_counts
+                .iter()
+                .filter(|(entry, _)| *entry)
+                .map(|(_, n)| *n)
+                .collect::<Vec<_>>(),
+            [0, 2, 2]
+        );
+        assert_eq!(
+            p.capture_counts
+                .iter()
+                .filter(|(entry, _)| !*entry)
+                .map(|(_, n)| *n)
+                .sum::<usize>(),
+            2
+        );
     }
 
     #[test]
