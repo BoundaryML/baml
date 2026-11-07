@@ -132,7 +132,10 @@ test "initializer " + InitTestName() {
 function InitializerTestSummary(registry: testing.TestRegistry) -> string {
     let outcomes: string[] = [];
     for (let entry in registry.collector.tests) {
-        let report = registry.run_test(entry.name);
+        // This fixture checks registration and initialized captures, not deadlines.
+        // The harness bounds the process; a losing deadline task would introduce
+        // scheduler-dependent telemetry before its first instruction.
+        let report = testing._run_test(entry.body, entry.runner, 0);
         outcomes.push(`${entry.name}:${report.outcome}:${report.runs.length()}`);
     }
     outcomes.join(",")

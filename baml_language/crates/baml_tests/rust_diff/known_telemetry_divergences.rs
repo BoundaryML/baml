@@ -93,7 +93,7 @@ mod tests {
     }
 }
 
-pub const POLLING_REASON: &str = "readiness polling executes a scheduler-dependent number of successful 1ms sleeps (Cancellation probes.baml:136, RecursiveCancellation probes.baml:167, CancelDuringUnwind records.baml:401)";
+pub const POLLING_REASON: &str = "readiness polling executes a scheduler-dependent number of successful 1ms sleeps (Cancellation probes.baml:136, RecursiveCancellation probes.baml:167, CancelDuringUnwind records.baml:401, CancelDeep probes.baml:581, Shielded probes.baml:613)";
 
 /// Remove only the harness readiness poll, then rebuild tree signatures so
 /// ancestors still check all their other children. Error/cancellation outcomes
@@ -104,6 +104,8 @@ pub fn without_readiness_poll(trace: &str, probe: &str, backend: &str) -> String
         "Cancellation" => 136,
         "RecursiveCancellation" => 167,
         "CancelDuringUnwind" => 401,
+        "CancelDeep" => 581,
+        "Shielded" => 613,
         _ => return trace.to_owned(),
     };
     if !matches!(
@@ -405,11 +407,13 @@ mod scope_tests {
     }
 
     #[test]
-    fn readiness_exception_is_scoped_to_the_three_observed_sites() {
+    fn readiness_exception_is_scoped_to_the_observed_sites() {
         for (probe, line) in [
             ("Cancellation", 136),
             ("RecursiveCancellation", 167),
             ("CancelDuringUnwind", 401),
+            ("CancelDeep", 581),
+            ("Shielded", 613),
         ] {
             let row = format!(
                 "1 {}\n",
@@ -419,7 +423,9 @@ mod scope_tests {
             }, 0]}, "count"])
             );
             assert!(without_readiness_poll(&row, probe, "compiled").is_empty());
-            assert_eq!(without_readiness_poll(&row, probe, "runtime-v2"), row);
+            for backend in ["runtime-v2", "v2", "v2-gc-stress"] {
+                assert_eq!(without_readiness_poll(&row, probe, backend), row);
+            }
         }
     }
 
