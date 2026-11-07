@@ -750,7 +750,7 @@ fn decode_one(
                     Err(refused) => {
                         let at = refused
                             .key
-                            .map_or_else(|| path(), |key| format!("{}.{key}", path()));
+                            .map_or_else(path, |key| format!("{}.{key}", path()));
                         Err(raise_decode(vm, refused.message, &at))
                     }
                 };
