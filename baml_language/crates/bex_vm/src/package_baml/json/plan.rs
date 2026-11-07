@@ -197,7 +197,7 @@ impl RootHaver for ClassPlan {
 /// The class plans one call has worked out, under its naming.
 pub(super) struct Plans {
     pub(super) naming: JsonNaming,
-    plans: FxHashMap<(TypeHead, Box<[RealizedTy]>), Arc<ClassPlan>>,
+    classes: FxHashMap<(TypeHead, Box<[RealizedTy]>), Arc<ClassPlan>>,
     /// Each union met, with how it picks a member when it has a fallback.
     pub(super) unions: FxHashMap<Box<[RealizedTy]>, Option<Arc<super::union::UnionTags>>>,
 }
@@ -206,7 +206,7 @@ impl Plans {
     pub(super) fn new(naming: JsonNaming) -> Self {
         Self {
             naming,
-            plans: FxHashMap::default(),
+            classes: FxHashMap::default(),
             unions: FxHashMap::default(),
         }
     }
@@ -219,18 +219,18 @@ impl Plans {
         head: TypeHead,
         type_args: &[RealizedTy],
     ) -> Result<Arc<ClassPlan>, String> {
-        if let Some(plan) = self.plans.get(&(head, type_args.into())) {
+        if let Some(plan) = self.classes.get(&(head, type_args.into())) {
             return Ok(Arc::clone(plan));
         }
         let plan = Arc::new(ClassPlan::new(vm, head, type_args, self.naming)?);
-        self.plans
+        self.classes
             .insert((head, type_args.into()), Arc::clone(&plan));
         Ok(plan)
     }
 
     /// Forget every plan: after a collection their pointers may be stale.
     pub(super) fn clear(&mut self) {
-        self.plans.clear();
+        self.classes.clear();
         self.unions.clear();
     }
 }

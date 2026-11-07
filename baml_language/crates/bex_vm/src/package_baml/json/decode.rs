@@ -904,7 +904,7 @@ fn open_class(
     if plan.is_fallback()
         && let Some((message, key)) = super::fallback_tag_error(vm, source, &plan)
     {
-        let at = key.map_or_else(|| path(), |key| format!("{}.{key}", path()));
+        let at = key.map_or_else(path, |key| format!("{}.{key}", path()));
         return Err(raise_decode(vm, message, &at));
     }
     let mut fields: Vec<Field> = Vec::with_capacity(plan.fields.len());
