@@ -55,7 +55,7 @@ def _cli_env():
     return {**os.environ, "DEV_BAML_CLI_DISABLE_AGENT_DETECTION": "1"}
 
 
-def build_baml(cli, workload, stage, backend="vm"):
+def build_baml(cli, workload, stage, backend="vm", rust_build_dir=None):
     """Pack main.baml plus the driver into one executable. Returns a build record."""
     project = stage / backend / workload["id"].replace("/", "__")
     src = project / "baml_src"
@@ -75,7 +75,7 @@ def build_baml(cli, workload, stage, backend="vm"):
                "main" if backend == "rt" else "speedtest_driver", "-o", str(out)]
     if backend != "vm":
         command += ["--rust", "--rust-workspace", str(_repo_root()),
-                    "--rust-build-dir", str(stage / "rust-build" / backend)]
+                    "--rust-build-dir", str((rust_build_dir or stage / "rust-build") / backend)]
     if backend == "rt":
         command += ["--rt"]
     start = time.perf_counter()
@@ -248,7 +248,8 @@ def cmd_run(args):
         for w in workloads:
             builds[w["id"]] = {}
             for backend in backends:
-                b = build_baml(cli, w, stage, backend)
+                b = build_baml(cli, w, stage, backend,
+                               Path(args.rust_build_dir).resolve() if args.rust_build_dir else None)
                 loads.append(os.getloadavg()[0])
                 builds[w["id"]][backend] = b
                 _log(f"  {w['name']} [{backend}]: {b['status']} ({b.get('seconds', 0):.1f}s)" +

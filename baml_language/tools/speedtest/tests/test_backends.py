@@ -104,7 +104,7 @@ class Backends(unittest.TestCase):
                                              '--baml', str(cli_file), '--trials', '1'])
         self.workload.update(jobs=1, warmup=0, expect='42')
         packs = []
-        def pack(cli, workload, stage, backend):
+        def pack(cli, workload, stage, backend, rust_build_dir=None):
             packs.append(backend)
             return {'status': 'unsupported', 'error': 'unsupported by baml_rt: float'} if backend == 'rt' else {
                 'status': 'ok', 'artifact': backend, 'seconds': 1, 'bytes': 10}

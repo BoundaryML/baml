@@ -100,6 +100,9 @@ packs once per workload; levels share that executable via `BAML_TELEMETRY`.
 Native packs use the release profile and one Cargo build directory per backend
 across workloads. Pack time includes compilation with that progressively warm
 cache; the first admitted workload pays the cold dependency build cost.
+`--rust-build-dir DIR` retains that cache across runs (backend subdirectories;
+only one run may use it at a time). Cached dependencies affect pack time, so
+record whether the cache was warm when comparing build KPIs.
 
 VM/native pack the BAML speedtest driver. RT packs `main` and uses its native
 `--jobs` / `--warmup` JSON driver, retaining its runtime instance across jobs.

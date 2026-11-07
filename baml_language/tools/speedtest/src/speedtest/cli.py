@@ -24,6 +24,7 @@ def build_parser():
     run_p.add_argument("--cpu", type=int, default=None, help="Pin every trial to this CPU (Linux)")
     run_p.add_argument("--build", action="store_true", help="cargo build --release baml-cli and the pack host first")
     run_p.add_argument("--baml", default=None, help="Path to baml-cli (default: target/release/baml-cli)")
+    run_p.add_argument("--rust-build-dir", default=None, help="Persistent native Cargo cache (backend subdirectories; serial runs only)")
     run_p.add_argument("--tag", default=None, metavar="NAME", help="Also save this run as baseline NAME")
     run_p.add_argument("--out", default=None, metavar="DIR", help="Also copy the report bundle here (e.g. a CI artifact dir)")
     run_p.add_argument("--profile", action="store_true", help="Capture samply CPU profiles of each BAML workload")
