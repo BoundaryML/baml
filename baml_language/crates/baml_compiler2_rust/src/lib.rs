@@ -13,3 +13,6 @@ mod render;
 mod structure;
 
 pub use admit::{CompiledFunction, Rejection, RustModule, compile_program};
+
+mod rt;
+pub use rt::compile_rt;

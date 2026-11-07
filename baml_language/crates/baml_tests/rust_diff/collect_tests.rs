@@ -16,7 +16,11 @@ pub fn main(artifact: &[u8], table: &'static bex_vm::CompiledBodyTable) -> std::
             artifact_fingerprint,
         },
     );
+    let recording = bex_engine::TelemetryRecording::from_artifact(&envelope.telemetry)
+        .unwrap()
+        .with_host("differential-collect-tests");
     let config = EngineConfig {
+        recording: Some(recording),
         artifact_telemetry: Some(envelope.telemetry),
         compiled_bodies,
         ..Default::default()
@@ -44,24 +48,34 @@ async fn collect(
         Vec::new(),
         config,
     )?);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
-        .await?;
-    let serialized = engine
-        .call_function(
-            "testing.TestRegistry.serialize",
-            vec![registry.clone()],
-            FunctionCallContextBuilder::new(CallId::next()).build(),
-            true,
-        )
-        .await?;
-    let outcomes = engine
-        .call_function(
-            "InitializerTestSummary",
-            vec![registry],
-            FunctionCallContextBuilder::new(CallId::next()).build(),
-            true,
-        )
-        .await?;
-    Ok(format!("{serialized:?}\n{outcomes:?}"))
+    let result = async {
+        let registry = engine
+            .collect_tests(CallId::next(), CancellationToken::default())
+            .await?;
+        let serialized = engine
+            .call_function(
+                "testing.TestRegistry.serialize",
+                vec![registry.clone()],
+                FunctionCallContextBuilder::new(CallId::next()).build(),
+                true,
+            )
+            .await?;
+        let outcomes = engine
+            .call_function(
+                "InitializerTestSummary",
+                vec![registry],
+                FunctionCallContextBuilder::new(CallId::next()).build(),
+                true,
+            )
+            .await?;
+        Ok(format!("{serialized:?}\n{outcomes:?}"))
+    }
+    .await;
+    engine.record_process_exit(if result.is_ok() {
+        bex_engine::ProcessStatus::Success
+    } else {
+        bex_engine::ProcessStatus::Error
+    });
+    engine.shutdown().await;
+    result
 }

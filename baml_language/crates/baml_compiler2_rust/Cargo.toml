@@ -16,6 +16,7 @@ workspace = true
 wasm_support = false
 
 [dependencies]
+baml_env.workspace = true
 baml_base = { workspace = true }
 baml_builtins2_codegen = { workspace = true }
 baml_compiler2_emit = { workspace = true }
@@ -23,4 +24,7 @@ baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_mir = { workspace = true }
 baml_type = { workspace = true }
+bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+borsh = { workspace = true }
+btel_types = { workspace = true }

@@ -640,8 +640,12 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
+ "baml_env",
  "baml_type",
+ "bex_vm",
  "bex_vm_types",
+ "borsh",
+ "btel_types",
 ]
 
 [[package]]
@@ -987,6 +991,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_rt"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_env",
+ "baml_rt_gc",
+ "baml_rt_tasks",
+ "baml_type",
+ "baml_version",
+ "bex_chunkedringbuffer",
+ "bex_str",
+ "bex_vm_types",
+ "borsh",
+ "btel_clock",
+ "btel_file",
+ "btel_processor",
+ "btel_recorder",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "libc",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "baml_rt_gc"
+version = "0.1.0"
+dependencies = [
+ "corosensei",
+ "libc",
+]
+
+[[package]]
+name = "baml_rt_tasks"
+version = "0.0.0-beta"
+dependencies = [
+ "corosensei",
+ "libc",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "baml_sdkgen_types"
 version = "0.0.0-beta"
 dependencies = [
@@ -1043,7 +1091,9 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "btel_clock",
+ "btel_reader",
  "btel_recorder",
+ "btel_snapshot",
  "codspeed-divan-compat",
  "darwin-kperf",
  "darwin-kperf-events",
@@ -1054,10 +1104,15 @@ dependencies = [
  "num-bigint",
  "prettyplease",
  "proc-macro2",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
  "quote",
  "rayon",
  "salsa",
+ "serde",
  "serde_json",
+ "sha2",
  "similar",
  "syn 2.0.117",
  "sys_native",
@@ -1066,6 +1121,7 @@ dependencies = [
  "tempfile",
  "text-size",
  "tokio",
+ "toml 0.8.23",
  "walkdir",
  "wiremock",
 ]
@@ -1388,6 +1444,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_env",
  "baml_linker_types",
+ "baml_rt_gc",
  "baml_test_support",
  "baml_type",
  "base64",
@@ -1395,6 +1452,7 @@ dependencies = [
  "bex_sap",
  "bex_str",
  "bex_vm_types",
+ "borsh",
  "btel_clock",
  "btel_processor",
  "btel_records",
@@ -1446,6 +1504,7 @@ dependencies = [
  "hex",
  "indexmap",
  "num-bigint",
+ "serde",
  "serde_json",
  "sha2",
  "thiserror 2.0.18",
@@ -6913,6 +6972,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]

@@ -1,3 +1,5 @@
+mod codegen_rt;
+pub use codegen_rt::{generate_rt, supports_rt};
 mod codegen;
 mod codegen_errors;
 mod codegen_io;

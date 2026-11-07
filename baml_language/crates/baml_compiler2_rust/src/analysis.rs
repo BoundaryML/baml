@@ -407,7 +407,7 @@ fn read_only_after_load(
 }
 
 /// Only nonescaping iterators can replace VM dispatch with an index walk.
-fn array_iterators(
+pub(crate) fn array_iterators(
     db: &dyn baml_compiler2_mir::Db,
     body: &MirFunctionBody<'_>,
     arity: usize,

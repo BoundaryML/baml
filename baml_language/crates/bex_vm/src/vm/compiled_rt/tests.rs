@@ -583,7 +583,9 @@ fn timing_records(vm: &BexVm, paths: &NamedPaths) -> TimingRecords {
                 reentry,
                 ..
             } => Some((paths[call_path].clone(), *outcome, *reentry)),
-            TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+            TimingRecord::ThreadSelected { .. }
+            | TimingRecord::SysOpTime { .. }
+            | TimingRecord::AggregateDeltas(_) => None,
         })
         .collect()
 }

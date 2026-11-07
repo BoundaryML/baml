@@ -818,12 +818,21 @@ impl Function {
     pub fn runtime_metadata(&self) -> Option<btel_types::FunctionMetadata> {
         let function_id = self.telemetry_function_id?;
         let label = super::owner::package_label(self.owner);
-        let fqn = self.identity.render(label.as_ref());
+        Some(self.telemetry_metadata(function_id, label.as_ref()))
+    }
+
+    /// Owned definition metadata, also used by native emitters before heap loading.
+    pub fn telemetry_metadata(
+        &self,
+        function_id: btel_types::FunctionId,
+        label: Option<&baml_base::Name>,
+    ) -> btel_types::FunctionMetadata {
+        let fqn = self.identity.render(label);
         let display_name = self
             .identity
             .declared_name()
-            .map_or_else(|| self.identity.tail(label.as_ref()), ToString::to_string);
-        let package_name = label.as_ref().map(ToString::to_string);
+            .map_or_else(|| self.identity.tail(label), ToString::to_string);
+        let package_name = label.map(ToString::to_string);
         let namespace: Vec<String> = self
             .identity
             .namespace()
@@ -858,11 +867,11 @@ impl Function {
             FunctionIdentity::Synthetic { parent, .. } => {
                 let parent = match parent.as_ref() {
                     SyntheticParent::Function(function) => Some(btel_types::DefinitionKey(
-                        format!("function:{}", function.render(label.as_ref())),
+                        format!("function:{}", function.render(label)),
                     )),
                     SyntheticParent::Let(_) => None,
                 };
-                (parent, Some(self.identity.tail(label.as_ref())))
+                (parent, Some(self.identity.tail(label)))
             }
             _ => (None, None),
         };
@@ -873,7 +882,7 @@ impl Function {
             end: self.span.range.end().into(),
         });
 
-        Some(btel_types::FunctionMetadata {
+        btel_types::FunctionMetadata {
             function_id,
             fqn: fqn.clone(),
             display_name,
@@ -890,7 +899,7 @@ impl Function {
             argument_layout: self.telemetry_argument_layout(),
             source_map: self.telemetry_source_map(),
             model_invoke: matches!(self.body_meta, Some(FunctionMeta::ModelInvoke)),
-        })
+        }
     }
 
     /// The executed (compact) code's line table, in the byte-offset PCs that

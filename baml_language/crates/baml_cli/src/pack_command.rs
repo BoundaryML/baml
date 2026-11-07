@@ -105,6 +105,10 @@ pub struct PackArgs {
     #[arg(long, help_heading = "Build options")]
     pub rust: bool,
 
+    /// Run compiled Rust with baml_rt instead of the VM.
+    #[arg(long, requires = "rust", help_heading = "Build options")]
+    pub rt: bool,
+
     /// The `baml_language` workspace checkout the generated host is built from.
     #[arg(
         long,
@@ -200,6 +204,9 @@ impl PackArgs {
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         self.validate_flags()?;
         let manifest = self.artifact_manifest()?;
+        if self.rt && self.telemetry.embed_telemetry {
+            anyhow::bail!("unsupported in baml_rt: embedded telemetry");
+        }
         let mut telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
             &manifest,
             btel_settings::artifact::ArtifactKind::Pack,
@@ -265,17 +272,40 @@ impl PackArgs {
                         .map(|callable| callable.object.raw())
                 })
                 .collect();
-            let module = baml_db::rust_backend::compile_program(
-                &db,
-                root,
-                &envelope.program,
-                crate::bytecode_cache::CLI_OPT_LEVEL,
-                "program.bexa",
-                fingerprint,
-                entries.as_deref(),
-            )
-            .map_err(|error| anyhow!(error))?;
-            Some(module)
+            if self.rt {
+                if self.target.is_none() || targets.len() != 1 {
+                    anyhow::bail!("unsupported in baml_rt: subcommand packs");
+                }
+                let entry = entries
+                    .as_ref()
+                    .and_then(|e| e.first())
+                    .ok_or_else(|| anyhow!("rt entry not linked"))?;
+                let source = baml_db::rust_backend::compile_rt(
+                    &db,
+                    root,
+                    &envelope.program,
+                    crate::bytecode_cache::CLI_OPT_LEVEL,
+                    *entry,
+                )
+                .map_err(|e| anyhow!(e))?;
+                Some(baml_db::rust_backend::RustModule {
+                    source,
+                    functions: Vec::new(),
+                    rejected: Vec::new(),
+                })
+            } else {
+                let module = baml_db::rust_backend::compile_program(
+                    &db,
+                    root,
+                    &envelope.program,
+                    crate::bytecode_cache::CLI_OPT_LEVEL,
+                    "program.bexa",
+                    fingerprint,
+                    entries.as_deref(),
+                )
+                .map_err(|error| anyhow!(error))?;
+                Some(module)
+            }
         } else {
             None
         };
@@ -435,7 +465,32 @@ impl PackArgs {
         let src_dir = build_dir.join("src");
         std::fs::create_dir_all(&src_dir)
             .with_context(|| format!("failed to create {}", src_dir.display()))?;
-        let manifest = rust_manifest(&workspace, self.rust_profile);
+        let manifest = if self.rt {
+            let mut manifest =
+                rust_manifest(&workspace, self.rust_profile).parse::<toml::Value>()?;
+            let dependencies = manifest["dependencies"].as_table_mut().unwrap();
+            dependencies.clear();
+            for name in ["baml_rt", "baml_rt_gc"] {
+                dependencies.insert(
+                    name.into(),
+                    toml::Value::Table(toml::map::Map::from_iter([(
+                        "path".into(),
+                        toml::Value::String(
+                            workspace.join("crates").join(name).display().to_string(),
+                        ),
+                    )])),
+                );
+            }
+            // Retain source symbols for the required gap profile.
+            manifest["profile"]["release"]["strip"] = toml::Value::Boolean(false);
+            manifest["profile"]["release"]
+                .as_table_mut()
+                .unwrap()
+                .insert("debug".into(), toml::Value::Integer(1));
+            toml::to_string(&manifest)?
+        } else {
+            rust_manifest(&workspace, self.rust_profile)
+        };
         let main = b"fn main() -> std::process::ExitCode {
     baml_pack_host::run_embedded(
         baml_rust_program::PROGRAM_ARTIFACT,
@@ -445,8 +500,22 @@ impl PackArgs {
 ";
         for (name, contents) in [
             ("src/program.bexa", serialized),
-            ("src/lib.rs", module.source.as_bytes()),
-            ("src/main.rs", main.as_slice()),
+            (
+                "src/lib.rs",
+                if self.rt {
+                    b""
+                } else {
+                    module.source.as_bytes()
+                },
+            ),
+            (
+                "src/main.rs",
+                if self.rt {
+                    module.source.as_bytes()
+                } else {
+                    main.as_slice()
+                },
+            ),
             ("Cargo.toml", manifest.as_bytes()),
         ] {
             std::fs::write(build_dir.join(name), contents)
@@ -1002,6 +1071,7 @@ mod tests {
             file: None,
             output: None,
             rust: false,
+            rt: false,
             rust_workspace: None,
             rust_build_dir: None,
             rust_profile: RustProfile::Release,
