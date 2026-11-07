@@ -19,10 +19,11 @@ recordings never enter the developer's normal BAML home. Delivery is local.
 
 Add one `Backend` entry in `tests/rust_differential.rs`: a unique name, artifact
 cache key, builder function and run environment. Its builder returns a fixture
-name-to-executable map, using the same probe and KPI sources. A distinct artifact
+name-to-build-result map (executable or explicit rejection), using the same
+probe and KPI sources. A distinct artifact
 key invokes that builder once; entries sharing a key reuse artifacts. Bytecode
 is selected by name as the reference, independently of environment variables.
-No comparator or telemetry code needs a v2 branch. Existing compiled-body,
+V2 bypasses the existing telemetry allowlist entirely. Existing compiled-body,
 GC-stress and VM-frame environment switches remain in the existing entries.
 
 The probe matrix includes default, off, low, explicit medium and high. KPI
@@ -60,8 +61,9 @@ failed GC completions and all other records remain compared.
 
 Other current compiled-backend exceptions:
 
-- `Cancellation`, `RecursiveCancellation`, `CancelDuringUnwind`: readiness
-  polls at `probes.baml:136`, `probes.baml:167`, and `records.baml:401` execute
+- `Cancellation`, `RecursiveCancellation`, `CancelDuringUnwind`, `CancelDeep`,
+  `Shielded`: readiness polls at `probes.baml:136`, `probes.baml:167`,
+  `records.baml:401`, `probes.baml:581`, and `probes.baml:613` execute
   scheduler-dependent numbers of successful sleeps. Only that call site and its
   descendants are removed, then ancestor tree signatures are rebuilt; captured
   values and unsuccessful completions remain checked.
@@ -108,3 +110,48 @@ subset compile time. Initializer variants also export only their required
 roots, so unrelated probe bodies are not repeatedly compiled. Use the examples
 above for quick iteration before the full
 gate; do not treat a subset as full backend acceptance.
+
+## Runtime v2 coverage / phase 2 queue
+
+`v2` and `v2-gc-stress` pack each selected fixture separately with
+`--rust --runtime v2`, using the same complete source project as the oracle.
+Single-entry executables receive no subcommand argument. Both modes run every
+admitted probe and all admitted KPI workloads, including GC stress on KPIs.
+No process or telemetry divergence allowance applies to v2.
+
+Only a failed pack containing `unsupported in runtime v2:` is unsupported;
+its first diagnostic construct is recorded. Every other pack/run error,
+crash, or mismatch fails the gate. Stale output executables are removed before
+packing. V2's closed-world compiler rejects unsupported reachable code rather
+than emitting a partial bytecode fallback. The shared probe project currently
+contains top-level initializers: their rejection is a project-level blocker,
+not evidence that each probe's individual body is unsupported. Synthetic
+initializer/registry fixtures also require a v2 host adapter once admitted;
+the harness fails explicitly rather than running an unmodified variant.
+
+`rust-differential/v2-coverage.txt` records one row per selected probe/workload,
+with pass (both modes), unsupported (first construct), or fail, plus totals and
+construct counts sorted by the number of fixtures blocked. The report is also
+printed at the end, before the final failure assertion. Legacy-only failures
+still fail the gate but do not change v2 coverage. Subset runs report only
+the selected fixtures; run the full gate to regenerate the complete work queue.
+
+V2 telemetry off is required now. Low/medium/high/default are explicitly
+reported as **not yet supported**. Flip the single `TELEMETRY_SUPPORTED` constant
+in `v2.rs` when the producer lands: all existing applicable matrix cells become
+required, including recording integrity, non-empty telemetry, and exact
+normalized equality. No allowlist changes are needed or permitted for v2.
+
+The initializer registration fixture runs collected test bodies without a deadline
+task (`testing._run_test(..., 0)`). The harness process timeout still bounds it.
+This avoids scheduler-dependent records from cancelling a losing timer before
+its body starts; initializer/capture assertions and exact telemetry checks remain.
+
+`v2-coverage-baseline.txt` preserves the initial full-run phase 2 queue in git.
+Regenerate it from the full gate's `rust-differential/v2-coverage.txt`; subset
+reports must not replace the baseline. The freshly generated report is the
+source of truth after compiler or telemetry support changes.
+
+`Async` passes settled inputs to `future.any`, keeping its result and task
+outcomes deterministic. `AnyWithFailure` still exercises pending inputs and
+error handling. No task cancellation outcome is normalized away.
