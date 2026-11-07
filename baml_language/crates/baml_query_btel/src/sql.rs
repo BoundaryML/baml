@@ -24,6 +24,7 @@ use sqlparser::{
     },
     dialect::{GenericDialect, PostgreSqlDialect},
     parser::Parser,
+    tokenizer::{Token, Tokenizer},
 };
 
 use crate::catalog;
@@ -143,7 +144,7 @@ pub fn translate(sql: &str) -> Result<Translation, SqlError> {
     };
     let shape = translator.query(&mut query, Mode::Final)?;
     let sql = if matches!(query.body.as_ref(), SetExpr::Select(_)) {
-        query.to_string()
+        render_limited_select(&query, &translator.output).unwrap_or_else(|| query.to_string())
     } else {
         let (sql, output) = render_set_operation(&query, &shape)?;
         translator.output = output;
@@ -153,6 +154,150 @@ pub fn translate(sql: &str) -> Result<Translation, SqlError> {
         sql,
         columns: translator.output,
     })
+}
+
+/// Keep value handles through a metadata top-N, then render only its result.
+/// SQLite otherwise evaluates projection callbacks before sorting a compound
+/// view, even for rows discarded by LIMIT. Keep the original physical column
+/// positions (including kind slots) so positional ORDER BY still means the
+/// same thing. DISTINCT, grouping and value-based ordering need rendered values
+/// to choose rows, so those queries keep the ordinary translation.
+fn render_limited_select(query: &Query, output: &[OutputColumn]) -> Option<String> {
+    use sqlparser::ast::LimitClause;
+
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return None;
+    };
+    if !output.iter().any(|column| column.value)
+        || select.distinct.is_some()
+        || select.having.is_some()
+        || !matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty())
+    {
+        return None;
+    }
+    let limit = match query.limit_clause.as_ref()? {
+        LimitClause::LimitOffset { limit, .. } => limit.as_ref()?,
+        LimitClause::OffsetCommaLimit { limit, .. } => limit,
+    };
+    // Do not materialize an unbounded LIMIT -1 or an unknown parameter.
+    let Expr::Value(value) = limit else {
+        return None;
+    };
+    let Value::Number(number, _) = &value.value else {
+        return None;
+    };
+    if number.parse::<u64>().ok()? == 0 {
+        return None;
+    }
+    let order = query.order_by.as_ref()?;
+    let OrderByKind::Expressions(terms) = &order.kind else {
+        return None;
+    };
+    let physical_values: Vec<bool> = output
+        .iter()
+        .flat_map(|column| {
+            if column.value {
+                vec![true, true]
+            } else {
+                vec![false]
+            }
+        })
+        .collect();
+    for term in terms {
+        match &term.expr {
+            Expr::Identifier(name) => {
+                let mut matches = output
+                    .iter()
+                    .filter(|column| column.name.eq_ignore_ascii_case(&name.value));
+                if matches.next()?.value || matches.next().is_some() {
+                    return None;
+                }
+            }
+            Expr::Value(value) => {
+                let Value::Number(number, _) = &value.value else {
+                    return None;
+                };
+                let position = number.parse::<usize>().ok()?.checked_sub(1)?;
+                if *physical_values.get(position)? {
+                    return None;
+                }
+            }
+            // Expressions and qualified/non-output columns need the original
+            // scope. In particular, never sort opaque handles as SQL values.
+            _ => return None,
+        }
+    }
+
+    // SQLite also permits SELECT aliases in WHERE and JOIN ON. If one of
+    // those clauses reads a rendered output alias, replacing its projection
+    // with a handle would change the predicate. Conservatively keep the
+    // ordinary path whenever a value output name occurs outside projection.
+    let mut inputs = select.clone();
+    inputs.projection.clear();
+    let input_sql = inputs.to_string();
+    if Tokenizer::new(&GenericDialect {}, &input_sql)
+        .tokenize()
+        .ok()?
+        .iter()
+        .any(|token| {
+            matches!(token, Token::Word(word) if output.iter().any(|column| {
+                column.value && column.name.eq_ignore_ascii_case(&word.value)
+            }))
+        })
+    {
+        return None;
+    }
+
+    let mut inner = query.clone();
+    let SetExpr::Select(select) = inner.body.as_mut() else {
+        return None;
+    };
+    let slots: Vec<String> = (0..select.projection.len())
+        .map(|i| quoted(&format!("__c{i}")).to_string())
+        .collect();
+    let mut items = Vec::new();
+    let mut physical = 0;
+    for column in output {
+        let slot = &slots[physical];
+        let name = quoted(&column.name);
+        if column.value {
+            let SelectItem::ExprWithAlias { expr, .. } = &mut select.projection[physical] else {
+                return None;
+            };
+            let Expr::Function(function) = expr else {
+                return None;
+            };
+            let FunctionArguments::List(arguments) = &function.args else {
+                return None;
+            };
+            let [FunctionArg::Unnamed(FunctionArgExpr::Expr(handle))] = arguments.args.as_slice()
+            else {
+                return None;
+            };
+            *expr = handle.clone();
+            let SelectItem::ExprWithAlias { expr, .. } = &mut select.projection[physical + 1]
+            else {
+                return None;
+            };
+            *expr = Expr::Value(Value::Null.into());
+            let kind = quoted(&format!("{}{KIND_SUFFIX}", column.name));
+            items.push(format!(
+                "__btel_render({slot}) AS {name}, __btel_kind({slot}) AS {kind}"
+            ));
+            physical += 2;
+        } else {
+            items.push(format!("{slot} AS {name}"));
+            physical += 1;
+        }
+    }
+    // Keep the top-N as a co-routine instead of forcing materialization of
+    // its wide rows. ORDER BY on both sides prevents flattening; repeating
+    // the metadata ordering also makes the output order explicit.
+    Some(format!(
+        "WITH \"__limited\"({}) AS NOT MATERIALIZED ({inner}) SELECT {} FROM \"__limited\" {order}",
+        slots.join(", "),
+        items.join(", ")
+    ))
 }
 
 fn parse(sql: &str) -> Result<Vec<Statement>, SqlError> {

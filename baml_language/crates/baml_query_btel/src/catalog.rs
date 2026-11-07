@@ -707,6 +707,51 @@ mod tests {
         }
     }
 
+    /// Each span branch must scan its own population rather than probing
+    /// unrelated kinds of spans through their shared context table.
+    #[test]
+    fn span_branches_do_not_scan_all_event_contexts() {
+        let conn = connection();
+        for relation in ["spans", "span_announcements"] {
+            for projection in ["*", "count(*)"] {
+                let sql = format!("SELECT {projection} FROM {relation}");
+                let plan = plan(&conn, &sql);
+                assert!(
+                    !plan.iter().any(|(_, _, step)| step.starts_with("SCAN ec")),
+                    "{sql}: {plan:#?}"
+                );
+            }
+        }
+    }
+
+    /// Correcting unfiltered scans must also retain selective identity-driven
+    /// lookups; forcing the span table first would regress those predicates.
+    #[test]
+    fn context_identity_filters_can_still_drive_span_lookups() {
+        let conn = connection();
+        for relation in ["spans", "span_announcements"] {
+            let sql = format!(
+                "SELECT span_id FROM {relation} WHERE context_distinct_id = 'selected-user'"
+            );
+            let plan = plan(&conn, &sql);
+            for index in ["context_by_identity", "event_context_by_cas"] {
+                assert!(
+                    plan.iter().any(|(_, _, step)| step.contains(index)),
+                    "{sql}: {plan:#?}"
+                );
+            }
+            assert!(
+                !plan.iter().any(|(_, _, step)| {
+                    ["c", "t", "n", "ec"].iter().any(|name| {
+                        step == &format!("SCAN {name}")
+                            || step.starts_with(&format!("SCAN {name} "))
+                    })
+                }),
+                "{sql}: {plan:#?}"
+            );
+        }
+    }
+
     /// Every relation's documented columns are exactly its view's columns.
     #[test]
     fn documented_columns_match_views() {
