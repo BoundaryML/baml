@@ -32,6 +32,8 @@ def fmt_ratio(a, b):
     if b == 0:
         return "—"
     r = a / b
+    if 0 < r < 0.1:
+        return f"{r:.3g}x"
     if r >= 10:
         return f"{r:.0f}x"
     elif r >= 1:

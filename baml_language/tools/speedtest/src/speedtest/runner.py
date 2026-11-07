@@ -91,8 +91,6 @@ def build_baml(cli, workload, stage, backend="vm", rust_build_dir=None):
     if r.returncode != 0 or not out.exists():
         lines = [l for l in r.stderr.strip().splitlines() if l.strip() and not l.startswith("warning:")]
         return {"status": "failed", "error": (lines[-1] if lines else f"exit {r.returncode}")[:400]}
-    if backend == "rt" and _has_setup(workload["baml"]):
-        return {"status": "failed", "error": "rt driver cannot retain setup() state between jobs"}
     return {"status": "ok", "artifact": str(out), "seconds": seconds, "bytes": out.stat().st_size}
 
 
@@ -153,6 +151,10 @@ def _fmt_ns(ns):
     return f"{ns / 1e3:.1f}µs"
 
 
+def _cell_status(cell):
+    return "unsupported by baml_rt" if cell["status"] == "unsupported" else cell["status"]
+
+
 def _cell_median(cell):
     return cell.get("per_job_ns", {}).get("median") if cell["status"] == "ok" else None
 
@@ -163,20 +165,28 @@ def print_table(workloads, row_list, cells):
     head = ["workload", primary.label] + [c for r in others for c in (r.label, f"vs {r.label}")]
     comparisons = [(key, label) for key, label in (("vm-off", "rt speedup vs VM"), ("node", "rt speedup vs Node"))
                    if "rt-off" in {r.key for r in row_list} and key in {r.key for r in row_list}]
-    head += [label for _, label in comparisons]
+    if comparisons:
+        head = ["workload"] + [label for _, label in comparisons] + [r.label for r in row_list]
     table = [head]
     for w in workloads:
         p = cells[(w["id"], primary.key)].summary()
         pm = p.get("per_job_ns", {}).get("median") if p.get("per_job_ns") else None
-        line = [w["name"], _fmt_ns(pm) if pm else p["status"]]
+        line = [w["name"], _fmt_ns(pm) if pm else _cell_status(p)]
         for r in others:
             s = cells[(w["id"], r.key)].summary()
             m = s["per_job_ns"]["median"] if s.get("per_job_ns") else None
-            line += [_fmt_ns(m) if m else s["status"], fmt_ratio(pm, m) if pm and m else "—"]
+            line += [_fmt_ns(m) if m else _cell_status(s), fmt_ratio(pm, m) if pm and m else "—"]
+        ratios = []
         for key, _ in comparisons:
             a = _cell_median(cells[(w["id"], key)].summary())
             b = _cell_median(cells[(w["id"], "rt-off")].summary())
-            line.append(fmt_ratio(a, b) if a is not None and b else "—")
+            ratios.append(fmt_ratio(a, b) if a is not None and b else "—")
+        if comparisons:
+            line = [w["name"]] + ratios
+            for r in row_list:
+                cell = cells[(w["id"], r.key)].summary()
+                m = _cell_median(cell)
+                line.append(_fmt_ns(m) if m is not None else _cell_status(cell))
         table.append(line)
     widths = [max(len(str(row[i])) for row in table) for i in range(len(head))]
     for i, row in enumerate(table):
@@ -184,8 +194,9 @@ def print_table(workloads, row_list, cells):
         if i == 0:
             print("  ".join("-" * w for w in widths))
     if comparisons:
-        print("rt speedup = comparison time / rt-off time; above 1x means rt is faster.")
-    print(f"\nper-job time, median of trials; 'vs X' is {primary.label} time over X's (above 1x: BAML is slower).")
+        print("Per-job time, median of trials; rt speedup = comparison time / rt-off time; above 1x means rt is faster.")
+    else:
+        print(f"\nper-job time, median of trials; 'vs X' is {primary.label} time over X's (above 1x: BAML is slower).")
 
 
 def _machine():
@@ -265,6 +276,10 @@ def cmd_run(args):
                 cell.status = b["status"]
                 cell.reason = b["error"]
                 continue
+            if cell.row.kind == "rt" and _has_setup(cell.workload["baml"]):
+                cell.fail("rt driver cannot retain setup() state between jobs")
+                _log(f"  {cell.workload['name']} [{cell.row.key}]: {cell.reason}")
+                continue
             t = _trial(cell, b.get("artifact"), 1, 0, stage, args.cpu)
             loads.append(os.getloadavg()[0])
             if t.ok:
@@ -340,7 +355,7 @@ def _save(args, cli, workloads, row_list, cells, builds, versions, trials_n, tim
     rdir = results_dir(args)
     run_path = save_run(rdir, data, getattr(args, "_profile_files", None))
     with open(run_path / "trials.csv", "w", newline="") as f:
-        out = csv.writer(f)
+        out = csv.writer(f, lineterminator="\n")
         out.writerow(["workload", "row", "trial", "ok", "jobs", "per_job_ns", "elapsed_ns", "process_ns", "cpu_ns",
                       "peak_rss_bytes", "recording_bytes", "error"])
         for (wid, key), cell in cells.items():

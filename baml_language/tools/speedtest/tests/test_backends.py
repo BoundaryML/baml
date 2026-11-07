@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from speedtest import cli, kpis, rows, runner
 from speedtest.measure import Trial
+from speedtest.fmt import fmt_ratio
 
 
 class Backends(unittest.TestCase):
@@ -126,6 +127,9 @@ class Backends(unittest.TestCase):
         cells = save.call_args.args[4]
         self.assertEqual(cells[(self.workload['id'], 'rt-medium')].status, 'unsupported')
 
+    def test_small_speedup_is_not_rounded_to_zero(self):
+        self.assertEqual(fmt_ratio(0.03922, 19.61), "0.002x")
+
     def test_table_handles_unsupported(self):
         row_list = rows.resolve(['vm-off', 'rt-off', 'node'])
         cells = {(self.workload['id'], r.key): runner.Cell(self.workload, r) for r in row_list}
@@ -133,7 +137,7 @@ class Backends(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as output:
             runner.print_table([self.workload], row_list, cells)
         self.assertIn('rt speedup vs VM', output.getvalue())
-        self.assertIn('unsupported', output.getvalue())
+        self.assertIn('unsupported by baml_rt', output.getvalue())
 
 
 if __name__ == '__main__':

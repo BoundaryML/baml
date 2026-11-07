@@ -1,0 +1,35 @@
+workload                               rt speedup vs VM  rt speedup vs Node  VM(off)  VM(medium)  Native(off)  Native(medium)            baml_rt(off)         baml_rt(medium)     Node      Bun   Python
+-------------------------------------  ----------------  ------------------  -------  ----------  -----------  --------------  ----------------------  ----------------------  -------  -------  -------
+classes::method call 100k                           19x             0.0376x   25.9ms      47.0ms       6.81ms          21.6ms                  1.39ms                  3.72ms   52.2µs  295.2µs   14.3ms
+compute::array build sum 100k                         —                   —   26.4ms      38.5ms       3.13ms          3.21ms  unsupported by baml_rt  unsupported by baml_rt   2.10ms   1.44ms   8.37ms
+compute::array traversal 8k                           —                   —   2.82ms      2.83ms      606.3µs         452.7µs  unsupported by baml_rt  unsupported by baml_rt  107.4µs  327.5µs  894.3µs
+compute::fib32 recursive                            14x               0.84x  345.2ms       1.05s       67.3ms         782.6ms                  24.3ms                 263.5ms   20.3ms   12.1ms  264.8ms
+compute::generate sort 8k                             —                   —   4.97ms      10.2ms      904.7µs          1.99ms  unsupported by baml_rt  unsupported by baml_rt   3.01ms   4.47ms   4.76ms
+compute::json aggregate 2k                            —                   —   40.7ms      75.5ms       23.1ms          86.8ms  unsupported by baml_rt  unsupported by baml_rt   9.85ms   12.0ms   38.6ms
+compute::json hello                                   —                   —    1.4µs       1.8µs        0.6µs           2.2µs  unsupported by baml_rt  unsupported by baml_rt    0.1µs    0.6µs    0.9µs
+compute::json ndjson events                           —                   —   5.48ms      12.5ms       4.24ms          8.85ms  unsupported by baml_rt  unsupported by baml_rt   1.14ms   1.29ms   3.90ms
+compute::json request body                            —                   —  120.0µs     121.8µs       57.1µs         122.7µs  unsupported by baml_rt  unsupported by baml_rt   36.3µs   60.9µs  115.4µs
+compute::json tree path                               —                   —   5.24ms      8.49ms       3.14ms          4.98ms  unsupported by baml_rt  unsupported by baml_rt  950.3µs   1.32ms   2.46ms
+compute::k-nucleotide 25k                             —                   —  225.5ms     180.9ms       76.5ms         110.2ms  unsupported by baml_rt  unsupported by baml_rt   14.5ms   18.1ms   42.0ms
+compute::merge sort 20k                               —                   —  179.7ms     172.0ms       21.6ms          33.5ms  unsupported by baml_rt  unsupported by baml_rt   12.3ms   11.4ms  171.5ms
+compute::nbody 20k                                    —                   —  226.5ms     236.1ms       57.2ms          60.2ms  unsupported by baml_rt  unsupported by baml_rt   1.21ms   5.43ms  173.8ms
+compute::nested loops 500x500                       50x               0.67x   10.4ms      22.1ms      175.8µs         193.4µs                 207.9µs                  86.7µs  138.3µs  412.8µs   7.79ms
+compute::pure call 1m                               39x               0.25x   81.3ms     112.8ms       7.88ms          77.9ms                  2.10ms                  50.2ms  532.3µs   1.75ms   42.6ms
+compute::quick sort 3-way 1k                          —                   —   7.65ms      7.90ms      522.2µs          1.16ms  unsupported by baml_rt  unsupported by baml_rt  697.2µs  822.6µs   3.78ms
+interfaces::polymorphic dispatch 100k               33x               0.65x   52.4ms      48.4ms       22.1ms          52.7ms                  1.58ms                  63.5ms   1.02ms  948.0µs   17.5ms
+memory::allocation high retention                     —                   —  415.5ms     402.4ms       91.2ms         185.9ms  unsupported by baml_rt  unsupported by baml_rt   27.5ms   31.1ms  141.2ms
+memory::allocation low retention                      —                   —  295.2ms     237.2ms       50.6ms          97.9ms  unsupported by baml_rt  unsupported by baml_rt   13.8ms   16.2ms   88.2ms
+memory::binary trees 14                             41x                1.3x    1.50s       1.64s      386.1ms           1.10s                  36.9ms                 904.0ms   49.4ms   27.3ms  683.7ms
+memory::cycles into live                              —                   —  201.7ms     294.8ms      302.2ms         162.1ms  unsupported by baml_rt  unsupported by baml_rt   69.9ms   19.7ms   53.9ms
+memory::cyclic churn                                  —                   —   32.3ms      35.3ms       8.95ms          17.6ms  unsupported by baml_rt  unsupported by baml_rt   1.82ms   2.83ms   10.0ms
+memory::heap calls                                    —                   —   3.04ms      4.23ms      972.6µs          3.07ms  unsupported by baml_rt  unsupported by baml_rt   81.6µs   96.4µs   2.51ms
+memory::live heap                                     —                   —  332.4ms     364.2ms      348.4ms         285.7ms  unsupported by baml_rt  unsupported by baml_rt   73.1ms   48.9ms  107.8ms
+memory::live walk                                     —                   —   62.9ms     107.2ms       26.1ms          24.8ms  unsupported by baml_rt  unsupported by baml_rt   6.92ms   3.01ms   13.9ms
+memory::splay 2k                                      —                   —  302.8ms     314.1ms       76.4ms          91.6ms  unsupported by baml_rt  unsupported by baml_rt   29.7ms   13.0ms   70.1ms
+process::startup                                    26x                1.0x   17.2µs      18.4µs       14.9µs          15.7µs                   0.7µs                 211.7µs    0.7µs    0.8µs    0.5µs
+programs::agent loop 300                            15x                2.3x   36.0ms      62.7ms       46.8ms          76.0ms                  2.45ms                  6.74ms   5.71ms   4.40ms   15.1ms
+programs::json parser 15                              —                   —  375.9ms     274.8ms      166.3ms         241.1ms  unsupported by baml_rt  unsupported by baml_rt   12.1ms   19.6ms  103.8ms
+programs::richards 50                              195x                1.1x  506.1ms     432.7ms       53.9ms         154.2ms                  2.60ms                  84.4ms   2.74ms   15.6ms   94.5ms
+string::concat loop 10k                           0.32x              0.002x   6.36ms      5.89ms       2.16ms          1.99ms                  19.6ms                  19.5ms   39.2µs   77.3µs  441.2µs
+string::split medium literal 10k                      —                   —   9.57ms      14.5ms       7.34ms          12.9ms  unsupported by baml_rt  unsupported by baml_rt  248.8µs  181.1µs   2.90ms
+Per-job time, median of trials; rt speedup = comparison time / rt-off time; above 1x means rt is faster.

@@ -50,7 +50,7 @@ footer{margin-top:16px;color:var(--muted);font-size:.8rem}footer ol{margin:4px 0
 @media (max-width:1240px){.tiles{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:repeat(2,1fr)}.box:last-child:nth-child(odd){grid-column:1/-1}}
 @media (max-width:820px){.grid{grid-template-columns:1fr}.box:last-child:nth-child(odd){grid-column:auto}.hd{min-height:0}}
 td.b,th.b{background:var(--hl-bg)}th.b{color:var(--hl)}td.p,th.p{font-weight:600}tr.b td{background:var(--hl-bg)}tr.b td:first-child{color:var(--hl);font-weight:500}tr.p td{font-weight:600}.lbl.baml{fill:var(--hl);font-weight:600}.fam.baml{fill:var(--hl)}
-.all{overflow-x:auto;margin-top:16px;background:var(--tint);border-radius:6px;padding:16px}.all h2{font-size:1.05rem;font-weight:600;margin:0 0 4px}.all td.bad{color:var(--bad);font-style:italic}.all td.d{font-family:var(--font);color:var(--muted);white-space:normal;text-align:left}
+.all{overflow-x:auto;margin-top:16px;background:var(--tint);border-radius:6px;padding:16px}.all h2{font-size:1.05rem;font-weight:600;margin:0 0 4px}.all td.bad{color:var(--bad);font-style:italic}.all td.d{min-width:220px;font-family:var(--font);color:var(--muted);white-space:normal;text-align:left}
 </style>
 </head>
 <body>
@@ -76,7 +76,7 @@ const fmtN = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1e4 ? Math.round(v/1e
 const fmtU = v => v >= 100000 ? Math.round(v/1000).toLocaleString()+' ms' : v >= 1000 ? (v/1000).toFixed(2)+' ms' : v >= 10 ? v.toFixed(1)+' µs' : v.toFixed(3)+' µs';
 const fmtNs = v => v == null ? '—' : fmtU(v / 1e3);
 const fmt = (v, unit) => v == null ? '—' : unit === 'jobs/s' ? fmtN(v)+'/s' : unit === 'MiB' ? v.toFixed(1)+' MiB' : unit === 'ms' ? v.toFixed(2)+' ms' : unit === 'KB' ? Math.round(v).toLocaleString()+' KB' : unit === 's' ? v.toFixed(2)+' s' : String(v);
-const fmtR = r => r == null ? '—' : r >= 10 ? r.toFixed(0)+'×' : r >= 2 ? r.toFixed(1)+'×' : r.toFixed(2)+'×';
+const fmtR = r => r == null ? '—' : r > 0 && r < 0.1 ? r.toPrecision(3)+'×' : r >= 10 ? r.toFixed(0)+'×' : r >= 2 ? r.toFixed(1)+'×' : r.toFixed(2)+'×';
 const charted = D.kpis.filter(k => k.scenarios.length), pending = D.kpis.filter(k => !k.scenarios.length);
 const entryOf = k => k.scenarios.find(s => s.name === k.default) || k.scenarios[0];
 const has = st => st && st.median != null;
@@ -192,9 +192,16 @@ document.querySelectorAll('select[data-kpi]').forEach(s => s.addEventListener('c
 
 // every workload of the run: per-job time for each row
 const cols = D.rows.map(rw => rw.key);
-document.getElementById('all').innerHTML = `<h2>Every workload</h2><p class="q">Per-job time, median of trials; rt speedup is comparison time / baml_rt(off) time; above 1× means baml_rt is faster.</p>
- <table><tr><th>workload</th>${cols.map(k => `<th class="${cls(k)}">${esc(rowLabel(k))}</th>`).join('')}<th>rt speedup vs VM(off)</th><th>rt speedup vs Node</th><th>what it does</th></tr>` + D.workloads.map(w => {
-  return `<tr><td>${esc(w.name)}</td>${cols.map(k => w.values[k] != null ? `<td class="${cls(k)}">${fmtNs(w.values[k])}</td>` : `<td class="bad ${cls(k)}">${esc((w.reasons || {})[k] || w.status[k])}</td>`).join('')}${['vm-off', 'node'].map(k => `<td>${w.rt_speedup && w.rt_speedup[k] != null ? fmtR(w.rt_speedup[k]) : '—'}</td>`).join('')}<td class="d">${esc(w.description)}</td></tr>`;
+const rtComparisons = cols.includes('rt-off') ? ['vm-off', 'node'].filter(k => cols.includes(k)) : [];
+function comparisonCells(w) {
+  if (rtComparisons.length) return rtComparisons.map(k => `<td>${w.rt_speedup && w.rt_speedup[k] != null ? fmtR(w.rt_speedup[k]) : '—'}</td>`).join('');
+  const others = cols.filter(k => k !== P).map(k => w.values[k]).filter(v => v != null);
+  const best = others.length ? Math.min(...others) : null;
+  return `<td>${w.values[P] != null && best ? fmtR(w.values[P] / best) : '—'}</td>`;
+}
+document.getElementById('all').innerHTML = `<h2>Every workload</h2><p class="q">Per-job time, median of trials; ${rtComparisons.length ? 'rt speedup is comparison time / baml_rt(off) time; above 1× means baml_rt is faster.' : 'the ratio is ' + esc(PL) + ' over the fastest other row.'}</p>
+ <table><tr><th>workload</th>${rtComparisons.length ? rtComparisons.map(k => `<th>rt speedup vs ${esc(rowLabel(k))}</th>`).join('') : '<th>vs fastest</th>'}${cols.map(k => `<th class="${cls(k)}">${esc(rowLabel(k))}</th>`).join('')}<th>what it does</th></tr>` + D.workloads.map(w => {
+  return `<tr><td>${esc(w.name)}</td>${comparisonCells(w)}${cols.map(k => w.values[k] != null ? `<td class="${cls(k)}">${fmtNs(w.values[k])}</td>` : `<td class="${w.status[k] === 'failed' ? 'bad ' : ''}${cls(k)}" title="${esc((w.reasons || {})[k])}">${esc(w.status[k] === 'unsupported' ? 'unsupported by baml_rt' : w.status[k])}</td>`).join('')}<td class="d">${esc(w.description)}</td></tr>`;
 }).join('') + '</table>';
 
 // click a chart to enlarge it; ?zoom=<kpi> opens one on load
