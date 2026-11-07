@@ -20,12 +20,16 @@ class Row:
     key: str
     label: str
     family: str
-    kind: str                       # "baml" | "python" | "node" | "bun"
+    kind: str                       # "baml" | "native" | "rt" | "python" | "node" | "bun"
     telemetry: str | None = None    # BAML_TELEMETRY for BAML rows
 
     @property
     def is_baml(self):
-        return self.kind == "baml"
+        return self.kind in ("baml", "native", "rt")
+
+    @property
+    def backend(self):
+        return "vm" if self.kind == "baml" else self.kind
 
     def command(self, workload, artifact, jobs, warmup):
         if self.is_baml:
@@ -37,6 +41,11 @@ class Row:
     def env(self, base, baml_home):
         env = dict(base)
         if self.is_baml:
+            env.pop("BOUNDARY_PROJECT", None)
+            env.pop("BOUNDARY_API_URL", None)
+            env["BAML_COMPILED_BODIES"] = "1" if self.kind == "native" else "0"
+            env["BAML_GC_STRESS"] = "0"
+            env["BAML_COMPILED_FRAMES"] = "0"
             env["BAML_TELEMETRY"] = self.telemetry
             # Each trial records into its own home, so recordings can be
             # counted per trial and never accumulate across the run.
@@ -46,6 +55,10 @@ class Row:
 
 ROWS = [Row(f"vm-{lvl}", f"VM({lvl})", "BAML VM", "baml", lvl)
         for lvl in TELEMETRY_LEVELS] + [
+    Row(f"{kind}-{lvl}", f"{label}({lvl})", family, kind, lvl)
+    for kind, label, family in (("native", "Native", "BAML native"), ("rt", "baml_rt", "BAML runtime"))
+    for lvl in ("off", "medium")
+] + [
     Row("node", "Node", "references", "node"),
     Row("bun", "Bun", "references", "bun"),
     Row("python", "Python", "references", "python"),

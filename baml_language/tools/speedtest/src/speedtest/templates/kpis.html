@@ -50,7 +50,7 @@ footer{margin-top:16px;color:var(--muted);font-size:.8rem}footer ol{margin:4px 0
 @media (max-width:1240px){.tiles{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:repeat(2,1fr)}.box:last-child:nth-child(odd){grid-column:1/-1}}
 @media (max-width:820px){.grid{grid-template-columns:1fr}.box:last-child:nth-child(odd){grid-column:auto}.hd{min-height:0}}
 td.b,th.b{background:var(--hl-bg)}th.b{color:var(--hl)}td.p,th.p{font-weight:600}tr.b td{background:var(--hl-bg)}tr.b td:first-child{color:var(--hl);font-weight:500}tr.p td{font-weight:600}.lbl.baml{fill:var(--hl);font-weight:600}.fam.baml{fill:var(--hl)}
-.all{margin-top:16px;background:var(--tint);border-radius:6px;padding:16px}.all h2{font-size:1.05rem;font-weight:600;margin:0 0 4px}.all td.bad{color:var(--bad);font-style:italic}.all td.d{font-family:var(--font);color:var(--muted);white-space:normal;text-align:left}
+.all{overflow-x:auto;margin-top:16px;background:var(--tint);border-radius:6px;padding:16px}.all h2{font-size:1.05rem;font-weight:600;margin:0 0 4px}.all td.bad{color:var(--bad);font-style:italic}.all td.d{font-family:var(--font);color:var(--muted);white-space:normal;text-align:left}
 </style>
 </head>
 <body>
@@ -71,7 +71,7 @@ td.b,th.b{background:var(--hl-bg)}th.b{color:var(--hl)}td.p,th.p{font-weight:600
 const D = JSON.parse(document.getElementById('data').textContent);
 if (!D) return;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const COLOR = k => k.startsWith('native') ? 'var(--c-native)' : `var(--c-${k})`;
+const COLOR = k => k.startsWith('native') ? 'var(--c-native)' : k.startsWith('rt-') ? 'var(--c-rust)' : `var(--c-${k})`;
 const fmtN = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1e4 ? Math.round(v/1e3)+'K' : v >= 1e3 ? (v/1e3).toFixed(1)+'K' : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
 const fmtU = v => v >= 100000 ? Math.round(v/1000).toLocaleString()+' ms' : v >= 1000 ? (v/1000).toFixed(2)+' ms' : v >= 10 ? v.toFixed(1)+' µs' : v.toFixed(3)+' µs';
 const fmtNs = v => v == null ? '—' : fmtU(v / 1e3);
@@ -93,7 +93,7 @@ document.getElementById('hd').innerHTML = `<h1>BAML Speedtest</h1><div class="fa
  <span><b>candidate</b> <code>${esc((c.sha||'').slice(0,12))}</code> ${esc(c.branch||'')}</span>
  <span><b>machine</b> ${esc(D.machine.cpu)} · ${esc(D.machine.cores)} cores · ${esc(D.machine.platform)} ${esc(D.machine.kernel)}</span>
  <span><b>protocol</b> ${D.protocol.trials} trials per bar, shuffled${D.protocol.cpu != null ? ' · pinned to CPU ' + D.protocol.cpu : ''}${tc ? ' · ' + esc(tc) : ''}</span>
- <span><b>run</b> ${r.trials_total} trials, ${r.trials_failed} failed <span class="pill ${ok?'ok':'bad'}">${ok?'every trial returned the expected value':'failures present'}</span>${busy ? ` <span class="pill bad" title="timings from a busy machine vary from run to run">busy machine: load ${load.toFixed(1)} on ${D.machine.cores} cores</span>` : ''}</span></div>`;
+ <span><b>run</b> ${r.trials_total} trials, ${r.trials_failed} failed <span class="pill ${ok?'ok':'bad'}">${ok?'every trial returned the expected value':'failures present'}</span>${busy ? ` <span class="pill bad" title="timings from a busy machine vary from run to run">busy machine: load ${r.loadavg_1m_range ? r.loadavg_1m_range.map(v => v.toFixed(1)).join('–') : load.toFixed(1)} on ${D.machine.cores} cores</span>` : ''}</span></div>`;
 
 // the primary row's number for one entry, and how it stands against the comparison rows
 function standing(k, e) {
@@ -192,11 +192,9 @@ document.querySelectorAll('select[data-kpi]').forEach(s => s.addEventListener('c
 
 // every workload of the run: per-job time for each row
 const cols = D.rows.map(rw => rw.key);
-document.getElementById('all').innerHTML = `<h2>Every workload</h2><p class="q">Per-job time, median of trials; the ratio is ${esc(PL)} over the fastest other row.</p>
- <table><tr><th>workload</th>${cols.map(k => `<th class="${cls(k)}">${esc(rowLabel(k))}</th>`).join('')}<th>vs fastest</th><th>what it does</th></tr>` + D.workloads.map(w => {
-  const others = cols.filter(k => k !== P).map(k => w.values[k]).filter(v => v != null);
-  const best = others.length ? Math.min(...others) : null, p = w.values[P];
-  return `<tr><td>${esc(w.name)}</td>${cols.map(k => w.values[k] != null ? `<td class="${cls(k)}">${fmtNs(w.values[k])}</td>` : `<td class="bad ${cls(k)}">${esc(w.status[k])}</td>`).join('')}<td>${p != null && best ? fmtR(p / best) : '—'}</td><td class="d">${esc(w.description)}</td></tr>`;
+document.getElementById('all').innerHTML = `<h2>Every workload</h2><p class="q">Per-job time, median of trials; rt speedup is comparison time / baml_rt(off) time; above 1× means baml_rt is faster.</p>
+ <table><tr><th>workload</th>${cols.map(k => `<th class="${cls(k)}">${esc(rowLabel(k))}</th>`).join('')}<th>rt speedup vs VM(off)</th><th>rt speedup vs Node</th><th>what it does</th></tr>` + D.workloads.map(w => {
+  return `<tr><td>${esc(w.name)}</td>${cols.map(k => w.values[k] != null ? `<td class="${cls(k)}">${fmtNs(w.values[k])}</td>` : `<td class="bad ${cls(k)}">${esc((w.reasons || {})[k] || w.status[k])}</td>`).join('')}${['vm-off', 'node'].map(k => `<td>${w.rt_speedup && w.rt_speedup[k] != null ? fmtR(w.rt_speedup[k]) : '—'}</td>`).join('')}<td class="d">${esc(w.description)}</td></tr>`;
 }).join('') + '</table>';
 
 // click a chart to enlarge it; ?zoom=<kpi> opens one on load
@@ -211,12 +209,12 @@ document.getElementById('dlg-x').addEventListener('click', () => dlg.close());
 dlg.addEventListener('click', ev => { if (ev.target === dlg) dlg.close(); });
 const want = new URLSearchParams(location.search).get('zoom'); if (want) enlarge(want);
 
-document.getElementById('why').innerHTML = `<b>Why some bars are empty.</b> Rows marked not installed: ${esc(D.reasons.unavailable)}. Rows in italics do not apply to that implementation, or failed, and say why. ${pending.length ? pending.map(k => esc(k.title) + ': ' + esc(k.pending)).join('. ') + '. ' : ''}An empty row is drawn, never dropped, so a missing comparison is visible rather than silently absent.`;
+document.getElementById('why').innerHTML = `<b>Why some bars are empty.</b> Rows marked not installed: ${esc(D.reasons.unavailable)}. Rows in italics do not apply to that implementation, failed, or unsupported by baml_rt, and say why. Unsupported workloads are excluded from comparisons. ${pending.length ? pending.map(k => esc(k.title) + ': ' + esc(k.pending)).join('. ') + '. ' : ''}An empty row is drawn, never dropped, so a missing comparison is visible rather than silently absent.`;
 document.getElementById('ft').innerHTML = `<details><summary>How this was produced</summary>
- <ol><li>Pack each workload's <code>main.baml</code> with the speedtest driver into one executable with <code>baml pack</code> (${esc(c.cli || 'baml-cli')}); pack time and executable size are the build and binary-size KPIs.</li>
+ <ol><li>Pack each workload's <code>main.baml</code> with the speedtest driver into one executable per backend with <code>baml pack</code>, <code>--rust</code>, or <code>--rust --rt</code> (${esc(c.cli || 'baml-cli')}); pack time and executable size are the build and binary-size KPIs.</li>
  <li>Verify every implementation once: its <code>main()</code> must return the workload's expected value. A row that fails is reported and not measured.</li>
  <li>Run ${r.trials_total} trials: ${D.protocol.trials} rounds, each running every (workload, row) once in a fresh process, in an order shuffled with seed ${esc(D.protocol.seed)}. The driver in each process calls <code>main()</code> once to verify, runs the warmup, then times the workload's jobs in-process; the parent records process wall time, CPU time and peak RSS from <code>wait4</code>. Every trial's result is checked again.</li>
- <li>BAML rows set <code>BAML_TELEMETRY</code> per row and record into a fresh <code>BAML_HOME</code> per trial. BAML has no monotonic clock, so its in-process timer is the wall clock.</li>
+ <li>BAML rows set <code>BAML_TELEMETRY</code> per row and record into a fresh <code>BAML_HOME</code> per trial. VM/native use the BAML wall-clock driver; baml_rt packs main directly and uses its native monotonic-clock driver, also checking every timed return. Native build times use release optimization and a progressively warm Cargo cache per backend.</li>
  <li>Summarize (median, min, max over trials), write <code>kpis.json</code>, render this page from it.</li></ol>
  <p>Run ${esc(r.id)}: started ${esc(r.started)}, finished ${esc(r.finished)}; load ${esc((r.loadavg_start||[]).map(v => v.toFixed(2)).join(' '))} → ${esc((r.loadavg_end||[]).map(v => v.toFixed(2)).join(' '))}. Data: <a href="kpis.json">kpis.json</a>, every trial in <code>trials.csv</code>.</p></details>`;
 })();
