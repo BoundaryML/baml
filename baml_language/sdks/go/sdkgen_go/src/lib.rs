@@ -5967,11 +5967,15 @@ mod tests {
                     name: BaseName::new(name),
                     docstring: None,
                     ty,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 })
                 .collect(),
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         (name, Symbol::Class(class))
     }
@@ -5986,6 +5990,7 @@ mod tests {
                     name: BaseName::new(*variant),
                     docstring: None,
                     value: (*value).to_string(),
+                    json_rename: None,
                 })
                 .collect(),
             origin: origin(),
@@ -6225,10 +6230,14 @@ mod tests {
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(type_parameter.clone()),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let identity = Function {
             name: BaseName::new("identity"),
@@ -6316,21 +6325,31 @@ mod tests {
                     name: BaseName::new("payload"),
                     docstring: None,
                     ty: ty_alias(json_name.clone()),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 },
                 ClassProperty {
                     name: BaseName::new("tags"),
                     docstring: None,
                     ty: ty_list_boxed(Box::new(ty_literal(Literal::String("a".to_string())))),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 },
                 ClassProperty {
                     name: BaseName::new("mixed"),
                     docstring: None,
                     ty: ty_list_boxed(Box::new(mixed_union.clone())),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 },
             ],
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let mixed = Function {
             name: BaseName::new("mixed"),
@@ -6461,6 +6480,9 @@ mod tests {
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(BaseName::new("T")),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![
                 method,
@@ -6470,6 +6492,7 @@ mod tests {
             ],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let hidden_owner = Name::new(
             BaseName::new("user"),
@@ -6485,6 +6508,9 @@ mod tests {
                 name: BaseName::new("unsupported"),
                 docstring: None,
                 ty: ty_media(baml_base::MediaKind::Generic),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![Function {
                 name: BaseName::new("ping"),
@@ -6504,6 +6530,7 @@ mod tests {
             }],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let pool = SymbolPool::from([
             (owner, Symbol::Class(class)),
@@ -6597,10 +6624,14 @@ mod tests {
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(type_parameter),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![],
             instance_methods: vec![method],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let pool = SymbolPool::from([(box_name, Symbol::Class(class))]);
 
@@ -6676,10 +6707,14 @@ mod tests {
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(type_parameter),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let pool = SymbolPool::from([
             (generic_box.clone(), Symbol::Class(generic_box_class)),
@@ -6717,10 +6752,14 @@ mod tests {
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(type_parameter),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let pool = SymbolPool::from([
             (generic_box.clone(), Symbol::Class(generic_box_class)),
@@ -6764,10 +6803,14 @@ mod tests {
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(type_parameter),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let pool = SymbolPool::from([
             (generic_box.clone(), Symbol::Class(generic_box_class)),
@@ -6822,6 +6865,9 @@ mod tests {
                     name: BaseName::new("marker"),
                     docstring: None,
                     ty: ty_type_var(type_parameter),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 },
                 ClassProperty {
                     name: BaseName::new("value"),
@@ -6833,11 +6879,15 @@ mod tests {
                             .map(|name| ty_class(name, vec![]))
                             .collect(),
                     ),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 },
             ],
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let mut symbols = candidates
             .into_iter()

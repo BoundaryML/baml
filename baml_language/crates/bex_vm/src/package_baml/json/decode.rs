@@ -11,7 +11,9 @@
 //! children by the same rule. The one place shape decides is a union: its
 //! member is the best structural match ([`super::union`]), because a provided
 //! `from_json` that throws unwinds the whole walk and cannot be tried and
-//! fallen through; the chosen member then decodes by the rule above.
+//! fallen through; the chosen member then decodes by the rule above. A union
+//! with a `@json.fallback` member chooses by tag instead
+//! ([`super::union::tagged_member`]).
 //!
 //! The walk suspends only to call a provided `from_json`. It keeps the
 //! containers it is inside on a stack of its own ([`Decoder`]), so its depth is
@@ -740,6 +742,19 @@ fn decode_one(
             // the whole walk, so a member cannot be tried through its rule
             // and fallen through to the next.
             validate(vm, json, path)?;
+            if let Some(ptr) = json.as_object_ptr()
+                && let Some(tagged) = union::tagged_member(vm, members, ptr, &mut lookups.plans)
+            {
+                return match tagged {
+                    Ok(member) => decode_one(vm, json, &member, Root::Dispatch, lookups, path),
+                    Err(refused) => {
+                        let at = refused
+                            .key
+                            .map_or_else(path, |key| format!("{}.{key}", path()));
+                        Err(raise_decode(vm, refused.message, &at))
+                    }
+                };
+            }
             let keys = json.as_object_ptr().map(union::Keys::Map);
             let order = union::Candidates::of(vm, members, kind_of(vm, json)).order(
                 vm,
@@ -820,7 +835,7 @@ fn decode_leaf(
 
 /// The JSON kind of `json`, as a union sorts its members by: what
 /// [`node_of`] reads it as.
-fn kind_of(vm: &BexVm, json: Value) -> Kind {
+pub(super) fn kind_of(vm: &BexVm, json: Value) -> Kind {
     match node_of(vm, json) {
         Node::Null => Kind::Null,
         Node::Bool(_) => Kind::Bool,
@@ -886,8 +901,23 @@ fn open_class(
             ));
         }
     };
+    if plan.is_fallback()
+        && let Some((message, key)) = super::fallback_tag_error(vm, source, &plan)
+    {
+        let at = key.map_or_else(path, |key| format!("{}.{key}", path()));
+        return Err(raise_decode(vm, message, &at));
+    }
     let mut fields: Vec<Field> = Vec::with_capacity(plan.fields.len());
     for (index, field) in plan.fields.iter().enumerate() {
+        if let Some(rest) = field.rest {
+            match super::rest_value(vm, source, &plan, rest) {
+                Ok(held) => fields.push(Field::Held(held)),
+                Err((message, inner)) => {
+                    return Err(raise_decode(vm, message, &format!("{}{inner}", path())));
+                }
+            }
+            continue;
+        }
         if !field.shown {
             let Some(empty) = super::super::sap::empty_value(vm, &field.ty, &mut Vec::new())?
             else {
@@ -1547,6 +1577,22 @@ impl<'p> Structural<'p> {
                 self.decode(vm, json, other)
             };
         }
+        if let Some(ptr) = json.as_object_ptr()
+            && let Some(tagged) = union::tagged_member(vm, members, ptr, self.plans)
+        {
+            return match tagged {
+                Ok(member) => self.decode(vm, json, &member),
+                Err(refused) => self.within(
+                    |path| {
+                        if let Some(key) = &refused.key {
+                            path.push('.');
+                            path.push_str(key);
+                        }
+                    },
+                    |this| Err(this.fail(vm, || refused.message.clone())),
+                ),
+            };
+        }
         let keys = json.as_object_ptr().map(union::Keys::Map);
         let order = union::Candidates::of(vm, members, kind_of(vm, json)).order(
             vm,
@@ -1729,7 +1775,9 @@ impl<'p> Structural<'p> {
                 .map(|v| {
                     (
                         self.naming().shows(v.skip),
-                        self.naming().key(&v.name, v.alias.as_deref()).to_owned(),
+                        self.naming()
+                            .key(&v.name, v.alias.as_deref(), v.json_rename.as_deref())
+                            .to_owned(),
                     )
                 }),
             _ => return Err(self.fail(vm, || format!("`{}` is not an enum", named()))),
@@ -1783,8 +1831,33 @@ impl<'p> Structural<'p> {
         // holds its type's empty value, as it does when SAP reads a model's
         // answer. A field that can be `null` may be absent and decodes to
         // `null`; every other field must be present.
+        if plan.is_fallback()
+            && let Some((message, key)) = super::fallback_tag_error(vm, ptr, &plan)
+        {
+            return self.within(
+                |path| {
+                    if let Some(key) = &key {
+                        path.push('.');
+                        path.push_str(key);
+                    }
+                },
+                |this| Err(this.fail(vm, || message)),
+            );
+        }
         let mut values = Vec::with_capacity(plan.fields.len());
         for (index, field) in plan.fields.iter().enumerate() {
+            if let Some(rest) = field.rest {
+                match super::rest_value(vm, ptr, &plan, rest) {
+                    Ok(held) => values.push(held),
+                    Err((message, inner)) => {
+                        return self.within(
+                            |path| path.push_str(&inner),
+                            |this| Err(this.fail(vm, || message.to_owned())),
+                        );
+                    }
+                }
+                continue;
+            }
             if !field.shown {
                 let empty = match super::super::sap::empty_value(vm, &field.ty, &mut Vec::new()) {
                     Ok(Some(empty)) => empty,

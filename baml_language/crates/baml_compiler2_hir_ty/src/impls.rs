@@ -1427,6 +1427,14 @@ const STRUCTURAL_INTERFACES: &[(&[&str], &str, baml_type::StructuralInterface)] 
     (&[], "Hash", baml_type::StructuralInterface::Hash),
 ];
 
+/// Whether `name` is the stdlib's `baml.json.json`, never a user alias with
+/// the same spelling.
+pub(crate) fn is_json_alias(db: &dyn baml_compiler2_hir::Db, name: &DeclName) -> bool {
+    lang_roots(db).is(baml_base::LangPackage::Baml, name.root())
+        && name.namespace().iter().map(Name::as_str).eq(["json"])
+        && name.name().as_str() == "json"
+}
+
 /// Recognize trusted language declarations, never user interfaces with the same spelling.
 pub fn structural_interface(
     db: &dyn baml_compiler2_hir::Db,

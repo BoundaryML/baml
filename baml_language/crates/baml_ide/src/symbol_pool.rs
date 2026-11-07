@@ -205,6 +205,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase, viewer: SourceRoot) -> SymbolPool
                         name: field.name.clone(),
                         docstring: field.docstring.clone(),
                         ty,
+                        json_rename: field.attrs.json_rename.clone(),
+                        json_flatten: field.attrs.json_flatten,
+                        json_fallback: field.attrs.json_fallback,
                     })
                 })
                 .collect();
@@ -353,6 +356,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase, viewer: SourceRoot) -> SymbolPool
                         .collect(),
                     docstring: class.docstring.clone(),
                     properties,
+                    json_omit_nulls: class.attrs.json_omit_nulls,
                     crossing: baml_compiler2_hir_ty::layout::class_crossing(
                         db,
                         baml_compiler2_hir::loc::DeclRef::Source(class_loc),
@@ -382,6 +386,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase, viewer: SourceRoot) -> SymbolPool
                     name: v.name.clone(),
                     docstring: v.docstring.clone(),
                     value: v.name.to_string(),
+                    json_rename: v.attrs.json_rename.clone(),
                 })
                 .collect();
             pool.insert(
