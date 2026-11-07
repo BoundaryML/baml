@@ -68,6 +68,20 @@ class WireOther {
     raw: map<string, json> @json.fallback,
 }
 
+// A tag whose kind differs between a member and the fallback.
+class WireStringCode {
+    code: "two",
+}
+
+class WireNumberOther {
+    code: 0,
+    raw: map<string, json> @json.fallback,
+}
+
+class WireCoded {
+    value: WireStringCode | WireNumberOther,
+}
+
 enum WireMode {
     Fast @json.rename("fast-mode")
     Slow
@@ -86,6 +100,14 @@ type WireDefaultAlias = WireDefault
 
 class WireAliased {
     network: WireDefaultAlias | WireOther,
+}
+
+// An optional literal under `@@json.omit_nulls`.
+class WireOptionalTag {
+    mode: "forward"?,
+    name: string,
+
+    @@json.omit_nulls
 }
 
 class WireConfig {

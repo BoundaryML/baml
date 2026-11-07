@@ -147,6 +147,18 @@ type U = S3 | Gcs | Ai | Fb
 }
 
 #[test]
+fn a_tag_renamed_only_under_aliased_names_is_an_error() {
+    assert_error(
+        r#"
+class A { type: "a" @alias("kind") }
+class Fb { type: "UNKNOWN", raw: map<string, json> @json.fallback }
+type U = A | Fb
+"#,
+        "`A` has no literal field for its tag",
+    );
+}
+
+#[test]
 fn a_fallback_class_needs_a_tag() {
     assert_error(
         "class A { raw: map<string, json> @json.fallback }",

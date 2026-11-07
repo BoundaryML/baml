@@ -306,7 +306,7 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
             let literals: Vec<_> = tagged_arms.iter().map(|(tags, _)| tags.clone()).collect();
             let tree = tag_tree(&literals, &fallback_literals).ok()?;
             let reads: Vec<_> = tagged_arms.iter().map(|(_, read)| read).collect();
-            let pick = pick_by_tag(&tree, &reads);
+            let pick = pick_by_tag(&tree, &reads, &fallback_literals);
             Some(quote! {
                 if json.is_object() {
                     #pick
@@ -407,7 +407,11 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
 /// The code that returns the member `tree` picks for the object `json`, and
 /// falls out of the end for a tag value no member has. The same tree the
 /// compiler checked and the engine walks.
-fn pick_by_tag(tree: &TagTree<baml_base::Literal>, reads: &[&TokenStream]) -> TokenStream {
+fn pick_by_tag(
+    tree: &TagTree<baml_base::Literal>,
+    reads: &[&TokenStream],
+    fallback: &[(String, baml_base::Literal)],
+) -> TokenStream {
     let (key, arms) = match tree {
         TagTree::Member(member) => {
             let read = reads[*member];
@@ -417,17 +421,25 @@ fn pick_by_tag(tree: &TagTree<baml_base::Literal>, reads: &[&TokenStream]) -> To
     };
     let values = arms.iter().map(|(literal, next)| {
         let holds = literal_holds(literal);
-        let next = pick_by_tag(next, reads);
+        let next = pick_by_tag(next, reads, fallback);
         quote! { ::std::option::Option::Some(__tag) if #holds => { #next } }
     });
-    let kind = arms.first().map_or_else(
-        || quote! { true },
-        |(literal, _)| match literal {
+    // Any literal this key could hold says what kind it can be.
+    let kinds = arms
+        .iter()
+        .map(|(literal, _)| literal)
+        .chain(
+            fallback
+                .iter()
+                .filter(|(tag, _)| tag == key)
+                .map(|(_, literal)| literal),
+        )
+        .map(|literal| match literal {
             baml_base::Literal::String(_) => quote! { __tag.is_string() },
             baml_base::Literal::Bool(_) => quote! { __tag.is_boolean() },
             _ => quote! { __tag.is_number() },
-        },
-    );
+        });
+    let kind = quote! { #(#kinds)||* };
     let wrong_kind = format!("the tag `{key}` holds the wrong kind of value");
     let missing = format!("missing required field `{key}`");
     quote! {

@@ -762,6 +762,21 @@ fn prepare_group(
             }
             fields.push(row);
         }
+        // Each attribute claims every key left over, so only one field may.
+        if fields
+            .iter()
+            .filter(|field| field.json.flatten || field.json.fallback)
+            .count()
+            > 1
+        {
+            diagnostics.push(compiler_diagnostic(
+                DiagnosticId::TypeMismatch,
+                format!(
+                    "class `{}` has more than one `@json.flatten` or `@json.fallback` field",
+                    node.name
+                ),
+            ));
+        }
         prepared.insert(node.id, fields);
     }
 

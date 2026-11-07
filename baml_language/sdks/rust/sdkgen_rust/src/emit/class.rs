@@ -328,7 +328,8 @@ fn fields_struct(
                 literal_check(type_name, field_name, literal, optional_literal.is_some())
             });
         let serde_literal = literal_check.as_ref().map(|(path, _)| {
-            let default = optional_literal.is_some().then(|| quote! { default, });
+            // `@@json.omit_nulls` already names one.
+            let default = (optional_literal.is_some() && !omit_null).then(|| quote! { default, });
             quote! { #[cfg_attr(feature = "serde", serde(#default deserialize_with = #path))] }
         });
         literal_checks.extend(literal_check.map(|(_, check)| check));

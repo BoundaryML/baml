@@ -12,8 +12,8 @@ use baml_bridge::{
     serde_json::{self, json},
 };
 use baml_sdk::json_interchange::{
-    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, WireAliased, WireConfig,
-    WireDefault, WireSettings, from_json_sync, to_json_sync,
+    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, WireAliased, WireCoded,
+    WireConfig, WireDefault, WireOptionalTag, WireSettings, from_json_sync, to_json_sync,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -351,6 +351,26 @@ fn test_json_interchange_flattened_keys_are_kept_and_a_declared_field_wins() {
 fn test_json_interchange_a_member_behind_an_alias_keeps_its_tag() {
     assert_reads_and_writes_agree::<WireAliased>(r#"{"network":{"type":"use-default"}}"#);
     assert_reads_and_writes_agree::<WireAliased>(r#"{"network":{"type":"future"}}"#);
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_an_optional_literal_is_checked_and_left_out() {
+    assert_reads_and_writes_agree::<WireOptionalTag>(r#"{"name":"n"}"#);
+    assert_reads_and_writes_agree::<WireOptionalTag>(r#"{"mode":"forward","name":"n"}"#);
+    let wrong = r#"{"mode":"backward","name":"n"}"#;
+    assert!(serde_json::from_str::<WireOptionalTag>(wrong).is_err());
+    assert!(from_json_sync::<WireOptionalTag>(wrong.to_string()).is_err());
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_a_tag_of_the_fallbacks_kind_reaches_the_fallback() {
+    assert_reads_and_writes_agree::<WireCoded>(r#"{"value":{"code":"two"}}"#);
+    assert_reads_and_writes_agree::<WireCoded>(r#"{"value":{"code":0}}"#);
+    let wrong_kind = r#"{"value":{"code":true}}"#;
+    assert!(serde_json::from_str::<WireCoded>(wrong_kind).is_err());
+    assert!(from_json_sync::<WireCoded>(wrong_kind.to_string()).is_err());
 }
 
 // SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls

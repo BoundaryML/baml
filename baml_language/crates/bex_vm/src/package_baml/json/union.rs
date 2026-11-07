@@ -167,6 +167,8 @@ pub(super) struct UnionTags {
     /// The members the tree picks from.
     members: Vec<RealizedTy>,
     fallback: RealizedTy,
+    /// The fallback class's tag, as its JSON keys and literals.
+    fallback_literals: Vec<(String, RealizedTy)>,
 }
 
 /// Why an object is none of a tagged union's members.
@@ -240,6 +242,7 @@ fn build_union_tags(vm: &BexVm, members: &[RealizedTy], plans: &mut Plans) -> Op
         tree,
         members: tagged,
         fallback,
+        fallback_literals,
     })
 }
 
@@ -299,9 +302,20 @@ pub(super) fn tagged_member(
         match next {
             Some(tree) => node = tree,
             None => {
-                let (fits, kind) = arms.first().map_or((true, ""), |(literal, _)| {
-                    super::tag_kind(vm, value, literal)
-                });
+                // Any literal this key could hold says what kind it can be.
+                let literals = arms.iter().map(|(literal, _)| literal).chain(
+                    tags.fallback_literals
+                        .iter()
+                        .filter(|(tag, _)| tag == key)
+                        .map(|(_, literal)| literal),
+                );
+                let mut kind = "";
+                let mut fits = false;
+                for literal in literals {
+                    let (literal_fits, literal_kind) = super::tag_kind(vm, value, literal);
+                    fits |= literal_fits;
+                    kind = literal_kind;
+                }
                 return Some(if fits {
                     Ok(tags.fallback.clone())
                 } else {

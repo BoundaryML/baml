@@ -283,23 +283,40 @@ fn source_fields(
     }
 }
 
-/// Each literal field among `fields`, by its JSON key.
+/// Each literal field among `fields`, by its JSON key under declared or
+/// aliased names.
 fn literals(
     db: &dyn baml_compiler2_hir::Db,
     fields: &[(Name, Ty, ClassFieldAttrs)],
+    aliased: bool,
 ) -> Vec<(String, Literal)> {
     fields
         .iter()
         .filter(|(_, _, attrs)| !attrs.skip)
         .filter_map(|(name, ty, attrs)| {
-            let key = attrs.json_rename.as_deref().unwrap_or(name.as_str());
+            let alias = attrs.schema.alias.as_deref().filter(|_| aliased);
+            let key = attrs
+                .json_rename
+                .as_deref()
+                .or(alias)
+                .unwrap_or(name.as_str());
             Some((key.to_string(), literal_of(db, ty)?))
         })
         .collect()
 }
 
+/// Why the union of `members` can't pick by tag, under either naming:
+/// `baml.json` reads aliased names when a call asks it to.
 fn fallback_union_error(db: &dyn baml_compiler2_hir::Db, members: &[Ty]) -> Option<TirTypeError> {
-    let mut fallback: Option<(Name, Vec<(String, Literal)>)> = None;
+    tag_error(db, members, false).or_else(|| tag_error(db, members, true))
+}
+
+fn tag_error(
+    db: &dyn baml_compiler2_hir::Db,
+    members: &[Ty],
+    aliased: bool,
+) -> Option<TirTypeError> {
+    let mut fallback: Option<(DeclName, Vec<(String, Literal)>)> = None;
     let mut tagged: Vec<(&Ty, Vec<(String, Literal)>)> = Vec::new();
     let mut untagged = Vec::new();
     for member in members {
@@ -311,11 +328,11 @@ fn fallback_union_error(db: &dyn baml_compiler2_hir::Db, members: &[Ty]) -> Opti
                 };
                 let is_fallback = fields.iter().any(|(_, _, attrs)| attrs.json_fallback);
                 if is_fallback && fallback.is_none() {
-                    fallback = Some((head.name().clone(), literals(db, &fields)));
+                    fallback = Some((head.clone(), literals(db, &fields, aliased)));
                 } else if is_fallback {
                     untagged.push(member);
                 } else {
-                    tagged.push((member, literals(db, &fields)));
+                    tagged.push((member, literals(db, &fields, aliased)));
                 }
             }
             // Each reads any object, with nothing to match on.
@@ -326,7 +343,8 @@ fn fallback_union_error(db: &dyn baml_compiler2_hir::Db, members: &[Ty]) -> Opti
             _ => {}
         }
     }
-    let (name, tags) = fallback?;
+    let (head, tags) = fallback?;
+    let name = head.name().clone();
     if let Some(member) = untagged.first() {
         return Some(TirTypeError::JsonFallbackUntaggedMember {
             fallback: name,

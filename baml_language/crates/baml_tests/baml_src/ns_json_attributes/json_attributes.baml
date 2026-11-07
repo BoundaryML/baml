@@ -51,6 +51,19 @@ class Both {
     value: string @alias("shown") @json.rename("wire"),
 }
 
+class NumberTag {
+    code: 1,
+}
+
+class StringTag {
+    code: "two",
+}
+
+class NumberFallback {
+    code: 0,
+    raw: map<string, json> @json.fallback,
+}
+
 class FlatOmit {
     note: string?,
     extra: map<string, json> @json.flatten,
@@ -226,6 +239,13 @@ testset "json attributes" {
             _ => {}
         }
         assert.equal(baml.json.stringify(src), `{"id":"i","type":"t","n":{"a":1}}`);
+    }
+    test "a tag of the fallback's kind reaches the fallback" {
+        let read = baml.json.decode<StringTag | NumberFallback>(`{"code":2}`);
+        match (read) {
+            let s: StringTag => { assert.equal(s.code, "not this member"); }
+            let n: NumberFallback => { assert.equal(n.raw.length(), 1); }
+        }
     }
     test "a flatten key beside an omitted field is written" {
         assert.equal(out(FlatOmit { note: null, extra: {"note": "x", "b": 1} }), `{"note":"x","b":1}`);
