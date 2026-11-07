@@ -563,6 +563,9 @@ fn synthetic_class_with_methods(
                 name: BaseName::new(name),
                 docstring: None,
                 ty,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             })
             .collect(),
         static_methods,
@@ -571,6 +574,7 @@ fn synthetic_class_with_methods(
             source_file_path: "synthetic.baml".to_string(),
             span_start: 0,
         },
+        json_omit_nulls: false,
     };
     (name, Symbol::Class(class))
 }
@@ -627,6 +631,7 @@ fn synthetic_enum(name: Name, variants: &[&str]) -> (Name, Symbol) {
                 name: BaseName::new(*variant),
                 docstring: None,
                 value: (*variant).to_string(),
+                json_rename: None,
             })
             .collect(),
         origin: Origin {

@@ -127,6 +127,32 @@ test "fields_from_a_colliding_class_throws_and_appends_nothing" {
     assert.equal(built.fields()[0].type, int.type())
 }
 
+class FlatOne {
+    one: map<string, json> @json.flatten,
+}
+
+class FlatTwo {
+    kind: "UNKNOWN",
+    two: map<string, json> @json.fallback,
+}
+
+test "fields_from_two_classes_that_claim_the_rest_throws" {
+    let one = FlatOne.type().as_class() ?? throw "missing";
+    let two = FlatTwo.type().as_class() ?? throw "missing";
+    let builder = reflect.Class.builder("TwoRests").fields_from(one).fields_from(two);
+    let message = {
+        builder.build();
+        "build did not throw"
+    } catch (e) {
+        reflect.errors.CompilationError => e.diagnostics[0].message,
+    };
+
+    assert.equal(
+        message,
+        "class `TwoRests` has more than one `@json.flatten` or `@json.fallback` field"
+    )
+}
+
 test "fields_from_on_a_frozen_builder_throws" {
     let action = Action.type().as_class() ?? throw "missing";
     let builder = reflect.Class.builder("Frozen");

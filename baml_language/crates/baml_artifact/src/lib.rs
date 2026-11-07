@@ -134,7 +134,10 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 29: a `Class` and each of its fields carry `redact`, whether
 /// telemetry records a redaction in place of the value (`@@trace.redact`,
 /// `@trace.redact`).
-pub const FORMAT_VERSION: u32 = 29;
+///
+/// Version 30: a class field and an enum variant carry their `@json`
+/// attributes.
+pub const FORMAT_VERSION: u32 = 30;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

@@ -449,6 +449,9 @@ mod tests {
                     name: baml_base::Name::new(*field),
                     docstring: None,
                     ty: Ty::String,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 })
                 .collect(),
             static_methods: Vec::new(),
@@ -457,6 +460,7 @@ mod tests {
                 source_file_path: "main.baml".to_string(),
                 span_start: 0,
             },
+            json_omit_nulls: false,
         })
     }
 

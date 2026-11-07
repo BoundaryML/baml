@@ -256,7 +256,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.not_null`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@trace.redact`
+  × unknown attribute `@stream.not_null`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@json.rename`, `@json.flatten`, `@json.fallback`,
+  │ `@trace.redact`
     ╭─[class_decls.baml:33:74]
  33 │     summary string? @description("A summary") @alias("sum") @stream.done @stream.not_null
     ·                                                                          ────────┬───────
@@ -265,7 +266,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@@streaming`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@trace.redact`
+  × unknown attribute `@@streaming`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@json.omit_nulls`, `@@trace.redact`
     ╭─[class_decls.baml:73:5]
  73 │     @@streaming
     ·     ─────┬─────
@@ -274,7 +275,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@@first`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@trace.redact`
+  × unknown attribute `@@first`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@json.omit_nulls`, `@@trace.redact`
     ╭─[class_decls.baml:79:5]
  79 │     @@first
     ·     ───┬───
@@ -283,7 +284,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@@streaming`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@trace.redact`
+  × unknown attribute `@@streaming`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@json.omit_nulls`, `@@trace.redact`
     ╭─[class_decls.baml:80:5]
  80 │     @@streaming
     ·     ─────┬─────
@@ -292,7 +293,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.not_null`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@trace.redact`
+  × unknown attribute `@stream.not_null`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@json.rename`, `@json.flatten`, `@json.fallback`,
+  │ `@trace.redact`
      ╭─[class_decls.baml:291:14]
  291 │     e string @stream.not_null
      ·              ────────┬───────
@@ -301,7 +303,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.with_state`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@trace.redact`
+  × unknown attribute `@stream.with_state`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@json.rename`, `@json.flatten`, `@json.fallback`,
+  │ `@trace.redact`
      ╭─[class_decls.baml:292:14]
  292 │     f string @stream.with_state
      ·              ─────────┬────────
@@ -1015,7 +1018,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`
+  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`, `@json.rename`
     ╭─[enum_decls.baml:49:115]
  49 │     ConfiguredVariant @description("A configured variant with many attributes") @alias("configured") @stream.done @stream.not_null @stream.with_state
     ·                                                                                                                   ────────┬───────
@@ -1024,7 +1027,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.with_state`; valid on an enum variant: `@description`, `@alias`, `@skip`
+  × unknown attribute `@stream.with_state`; valid on an enum variant: `@description`, `@alias`, `@skip`, `@json.rename`
     ╭─[enum_decls.baml:49:132]
  49 │     ConfiguredVariant @description("A configured variant with many attributes") @alias("configured") @stream.done @stream.not_null @stream.with_state
     ·                                                                                                                                    ─────────┬────────
@@ -1051,7 +1054,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`
+  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`, `@json.rename`
      ╭─[enum_decls.baml:148:5]
  148 │     @stream.not_null // 22 fourth attr trailing
      ·     ────────┬───────
@@ -1069,7 +1072,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`
+  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`, `@json.rename`
      ╭─[enum_decls.baml:174:5]
  174 │     @stream.not_null /* 22 fourth attr trailing */
      ·     ────────┬───────
@@ -1111,7 +1114,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`
+  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`, `@json.rename`
      ╭─[enum_decls.baml:219:7]
  219 │     Y @stream.not_null
      ·       ────────┬───────

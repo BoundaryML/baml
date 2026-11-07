@@ -77,7 +77,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.dne`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@trace.redact`
+  × unknown attribute `@stream.dne`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@json.rename`, `@json.flatten`, `@json.fallback`,
+  │ `@trace.redact`
     ╭─[stream_attribute_positions.baml:33:15]
  33 │   body string @stream.dne
     ·               ─────┬─────
@@ -86,7 +87,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@@stream.finished`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@trace.redact`
+  × unknown attribute `@@stream.finished`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@json.omit_nulls`, `@@trace.redact`
     ╭─[stream_attribute_positions.baml:34:3]
  34 │   @@stream.finished
     ·   ────────┬────────

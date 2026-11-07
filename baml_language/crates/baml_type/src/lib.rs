@@ -44,6 +44,7 @@ mod head;
 mod int;
 pub mod interned;
 pub mod json_inhabit;
+pub mod json_tags;
 mod names;
 pub mod normalize;
 mod param;

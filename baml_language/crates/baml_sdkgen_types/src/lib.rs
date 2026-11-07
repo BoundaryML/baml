@@ -3,6 +3,7 @@
 //! Union / Optional / Null invariance guaranteed
 
 mod descriptor;
+pub use baml_type::json_tags;
 mod embedded_bytecode;
 mod errors;
 mod generator_fields;

@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0015
 
-  × unknown attribute `@custom`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@trace.redact`
+  × unknown attribute `@custom`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`, `@json.rename`, `@json.flatten`, `@json.fallback`, `@trace.redact`
    ╭─[unknown_attributes.baml:5:15]
  5 │   name string @custom("field-extra")
    ·               ───────────┬──────────
@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@@vendor.tag`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@trace.redact`
+  × unknown attribute `@@vendor.tag`; valid on a class: `@@description`, `@@alias`, `@@stream.done`, `@@json.omit_nulls`, `@@trace.redact`
    ╭─[unknown_attributes.baml:6:3]
  6 │   @@vendor.tag
    ·   ──────┬─────
@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@custom`; valid on an enum variant: `@description`, `@alias`, `@skip`
+  × unknown attribute `@custom`; valid on an enum variant: `@description`, `@alias`, `@skip`, `@json.rename`
     ╭─[unknown_attributes.baml:10:7]
  10 │   Red @custom("variant-extra")
     ·       ────────────┬───────────
