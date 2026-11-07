@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs the pinned BAML 0.25.2 CLI from this directory's isolated BAML home.
+here=$(cd "$(dirname "$0")/.." && pwd)
+export BAML_HOME="$here/env/baml-home" BAML_CLI_ALLOW_DIRECT=1 DO_NOT_TRACK=1 BAML_AGENT_SKILL_CHECK=off
+exec "$here/env/baml-home/toolchains/0.25.2/bin/baml-cli" "$@"

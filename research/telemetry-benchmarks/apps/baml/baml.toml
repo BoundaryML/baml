@@ -1,0 +1,7 @@
+[package]
+name = "bench_apps"
+
+[generator.python]
+output_type = "python/pydantic"
+output_dir = "../py_bridge"
+naming_convention = "preserve-case"

@@ -1,0 +1,7 @@
+env/
+.env
+__pycache__/
+*.pyc
+.venv/
+scratch/
+apps/py_bridge/
