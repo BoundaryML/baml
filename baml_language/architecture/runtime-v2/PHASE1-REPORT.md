@@ -1620,3 +1620,70 @@ the clock-floor gate and profile above remain the measured checkpoint results.
 The off/low/medium regression matrix was then rerun against the span-enabled
 binaries: **12/12 pass** normal/stress, for **16/16 accepted cases** across all
 four levels on the two workloads. Strict clippy passes for both touched crates.
+
+## Telemetry T3: agent-loop, recording error evidence, complete level matrix
+
+The JSON specialization now preserves both observable bytecode calls (`decode`
+and `_aliased`), their original compact call-site PCs, and their completion
+outcomes. Error records use the compiler's compact PC/source mapping. Raises
+share one clock read through unwinding; caught ends identify the handler and
+count unwound frames. Agent-loop's recording matches the oracle's **1,086 JSON
+boundary raises and 108 explicit throws** per job, including high-span links.
+
+When every function is observed, the call path already describes the stack:
+only a depth counter is needed to retain recursive frame counts. Low/hidden
+observations use recording-only, on-stack linked frames for explicit stacks.
+Those links are removed on Rust unwinding as well. Error evidence is skipped
+when no recording publisher is present. Native operations remain hidden.
+The observation word's zero branch remains first. A separate non-inlined
+function handles high/policy/explicit-stack dispatch, preserving the ordinary
+off/medium wrapper's inlining opportunity.
+
+**Parity: 24/24 pass**, all three workloads × off/low/medium/high × normal/GC
+stress. GC maintenance is the only filter; error records, spans, counts,
+outcomes, paths and all other published content remain strict. Six off cases
+also match without the GC filter. Evidence: `telemetry/parity.json` and
+`target/t3-cold-parity.log`. Runtime tests (19), compiler tests (10), and strict
+all-target clippy for both crates pass. The new error regression covers both
+explicit and call-path-backed stacks, low/timing/span/promotion observations,
+handler PCs and unwind counts.
+
+### Performance with high and error evidence enabled
+
+Pinned to CPU 12; five rotated, interleaved rounds; three timed jobs plus one
+warmup for binary-trees, ten plus one for Richards/agent-loop. Each workload
+runs v2 off/medium/high, native medium, and Node in each round. All results and
+job counts are checked. Medians in ms/job:
+
+| Workload | v2 off | v2 medium | v2 high | Native medium | Node | Medium/off |
+|---|---:|---:|---:|---:|---:|---:|
+| binary-trees-14 | 42.465 | 320.660 | 1431.860 | 1032.556 | 40.398 | **7.551×** |
+| richards-50 | 3.728 | 85.389 | 392.073 | 289.929 | 6.001 | **22.906×** |
+| agent-loop-300 | 3.582 | 5.190 | 9.392 | 58.376 | 8.294 | **1.449×** |
+
+The Richards ≤1.5× gate **fails**. Medium stays the default. Host load ranges
+(1/5/15 minutes) were **10.02–18.47 / 17.40–20.45 / 29.47–31.57**, on 20 CPUs;
+the machine was not isolated. Raw rounds, binary hashes and environment are in
+`telemetry/t3-cold-benchmark-{raw,summary,environment}.json`.
+
+Before outlining the dispatcher, the same five-round protocol measured
+Richards off at 9.179 ms and medium at 97.873 ms (10.663×). That ratio concealed
+an off-path regression; a quick adjacent pinned check measured 4.732 ms off
+for that binary and 3.754 ms after outlining. The final interleaved table above
+uses the outlined binary. Keep absolute costs alongside ratios. Earlier
+measurements remain in `telemetry/t3-benchmark-*.json`; preliminary agent-only
+measurements are in `telemetry/t3-agent-benchmark-*.json`.
+
+The final Richards medium profile has **104K cycle samples, zero lost**.
+Source-location attribution: ECV clock read/return **52.41%**, parent/reentry
+Option comparisons **23.44%**, checked aggregate additions **20.31%**. As with
+the floor profile, these locations describe inlined instructions, not an exact
+causal cost decomposition. Standalone hashing, aggregate merge and path lookup
+remain below the 0.5% reporting threshold. Evidence:
+`telemetry/richards-t3-cold-{profile.txt,lines.txt,profile-run.json}`.
+
+T3 is complete for the requested agent-loop subset. T2 high/default spans and
+noncapturing promotion are verified; **exact policy captures remain pending**.
+No exemption was added to accommodate that remaining work. Diagnostic floor
+source regeneration now supplies empty error-PC tables to its preserved
+pre-error-evidence source; its off-level diagnostic variants never use them.

@@ -867,6 +867,19 @@ pub fn compile_v2(
         }
         out.push_str("}\n");
     }
+    let host_function = |name: &str| {
+        program
+            .objects
+            .iter()
+            .enumerate()
+            .find_map(|(i, o)| {
+                (matches!(o, Object::Function(_)) && plan.index.display(i) == name).then_some(i)
+            })
+            .ok_or_else(|| no(format!("host function {name}")))
+    };
+    let stringify = host_function("baml.json.stringify")?;
+    let aliased = host_function("baml.json._aliased")?;
+    let alias_function = aliased;
     if let Some(callee) = json_decode {
         if plan.json_types.is_empty() {
             return Err(no("missing JSON specialization"));
@@ -1057,6 +1070,7 @@ pub fn compile_v2(
                     return Err(no("JSON wrapper body"));
                 };
                 let mut line = None;
+                let mut decode_pc = None;
                 for block in &body.blocks {
                     if let Some(Terminator::Call {
                         callee: Operand::Constant(Constant::Function(f)),
@@ -1065,17 +1079,25 @@ pub fn compile_v2(
                         && let Some((target, _)) = plan.index.function(db, *f)
                         && plan.index.display(target) == "baml.json._decode"
                     {
+                        let bytecode = plan.index.positions(callee);
+                        decode_pc = Some(
+                            bytecode
+                                .lower_to_compact_with_offsets()
+                                .offset_of(bytecode.block_pcs[block.id.0].terminator.unwrap())
+                                .unwrap(),
+                        );
                         line = plan.index.positions(callee).block_pcs[block.id.0]
                             .terminator
                             .map(|pc| plan.index.positions(callee).source_line_for_pc(pc));
                     }
                 }
                 let line = line.ok_or_else(|| no("JSON wrapper source line"))?;
+                let decode_pc = decode_pc.unwrap();
                 if specialization == 0 && !aliased {
-                    writeln!(&mut out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}]}};",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
+                    writeln!(&mut out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}],pcs:&[{decode_pc}],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
                 }
                 if !aliased {
-                    writeln!(&mut out,"unsafe fn f{callee}_json{code}(s:usize,naming:usize)->R<rt::Dyn>{{unsafe{{rt::observe(&O{callee});rt::check_stack().map_err(|e|e.at(&S{callee},0))?;if naming==0{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}}}}}").unwrap();
+                    writeln!(&mut out,"unsafe fn f{callee}_json{code}(telemetry_site:usize,s:usize,naming:usize)->R<rt::Dyn>{{unsafe{{rt::telemetry::observed_call(&O{callee},telemetry_site,||{{rt::check_stack().map_err(|e|e.at(&S{callee},0))?;let aliased=rt::telemetry::observed_call(&O{alias_function},JSON_ALIAS_SITE,||Ok(naming!=0))?;(if !aliased{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}).map_err(|e|e.at(&S{callee},0))}})}}}}").unwrap();
                 }
             }
         }
@@ -1121,6 +1143,8 @@ pub fn compile_v2(
             block: 0,
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
+            compact_sites: Vec::new(),
+            raise_kinds: Vec::new(),
             telemetry_sites: &telemetry_sites,
             site: 0,
         };
@@ -1128,18 +1152,6 @@ pub fn compile_v2(
     }
     // The pack host formats an integer through stringify and _aliased(Declared).
     // Preserve these logical calls in the typed host specialization too.
-    let host_function = |name: &str| {
-        program
-            .objects
-            .iter()
-            .enumerate()
-            .find_map(|(i, o)| {
-                (matches!(o, Object::Function(_)) && plan.index.display(i) == name).then_some(i)
-            })
-            .ok_or_else(|| no(format!("host function {name}")))
-    };
-    let stringify = host_function("baml.json.stringify")?;
-    let aliased = host_function("baml.json._aliased")?;
     let MirFunctionKind::Bytecode(host_body) = &all[&stringify].kind else {
         return Err(no("host stringify body"));
     };
@@ -1162,6 +1174,35 @@ pub fn compile_v2(
         .borrow_mut()
         .extend([(None, 0, stringify), (Some(stringify), alias_pc, aliased)]);
     let mut observed = reached.clone();
+    if let Some(decode) = json_decode {
+        observed.insert(decode);
+        let MirFunctionKind::Bytecode(body) = &all[&decode].kind else {
+            unreachable!()
+        };
+        let block = body
+            .blocks
+            .iter()
+            .find(|b| {
+                matches!(&b.terminator,
+            Some(Terminator::Call { callee: Operand::Constant(Constant::Function(f)), .. })
+            if plan.index.function(db,*f).is_some_and(|(id,_)|id==aliased))
+            })
+            .ok_or_else(|| no("decode naming call"))?;
+        let bytecode = plan.index.positions(decode);
+        let pc = bytecode
+            .lower_to_compact_with_offsets()
+            .offset_of(bytecode.block_pcs[block.id.0].terminator.unwrap())
+            .unwrap();
+        writeln!(
+            &mut out,
+            "const JSON_ALIAS_SITE:usize={};",
+            telemetry_sites.borrow().len()
+        )
+        .unwrap();
+        telemetry_sites
+            .borrow_mut()
+            .push((Some(decode), pc, aliased));
+    }
     for id in [stringify, aliased] {
         if observed.insert(id) {
             writeln!(
@@ -1234,6 +1275,8 @@ struct Emitter<'a, 'db> {
     block: usize,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
+    compact_sites: Vec<u32>,
+    raise_kinds: Vec<&'static str>,
     telemetry_sites: &'a std::cell::RefCell<Vec<(Option<usize>, usize, usize)>>,
     site: usize,
 }
@@ -1267,7 +1310,25 @@ impl Emitter<'_, '_> {
         self.plan.local_repr(self.body, i, 0)
     }
     fn mark(&mut self, pc: Option<usize>) {
+        use bex_vm_types::bytecode::OpCode;
         if let Some(pc) = pc {
+            let bytecode = self.plan.index.positions(self.object);
+            let compact = bytecode.lower_to_compact_with_offsets();
+            let offset = compact.offset_of(pc).expect("source instruction");
+            self.compact_sites.push(u32::try_from(offset).unwrap());
+            let kind = match OpCode::try_from(bytecode.lower_to_compact().code[offset]).unwrap() {
+                OpCode::Throw => "Throw",
+                OpCode::Rethrow => "Rethrow",
+                OpCode::Call
+                | OpCode::CallHooked
+                | OpCode::CallLocal
+                | OpCode::CallExactArgs
+                | OpCode::CallIndirect
+                | OpCode::VirtualCall
+                | OpCode::SysOp => "NativeBoundary",
+                _ => "Runtime",
+            };
+            self.raise_kinds.push(kind);
             self.site = self.sites.len();
             self.sites.push(
                 self.plan
@@ -1282,8 +1343,13 @@ impl Emitter<'_, '_> {
             let landing = self.body.blocks[handler.0]
                 .landing
                 .expect("verified handler landing");
+            let bytecode = self.plan.index.positions(self.object);
+            let pc = bytecode
+                .lower_to_compact_with_offsets()
+                .offset_of(bytecode.block_pcs[handler.0].start.expect("handler pc"))
+                .expect("compact handler");
             format!(
-                "{{let error={error};if error.value==0{{return Err(error);}}let rooted=rt::CaughtError::new(error);let p=rooted.value();l{}=rt::Dyn{{tag:(*(p as *const bex_v2_heap::Header)).desc as u64+3,payload:p as u64}};caught{}=Some(rooted);{}}}",
+                "{{let mut error={error};rt::telemetry::evidence::caught(&mut error,{pc}u32);if error.value==0{{return Err(error);}}let rooted=rt::CaughtError::new(error);let p=rooted.value();l{}=rt::Dyn{{tag:(*(p as *const bex_v2_heap::Header)).desc as u64+3,payload:p as u64}};caught{}=Some(rooted);{}}}",
                 landing.error_local.0, handler.0, self.unwind_jumps[self.block]
             )
         } else {
@@ -1821,7 +1887,7 @@ impl Emitter<'_, '_> {
             .collect::<Vec<_>>()
             .join(",");
         let mut code = format!(
-            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{let mode=rt::telemetry::mode(&O{object});if mode==0{{return f{object}_body({arguments});}}if mode>1{{return rt::telemetry::observe(telemetry_site,mode,||f{object}_body({arguments}));}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
+            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{let mode=rt::telemetry::mode(&O{object});if mode==0{{return f{object}_body({arguments});}}if mode!=1{{return f{object}_observed(telemetry_site,mode,{arguments});}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n#[inline(never)] unsafe fn f{object}_observed(telemetry_site:usize,mode:u8,{params})->R<{returned}>{{unsafe{{if mode>3{{rt::telemetry::evidence::observe(telemetry_site,mode&3,||f{object}_body({arguments}))}}else{{rt::telemetry::observe(telemetry_site,mode,||f{object}_body({arguments}))}}}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
         );
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {
@@ -1861,8 +1927,15 @@ impl Emitter<'_, '_> {
             .map(usize::to_string)
             .collect::<Vec<_>>()
             .join(",");
+        let pcs = format!("{:?}", self.compact_sites);
+        let kinds = self
+            .raise_kinds
+            .iter()
+            .map(|k| format!("rt::telemetry::RaiseKind::{k}"))
+            .collect::<Vec<_>>()
+            .join(",");
         Ok(format!(
-            "static O{}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);\nstatic S{}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{lines}]}};\n{code}",
+            "static O{}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);\nstatic S{}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{lines}],pcs:&{pcs},kinds:&[{kinds}]}};\n{code}",
             self.object,
             self.object,
             self.plan.index.info(self.object).source_file,
@@ -2003,7 +2076,7 @@ impl Emitter<'_, '_> {
                     .collect::<Vec<_>>()
                     .join(",");
                 let error = format!(
-                    "Box::new(rt::Error{{value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
+                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
                     self.object, self.site
                 );
                 writeln!(&mut out, "{{let p={value};{}}}", self.raise(&error)).unwrap();
@@ -2081,11 +2154,14 @@ impl Emitter<'_, '_> {
                         self.coerce(self.operand(&args[2])?, Repr::Naming)?
                     };
                     let text = self.coerce(self.operand(&args[1])?, Repr::Str)?;
+                    let telemetry_site = self.telemetry_site(c);
                     let (destination, _) = crate::analysis::continuation(term).unwrap();
                     out.push_str(&self.assign(
                         destination,
                         (
-                            self.fallible(&format!("f{c}_json{code}({text},{naming})")),
+                            self.fallible(&format!(
+                                "f{c}_json{code}({telemetry_site},{text},{naming})"
+                            )),
                             Repr::Tagged,
                         ),
                     )?);

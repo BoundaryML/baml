@@ -1,42 +1,6 @@
 [
   {
     "workload": "trees",
-    "level": "high",
-    "stress": "0",
-    "strict_parity": false,
-    "parity": true,
-    "parity_except_existing_gc_records": true,
-    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-high-0.diff"
-  },
-  {
-    "workload": "trees",
-    "level": "high",
-    "stress": "1",
-    "strict_parity": false,
-    "parity": true,
-    "parity_except_existing_gc_records": true,
-    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-high-1.diff"
-  },
-  {
-    "workload": "richards",
-    "level": "high",
-    "stress": "0",
-    "strict_parity": false,
-    "parity": true,
-    "parity_except_existing_gc_records": true,
-    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-high-0.diff"
-  },
-  {
-    "workload": "richards",
-    "level": "high",
-    "stress": "1",
-    "strict_parity": false,
-    "parity": true,
-    "parity_except_existing_gc_records": true,
-    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-high-1.diff"
-  },
-  {
-    "workload": "trees",
     "level": "off",
     "stress": "0",
     "strict_parity": true,
@@ -64,6 +28,15 @@
   },
   {
     "workload": "trees",
+    "level": "high",
+    "stress": "0",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-high-0.diff"
+  },
+  {
+    "workload": "trees",
     "level": "off",
     "stress": "1",
     "strict_parity": true,
@@ -88,6 +61,15 @@
     "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-medium-1.diff"
+  },
+  {
+    "workload": "trees",
+    "level": "high",
+    "stress": "1",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/trees-high-1.diff"
   },
   {
     "workload": "richards",
@@ -118,6 +100,15 @@
   },
   {
     "workload": "richards",
+    "level": "high",
+    "stress": "0",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-high-0.diff"
+  },
+  {
+    "workload": "richards",
     "level": "off",
     "stress": "1",
     "strict_parity": true,
@@ -142,5 +133,86 @@
     "parity": true,
     "parity_except_existing_gc_records": true,
     "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-medium-1.diff"
+  },
+  {
+    "workload": "richards",
+    "level": "high",
+    "stress": "1",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-high-1.diff"
+  },
+  {
+    "workload": "agent",
+    "level": "off",
+    "stress": "0",
+    "strict_parity": true,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": null
+  },
+  {
+    "workload": "agent",
+    "level": "low",
+    "stress": "0",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/agent-low-0.diff"
+  },
+  {
+    "workload": "agent",
+    "level": "medium",
+    "stress": "0",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/agent-medium-0.diff"
+  },
+  {
+    "workload": "agent",
+    "level": "high",
+    "stress": "0",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/agent-high-0.diff"
+  },
+  {
+    "workload": "agent",
+    "level": "off",
+    "stress": "1",
+    "strict_parity": true,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": null
+  },
+  {
+    "workload": "agent",
+    "level": "low",
+    "stress": "1",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/agent-low-1.diff"
+  },
+  {
+    "workload": "agent",
+    "level": "medium",
+    "stress": "1",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/agent-medium-1.diff"
+  },
+  {
+    "workload": "agent",
+    "level": "high",
+    "stress": "1",
+    "strict_parity": false,
+    "parity": true,
+    "parity_except_existing_gc_records": true,
+    "diff": "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/agent-high-1.diff"
   }
 ]

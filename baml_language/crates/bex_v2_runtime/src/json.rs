@@ -162,6 +162,7 @@ fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<Error> {
     match build(cx, &message, path.as_deref()) {
         Err(e) => e,
         Ok(value) => Box::new(Error {
+            telemetry_raise: None,
             telemetry_at: None,
             value,
             class: if path.is_some() {

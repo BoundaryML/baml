@@ -106,7 +106,8 @@ def check(names,levels):
     if any(not row['parity'] for row in results):
         raise AssertionError('BTEL parity failed outside the C5 GC exception; per-case diffs are retained in target/telemetry')
 
-def bench(names,cpu):
+def bench(names,cpu,label):
+    assert label and label.replace('-','').replace('_','').isalnum(), 'benchmark label must be a path-free name'
     environment=dict(cpu=cpu,logical_cpus=os.cpu_count(),affinity=sorted(os.sched_getaffinity(0)),load=os.getloadavg(),
         platform=os.uname()._asdict() if hasattr(os.uname(), '_asdict') else list(os.uname()),
         node=run(['node','--version'],capture_output=True,text=True).stdout.strip(),
@@ -114,7 +115,7 @@ def bench(names,cpu):
         base_commit=run(['git','rev-parse','HEAD'],capture_output=True,text=True).stdout.strip(),
         binaries={name+'-'+backend:hashlib.sha256((OUT/(name+'-'+backend)).read_bytes()).hexdigest()
                   for name in names for backend in ['v2','oracle','native']})
-    (EVIDENCE/'benchmark-environment.json').write_text(json.dumps(environment,indent=2)+'\n')
+    (EVIDENCE/f'{label}-benchmark-environment.json').write_text(json.dumps(environment,indent=2)+'\n')
     rows=[]
     for round in range(5):
         for name in names:
@@ -122,6 +123,7 @@ def bench(names,cpu):
             commands={
                 'v2-off':([OUT/(name+'-v2'),'--jobs',jobs,'--warmup',1],'off'),
                 'v2-medium':([OUT/(name+'-v2'),'--jobs',jobs,'--warmup',1],'medium'),
+                'v2-high':([OUT/(name+'-v2'),'--jobs',jobs,'--warmup',1],'high'),
                 'native-medium':([OUT/(name+'-native'),'--jobs',jobs,'--warmup',1],'medium'),
                 'node':(['node',WS/'tools/speedtest/src/speedtest/drivers/driver.js',OUT/(name+'.js'),jobs,1],'off'),
             }
@@ -130,7 +132,7 @@ def bench(names,cpu):
             for backend in order:
                 cmd,level=commands[backend]
                 env=dict(ENV,BAML_TELEMETRY=level,BAML_GC_STRESS='0',BAML_COMPILED_BODIES='1')
-                env['BAML_HOME']=str(OUT/f'bench-{name}-{backend}-{round}')
+                env['BAML_HOME']=str(OUT/f'bench-{label}-{name}-{backend}-{round}')
                 before=os.getloadavg()
                 result=run(['taskset','-c',cpu,*cmd],env=env,capture_output=True,text=True)
                 data=json.loads(result.stdout)
@@ -138,12 +140,17 @@ def bench(names,cpu):
                 assert data['jobs']==jobs,data
                 row=dict(workload=name,backend=backend,round=round+1,cpu=cpu,load_before=before,load_after=os.getloadavg(),stderr=result.stderr,**data)
                 rows.append(row);print(json.dumps(row),flush=True)
-                (EVIDENCE/'benchmark-raw.json').write_text(json.dumps(rows,indent=2)+'\n')
+                (EVIDENCE/f'{label}-benchmark-raw.json').write_text(json.dumps(rows,indent=2)+'\n')
+                # Timed recordings are disposable; parity recordings are retained.
+                # High produces many spans across repeated jobs. Keep measured
+                # results/hashes/load without filling the worktree with copies.
+                home=Path(env['BAML_HOME'])
+                if home.exists(): shutil.rmtree(home)
     summary={}
     for name in names:
         medians={b:statistics.median(r['elapsed_ns']/r['jobs']/1e6 for r in rows if r['workload']==name and r['backend']==b) for b in commands}
         summary[name]=dict(ms_per_job=medians,medium_over_off=medians['v2-medium']/medians['v2-off'])
-    (EVIDENCE/'benchmark-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    (EVIDENCE/f'{label}-benchmark-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
     print(json.dumps(summary),flush=True)
 
 def profile(cpu,label="medium"):
@@ -165,7 +172,7 @@ def profile_report(label="medium"):
     (EVIDENCE/f'richards-{label}-lines.txt').write_text('\n'.join(line.rstrip() for line in lines.stdout.splitlines())+'\n')
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('action',choices=['build','check','bench','reader','profile','profile-report']);p.add_argument('--workloads',default='trees,richards');p.add_argument('--levels',default='off,low,medium');p.add_argument('--cpu',default='12');p.add_argument('--profile-label',default='medium');p.add_argument('--backends',default='v2,oracle,native');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('action',choices=['build','check','bench','reader','profile','profile-report']);p.add_argument('--workloads',default='trees,richards');p.add_argument('--levels',default='off,low,medium');p.add_argument('--cpu',default='12');p.add_argument('--profile-label',default='medium');p.add_argument('--benchmark-label',default='current');p.add_argument('--backends',default='v2,oracle,native');a=p.parse_args()
     OUT.mkdir(parents=True,exist_ok=True)
     names=a.workloads.split(',')
     if a.action=='build':build(names,a.backends.split(','))
@@ -173,4 +180,4 @@ if __name__=='__main__':
     elif a.action=='reader':reader()
     elif a.action=='profile':profile(a.cpu,a.profile_label)
     elif a.action=='profile-report':profile_report(a.profile_label)
-    else:bench(names,a.cpu)
+    else:bench(names,a.cpu,a.benchmark_label)

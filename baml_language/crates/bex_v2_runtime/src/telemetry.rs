@@ -19,6 +19,8 @@ use std::{
     },
 };
 
+pub mod evidence;
+pub use btel_records::RaiseKind;
 pub use btel_types as types;
 pub type Policy = btel_settings::policy::TelemetryPolicy<std::time::Duration>;
 pub struct Function {
@@ -74,6 +76,9 @@ impl DeltaClock {
 }
 
 struct State {
+    evidence: bool,
+    depth: u32,
+    evidence_frame: *mut evidence::EvidenceFrame,
     producer: Producer<TimingRecord, Span>,
     clock: Arc<ClockEpoch>,
     functions: Vec<FunctionId>,
@@ -273,6 +278,7 @@ pub unsafe fn enter_observed(site_id: usize) -> Frame {
         await_duration: AwaitDuration::ZERO,
         flags: u8::from(reentry),
     };
+    state.depth += 1;
     state.active = path;
     state.active_slot = if reentry {
         unsafe { slot.sub(1) }
@@ -304,6 +310,8 @@ impl Frame {
         {
             complete_unusual(state, self.slot, duration, self.await_duration, outcome);
         }
+        evidence::frame_completed(state, result);
+        state.depth -= 1;
         state.active = self.saved_path;
         state.active_function = self.saved_function;
         state.active_slot = self.saved_slot;
@@ -417,6 +425,8 @@ pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> 
     } else {
         complete_unusual(state, frame.slot, duration, frame.await_duration, outcome);
     }
+    evidence::frame_completed(state, &mut result);
+    state.depth -= 1;
     state.active_span = saved_span;
     state.active = frame.saved_path;
     state.active_function = frame.saved_function;
@@ -427,8 +437,14 @@ pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> 
 /// # Safety
 /// The same session and site requirements as `enter_observed` apply.
 pub unsafe fn observed_call<T>(word: &AtomicU8, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
-    match mode(word) {
-        0 => call(),
+    let mode = mode(word);
+    if mode == 0 {
+        return call();
+    }
+    if mode > 3 {
+        return unsafe { evidence::observe(site, mode & 3, call) };
+    }
+    match mode {
         1 => {
             let frame = unsafe { enter_observed(site) };
             let mut result = call();
@@ -617,13 +633,15 @@ pub struct Session {
 impl Session {
     pub fn new(functions: &'static [Function], sites: &'static [Site]) -> R<Self> {
         let level = btel_settings::mode::from_env().map_err(|e| Error::internal(e.to_string()))?;
+        let evidence = level.is_some() && recording_root().is_some();
         let words = functions
             .iter()
             .map(|function| {
                 let word = observation(level, function.hidden, function.policy);
-                if function.policy.capture_inputs
-                    || function.policy.capture_output
-                    || function.policy.capture_error
+                if word != 0
+                    && (function.policy.capture_inputs
+                        || function.policy.capture_output
+                        || function.policy.capture_error)
                 {
                     return Err(Error::internal(
                         "unsupported in runtime v2: policy captures (T2 pending)".into(),
@@ -632,8 +650,13 @@ impl Session {
                 Ok(word)
             })
             .collect::<R<Vec<_>>>()?;
+        // If every function is observed, its call path already carries the
+        // stack. Only low/hidden observations need recording-only stack links.
+        let explicit_stack = evidence && words.contains(&0);
         for (function, word) in functions.iter().zip(words) {
-            function.word.store(word, Ordering::Relaxed);
+            function
+                .word
+                .store(word | if explicit_stack { 4 } else { 0 }, Ordering::Relaxed);
         }
         let clocks = ClockRuntime::new(btel_settings::clock::DEFAULT_MODE);
         let exit = Arc::new(btel_types::ProcessExitSlot::default());
@@ -724,6 +747,9 @@ impl Session {
         };
         let clock = session.clocks.start_run();
         session.state = Some(Box::new(State {
+            evidence,
+            depth: 0,
+            evidence_frame: std::ptr::null_mut(),
             producer: pool.register_producer().unwrap(),
             clock: clock.clone(),
             functions: ids,
@@ -809,7 +835,10 @@ impl Session {
             }
         }
         let binding = Binding(CURRENT.replace(&mut **state));
-        let result = call();
+        let mut result = call();
+        if let Err(error) = &mut result {
+            evidence::end(error, btel_records::UnwindResult::Unhandled, None);
+        }
         drop(binding);
         state.flush();
         state.span(SpanRecord::ThreadSpanCompletion {
@@ -1022,6 +1051,9 @@ mod tests {
         let allocator = btel_types::FunctionIdAllocator::default();
         let clock = ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
         Box::new(State {
+            evidence: true,
+            depth: 0,
+            evidence_frame: std::ptr::null_mut(),
             producer: pool.register_producer().unwrap(),
             clock,
             functions: vec![allocator.allocate().unwrap(), allocator.allocate().unwrap()],
@@ -1052,12 +1084,30 @@ mod tests {
         announcements: Vec<(TelemetryId, TelemetryId)>,
         completions: Vec<(TelemetryId, TelemetryId, bool, bool, InvocationOutcome)>,
         count: u64,
+        raises: Vec<(btel_records::RaiseKind, u32, CallPathId)>,
+        stacks: Vec<usize>,
+        ends: Vec<(u32, Option<u32>)>,
     }
     impl btel_processor::Publisher<Snapshot, Snapshot> for Spans {
         fn aggregate(&mut self, delta: AggregateDelta) {
             self.count += delta.count;
         }
         fn span(&mut self, _: TelemetryId, record: &mut Span) {
+            match record {
+                SpanRecord::ErrorRaised {
+                    kind,
+                    frame_count,
+                    call_path,
+                    ..
+                } => self.raises.push((*kind, *frame_count, *call_path)),
+                SpanRecord::ErrorRaiseStack(stack) => self.stacks.push(stack.frames.len()),
+                SpanRecord::ErrorUnwindEnded {
+                    unwound_frames,
+                    handler_pc,
+                    ..
+                } => self.ends.push((*unwound_frames, *handler_pc)),
+                _ => {}
+            }
             if let SpanRecord::FunctionSpanAnnouncement { id, parent_id, .. } = record {
                 self.announcements.push((*id, *parent_id));
             }
@@ -1125,5 +1175,79 @@ mod tests {
         assert!(published.completions[2].2);
         assert_eq!(published.completions[2].1, root);
         assert_eq!(published.completions[2].4, InvocationOutcome::Panicked);
+    }
+
+    #[test]
+    fn recording_errors_preserve_hidden_stacks_and_unwind_counts() {
+        static SOURCE: crate::Source = crate::Source {
+            file: "test.baml",
+            function: "child",
+            lines: &[7],
+            pcs: &[17],
+            kinds: &[RaiseKind::Throw],
+        };
+        static WORDS: [AtomicU8; 8] = [
+            AtomicU8::new(0),
+            AtomicU8::new(1),
+            AtomicU8::new(2),
+            AtomicU8::new(3),
+            AtomicU8::new(4),
+            AtomicU8::new(5),
+            AtomicU8::new(6),
+            AtomicU8::new(7),
+        ];
+        for (mode, explicit) in [
+            (0, true),
+            (1, true),
+            (2, true),
+            (3, true),
+            (1, false),
+            (2, false),
+            (3, false),
+        ] {
+            let word = &WORDS[mode | if explicit { 4 } else { 0 }];
+            let pool = Pool::new(bex_chunkedringbuffer::Config::for_producers(
+                NonZeroUsize::new(1).unwrap(),
+            ))
+            .unwrap();
+            let mut processor = Processor::with_publisher(
+                pool.bind_consumer().unwrap(),
+                NonZeroUsize::new(8).unwrap(),
+                Spans::default(),
+            );
+            let mut state = test_state(&pool);
+            state.policies[1].promote_errors = true;
+            state.words = vec![word, word];
+            state.producer.write_timing(TimingRecord::ThreadSelected {
+                thread_id: state.thread,
+            });
+            CURRENT.set(&mut *state);
+            let result = unsafe {
+                observed_call(word, 0, || {
+                    let child: R<()> = observed_call(word, 1, || {
+                        Err(Error::internal("test".into()).at(&SOURCE, 0))
+                    });
+                    let mut error = child.unwrap_err();
+                    assert!(error.telemetry_at.is_some());
+                    evidence::caught(&mut error, 42);
+                    assert!(error.telemetry_raise.is_none());
+                    Ok(())
+                })
+            };
+            assert!(result.is_ok());
+            assert!(state.evidence_frame.is_null());
+            CURRENT.set(std::ptr::null_mut());
+            state.flush();
+            processor.process_available();
+            processor.flush();
+            let published = processor.publisher();
+            assert_eq!(published.count, if mode == 0 { 0 } else { 2 });
+            assert_eq!(published.raises.len(), 1);
+            assert_eq!(published.raises[0].0, RaiseKind::Throw);
+            assert_eq!(published.raises[0].1, 2);
+            assert_eq!(published.raises[0].2 == CallPathId::ROOT, mode == 0);
+            assert_eq!(published.stacks, if mode == 0 { vec![2] } else { vec![] });
+            assert_eq!(published.ends, vec![(1, Some(42))]);
+        }
     }
 }

@@ -1,0 +1,22 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 106K of event 'armv8_pmuv3_0/cycles/P'
+# Event count (approx.): 73529569770
+#
+# Overhead  Source:Line
+# ........  .......................................................................................................................................................................................
+#
+    36.82%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:127
+    30.02%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:130
+    15.28%  /home/rathi/.local/share/rustup/toolchains/1.98.0-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2442
+    12.96%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:460
+     0.96%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:248
+     0.96%  /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/baml_language/crates/bex_v2_runtime/src/telemetry.rs:111
+
+
+#
+# (Tip: To change sampling frequency to 100 Hz: perf record -F 100)
+#

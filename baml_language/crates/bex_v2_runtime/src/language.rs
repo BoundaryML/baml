@@ -3,7 +3,6 @@
 use crate::Instance;
 use baml_type::Int63;
 use bex_v2_heap::{Descriptor, ElementLayout, Elements, Field, Header, Kind, SlotKind};
-use std::sync::atomic::{AtomicU8, Ordering};
 pub type Dyn = bex_v2_heap::TaggedSlot;
 pub type R<T> = Result<T, Box<Error>>;
 
@@ -74,6 +73,8 @@ pub struct Source {
     pub file: &'static str,
     pub function: &'static str,
     pub lines: &'static [usize],
+    pub pcs: &'static [u32],
+    pub kinds: &'static [crate::telemetry::RaiseKind],
 }
 #[derive(Debug)]
 pub struct Frame {
@@ -83,6 +84,7 @@ pub struct Frame {
 }
 #[derive(Debug)]
 pub struct Error {
+    pub telemetry_raise: Option<crate::telemetry::evidence::Raise>,
     pub telemetry_at: Option<btel_types::ClockInstant>,
     /// Actual v2 heap instance of the panic class, zero only for internal errors.
     pub value: usize,
@@ -95,6 +97,7 @@ impl Error {
     #[cold]
     pub fn internal(message: String) -> Box<Self> {
         Box::new(Self {
+            telemetry_raise: None,
             telemetry_at: None,
             value: 0,
             class: "InternalError",
@@ -105,6 +108,7 @@ impl Error {
     }
     #[cold]
     pub fn at(mut self: Box<Self>, source: &'static Source, site: usize) -> Box<Self> {
+        crate::telemetry::evidence::raised(&mut self, source, site, None);
         self.frames.push(Frame {
             file: source.file,
             function: source.function,
@@ -130,6 +134,7 @@ fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
         };
         bex_v2_heap::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
+            telemetry_raise: None,
             telemetry_at: None,
             value: object as usize,
             class,
@@ -213,11 +218,14 @@ pub fn nonnull(p: usize) -> R<usize> {
         ))
     }
 }
+/// Native builtin observation words remain hidden in the admitted subset.
 #[inline(always)]
-pub fn observe(word: &AtomicU8) {
-    if word.load(Ordering::Relaxed) != 0 {
-        unimplemented!("runtime v2 telemetry producer");
-    }
+pub fn observe(word: &std::sync::atomic::AtomicU8) {
+    assert_eq!(
+        word.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "unsupported in runtime v2: native observation policy"
+    );
 }
 #[inline(always)]
 pub fn poll() -> R<()> {
@@ -412,6 +420,7 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
             crate::emergency_alloc(5, std::mem::size_of::<MessagePanic>()).cast::<MessagePanic>();
         bex_v2_heap::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
+            telemetry_raise: None,
             telemetry_at: None,
             value: object as usize,
             class: "baml.panics.AllocFailure",
@@ -507,6 +516,7 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
         object.add(8).cast::<i64>().write(index);
         object.add(16).cast::<i64>().write(length as i64);
         Box::new(Error {
+            telemetry_raise: None,
             telemetry_at: None,
             value: object as usize,
             class: "baml.panics.IndexOutOfBounds",
@@ -694,6 +704,8 @@ mod caught_tests {
     static SOURCE: Source = Source {
         file: "catch.baml",
         function: "user.raise",
+        pcs: &[],
+        kinds: &[],
         lines: &[7],
     };
     #[test]
@@ -817,6 +829,7 @@ fn division_zero(left: i64) -> Box<Error> {
         );
     }
     Box::new(Error {
+        telemetry_raise: None,
         telemetry_at: None,
         value: p as usize,
         class: "baml.panics.DivisionByZero",

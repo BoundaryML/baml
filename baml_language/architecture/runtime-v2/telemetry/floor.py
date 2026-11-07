@@ -19,6 +19,10 @@ def build():
     baseline=OUT/'floor-baseline.rs'
     if not baseline.exists(): baseline.write_text((OUT/'v2-build/src/main.rs').read_text())
     original=baseline.read_text()
+    # The preserved diagnostic source predates recording-only error PCs.
+    # These off-level variants never build error evidence.
+    if 'pcs:' not in original:
+        original=original.replace('rt::Source{file:', 'rt::Source{pcs:&[],kinds:&[],file:')
     assert '1161046400' not in original # result must be computed, not embedded
     functions={int(i): hidden=='true' for i,hidden in re.findall(r'word:&O(\d+),policy:rt::telemetry::Policy::NONE,hidden:(true|false)',original)}
     assert functions and 'WorkerTask' in original

@@ -1,0 +1,34 @@
+{
+  "command": [
+    "taskset",
+    "-c",
+    "12",
+    "/nix/store/i0cd89mpcvd3jb6slpzry4vr23gz4j9k-perf-linux-7.1/bin/perf",
+    "record",
+    "-g",
+    "--call-graph",
+    "dwarf",
+    "-o",
+    "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-t3.perf.data",
+    "--",
+    "/home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-v2",
+    "--jobs",
+    "300",
+    "--warmup",
+    "1"
+  ],
+  "load_before": [
+    23.85595703125,
+    29.43017578125,
+    39.73681640625
+  ],
+  "load_after": [
+    19.265625,
+    27.70361328125,
+    38.82958984375
+  ],
+  "stderr": "WARNING: Kernel address maps (/proc/{kallsyms,modules}) are restricted,\ncheck /proc/sys/kernel/kptr_restrict and /proc/sys/kernel/perf_event_paranoid.\n\nSamples in kernel functions may not be resolved if a suitable vmlinux\nfile is not found in the buildid cache or in the vmlinux path.\n\nSamples in kernel modules won't be resolved at all.\n\nIf some relocation was applied (e.g. kexec) symbols may be misresolved\neven with a suitable vmlinux or kallsyms file.\n\nCouldn't record kernel reference relocation symbol\nSymbol resolution may be skewed if relocation was used (e.g. kexec).\nCheck /proc/kallsyms permission or run as root.\n[ perf record: Woken up 3458 times to write data ]\n[ perf record: Captured and wrote 864.439 MB /home/rathi/Documents/Git/boundary/baml/.worktrees/v2-telemetry/target/telemetry/richards-t3.perf.data (106083 samples) ]\n",
+  "result": "1161046400",
+  "jobs": 300,
+  "elapsed_ns": 27028654753
+}
