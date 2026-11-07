@@ -40,13 +40,31 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BAML_BUILD_CACHE` | `false` turns off the build cache. |
 | `BAML_BUILD_CACHE_REMOTE`, `BAML_BUILD_CACHE_REMOTE_TOKEN` | Shared build cache for CI. URL must be https (or localhost). |
 | `BAML_LOG` | Level for `log.*` output from `baml run` and `baml test` (same as `--log`): `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
-| `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. |
+| `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. Set `off` to disable recording and cloud uploads in CLI runs/tests and ordinary generated SDKs, including when logged in. See [Runtime traces](#runtime-traces). |
 | `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.prod.bcs.boundaryml.com`. |
-| `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. |
+| `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. The sentinel `local` selects local recordings instead of cloud uploads. |
 | `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; query's `--project` flag takes precedence. |
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |
 | `BAML_FEEDBACK_HOST` | Where `baml feedback` sends reports. Staging and tests. |
 | `BAML_AWS_CREDENTIAL_PROCESS` | Allow running an AWS profile's `credential_process`. Off by default because it runs a program. |
+
+## Runtime traces
+
+Set `BAML_TELEMETRY=off` before starting your process to disable runtime recording, including cloud upload preparation and heartbeats. CLI `run`/`test` and ordinary generated SDKs honor it even when `baml auth status` reports a saved login or `BOUNDARY_API_KEY` contains a cloud credential. It creates no local trace files either. The native runtime reads the setting when it initializes; for Node, set it before importing `baml_sdk`.
+
+```sh
+BAML_TELEMETRY=off baml run main
+BAML_TELEMETRY=off baml test
+BAML_TELEMETRY=off node app.js
+```
+
+`0`, `false`, and `no` also disable recording; values are case-insensitive. Empty means unset, and `1`, `true`, `yes`, and `on` keep the default `medium` level. `none` and `disabled` are not supported spellings: the CLI reports an invalid setting and an ordinary generated SDK disables recording for unrecognized values.
+
+To keep traces locally instead, set `BOUNDARY_API_KEY=local` and leave recording enabled. This bypasses cloud credentials and endpoint validation, even when logged in. CLI runs/tests write to `<project>/.baml/btel`; SDKs use `BAML_HOME/btel` when `BAML_HOME` is set, otherwise the BAML project enclosing the working directory, falling back to `~/.baml/btel` outside a project. `baml query --local` reads local recordings. `BAML_HOME` chooses a state directory; it does not disable cloud uploads.
+
+When recording is enabled, an explicit API key or saved login still selects cloud delivery. `BAML_TELEMETRY=medium`/`high` controls recording detail, not the destination. Runtime traces and CLI usage analytics are separate: use `DO_NOT_TRACK=1` or `baml telemetry disable` for usage analytics.
+
+Publisher-owned artifacts can explicitly freeze or rename the recording variable. `[bridge.env_var_names] BAML_TELEMETRY = false` freezes a generated SDK's recording level, and a string names its accepted variable. An explicit destination binding that reuses the `BAML_TELEMETRY` name also takes precedence over the implicit recording switch. Bridges built with `--embed-telemetry`, and packed programs, keep their baked recording level unless the publisher explicitly binds a recording variable. For those artifacts, use the publisher's declared control; see [artifact telemetry policy](crates/bcs_api/README.md#embedded-telemetry-in-artifacts).
 
 ## Bridges
 
