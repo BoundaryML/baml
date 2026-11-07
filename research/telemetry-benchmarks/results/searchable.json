@@ -70,5 +70,41 @@
   "marker": "m869742fc87cf4068",
   "seconds": 54.66177582740784,
   "polls": 25
+ },
+ {
+  "vendor": "bcs",
+  "marker": "01a1b43cd7bf7f9e957c37faa9ec0e66",
+  "seconds": 1.8489980697631836,
+  "polls": 2
+ },
+ {
+  "vendor": "bcs",
+  "marker": "01a1b43ce3da7168a7dc1bed1c00f187",
+  "seconds": 5.972909927368164,
+  "polls": 6
+ },
+ {
+  "vendor": "bcs",
+  "marker": "01a1b43cff6e72e99438e1642bb95c80",
+  "seconds": 5.434202194213867,
+  "polls": 6
+ },
+ {
+  "vendor": "bcs",
+  "marker": "01a1b43d18c97e79af4e0eb9b44a07d4",
+  "seconds": 6.001224756240845,
+  "polls": 6
+ },
+ {
+  "vendor": "bcs",
+  "marker": "01a1b43d348074b894f2600d80333665",
+  "seconds": 5.61064600944519,
+  "polls": 6
+ },
+ {
+  "vendor": "bcs",
+  "marker": "01a1b43d4e887e45be670dc6fbe3d2cb",
+  "seconds": 6.680762767791748,
+  "polls": 7
  }
 ]

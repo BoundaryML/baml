@@ -15,7 +15,8 @@ All runs use a local fake OpenAI server, so the numbers measure tracing, not the
 5. **Spans are free on BCS.** The 8,200 spans billed 445 bytes. The same workload is about $82 per million requests on Logfire (41 records each) and about $70 on Datadog APM indexed spans.
 6. **Retries are visible.** BAML recorded all 30 HTTP attempts in the agent runs, including the 10 503 failures. Logfire and Datadog recorded 20 model spans, because the OpenAI SDK's internal retry happens inside one instrumented call.
 7. **Full fidelity, no silent edits.** BCS stores the raw HTTP request and response plus inputs and outputs and never redacts unless asked (`@trace.redact`). Logfire's default scrubbing replaced 8 of 10 ordinary support tickets with `[Scrubbed due to '…']`, triggered by words like password, session, cookie, secret santa and authentication (`results/scrub.json`).
-8. **Dedup on the wire.** Ten identical 100 KiB calls upload 328 KB, against 2.19 MB for ten different ones.
+8. **Fastest to search.** A finished BAML CLI run appeared in `baml query` after a median of 5.8 s (1.8–6.7 s, 6 trials), against 15.2 s for Logfire's SQL API and 37.8 s for Datadog span search (`results/searchable.json`).
+9. **Dedup on the wire.** Ten identical 100 KiB calls upload 328 KB, against 2.19 MB for ten different ones.
 
 ## Weaknesses and surprises
 
@@ -35,7 +36,6 @@ All runs use a local fake OpenAI server, so the numbers measure tracing, not the
 5. **About 55 KB fixed upload per process** (runtime definitions), so short-lived processes send 25–50× more bytes than Logfire or OTel for a single call. It is billed at only a few hundred bytes.
 6. **Default `medium` shows nothing per call for plain functions** (timing aggregates only). To see non-LLM steps you need `high` or a call-site `trace.span()`.
 7. **No disk spool.** What is unsent at kill -9 is gone, about the last 0.5 s of work.
-8. **Read access was not testable.** The ingest key gets 403 on `baml query`, so time-to-searchable for BCS was not measured. Logfire took a median of 15.2 s and Datadog APM 37.8 s.
 
 ## Notes on the other stacks
 
@@ -47,4 +47,3 @@ All runs use a local fake OpenAI server, so the numbers measure tracing, not the
 ## Open items
 
 - Live OpenAI runs (blocked: infisical login).
-- BCS time to searchable (needs a key with read access).

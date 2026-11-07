@@ -234,7 +234,7 @@ logfire.instrument_openai()
   <h2>Time until a trace can be found</h2>
   <p class="col">From process exit to the first successful query for a unique marker, over 6 trials each.</p>
   <div class="chart" id="search"></div>
-  <p class="muted col">BCS is not measured here: our test key can write but not query.</p>
+  <p class="muted col">Each vendor is polled through its own query API: <code>baml query</code> for BCS (about every second, counting each query's own time), Logfire's SQL API every 0.5 s and Datadog's span search every 2 s, which is rate-limited.</p>
 </section>
 
 <section>
@@ -316,6 +316,7 @@ function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === 
     ["bad", "Big prompts cost more", "BCS bills captured bytes, and the prompt counts twice (as input and inside the HTTP body). A 100 KiB classify costs about $825 per million calls, against $4 on Logfire. <code>http_bodies = false</code> halves it."],
     ["bad", "Python bridge ignores BAML_TELEMETRY", "Setting it to <code>off</code> in a Python app still uploads, unless the package's baml.toml opts in to the variable."],
     ["bad", "First upload is heavy", "Each process uploads about 55 KB of runtime definitions once. That matters for short-lived processes, not for servers."],
+    ["good", "Searchable in seconds", "A finished BAML run showed up in <code>baml query</code> after a median of 5.8 s, against 15 s for Logfire and 38 s for Datadog."],
     ["mixed", "Logfire is cheap but edits your data", "Its default scrubbing replaced 8 of 10 ordinary support tickets with a placeholder."],
   ];
   document.getElementById("score").innerHTML = items.map(([v, h, t]) =>
@@ -464,7 +465,7 @@ function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === 
 // ---- searchable
 (function search() {
   const S = D.searchable;
-  const rows = [["logfire", "Logfire"], ["datadog", "Datadog APM"]].filter(([k]) => S[k]).map(([k, l]) => ({label: l, value: S[k].median, color: STACKS[k].c,
+  const rows = [["bcs", "BCS", "baml"], ["logfire", "Logfire", "logfire"], ["datadog", "Datadog APM", "datadog"]].filter(([k]) => S[k]).map(([k, l, c]) => ({label: l, value: S[k].median, color: STACKS[c].c,
     text: `${S[k].median.toFixed(1)} s`, tip: `${l}: median ${S[k].median.toFixed(1)} s, range ${S[k].min.toFixed(1)}–${S[k].max.toFixed(1)} s over ${S[k].n} trials`}));
   hbars(document.getElementById("search"), rows, {labelW: 160});
 })();

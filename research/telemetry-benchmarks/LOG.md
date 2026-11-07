@@ -238,3 +238,17 @@ Bytes on the wire per call, classify, 10 independent documents:
 BCS billed bytes didn't change (for example, 10 KiB classify: 219,406 → 219,346). Uncompressed, Logfire carries the prompt about 2.4× per call (function argument, chat message, and the pending span) and OTel 1× (only the decorator's `input` attribute; openai-v2 puts no message text on spans). gzip then shrinks this random text to about 65%. Real English text compresses further.
 
 Corrected comparison at 10 KiB: BAML sends 2.5× Logfire, 5× OTel and 1.75× Datadog per call. That includes about 5.5 KB per call of the one-time definitions upload spread over the 10 calls. Earlier it looked like 18× Logfire. The site and FINDINGS.md now use the rerun rows for every "10v" figure.
+
+## 2026-11-07: E9 BCS time to searchable (read/write key as `BOUNDARY_QUERY_KEY`)
+
+The user supplied a key with read access. `baml query --project aarons-prod-org1/test --environment Production` works. Its first answer is another billing cross-check: `spans` holds 1,309 network + 745 future + 3,403 function = **5,457 spans**, matching the Billing page.
+
+Method (`experiments/searchable.py --vendors bcs`): the BAML CLI runs `Classify` once against the mock model. The upload goes through the recording relay to the real BCS, and the relay learns the process ID. After the process exits, the script polls `select count(*) from spans where process_id = '…'` every 0.5 s; each query also takes about 0.4–0.6 s, so the resolution is about 1 s.
+
+| vendor | trials | median | range |
+|---|---:|---:|---|
+| BCS (`baml query`) | 6 | 5.8 s | 1.8–6.7 s |
+| Logfire (SQL API) | 6 | 15.2 s | 8.4–15.7 s |
+| Datadog APM (spans search) | 6 | 37.8 s | 34.9–54.7 s |
+
+A filter on a captured value (`input_args['text'] like 'abc%'`) took 6.3 s over the whole project because it loads values from content-addressed storage (336 loads, 6.2 MB read). Filters on span columns such as `process_id` answer in about 0.3–0.6 s.

@@ -6,7 +6,9 @@ query API every 0.5 s (Logfire) or 2 s (Datadog, whose search API rate-limits) u
 
 - Logfire: Python + logfire SDK, polled with the SQL query API.
 - Datadog: Python + ddtrace APM spans via the OTLP intake, polled with spans search.
-- BCS: BAML CLI upload, polled with `baml query` (needs BOUNDARY_QUERY_KEY in .env).
+- BCS: BAML CLI `Classify` call (against the loopback mock model) uploaded through a
+  recording relay that learns the process ID, polled with `baml query` for spans of
+  that process (needs a key with read access as BOUNDARY_QUERY_KEY in .env).
 
     python experiments/searchable.py --trials 5 --out results/searchable.json
 """
@@ -20,6 +22,9 @@ import uuid
 from pathlib import Path
 
 import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lab"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "env" / "proto"))
 
 ROOT = Path(__file__).resolve().parents[1]
 S = dict(line.strip().split("=", 1) for line in open(ROOT / ".env") if "=" in line)
@@ -68,7 +73,46 @@ def datadog_found(marker):
     return len(r.json().get("data", [])) > 0
 
 
+BAML = str(ROOT / "bin" / "baml")
+BCS_PROJECT = ["--project", "aarons-prod-org1/test", "--environment", "Production"]
+
+
+def bcs_found(process_id):
+    env = {**os.environ, "BOUNDARY_API_KEY": S["BOUNDARY_QUERY_KEY"]}
+    proc = subprocess.run([BAML, "--agent-skill-check", "off", "query", *BCS_PROJECT, "--format", "json",
+                           f"select count(*) from spans where process_id = '{process_id}'"],
+                          env=env, cwd=ROOT / "apps" / "baml", capture_output=True, text=True, timeout=120)
+    if proc.returncode:
+        raise RuntimeError(proc.stderr[-500:])
+    return json.loads(proc.stdout)["rows"][0][0] > 0
+
+
+def bcs_trial():
+    from logical_usage import Meter
+    from servers import bcs_relay, mock_llm
+    model, meter = mock_llm(), Meter()
+    sink = bcs_relay(S["BOUNDARY_API_KEY"], meter=meter)
+    env = {"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "MODEL_BASE_URL": model.url + "/v1",
+           "MODEL_API_KEY": "fixture", "BOUNDARY_API_KEY": sink.handle, "BOUNDARY_API_URL": sink.url}
+    subprocess.run([BAML, "--agent-skill-check", "off", "run", "Classify", "--log", "off", "--", "--text",
+                    "searchable " + uuid.uuid4().hex], env=env, cwd=ROOT / "apps" / "baml", check=True,
+                   capture_output=True, timeout=60)
+    sent = time.time()
+    sink.shutdown()
+    model.shutdown()
+    (process_id,) = meter.summary()["process_ids"]
+    polls = 0
+    while time.time() - sent < 300:
+        polls += 1
+        if bcs_found(process_id):
+            return {"vendor": "bcs", "marker": process_id, "seconds": time.time() - sent, "polls": polls}
+        time.sleep(0.5)
+    return {"vendor": "bcs", "marker": process_id, "seconds": None, "polls": polls}
+
+
 def trial(vendor, marker):
+    if vendor == "bcs":
+        return bcs_trial()
     env = {**os.environ, "LOGFIRE_TOKEN": S["LOGFIRE_TOKEN"], "DD_API_KEY": S["DD_API_KEY"]}
     code, found = {"logfire": (LOGFIRE_APP, logfire_found), "datadog": (DATADOG_APP, datadog_found)}[vendor]
     subprocess.run([PY, "-c", code, marker], env=env, check=True, capture_output=True, timeout=60)
@@ -84,11 +128,12 @@ def trial(vendor, marker):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--vendors", nargs="+", default=["logfire", "datadog"])
+    p.add_argument("--vendors", nargs="+", default=["logfire", "datadog", "bcs"])
     p.add_argument("--trials", type=int, default=5)
     p.add_argument("--out", required=True)
     args = p.parse_args()
-    rows = []
+    out = ROOT / args.out
+    rows = json.loads(out.read_text()) if out.exists() else []
     for t in range(args.trials):
         for vendor in args.vendors:
             row = trial(vendor, "m" + uuid.uuid4().hex[:16])
