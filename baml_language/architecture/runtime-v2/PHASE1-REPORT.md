@@ -1,5 +1,7 @@
 # Phase 1: streaming JSON meets the required Node gate
 
+> Raw measurement files (benchmark JSON, MIR dumps, perf output) are not committed. Every table below lists the command that regenerates its data.
+
 M1–M3 remain correctness-verified. Generated per-type streaming JSON decoding
 reduces agent-loop from **9.012 ms/job to 3.450 ms/job (2.61× faster)**. It beats
 both the requested 5.7 ms ceiling and the current interleaved Node result

@@ -1,0 +1,11 @@
+# Raw measurement output from the phase 1 scripts. Reports keep the summaries;
+# regenerate raw data with the commands in PHASE1-REPORT.md.
+phase1/*.json
+phase1/*.jsonl
+phase1/*.mir
+phase1/*.txt
+phase1/*.log
+telemetry/*.json
+telemetry/*.jsonl
+telemetry/*.txt
+telemetry/*.log
