@@ -198,3 +198,20 @@ The app (`apps/baml_pipeline`, plus the same code in Python) serves 200 requests
 This is the case where BCS pricing wins by far: many spans that carry little data.
 
 BAML's default `medium` level records nothing per call for plain functions. You need `high`, or an explicit `trace.span()` at the call site, to see these steps in a trace.
+
+## 2026-11-07: E6 crash (`experiments/crash.py --trials 3`, `results/crash.json`)
+
+Each trial runs a loop of `classify` calls against a mock model that takes 50 ms per reply, and kills the process at a random 3–9 s. "Lost" means completed model calls whose model span never reached the local backend stand-in. Totals are over 3 trials.
+
+| stack | kill -9: lost / completed | SIGTERM: lost / completed |
+|---|---:|---:|
+| BAML CLI → BCS | 10 / 358 (2.8%) | 0 / 257 (0%) |
+| Python → BAML bridge | 19 / 325 (5.8%) | 17 / 303 (5.6%) |
+| Python + Logfire | 10 / 317 (3.2%) | 13 / 258 (5.0%) |
+| Python + Datadog LLM Obs | 49 / 133 (36.8%) | 22 / 301 (7.3%) |
+| Python + OTel SDK | 128 / 303 (42.2%) | 115 / 290 (39.7%) |
+
+- BAML's CLI drains its upload on SIGTERM (0 lost). On kill -9 it loses about the last half-second of calls. There is no disk spool, so nothing is recovered later.
+- In Python, SIGTERM is as bad as kill -9 unless the app installs a handler. Python's default SIGTERM action ends the process without running `atexit`, so no SDK gets to flush. That is why the bridge, Logfire, Datadog and OTel all lose data on SIGTERM too. This is what happens on every `docker stop` or Kubernetes rollout of a Python worker that doesn't handle SIGTERM.
+- OTel's `BatchSpanProcessor` exports every 5 s, so a kill loses up to the whole window: one trial lost all 53 calls (killed at 3.7 s, before the first export).
+- Datadog's LLM Obs writer flushes every few seconds and lost 37% on kill -9, with large spread.

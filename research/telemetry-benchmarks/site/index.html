@@ -1,0 +1,469 @@
+<title>Telemetry Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a single 46rem reading column; charts and the calculator break out to 64rem. Stack colors are fixed identities used everywhere. */
+:root {
+  --bg: #f5f7f6;
+  --panel: #ffffff;
+  --ink: #142320;
+  --ink-2: #4a5955;
+  --ink-3: #75837f;
+  --rule: #d9e0dd;
+  --grid: #e6ebe9;
+  --code-bg: #eaf0ee;
+  --accent: #0f6b5c;
+  --good: #1b7f3b;
+  --bad: #b3361f;
+  --s-baml: #2a78d6;
+  --s-logfire: #eb6834;
+  --s-datadog: #6250d6;
+  --s-otel: #eda100;
+  --s-bridge: #1baf7a;
+  --s-off: #9aa5a1;
+  --f-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111816; --panel: #18211f; --ink: #e8efec; --ink-2: #b5c2be; --ink-3: #8a9894;
+    --rule: #2c3835; --grid: #232e2b; --code-bg: #1e2926; --accent: #4cc4ad; --good: #5cc77a; --bad: #f07a63;
+    --s-baml: #3987e5; --s-logfire: #d95926; --s-datadog: #9085e9; --s-otel: #c98500; --s-bridge: #199e70; --s-off: #6b7773;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111816; --panel: #18211f; --ink: #e8efec; --ink-2: #b5c2be; --ink-3: #8a9894;
+  --rule: #2c3835; --grid: #232e2b; --code-bg: #1e2926; --accent: #4cc4ad; --good: #5cc77a; --bad: #f07a63;
+  --s-baml: #3987e5; --s-logfire: #d95926; --s-datadog: #9085e9; --s-otel: #c98500; --s-bridge: #199e70; --s-off: #6b7773;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--f-body); }
+.wrap { max-width: 64rem; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 2.5rem 4rem; }
+.col { max-width: 46rem; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+.lede { font-size: 1.15rem; color: var(--ink-2); max-width: 40rem; }
+.eyebrow { font: 600 0.72rem/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+section { display: grid; gap: 1.1rem; padding-block: 3rem; border-top: 1px solid var(--rule); }
+header { display: grid; gap: 1.2rem; padding-bottom: 2rem; }
+.muted { color: var(--ink-3); font-size: 0.9rem; }
+code, pre { font-family: var(--f-mono); font-size: 0.82rem; }
+p code, li code, td code { background: var(--code-bg); padding: 0.05em 0.35em; border-radius: 4px; }
+pre { background: var(--code-bg); border-radius: 8px; padding: 1rem 1.1rem; margin: 0; overflow-x: auto; line-height: 1.55; }
+.k { color: var(--accent); font-weight: 600; }
+.c { color: var(--ink-3); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr)); gap: 1rem; }
+.grid2 > * { min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 1rem 1.1rem; display: grid; gap: 0.6rem; min-width: 0; }
+.panel h3 { display: flex; align-items: center; gap: 0.5rem; }
+.chip { display: inline-flex; align-items: center; gap: 0.4rem; font: 600 0.78rem/1 var(--f-mono); }
+.dot { width: 0.7rem; height: 0.7rem; border-radius: 3px; flex: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; }
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; height: auto; min-width: 34rem; }
+svg text { fill: var(--ink-2); font-family: var(--f-mono); font-size: 11px; }
+svg .val { fill: var(--ink); font-weight: 600; }
+svg .gl { stroke: var(--grid); stroke-width: 1; }
+svg .axis { stroke: var(--rule); stroke-width: 1; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font: 600 0.72rem/1.2 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+td.n, th.n { text-align: right; }
+.tablewrap { overflow-x: auto; }
+.callout { border-left: 3px solid var(--accent); padding: 0.2rem 0 0.2rem 1rem; display: grid; gap: 0.4rem; }
+.verdict { display: inline-block; font: 600 0.72rem/1 var(--f-mono); padding: 0.3rem 0.45rem; border-radius: 4px; letter-spacing: 0.04em; }
+.v-good { color: var(--good); border: 1px solid var(--good); }
+.v-bad { color: var(--bad); border: 1px solid var(--bad); }
+.v-mixed { color: var(--ink-2); border: 1px solid var(--ink-3); }
+.score { display: grid; gap: 0.5rem; }
+.score li { display: grid; grid-template-columns: 4.6rem 1fr; gap: 0.8rem; align-items: start; }
+ul.plain { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.7rem; }
+.calc { display: grid; gap: 1.2rem; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 1rem; }
+.controls label { display: grid; gap: 0.35rem; font-size: 0.88rem; color: var(--ink-2); }
+.controls output { font: 600 1rem var(--f-mono); color: var(--ink); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+select { font: inherit; padding: 0.35rem; border-radius: 6px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); }
+.bars { display: grid; gap: 0.55rem; }
+.bar { display: grid; grid-template-columns: 9.5rem 1fr 6.5rem; gap: 0.7rem; align-items: center; font-size: 0.9rem; }
+.bar .track { height: 1.1rem; background: var(--grid); border-radius: 3px; overflow: hidden; }
+.bar .fill { height: 100%; border-radius: 0 4px 4px 0; transition: width 0.3s; }
+.bar .amt { font: 600 0.92rem var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 30rem) { .bar { grid-template-columns: 6.5rem 1fr 5.2rem; font-size: 0.8rem; } }
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font: 0.78rem/1.4 var(--f-mono); padding: 0.4rem 0.55rem; border-radius: 6px; max-width: 18rem; z-index: 20; }
+.tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.tabs button { font: 600 0.8rem var(--f-mono); border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); padding: 0.35rem 0.7rem; border-radius: 6px; cursor: pointer; }
+.tabs button[aria-pressed=true] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scrub td:nth-child(2) { font-family: var(--f-mono); font-size: 0.8rem; }
+.hero svg { width: 100%; height: auto; display: block; }
+.hero .chart svg { min-width: 40rem; }
+@media (prefers-reduced-motion: reduce) { .bar .fill { transition: none; } }
+</style>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">Benchmark notes · BAML 0.25.2 · November 2026</span>
+  <h1>Telemetry Bench</h1>
+  <p class="lede">We wrote the same four small programs in BAML and in Python, traced them with Boundary Cloud (BCS), Pydantic Logfire, Datadog and plain OpenTelemetry, and measured what each one sends, stores, costs and loses.</p>
+  <div class="hero">
+    <div class="chart" id="hero"></div>
+    <p class="muted">One <code>classify</code> call with a 10 KiB document, made 10 times with different text. The bars show what each stack sends over the network per call, next to the prompt it sent to the model. BAML's figure includes a one-time upload of about 55 KB of program definitions per process, spread here over 10 calls.</p>
+  </div>
+</header>
+
+<section>
+  <span class="eyebrow">Short version</span>
+  <h2>What we found</h2>
+  <ul class="plain score" id="score"></ul>
+</section>
+
+<section>
+  <span class="eyebrow">The setup</span>
+  <h2>Same program, four ways to watch it</h2>
+  <p class="col">Each app runs in a fresh process against a fake model server on the same machine, so the network and the model never add noise. The four apps grow in size: <b>hello</b> (no model), <b>classify</b> (yes/no about a document), <b>extract</b> (pull an invoice into a class) and <b>agent</b> (two model calls and a tool, where the first reply attempt fails with a 503 and is retried).</p>
+  <div class="grid2">
+    <div class="panel">
+      <h3><span class="dot" style="background:var(--s-baml)"></span>BAML</h3>
+<pre><span class="k">function</span> Classify(text: string) -> bool {
+  client: Model
+  prompt: `
+    Is this document an invoice?
+    Reply with only true or false.
+    ${text}
+  `
+}</pre>
+      <p class="muted">Tracing setup: none. Set <code>BOUNDARY_API_KEY</code> and every LLM call is recorded with its inputs, output and raw HTTP exchange.</p>
+    </div>
+    <div class="panel">
+      <h3><span class="dot" style="background:var(--s-logfire)"></span>Python + Logfire</h3>
+<pre><span class="k">import</span> logfire
+logfire.configure(service_name=<span class="c">"bench"</span>)
+logfire.instrument_openai()
+
+<span class="k">@logfire.instrument()</span>
+<span class="k">def</span> classify(text):
+    reply = ask(<span class="c">f"Is this document an invoice? ...\n{text}"</span>)
+    <span class="k">return</span> reply.strip() == <span class="c">"true"</span></pre>
+      <p class="muted">Datadog looks much the same (<code>LLMObs.enable</code> plus <code>@workflow</code>). Plain OpenTelemetry needs its own exporter, provider and decorator.</p>
+    </div>
+  </div>
+  <h3>Lines of tracing code in the Python version of the four apps</h3>
+  <div class="chart" id="loc"></div>
+</section>
+
+<section>
+  <span class="eyebrow">Bytes on the wire</span>
+  <h2>BAML records the whole exchange, so it sends more</h2>
+  <p class="col">BAML records every model call's raw HTTP request and response next to the function's inputs and output. The others record less by default: Logfire keeps function arguments and the chat messages but not return values, and OpenTelemetry's OpenAI instrumentation keeps no message text on spans at all. Pick a document size to see bytes sent per call.</p>
+  <div class="tabs" role="group" aria-label="Document size" id="sizeTabs"></div>
+  <div class="chart" id="wire"></div>
+  <div class="legend" id="wireLegend"></div>
+  <div class="callout col">
+    <h3>Repeated input is nearly free on the wire</h3>
+    <p>BCS stores content by hash. Ten identical 100 KiB calls sent <b id="dedupSame"></b> from BAML versus <b id="dedupVary"></b> for ten different ones. Logfire's gzip gets part of that saving (781 KB vs 1.55 MB). Datadog sends uncompressed JSON, about 207 KB per call either way. The <b>bill</b> does not shrink: BCS counts every reference.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Cost</span>
+  <h2>Who is cheapest depends on the shape of your data</h2>
+  <p class="col">The three products bill different things. BCS bills captured data by the gigabyte, and spans are free. Logfire bills per span or log record. Datadog LLM Observability bills per model call. Move the sliders to match your app. The defaults are our measured <code>classify</code> app with a 10 KiB document.</p>
+  <div class="panel calc">
+    <div class="controls">
+      <label for="cSize">Document per call <output id="oSize"></output><input type="range" id="cSize" min="0" max="100" value="50"></label>
+      <label for="cSpans">Traced steps per call (non-model) <output id="oSpans"></output><input type="range" id="cSpans" min="0" max="60" value="1"></label>
+      <label for="cCalls">Calls per month <output id="oCalls"></output><input type="range" id="cCalls" min="0" max="100" value="50"></label>
+      <label for="cLlm">Model calls per call <output id="oLlm"></output><input type="range" id="cLlm" min="1" max="5" value="1"></label>
+    </div>
+    <div class="bars" id="costBars"></div>
+    <p class="muted" id="costNote"></p>
+  </div>
+  <div class="tablewrap"><table id="costTable"></table></div>
+  <p class="muted col">Prices are the published list prices on 7 November 2026, after free tiers: BCS Starter $4/GB, Logfire $2 per million records, Datadog LLM Observability $3.50 per 10,000 LLM spans. Datadog also has a $160/month minimum, and APM spans for non-model steps are billed separately. Measured billed bytes come from replaying BCS's billing rules over the exact upload bodies.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Speed and memory</span>
+  <h2>A BAML process is done before Python finishes importing</h2>
+  <p class="col">Each process made 51 <code>classify</code> calls to an instant fake model. These are medians over 12 fresh processes per stack.</p>
+  <div class="tabs" role="group" aria-label="Metric" id="perfTabs"></div>
+  <div class="chart" id="perf"></div>
+  <p class="muted col" id="perfNote"></p>
+</section>
+
+<section>
+  <span class="eyebrow">Reliability</span>
+  <h2>What survives a crash, a burst and a retry</h2>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Process killed mid-run</h3>
+      <p class="muted">Model calls with no trace at the backend after the worker was killed 3 to 9 seconds into a loop of calls. 3 trials per stack and signal.</p>
+      <div class="chart" id="crash"></div>
+    </div>
+    <div class="panel">
+      <h3>8,200 small functions in under a second</h3>
+      <p class="muted">Spans that reached the backend from a non-LLM pipeline. The OpenTelemetry SDK's default queue holds 2,048 spans and drops the rest with a single warning line.</p>
+      <div class="chart" id="burst"></div>
+    </div>
+  </div>
+  <div class="callout col">
+    <h3>Retries</h3>
+    <p>In the agent app, every first model attempt fails with a 503 and is retried. BAML recorded all 30 HTTP attempts in 10 runs, failures included. Logfire and Datadog recorded 20 model spans for the same 30 requests, because the OpenAI SDK retries inside a single instrumented call.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">What gets stored</span>
+  <h2>Logfire's default scrubbing hides ordinary support tickets</h2>
+  <p class="col">Logfire replaces any recorded value that contains words like <i>password</i>, <i>session</i> or <i>secret</i>. It replaces the whole value, not just the word. We sent ten ordinary tickets through a traced function and read back what Logfire stored for its argument.</p>
+  <div class="tablewrap"><table class="scrub" id="scrub"></table></div>
+  <p class="muted col">The model-call span in the same trace kept the full text every time, because chat messages are on Logfire's safe list. So the ticket is still stored. It just disappears from the function span you would search. BAML never redacts unless you mark a field with <code>@trace.redact</code>.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Freshness</span>
+  <h2>Time until a trace can be found</h2>
+  <p class="col">From process exit to the first successful query for a unique marker, over 6 trials each.</p>
+  <div class="chart" id="search"></div>
+  <p class="muted col">BCS is not measured here: our test key can write but not query.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Method</span>
+  <h2>How we measured</h2>
+  <ul class="col">
+    <li>Each run is a fresh process. Run order is shuffled so one stack never always goes first.</li>
+    <li>A local relay sits between each SDK and its backend and records every request body exactly as sent. In hosted runs it also forwards to the real service, and every request was accepted.</li>
+    <li>BCS billed bytes are computed by replaying BCS's billing rules (<code>logical_bytes_approx_v1</code>) over the upload bodies, then checked against the Billing page.</li>
+    <li>Python stacks are set up the way each vendor's docs describe: Logfire 5.4, ddtrace 4.16 (LLM Observability, agentless), OpenTelemetry SDK 1.45 with <code>opentelemetry-instrumentation-openai-v2</code>, OpenAI SDK with <code>max_retries=1</code>.</li>
+    <li>The model is a local fake that answers instantly, so speed numbers show tracing cost only. A real model call takes hundreds of milliseconds, which dwarfs every difference on this page except process startup.</li>
+    <li>Everything (code, raw results, a running log) is in <code>research/telemetry-benchmarks/</code>.</li>
+  </ul>
+</section>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const D = {"wire":[{"stack":"datadog","app":"extract","size":10240,"batch":"1","calls":1,"bytes":22768,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":10384},{"stack":"datadog","app":"classify","size":1024,"batch":"10s","calls":10,"bytes":41603,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11510},{"stack":"baml","app":"classify","size":1024,"batch":"10s","calls":10,"bytes":119092,"spans":34,"billed":34915,"model_calls":10,"model_ok":10,"prompt_bytes":11780},{"stack":"bridge","app":"classify","size":10240,"batch":"10v","calls":10,"bytes":407301,"spans":42,"billed":219406,"model_calls":10,"model_ok":10,"prompt_bytes":103970},{"stack":"datadog","app":"agent","size":10240,"batch":"10s","calls":10,"bytes":247615,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":105990},{"stack":"datadog","app":"classify","size":10240,"batch":"1","calls":1,"bytes":22600,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":10367},{"stack":"logfire","app":"classify","size":10240,"batch":"10s","calls":10,"bytes":21964,"spans":22,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103670},{"stack":"logfire","app":"extract","size":10240,"batch":"10v","calls":10,"bytes":22280,"spans":22,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103870},{"stack":"datadog","app":"extract","size":102400,"batch":"10v","calls":10,"bytes":2070975,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025470},{"stack":"bridge","app":"classify","size":1024,"batch":"10v","calls":10,"bytes":221122,"spans":42,"billed":35066,"model_calls":10,"model_ok":10,"prompt_bytes":11810},{"stack":"bridge","app":"extract","size":1024,"batch":"10s","calls":10,"bytes":127008,"spans":42,"billed":37245,"model_calls":10,"model_ok":10,"prompt_bytes":12510},{"stack":"bridge","app":"classify","size":10240,"batch":"10s","calls":10,"bytes":143132,"spans":42,"billed":219255,"model_calls":10,"model_ok":10,"prompt_bytes":103940},{"stack":"datadog","app":"classify","size":1024,"batch":"10v","calls":10,"bytes":41649,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11540},{"stack":"datadog","app":"classify","size":102400,"batch":"10v","calls":10,"bytes":2069227,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025300},{"stack":"baml","app":"agent","size":10240,"batch":"10s","calls":10,"bytes":290589,"spans":124,"billed":244731,"model_calls":30,"model_ok":20,"prompt_bytes":107070},{"stack":"baml","app":"classify","size":102400,"batch":"10s","calls":10,"bytes":322487,"spans":34,"billed":2062475,"model_calls":10,"model_ok":10,"prompt_bytes":1025540},{"stack":"bridge","app":"extract","size":10240,"batch":"10s","calls":10,"bytes":145757,"spans":42,"billed":221585,"model_calls":10,"model_ok":10,"prompt_bytes":104670},{"stack":"logfire","app":"hello","size":0,"batch":"1","calls":1,"bytes":642,"spans":1,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"baml","app":"hello","size":0,"batch":"10s","calls":10,"bytes":5448,"spans":4,"billed":445,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"bridge","app":"hello","size":0,"batch":"10s","calls":10,"bytes":7318,"spans":12,"billed":445,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"bridge","app":"classify","size":1024,"batch":"10s","calls":10,"bytes":124879,"spans":42,"billed":34915,"model_calls":10,"model_ok":10,"prompt_bytes":11780},{"stack":"baml","app":"agent","size":10240,"batch":"10v","calls":10,"bytes":487396,"spans":124,"billed":244791,"model_calls":30,"model_ok":20,"prompt_bytes":107100},{"stack":"logfire","app":"classify","size":10240,"batch":"10v","calls":10,"bytes":22110,"spans":22,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103700},{"stack":"bridge","app":"classify","size":102400,"batch":"10s","calls":10,"bytes":328063,"spans":42,"billed":2062475,"model_calls":10,"model_ok":10,"prompt_bytes":1025540},{"stack":"bridge","app":"classify","size":1024,"batch":"1","calls":1,"bytes":58919,"spans":6,"billed":3892,"model_calls":1,"model_ok":1,"prompt_bytes":1178},{"stack":"bridge","app":"extract","size":102400,"batch":"10s","calls":10,"bytes":330991,"spans":42,"billed":2064805,"model_calls":10,"model_ok":10,"prompt_bytes":1026270},{"stack":"logfire","app":"agent","size":10240,"batch":"10v","calls":10,"bytes":81117,"spans":54,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":106020},{"stack":"logfire","app":"extract","size":1024,"batch":"10v","calls":10,"bytes":3351,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11710},{"stack":"baml","app":"agent","size":10240,"batch":"1","calls":1,"bytes":163294,"spans":16,"billed":24936,"model_calls":3,"model_ok":2,"prompt_bytes":10707},{"stack":"bridge","app":"extract","size":10240,"batch":"10v","calls":10,"bytes":343476,"spans":42,"billed":221736,"model_calls":10,"model_ok":10,"prompt_bytes":104700},{"stack":"logfire","app":"agent","size":10240,"batch":"10s","calls":10,"bytes":90502,"spans":56,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":105990},{"stack":"logfire","app":"agent","size":1024,"batch":"10v","calls":10,"bytes":23992,"spans":56,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":13860},{"stack":"logfire","app":"classify","size":1024,"batch":"1","calls":1,"bytes":2229,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":1151},{"stack":"logfire","app":"hello","size":0,"batch":"10v","calls":10,"bytes":992,"spans":10,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"baml","app":"agent","size":102400,"batch":"10v","calls":10,"bytes":2384205,"spans":124,"billed":2088102,"model_calls":30,"model_ok":20,"prompt_bytes":1028700},{"stack":"baml","app":"classify","size":102400,"batch":"10v","calls":10,"bytes":2235710,"spans":34,"billed":2062626,"model_calls":10,"model_ok":10,"prompt_bytes":1025570},{"stack":"bridge","app":"agent","size":10240,"batch":"10v","calls":10,"bytes":472849,"spans":132,"billed":244791,"model_calls":30,"model_ok":20,"prompt_bytes":107100},{"stack":"logfire","app":"classify","size":1024,"batch":"10v","calls":10,"bytes":3279,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11540},{"stack":"baml","app":"extract","size":10240,"batch":"1","calls":1,"bytes":79194,"spans":7,"billed":22559,"model_calls":1,"model_ok":1,"prompt_bytes":10467},{"stack":"bridge","app":"classify","size":102400,"batch":"10v","calls":10,"bytes":2188702,"spans":42,"billed":2062626,"model_calls":10,"model_ok":10,"prompt_bytes":1025570},{"stack":"bridge","app":"agent","size":1024,"batch":"10s","calls":10,"bytes":259474,"spans":132,"billed":60391,"model_calls":30,"model_ok":20,"prompt_bytes":14910},{"stack":"bridge","app":"extract","size":1024,"batch":"10v","calls":10,"bytes":223830,"spans":42,"billed":37396,"model_calls":10,"model_ok":10,"prompt_bytes":12540},{"stack":"datadog","app":"agent","size":102400,"batch":"1","calls":1,"bytes":209073,"spans":4,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":102759},{"stack":"baml","app":"extract","size":102400,"batch":"1","calls":1,"bytes":263922,"spans":7,"billed":206881,"model_calls":1,"model_ok":1,"prompt_bytes":102627},{"stack":"baml","app":"hello","size":0,"batch":"10v","calls":10,"bytes":5448,"spans":4,"billed":445,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"logfire","app":"extract","size":102400,"batch":"10v","calls":10,"bytes":1709103,"spans":22,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025470},{"stack":"datadog","app":"hello","size":0,"batch":"10s","calls":10,"bytes":8731,"spans":10,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"bridge","app":"extract","size":102400,"batch":"10v","calls":10,"bytes":2191911,"spans":42,"billed":2064956,"model_calls":10,"model_ok":10,"prompt_bytes":1026300},{"stack":"datadog","app":"classify","size":10240,"batch":"10v","calls":10,"bytes":226005,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103700},{"stack":"bridge","app":"extract","size":10240,"batch":"1","calls":1,"bytes":78611,"spans":6,"billed":22559,"model_calls":1,"model_ok":1,"prompt_bytes":10467},{"stack":"baml","app":"extract","size":102400,"batch":"10s","calls":10,"bytes":324719,"spans":34,"billed":2064805,"model_calls":10,"model_ok":10,"prompt_bytes":1026270},{"stack":"datadog","app":"hello","size":0,"batch":"1","calls":1,"bytes":875,"spans":1,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"logfire","app":"classify","size":102400,"batch":"1","calls":1,"bytes":311259,"spans":4,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":102527},{"stack":"baml","app":"hello","size":0,"batch":"1","calls":1,"bytes":5448,"spans":4,"billed":445,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"logfire","app":"extract","size":1024,"batch":"10s","calls":10,"bytes":3291,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11680},{"stack":"baml","app":"extract","size":1024,"batch":"10s","calls":10,"bytes":121477,"spans":34,"billed":37245,"model_calls":10,"model_ok":10,"prompt_bytes":12510},{"stack":"logfire","app":"extract","size":102400,"batch":"1","calls":1,"bytes":156002,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":102544},{"stack":"logfire","app":"hello","size":0,"batch":"10s","calls":10,"bytes":992,"spans":10,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"datadog","app":"agent","size":10240,"batch":"1","calls":1,"bytes":24753,"spans":4,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":10599},{"stack":"datadog","app":"agent","size":10240,"batch":"10v","calls":10,"bytes":247642,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":106020},{"stack":"baml","app":"extract","size":1024,"batch":"10v","calls":10,"bytes":214818,"spans":34,"billed":37396,"model_calls":10,"model_ok":10,"prompt_bytes":12540},{"stack":"datadog","app":"classify","size":102400,"batch":"10s","calls":10,"bytes":2069162,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025270},{"stack":"datadog","app":"extract","size":1024,"batch":"10s","calls":10,"bytes":43333,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11680},{"stack":"bridge","app":"agent","size":102400,"batch":"10s","calls":10,"bytes":461697,"spans":132,"billed":2087951,"model_calls":30,"model_ok":20,"prompt_bytes":1028670},{"stack":"baml","app":"extract","size":1024,"batch":"1","calls":1,"bytes":60626,"spans":7,"billed":4125,"model_calls":1,"model_ok":1,"prompt_bytes":1251},{"stack":"bridge","app":"agent","size":1024,"batch":"10v","calls":10,"bytes":290356,"spans":132,"billed":60451,"model_calls":30,"model_ok":20,"prompt_bytes":14940},{"stack":"bridge","app":"agent","size":102400,"batch":"10v","calls":10,"bytes":2326210,"spans":132,"billed":2088102,"model_calls":30,"model_ok":20,"prompt_bytes":1028700},{"stack":"datadog","app":"agent","size":102400,"batch":"10v","calls":10,"bytes":2090894,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":1027620},{"stack":"datadog","app":"agent","size":102400,"batch":"10s","calls":10,"bytes":2090810,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":1027590},{"stack":"baml","app":"extract","size":10240,"batch":"10v","calls":10,"bytes":399310,"spans":34,"billed":221736,"model_calls":10,"model_ok":10,"prompt_bytes":104700},{"stack":"baml","app":"extract","size":10240,"batch":"10s","calls":10,"bytes":139973,"spans":34,"billed":221585,"model_calls":10,"model_ok":10,"prompt_bytes":104670},{"stack":"datadog","app":"extract","size":1024,"batch":"1","calls":1,"bytes":4335,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":1168},{"stack":"logfire","app":"extract","size":10240,"batch":"1","calls":1,"bytes":9524,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":10384},{"stack":"bridge","app":"agent","size":102400,"batch":"1","calls":1,"bytes":302088,"spans":15,"billed":209258,"model_calls":3,"model_ok":2,"prompt_bytes":102867},{"stack":"baml","app":"classify","size":10240,"batch":"1","calls":1,"bytes":78078,"spans":7,"billed":22326,"model_calls":1,"model_ok":1,"prompt_bytes":10394},{"stack":"logfire","app":"agent","size":1024,"batch":"1","calls":1,"bytes":4710,"spans":6,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":1383},{"stack":"logfire","app":"agent","size":102400,"batch":"10s","calls":10,"bytes":2185399,"spans":53,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":1027590},{"stack":"baml","app":"classify","size":10240,"batch":"10v","calls":10,"bytes":396440,"spans":34,"billed":219406,"model_calls":10,"model_ok":10,"prompt_bytes":103970},{"stack":"datadog","app":"agent","size":1024,"batch":"10v","calls":10,"bytes":63306,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":13860},{"stack":"baml","app":"agent","size":102400,"batch":"10s","calls":10,"bytes":474438,"spans":124,"billed":2087951,"model_calls":30,"model_ok":20,"prompt_bytes":1028670},{"stack":"logfire","app":"classify","size":10240,"batch":"1","calls":1,"bytes":9462,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":10367},{"stack":"datadog","app":"extract","size":10240,"batch":"10s","calls":10,"bytes":227671,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103840},{"stack":"logfire","app":"classify","size":1024,"batch":"10s","calls":10,"bytes":3223,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11510},{"stack":"datadog","app":"hello","size":0,"batch":"10v","calls":10,"bytes":8727,"spans":10,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"datadog","app":"classify","size":102400,"batch":"1","calls":1,"bytes":206918,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":102527},{"stack":"baml","app":"classify","size":1024,"batch":"1","calls":1,"bytes":59492,"spans":7,"billed":3892,"model_calls":1,"model_ok":1,"prompt_bytes":1178},{"stack":"datadog","app":"agent","size":1024,"batch":"1","calls":1,"bytes":6333,"spans":4,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":1383},{"stack":"logfire","app":"agent","size":1024,"batch":"10s","calls":10,"bytes":23936,"spans":56,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":13830},{"stack":"logfire","app":"extract","size":102400,"batch":"10s","calls":10,"bytes":1631734,"spans":21,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025440},{"stack":"bridge","app":"agent","size":10240,"batch":"1","calls":1,"bytes":117405,"spans":15,"billed":24936,"model_calls":3,"model_ok":2,"prompt_bytes":10707},{"stack":"baml","app":"agent","size":1024,"batch":"10v","calls":10,"bytes":302815,"spans":124,"billed":60451,"model_calls":30,"model_ok":20,"prompt_bytes":14940},{"stack":"logfire","app":"agent","size":102400,"batch":"1","calls":1,"bytes":235103,"spans":6,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":102759},{"stack":"datadog","app":"classify","size":10240,"batch":"10s","calls":10,"bytes":225937,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103670},{"stack":"bridge","app":"hello","size":0,"batch":"1","calls":1,"bytes":4320,"spans":3,"billed":445,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"logfire","app":"classify","size":102400,"batch":"10v","calls":10,"bytes":1553353,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025300},{"stack":"baml","app":"agent","size":1024,"batch":"1","calls":1,"bytes":144966,"spans":16,"billed":6502,"model_calls":3,"model_ok":2,"prompt_bytes":1491},{"stack":"bridge","app":"extract","size":1024,"batch":"1","calls":1,"bytes":60052,"spans":6,"billed":4125,"model_calls":1,"model_ok":1,"prompt_bytes":1251},{"stack":"baml","app":"agent","size":1024,"batch":"10s","calls":10,"bytes":271687,"spans":124,"billed":60391,"model_calls":30,"model_ok":20,"prompt_bytes":14910},{"stack":"bridge","app":"classify","size":10240,"batch":"1","calls":1,"bytes":77496,"spans":6,"billed":22326,"model_calls":1,"model_ok":1,"prompt_bytes":10394},{"stack":"datadog","app":"extract","size":10240,"batch":"10v","calls":10,"bytes":227742,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103870},{"stack":"bridge","app":"agent","size":1024,"batch":"1","calls":1,"bytes":98917,"spans":15,"billed":6502,"model_calls":3,"model_ok":2,"prompt_bytes":1491},{"stack":"datadog","app":"extract","size":102400,"batch":"1","calls":1,"bytes":207091,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":102544},{"stack":"datadog","app":"agent","size":1024,"batch":"10s","calls":10,"bytes":63234,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":13830},{"stack":"baml","app":"classify","size":10240,"batch":"10s","calls":10,"bytes":137759,"spans":34,"billed":219255,"model_calls":10,"model_ok":10,"prompt_bytes":103940},{"stack":"datadog","app":"extract","size":102400,"batch":"10s","calls":10,"bytes":2070903,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025440},{"stack":"logfire","app":"classify","size":102400,"batch":"10s","calls":10,"bytes":781744,"spans":21,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025270},{"stack":"baml","app":"classify","size":102400,"batch":"1","calls":1,"bytes":262806,"spans":7,"billed":206648,"model_calls":1,"model_ok":1,"prompt_bytes":102554},{"stack":"logfire","app":"agent","size":102400,"batch":"10v","calls":10,"bytes":2108448,"spans":53,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":1027620},{"stack":"baml","app":"agent","size":102400,"batch":"1","calls":1,"bytes":348168,"spans":16,"billed":209258,"model_calls":3,"model_ok":2,"prompt_bytes":102867},{"stack":"bridge","app":"hello","size":0,"batch":"10v","calls":10,"bytes":7318,"spans":12,"billed":445,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"bridge","app":"classify","size":102400,"batch":"1","calls":1,"bytes":262206,"spans":6,"billed":206648,"model_calls":1,"model_ok":1,"prompt_bytes":102554},{"stack":"logfire","app":"extract","size":10240,"batch":"10s","calls":10,"bytes":21995,"spans":22,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103840},{"stack":"datadog","app":"classify","size":1024,"batch":"1","calls":1,"bytes":4166,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":1151},{"stack":"baml","app":"extract","size":102400,"batch":"10v","calls":10,"bytes":2239430,"spans":34,"billed":2064956,"model_calls":10,"model_ok":10,"prompt_bytes":1026300},{"stack":"baml","app":"classify","size":1024,"batch":"10v","calls":10,"bytes":211853,"spans":34,"billed":35066,"model_calls":10,"model_ok":10,"prompt_bytes":11810},{"stack":"datadog","app":"extract","size":1024,"batch":"10v","calls":10,"bytes":43406,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11710},{"stack":"bridge","app":"agent","size":10240,"batch":"10s","calls":10,"bytes":277037,"spans":132,"billed":244731,"model_calls":30,"model_ok":20,"prompt_bytes":107070},{"stack":"bridge","app":"extract","size":102400,"batch":"1","calls":1,"bytes":263348,"spans":6,"billed":206881,"model_calls":1,"model_ok":1,"prompt_bytes":102627},{"stack":"logfire","app":"agent","size":10240,"batch":"1","calls":1,"bytes":19034,"spans":6,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":10599},{"stack":"logfire","app":"extract","size":1024,"batch":"1","calls":1,"bytes":2296,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":1168},{"stack":"otel","app":"classify","size":10240,"batch":"10v","calls":10,"bytes":10410,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103700},{"stack":"otel","app":"agent","size":102400,"batch":"10s","calls":10,"bytes":773499,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":1027590},{"stack":"otel","app":"hello","size":0,"batch":"10s","calls":10,"bytes":632,"spans":10,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"otel","app":"classify","size":1024,"batch":"1","calls":1,"bytes":1399,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":1151},{"stack":"otel","app":"agent","size":102400,"batch":"10v","calls":10,"bytes":773508,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":1027620},{"stack":"otel","app":"agent","size":10240,"batch":"10s","calls":10,"bytes":11209,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":105990},{"stack":"otel","app":"extract","size":102400,"batch":"10v","calls":10,"bytes":772887,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025470},{"stack":"otel","app":"hello","size":0,"batch":"10v","calls":10,"bytes":631,"spans":10,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"otel","app":"extract","size":10240,"batch":"10s","calls":10,"bytes":10427,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103840},{"stack":"otel","app":"agent","size":10240,"batch":"1","calls":1,"bytes":8529,"spans":4,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":10599},{"stack":"otel","app":"extract","size":102400,"batch":"1","calls":1,"bytes":77686,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":102544},{"stack":"otel","app":"extract","size":1024,"batch":"10s","calls":10,"bytes":2289,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11680},{"stack":"otel","app":"classify","size":10240,"batch":"10s","calls":10,"bytes":10364,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103670},{"stack":"otel","app":"agent","size":1024,"batch":"10v","calls":10,"bytes":2953,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":13860},{"stack":"otel","app":"extract","size":1024,"batch":"1","calls":1,"bytes":1455,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":1168},{"stack":"otel","app":"extract","size":10240,"batch":"1","calls":1,"bytes":8434,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":10384},{"stack":"otel","app":"classify","size":102400,"batch":"10v","calls":10,"bytes":772008,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025300},{"stack":"otel","app":"agent","size":102400,"batch":"1","calls":1,"bytes":77787,"spans":4,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":102759},{"stack":"otel","app":"extract","size":102400,"batch":"10s","calls":10,"bytes":772696,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025440},{"stack":"otel","app":"classify","size":10240,"batch":"1","calls":1,"bytes":8378,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":10367},{"stack":"otel","app":"agent","size":10240,"batch":"10v","calls":10,"bytes":11254,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":106020},{"stack":"otel","app":"agent","size":1024,"batch":"10s","calls":10,"bytes":2922,"spans":40,"billed":null,"model_calls":30,"model_ok":20,"prompt_bytes":13830},{"stack":"otel","app":"extract","size":10240,"batch":"10v","calls":10,"bytes":10490,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":103870},{"stack":"otel","app":"extract","size":1024,"batch":"10v","calls":10,"bytes":2320,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11710},{"stack":"otel","app":"classify","size":102400,"batch":"1","calls":1,"bytes":77591,"spans":2,"billed":null,"model_calls":1,"model_ok":1,"prompt_bytes":102527},{"stack":"otel","app":"classify","size":1024,"batch":"10v","calls":10,"bytes":2263,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11540},{"stack":"otel","app":"classify","size":1024,"batch":"10s","calls":10,"bytes":2230,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":11510},{"stack":"otel","app":"agent","size":1024,"batch":"1","calls":1,"bytes":1528,"spans":4,"billed":null,"model_calls":3,"model_ok":2,"prompt_bytes":1383},{"stack":"otel","app":"classify","size":102400,"batch":"10s","calls":10,"bytes":771787,"spans":20,"billed":null,"model_calls":10,"model_ok":10,"prompt_bytes":1025270},{"stack":"otel","app":"hello","size":0,"batch":"1","calls":1,"bytes":283,"spans":1,"billed":null,"model_calls":0,"model_ok":0,"prompt_bytes":0},{"stack":"bridge-nobodies","app":"agent","size":10240,"batch":"10v","calls":10,"bytes":354525,"spans":132,"billed":130748,"model_calls":30,"model_ok":20,"prompt_bytes":107100},{"stack":"bridge-nobodies","app":"classify","size":10240,"batch":"1","calls":1,"bytes":66569,"spans":6,"billed":11646,"model_calls":1,"model_ok":1,"prompt_bytes":10394},{"stack":"bridge-nobodies","app":"extract","size":102400,"batch":"10s","calls":10,"bytes":222170,"spans":42,"billed":1034895,"model_calls":10,"model_ok":10,"prompt_bytes":1026270},{"stack":"bridge-nobodies","app":"classify","size":1024,"batch":"10s","calls":10,"bytes":119282,"spans":42,"billed":20295,"model_calls":10,"model_ok":10,"prompt_bytes":11780},{"stack":"bridge-nobodies","app":"classify","size":10240,"batch":"10v","calls":10,"bytes":227028,"spans":42,"billed":112485,"model_calls":10,"model_ok":10,"prompt_bytes":103970},{"stack":"bridge-nobodies","app":"classify","size":1024,"batch":"1","calls":1,"bytes":57246,"spans":6,"billed":2430,"model_calls":1,"model_ok":1,"prompt_bytes":1178},{"stack":"bridge-nobodies","app":"agent","size":102400,"batch":"1","calls":1,"bytes":197449,"spans":15,"billed":105696,"model_calls":3,"model_ok":2,"prompt_bytes":102867},{"stack":"bridge-nobodies","app":"extract","size":1024,"batch":"1","calls":1,"bytes":58230,"spans":6,"billed":2514,"model_calls":1,"model_ok":1,"prompt_bytes":1251},{"stack":"bridge-nobodies","app":"extract","size":1024,"batch":"10s","calls":10,"bytes":120670,"spans":42,"billed":21135,"model_calls":10,"model_ok":10,"prompt_bytes":12510},{"stack":"bridge-nobodies","app":"agent","size":1024,"batch":"1","calls":1,"bytes":95892,"spans":15,"billed":4320,"model_calls":3,"model_ok":2,"prompt_bytes":1491},{"stack":"bridge-nobodies","app":"classify","size":102400,"batch":"10s","calls":10,"bytes":220780,"spans":42,"billed":1034055,"model_calls":10,"model_ok":10,"prompt_bytes":1025540},{"stack":"bridge-nobodies","app":"extract","size":10240,"batch":"10v","calls":10,"bytes":228960,"spans":42,"billed":113325,"model_calls":10,"model_ok":10,"prompt_bytes":104700},{"stack":"bridge-nobodies","app":"classify","size":10240,"batch":"10s","calls":10,"bytes":128254,"spans":42,"billed":112455,"model_calls":10,"model_ok":10,"prompt_bytes":103940},{"stack":"bridge-nobodies","app":"extract","size":102400,"batch":"10v","calls":10,"bytes":1152800,"spans":42,"billed":1034925,"model_calls":10,"model_ok":10,"prompt_bytes":1026300},{"stack":"bridge-nobodies","app":"agent","size":1024,"batch":"10s","calls":10,"bytes":247990,"spans":132,"billed":38558,"model_calls":30,"model_ok":20,"prompt_bytes":14910},{"stack":"bridge-nobodies","app":"agent","size":102400,"batch":"10s","calls":10,"bytes":347721,"spans":132,"billed":1052318,"model_calls":30,"model_ok":20,"prompt_bytes":1028670},{"stack":"bridge-nobodies","app":"agent","size":10240,"batch":"10s","calls":10,"bytes":255995,"spans":132,"billed":130718,"model_calls":30,"model_ok":20,"prompt_bytes":107070},{"stack":"bridge-nobodies","app":"agent","size":1024,"batch":"10v","calls":10,"bytes":262586,"spans":132,"billed":38588,"model_calls":30,"model_ok":20,"prompt_bytes":14940},{"stack":"bridge-nobodies","app":"agent","size":102400,"batch":"10v","calls":10,"bytes":1279167,"spans":132,"billed":1052348,"model_calls":30,"model_ok":20,"prompt_bytes":1028700},{"stack":"bridge-nobodies","app":"extract","size":1024,"batch":"10v","calls":10,"bytes":136818,"spans":42,"billed":21165,"model_calls":10,"model_ok":10,"prompt_bytes":12540},{"stack":"bridge-nobodies","app":"extract","size":10240,"batch":"10s","calls":10,"bytes":129897,"spans":42,"billed":113295,"model_calls":10,"model_ok":10,"prompt_bytes":104670},{"stack":"bridge-nobodies","app":"classify","size":1024,"batch":"10v","calls":10,"bytes":135390,"spans":42,"billed":20325,"model_calls":10,"model_ok":10,"prompt_bytes":11810},{"stack":"bridge-nobodies","app":"extract","size":102400,"batch":"1","calls":1,"bytes":159948,"spans":6,"billed":103890,"model_calls":1,"model_ok":1,"prompt_bytes":102627},{"stack":"bridge-nobodies","app":"classify","size":102400,"batch":"1","calls":1,"bytes":158964,"spans":6,"billed":103806,"model_calls":1,"model_ok":1,"prompt_bytes":102554},{"stack":"bridge-nobodies","app":"agent","size":10240,"batch":"1","calls":1,"bytes":105135,"spans":15,"billed":13536,"model_calls":3,"model_ok":2,"prompt_bytes":10707},{"stack":"bridge-nobodies","app":"extract","size":10240,"batch":"1","calls":1,"bytes":67598,"spans":6,"billed":11730,"model_calls":1,"model_ok":1,"prompt_bytes":10467},{"stack":"bridge-nobodies","app":"classify","size":102400,"batch":"10v","calls":10,"bytes":1151262,"spans":42,"billed":1034085,"model_calls":10,"model_ok":10,"prompt_bytes":1025570}],"overhead":{"bridge":{"n":12,"wall_ms":828.5242499550804,"rss_mb":127.984375,"first_ms":2.6422920000000003,"warm_ms":0.3720415,"warm_p95_ms":0.578584,"telemetry_bytes":427738.5},"bridge-off":{"n":12,"wall_ms":838.0493755685166,"rss_mb":128.0625,"first_ms":2.702708,"warm_ms":0.376042,"warm_p95_ms":0.528958,"telemetry_bytes":428289.5},"otel":{"n":12,"wall_ms":821.6468745376915,"rss_mb":91.46875,"first_ms":11.0098755,"warm_ms":0.5509795,"warm_p95_ms":0.721125,"telemetry_bytes":5151.5},"datadog":{"n":12,"wall_ms":1930.058124475181,"rss_mb":134.6015625,"first_ms":13.3554375,"warm_ms":0.6763954999999999,"warm_p95_ms":0.906125,"telemetry_bytes":212110.0},"baml-off":{"n":12,"wall_ms":69.67150012496859,"rss_mb":55.9140625,"first_ms":1.4445000000000001,"warm_ms":0.273,"warm_p95_ms":0.364,"telemetry_bytes":0.0},"baml":{"n":12,"wall_ms":149.5818335097283,"rss_mb":61.1796875,"first_ms":1.268,"warm_ms":0.312,"warm_p95_ms":0.425,"telemetry_bytes":393462.5},"logfire":{"n":12,"wall_ms":857.0099789649248,"rss_mb":93.296875,"first_ms":23.184313,"warm_ms":0.7252495,"warm_p95_ms":1.258708,"telemetry_bytes":8272.0},"off":{"n":12,"wall_ms":744.0546458819881,"rss_mb":88.0,"first_ms":25.606541999999997,"warm_ms":0.49058349999999995,"warm_p95_ms":0.7335,"telemetry_bytes":0.0}},"crash":[{"stack":"baml","signal":"SIGKILL","trials":3,"completed":358,"delivered":348,"lost_pct":2.793296089385475,"trials_detail":[{"after_s":7.44,"completed":134,"delivered":134},{"after_s":4.68,"completed":84,"delivered":81},{"after_s":7.78,"completed":140,"delivered":133}]},{"stack":"baml","signal":"SIGTERM","trials":3,"completed":257,"delivered":257,"lost_pct":0.0,"trials_detail":[{"after_s":7.45,"completed":134,"delivered":134},{"after_s":3.17,"completed":56,"delivered":56},{"after_s":3.76,"completed":67,"delivered":67}]},{"stack":"bridge","signal":"SIGKILL","trials":3,"completed":325,"delivered":306,"lost_pct":5.846153846153846,"trials_detail":[{"after_s":5.79,"completed":92,"delivered":92},{"after_s":6.89,"completed":110,"delivered":102},{"after_s":7.59,"completed":123,"delivered":112}]},{"stack":"bridge","signal":"SIGTERM","trials":3,"completed":303,"delivered":286,"lost_pct":5.6105610561056105,"trials_detail":[{"after_s":8.41,"completed":138,"delivered":133},{"after_s":6.26,"completed":100,"delivered":92},{"after_s":4.3,"completed":65,"delivered":61}]},{"stack":"datadog","signal":"SIGKILL","trials":3,"completed":133,"delivered":84,"lost_pct":36.8421052631579,"trials_detail":[{"after_s":3.08,"completed":33,"delivered":16},{"after_s":3.96,"completed":47,"delivered":34},{"after_s":4.26,"completed":53,"delivered":34}]},{"stack":"datadog","signal":"SIGTERM","trials":3,"completed":301,"delivered":279,"lost_pct":7.308970099667774,"trials_detail":[{"after_s":7.77,"completed":113,"delivered":105},{"after_s":6.44,"completed":92,"delivered":87},{"after_s":6.7,"completed":96,"delivered":87}]},{"stack":"logfire","signal":"SIGKILL","trials":3,"completed":317,"delivered":307,"lost_pct":3.1545741324921135,"trials_detail":[{"after_s":8.65,"completed":139,"delivered":135},{"after_s":8.5,"completed":137,"delivered":135},{"after_s":3.01,"completed":41,"delivered":37}]},{"stack":"logfire","signal":"SIGTERM","trials":3,"completed":258,"delivered":245,"lost_pct":5.038759689922481,"trials_detail":[{"after_s":8.53,"completed":138,"delivered":135},{"after_s":4.48,"completed":65,"delivered":64},{"after_s":3.83,"completed":55,"delivered":46}]},{"stack":"otel","signal":"SIGKILL","trials":3,"completed":303,"delivered":175,"lost_pct":42.244224422442244,"trials_detail":[{"after_s":6.74,"completed":107,"delivered":87},{"after_s":8.66,"completed":143,"delivered":88},{"after_s":3.68,"completed":53,"delivered":0}]},{"stack":"otel","signal":"SIGTERM","trials":3,"completed":290,"delivered":175,"lost_pct":39.6551724137931,"trials_detail":[{"after_s":5.81,"completed":92,"delivered":88},{"after_s":8.23,"completed":134,"delivered":87},{"after_s":4.29,"completed":64,"delivered":0}]}],"searchable":{"logfire":{"median":15.164600610733032,"min":8.433667182922363,"max":15.73444414138794,"n":6},"datadog":{"median":37.83335840702057,"min":34.8611159324646,"max":54.66177582740784,"n":6}},"loc":{"otel":{"setup_lines":23,"decorators":5,"total":28,"snippet":"os.environ.setdefault(\"OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\", \"true\")\nfrom opentelemetry import trace\nfrom opentelemetry.exporter.otlp.proto.http import Compression\nfrom opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter\nfrom opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor\nfrom opentelemetry.sdk.resources import Resource\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\nprovider = TracerProvider(resource=Resource.create({\"service.name\": \"bench\"}))\nprovider.add_span_processor(BatchSpanProcessor(\n    OTLPSpanExporter(endpoint=TELEMETRY_URL + \"/v1/traces\", compression=Compression.Gzip)))\ntrace.set_tracer_provider(provider)\nOpenAIInstrumentor().instrument()\ntracer = trace.get_tracer(\"bench\")\n\ndef traced(fn):\n    def wrapper(*args):\n        with tracer.start_as_current_span(fn.__name__) as span:\n            span.set_attribute(\"input\", json.dumps(args))\n            result = fn(*args)\n            span.set_attribute(\"output\", json.dumps(result if not isinstance(result, BaseModel) else result.model_dump()))\n            return result\n    return wrapper\ntrace_app = trace_tool = traced\n"},"logfire":{"setup_lines":5,"decorators":5,"total":10,"snippet":"import logfire\nlogfire.configure(service_name=\"bench\", console=False, metrics=False,\n                  advanced=logfire.AdvancedOptions(base_url=TELEMETRY_URL))\nlogfire.instrument_openai()\ntrace_app = trace_tool = logfire.instrument()\n"},"datadog":{"setup_lines":5,"decorators":5,"total":10,"snippet":"os.environ.update(DD_LLMOBS_OVERRIDE_ORIGIN=TELEMETRY_URL, DD_APM_TRACING_ENABLED=\"false\")\nfrom ddtrace.llmobs import LLMObs\nfrom ddtrace.llmobs.decorators import tool, workflow\nLLMObs.enable(ml_app=\"bench\", agentless_enabled=True, integrations_enabled=True)\ntrace_app, trace_tool = workflow, tool\n"},"baml":{"setup_lines":0,"decorators":0,"explicit_captures":1,"total":1,"snippet":"export BOUNDARY_API_KEY=bdry_secret_..."}},"scrub":[{"ticket":"Where is my package? The tracking page has not changed since Monday.","stored_argument":"Where is my package? The tracking page has not changed since Monday.","argument_scrubbed":false,"scrubbed_reason":null,"prompt_kept_text":true,"llm_spans":1},{"ticket":"I never got the password reset email, so I cannot check my order.","stored_argument":"[Scrubbed due to 'password']","argument_scrubbed":true,"scrubbed_reason":"[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"password\"}]","prompt_kept_text":true,"llm_spans":1},{"ticket":"Checkout keeps saying my session expired before I can pay.","stored_argument":"[Scrubbed due to 'session']","argument_scrubbed":true,"scrubbed_reason":"[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"session\"}]","prompt_kept_text":true,"llm_spans":1},{"ticket":"My credit card was charged twice for order 8812.","stored_argument":"[Scrubbed due to 'credit card']","argument_scrubbed":true,"scrubbed_reason":"[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"credit card\"}]","prompt_kept_text":true,"llm_spans":1},{"ticket":"The cookie banner covers the Buy button on mobile.","stored_argument":"[Scrubbed due to 'cookie']","argument_scrubbed":true,"scrubbed_reason":"[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"cookie\"}]","prompt_kept_text":true,"llm_spans":1},{"ticket":"Can you send me the docs for creating an API key?","stored_argument":"[Scrubbed due to 'API key']","argument_scrubbed":true,"scrubbed_reason":"[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"API key\"}]","prompt_kept_text":true,"llm_spans":1},{"ticket":"Please correct the author name printed on my invoice.","stored_argument":"Please correct the author name printed on my invoice.","argument_scrubbed":false,"scrubbed_reason":null,"prompt_kept_text":true,"llm_spans":1},{"ticket":"We want to discuss authentication options for our SSO rollout.","stored_argument":"[Scrubbed due to 'auth']","argument_scrubbed":true,"scrubbed_reason":"[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"auth\"}]","prompt_kept_text":true,"llm_spans":1},{"ticket":"My secret santa gift arrived damaged.","stored_argument":"[Scrubbed due to 'secret']","argument_scrubbed":true,"scrubbed_reason":"[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"secret\"}]","prompt_kept_text":true,"llm_spans":1},{"ticket":"Is there a private key ring option for the office locker?","stored_argument":"[Scrubbed due to 'private key']","argument_scrubbed":true,"scrubbed_reason":"[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"private key\"}]","prompt_kept_text":true,"llm_spans":1}],"pipeline":[{"stack":"baml-medium","requests":200,"steps":20,"function_calls":8200,"bytes":2947,"spans":2,"billed":445,"events":{"thread_announcement":2,"thread_completion":2}},{"stack":"baml-high","requests":200,"steps":20,"function_calls":8200,"bytes":436631,"spans":8203,"billed":445,"events":{"thread_announcement":2,"function_announcement":8201,"function_completion":8201,"thread_completion":2}},{"stack":"logfire","requests":200,"steps":20,"function_calls":8200,"bytes":74851,"spans":2576,"pending_spans":16,"stored_records":2560},{"stack":"otel","requests":200,"steps":20,"function_calls":8200,"bytes":48525,"spans":2560,"pending_spans":0,"stored_records":2560},{"stack":"datadog","requests":200,"steps":20,"function_calls":8200,"bytes":2753393,"spans":8200,"pending_spans":0,"stored_records":8200}]};
+const STACKS = {
+  baml: {name: "BAML + BCS", c: "--s-baml"},
+  bridge: {name: "Python → BAML", c: "--s-bridge"},
+  logfire: {name: "Logfire", c: "--s-logfire"},
+  datadog: {name: "Datadog", c: "--s-datadog"},
+  otel: {name: "OpenTelemetry", c: "--s-otel"},
+  off: {name: "Python, untraced", c: "--s-off"},
+};
+const css = v => `var(${v})`;
+const fmtB = b => b >= 1e6 ? (b / 1e6).toFixed(2) + " MB" : b >= 1e3 ? (b / 1e3).toFixed(1) + " KB" : Math.round(b) + " B";
+const fmt$ = v => v >= 1000 ? "$" + Math.round(v).toLocaleString("en-US") : v >= 10 ? "$" + v.toFixed(0) : "$" + v.toFixed(2);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]);
+const tip = document.getElementById("tip");
+function bindTips(root) {
+  root.querySelectorAll("[data-tip]").forEach(el => {
+    el.addEventListener("pointermove", e => { tip.hidden = false; tip.innerHTML = el.dataset.tip; tip.style.left = Math.min(e.clientX + 12, innerWidth - 300) + "px"; tip.style.top = (e.clientY + 12) + "px"; });
+    el.addEventListener("pointerleave", () => { tip.hidden = true; });
+  });
+}
+
+// Horizontal bar chart. rows: [{label, value, color, text, tip}]
+function hbars(el, rows, {max, unit = "", labelW = 170, valW = 110, rowH = 30, log = false} = {}) {
+  const W = 720, plotW = W - labelW - valW, H = rows.length * rowH + 8;
+  const m = max ?? Math.max(...rows.map(r => r.value));
+  const sx = v => log ? (Math.log10(Math.max(v, 1)) / Math.log10(m)) * plotW : (v / m) * plotW;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  rows.forEach((r, i) => {
+    const y = 4 + i * rowH, w = Math.max(r.value > 0 ? 3 : 0, sx(r.value));
+    s += `<text x="${labelW - 10}" y="${y + rowH / 2 + 4}" text-anchor="end">${esc(r.label)}</text>`;
+    s += `<rect x="${labelW}" y="${y + 5}" width="${plotW}" height="${rowH - 10}" fill="transparent" data-tip="${esc(r.tip || r.label + ": " + r.text)}"/>`;
+    s += `<rect x="${labelW}" y="${y + 6}" width="${w}" height="${rowH - 12}" rx="3" fill="${css(r.color)}" pointer-events="none"/>`;
+    s += `<text class="val" x="${labelW + w + 8}" y="${y + rowH / 2 + 4}">${esc(r.text)}</text>`;
+  });
+  el.innerHTML = s + "</svg>";
+  bindTips(el);
+}
+
+// ---- hero: bytes per call, 10 KiB classify, varied
+function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === stack && r.app === app && r.size === size && r.batch === batch); }
+(function hero() {
+  const size = 10240, rows = [];
+  const prompt = wireRow("logfire", "classify", size, "10v").prompt_bytes / 10;
+  rows.push({label: "Prompt to the model", value: prompt, color: "--rule", text: fmtB(prompt), tip: "The HTTP request the app sent to the model, for comparison"});
+  for (const s of ["baml", "logfire", "datadog", "otel"]) {
+    const r = wireRow(s, "classify", size, "10v"); if (!r) continue;
+    rows.push({label: STACKS[s].name, value: r.bytes / r.calls, color: STACKS[s].c, text: fmtB(r.bytes / r.calls) + " / call",
+      tip: `${STACKS[s].name}: ${fmtB(r.bytes)} for ${r.calls} calls${r.billed ? ", BCS billed " + fmtB(r.billed / r.calls) + " per call" : ""}`});
+  }
+  hbars(document.getElementById("hero"), rows, {labelW: 180, valW: 140, rowH: 36});
+})();
+
+// ---- scorecard
+(function score() {
+  const items = [
+    ["good", "Zero setup lines", "BAML traces every LLM call with no code. The Python stacks needed 10 to 28 lines across four small apps."],
+    ["good", "Fast and light", "A whole BAML process with 51 calls took 150 ms and 61 MB. Python with Datadog took 1.9 s and 135 MB."],
+    ["good", "Little lost when a process dies", "Killed with kill -9, BAML lost the traces of 3% of completed calls, and none on a normal stop. OpenTelemetry lost 42% and Datadog 37% on kill -9."],
+    ["good", "Spans are free", "8,200 small spans billed 445 bytes on BCS. The same burst would be 8,200 records on Logfire."],
+    ["good", "Retries are visible", "BAML records every HTTP attempt, including the failed ones the OpenAI SDK hides inside one call."],
+    ["bad", "Big prompts cost more", "BCS bills captured bytes, and the prompt counts twice (as input and inside the HTTP body). A 100 KiB classify costs about $825 per million calls, against $4 on Logfire. <code>http_bodies = false</code> halves it."],
+    ["bad", "Python bridge ignores BAML_TELEMETRY", "Setting it to <code>off</code> in a Python app still uploads, unless the package's baml.toml opts in to the variable."],
+    ["bad", "First upload is heavy", "Each process uploads about 55 KB of runtime definitions once. That matters for short-lived processes, not for servers."],
+    ["mixed", "Logfire is cheap but edits your data", "Its default scrubbing replaced 8 of 10 ordinary support tickets with a placeholder."],
+  ];
+  document.getElementById("score").innerHTML = items.map(([v, h, t]) =>
+    `<li><span class="verdict v-${v}">${v === "good" ? "STRENGTH" : v === "bad" ? "WEAKNESS" : "CONTEXT"}</span><div><b>${h}.</b> ${t}</div></li>`).join("");
+})();
+
+// ---- lines of code
+(function loc() {
+  const rows = ["baml", "logfire", "datadog", "otel"].map(s => {
+    const l = D.loc[s]; const total = l.total;
+    const detail = s === "baml" ? "1 explicit capture, 0 setup" : `${l.setup_lines} setup + ${l.decorators} decorators`;
+    return {label: STACKS[s].name, value: total, color: STACKS[s].c, text: `${total} (${detail})`};
+  });
+  hbars(document.getElementById("loc"), rows, {valW: 230});
+})();
+
+// ---- wire chart
+(function wire() {
+  const sizes = [[1024, "1 KiB"], [10240, "10 KiB"], [102400, "100 KiB"]];
+  const tabs = document.getElementById("sizeTabs");
+  tabs.innerHTML = sizes.map(([s, l], i) => `<button type="button" id="size-${s}" aria-pressed="${i === 1}" data-s="${s}">${l} document</button>`).join("");
+  const order = ["baml", "bridge", "logfire", "datadog", "otel"];
+  document.getElementById("wireLegend").innerHTML = "";
+  function draw(size) {
+    const rows = [];
+    for (const s of order) for (const [b, bl] of [["10v", "different inputs"], ["10s", "same input"]]) {
+      const r = wireRow(s, "classify", size, b); if (!r) continue;
+      rows.push({label: `${STACKS[s].name} · ${bl}`, value: r.bytes / r.calls, color: STACKS[s].c, text: fmtB(r.bytes / r.calls),
+        tip: `${STACKS[s].name}, 10 calls with ${bl}: ${fmtB(r.bytes)} total`});
+    }
+    hbars(document.getElementById("wire"), rows, {labelW: 260, valW: 90, rowH: 28});
+  }
+  tabs.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    tabs.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); draw(+b.dataset.s); });
+  draw(10240);
+  const same = wireRow("baml", "classify", 102400, "10s"), vary = wireRow("baml", "classify", 102400, "10v");
+  document.getElementById("dedupSame").textContent = fmtB(same.bytes);
+  document.getElementById("dedupVary").textContent = fmtB(vary.bytes);
+})();
+
+// ---- cost calculator
+(function cost() {
+  // Measured BCS billed bytes per classify call by document size (10 varied calls).
+  const pts = [1024, 10240, 102400].map(s => {
+    const d = wireRow("baml", "classify", s, "10v"), n = wireRow("bridge-nobodies", "classify", s, "10v");
+    return {s, def: d.billed / d.calls, nob: n.billed / n.calls};
+  });
+  // Linear fit through the measured points: fixed bytes + k * document bytes.
+  const fit = key => { const a = pts[0], b = pts[2]; const k = (b[key] - a[key]) / (b.s - a.s); return {k, c: a[key] - k * a.s}; };
+  const fd = fit("def"), fn = fit("nob");
+  const el = id => document.getElementById(id);
+  const sizeAt = v => Math.round(Math.pow(10, 2 + v / 100 * 4)); // 100 B .. 1 MB
+  const callsAt = v => Math.round(Math.pow(10, 4 + v / 100 * 4)); // 10k .. 100M
+  function draw() {
+    const size = sizeAt(+el("cSize").value), steps = +el("cSpans").value, calls = callsAt(+el("cCalls").value), llm = +el("cLlm").value;
+    el("oSize").textContent = fmtB(size); el("oSpans").textContent = steps; el("oCalls").textContent = calls.toLocaleString("en-US"); el("oLlm").textContent = llm;
+    const extra = (llm - 1) * 1500; // each extra model call: about 1.5 KB of request/response overhead
+    const bcsDef = (fd.c + fd.k * size + extra) * calls / 1e9 * 4;
+    const bcsNob = (fn.c + fn.k * size + extra * 0.5) * calls / 1e9 * 4;
+    const logfire = (steps + llm) * calls / 1e6 * 2;
+    const dd = llm * calls / 1e4 * 3.5;
+    const rows = [
+      {label: "BCS", value: bcsDef, color: "--s-baml", text: fmt$(bcsDef)},
+      {label: "BCS, no HTTP bodies", value: bcsNob, color: "--s-baml", text: fmt$(bcsNob)},
+      {label: "Logfire", value: logfire, color: "--s-logfire", text: fmt$(logfire)},
+      {label: "Datadog LLM Obs", value: dd, color: "--s-datadog", text: fmt$(dd)},
+    ];
+    const max = Math.max(...rows.map(r => r.value), 1e-9);
+    el("costBars").innerHTML = rows.map(r => `<div class="bar"><span>${r.label}</span><div class="track"><div class="fill" style="width:${(r.value / max * 100).toFixed(1)}%;background:${css(r.color)}"></div></div><span class="amt">${r.text}</span></div>`).join("");
+    const cheapest = rows.reduce((a, b) => a.value <= b.value ? a : b);
+    el("costNote").textContent = `Per month, before free tiers. Cheapest here: ${cheapest.label}. BCS cost tracks bytes; Logfire tracks spans; Datadog tracks model calls.`;
+  }
+  ["cSize", "cSpans", "cCalls", "cLlm"].forEach(id => el(id).addEventListener("input", draw));
+  el("cSize").value = Math.round((Math.log10(10240) - 2) / 4 * 100);
+  el("cCalls").value = 50;
+  draw();
+  // Measured table
+  const apps = [["classify", 2, 1], ["extract", 2, 1], ["agent", 4, 2]];
+  let t = `<thead><tr><th>App, document</th><th class="n">BCS billed / call</th><th class="n">BCS</th><th class="n">BCS no bodies</th><th class="n">Logfire</th><th class="n">Datadog</th></tr></thead><tbody>`;
+  for (const [a, rec, llm] of apps) for (const [s, sl] of [[1024, "1 KiB"], [10240, "10 KiB"], [102400, "100 KiB"]]) {
+    const d = wireRow("baml", a, s, "10v"), n = wireRow("bridge-nobodies", a, s, "10v");
+    const db = d.billed / d.calls, nb = n.billed / n.calls;
+    t += `<tr><td>${a}, ${sl}</td><td class="n">${fmtB(db)}</td><td class="n">${fmt$(db * 0.004)}</td><td class="n">${fmt$(nb * 0.004)}</td><td class="n">${fmt$(rec * 2)}</td><td class="n">${fmt$(llm * 350)}</td></tr>`;
+  }
+  const p = D.pipeline.find(r => r.stack === "baml-high");
+  t += `<tr><td>pipeline, 41 plain functions</td><td class="n">≈ 0 B</td><td class="n">$0</td><td class="n">$0</td><td class="n">$82</td><td class="n">APM: $70</td></tr>`;
+  el("costTable").innerHTML = t + `</tbody><caption class="muted" style="caption-side:bottom;text-align:left;padding-top:.5rem">Cost per million calls from measured runs (10 calls with different text each).</caption>`;
+})();
+
+// ---- performance
+(function perf() {
+  const order = ["off", "otel", "logfire", "datadog", "bridge", "baml"];
+  const O = D.overhead;
+  const metrics = {
+    wall: {label: "Whole process", key: "wall_ms", f: v => Math.round(v) + " ms", note: "Start, 51 calls, flush, exit. The untraced Python baseline is mostly importing the OpenAI SDK."},
+    rss: {label: "Peak memory", key: "rss_mb", f: v => Math.round(v) + " MB", note: "Peak resident memory of the process."},
+    warm: {label: "Per call", key: "warm_ms", f: v => v.toFixed(3) + " ms", note: "Median of calls 2 to 51 with an instant model. The traced-minus-untraced gap is the tracing cost: BAML +0.04 ms, OpenTelemetry +0.06 ms, Datadog +0.19 ms, Logfire +0.23 ms."},
+    first: {label: "First call", key: "first_ms", f: v => v.toFixed(1) + " ms", note: "The Python OpenAI client builds its HTTP stack on first use."},
+  };
+  const tabs = document.getElementById("perfTabs");
+  tabs.innerHTML = Object.entries(metrics).map(([k, m], i) => `<button type="button" id="perf-${k}" aria-pressed="${i === 0}" data-k="${k}">${m.label}</button>`).join("");
+  function draw(k) {
+    const m = metrics[k];
+    const rows = order.filter(s => O[s]).map(s => ({label: STACKS[s].name, value: O[s][m.key], color: STACKS[s].c, text: m.f(O[s][m.key])}));
+    hbars(document.getElementById("perf"), rows, {labelW: 180});
+    document.getElementById("perfNote").textContent = m.note;
+  }
+  tabs.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    tabs.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); draw(b.dataset.k); });
+  draw("wall");
+})();
+
+// ---- crash
+(function crash() {
+  const order = ["baml", "bridge", "logfire", "datadog", "otel"];
+  const rows = [];
+  for (const s of order) for (const sig of ["SIGKILL", "SIGTERM"]) {
+    const r = D.crash.find(x => x.stack === s && x.signal === sig); if (!r) continue;
+    const lost = r.completed - r.delivered;
+    rows.push({label: `${STACKS[s].name} · ${sig === "SIGKILL" ? "kill -9" : "stop"}`, value: r.lost_pct, color: STACKS[s].c,
+      text: `${r.lost_pct.toFixed(0)}% lost`, tip: `${STACKS[s].name}, ${sig}: ${lost} of ${r.completed} completed calls had no trace (${r.trials} trials)`});
+  }
+  hbars(document.getElementById("crash"), rows, {max: 100, labelW: 210, valW: 90, rowH: 26});
+})();
+
+// ---- burst
+(function burst() {
+  const names = {"baml-high": "BAML (high)", "baml-medium": "BAML (default)", logfire: "Logfire", otel: "OpenTelemetry", datadog: "Datadog (ddtrace)"};
+  const color = {"baml-high": "--s-baml", "baml-medium": "--s-baml", logfire: "--s-logfire", otel: "--s-otel", datadog: "--s-datadog"};
+  const rows = D.pipeline.filter(r => r.stack !== "baml-medium").map(r => {
+    const got = Math.min(r.stored_records ?? r.spans, r.function_calls);
+    return {label: names[r.stack], value: got, color: color[r.stack], text: `${got.toLocaleString("en-US")} / 8,200`};
+  });
+  hbars(document.getElementById("burst"), rows, {max: 8200, labelW: 160, valW: 120, rowH: 28});
+})();
+
+// ---- scrub
+(function scrub() {
+  let t = `<thead><tr><th>Ticket</th><th>Stored function argument</th></tr></thead><tbody>`;
+  for (const r of D.scrub) t += `<tr><td>${esc(r.ticket)}</td><td style="color:${r.argument_scrubbed ? "var(--bad)" : "var(--good)"}">${esc(r.argument_scrubbed ? r.stored_argument : "kept in full")}</td></tr>`;
+  document.getElementById("scrub").innerHTML = t + "</tbody>";
+})();
+
+// ---- searchable
+(function search() {
+  const S = D.searchable;
+  const rows = [["logfire", "Logfire"], ["datadog", "Datadog APM"]].filter(([k]) => S[k]).map(([k, l]) => ({label: l, value: S[k].median, color: STACKS[k].c,
+    text: `${S[k].median.toFixed(1)} s`, tip: `${l}: median ${S[k].median.toFixed(1)} s, range ${S[k].min.toFixed(1)}–${S[k].max.toFixed(1)} s over ${S[k].n} trials`}));
+  hbars(document.getElementById("search"), rows, {labelW: 160});
+})();
+</script>

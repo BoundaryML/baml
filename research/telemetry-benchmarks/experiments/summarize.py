@@ -82,11 +82,13 @@ def searchable():
 def main():
     data = {
         "wire": wire(), "overhead": overhead(), "crash": crash(), "searchable": searchable(),
-        "loc": load("loc.json"), "scrub": load("scrub.json"),
+        "loc": load("loc.json"), "scrub": load("scrub.json"), "pipeline": load("pipeline.json"),
     }
     out = ROOT / "site" / "data.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(data, indent=1) + "\n")
+    html = (ROOT / "site" / "template.html").read_text().replace("__DATA__", json.dumps(data, separators=(",", ":")))
+    (ROOT / "site" / "index.html").write_text(html)
     print("wrote", out, {k: len(v) for k, v in data.items()})
 
 

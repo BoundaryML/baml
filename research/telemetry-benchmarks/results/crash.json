@@ -1,0 +1,302 @@
+[
+ {
+  "stack": "otel",
+  "signal": "SIGKILL",
+  "after_s": 6.74,
+  "model_calls_completed": 107,
+  "calls_at_signal": 106,
+  "model_spans_delivered": 87,
+  "requests_to_backend": 1,
+  "lost": 20
+ },
+ {
+  "stack": "baml",
+  "signal": "SIGTERM",
+  "after_s": 7.45,
+  "model_calls_completed": 134,
+  "calls_at_signal": 133,
+  "model_spans_delivered": 134,
+  "requests_to_backend": 30,
+  "lost": 0
+ },
+ {
+  "stack": "datadog",
+  "signal": "SIGTERM",
+  "after_s": 7.77,
+  "model_calls_completed": 113,
+  "calls_at_signal": 112,
+  "model_spans_delivered": 105,
+  "requests_to_backend": 6,
+  "lost": 8
+ },
+ {
+  "stack": "logfire",
+  "signal": "SIGKILL",
+  "after_s": 8.65,
+  "model_calls_completed": 139,
+  "calls_at_signal": 138,
+  "model_spans_delivered": 135,
+  "requests_to_backend": 17,
+  "lost": 4
+ },
+ {
+  "stack": "baml",
+  "signal": "SIGKILL",
+  "after_s": 7.44,
+  "model_calls_completed": 134,
+  "calls_at_signal": 133,
+  "model_spans_delivered": 134,
+  "requests_to_backend": 28,
+  "lost": 0
+ },
+ {
+  "stack": "logfire",
+  "signal": "SIGTERM",
+  "after_s": 8.53,
+  "model_calls_completed": 138,
+  "calls_at_signal": 137,
+  "model_spans_delivered": 135,
+  "requests_to_backend": 17,
+  "lost": 3
+ },
+ {
+  "stack": "baml",
+  "signal": "SIGTERM",
+  "after_s": 3.17,
+  "model_calls_completed": 56,
+  "calls_at_signal": 55,
+  "model_spans_delivered": 56,
+  "requests_to_backend": 14,
+  "lost": 0
+ },
+ {
+  "stack": "bridge",
+  "signal": "SIGKILL",
+  "after_s": 5.79,
+  "model_calls_completed": 92,
+  "calls_at_signal": 91,
+  "model_spans_delivered": 92,
+  "requests_to_backend": 20,
+  "lost": 0
+ },
+ {
+  "stack": "otel",
+  "signal": "SIGKILL",
+  "after_s": 8.66,
+  "model_calls_completed": 143,
+  "calls_at_signal": 142,
+  "model_spans_delivered": 88,
+  "requests_to_backend": 1,
+  "lost": 55
+ },
+ {
+  "stack": "bridge",
+  "signal": "SIGKILL",
+  "after_s": 6.89,
+  "model_calls_completed": 110,
+  "calls_at_signal": 109,
+  "model_spans_delivered": 102,
+  "requests_to_backend": 22,
+  "lost": 8
+ },
+ {
+  "stack": "bridge",
+  "signal": "SIGTERM",
+  "after_s": 8.41,
+  "model_calls_completed": 138,
+  "calls_at_signal": 137,
+  "model_spans_delivered": 133,
+  "requests_to_backend": 28,
+  "lost": 5
+ },
+ {
+  "stack": "otel",
+  "signal": "SIGKILL",
+  "after_s": 3.68,
+  "model_calls_completed": 53,
+  "calls_at_signal": 53,
+  "model_spans_delivered": 0,
+  "requests_to_backend": 0,
+  "lost": 53
+ },
+ {
+  "stack": "otel",
+  "signal": "SIGTERM",
+  "after_s": 5.81,
+  "model_calls_completed": 92,
+  "calls_at_signal": 91,
+  "model_spans_delivered": 88,
+  "requests_to_backend": 1,
+  "lost": 4
+ },
+ {
+  "stack": "logfire",
+  "signal": "SIGTERM",
+  "after_s": 4.48,
+  "model_calls_completed": 65,
+  "calls_at_signal": 64,
+  "model_spans_delivered": 64,
+  "requests_to_backend": 9,
+  "lost": 1
+ },
+ {
+  "stack": "bridge",
+  "signal": "SIGTERM",
+  "after_s": 6.26,
+  "model_calls_completed": 100,
+  "calls_at_signal": 99,
+  "model_spans_delivered": 92,
+  "requests_to_backend": 20,
+  "lost": 8
+ },
+ {
+  "stack": "datadog",
+  "signal": "SIGTERM",
+  "after_s": 6.44,
+  "model_calls_completed": 92,
+  "calls_at_signal": 91,
+  "model_spans_delivered": 87,
+  "requests_to_backend": 5,
+  "lost": 5
+ },
+ {
+  "stack": "datadog",
+  "signal": "SIGKILL",
+  "after_s": 3.08,
+  "model_calls_completed": 33,
+  "calls_at_signal": 32,
+  "model_spans_delivered": 16,
+  "requests_to_backend": 1,
+  "lost": 17
+ },
+ {
+  "stack": "bridge",
+  "signal": "SIGTERM",
+  "after_s": 4.3,
+  "model_calls_completed": 65,
+  "calls_at_signal": 64,
+  "model_spans_delivered": 61,
+  "requests_to_backend": 14,
+  "lost": 4
+ },
+ {
+  "stack": "baml",
+  "signal": "SIGKILL",
+  "after_s": 4.68,
+  "model_calls_completed": 84,
+  "calls_at_signal": 83,
+  "model_spans_delivered": 81,
+  "requests_to_backend": 18,
+  "lost": 3
+ },
+ {
+  "stack": "logfire",
+  "signal": "SIGKILL",
+  "after_s": 8.5,
+  "model_calls_completed": 137,
+  "calls_at_signal": 136,
+  "model_spans_delivered": 135,
+  "requests_to_backend": 17,
+  "lost": 2
+ },
+ {
+  "stack": "bridge",
+  "signal": "SIGKILL",
+  "after_s": 7.59,
+  "model_calls_completed": 123,
+  "calls_at_signal": 122,
+  "model_spans_delivered": 112,
+  "requests_to_backend": 24,
+  "lost": 11
+ },
+ {
+  "stack": "datadog",
+  "signal": "SIGKILL",
+  "after_s": 3.96,
+  "model_calls_completed": 47,
+  "calls_at_signal": 46,
+  "model_spans_delivered": 34,
+  "requests_to_backend": 2,
+  "lost": 13
+ },
+ {
+  "stack": "baml",
+  "signal": "SIGKILL",
+  "after_s": 7.78,
+  "model_calls_completed": 140,
+  "calls_at_signal": 139,
+  "model_spans_delivered": 133,
+  "requests_to_backend": 28,
+  "lost": 7
+ },
+ {
+  "stack": "logfire",
+  "signal": "SIGTERM",
+  "after_s": 3.83,
+  "model_calls_completed": 55,
+  "calls_at_signal": 54,
+  "model_spans_delivered": 46,
+  "requests_to_backend": 7,
+  "lost": 9
+ },
+ {
+  "stack": "datadog",
+  "signal": "SIGTERM",
+  "after_s": 6.7,
+  "model_calls_completed": 96,
+  "calls_at_signal": 95,
+  "model_spans_delivered": 87,
+  "requests_to_backend": 5,
+  "lost": 9
+ },
+ {
+  "stack": "baml",
+  "signal": "SIGTERM",
+  "after_s": 3.76,
+  "model_calls_completed": 67,
+  "calls_at_signal": 66,
+  "model_spans_delivered": 67,
+  "requests_to_backend": 16,
+  "lost": 0
+ },
+ {
+  "stack": "logfire",
+  "signal": "SIGKILL",
+  "after_s": 3.01,
+  "model_calls_completed": 41,
+  "calls_at_signal": 40,
+  "model_spans_delivered": 37,
+  "requests_to_backend": 6,
+  "lost": 4
+ },
+ {
+  "stack": "otel",
+  "signal": "SIGTERM",
+  "after_s": 8.23,
+  "model_calls_completed": 134,
+  "calls_at_signal": 133,
+  "model_spans_delivered": 87,
+  "requests_to_backend": 1,
+  "lost": 47
+ },
+ {
+  "stack": "datadog",
+  "signal": "SIGKILL",
+  "after_s": 4.26,
+  "model_calls_completed": 53,
+  "calls_at_signal": 52,
+  "model_spans_delivered": 34,
+  "requests_to_backend": 2,
+  "lost": 19
+ },
+ {
+  "stack": "otel",
+  "signal": "SIGTERM",
+  "after_s": 4.29,
+  "model_calls_completed": 64,
+  "calls_at_signal": 63,
+  "model_spans_delivered": 0,
+  "requests_to_backend": 0,
+  "lost": 64
+ }
+]
