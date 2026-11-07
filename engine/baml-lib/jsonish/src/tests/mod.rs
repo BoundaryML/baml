@@ -16,6 +16,7 @@ mod test_maps;
 mod test_partials;
 mod test_streaming;
 mod test_unions;
+mod test_xml;
 
 use std::{
     collections::{HashMap, HashSet},
