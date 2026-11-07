@@ -4,6 +4,8 @@ Measured on 2026-11-06/07 with BAML 0.25.2, Logfire 5.4.0, ddtrace 4.16.3 (LLM O
 
 All runs use a local fake OpenAI server, so the numbers measure tracing, not the model. Hosted runs forwarded to the real Logfire, Datadog and BCS projects, and every request was accepted.
 
+**Billing check:** the BCS Billing page went from 2,799 spans / 4.5 MB to 5,457 spans / 34 MB. That exactly matches the 5,457 spans and about 34.1 MB predicted by replaying BCS's billing rules over the recorded uploads, so the cost figures below rest on billed bytes the page confirms.
+
 ## Strengths of BAML + BCS
 
 1. **No tracing code.** The four apps needed 0 setup lines in BAML (plus 1 explicit `$trace` to capture a plain function's values). The Python versions needed 10 lines for Logfire and Datadog, and 28 for plain OTel (`results/loc.json`).
@@ -43,6 +45,5 @@ All runs use a local fake OpenAI server, so the numbers measure tracing, not the
 
 ## Open items
 
-- BCS Billing page check: the prediction for the hosted matrix is +2,658 spans and +29,552,599 bytes (expected page about 5,457 spans and about 34.1 MB). The page showed 2,799 spans / 4.5 MB before. It has not been reloaded since; Firefox access is read-only.
 - Live OpenAI runs (blocked: infisical login).
 - BCS time to searchable (needs a key with read access).

@@ -243,7 +243,7 @@ logfire.instrument_openai()
   <ul class="col">
     <li>Each run is a fresh process. Run order is shuffled so one stack never always goes first.</li>
     <li>A local relay sits between each SDK and its backend and records every request body exactly as sent. In hosted runs it also forwards to the real service, and every request was accepted.</li>
-    <li>BCS billed bytes are computed by replaying BCS's billing rules (<code>logical_bytes_approx_v1</code>) over the upload bodies, then checked against the Billing page.</li>
+    <li>BCS billed bytes are computed by replaying BCS's billing rules (<code>logical_bytes_approx_v1</code>) over the upload bodies. The Billing page then showed exactly the predicted change: 5,457 spans and 34 MB.</li>
     <li>Python stacks are set up the way each vendor's docs describe: Logfire 5.4, ddtrace 4.16 (LLM Observability, agentless), OpenTelemetry SDK 1.45 with <code>opentelemetry-instrumentation-openai-v2</code>, OpenAI SDK with <code>max_retries=1</code>.</li>
     <li>The model is a local fake that answers instantly, so speed numbers show tracing cost only. A real model call takes hundreds of milliseconds, which dwarfs every difference on this page except process startup.</li>
     <li>Everything (code, raw results, a running log) is in <code>research/telemetry-benchmarks/</code>.</li>

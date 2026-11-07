@@ -215,3 +215,7 @@ Each trial runs a loop of `classify` calls against a mock model that takes 50 ms
 - In Python, SIGTERM is as bad as kill -9 unless the app installs a handler. Python's default SIGTERM action ends the process without running `atexit`, so no SDK gets to flush. That is why the bridge, Logfire, Datadog and OTel all lose data on SIGTERM too. This is what happens on every `docker stop` or Kubernetes rollout of a Python worker that doesn't handle SIGTERM.
 - OTel's `BatchSpanProcessor` exports every 5 s, so a kill loses up to the whole window: one trial lost all 53 calls (killed at 3.7 s, before the first export).
 - Datadog's LLM Obs writer flushes every few seconds and lost 37% on kill -9, with large spread.
+
+## 2026-11-07: BCS Billing page confirms the billing replay
+
+After a reload, the Billing page (Oct 8 – Nov 7, 2026) shows **5,457 spans** and **34 MB**. The prediction from replaying the billing rules over the hosted matrix's upload bodies was 2,799 + 2,658 = **5,457 spans** (exact) and 4.5 MB + 29.55 MB ≈ **34.1 MB** (matches at the page's 1 MB display precision). All later experiments used local stand-ins and sent nothing to BCS. So `lab/logical_usage.py` reproduces BCS billing for these workloads, and every BCS cost figure here rests on measured, not estimated, billed bytes.
