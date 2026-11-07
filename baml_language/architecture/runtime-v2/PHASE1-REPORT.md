@@ -1453,3 +1453,135 @@ normal and GC-stressed, with all program records strict and only C5 maintenance
 records exempt. Raw equality is retained separately (4/12 at off). Both v2
 recordings and bytecode recordings continue through the unchanged harness
 normalizer. Matrix logs: `target/t2-gc-{trees,richards}-parity.log`.
+
+## Richards medium floor and producer optimization
+
+The floor experiment builds diagnostic Cargo-feature variants from the emitted
+Richards source; these switches are not part of shipped compiler/runtime
+behavior. `floor-aggregate` adds one static slot per function, and `floor-ecv`
+selects the ordered ARM counter view. Both variants preserve the observation
+word and hidden functions. Variant a performs two reads and discards them;
+variant b additionally adds count/duration to its function's fixed slot. Neither
+uses call paths, a publisher or the normal telemetry state. A final diagnostic
+read of the counters prevents dead-store elimination and checks exactly
+1,736,751 observed program calls per job. The integer result is checked too.
+The full-medium control executable (c) is preserved before optimization.
+
+The producer now gives frames stable addresses for their aggregate slots,
+updates successful synchronous counts/durations in place, and only uses the
+shared checked merge on unusual outcomes/awaits or overflow. The overflow
+regression checks that a failed fast addition leaves the entire slot unchanged.
+A one-entry site cache still handles the immediate common case. Site-local
+parent histories handle repeated alternate parents without rehashing already
+known call paths; the map remains the canonical cold definition path. The test
+forces the one-entry cache empty, clears the hash map, grows the slot table
+while a parent frame is live, then confirms history reuse and correct completion.
+
+On ARM, startup selects the self-synchronizing `CNTVCTSS_EL0` view when Linux
+advertises FEAT_ECV and the calibrated epoch uses the system counter. Otherwise
+system-counter reads use `ISB; MRS CNTVCT_EL0`; OS-clock fallback stays in the
+original clock domain. Epoch calibration, conversion and boundary validation
+are unchanged. The views share the counter and tick scale. Unlike the existing
+Quanta raw read (`MRS CNTVCT_EL0`, no ISB), the ECV view provides architectural
+program-order timing without an explicit synchronization instruction. The asm
+also retains a compiler memory barrier. See [Arm's CNTVCTSS_EL0 specification](https://support.arm.com/documentation/111107/2026-03/AArch64-Registers/CNTVCTSS-EL0--Counter-timer-Self-Synchronized-Virtual-Count-Register).
+
+`floor.py clock` measures raw/unfenced, ISB-ordered, ECV, Quanta and OS monotonic
+reads in five rotated rounds on CPU 12, including an empty-loop control. It
+records wall and thread CPU time per read, monotonicity probes, actual Quanta
+source/calibration/fallback, and load. `floor.py bench` rotates off/a/b/c/optimized
+runs over five rounds with 20 timed jobs and two warmups, records binary hashes,
+checks b's call count and reads c/optimized clock sources from the actual BTEL
+files. An optimized-off row detects baseline code-generation changes.
+
+### Floor results (five interleaved rounds)
+
+CPU 12, five rotated rounds, 20 timed jobs and two untimed warmups per process.
+Own compilation/parity jobs had finished. Load ranges (1/5/15 minute) were
+18.64–25.14 / 38.67–42.92 / 40.28–41.64 on 20 CPUs. Every result and fixed-slot
+call count matched. All diagnostic Quanta selections and all full-medium BTEL
+clock definitions used the ARM system counter with no fallback.
+
+| Richards variant | Median ms/job | Relative to control off |
+|---|---:|---:|
+| Off, control binary | 3.937 | 1.000× |
+| a: two Quanta reads, discarded | 69.191 | 17.573× |
+| b: Quanta reads + fixed function slot | 69.125 | 17.557× |
+| c: full medium, before optimization | 82.833 | 21.038× |
+| a: two ordered ECV reads, discarded | 78.020 | 19.816× |
+| b: ECV reads + fixed function slot | 72.599 | 18.439× |
+| Optimized medium, ordered ECV reads | 79.785 | 20.264× |
+| Off, optimized binary | 3.704 | 0.941× |
+
+The optimized binary's own **medium/off ratio is 21.539×**, versus 21.038× in
+the control. Medium absolute time improves 3.68%, while its off path also gets
+faster; the ratio must not be reported as an improvement. The 1.5× gate is not
+met. The ECV a variant is noisy (69.23–109.91 ms); ECV b is 72.58–72.68 ms, and
+optimized medium is 79.37–80.91 ms. A/b subtraction is not a causal estimate of
+aggregate cost: register allocation, instruction overlap and scheduling differ.
+In particular, b being slightly faster than a does not mean aggregation is free
+or has negative cost.
+
+### Clock findings and practical floor
+
+Median per-read costs over five rotated 2,000,000-read loops on CPU 12:
+
+| Read | Wall ns | Thread CPU ns |
+|---|---:|---:|
+| Quanta Auto (system counter, no ISB) | 19.903 | 19.903 |
+| Direct CNTVCT_EL0, no ISB | 19.939 | 19.939 |
+| ISB + CNTVCT_EL0 | 30.384 | 30.384 |
+| CNTVCTSS_EL0, self-synchronized | 20.081 | 20.081 |
+| OS monotonic | 36.479 | 36.314 |
+| Empty black-box loop control | 0.359 | 0.359 |
+
+No backwards readings occurred in the monotonicity probes. Quanta converged and
+selected `SystemCounter`, without fallback. Microprobe load was
+22.37/42.92/41.64. CPU costs closely match wall costs, so the approximately 20 ns
+read cost is not explained by descheduling in this probe. The empty-loop control
+is reported, not silently subtracted. The shipped v2 producer uses ECV on this
+host; raw/unfenced reads remain diagnostic comparison points.
+
+At 1,736,751 calls/job, two ECV reads give 3,473,502 reads, approximately **69.75
+ms of read-loop cost** at measured throughput. The workload-only a result is
+about 69 ms with the existing clock; the ordered fixed-slot variant is 72.60 ms.
+Thus the practical full-precision floor here is roughly **70–73 ms/job**, before
+full path/state/publishing work, versus 3.70–3.94 ms off. Instruction overlap makes
+this an empirical floor, not a universal mathematical lower bound. Optimized
+medium remains about 7.19 ms above the ordered fixed-slot diagnostic. Hash/cache
+and merge engineering alone cannot bridge the approximately 70 ms floor to the
+5.56 ms budget implied by 1.5× optimized-off. Reducing the number or fidelity of
+clock observations would be a separate design/contract decision; neither was
+changed, and medium remains the default.
+
+The optimized profile has 97K cycle samples and zero lost samples: generated
+`entry` accounts for 99.72%; the previous standalone hashing, checked-merge and
+path-lookup rows are all below the 0.5% reporting threshold. Source locations
+attribute 55.66% to the ECV read/return region, 28.32% to Option comparisons
+(parent/reentry state), and 14.04% to the inlined count-add/overflow check. These
+are optimized debug locations, not an additive causal decomposition.
+
+### Validation and reproduction
+
+Optimized off/low/medium parity remains **12/12**, normal and stressed, under
+only C5. Runtime tests (17) and strict all-target clippy pass. Logs:
+`target/t2-optimized-{tests,clippy,trees-parity}.log` and `target/t2-floor-final.log`.
+The floor control binary was built at `347d928e04` and preserved before producer
+optimization. `floor.py build` preserves that control and builds diagnostic
+Cargo-feature variants; it refuses to label a newly optimized binary as the
+original control. Local binaries and generated sources remain under
+`target/telemetry`; committed SHA-256 hashes identify measured binaries.
+
+```sh
+# At the control checkpoint, after building Richards:
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/floor.py build
+# After rebuilding the optimized Richards and preserving it as richards-optimized:
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/floor.py clock
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/floor.py bench
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py profile --profile-label optimized
+```
+
+Evidence: `telemetry/floor-{raw,summary}.json`, `clock-{cost.jsonl,source.txt,summary.json}`,
+and `richards-optimized-{profile.txt,lines.txt,profile-run.json}`. T2/T3 follow;
+this floor experiment neither weakens their parity requirements nor changes
+the telemetry default.

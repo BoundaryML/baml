@@ -24,3 +24,6 @@ btel_settings.workspace = true
 btel_file.workspace = true
 btel_recorder.workspace = true
 baml_version.workspace = true
+
+[target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
+libc.workspace = true

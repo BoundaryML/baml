@@ -1434,6 +1434,7 @@ dependencies = [
  "btel_settings",
  "btel_snapshot",
  "btel_types",
+ "libc",
  "serde_json",
  "tokio",
 ]

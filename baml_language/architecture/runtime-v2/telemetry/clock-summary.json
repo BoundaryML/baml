@@ -1,0 +1,30 @@
+{
+  "cpu": "12",
+  "load_before": [
+    22.373046875,
+    42.91748046875,
+    41.64013671875
+  ],
+  "load_after": [
+    22.373046875,
+    42.91748046875,
+    41.64013671875
+  ],
+  "backwards": 0,
+  "median_ns_per_read": {
+    "monotonic": 36.47932,
+    "quanta-auto": 19.9029805,
+    "cntvctss": 20.081334,
+    "loop-black-box": 0.3585715,
+    "raw-cntvct-no-isb": 19.938709,
+    "cntvct-isb": 30.3836845
+  },
+  "median_cpu_ns_per_read": {
+    "monotonic": 36.313712,
+    "quanta-auto": 19.90328,
+    "cntvctss": 20.0814,
+    "loop-black-box": 0.358856,
+    "raw-cntvct-no-isb": 19.939432,
+    "cntvct-isb": 30.38376
+  }
+}

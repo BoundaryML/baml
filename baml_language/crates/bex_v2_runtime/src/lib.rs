@@ -133,7 +133,9 @@ impl Instance {
             .build()
             .unwrap();
         let mut heap = Heap::new(descriptors, pointer_types);
-        heap.set_collection_observer(Some(crate::telemetry::collection));
+        if btel_settings::mode::from_env().is_ok_and(|level| level.is_some()) {
+            heap.set_collection_observer(Some(crate::telemetry::collection));
+        }
         heap.set_stress(baml_env::raw_var("BAML_GC_STRESS").is_some_and(|value| value == "1"));
         heap.reserve_emergency()
             .expect("cannot reserve v2 emergency exception storage");

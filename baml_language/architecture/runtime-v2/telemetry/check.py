@@ -44,7 +44,7 @@ def reader():
     source=(WS/'crates/baml_tests/rust_diff/telemetry.rs').read_text()
     (directory/'src/telemetry.rs').write_text(source)
     (directory/'src/known_telemetry_divergences.rs').write_text((WS/'crates/baml_tests/rust_diff/known_telemetry_divergences.rs').read_text())
-    (directory/'src/main.rs').write_text('mod telemetry; mod known_telemetry_divergences; fn main(){let a:Vec<_>=std::env::args_os().collect();let trace=telemetry::read(std::path::Path::new(&a[1]));std::fs::write(&a[2],&trace).unwrap();if let Some(path)=a.get(3){std::fs::write(path,known_telemetry_divergences::without_gc(&trace,"v2")).unwrap();}}')
+    shutil.copyfile(EVIDENCE/'reader_main.rs',directory/'src/main.rs')
     shutil.copyfile(WS/'Cargo.lock',directory/'Cargo.lock')
     run(['cargo','build','--release','--manifest-path',directory/'Cargo.toml','--target-dir',OUT/'reader-target'],stdout=subprocess.DEVNULL)
     return OUT/'reader-target/release/v2-telemetry-reader'
@@ -142,31 +142,31 @@ def bench(names,cpu):
     (EVIDENCE/'benchmark-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
     print(json.dumps(summary),flush=True)
 
-def profile(cpu):
+def profile(cpu,label="medium"):
     perf = shutil.which('perf') or '/nix/store/i0cd89mpcvd3jb6slpzry4vr23gz4j9k-perf-linux-7.1/bin/perf'
     env = dict(ENV,BAML_TELEMETRY='medium',BAML_GC_STRESS='0',BAML_HOME=str(OUT/'profile-home'))
-    command = ['taskset','-c',cpu,perf,'record','-g','--call-graph','dwarf','-o',OUT/'richards-medium.perf.data','--',OUT/'richards-v2','--jobs','300','--warmup','1']
+    command = ['taskset','-c',cpu,perf,'record','-g','--call-graph','dwarf','-o',OUT/f'richards-{label}.perf.data','--',OUT/'richards-v2','--jobs','300','--warmup','1']
     load_before=os.getloadavg()
     result=run(command,env=env,capture_output=True,text=True)
     data=json.loads(result.stdout)
     assert str(data['result'])==WORKLOADS['richards'][1],data
-    (EVIDENCE/'richards-medium-profile-run.json').write_text(json.dumps(dict(command=list(map(str,command)),load_before=load_before,load_after=os.getloadavg(),stderr=result.stderr,**data),indent=2)+'\n')
-    profile_report()
+    (EVIDENCE/f'richards-{label}-profile-run.json').write_text(json.dumps(dict(command=list(map(str,command)),load_before=load_before,load_after=os.getloadavg(),stderr=result.stderr,**data),indent=2)+'\n')
+    profile_report(label)
 
-def profile_report():
+def profile_report(label="medium"):
     perf = shutil.which('perf') or '/nix/store/i0cd89mpcvd3jb6slpzry4vr23gz4j9k-perf-linux-7.1/bin/perf'
-    report=run([perf,'report','--stdio','--no-children','--call-graph','none','--sort','symbol','--percent-limit','0.5','-i',OUT/'richards-medium.perf.data'],capture_output=True,text=True)
-    (EVIDENCE/'richards-medium-profile.txt').write_text('\n'.join(line.rstrip() for line in report.stdout.splitlines())+'\n')
-    lines=run([perf,'report','--stdio','--no-children','--call-graph','none','--full-source-path','--sort','srcline','--percent-limit','0.5','-i',OUT/'richards-medium.perf.data'],capture_output=True,text=True)
-    (EVIDENCE/'richards-medium-lines.txt').write_text('\n'.join(line.rstrip() for line in lines.stdout.splitlines())+'\n')
+    report=run([perf,'report','--stdio','--no-children','--call-graph','none','--sort','symbol','--percent-limit','0.5','-i',OUT/f'richards-{label}.perf.data'],capture_output=True,text=True)
+    (EVIDENCE/f'richards-{label}-profile.txt').write_text('\n'.join(line.rstrip() for line in report.stdout.splitlines())+'\n')
+    lines=run([perf,'report','--stdio','--no-children','--call-graph','none','--full-source-path','--sort','srcline','--percent-limit','0.5','-i',OUT/f'richards-{label}.perf.data'],capture_output=True,text=True)
+    (EVIDENCE/f'richards-{label}-lines.txt').write_text('\n'.join(line.rstrip() for line in lines.stdout.splitlines())+'\n')
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('action',choices=['build','check','bench','reader','profile','profile-report']);p.add_argument('--workloads',default='trees,richards');p.add_argument('--levels',default='off,low,medium');p.add_argument('--cpu',default='12');p.add_argument('--backends',default='v2,oracle,native');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('action',choices=['build','check','bench','reader','profile','profile-report']);p.add_argument('--workloads',default='trees,richards');p.add_argument('--levels',default='off,low,medium');p.add_argument('--cpu',default='12');p.add_argument('--profile-label',default='medium');p.add_argument('--backends',default='v2,oracle,native');a=p.parse_args()
     OUT.mkdir(parents=True,exist_ok=True)
     names=a.workloads.split(',')
     if a.action=='build':build(names,a.backends.split(','))
     elif a.action=='check':check(names,a.levels.split(','))
     elif a.action=='reader':reader()
-    elif a.action=='profile':profile(a.cpu)
-    elif a.action=='profile-report':profile_report()
+    elif a.action=='profile':profile(a.cpu,a.profile_label)
+    elif a.action=='profile-report':profile_report(a.profile_label)
     else:bench(names,a.cpu)

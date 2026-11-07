@@ -37,7 +37,7 @@ pub struct Site {
 struct Cache {
     parent: Option<CallPathId>,
     path: CallPathId,
-    slot: usize,
+    slot: *mut AggregateDelta,
 }
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 struct Key {
@@ -50,6 +50,29 @@ type Span = SpanRecord<Snapshot, Snapshot>;
 type Pool = ChunkPool<TimingRecord, Span>;
 thread_local! { static CURRENT: Cell<*mut State> = const { Cell::new(std::ptr::null_mut()) }; }
 
+#[derive(Clone, Copy)]
+enum DeltaClock {
+    Epoch,
+    #[cfg(target_arch = "aarch64")]
+    OrderedCounter,
+    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+    SelfSynchronizedCounter,
+}
+impl DeltaClock {
+    fn for_epoch(clock: &ClockEpoch) -> Self {
+        #[cfg(target_arch = "aarch64")]
+        if clock.metadata().source == btel_clock::Source::SystemCounter {
+            #[cfg(target_os = "linux")]
+            if unsafe { libc::getauxval(libc::AT_HWCAP2) } & (1 << 19) != 0 {
+                return Self::SelfSynchronizedCounter;
+            }
+            return Self::OrderedCounter;
+        }
+        let _ = clock;
+        Self::Epoch
+    }
+}
+
 struct State {
     producer: Producer<TimingRecord, Span>,
     clock: Arc<ClockEpoch>,
@@ -59,11 +82,16 @@ struct State {
     name: Option<btel_records::ThreadName>,
     sites: &'static [Site],
     caches: Vec<Cache>,
-    paths: HashMap<Key, (CallPathId, usize)>,
-    slots: Vec<AggregateDelta>,
+    paths: HashMap<Key, (CallPathId, *mut AggregateDelta)>,
+    histories: Vec<Vec<Cache>>,
+    // Stable addresses let on-stack frames update their slot after nested calls
+    // grow the table. These pointers never address the managed heap.
+    #[allow(clippy::vec_box, reason = "stable addresses held by frames and caches")]
+    slots: Vec<Box<[AggregateDelta; 2]>>,
+    reader: DeltaClock,
     active: CallPathId,
     active_function: Option<usize>,
-    active_slot: usize,
+    active_slot: *mut AggregateDelta,
     next_path: u32,
     gc_function: FunctionId,
     gc_started: Option<ClockInstant>,
@@ -71,6 +99,30 @@ struct State {
     started: ClockInstant,
 }
 impl State {
+    #[inline(always)]
+    fn read(&self) -> ClockInstant {
+        match self.reader {
+            DeltaClock::Epoch => self.clock.read(),
+            #[cfg(target_arch = "aarch64")]
+            DeltaClock::OrderedCounter => {
+                let ticks;
+                unsafe {
+                    std::arch::asm!("isb", "mrs {}, cntvct_el0", out(reg) ticks, options(nostack, preserves_flags));
+                }
+                ClockInstant::from_ticks(ticks)
+            }
+            #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+            DeltaClock::SelfSynchronizedCounter => {
+                let ticks;
+                // FEAT_ECV is checked once. Same count/domain as Quanta's
+                // CNTVCT_EL0, but reads occur in program order without an ISB.
+                unsafe {
+                    std::arch::asm!("mrs {}, S3_3_C14_C0_6", out(reg) ticks, options(nostack, preserves_flags));
+                }
+                ClockInstant::from_ticks(ticks)
+            }
+        }
+    }
     fn span(&mut self, record: Span) {
         if self.producer.span_remaining() < 3 {
             self.producer.seal();
@@ -86,7 +138,7 @@ impl State {
 
     fn flush(&mut self) {
         let mut batch = Vec::new();
-        for slot in &mut self.slots {
+        for slot in self.slots.iter_mut().flat_map(|pair| pair.iter_mut()) {
             if slot.count != 0 {
                 batch.push(*slot);
                 slot.count = 0;
@@ -104,25 +156,43 @@ impl State {
         self.producer.seal();
     }
     #[cold]
-    fn path(&mut self, site: Site) -> (CallPathId, usize) {
+    fn path(&mut self, site_id: usize) -> (CallPathId, *mut AggregateDelta) {
+        // The one-entry cache is checked by the prologue. Alternating parents
+        // reuse this compact site-local history, without hashing an existing edge.
+        if let Some(cache) = self.histories[site_id]
+            .iter()
+            .find(|cache| cache.parent == Some(self.active))
+        {
+            return (cache.path, cache.slot);
+        }
+        let site = self.sites[site_id];
         let key = Key {
             parent: self.active,
             caller: site.caller,
             pc: site.pc,
             callee: site.callee,
         };
-        if let Some(value) = self.paths.get(&key) {
-            return *value;
+        if let Some(&(path, slot)) = self.paths.get(&key) {
+            self.histories[site_id].push(Cache {
+                parent: Some(self.active),
+                path,
+                slot,
+            });
+            return (path, slot);
         }
         self.next_path = self.next_path.checked_add(1).expect("call path exhausted");
         let path = CallPathId::new_non_root(self.next_path).unwrap();
-        let slot = self.slots.len();
-        for reentry in [false, true] {
-            self.slots.push(AggregateDelta {
-                node: CallPathNodeId::new(path, reentry),
-                ..Default::default()
-            });
-        }
+        let mut pair = Box::new([false, true].map(|reentry| AggregateDelta {
+            node: CallPathNodeId::new(path, reentry),
+            ..Default::default()
+        }));
+        let slot = pair.as_mut_ptr();
+        self.slots.push(pair);
+        self.histories[site_id].push(Cache {
+            parent: Some(self.active),
+            path,
+            slot,
+        });
         self.paths.insert(key, (path, slot));
         self.span(SpanRecord::CallPathDefined {
             call_path: path,
@@ -142,8 +212,8 @@ pub struct Frame {
     entered_at: ClockInstant,
     saved_path: CallPathId,
     saved_function: Option<usize>,
-    saved_slot: usize,
-    slot: usize,
+    saved_slot: *mut AggregateDelta,
+    slot: *mut AggregateDelta,
     pub await_duration: AwaitDuration,
     flags: u8,
 }
@@ -164,24 +234,26 @@ pub fn enabled(word: &AtomicU8) -> bool {
 pub unsafe fn enter_observed(site_id: usize) -> Frame {
     let ptr = CURRENT.get();
     let state = unsafe { &mut *ptr };
-    let site = state.sites[site_id];
-    let entered_at = state.clock.read();
+    let site = unsafe { *state.sites.get_unchecked(site_id) };
+    let entered_at = state.read();
     let reentry = site.caller == Some(site.callee) && state.active_function == Some(site.callee);
     let (path, slot) = if reentry {
         // The active node's adjacent slot is its reentry population.
         let base = state.active_slot;
-        (state.active, base + 1)
+        (state.active, unsafe { base.add(1) })
     } else {
-        let cache = state.caches[site_id];
+        let cache = unsafe { *state.caches.get_unchecked(site_id) };
         if cache.parent == Some(state.active) {
             (cache.path, cache.slot)
         } else {
-            let (path, slot) = state.path(site);
-            state.caches[site_id] = Cache {
-                parent: Some(state.active),
-                path,
-                slot,
-            };
+            let (path, slot) = state.path(site_id);
+            unsafe {
+                *state.caches.get_unchecked_mut(site_id) = Cache {
+                    parent: Some(state.active),
+                    path,
+                    slot,
+                };
+            }
             (path, slot)
         }
     };
@@ -196,7 +268,11 @@ pub unsafe fn enter_observed(site_id: usize) -> Frame {
         flags: u8::from(reentry),
     };
     state.active = path;
-    state.active_slot = slot & !1;
+    state.active_slot = if reentry {
+        unsafe { slot.sub(1) }
+    } else {
+        slot
+    };
     state.active_function = Some(site.callee);
     frame
 }
@@ -205,35 +281,69 @@ impl Frame {
     pub fn finish<T>(self, result: &mut R<T>) {
         let state = unsafe { &mut *self.state };
         let (exited_at, outcome) = match result {
-            Ok(_) => (state.clock.read(), InvocationOutcome::Ok),
+            Ok(_) => (state.read(), InvocationOutcome::Ok),
             Err(error) => (
-                *error.telemetry_at.get_or_insert_with(|| state.clock.read()),
+                *error.telemetry_at.get_or_insert_with(|| state.read()),
                 outcome(error),
             ),
         };
-        let sample = AggregateDelta {
-            node: state.slots[self.slot].node,
-            count: 1,
-            total_duration: self.entered_at.elapsed_until(exited_at),
-            total_self_await: self.await_duration,
-            errored: u64::from(outcome.is_error()),
-            cancelled: u64::from(outcome == InvocationOutcome::Cancelled),
-            panicked: u64::from(outcome == InvocationOutcome::Panicked),
-        };
-        debug_assert_eq!(sample.node.is_reentry(), self.flags != 0);
-        if let Some(sum) = state.slots[self.slot].checked_merge(sample) {
-            state.slots[self.slot] = sum;
-        } else {
-            state.producer.write_timing(TimingRecord::AggregateDeltas(
-                vec![state.slots[self.slot]].into_boxed_slice(),
-            ));
-            state.slots[self.slot] = sample;
+        // Only two integer additions on a successful synchronous call. Keep
+        // outcome/await handling and overflow transfer out of the common path.
+        let slot = unsafe { &mut *self.slot };
+        let duration = self.entered_at.elapsed_until(exited_at);
+        debug_assert_eq!(slot.node.is_reentry(), self.flags != 0);
+        if !(outcome == InvocationOutcome::Ok
+            && self.await_duration == AwaitDuration::ZERO
+            && add_ok(slot, duration))
+        {
+            complete_unusual(state, self.slot, duration, self.await_duration, outcome);
         }
         state.active = self.saved_path;
         state.active_function = self.saved_function;
         state.active_slot = self.saved_slot;
     }
 }
+#[inline(always)]
+fn add_ok(slot: &mut AggregateDelta, duration: btel_types::ClockDuration) -> bool {
+    let Some(count) = slot.count.checked_add(1) else {
+        return false;
+    };
+    let Some(ticks) = slot.total_duration.get().checked_add(duration.get()) else {
+        return false;
+    };
+    slot.count = count;
+    slot.total_duration = btel_types::ClockDuration::from_ticks(ticks);
+    true
+}
+
+#[cold]
+fn complete_unusual(
+    state: &mut State,
+    slot: *mut AggregateDelta,
+    duration: btel_types::ClockDuration,
+    await_duration: AwaitDuration,
+    outcome: InvocationOutcome,
+) {
+    let slot = unsafe { &mut *slot };
+    let sample = AggregateDelta {
+        node: slot.node,
+        count: 1,
+        total_duration: duration,
+        total_self_await: await_duration,
+        errored: u64::from(outcome.is_error()),
+        cancelled: u64::from(outcome == InvocationOutcome::Cancelled),
+        panicked: u64::from(outcome == InvocationOutcome::Panicked),
+    };
+    if let Some(sum) = slot.checked_merge(sample) {
+        *slot = sum;
+    } else {
+        state.producer.write_timing(TimingRecord::AggregateDeltas(
+            vec![*slot].into_boxed_slice(),
+        ));
+        *slot = sample;
+    }
+}
+
 fn outcome(error: &Error) -> InvocationOutcome {
     if error.class == "baml.panics.Cancelled" {
         InvocationOutcome::Cancelled
@@ -284,7 +394,7 @@ pub fn collection(event: bex_v2_heap::CollectionEvent) {
     let state = unsafe { &mut *ptr };
     let (live_slots, reclaimed_slots, live_payload_bytes) = match event {
         CollectionEvent::Started => {
-            state.gc_started = Some(state.clock.read());
+            state.gc_started = Some(state.read());
             return;
         }
         CollectionEvent::Completed {
@@ -293,7 +403,7 @@ pub fn collection(event: bex_v2_heap::CollectionEvent) {
             live_payload_bytes,
         } => (live_slots, reclaimed_slots, live_payload_bytes),
     };
-    let completed_at = state.clock.read();
+    let completed_at = state.read();
     let started_at = state.gc_started.take().expect("collection started");
     let mut patch = ContextPatch::default();
     for (key, value) in [("collection_level", "major"), ("trigger", "automatic")] {
@@ -477,7 +587,7 @@ impl Session {
         let clock = session.clocks.start_run();
         session.state = Some(Box::new(State {
             producer: pool.register_producer().unwrap(),
-            clock,
+            clock: clock.clone(),
             functions: ids,
             names,
             words: functions.iter().map(|f| f.word).collect(),
@@ -485,10 +595,12 @@ impl Session {
             sites,
             caches: vec![Cache::default(); sites.len()],
             paths: HashMap::new(),
+            histories: vec![Vec::new(); sites.len()],
+            reader: DeltaClock::for_epoch(&clock),
             slots: Vec::new(),
             active: CallPathId::ROOT,
             active_function: None,
-            active_slot: 0,
+            active_slot: std::ptr::null_mut(),
             next_path: 0,
             gc_function,
             gc_started: None,
@@ -530,10 +642,14 @@ impl Session {
         };
         state.name = state.sites.get(site).map(|s| state.names[s.callee].clone());
         state.clock = self.clocks.start_run();
+        state.reader = DeltaClock::for_epoch(&state.clock);
         state.clock.attach_thread();
         state.thread = allocate_telemetry_id();
-        state.started = state.clock.read();
+        state.started = state.read();
         state.paths.clear();
+        for history in &mut state.histories {
+            history.clear();
+        }
         state.slots.clear();
         state.caches.fill(Cache::default());
         state.producer.write_timing(TimingRecord::ThreadSelected {
@@ -566,7 +682,7 @@ impl Session {
             parent_id: None,
             spawn_call_path: CallPathId::ROOT,
             started_at: state.started,
-            completed_at: state.clock.read(),
+            completed_at: state.read(),
             outcome: result
                 .as_ref()
                 .map_or_else(|e| outcome(e), |_| InvocationOutcome::Ok),
@@ -668,6 +784,25 @@ mod tests {
     ];
 
     #[test]
+    fn successful_slot_add_is_atomic_on_overflow() {
+        use btel_types::ClockDuration;
+        let mut slot = AggregateDelta {
+            count: u64::MAX,
+            ..Default::default()
+        };
+        assert!(!add_ok(&mut slot, ClockDuration::from_ticks(1)));
+        assert_eq!(slot.count, u64::MAX);
+        assert_eq!(slot.total_duration.get(), 0);
+        slot.count = 7;
+        slot.total_duration = ClockDuration::from_ticks(u64::MAX);
+        assert!(!add_ok(&mut slot, ClockDuration::from_ticks(1)));
+        assert_eq!(slot.count, 7);
+        slot.total_duration = ClockDuration::from_ticks(10);
+        assert!(add_ok(&mut slot, ClockDuration::from_ticks(5)));
+        assert_eq!((slot.count, slot.total_duration.get()), (8, 15));
+    }
+
+    #[test]
     fn startup_observation_respects_off_low_and_explicit_policy() {
         use btel_settings::mode::AutoTelemetryLevel::{High, Low, Medium};
         let policy = Policy {
@@ -720,10 +855,12 @@ mod tests {
             sites: SITES,
             caches: vec![Cache::default(); 3],
             paths: HashMap::new(),
+            histories: vec![Vec::new(); SITES.len()],
+            reader: DeltaClock::Epoch,
             slots: Vec::new(),
             active: CallPathId::ROOT,
             active_function: None,
-            active_slot: 0,
+            active_slot: std::ptr::null_mut(),
             next_path: 0,
             gc_function: allocator.allocate().unwrap(),
             gc_started: None,
@@ -744,11 +881,22 @@ mod tests {
         assert_eq!(error.as_ref().unwrap_err().telemetry_at, at);
         assert_eq!(state.paths.len(), 2);
         let path = state.caches[1].path;
+        // Force a cache miss and a slot-table relocation while the root frame
+        // is live. The site history must reuse the old stable slot without hashing.
+        state.caches[1] = Cache::default();
+        state.paths.clear();
+        state.slots.reserve(512);
         before_yield();
-        assert!(state.slots.iter().all(|s| s.count == 0));
+        assert!(
+            state
+                .slots
+                .iter()
+                .flat_map(|p| p.iter())
+                .all(|s| s.count == 0)
+        );
         let child = unsafe { enter(&WORD, 1) }.unwrap();
         assert_eq!(state.active, path);
-        assert_eq!(state.paths.len(), 2);
+        assert!(state.paths.is_empty());
         child.finish(&mut Ok(()));
         root.finish(&mut Ok(()));
         assert_eq!(state.active, CallPathId::ROOT);

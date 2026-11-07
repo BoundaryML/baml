@@ -1,0 +1,17 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 97K of event 'armv8_pmuv3_0/cycles/P'
+# Event count (approx.): 67478358549
+#
+# Overhead  Symbol                                                                                                                                                                                                        IPC   [IPC Coverage]
+# ........  ............................................................................................................................................................................................................  ....................
+#
+    99.72%  [.] baml_rust_program::entry                                                                                                                                                                                  -      -
+
+
+#
+# (Tip: Save output of perf stat using: perf stat record <target workload>)
+#
