@@ -68,6 +68,13 @@ impl Hash for Value {
     }
 }
 
+/// Quote and escape a string slice as an RFC 8259-compliant JSON string literal.
+///
+/// Serializing a string slice with `serde_json::to_string` is infallible.
+fn json_quote(s: &str) -> String {
+    serde_json::to_string(s).expect("serializing a str to JSON cannot fail")
+}
+
 impl Value {
     pub(super) fn simplify(self, is_done: bool) -> Self {
         match self {
@@ -146,6 +153,7 @@ impl Value {
         }
     }
 
+    /// Returns the completion state of this value.
     pub fn completion_state(&self) -> &CompletionState {
         match self {
             Value::String(_, s) => s,
@@ -169,6 +177,7 @@ impl Value {
         }
     }
 
+    /// Recursively marks this value and all nested children as complete.
     pub fn complete_deeply(&mut self) {
         match self {
             Value::String(_, s) => *s = CompletionState::Complete,
@@ -188,6 +197,53 @@ impl Value {
                 val.complete_deeply();
             }
             Value::AnyOf(choices, _) => choices.iter_mut().for_each(|v| v.complete_deeply()),
+        }
+    }
+
+    /// Format the Value as a valid, standard JSON string representation.
+    ///
+    /// Unlike `std::fmt::Display`, which formats objects as `{key: val}` without quotes,
+    /// this properly quotes keys and strings so the resulting string can be parsed as JSON
+    /// by downstream deserializers (such as Python's `json.loads` or TypeScript's `JSON.parse`).
+    pub fn to_json_string(&self) -> String {
+        match self {
+            Value::String(s, _) => json_quote(s),
+            Value::Number(n, _) => n.to_string(),
+            Value::Boolean(b) => b.to_string(),
+            Value::Null => "null".to_string(),
+            Value::Object(o, _) => {
+                let mut buf = String::from("{");
+                for (i, (k, v)) in o.iter().enumerate() {
+                    if i > 0 {
+                        buf.push_str(", ");
+                    }
+                    buf.push_str(&json_quote(k));
+                    buf.push_str(": ");
+                    buf.push_str(&v.to_json_string());
+                }
+                buf.push('}');
+                buf
+            }
+            Value::Array(a, _) => {
+                let mut buf = String::from("[");
+                for (i, v) in a.iter().enumerate() {
+                    if i > 0 {
+                        buf.push_str(", ");
+                    }
+                    buf.push_str(&v.to_json_string());
+                }
+                buf.push(']');
+                buf
+            }
+            Value::Markdown(_, v, _) => v.to_json_string(),
+            Value::FixedJson(v, _) => v.to_json_string(),
+            Value::AnyOf(items, raw) => {
+                if let Some(first) = items.first() {
+                    first.to_json_string()
+                } else {
+                    json_quote(raw)
+                }
+            }
         }
     }
 }

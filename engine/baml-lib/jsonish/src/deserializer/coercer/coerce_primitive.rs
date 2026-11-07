@@ -129,6 +129,11 @@ fn coerce_null(
     }
 }
 
+/// Coerces an AST `Value` into a `BamlValueWithFlags::String`.
+///
+/// When an AST `Value::Object` or `Value::Array` is encountered under a `string` target,
+/// it is serialized into an RFC 8259-compliant JSON string via `Value::to_json_string`
+/// and marked with `Flag::JsonToString`.
 fn coerce_string(
     ctx: &ParsingContext,
     target: &TypeIR,
@@ -177,7 +182,7 @@ fn coerce_string(
             Ok(baml_value)
         }
         v => Ok(BamlValueWithFlags::String(
-            (v.to_string(), target, Flag::JsonToString(v.clone())).into(),
+            (v.to_json_string(), target, Flag::JsonToString(v.clone())).into(),
         )),
     }
 }
