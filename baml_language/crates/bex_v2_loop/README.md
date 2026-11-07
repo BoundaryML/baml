@@ -36,4 +36,4 @@ cargo run -p bex_v2_loop --release --example profile
 ```
 
 `instrument` enables scheduler counters for separate measurement runs.
-See `architecture/runtime-v2/{INTERFACES,CONTRACTS,PHASE1-REPORT}.md`.
+Design notes and results are in the runtime v2 PR description (#5566).

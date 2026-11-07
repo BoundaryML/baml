@@ -36,6 +36,5 @@ BAML_RUST_DIFF_PROBES='programs::richards 50,memory::binary trees 14,programs::a
 ```
 
 Use packed workload binaries with `--jobs`/`--warmup` for benchmarks; pin a CPU
-and interleave variants. See `architecture/runtime-v2/PHASE1-REPORT.md` for
-results, reproduction scope and open items, and `INTERFACES.md` / `CONTRACTS.md`
-for ownership and runtime contracts.
+and interleave variants. Results and runtime contracts are in the runtime v2 PR
+description (#5566).

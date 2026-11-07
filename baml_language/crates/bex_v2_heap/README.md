@@ -30,4 +30,4 @@ cargo run -p bex_v2_heap --release --example bench
 
 The fiber test keeps eight objects alive across ten parked-stack collections.
 The benchmark uses precise roots to isolate allocation and tracing costs.
-See `architecture/runtime-v2/{INTERFACES,CONTRACTS,PHASE1-REPORT}.md`.
+Design notes and results are in the runtime v2 PR description (#5566).
