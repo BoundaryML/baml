@@ -395,12 +395,12 @@ module.exports = grammar({
         optional(','),
       ),
 
-    // `prompt #"..."#` | `prompt: #"..."#,`
+    // `prompt #"..."#` | `prompt: #"..."#,` | `prompt: "..."` | `prompt: `...``
     prompt_field: ($) =>
       seq(
         alias('prompt', $.property_identifier),
         optional(':'),
-        field('value', $.raw_string),
+        field('value', choice($.raw_string, $.string, $.backtick_string)),
         optional(','),
       ),
 
@@ -494,12 +494,14 @@ module.exports = grammar({
     // template_string
     // ==========================================================================
 
+    // `template_string X #"..."#` | `template_string X "..."`
+    // | `template_string X `...``
     template_string_declaration: ($) =>
       seq(
         'template_string',
         field('name', $.identifier),
         optional(field('parameters', $.parameter_list)),
-        field('body', $.raw_string),
+        field('body', choice($.raw_string, $.string, $.backtick_string)),
       ),
 
     // ==========================================================================
