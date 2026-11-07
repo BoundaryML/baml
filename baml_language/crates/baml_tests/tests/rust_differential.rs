@@ -118,15 +118,18 @@ const PROBES: &[&str] = &[
     "GlobalCallPending",
 ];
 
-/// A backend owns its artifact builder and run environment. Add runtime v2
-/// here with its builder; comparison/reference selection needs no changes.
+/// A backend owns its artifact builder and run environment.
+/// Shared artifact keys build once; rejected artifacts retain their diagnostics.
 struct Backend {
     name: &'static str,
     build: fn(&Path, &Path, &Path, Option<&str>) -> Artifacts,
     artifact_key: &'static str,
     env: &'static [(&'static str, &'static str)],
 }
-type Artifacts = std::collections::BTreeMap<String, std::path::PathBuf>;
+type Artifacts = std::collections::BTreeMap<String, Result<std::path::PathBuf, v2::Rejection>>;
+
+#[path = "../rust_diff/v2.rs"]
+mod v2;
 const BACKENDS: &[Backend] = &[
     Backend {
         name: "bytecode",
@@ -161,6 +164,18 @@ const BACKENDS: &[Backend] = &[
             ("BAML_GC_STRESS", "1"),
             ("BAML_COMPILED_FRAMES", "1"),
         ],
+    },
+    Backend {
+        name: "v2",
+        build: v2::build,
+        artifact_key: "v2",
+        env: &[],
+    },
+    Backend {
+        name: "v2-gc-stress",
+        build: v2::build,
+        artifact_key: "v2",
+        env: &[("BAML_GC_STRESS", "1")],
     },
 ];
 const LEVELS: &[&str] = &["off", "low", "medium", "high", "default"];
@@ -260,7 +275,7 @@ fn probe_timeout_kills_and_reaps() {
 
 fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
     std::fs::create_dir_all(build).unwrap();
-    let mut artifacts = Artifacts::new();
+    let mut artifacts = std::collections::BTreeMap::new();
     if PROBES
         .iter()
         .any(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
@@ -332,6 +347,9 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         artifacts.insert(fixture.name, executable);
     }
     artifacts
+        .into_iter()
+        .map(|(name, path)| (name, Ok(path)))
+        .collect()
 }
 
 fn pack<'a>(
@@ -341,6 +359,21 @@ fn pack<'a>(
     executable: &Path,
     functions: impl IntoIterator<Item = &'a str>,
 ) {
+    pack_result(build, workspace, source, executable, functions, false).expect("pack must succeed");
+}
+
+fn pack_result<'a>(
+    build: &Path,
+    workspace: &Path,
+    source: &Path,
+    executable: &Path,
+    functions: impl IntoIterator<Item = &'a str>,
+    v2: bool,
+) -> Result<(), String> {
+    // Never accept an executable left over from a previous successful pack.
+    if executable.exists() {
+        std::fs::remove_file(executable).map_err(|e| e.to_string())?;
+    }
     let mut argv: Vec<String> = [
         "baml",
         "--agent-skill-check",
@@ -368,10 +401,23 @@ fn pack<'a>(
         if !seen.insert(function) {
             continue;
         }
-        argv.extend(["--function".into(), function.into()]);
+        if v2 {
+            argv.push(function.into());
+        } else {
+            argv.extend(["--function".into(), function.into()]);
+        }
     }
-    let result = baml_cli::run_cli(argv).expect("pack must succeed");
-    assert!(matches!(result, baml_cli::ExitCode::Success), "{result:?}");
+    if v2 {
+        argv.extend(["--runtime".into(), "v2".into()]);
+    }
+    let result = baml_cli::run_cli(argv).map_err(|error| format!("{error:#}"))?;
+    if !matches!(result, baml_cli::ExitCode::Success) {
+        return Err(format!("pack exited {result:?}"));
+    }
+    if !executable.is_file() {
+        return Err("pack succeeded without an executable".into());
+    }
+    Ok(())
 }
 
 #[test]
@@ -431,8 +477,10 @@ fn rust_differential() {
             .is_none_or(|s| s.split(',').any(|p| p == probe))
     });
     assert!(!probes.is_empty(), "no probes selected");
-    let mut failures = Vec::new();
+    let mut coverage = v2::Coverage::new(&artifacts["v2"]);
+    let mut failures = coverage.build_failures();
     for probe in probes {
+        let failures_before = failures.len();
         for level in LEVELS {
             if (probe.contains("::") && matches!(*level, "default" | "low"))
                 || (*level == "default"
@@ -443,6 +491,13 @@ fn rust_differential() {
             let mut outputs = Vec::new();
             let mut traces = Vec::new();
             for backend in BACKENDS {
+                if backend.artifact_key == "v2"
+                    && (!v2::supports_level(level) || artifacts["v2"][&probe].is_err())
+                {
+                    outputs.push(None);
+                    traces.push(String::new());
+                    continue;
+                }
                 // Stress switches target the old compiled implementation. KPI
                 // programs run each actual backend, with one full job per level.
                 if ((probe.contains("::") || *level == "low")
@@ -459,8 +514,11 @@ fn rust_differential() {
                 }
                 let mode = format!("{}-telemetry-{level}", backend.name);
                 let home = tempfile::tempdir_in(&build).unwrap();
-                let mut command = Command::new(&artifacts[backend.artifact_key][&probe]);
-                if probe.contains("::") {
+                let mut command =
+                    Command::new(artifacts[backend.artifact_key][&probe].as_ref().unwrap());
+                if backend.artifact_key == "v2" {
+                    // V2 packs have one entry, not a subcommand dispatcher.
+                } else if probe.contains("::") {
                     command.arg("main");
                 } else if !initializer_probes::collects_tests(&probe) {
                     command.arg(&probe);
@@ -485,6 +543,9 @@ fn rust_differential() {
                     Ok(output) => {
                         eprintln!("{probe}/{mode}: {} ({:?})", output.status, start.elapsed());
                         let stderr = String::from_utf8_lossy(&output.stderr);
+                        if backend.artifact_key == "v2" && output.status.code().is_none() {
+                            failures.push(format!("{probe}/{mode}: terminated by signal"));
+                        }
                         if stderr.contains("panicked at") {
                             failures.push(format!("{probe}/{mode}: Rust panic: {stderr}"));
                         }
@@ -506,14 +567,27 @@ fn rust_differential() {
                 let reader_output = run_probe(
                     Command::new(&reader).arg(home.path()).arg(&normalized),
                     timeout * 3,
-                )
-                .unwrap_or_else(|error| panic!("{probe}/{mode}: telemetry reader: {error}"));
-                assert!(
-                    reader_output.status.success(),
-                    "{probe}/{mode}: telemetry reader: {}",
-                    String::from_utf8_lossy(&reader_output.stderr)
                 );
-                let trace = std::fs::read_to_string(normalized).unwrap();
+                let trace = match reader_output {
+                    Ok(reader_output) if reader_output.status.success() => {
+                        std::fs::read_to_string(normalized).map_err(|error| error.to_string())
+                    }
+                    Ok(reader_output) => Err(format!(
+                        "{}: {}",
+                        reader_output.status,
+                        String::from_utf8_lossy(&reader_output.stderr)
+                    )),
+                    Err(error) => Err(error),
+                };
+                let trace = match trace {
+                    Ok(trace) => trace,
+                    Err(error) => {
+                        failures.push(format!("{probe}/{mode}: telemetry reader: {error}"));
+                        outputs.push(output.ok());
+                        traces.push(String::new());
+                        continue;
+                    }
+                };
                 if *level == "off" && !trace.is_empty() {
                     failures.push(format!(
                         "{probe}/{mode}: off unexpectedly produced telemetry"
@@ -536,7 +610,8 @@ fn rust_differential() {
                 traces.push(trace);
                 outputs.push(output.ok());
             }
-            initializer_probes::assert_outputs(&probe, &outputs);
+            // Assert the oracle contract; every other backend must match it exactly.
+            initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
             for (index, backend) in BACKENDS.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;
@@ -564,6 +639,13 @@ fn rust_differential() {
                     ));
                 }
                 if traces[reference] != traces[index] {
+                    if backend.artifact_key == "v2" {
+                        failures.push(format!(
+                            "{probe}/{mode}: telemetry mismatch\n{}",
+                            diff(&traces[reference], &traces[index], &mode)
+                        ));
+                        continue;
+                    }
                     if let Some(reason) =
                         known_telemetry_divergences::fixture_exception(&probe, level, backend.name)
                     {
@@ -646,7 +728,9 @@ fn rust_differential() {
                 }
             }
         }
+        coverage.record(&probe, &failures[failures_before..]);
     }
+    coverage.write(&build);
     for failure in &failures {
         eprintln!("{failure}");
     }

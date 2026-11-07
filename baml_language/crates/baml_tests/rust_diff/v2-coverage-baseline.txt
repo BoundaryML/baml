@@ -1,0 +1,152 @@
+Runtime v2 coverage (normal AND GC stress): 10 pass, 125 unsupported, 0 fail
+Telemetry off: required
+Telemetry low/medium/high/default: not yet supported
+
+First unsupported constructs (fixtures blocked):
+103	top-level initializers
+10	list element
+4	list field element
+2	growing list builtin receiver
+1	JSON field union
+1	baml.String.split
+1	field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
+1	generic interface implementation
+1	generic user call
+1	terminator Some(Switch { discriminant: Copy(Local(Local(2))), arms: [(Int(1), BlockId(3)), (Int(0), BlockId(2))], otherwise: BlockId(1), exhaustive: true, arm_names: [(Int(1), "Naming.Aliased"), (Int(0), "Naming.Declared")] })
+
+Per probe / KPI workload:
+Allocation	unsupported: top-level initializers
+AnyWithFailure	unsupported: top-level initializers
+ArrayWalk	unsupported: top-level initializers
+Async	unsupported: top-level initializers
+AwaitChain	unsupported: top-level initializers
+AwaitErrors	unsupported: top-level initializers
+BoundTypes	unsupported: top-level initializers
+CallbackDepth	unsupported: top-level initializers
+CancelDeep	unsupported: top-level initializers
+CancelDuringUnwind	unsupported: top-level initializers
+Cancellation	unsupported: top-level initializers
+CatchAllThrownPanic	unsupported: top-level initializers
+CatchAllocation	unsupported: top-level initializers
+CatchBindChain	unsupported: top-level initializers
+CatchBindJumpTable	unsupported: top-level initializers
+CatchMixedUnion	unsupported: top-level initializers
+CatchNonstreamCancellation	unsupported: top-level initializers
+CatchOrPanics	unsupported: top-level initializers
+CatchStreamingCancellation	unsupported: top-level initializers
+CatchUnmatchedChain	unsupported: top-level initializers
+CatchWildcardDivision	unsupported: top-level initializers
+CatchWildcardIndex	unsupported: top-level initializers
+CatchWildcardReassigned	unsupported: top-level initializers
+CatchWildcardThenBoundary	unsupported: top-level initializers
+CatchWildcardThrownPanic	unsupported: top-level initializers
+CauseChains	unsupported: top-level initializers
+Closures	unsupported: top-level initializers
+Containers	unsupported: top-level initializers
+Contexts	unsupported: top-level initializers
+DeepErrors	unsupported: top-level initializers
+DeepUncaught	unsupported: top-level initializers
+DeferUnwind	unsupported: top-level initializers
+DeferUnwindUncaught	unsupported: top-level initializers
+Depth	unsupported: top-level initializers
+Equality	unsupported: top-level initializers
+EscapeAwaitResult	unsupported: top-level initializers
+EscapeAwaitShared	unsupported: top-level initializers
+EscapeCaptureAlias	unsupported: top-level initializers
+EscapeClosure	unsupported: top-level initializers
+EscapeField	unsupported: top-level initializers
+EscapeFinalizer	unsupported: top-level initializers
+EscapeGlobal	unsupported: top-level initializers
+EscapeInsert	unsupported: top-level initializers
+EscapeInsertContents	unsupported: top-level initializers
+EscapeIterator	unsupported: top-level initializers
+EscapeMap	unsupported: top-level initializers
+EscapeMapSetContents	unsupported: top-level initializers
+EscapeMapValue	unsupported: top-level initializers
+EscapeMaskClosure	unsupported: top-level initializers
+EscapeMaskMixed	unsupported: top-level initializers
+EscapeOrderedReturn	unsupported: top-level initializers
+EscapeOrderedSpawn	unsupported: top-level initializers
+EscapePublishedField	unsupported: top-level initializers
+EscapePushContents	unsupported: top-level initializers
+EscapeRecursive	unsupported: top-level initializers
+EscapeReturnedAlias	unsupported: top-level initializers
+EscapeSessionHandoff	unsupported: top-level initializers
+EscapeSpawn	unsupported: top-level initializers
+EscapeSpawnInCallee	unsupported: top-level initializers
+EscapeStoredDeep	unsupported: top-level initializers
+EscapeThrowCaught	unsupported: top-level initializers
+EscapeUnshiftContents	unsupported: top-level initializers
+FrameLimit	unsupported: top-level initializers
+GenericChains	unsupported: top-level initializers
+GenericClosures	unsupported: top-level initializers
+GlobalCallPending	unsupported: top-level initializers
+GlobalCalls	unsupported: top-level initializers
+Hidden	unsupported: top-level initializers
+Hooked	unsupported: top-level initializers
+HookedDeep	unsupported: top-level initializers
+InitializerClosures	unsupported: top-level initializers
+InitializerErrors	unsupported: top-level initializers
+InitializerPanic	unsupported: top-level initializers
+InitializerPending	unsupported: top-level initializers
+InitializerTestErrors	unsupported: top-level initializers
+InitializerTests	unsupported: top-level initializers
+InitializerUncaught	unsupported: top-level initializers
+Initializers	unsupported: top-level initializers
+InterfaceErrors	unsupported: top-level initializers
+Interfaces	unsupported: top-level initializers
+IteratorInterfaceIdentity	unsupported: top-level initializers
+Iterators	unsupported: top-level initializers
+Logs	unsupported: top-level initializers
+LogsDeep	unsupported: top-level initializers
+ManualSpan	unsupported: top-level initializers
+NoLeaks	unsupported: top-level initializers
+Overflow	unsupported: top-level initializers
+RecursiveCancellation	unsupported: top-level initializers
+RuntimeClass	unsupported: top-level initializers
+Scalars	unsupported: top-level initializers
+Shapes	unsupported: top-level initializers
+Shielded	unsupported: top-level initializers
+SpawnChains	unsupported: top-level initializers
+SpawnPanicCaught	unsupported: top-level initializers
+SpawnPanicDetached	unsupported: top-level initializers
+SpawnPanicUncaught	unsupported: top-level initializers
+SpawnThrowUncaught	unsupported: top-level initializers
+SpawnedClosures	unsupported: top-level initializers
+Spawns	unsupported: top-level initializers
+TaskOverflow	unsupported: top-level initializers
+ThreadLocalParallel	unsupported: top-level initializers
+TimeoutCancellation	unsupported: top-level initializers
+Uncaught	unsupported: top-level initializers
+classes::method call 100k	pass
+compute::array build sum 100k	unsupported: growing list builtin receiver
+compute::array traversal 8k	unsupported: growing list builtin receiver
+compute::fib32 recursive	pass
+compute::generate sort 8k	unsupported: generic interface implementation
+compute::json aggregate 2k	unsupported: list element
+compute::json hello	unsupported: terminator Some(Switch { discriminant: Copy(Local(Local(2))), arms: [(Int(1), BlockId(3)), (Int(0), BlockId(2))], otherwise: BlockId(1), exhaustive: true, arm_names: [(Int(1), "Naming.Aliased"), (Int(0), "Naming.Declared")] })
+compute::json ndjson events	unsupported: JSON field union
+compute::json request body	unsupported: list field element
+compute::json tree path	unsupported: field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
+compute::k-nucleotide 25k	unsupported: generic user call
+compute::merge sort 20k	unsupported: list element
+compute::nbody 20k	unsupported: list element
+compute::nested loops 500x500	pass
+compute::pure call 1m	pass
+compute::quick sort 3-way 1k	unsupported: list element
+interfaces::polymorphic dispatch 100k	pass
+memory::allocation high retention	unsupported: list element
+memory::allocation low retention	unsupported: list element
+memory::binary trees 14	pass
+memory::cycles into live	unsupported: list element
+memory::cyclic churn	unsupported: list field element
+memory::heap calls	unsupported: list element
+memory::live heap	unsupported: list element
+memory::live walk	unsupported: list field element
+memory::splay 2k	unsupported: list element
+process::startup	pass
+programs::agent loop 300	pass
+programs::json parser 15	unsupported: list field element
+programs::richards 50	pass
+string::concat loop 10k	pass
+string::split medium literal 10k	unsupported: baml.String.split
