@@ -463,7 +463,12 @@ fn literal_holds(literal: &baml_base::Literal) -> TokenStream {
         }
         baml_base::Literal::Float(expected) => {
             let expected = expected.parse::<f64>().unwrap_or(f64::NAN);
-            quote! { __tag.as_f64() == ::std::option::Option::Some(#expected) }
+            // As the engine compares a float literal.
+            quote! {
+                __tag
+                    .as_f64()
+                    .is_some_and(|tag| (tag - #expected).abs() < ::core::primitive::f64::EPSILON)
+            }
         }
         baml_base::Literal::Bigint(_) => quote! { false },
     }

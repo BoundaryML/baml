@@ -221,7 +221,11 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 26: appended `ConcatStrings` to the instruction/opcode sets, which
 /// joins a chain of string `+` in one step.
-pub const FORMAT_VERSION: u32 = 26;
+///
+/// Version 27: a `Class` and each of its fields carry `redact`, whether
+/// telemetry records a redaction in place of the value (`@@trace.redact`,
+/// `@trace.redact`).
+pub const FORMAT_VERSION: u32 = 27;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

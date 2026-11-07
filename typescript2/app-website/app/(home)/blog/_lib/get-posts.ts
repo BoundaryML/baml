@@ -28,6 +28,8 @@ export interface Post {
   featured?: boolean;
   /** Outdated: kept at its URL but left off the index, the feed, and "Read next". */
   archived?: boolean;
+  /** Puts a link to the quickstart under the post's description, for posts that teach BAML. */
+  quickstart?: boolean;
   readingTime?: string;
   firstImage?: string | null;
 }

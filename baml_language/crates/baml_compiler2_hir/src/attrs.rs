@@ -208,6 +208,7 @@ impl AttributeCarrier for ClassFieldAttrs {
             ("json.rename", AttributeValue::Text(key)) => self.json_rename = Some(key),
             ("json.flatten", AttributeValue::Flag) => self.json_flatten = true,
             ("json.fallback", AttributeValue::Flag) => self.json_fallback = true,
+            ("trace.redact", AttributeValue::Flag) => self.redact = true,
             _ => drift(spec, Self::POSITION),
         }
     }
@@ -238,6 +239,7 @@ impl AttributeCarrier for ClassAttrs {
         match (spec.name, value) {
             ("stream.done", AttributeValue::Flag) => self.stream_done = true,
             ("json.omit_nulls", AttributeValue::Flag) => self.json_omit_nulls = true,
+            ("trace.redact", AttributeValue::Flag) => self.redact = true,
             _ => drift(spec, Self::POSITION),
         }
     }

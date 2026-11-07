@@ -194,6 +194,21 @@ json.omit_nulls:
   details: |
     Reading doesn't change: a missing optional field reads as `null`. It applies to the class's own fields, not to nested classes. A field is optional when its declared type has a `null` arm. A `json` field keeps its `null`, because there `null` is a value.
 
+trace.redact:
+  summary: "Keeps a class field's value, or every instance of a class, out of telemetry recordings. Takes no arguments."
+  syntax: |
+    class Account {
+        name: string,
+        api_key: string @trace.redact,
+    }
+
+    class Credentials {
+        token: string,
+        @@trace.redact
+    }
+  details: |
+    A recording keeps a marker saying the value was redacted in its place, wherever the value is captured: a function's inputs or output, a thrown error, or `log.*` data. `@trace.redact` applies to a class field, and `@@trace.redact` to a class, whose every instance is withheld whole, fields and all. Only recordings change: the program reads, prints and serializes the value as before. A value copied out of a redacted field into a plain string or another field is recorded as that copy. Takes no arguments, at most once per declaration.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |

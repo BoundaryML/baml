@@ -172,6 +172,15 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         repeatable: false,
         positions: &[AttributePosition::Class],
     },
+    // Telemetry records a redaction marker in place of the value: a field's
+    // `@trace.redact` withholds that field, a class's `@@trace.redact` every
+    // instance of the class whole.
+    SchemaAttributeSpec {
+        name: "trace.redact",
+        arguments: SchemaAttributeArguments::None,
+        repeatable: false,
+        positions: &[AttributePosition::ClassField, AttributePosition::Class],
+    },
 ];
 
 pub fn schema_attribute_spec(name: &str) -> Option<&'static SchemaAttributeSpec> {
@@ -267,7 +276,8 @@ mod tests {
                 "stream.must_exist",
                 "json.rename",
                 "json.flatten",
-                "json.fallback"
+                "json.fallback",
+                "trace.redact"
             ]
         );
         assert_eq!(
@@ -276,7 +286,13 @@ mod tests {
         );
         assert_eq!(
             names_at(AttributePosition::Class),
-            ["description", "alias", "stream.done", "json.omit_nulls"]
+            [
+                "description",
+                "alias",
+                "stream.done",
+                "json.omit_nulls",
+                "trace.redact"
+            ]
         );
         assert_eq!(names_at(AttributePosition::Enum), ["description", "alias"]);
         assert!(names_at(AttributePosition::Interface).is_empty());

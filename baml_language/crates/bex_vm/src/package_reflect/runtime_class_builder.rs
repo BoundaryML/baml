@@ -81,6 +81,8 @@ struct BuilderField {
     skip: bool,
     /// The `@json` attributes, which only `fields_from` sets too.
     json: JsonAttrs,
+    /// `@trace.redact`, set the same way: a copied field stays redacted.
+    redact: bool,
 }
 
 /// A field's `@json` attributes, as a class declares them.
@@ -161,6 +163,7 @@ struct PreparedField {
     other: IndexMap<String, String>,
     skip: bool,
     json: JsonAttrs,
+    redact: bool,
 }
 
 type PreparedGroup = IndexMap<u64, Vec<PreparedField>>;
@@ -440,6 +443,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
             root_index,
             skip: false,
             json: JsonAttrs::default(),
+            redact: false,
         });
 
         for target in pending_builders {
@@ -510,6 +514,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
                     fallback: field.json_fallback,
                     omit_null: field.json_omit_null,
                 },
+                redact: field.redact,
             });
             roots.push(root);
         }
@@ -715,6 +720,7 @@ fn prepare_group(
                             other: meta.other,
                             skip: field.skip,
                             json: field.json.clone(),
+                            redact: field.redact,
                         }
                     }
                     Err(message) => {
@@ -739,6 +745,7 @@ fn prepare_group(
                         other,
                         skip: field.skip,
                         json: field.json.clone(),
+                        redact: field.redact,
                     },
                     Err(message) => {
                         diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
@@ -981,6 +988,7 @@ fn build_group(
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(ptr, type_tag),
@@ -1052,6 +1060,7 @@ fn build_group(
                 json_fallback: field.json.fallback,
                 json_omit_null: field.json.omit_null,
                 runtime_type: Some(type_value),
+                redact: field.redact,
             });
         }
         let plan = &plans[&node.id];

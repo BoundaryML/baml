@@ -169,6 +169,7 @@ mod tests {
             json_flatten: false,
             json_rename: None,
             json_omit_null: false,
+            redact: false,
         }
     }
 
@@ -204,6 +205,7 @@ mod tests {
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         };
 
         let definition = class_definition(&class);

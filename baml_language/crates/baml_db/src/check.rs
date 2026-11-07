@@ -722,7 +722,7 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                 &data.name,
             );
             errors.extend(baml_compiler2_hir_ty::json_attrs::class_errors(
-                db, class_loc, &head, &overrides,
+                db, class_loc, &head, overrides,
             ));
             let source_map = baml_compiler2_hir::item_data::class_source_map(db, class_loc);
             let fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
@@ -743,12 +743,15 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                 .variants
                 .iter()
                 .any(|variant| variant.attrs.json_rename.is_some());
-            if renames && let Some(interface) = overrides.get(&head) {
+            if renames
+                && let Some(interface) =
+                    baml_compiler2_hir_ty::json_attrs::override_of(overrides, &head)
+            {
                 errors.push((
                     baml_compiler2_hir::item_data::enum_source_map(db, enum_loc).name_span,
                     TirTypeError::JsonAttributesWithOverride {
                         name: data.name.clone(),
-                        interface,
+                        interface: interface.to_string(),
                     },
                 ));
             }

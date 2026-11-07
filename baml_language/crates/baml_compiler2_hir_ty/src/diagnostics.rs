@@ -1129,7 +1129,7 @@ pub enum TirTypeError {
     LlmOutputFieldAlwaysNull { field: Name },
     /// `@json` attributes on a class that provides `baml.ToJson` or
     /// `baml.FromJson`, which they would not reach.
-    JsonAttributesWithOverride { name: Name, interface: &'static str },
+    JsonAttributesWithOverride { name: Name, interface: String },
     /// `@json.flatten` or `@json.fallback` on a field that is not
     /// `map<string, json>`.
     JsonRestFieldType {

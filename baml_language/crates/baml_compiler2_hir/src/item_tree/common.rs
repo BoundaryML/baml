@@ -22,6 +22,10 @@ pub struct SchemaAttrs {
 // Each bool is one flag attribute.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one independent flag per attribute the source can write; no combination is invalid"
+)]
 pub struct ClassFieldAttrs {
     pub schema: SchemaAttrs,
     /// `@skip`: left out of the schema and never parsed.
@@ -39,6 +43,9 @@ pub struct ClassFieldAttrs {
     /// `@json.fallback`: the field holds the whole object, and its class is
     /// the member of a union no other member's literals match.
     pub json_fallback: bool,
+    /// `@trace.redact`: telemetry records a redaction in place of the field's
+    /// value.
+    pub redact: bool,
 }
 
 /// The attributes an enum variant can carry.
@@ -61,6 +68,9 @@ pub struct ClassAttrs {
     /// `@@json.omit_nulls`: the class's optional fields holding `null` are not
     /// written. A `json` field keeps its `null`.
     pub json_omit_nulls: bool,
+    /// `@@trace.redact`: telemetry records a redaction in place of every
+    /// instance of the class.
+    pub redact: bool,
 }
 
 /// The `@@` attributes an enum can carry.

@@ -495,3 +495,38 @@ fn frozen_v6_redactions_decode_with_verified_content_ids() {
         ]
     );
 }
+
+/// The writer's redacted value is the frozen one: a declared redaction as a
+/// value root writes the fixture's first blob byte for byte, ID included, and
+/// one among arguments decodes back as itself.
+#[test]
+fn the_writer_writes_redactions_as_frozen() {
+    use btel_snapshot::{DecodedRoot, DecodedValue, Redaction, RedactionReason};
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let declared = V::Redacted(RedactionReason::Declared);
+    let builder = pool.try_acquire().unwrap();
+    let value = builder.finish(declared, &mut Shaper::default());
+    assert_eq!(root_blob(&value), redacted_v6_blobs()[0]);
+
+    let mut builder = pool.try_acquire().unwrap();
+    let arguments = builder.arguments(0..2, |_, slot| match slot {
+        0 => declared,
+        _ => V::Int(7),
+    });
+    let arguments = builder.finish(arguments, &mut Shaper::default());
+    let decoded = btel_snapshot::decode_blob(
+        &root_blob(&arguments),
+        &btel_snapshot::DecodeLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        decoded.root,
+        DecodedRoot::FunctionArgs {
+            parameter_count: 2,
+            slots: vec![
+                DecodedValue::Redacted(Redaction::Declared),
+                DecodedValue::Int(7)
+            ],
+        }
+    );
+}

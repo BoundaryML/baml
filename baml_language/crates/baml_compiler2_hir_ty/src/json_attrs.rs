@@ -14,20 +14,20 @@ use baml_type::{
     DeclName, StructuralInterface, Ty,
     json_tags::{Untagged, tag_tree},
 };
-use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
 use crate::diagnostics::TirTypeError;
 
-/// The interface each class or enum in `package` overrides, by its name:
-/// `baml.ToJson` or `baml.FromJson`, when an impl provides the method, for any
-/// instantiation. An impl's own package holds it, since the type's package or
-/// the interface's has to.
+/// The interface each class or enum in `package` overrides, by its name and
+/// sorted by it: `baml.ToJson` or `baml.FromJson`, when an impl provides the
+/// method, for any instantiation. An impl's own package holds it, since the
+/// type's package or the interface's has to.
+#[salsa::tracked(returns(ref))]
 pub fn json_overrides(
     db: &dyn baml_compiler2_hir::Db,
     package: SourceRoot,
-) -> FxHashMap<DeclName, &'static str> {
-    let mut overrides = FxHashMap::default();
+) -> Vec<(DeclName, &'static str)> {
+    let mut overrides = Vec::new();
     for &block in crate::impls::package_impl_locs(db, package) {
         let Some(facts) = crate::impls::impl_facts(db, block).resolved() else {
             continue;
@@ -48,10 +48,23 @@ pub fn json_overrides(
             continue;
         }
         if let Ty::Class(head, _) | Ty::Enum(head) = facts.for_ty_pattern.to_plain() {
-            overrides.insert(head, interface);
+            overrides.push((head, interface));
         }
     }
+    overrides.sort();
     overrides
+}
+
+/// The interface `head` overrides, in [`json_overrides`]' list.
+pub fn override_of<'a>(
+    overrides: &'a [(DeclName, &'static str)],
+    head: &DeclName,
+) -> Option<&'a str> {
+    let at = overrides.partition_point(|(name, _)| name < head);
+    overrides
+        .get(at)
+        .filter(|(name, _)| name == head)
+        .map(|(_, interface)| *interface)
 }
 
 /// The compile errors of `class`'s own `@json` attributes, at the field or
@@ -60,7 +73,7 @@ pub fn class_errors<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     class: ClassLoc<'db>,
     head: &DeclName,
-    overrides: &FxHashMap<DeclName, &'static str>,
+    overrides: &[(DeclName, &'static str)],
 ) -> Vec<(TextRange, TirTypeError)> {
     let data = baml_compiler2_hir::item_data::class_data(db, class);
     let source_map = baml_compiler2_hir::item_data::class_source_map(db, class);
@@ -149,12 +162,12 @@ pub fn class_errors<'db>(
         || fields.iter().any(|(_, _, attrs)| {
             attrs.json_rename.is_some() || attrs.json_flatten || attrs.json_fallback
         });
-    if uses_attributes && let Some(interface) = overrides.get(head) {
+    if uses_attributes && let Some(interface) = override_of(overrides, head) {
         errors.push((
             source_map.name_span,
             TirTypeError::JsonAttributesWithOverride {
                 name: data.name.clone(),
-                interface,
+                interface: interface.to_string(),
             },
         ));
     }
