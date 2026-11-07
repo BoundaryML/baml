@@ -1083,6 +1083,9 @@ pub(crate) mod support {
                                     if fattrs.must_exist {
                                         field_attr_strs.push("@stream.must_exist".to_string());
                                     }
+                                    if fattrs.redact {
+                                        field_attr_strs.push("@trace.redact".to_string());
+                                    }
                                     // Format: field: Ty @field_attr
                                     let ty_str = fty.render_with(&vp);
                                     if field_attr_strs.is_empty() {

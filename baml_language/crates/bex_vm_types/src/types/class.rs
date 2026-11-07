@@ -7,6 +7,10 @@ use crate::{
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one independent flag per attribute the source can write; no combination is invalid"
+)]
 pub struct ClassField {
     pub name: String,
     /// Used by paths that don't care about parametric class type-args
@@ -31,6 +35,9 @@ pub struct ClassField {
     /// `@stream.must_exist`: the field has no default, so its class has no
     /// partial parse until the field is present.
     pub must_exist: bool,
+    /// `@trace.redact`: telemetry records a redaction in place of the field's
+    /// value.
+    pub redact: bool,
 
     /// The exact `type` operand a runtime-constructed field was built from, so
     /// reflection reads back the definitions it carried, not just its shape.
@@ -64,6 +71,10 @@ pub struct Class {
     /// `@@stream.done`: while streaming, an instance is never surfaced until
     /// the whole object is complete.
     pub stream_done: bool,
+
+    /// `@@trace.redact`: telemetry records a redaction in place of every
+    /// instance of the class.
+    pub redact: bool,
 
     /// How the compiler decided an instance crosses the host boundary; a
     /// class built through `reflect` is `Fields`. Read through

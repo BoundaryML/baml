@@ -479,6 +479,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         }))
     }
 
@@ -1283,6 +1284,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("expected trampoline bytecode frame");
@@ -1340,6 +1342,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         vm.pending_call_type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),

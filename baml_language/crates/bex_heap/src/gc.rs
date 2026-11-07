@@ -1245,6 +1245,7 @@ mod tests {
                 stream_done: false,
                 must_exist: false,
                 runtime_type: None,
+                redact: false,
             }],
             description: None,
             alias: None,
@@ -1257,6 +1258,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1912,6 +1914,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2163,6 +2166,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2294,6 +2298,7 @@ mod tests {
                 stream_done: false,
                 must_exist: false,
                 runtime_type: None,
+                redact: false,
             }],
             description: None,
             alias: None,
@@ -2307,6 +2312,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
             TypeHead::new(class_ptr, type_tag),
@@ -2709,6 +2715,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
@@ -2965,6 +2972,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         }))
     }
 

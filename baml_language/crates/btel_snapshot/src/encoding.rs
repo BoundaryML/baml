@@ -1,4 +1,4 @@
-//! CAS blob format 5. Explicit little-endian scalar tags, not Rust layouts.
+//! CAS blob format 6. Explicit little-endian scalar tags, not Rust layouts.
 //!
 //! Header: `BTELCAS\0`, u32 version, 16 digest bytes, u32 child count and each
 //! child's 16-byte ID, u32 object count, root, then object definitions in
@@ -33,7 +33,10 @@
 //! children in the child table, in first-use order. A definition group's own
 //! blob has root tag 2; [`crate::definition`] describes its content.
 //!
-//! Value and object tags mirror hash format 5. Type/declaration metadata uses
+//! A redacted value (format 6) is tag 13, a u32 body length and the body: a
+//! reason tag, then what that reason carries (see `tags::RedactionTag`).
+//!
+//! Value and object tags mirror hash format 6. Type/declaration metadata uses
 //! its Borsh representation. Floats use raw bits (including NaNs). Bigints use
 //! sign (0 negative, 1 zero, 2 positive), u64 bit length, then ceil(bits/64)
 //! little-endian u64 magnitude limbs. Any encoding change needs a version bump.
@@ -269,6 +272,9 @@ impl<W: Write> Visitor for Writer<'_, W> {
     }
     fn index(&mut self, index: u32) -> io::Result<()> {
         self.0.write_all(&index.to_le_bytes())
+    }
+    fn raw(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.0.write_all(bytes)
     }
     fn length(&mut self, length: usize) -> io::Result<()> {
         original_len(self.0, length)
