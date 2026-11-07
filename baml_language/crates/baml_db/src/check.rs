@@ -709,8 +709,11 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }
-        // `@json` ATTRIBUTE errors: the class's own, and each union a field
-        // holds whose fallback another member would shadow.
+        // `@json` ATTRIBUTE errors: a declaration's own, and each union its
+        // types spell that can't pick a member by tag.
+        let package = baml_compiler2_hir::file_package::file_package(db, file).root;
+        let overrides = baml_compiler2_hir_ty::json_attrs::json_overrides(db, package);
+        let mut errors = Vec::new();
         for &class_loc in baml_compiler2_hir::item_data::file_classes(db, file) {
             let data = baml_compiler2_hir::item_data::class_data(db, class_loc);
             let head = baml_compiler2_hir_ty::lower::qualify_def(
@@ -718,28 +721,61 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                 baml_compiler2_hir::contributions::Definition::Class(class_loc),
                 &data.name,
             );
-            let viewer = baml_compiler2_hir::file_package::file_package(db, file).root;
-            let mut errors =
-                baml_compiler2_hir_ty::json_attrs::class_errors(db, class_loc, &head, viewer);
+            errors.extend(baml_compiler2_hir_ty::json_attrs::class_errors(
+                db, class_loc, &head, &overrides,
+            ));
             let source_map = baml_compiler2_hir::item_data::class_source_map(db, class_loc);
             let fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
             for (field, (_, ty, _)) in data.fields.iter().zip(fields.iter()) {
-                if let Some(error) =
-                    baml_compiler2_hir_ty::json_attrs::untagged_member_error(db, ty)
-                {
+                if let Some(error) = baml_compiler2_hir_ty::json_attrs::union_error(db, ty) {
                     errors.push((source_map.type_refs.span(field.type_ref), error));
                 }
             }
-            for (range, error) in errors {
-                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
-                    message: error.render(&vp),
-                    error,
-                    range,
-                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
-                    related: Vec::new(),
-                };
-                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+        }
+        for &enum_loc in baml_compiler2_hir::item_data::file_enums(db, file) {
+            let data = baml_compiler2_hir::item_data::enum_data(db, enum_loc);
+            let head = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                baml_compiler2_hir::contributions::Definition::Enum(enum_loc),
+                &data.name,
+            );
+            let renames = data
+                .variants
+                .iter()
+                .any(|variant| variant.attrs.json_rename.is_some());
+            if renames && let Some(interface) = overrides.get(&head) {
+                errors.push((
+                    baml_compiler2_hir::item_data::enum_source_map(db, enum_loc).name_span,
+                    TirTypeError::JsonAttributesWithOverride {
+                        name: data.name.clone(),
+                        interface,
+                    },
+                ));
             }
+        }
+        for &func_loc in baml_compiler2_hir::item_data::file_functions(db, file) {
+            let signature = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
+            let error = signature
+                .params
+                .iter()
+                .map(|param| &param.ty)
+                .chain([&signature.ret])
+                .find_map(|ty| baml_compiler2_hir_ty::json_attrs::union_error(db, ty));
+            if let Some(error) = error {
+                let name_span =
+                    baml_compiler2_hir::item_data::function_source_map(db, func_loc).name_span;
+                errors.push((name_span, error));
+            }
+        }
+        for (range, error) in errors {
+            let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                message: error.render(&vp),
+                error,
+                range,
+                severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                related: Vec::new(),
+            };
+            diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
         }
         // LLM OUTPUT field warnings: an optional field an LLM function's
         // output reaches, which a model can never fill (E0185), at the
@@ -805,7 +841,7 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
             continue;
         };
         let value = baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc);
-        let untagged = baml_compiler2_hir_ty::json_attrs::untagged_member_error(db, &value);
+        let untagged = baml_compiler2_hir_ty::json_attrs::union_error(db, &value);
         let declaration_span =
             baml_compiler2_hir::item_data::type_alias_source_map(db, alias_loc).name_span;
         for (range, error) in
@@ -2323,8 +2359,11 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::JsonRestFieldType { .. }
         | TirTypeError::JsonRestRenamed { .. }
         | TirTypeError::JsonRestRepeated { .. }
+        | TirTypeError::JsonAttributeSkipped { .. }
         | TirTypeError::JsonFallbackFieldNotLiteral { .. }
-        | TirTypeError::JsonFallbackUntaggedMember { .. } => DiagnosticId::InvalidJsonAttribute,
+        | TirTypeError::JsonFallbackNoTag { .. }
+        | TirTypeError::JsonFallbackUntaggedMember { .. }
+        | TirTypeError::JsonFallbackOverlap { .. } => DiagnosticId::InvalidJsonAttribute,
         // Global variables.
         TirTypeError::AssignmentToGlobal { .. } => DiagnosticId::AssignmentToGlobal,
         TirTypeError::ReturnInGlobalInitializer { .. } => DiagnosticId::ReturnInGlobalInitializer,

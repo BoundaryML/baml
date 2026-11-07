@@ -236,6 +236,7 @@ fn fields_struct(
     let mut field_defs = Vec::new();
     let mut literal_checks = Vec::new();
     let mut serialize_entries = Vec::new();
+    let mut declared_keys = Vec::new();
     let mut fallback_fields = Vec::new();
     let mut fallback_tags = Vec::new();
     let mut encode_entries = Vec::new();
@@ -263,34 +264,72 @@ fn fields_struct(
             })?;
         let field_docs = doc_attrs(prop.docstring.as_deref());
         let json_key = analyze::json_key(prop);
-        let serde_rename = (derived_fields && !prop.json_flatten && field_ident != json_key)
-            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #json_key))] });
+        // An ident reads as `r#type` and its key as `type`, so a key spelled
+        // `r#type` looks like the field's own name.
+        let serde_rename = (derived_fields
+            && !prop.json_flatten
+            && (field_ident != json_key || json_key.starts_with("r#")))
+        .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #json_key))] });
         let serde_flatten = (derived_fields && prop.json_flatten)
             .then(|| quote! { #[cfg_attr(feature = "serde", serde(flatten))] });
-        let omit_null = class.json_omit_nulls && is_optional(&prop.ty, name, field_ctx.analysis);
+        let optional = is_optional(&prop.ty, name, field_ctx.analysis);
+        let boxed_optional = matches!(&prop.ty, Ty::TypeAlias(alias)
+            if field_ctx.analysis.needs_box(name, alias)
+                && alias_is_nullable(alias, field_ctx.analysis));
+        let omit_null = class.json_omit_nulls && (optional || boxed_optional);
+        let type_name = field_ctx.analysis.names.type_name(name);
+        // A boxed `Option` has no `is_none` of its own to name.
+        let boxed_check = (boxed_optional && omit_null && derives_serde).then(|| {
+            let path = format!("__baml_unset_{}_{type_name}_{field_name}", type_name.len());
+            let function = idents::ident(&path);
+            let check = quote! {
+                #[cfg(feature = "serde")]
+                #[doc(hidden)]
+                #[allow(non_snake_case, clippy::borrowed_box)]
+                fn #function<__T>(
+                    value: &::std::boxed::Box<::std::option::Option<__T>>,
+                ) -> ::core::primitive::bool {
+                    value.is_none()
+                }
+            };
+            (path, check)
+        });
+        let skip_check = boxed_check
+            .as_ref()
+            .map_or("::std::option::Option::is_none", |(path, _)| path.as_str());
+        // Named, because a bare `default` makes serde's derive ask `T: Default`
+        // of a class's own parameters.
         let serde_omit = (derived_fields && omit_null).then(|| {
             quote! {
                 #[cfg_attr(
                     feature = "serde",
-                    serde(default, skip_serializing_if = "::std::option::Option::is_none")
+                    serde(default = "::std::default::Default::default", skip_serializing_if = #skip_check)
                 )]
             }
         });
+        literal_checks.extend(boxed_check.map(|(_, check)| check));
         // Rust has no literal types, so the check a literal field stands for
         // is written out: without it, every string fits a tag.
-        let literal = match &prop.ty {
-            Ty::Literal(literal, ..) => Some(literal),
+        let literal = field_ctx.analysis.literal_of(&prop.ty);
+        let optional_literal = match &prop.ty {
+            Ty::Union(items) => match unions::strip_null(items) {
+                (rest, true) => match rest.as_slice() {
+                    [only] => field_ctx.analysis.literal_of(only).cloned(),
+                    _ => None,
+                },
+                _ => None,
+            },
             _ => None,
         };
-        let literal_check = literal.filter(|_| derived_fields).and_then(|literal| {
-            literal_check(
-                field_ctx.analysis.names.type_name(name),
-                field_name,
-                literal,
-            )
-        });
+        let literal_check = literal
+            .or(optional_literal.as_ref())
+            .filter(|_| derived_fields)
+            .and_then(|literal| {
+                literal_check(type_name, field_name, literal, optional_literal.is_some())
+            });
         let serde_literal = literal_check.as_ref().map(|(path, _)| {
-            quote! { #[cfg_attr(feature = "serde", serde(deserialize_with = #path))] }
+            let default = optional_literal.is_some().then(|| quote! { default, });
+            quote! { #[cfg_attr(feature = "serde", serde(#default deserialize_with = #path))] }
         });
         literal_checks.extend(literal_check.map(|(_, check)| check));
         if let Some(check) = literal.and_then(tag_kind_check) {
@@ -312,12 +351,7 @@ fn fields_struct(
             quote! { #field_ident: #value }
         });
         serialize_entries.push(if prop.json_flatten {
-            let declared = properties
-                .iter()
-                .filter(|other| !other.json_flatten)
-                .map(analyze::json_key);
             quote! {
-                let declared: &[&str] = &[#(#declared),*];
                 for (key, value) in &self.#field_ident {
                     if !declared.contains(&key.as_str()) {
                         map.serialize_entry(key, value)?;
@@ -325,12 +359,28 @@ fn fields_struct(
                 }
             }
         } else if omit_null {
+            let held = if boxed_optional {
+                quote! { &*self.#field_ident }
+            } else {
+                quote! { &self.#field_ident }
+            };
+            let is_set = if boxed_optional {
+                quote! { (*self.#field_ident).is_some() }
+            } else {
+                quote! { self.#field_ident.is_some() }
+            };
+            declared_keys.push(quote! {
+                if #is_set {
+                    declared.push(#json_key);
+                }
+            });
             quote! {
-                if let ::std::option::Option::Some(value) = &self.#field_ident {
+                if let ::std::option::Option::Some(value) = #held {
                     map.serialize_entry(#json_key, value)?;
                 }
             }
         } else {
+            declared_keys.push(quote! { declared.push(#json_key); });
             quote! { map.serialize_entry(#json_key, &self.#field_ident)?; }
         });
         // BAML reads a missing `json` field as `null` (the type admits it), so
@@ -528,6 +578,8 @@ fn fields_struct(
                 ) -> ::std::result::Result<__S::Ok, __S::Error> {
                     use ::serde::ser::SerializeMap as _;
                     let mut map = serializer.serialize_map(::std::option::Option::None)?;
+                    let mut declared: ::std::vec::Vec<&str> = ::std::vec::Vec::new();
+                    #(#declared_keys)*
                     #(#serialize_entries)*
                     map.end()
                 }
@@ -617,12 +669,13 @@ fn literal_value(literal: &baml_base::Literal) -> Option<TokenStream> {
 }
 
 /// The `deserialize_with` function that rejects any value but `literal` for
-/// a field, and the path serde names it by. `None` for the literals with no
-/// check to write.
+/// a field, or for an `optional` one any value but `literal` or `null`, and the
+/// path serde names it by. `None` for the literals with no check to write.
 fn literal_check(
     class: &str,
     field: &str,
     literal: &baml_base::Literal,
+    optional: bool,
 ) -> Option<(String, TokenStream)> {
     let (rust_ty, expected) = match literal {
         baml_base::Literal::String(value) => {
@@ -639,15 +692,23 @@ fn literal_check(
     let path = format!("__baml_literal_{}_{class}_{field}", class.len());
     let function = idents::ident(&path);
     let message = format!("`{class}.{field}` holds another value than its literal");
+    let (field_ty, holds) = if optional {
+        (
+            quote! { ::std::option::Option<#rust_ty> },
+            quote! { value.as_ref().is_none_or(|value| *value == #expected) },
+        )
+    } else {
+        (rust_ty, quote! { value == #expected })
+    };
     let check = quote! {
         #[cfg(feature = "serde")]
         #[doc(hidden)]
         #[allow(non_snake_case, clippy::bool_comparison)]
         fn #function<'de, __D: ::serde::Deserializer<'de>>(
             deserializer: __D,
-        ) -> ::std::result::Result<#rust_ty, __D::Error> {
-            let value = <#rust_ty as ::serde::Deserialize<'de>>::deserialize(deserializer)?;
-            if value == #expected {
+        ) -> ::std::result::Result<#field_ty, __D::Error> {
+            let value = <#field_ty as ::serde::Deserialize<'de>>::deserialize(deserializer)?;
+            if #holds {
                 ::std::result::Result::Ok(value)
             } else {
                 ::std::result::Result::Err(<__D::Error as ::serde::de::Error>::custom(#message))

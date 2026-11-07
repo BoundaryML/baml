@@ -949,8 +949,8 @@ impl Walker<'_, '_> {
             }
             children = unique;
         }
-        // A `@json.flatten` field writes its entries where it sits, and a
-        // declared field's key stays that field's.
+        // A `@json.flatten` field writes its entries where it sits, and a key
+        // a declared field writes stays that field's.
         if let Some(flattened) = declaration.fields.iter().position(|f| f.json_flatten) {
             let at = children
                 .iter()
@@ -961,15 +961,19 @@ impl Walker<'_, '_> {
                     Some(Object::Map(map)) => map.snapshot_entries(),
                     _ => Vec::new(),
                 };
-                let written = entries.into_iter().filter(|(key, _)| {
-                    let key = vm.as_string(key).ok().map(bex_vm_types::BexStr::as_str);
-                    !declaration.fields.iter().enumerate().any(|(i, field)| {
-                        i != flattened
-                            && self.options.naming.shows(field.skip)
-                            && key.is_some_and(|key| plan.keys[i] == key)
+                let declared: Vec<&str> = children
+                    .iter()
+                    .filter_map(|(slot, _)| match slot {
+                        Some(Slot::Field(_, index)) => Some(plan.keys[*index].as_str()),
+                        _ => None,
                     })
-                });
-                let written: Vec<_> = written
+                    .collect();
+                let written: Vec<_> = entries
+                    .into_iter()
+                    .filter(|(key, _)| {
+                        let key = vm.as_string(key).map(bex_vm_types::BexStr::as_str);
+                        key.is_ok_and(|key| !declared.contains(&key))
+                    })
                     .map(|(key, value)| (Some(Slot::Key(key)), value))
                     .collect();
                 children.splice(at..at, written);

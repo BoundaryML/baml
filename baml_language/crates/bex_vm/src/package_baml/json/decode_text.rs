@@ -170,6 +170,11 @@ impl TextDecoder<'_, '_> {
                 self.value(vm, other)
             };
         }
+        // Picking by tag is the slow path's.
+        if super::union::union_tags(vm, members, self.plans).is_some() {
+            self.slow_path_only = true;
+            return Err(Stop);
+        }
         let kind = Kind::of_text(first);
         let start = self.parser.reader.mark();
         let candidates = Candidates::of(vm, members, kind);

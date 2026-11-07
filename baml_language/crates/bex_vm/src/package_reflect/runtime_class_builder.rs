@@ -79,6 +79,17 @@ struct BuilderField {
     /// `@skip`. A `WithMeta` row has no slot for it, so only `fields_from`,
     /// which copies another class's fields, sets it.
     skip: bool,
+    /// The `@json` attributes, which only `fields_from` sets too.
+    json: JsonAttrs,
+}
+
+/// A field's `@json` attributes, as a class declares them.
+#[derive(Clone, Default)]
+struct JsonAttrs {
+    rename: Option<String>,
+    flatten: bool,
+    fallback: bool,
+    omit_null: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -149,6 +160,7 @@ struct PreparedField {
     docstring: Option<String>,
     other: IndexMap<String, String>,
     skip: bool,
+    json: JsonAttrs,
 }
 
 type PreparedGroup = IndexMap<u64, Vec<PreparedField>>;
@@ -427,6 +439,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
             name: name.to_string(),
             root_index,
             skip: false,
+            json: JsonAttrs::default(),
         });
 
         for target in pending_builders {
@@ -491,6 +504,12 @@ impl BamlClassClassBuilder for PackageReflectImpl {
                 name: field.name,
                 root_index: roots.len(),
                 skip: field.skip,
+                json: JsonAttrs {
+                    rename: field.json_rename.clone(),
+                    flatten: field.json_flatten,
+                    fallback: field.json_fallback,
+                    omit_null: field.json_omit_null,
+                },
             });
             roots.push(root);
         }
@@ -695,6 +714,7 @@ fn prepare_group(
                             docstring: meta.docstring,
                             other: meta.other,
                             skip: field.skip,
+                            json: field.json.clone(),
                         }
                     }
                     Err(message) => {
@@ -718,6 +738,7 @@ fn prepare_group(
                         docstring,
                         other,
                         skip: field.skip,
+                        json: field.json.clone(),
                     },
                     Err(message) => {
                         diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
@@ -1026,10 +1047,10 @@ fn build_group(
                 skip: field.skip,
                 stream_done: false,
                 must_exist: false,
-                json_rename: None,
-                json_flatten: false,
-                json_fallback: false,
-                json_omit_null: false,
+                json_rename: field.json.rename.clone(),
+                json_flatten: field.json.flatten,
+                json_fallback: field.json.fallback,
+                json_omit_null: field.json.omit_null,
                 runtime_type: Some(type_value),
             });
         }

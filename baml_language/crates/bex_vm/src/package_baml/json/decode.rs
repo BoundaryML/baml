@@ -743,9 +743,17 @@ fn decode_one(
             // and fallen through to the next.
             validate(vm, json, path)?;
             if let Some(ptr) = json.as_object_ptr()
-                && let Some(member) = union::tagged_member(vm, members, ptr, &mut lookups.plans)
+                && let Some(tagged) = union::tagged_member(vm, members, ptr, &mut lookups.plans)
             {
-                return decode_one(vm, json, &member, Root::Dispatch, lookups, path);
+                return match tagged {
+                    Ok(member) => decode_one(vm, json, &member, Root::Dispatch, lookups, path),
+                    Err(refused) => {
+                        let at = refused
+                            .key
+                            .map_or_else(|| path(), |key| format!("{}.{key}", path()));
+                        Err(raise_decode(vm, refused.message, &at))
+                    }
+                };
             }
             let keys = json.as_object_ptr().map(union::Keys::Map);
             let order = union::Candidates::of(vm, members, kind_of(vm, json)).order(
@@ -894,14 +902,20 @@ fn open_class(
         }
     };
     if plan.is_fallback()
-        && let Some(message) = super::fallback_tag_error(vm, source, &plan)
+        && let Some((message, key)) = super::fallback_tag_error(vm, source, &plan)
     {
-        return Err(raise_decode(vm, message, &path()));
+        let at = key.map_or_else(|| path(), |key| format!("{}.{key}", path()));
+        return Err(raise_decode(vm, message, &at));
     }
     let mut fields: Vec<Field> = Vec::with_capacity(plan.fields.len());
     for (index, field) in plan.fields.iter().enumerate() {
         if let Some(rest) = field.rest {
-            fields.push(Field::Held(super::rest_value(vm, source, &plan, rest)));
+            match super::rest_value(vm, source, &plan, rest) {
+                Ok(held) => fields.push(Field::Held(held)),
+                Err((message, inner)) => {
+                    return Err(raise_decode(vm, message, &format!("{}{inner}", path())));
+                }
+            }
             continue;
         }
         if !field.shown {
@@ -1564,9 +1578,20 @@ impl<'p> Structural<'p> {
             };
         }
         if let Some(ptr) = json.as_object_ptr()
-            && let Some(member) = union::tagged_member(vm, members, ptr, self.plans)
+            && let Some(tagged) = union::tagged_member(vm, members, ptr, self.plans)
         {
-            return self.decode(vm, json, &member);
+            return match tagged {
+                Ok(member) => self.decode(vm, json, &member),
+                Err(refused) => self.within(
+                    |path| {
+                        if let Some(key) = &refused.key {
+                            path.push('.');
+                            path.push_str(key);
+                        }
+                    },
+                    |this| Err(this.fail(vm, || refused.message.clone())),
+                ),
+            };
         }
         let keys = json.as_object_ptr().map(union::Keys::Map);
         let order = union::Candidates::of(vm, members, kind_of(vm, json)).order(
@@ -1807,14 +1832,30 @@ impl<'p> Structural<'p> {
         // answer. A field that can be `null` may be absent and decodes to
         // `null`; every other field must be present.
         if plan.is_fallback()
-            && let Some(message) = super::fallback_tag_error(vm, ptr, &plan)
+            && let Some((message, key)) = super::fallback_tag_error(vm, ptr, &plan)
         {
-            return Err(self.fail(vm, || message));
+            return self.within(
+                |path| {
+                    if let Some(key) = &key {
+                        path.push('.');
+                        path.push_str(key);
+                    }
+                },
+                |this| Err(this.fail(vm, || message)),
+            );
         }
         let mut values = Vec::with_capacity(plan.fields.len());
         for (index, field) in plan.fields.iter().enumerate() {
             if let Some(rest) = field.rest {
-                values.push(super::rest_value(vm, ptr, &plan, rest));
+                match super::rest_value(vm, ptr, &plan, rest) {
+                    Ok(held) => values.push(held),
+                    Err((message, inner)) => {
+                        return self.within(
+                            |path| path.push_str(&inner),
+                            |this| Err(this.fail(vm, || message.to_owned())),
+                        );
+                    }
+                }
                 continue;
             }
             if !field.shown {

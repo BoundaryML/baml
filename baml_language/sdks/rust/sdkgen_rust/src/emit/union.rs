@@ -14,9 +14,9 @@
 //! Under the `serde` feature a union is untagged, as in BAML's own JSON: an
 //! arm serializes as its payload (a literal arm as its string), and
 //! deserializing takes the first arm, in declaration order, that the value
-//! fits. A union with a `@json.fallback` arm picks by tag instead: an object
-//! is the arm whose literal fields all match, failing there is an error, and
-//! the fallback takes the object no arm's literals match. The impls are
+//! fits. A union with a `@json.fallback` arm picks by tag instead, with the
+//! tree in [`baml_type::json_tags`]: reaching an arm is final, and the
+//! fallback takes a tag value no arm has. The impls are
 //! written out rather than derived with
 //! `#[serde(untagged)]`: serde's untagged buffer cannot read a float while
 //! `serde_json`'s `arbitrary_precision` feature is on, and `baml_bridge`
@@ -25,7 +25,10 @@
 //! a type parameter needs only the `Deserialize<'de>` bound serde's derive
 //! puts on an enclosing class.
 
-use baml_sdkgen_types::Ty;
+use baml_sdkgen_types::{
+    Ty,
+    json_tags::{TagTree, tag_tree},
+};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -69,7 +72,9 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
     let mut baml_ty_options = Vec::new();
     let mut serialize_arms = Vec::new();
     let mut deserialize_trials = Vec::new();
-    let mut tag_checks = Vec::new();
+    // Each class an arm can be, with the arm's read: the tree below chooses
+    // among them, and a class behind an alias reads as its arm.
+    let mut tagged_arms: Vec<(Vec<(String, baml_base::Literal)>, TokenStream)> = Vec::new();
     let mut fallback_arm = None;
     let name_str = union_enum.rust_name.as_str();
     let arity = union_enum.arms.len();
@@ -154,20 +159,12 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                         .map(Self::#variant)
                         .map_err(<__D::Error as ::serde::de::Error>::custom)
                 };
-                match ctx.analysis.json_tag(ty) {
-                    Some(tag) if tag.fallback => fallback_arm = Some(read_arm),
-                    Some(tag) if !tag.literals.is_empty() => {
-                        let matches = tag
-                            .literals
-                            .iter()
-                            .map(|(key, literal)| literal_matches(key, literal));
-                        tag_checks.push(quote! {
-                            if #(#matches)&&* {
-                                return #read_arm;
-                            }
-                        });
+                for tag in ctx.analysis.json_tags_in(ty) {
+                    if tag.fallback {
+                        fallback_arm = Some((read_arm.clone(), tag.literals.clone()));
+                    } else {
+                        tagged_arms.push((tag.literals.clone(), read_arm.clone()));
                     }
-                    _ => {}
                 }
                 deserialize_trials.push(quote! {
                     if let ::std::result::Result::Ok(value) =
@@ -305,13 +302,17 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
     });
     let serde_impls = if has_serde {
         let no_arm = format!("value matches no arm of union `{name_str}`");
-        let by_tag = fallback_arm.map(|fallback_arm| {
-            quote! {
+        let by_tag = fallback_arm.and_then(|(fallback_arm, fallback_literals)| {
+            let literals: Vec<_> = tagged_arms.iter().map(|(tags, _)| tags.clone()).collect();
+            let tree = tag_tree(&literals, &fallback_literals).ok()?;
+            let reads: Vec<_> = tagged_arms.iter().map(|(_, read)| read).collect();
+            let pick = pick_by_tag(&tree, &reads);
+            Some(quote! {
                 if json.is_object() {
-                    #(#tag_checks)*
+                    #pick
                     return #fallback_arm;
                 }
-            }
+            })
         });
         let serialize_generics = if param_idents.is_empty() {
             TokenStream::new()
@@ -403,30 +404,67 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
     })
 }
 
-/// Whether the object `json` holds `literal` under `key`.
-fn literal_matches(key: &str, literal: &baml_base::Literal) -> TokenStream {
-    let value = quote! { json.get(#key) };
-    let holds = |read: TokenStream, expected: TokenStream| {
-        quote! { #value.and_then(#read) == ::std::option::Option::Some(#expected) }
+/// The code that returns the member `tree` picks for the object `json`, and
+/// falls out of the end for a tag value no member has. The same tree the
+/// compiler checked and the engine walks.
+fn pick_by_tag(tree: &TagTree<baml_base::Literal>, reads: &[&TokenStream]) -> TokenStream {
+    let (key, arms) = match tree {
+        TagTree::Member(member) => {
+            let read = reads[*member];
+            return quote! { return #read; };
+        }
+        TagTree::Read { key, arms } => (key, arms),
     };
+    let values = arms.iter().map(|(literal, next)| {
+        let holds = literal_holds(literal);
+        let next = pick_by_tag(next, reads);
+        quote! { ::std::option::Option::Some(__tag) if #holds => { #next } }
+    });
+    let kind = arms.first().map_or_else(
+        || quote! { true },
+        |(literal, _)| match literal {
+            baml_base::Literal::String(_) => quote! { __tag.is_string() },
+            baml_base::Literal::Bool(_) => quote! { __tag.is_boolean() },
+            _ => quote! { __tag.is_number() },
+        },
+    );
+    let wrong_kind = format!("the tag `{key}` holds the wrong kind of value");
+    let missing = format!("missing required field `{key}`");
+    quote! {
+        match json.get(#key) {
+            #(#values)*
+            ::std::option::Option::Some(__tag) if #kind => {}
+            ::std::option::Option::Some(_) => {
+                return ::std::result::Result::Err(
+                    <__D::Error as ::serde::de::Error>::custom(#wrong_kind),
+                );
+            }
+            ::std::option::Option::None => {
+                return ::std::result::Result::Err(
+                    <__D::Error as ::serde::de::Error>::custom(#missing),
+                );
+            }
+        }
+    }
+}
+
+/// Whether `__tag` holds `literal`.
+fn literal_holds(literal: &baml_base::Literal) -> TokenStream {
     match literal {
         baml_base::Literal::String(expected) => {
             let expected = expected.as_str();
-            holds(
-                quote! { ::baml_bridge::serde_json::Value::as_str },
-                quote! { #expected },
-            )
+            quote! { __tag.as_str() == ::std::option::Option::Some(#expected) }
         }
-        baml_base::Literal::Int(expected) => holds(
-            quote! { ::baml_bridge::serde_json::Value::as_i64 },
-            quote! { #expected },
-        ),
-        baml_base::Literal::Bool(expected) => holds(
-            quote! { ::baml_bridge::serde_json::Value::as_bool },
-            quote! { #expected },
-        ),
-        baml_base::Literal::Float(_) | baml_base::Literal::Bigint(_) => {
-            quote! { #value.is_some() }
+        baml_base::Literal::Int(expected) => {
+            quote! { __tag.as_i64() == ::std::option::Option::Some(#expected) }
         }
+        baml_base::Literal::Bool(expected) => {
+            quote! { __tag.as_bool() == ::std::option::Option::Some(#expected) }
+        }
+        baml_base::Literal::Float(expected) => {
+            let expected = expected.parse::<f64>().unwrap_or(f64::NAN);
+            quote! { __tag.as_f64() == ::std::option::Option::Some(#expected) }
+        }
+        baml_base::Literal::Bigint(_) => quote! { false },
     }
 }

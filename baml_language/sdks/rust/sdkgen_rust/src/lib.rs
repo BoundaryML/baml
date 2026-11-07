@@ -3078,19 +3078,19 @@ mod tests {
         for expected in [
             // A rename, and an optional field of a `@@json.omit_nulls` class.
             "serde(rename=\"vpc_id\")",
-            "serde(default,skip_serializing_if=\"::std::option::Option::is_none\")",
+            "serde(default=\"::std::default::Default::default\",skip_serializing_if=\"::std::option::Option::is_none\")",
             // A literal is checked.
             "serde(deserialize_with=\"__baml_literal_3_Vpc_type\")",
             "fn__baml_literal_3_Vpc_type",
             // `@json.flatten` reads with serde and writes declared keys first.
             "serde(flatten)",
-            "letdeclared:&[&str]=&[\"id\",\"network\"];",
+            "declared.push(\"id\");declared.push(\"network\");",
             // `@json.fallback` reads and writes the whole object.
             "::serde::Serialize::serialize(&self.raw,serializer)",
             "raw:__baml_raw",
             "__baml_raw.get(\"type\").is_some_and(::baml_bridge::serde_json::Value::is_string)",
             // The union picks by tag, and the fallback takes the rest.
-            "ifjson.is_object(){ifjson.get(\"type\")",
+            "ifjson.is_object(){matchjson.get(\"type\"){",
         ] {
             assert!(lib.contains(expected), "missing {expected}: {lib}");
         }

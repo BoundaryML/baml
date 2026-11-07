@@ -198,6 +198,8 @@ impl RootHaver for ClassPlan {
 pub(super) struct Plans {
     pub(super) naming: JsonNaming,
     plans: FxHashMap<(TypeHead, Box<[RealizedTy]>), Arc<ClassPlan>>,
+    /// Each union met, with how it picks a member when it has a fallback.
+    pub(super) unions: FxHashMap<Box<[RealizedTy]>, Option<Arc<super::union::UnionTags>>>,
 }
 
 impl Plans {
@@ -205,6 +207,7 @@ impl Plans {
         Self {
             naming,
             plans: FxHashMap::default(),
+            unions: FxHashMap::default(),
         }
     }
 
@@ -228,5 +231,6 @@ impl Plans {
     /// Forget every plan: after a collection their pointers may be stale.
     pub(super) fn clear(&mut self) {
         self.plans.clear();
+        self.unions.clear();
     }
 }

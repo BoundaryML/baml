@@ -298,9 +298,10 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 /// deeper in, the next one is tried. A union inside a member resolves by the
 /// same rule.
 ///
-/// A union with a `@json.fallback` member reads an object by tag instead: the
-/// member whose literal fields all match is the one, and failing there is an
-/// error. The fallback takes an object no member's literals match.
+/// A union with a `@json.fallback` member reads an object by its tag instead:
+/// the fallback class's literal fields name the tag, and the member holding
+/// that value is the one, read by the next literal field when several do.
+/// Failing after that is an error. A tag value no member has is the fallback.
 ///
 /// `T` matters here in a way it does not for `from`: decoding has only the
 /// target type to go on, so a wider `T` changes the result, not just its

@@ -51,6 +51,13 @@ class Both {
     value: string @alias("shown") @json.rename("wire"),
 }
 
+class FlatOmit {
+    note: string?,
+    extra: map<string, json> @json.flatten,
+
+    @@json.omit_nulls
+}
+
 class Plain2 {
     id: string,
 }
@@ -63,6 +70,62 @@ class FlattenFirst {
 class FlattenLast {
     id: string @json.rename("extra"),
     extra: map<string, json> @json.flatten,
+}
+
+class TaggedScope {
+    role: "admin",
+    type: "manager",
+}
+
+class OtherScope {
+    type: "UNKNOWN",
+    raw: map<string, json> @json.fallback,
+}
+
+type Scope = TaggedScope | OtherScope
+
+class Storage {
+    service: "s3",
+    type: "storage",
+}
+
+class Queue {
+    service: "sqs",
+    type: "storage",
+}
+
+class Ai {
+    type: "ai",
+}
+
+class BindingOther {
+    type: "UNKNOWN",
+    raw: map<string, json> @json.fallback,
+}
+
+type AnyBinding = Storage | Queue | Ai | BindingOther
+
+function binding(text: string) -> string {
+    let read = baml.json.decode<AnyBinding>(text) catch (e) {
+        baml.json.DecodeError => return "error",
+        baml.json.ParseError => return "parse error",
+    };
+    let parsed = baml.json.to<AnyBinding>(baml.json.parse(text)) catch (e) {
+        baml.json.DecodeError => return "error",
+        baml.json.ParseError => return "parse error",
+    };
+    match (parsed) {
+        let b: Storage => {}
+        let b: Queue => {}
+        let b: Ai => {}
+        let b: BindingOther => {}
+    }
+    match (read) {
+        let b: Storage => "s3",
+        let b: Queue => "sqs",
+        let b: Ai => "ai",
+        let b: BindingOther => "other",
+    }
 }
 
 class Binding {
@@ -132,6 +195,40 @@ testset "json attributes" {
     test "a flatten field shares no key with a renamed field" {
         assert.equal(out(FlattenFirst { extra: {"a": 1}, id: "i" }), `{"a":1,"extra":"i"}`);
         assert.equal(out(FlattenLast { id: "i", extra: {"a": 1} }), `{"extra":"i","a":1}`);
+    }
+    test "only the tag decides: a wrong literal elsewhere fails as that member" {
+        let wrong = baml.json.decode<Scope>(`{"type":"manager","role":"viewer"}`) catch (e) {
+            baml.json.DecodeError => TaggedScope { role: "admin", type: "manager" },
+            baml.json.ParseError => OtherScope { type: "UNKNOWN", raw: {} },
+        };
+        match (wrong) {
+            let t: TaggedScope => { assert.equal(t.role, "admin"); }
+            let o: OtherScope => { assert.equal(o.type, "this is not an unknown member"); }
+        }
+    }
+    test "a second tag is read when the first leaves several members" {
+        assert.equal(binding(`{"type":"storage","service":"s3"}`), "s3");
+        assert.equal(binding(`{"type":"storage","service":"sqs"}`), "sqs");
+        assert.equal(binding(`{"type":"storage","service":"minio"}`), "other");
+        assert.equal(binding(`{"type":"future"}`), "other");
+        assert.equal(binding(`{"type":"ai","service":"anything"}`), "ai");
+    }
+    test "a second tag that is missing or of the wrong kind is an error" {
+        assert.equal(binding(`{"type":"storage"}`), "error");
+        assert.equal(binding(`{"type":"storage","service":5}`), "error");
+        assert.equal(binding(`{"type":"storage","service":null}`), "error");
+    }
+    test "a flatten map is a copy that refuses a cycle" {
+        let src = baml.json.parse(`{"id":"i","type":"t","n":{"a":1}}`);
+        let c = baml.json.to<Config>(src);
+        match (c.extra["n"]) {
+            let m: map<string, json> => { m["a"] = 2; }
+            _ => {}
+        }
+        assert.equal(baml.json.stringify(src), `{"id":"i","type":"t","n":{"a":1}}`);
+    }
+    test "a flatten key beside an omitted field is written" {
+        assert.equal(out(FlatOmit { note: null, extra: {"note": "x", "b": 1} }), `{"note":"x","b":1}`);
     }
     test "null in a json field is a value" {
         assert.equal(out(Binding { region: null, bucket: null }), `{"region":null}`);

@@ -32,7 +32,7 @@ pub(crate) fn emit(name: &Name, enum_: &Enum, names: &RustNames) -> TokenStream 
             .json_rename
             .as_deref()
             .unwrap_or(variant.name.as_str());
-        let serde_rename = (variant_ident != json_string)
+        let serde_rename = (variant_ident != json_string || json_string.starts_with("r#"))
             .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #json_string))] });
         variant_defs.push(quote! {
             #(#variant_docs)*

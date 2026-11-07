@@ -627,10 +627,22 @@ impl TypeCtx {
     ) -> EnumTy<'a, NamedTy> {
         let variants = enum_def
             .variants()
-            .map(|variant| AnnotatedEnumVariant {
-                name: variant.name.as_str().into(),
-                aliases: variant.alias.iter().map(|a| a.as_str().into()).collect(),
-                description: variant.rendered_description().map(Into::into),
+            .map(|variant| {
+                // As for a field: an alias stops the name matching, so a JSON
+                // string read beside the name brings the name along.
+                let mut aliases: Vec<Cow<'_, str>> =
+                    variant.alias.iter().map(|a| a.as_str().into()).collect();
+                if let Some(json_rename) = &variant.json_rename {
+                    if aliases.is_empty() {
+                        aliases.push(variant.name.as_str().into());
+                    }
+                    aliases.push(json_rename.as_str().into());
+                }
+                AnnotatedEnumVariant {
+                    name: variant.name.as_str().into(),
+                    aliases,
+                    description: variant.rendered_description().map(Into::into),
+                }
             })
             .collect();
 

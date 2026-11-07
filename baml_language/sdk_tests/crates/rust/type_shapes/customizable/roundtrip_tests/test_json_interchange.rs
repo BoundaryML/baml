@@ -336,7 +336,8 @@ fn test_json_interchange_flattened_keys_are_kept_and_a_declared_field_wins() {
             ("b".to_string(), json!(1)),
         ]),
     };
-    let expected = json!({"id": "real", "b": 1});
+    // `kind` is unset, so the map's entry is the only one writing that key.
+    let expected = json!({"id": "real", "kind": "from-extra", "b": 1});
     assert_eq!(serde_json::to_value(&clashing).unwrap(), expected);
     let written_by_baml = to_json_sync(clashing).unwrap();
     assert_eq!(

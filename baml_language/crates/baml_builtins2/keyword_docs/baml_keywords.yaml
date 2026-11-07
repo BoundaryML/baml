@@ -173,14 +173,14 @@ json.flatten:
     The field writes its keys next to the class's other fields. If the map holds a key a declared field also writes, the declared field wins and the map entry is skipped. A class has one `@json.flatten` or `@json.fallback` field.
 
 json.fallback:
-  summary: "Makes a class the union member for objects no other member's literals match. Takes no arguments."
+  summary: "Makes a class the union member for objects with a tag no other member has. Takes no arguments."
   syntax: |
     class NetworkOther {
       type "UNKNOWN"
       raw map<string, json> @json.fallback
     }
   details: |
-    The field holds the whole object, and writes it back and nothing else. The class's other fields must be literals, and each names a key the object must have: an object with no `type` is an error. A member whose literals match is the one, and failing there is an error rather than a fall through to the fallback. The compiler rejects a union with a fallback and another member that can read any object: a class with no literal field, or a map.
+    The field holds the whole object, and writes it back and nothing else. The class's other fields must be literals: they name the union's tag, which every other member has too. An object with no tag is an error. Only the tag decides: once it picks a member, anything else wrong is an error rather than a fall through to the fallback. Members sharing a tag value are told apart by the next literal field. The compiler rejects a union with a member that has no tag, such as a map, or with two members no literal field tells apart.
 
 json.omit_nulls:
   summary: "Leaves a class's optional fields out of its JSON while they hold `null`. Takes no arguments."
@@ -192,7 +192,7 @@ json.omit_nulls:
       @@json.omit_nulls
     }
   details: |
-    Reading doesn't change: a missing optional field reads as `null`. It applies to the class's own fields, not to nested classes. A `json` field keeps its `null`, because there `null` is a value.
+    Reading doesn't change: a missing optional field reads as `null`. It applies to the class's own fields, not to nested classes. A field is optional when its declared type has a `null` arm. A `json` field keeps its `null`, because there `null` is a value.
 
 function:
   summary: "Declares a named callable with typed parameters and a return type."

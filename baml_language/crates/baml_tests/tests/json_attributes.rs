@@ -24,6 +24,10 @@ class Known { type: "known", name: string }
 class Other { type: "UNKNOWN", raw: map<string, json> @json.fallback }
 "#;
 
+const OVERRIDE_TO_JSON: &str = r#"{
+    function to_json(self) -> baml.json.json throws baml.json.SerializationError { "x" }
+}"#;
+
 #[test]
 fn attributes_compile_on_the_declarations_they_describe() {
     assert_eq!(
@@ -67,26 +71,121 @@ class Holder {{ value: (Known | Other)?, items: (string | Known | Other)[] }}
 fn an_untagged_class_beside_a_fallback_is_an_error() {
     let source =
         format!("{TAGGED}class Plain {{ name: string }}\ntype Thing = Known | Plain | Other");
-    assert_error(&source, "`Plain` has no literal field to match on");
+    assert_error(&source, "`Plain` has no literal field for its tag");
 }
 
 #[test]
 fn an_untagged_field_union_is_an_error() {
     let source =
         format!("{TAGGED}class Plain {{ name: string }}\nclass Holder {{ value: Plain | Other }}");
-    assert_error(&source, "`Plain` has no literal field to match on");
+    assert_error(&source, "`Plain` has no literal field for its tag");
 }
 
 #[test]
 fn a_map_beside_a_fallback_is_an_error() {
     let source = format!("{TAGGED}type Thing = Known | map<string, json> | Other");
-    assert_error(&source, "has no literal field to match on");
+    assert_error(&source, "has no literal field for its tag");
 }
 
 #[test]
 fn unknown_beside_a_fallback_is_an_error() {
     let source = format!("{TAGGED}class Holder {{ value: Known | unknown | Other }}");
-    assert_error(&source, "`unknown` has no literal field to match on");
+    assert_error(&source, "`unknown` has no literal field for its tag");
+}
+
+#[test]
+fn a_type_parameter_beside_a_fallback_is_an_error() {
+    let source = format!("{TAGGED}class Box<T> {{ value: T | Other }}");
+    assert_error(&source, "has no literal field for its tag");
+}
+
+#[test]
+fn every_spelling_of_a_union_is_checked() {
+    let plain = format!("{TAGGED}class Plain {{ name: string }}\nclass Box<T> {{ v: T }}\n");
+    for declaration in [
+        "function f(p: Known | Other | Plain) -> int { 1 }",
+        "function f() -> Known | Other | Plain { throw 1 }",
+        "class H { b: Box<Other | Plain> }",
+        "class H { b: (Other | Plain)[]? }",
+        "class H { b: (Other | Plain)[] | string }",
+        "type U = map<string, (Other | Plain)[]> | null",
+    ] {
+        assert_error(
+            &format!("{plain}{declaration}"),
+            "`Plain` has no literal field for its tag",
+        );
+    }
+}
+
+#[test]
+fn members_the_tags_cannot_tell_apart_are_an_error() {
+    assert_error(
+        r#"
+class A { type: "x", a: int }
+class B { type: "x", b: int }
+class Fb { type: "UNKNOWN", raw: map<string, json> @json.fallback }
+type U = A | B | Fb
+"#,
+        "no literal field tells `A` from `B`",
+    );
+}
+
+#[test]
+fn members_sharing_a_tag_can_be_told_apart_by_a_second_literal() {
+    assert_eq!(
+        errors(
+            r#"
+class S3 { type: "storage", service: "s3" }
+class Gcs { type: "storage", service: "gcs" }
+class Ai { type: "ai" }
+class Fb { type: "UNKNOWN", raw: map<string, json> @json.fallback }
+type U = S3 | Gcs | Ai | Fb
+"#
+        ),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn a_fallback_class_needs_a_tag() {
+    assert_error(
+        "class A { raw: map<string, json> @json.fallback }",
+        "needs a literal field to name the union's tag",
+    );
+}
+
+#[test]
+fn a_field_json_has_to_read_cannot_be_skipped() {
+    assert_error(
+        "class A { x: map<string, json> @json.flatten @skip }",
+        "`@skip` leaves `x` out of JSON",
+    );
+    assert_error(
+        "class A { type: \"x\" @skip, raw: map<string, json> @json.fallback }",
+        "`@skip` leaves `type` out of JSON",
+    );
+}
+
+#[test]
+fn one_field_cannot_be_both_flatten_and_fallback() {
+    assert_error(
+        "class A { type: \"x\", raw: map<string, json> @json.flatten @json.fallback }",
+        "`A` can have only one",
+    );
+}
+
+#[test]
+fn map_of_json_is_recognized_through_aliases() {
+    assert_eq!(
+        errors(
+            r#"
+type J = json
+type K = string
+class A { extra: map<K, J> @json.flatten }
+"#
+        ),
+        Vec::<String>::new()
+    );
 }
 
 #[test]
@@ -102,7 +201,7 @@ fn a_second_fallback_member_is_an_error() {
     let source = format!(
         "{TAGGED}class Another {{ kind: \"x\", raw: map<string, json> @json.fallback }}\ntype Thing = Other | Another"
     );
-    assert_error(&source, "`Other` is this union's `@json.fallback` member");
+    assert_error(&source, "has no literal field for its tag");
 }
 
 #[test]
@@ -169,6 +268,42 @@ implements baml.FromJson for A {
 }
 "#,
         "`A` implements `baml.FromJson`, so its `@json` attributes would be ignored",
+    );
+}
+
+#[test]
+fn an_override_of_one_instantiation_counts() {
+    assert_error(
+        &format!(
+            "class Box<T> {{ a: T @json.rename(\"b\") }}\nimplements baml.ToJson for Box<string> {OVERRIDE_TO_JSON}"
+        ),
+        "`Box` implements `baml.ToJson`",
+    );
+}
+
+#[test]
+fn an_enum_with_an_override_cannot_rename() {
+    assert_error(
+        &format!(
+            "enum Mode {{ Fast @json.rename(\"fast\") }}\nimplements baml.ToJson for Mode {OVERRIDE_TO_JSON}"
+        ),
+        "`Mode` implements `baml.ToJson`",
+    );
+}
+
+#[test]
+fn an_unrelated_method_named_to_json_is_not_an_override() {
+    assert_eq!(
+        errors(
+            r#"
+interface Named { function to_json(self) -> string throws never; }
+class A { a: string @json.rename("b") }
+implements Named for A {
+    function to_json(self) -> string throws never { "x" }
+}
+"#
+        ),
+        Vec::<String>::new()
     );
 }
 

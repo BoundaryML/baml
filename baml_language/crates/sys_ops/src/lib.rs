@@ -665,17 +665,27 @@ mod schema {
             let flatten = class_def.fields.iter().any(|field| field.json_flatten);
             let mut properties = serde_json::Map::new();
             let mut required = Vec::new();
-            for field in class_def
-                .fields
-                .iter()
-                .filter(|field| naming.shows(field.skip) && !field.json_flatten && !fallback)
-            {
+            for field in class_def.fields.iter().filter(|field| {
+                naming.shows(field.skip) && !field.json_flatten && !field.json_fallback
+            }) {
                 let key = naming.key(
                     &field.name,
                     field.alias.as_deref(),
                     field.json_rename.as_deref(),
                 );
                 let mut property = self.emit(&field.field_type)?;
+                // A fallback class's literals name its tag: any value of the
+                // tag's kind is one, which is what makes it the fallback.
+                if fallback && let Some(tag) = property.as_object_mut() {
+                    let kind = tag.remove("const").map(|value| match value {
+                        Value::Bool(_) => "boolean",
+                        Value::Number(_) => "number",
+                        _ => "string",
+                    });
+                    if let Some(kind) = kind {
+                        tag.insert("type".to_string(), json!(kind));
+                    }
+                }
                 describe(
                     &mut property,
                     documentation(field.description.as_deref(), field.docstring.as_deref()),
