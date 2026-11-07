@@ -1024,3 +1024,72 @@ fn v2_json_streaming_specializations_and_per_type_fallback() {
     assert!(source.contains("json_specialized_4_0"));
     assert!(source.contains("Tree fallback: aliased @skip"));
 }
+
+#[test]
+// Byte hashes captured from the unsplit runtime-v2 emitter. Intentional future
+// codegen changes may update these after checking the generated-source diff.
+fn v2_phase1_source_bytes_and_diagnostics() {
+    use sha2::{Digest, Sha256};
+    for (name, source) in [
+        (
+            "trees",
+            include_str!("../../../tools/speedtest/workloads/memory/binary-trees-14/main.baml"),
+        ),
+        (
+            "richards",
+            include_str!("../../../tools/speedtest/workloads/programs/richards-50/main.baml"),
+        ),
+        (
+            "agent",
+            include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
+        ),
+        ("initializer", "const X = 1; function main() -> int { X }"),
+        ("entry", "function main() -> string { \"hello\" }"),
+        (
+            "nested_list",
+            "function main() -> int { let a = [[1], [2]]; a[0][0] }",
+        ),
+        (
+            "hook",
+            "/// baml:$trace=trace.span\nfunction main() -> int { 1 }",
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("v2.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_v2(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        let expected = match name {
+            "trees" => "c9001552529938b668245efb9aa2c7a8ddab2d6947b504c5cecf74f55c665555",
+            "richards" => "080e3576866cf6c4fdbe4425fa67862ddb2529bdc5b7b3af926bacd27a1e1fee",
+            "agent" => "df5557d73c0e6c2c74c86d5e4cb89593d434e804b91faf5b0ecc31937ee6568c",
+            _ => "",
+        };
+        if expected.is_empty() {
+            let expected = match name {
+                "initializer" => "unsupported in runtime v2: top-level initializers",
+                "entry" => {
+                    "unsupported in runtime v2: entry must have no parameters and return int"
+                }
+                "nested_list" => "unsupported in runtime v2: list element",
+                "hook" => "unsupported in runtime v2: declaration hooks",
+                _ => unreachable!(),
+            };
+            assert_eq!(result.unwrap_err(), expected, "{name}");
+        } else {
+            let source = result.unwrap();
+            assert_eq!(
+                format!("{:x}", Sha256::digest(source.as_bytes())),
+                expected,
+                "{name}: generated source changed"
+            );
+        }
+    }
+}
