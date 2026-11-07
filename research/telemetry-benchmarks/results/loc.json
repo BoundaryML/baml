@@ -1,0 +1,27 @@
+{
+ "otel": {
+  "setup_lines": 23,
+  "decorators": 5,
+  "total": 28,
+  "snippet": "os.environ.setdefault(\"OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\", \"true\")\nfrom opentelemetry import trace\nfrom opentelemetry.exporter.otlp.proto.http import Compression\nfrom opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter\nfrom opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor\nfrom opentelemetry.sdk.resources import Resource\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\nprovider = TracerProvider(resource=Resource.create({\"service.name\": \"bench\"}))\nprovider.add_span_processor(BatchSpanProcessor(\n    OTLPSpanExporter(endpoint=TELEMETRY_URL + \"/v1/traces\", compression=Compression.Gzip)))\ntrace.set_tracer_provider(provider)\nOpenAIInstrumentor().instrument()\ntracer = trace.get_tracer(\"bench\")\n\ndef traced(fn):\n    def wrapper(*args):\n        with tracer.start_as_current_span(fn.__name__) as span:\n            span.set_attribute(\"input\", json.dumps(args))\n            result = fn(*args)\n            span.set_attribute(\"output\", json.dumps(result if not isinstance(result, BaseModel) else result.model_dump()))\n            return result\n    return wrapper\ntrace_app = trace_tool = traced\n"
+ },
+ "logfire": {
+  "setup_lines": 5,
+  "decorators": 5,
+  "total": 10,
+  "snippet": "import logfire\nlogfire.configure(service_name=\"bench\", console=False, metrics=False,\n                  advanced=logfire.AdvancedOptions(base_url=TELEMETRY_URL))\nlogfire.instrument_openai()\ntrace_app = trace_tool = logfire.instrument()\n"
+ },
+ "datadog": {
+  "setup_lines": 5,
+  "decorators": 5,
+  "total": 10,
+  "snippet": "os.environ.update(DD_LLMOBS_OVERRIDE_ORIGIN=TELEMETRY_URL, DD_APM_TRACING_ENABLED=\"false\")\nfrom ddtrace.llmobs import LLMObs\nfrom ddtrace.llmobs.decorators import tool, workflow\nLLMObs.enable(ml_app=\"bench\", agentless_enabled=True, integrations_enabled=True)\ntrace_app, trace_tool = workflow, tool\n"
+ },
+ "baml": {
+  "setup_lines": 0,
+  "decorators": 0,
+  "explicit_captures": 1,
+  "total": 1,
+  "snippet": "export BOUNDARY_API_KEY=bdry_secret_..."
+ }
+}

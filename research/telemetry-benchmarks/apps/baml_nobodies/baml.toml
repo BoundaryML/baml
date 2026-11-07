@@ -1,0 +1,11 @@
+[package]
+name = "bench_apps"
+
+[generator.python]
+output_type = "python/pydantic"
+output_dir = "../py_bridge_nobodies"
+naming_convention = "preserve-case"
+
+# The only difference from ../baml: network spans keep no request or response bodies.
+[bridge]
+http_bodies = false

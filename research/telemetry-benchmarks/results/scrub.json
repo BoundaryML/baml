@@ -1,0 +1,82 @@
+[
+ {
+  "ticket": "Where is my package? The tracking page has not changed since Monday.",
+  "stored_argument": "Where is my package? The tracking page has not changed since Monday.",
+  "argument_scrubbed": false,
+  "scrubbed_reason": null,
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "I never got the password reset email, so I cannot check my order.",
+  "stored_argument": "[Scrubbed due to 'password']",
+  "argument_scrubbed": true,
+  "scrubbed_reason": "[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"password\"}]",
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "Checkout keeps saying my session expired before I can pay.",
+  "stored_argument": "[Scrubbed due to 'session']",
+  "argument_scrubbed": true,
+  "scrubbed_reason": "[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"session\"}]",
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "My credit card was charged twice for order 8812.",
+  "stored_argument": "[Scrubbed due to 'credit card']",
+  "argument_scrubbed": true,
+  "scrubbed_reason": "[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"credit card\"}]",
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "The cookie banner covers the Buy button on mobile.",
+  "stored_argument": "[Scrubbed due to 'cookie']",
+  "argument_scrubbed": true,
+  "scrubbed_reason": "[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"cookie\"}]",
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "Can you send me the docs for creating an API key?",
+  "stored_argument": "[Scrubbed due to 'API key']",
+  "argument_scrubbed": true,
+  "scrubbed_reason": "[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"API key\"}]",
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "Please correct the author name printed on my invoice.",
+  "stored_argument": "Please correct the author name printed on my invoice.",
+  "argument_scrubbed": false,
+  "scrubbed_reason": null,
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "We want to discuss authentication options for our SSO rollout.",
+  "stored_argument": "[Scrubbed due to 'auth']",
+  "argument_scrubbed": true,
+  "scrubbed_reason": "[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"auth\"}]",
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "My secret santa gift arrived damaged.",
+  "stored_argument": "[Scrubbed due to 'secret']",
+  "argument_scrubbed": true,
+  "scrubbed_reason": "[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"secret\"}]",
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ },
+ {
+  "ticket": "Is there a private key ring option for the office locker?",
+  "stored_argument": "[Scrubbed due to 'private key']",
+  "argument_scrubbed": true,
+  "scrubbed_reason": "[{\"path\":[\"attributes\",\"text\"],\"matched_substring\":\"private key\"}]",
+  "prompt_kept_text": true,
+  "llm_spans": 1
+ }
+]

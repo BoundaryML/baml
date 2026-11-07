@@ -1,0 +1,74 @@
+[
+ {
+  "vendor": "logfire",
+  "marker": "mef719df2eafe4ac4",
+  "seconds": 8.433667182922363,
+  "polls": 12
+ },
+ {
+  "vendor": "datadog",
+  "marker": "m8e07315b5c514fd5",
+  "seconds": 38.80129790306091,
+  "polls": 18
+ },
+ {
+  "vendor": "logfire",
+  "marker": "m31b808c4127745bc",
+  "seconds": 15.151235103607178,
+  "polls": 22
+ },
+ {
+  "vendor": "datadog",
+  "marker": "m763cf19929ec4b36",
+  "seconds": 35.27032709121704,
+  "polls": 16
+ },
+ {
+  "vendor": "logfire",
+  "marker": "me3a33922f7b448b6",
+  "seconds": 15.153155088424683,
+  "polls": 22
+ },
+ {
+  "vendor": "datadog",
+  "marker": "me4ee61a3e4cd4030",
+  "seconds": 36.865418910980225,
+  "polls": 17
+ },
+ {
+  "vendor": "logfire",
+  "marker": "mc63a3c07c9094ef0",
+  "seconds": 15.176046133041382,
+  "polls": 22
+ },
+ {
+  "vendor": "datadog",
+  "marker": "mee3987b1a79f43eb",
+  "seconds": 47.71844696998596,
+  "polls": 22
+ },
+ {
+  "vendor": "logfire",
+  "marker": "m6dc8a5f2f0ef4ccc",
+  "seconds": 15.73444414138794,
+  "polls": 23
+ },
+ {
+  "vendor": "datadog",
+  "marker": "ma7724c84ac9b42e8",
+  "seconds": 34.8611159324646,
+  "polls": 16
+ },
+ {
+  "vendor": "logfire",
+  "marker": "m39e7ecaac03e4a74",
+  "seconds": 15.346740961074829,
+  "polls": 22
+ },
+ {
+  "vendor": "datadog",
+  "marker": "m869742fc87cf4068",
+  "seconds": 54.66177582740784,
+  "polls": 25
+ }
+]

@@ -1,0 +1,4142 @@
+[
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 10240,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:31.118141+00:00",
+  "wall_ms": 869.0394579898566,
+  "timing": {
+   "setup_ms": 791.6179588064551,
+   "call_ms": [
+    3.3215
+   ],
+   "flush_ms": 0.0005,
+   "maxrss_mb": 124.78125
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 78611,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1443,
+    "upload": 77054
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 22559,
+    "capture_references": 7,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413631e768ca706d0a1684845ad"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 10467,
+   "received": 334,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 102400,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:32.491286+00:00",
+  "wall_ms": 1115.8582500647753,
+  "timing": {
+   "setup_ms": 766.2744999397546,
+   "call_ms": [
+    257.215709
+   ],
+   "flush_ms": 0.00075,
+   "maxrss_mb": 129.4375
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 302088,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 5036,
+    "upload": 296938
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 15,
+    "logical_bytes": 209258,
+    "capture_references": 20,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41368417cb6b3dfedd63511943a"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 9,
+     "network_announcement": 3,
+     "network_event": 9,
+     "network_completion": 3,
+     "function_completion": 9
+    }
+   },
+   "spans": 15
+  },
+  "model_http": {
+   "requests": 3,
+   "sent": 102867,
+   "received": 611,
+   "statuses": [
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:34.290492+00:00",
+  "wall_ms": 3384.5205418765545,
+  "timing": {
+   "setup_ms": 709.5017079263926,
+   "call_ms": [
+    258.107125,
+    256.252959,
+    257.187292,
+    256.147333,
+    256.402084,
+    256.6885,
+    256.0705,
+    256.057041,
+    256.372709,
+    256.985791
+   ],
+   "flush_ms": 0.00175,
+   "maxrss_mb": 129.515625
+  },
+  "telemetry": {
+   "requests": 13,
+   "telemetry_bytes": 354525,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6763,
+    "upload": 347648
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 130748,
+    "capture_references": 145,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4136f157a33ad8a09abf2cb02e1"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 107100,
+   "received": 6103,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 10240,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:38.040512+00:00",
+  "wall_ms": 778.3267498016357,
+  "timing": {
+   "setup_ms": 700.4996661562473,
+   "call_ms": [
+    2.693333
+   ],
+   "flush_ms": 0.000458,
+   "maxrss_mb": 124.375
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 66569,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1279,
+    "upload": 65176
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 11646,
+    "capture_references": 6,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4137dac790d8b386596c169a867"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 10394,
+   "received": 258,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 10240,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:39.272568+00:00",
+  "wall_ms": 792.47941612266,
+  "timing": {
+   "setup_ms": 711.3362909294665,
+   "call_ms": [
+    2.903416
+   ],
+   "flush_ms": 0.000542,
+   "maxrss_mb": 124.421875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 77496,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1361,
+    "upload": 76021
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 22326,
+    "capture_references": 7,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413828c774998e89e16353a36ea"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 10394,
+   "received": 258,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 102400,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:40.540582+00:00",
+  "wall_ms": 790.4380420222878,
+  "timing": {
+   "setup_ms": 698.1922499835491,
+   "call_ms": [
+    3.751083,
+    1.346041,
+    1.0845,
+    1.337833,
+    1.414958,
+    1.368959,
+    1.166792,
+    0.997667,
+    1.160917,
+    1.144208
+   ],
+   "flush_ms": 0.000917,
+   "maxrss_mb": 129.796875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 222170,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1444,
+    "upload": 220612
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 1034895,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413877171d5a7ce097a85400715"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1026270,
+   "received": 3360,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 1024,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:41.783012+00:00",
+  "wall_ms": 809.1616248711944,
+  "timing": {
+   "setup_ms": 722.0413750037551,
+   "call_ms": [
+    2.67125,
+    0.576666,
+    0.479792,
+    0.393875,
+    0.3675,
+    0.360125,
+    0.380542,
+    0.36875,
+    0.434583,
+    0.487334
+   ],
+   "flush_ms": 0.000583,
+   "maxrss_mb": 124.6875
+  },
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 119282,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1216,
+    "upload": 117952
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 20295,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4138c687f8e99ebdf931b327b32"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 11780,
+   "received": 2560,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:43.455740+00:00",
+  "wall_ms": 779.8564999829978,
+  "timing": {
+   "setup_ms": 690.9545829985291,
+   "call_ms": [
+    2.971791,
+    0.682666,
+    0.526666,
+    0.586417,
+    0.540875,
+    0.478417,
+    0.453666,
+    0.461292,
+    0.772958,
+    0.473208
+   ],
+   "flush_ms": 0.000833,
+   "maxrss_mb": 125.421875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 227028,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2018,
+    "upload": 224896
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 112485,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41392d370baa8b35dd71f5ad00a"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 103970,
+   "received": 2580,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 1024,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:44.689204+00:00",
+  "wall_ms": 783.8036250323057,
+  "timing": {
+   "setup_ms": 701.5687921084464,
+   "call_ms": [
+    2.5565
+   ],
+   "flush_ms": 0.000334,
+   "maxrss_mb": 124.109375
+  },
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 58919,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1297,
+    "upload": 57508
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 3892,
+    "capture_references": 7,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41397ac7e1180d26131ca005fe8"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 1178,
+   "received": 256,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 102400,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:46.360296+00:00",
+  "wall_ms": 797.0334580168128,
+  "timing": {
+   "setup_ms": 709.4015839975327,
+   "call_ms": [
+    3.240958,
+    1.135959,
+    1.045084,
+    0.954917,
+    0.920041,
+    0.842083,
+    0.897084,
+    0.9945,
+    1.029708,
+    0.912875
+   ],
+   "flush_ms": 0.000625,
+   "maxrss_mb": 129.46875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 328063,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2264,
+    "upload": 325685
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 2062475,
+    "capture_references": 52,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4139e3771c6a581d67aee46110f"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1025540,
+   "received": 2600,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 1024,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:47.608443+00:00",
+  "wall_ms": 815.4812909197062,
+  "timing": {
+   "setup_ms": 714.216124964878,
+   "call_ms": [
+    2.505208,
+    0.5605,
+    0.420291,
+    0.39275,
+    0.358542,
+    0.319166,
+    0.37525,
+    0.454875,
+    0.433166,
+    0.460875
+   ],
+   "flush_ms": 0.0005,
+   "maxrss_mb": 124.78125
+  },
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 124879,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2036,
+    "upload": 122729
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 34915,
+    "capture_references": 52,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413a323742096882e7170999327"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 11780,
+   "received": 2560,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 1024,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:49.271951+00:00",
+  "wall_ms": 807.2008749004453,
+  "timing": {
+   "setup_ms": 721.1772080045193,
+   "call_ms": [
+    2.516583
+   ],
+   "flush_ms": 0.000541,
+   "maxrss_mb": 124.203125
+  },
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 57246,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1215,
+    "upload": 55917
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 2430,
+    "capture_references": 6,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413a9a7714bb6a89706af70da39"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 1178,
+   "received": 256,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 10240,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:50.943015+00:00",
+  "wall_ms": 3383.509458042681,
+  "timing": {
+   "setup_ms": 713.8277080375701,
+   "call_ms": [
+    258.170709,
+    256.271,
+    257.287083,
+    255.691416,
+    254.64125,
+    254.83125,
+    255.730833,
+    257.312833,
+    257.173375,
+    257.0445
+   ],
+   "flush_ms": 0.003042,
+   "maxrss_mb": 127.0625
+  },
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 277037,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 7879,
+    "upload": 269044
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 244731,
+    "capture_references": 175,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413b027732b8f2c5daee5bef3f6"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 107070,
+   "received": 6103,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 102400,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:55.222779+00:00",
+  "wall_ms": 1050.0407498329878,
+  "timing": {
+   "setup_ms": 694.4148340262473,
+   "call_ms": [
+    257.580542
+   ],
+   "flush_ms": 0.000833,
+   "maxrss_mb": 129.421875
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 197449,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4626,
+    "upload": 192709
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 15,
+    "logical_bytes": 105696,
+    "capture_references": 17,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413c0c97b96b58456bdea4ed42c"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 9,
+     "network_announcement": 3,
+     "network_event": 9,
+     "network_completion": 3,
+     "function_completion": 9
+    }
+   },
+   "spans": 15
+  },
+  "model_http": {
+   "requests": 3,
+   "sent": 102867,
+   "received": 611,
+   "statuses": [
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 1024,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:56.952461+00:00",
+  "wall_ms": 894.3950000684708,
+  "timing": {
+   "setup_ms": 798.3067501336336,
+   "call_ms": [
+    3.299666
+   ],
+   "flush_ms": 0.000458,
+   "maxrss_mb": 124.390625
+  },
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 58230,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1297,
+    "upload": 56819
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 2514,
+    "capture_references": 6,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413c7f0748bbc7425340b8e5424"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 1251,
+   "received": 332,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:35:58.693642+00:00",
+  "wall_ms": 869.8837498668581,
+  "timing": {
+   "setup_ms": 781.1431251466274,
+   "call_ms": [
+    2.733542,
+    0.585792,
+    0.520125,
+    0.516709,
+    0.434833,
+    0.393667,
+    0.371458,
+    0.465959,
+    0.532375,
+    0.506709
+   ],
+   "flush_ms": 0.000667,
+   "maxrss_mb": 125.0
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 221122,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 3974,
+    "upload": 217034
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 35066,
+    "capture_references": 53,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413cea97495b9612b2dda3cf28d"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 11810,
+   "received": 2560,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:00.007526+00:00",
+  "wall_ms": 815.7874171156436,
+  "timing": {
+   "setup_ms": 725.5701660178602,
+   "call_ms": [
+    2.670125,
+    0.70925,
+    0.577791,
+    0.510125,
+    0.44825,
+    0.429625,
+    0.421083,
+    0.420875,
+    0.449959,
+    0.520083
+   ],
+   "flush_ms": 0.000542,
+   "maxrss_mb": 127.84375
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 223830,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4055,
+    "upload": 219661
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 37396,
+    "capture_references": 53,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413d3987df282a467c5bad3df32"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 12540,
+   "received": 3320,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:01.272473+00:00",
+  "wall_ms": 803.9867919869721,
+  "timing": {
+   "setup_ms": 712.6552499830723,
+   "call_ms": [
+    2.856,
+    0.688,
+    0.62925,
+    0.691709,
+    0.624917,
+    0.601125,
+    0.509333,
+    0.500375,
+    0.518625,
+    0.649792
+   ],
+   "flush_ms": 0.000542,
+   "maxrss_mb": 128.734375
+  },
+  "telemetry": {
+   "requests": 7,
+   "telemetry_bytes": 343476,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4119,
+    "upload": 339243
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 221736,
+    "capture_references": 53,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413d87d71618bac166bed49072a"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 104700,
+   "received": 3340,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 102400,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:02.540337+00:00",
+  "wall_ms": 784.9555828142911,
+  "timing": {
+   "setup_ms": 711.0757501795888,
+   "call_ms": [
+    3.452625
+   ],
+   "flush_ms": 0.000292,
+   "maxrss_mb": 128.046875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 262206,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1525,
+    "upload": 260567
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 206648,
+    "capture_references": 7,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413dd687db997ba9bdf2df6ebed"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 102554,
+   "received": 260,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 1024,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:03.776686+00:00",
+  "wall_ms": 823.592791100964,
+  "timing": {
+   "setup_ms": 735.7698329724371,
+   "call_ms": [
+    2.667542,
+    0.585541,
+    0.572708,
+    0.494792,
+    0.435333,
+    0.398417,
+    0.383542,
+    0.39775,
+    0.393875,
+    0.4365
+   ],
+   "flush_ms": 0.0005,
+   "maxrss_mb": 125.015625
+  },
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 120670,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1298,
+    "upload": 119258
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 21135,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413e25f7fe9bdc293506c069639"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 12510,
+   "received": 3320,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 1024,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:05.458786+00:00",
+  "wall_ms": 1071.924707852304,
+  "timing": {
+   "setup_ms": 723.2911249157041,
+   "call_ms": [
+    257.496958
+   ],
+   "flush_ms": 0.001625,
+   "maxrss_mb": 125.359375
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 95892,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4544,
+    "upload": 91234
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 15,
+    "logical_bytes": 4320,
+    "capture_references": 17,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413e8e47e8fa6819c3f7c0a359a"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 9,
+     "network_announcement": 3,
+     "network_event": 9,
+     "network_completion": 3,
+     "function_completion": 9
+    }
+   },
+   "spans": 15
+  },
+  "model_http": {
+   "requests": 3,
+   "sent": 1491,
+   "received": 607,
+   "statuses": [
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 102400,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:07.241533+00:00",
+  "wall_ms": 785.1898749358952,
+  "timing": {
+   "setup_ms": 688.2687921170145,
+   "call_ms": [
+    3.916167
+   ],
+   "flush_ms": 0.000541,
+   "maxrss_mb": 128.25
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 263348,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1607,
+    "upload": 261627
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 206881,
+    "capture_references": 7,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413efb47daeab71d526464b94a1"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 102627,
+   "received": 336,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 102400,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:08.485214+00:00",
+  "wall_ms": 830.1491248421371,
+  "timing": {
+   "setup_ms": 740.5024589970708,
+   "call_ms": [
+    3.308,
+    1.18075,
+    1.0145,
+    1.00325,
+    1.180042,
+    0.992542,
+    1.081,
+    0.930459,
+    0.946958,
+    0.867833
+   ],
+   "flush_ms": 0.000666,
+   "maxrss_mb": 129.171875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 220780,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1362,
+    "upload": 219304
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 1034055,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413f4c37a5e935934cd800ffc3c"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1025540,
+   "received": 2600,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:09.770755+00:00",
+  "wall_ms": 864.818082889542,
+  "timing": {
+   "setup_ms": 766.6220420505852,
+   "call_ms": [
+    3.735084,
+    0.846791,
+    0.729833,
+    0.735125,
+    0.628,
+    0.59175,
+    0.503459,
+    0.520666,
+    0.477375,
+    0.488833
+   ],
+   "flush_ms": 0.00075,
+   "maxrss_mb": 125.90625
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 228960,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2100,
+    "upload": 226746
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 113325,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413f9e27099b841ca5bb700ac17"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 104700,
+   "received": 3340,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 10240,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:11.080785+00:00",
+  "wall_ms": 826.8359578214586,
+  "timing": {
+   "setup_ms": 741.0711660049856,
+   "call_ms": [
+    2.693792,
+    0.570041,
+    0.468083,
+    0.464125,
+    0.49075,
+    0.418333,
+    0.403709,
+    0.455875,
+    0.417584,
+    0.481
+   ],
+   "flush_ms": 0.000542,
+   "maxrss_mb": 125.359375
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 128254,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1280,
+    "upload": 126860
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 112455,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b413fee9758eb7aeb7ca4d529dd0"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 103940,
+   "received": 2580,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:12.372530+00:00",
+  "wall_ms": 791.2878750357777,
+  "timing": {
+   "setup_ms": 708.2575000822544,
+   "call_ms": [
+    3.273333,
+    1.223084,
+    1.016416,
+    0.955542,
+    0.9645,
+    1.093042,
+    1.138959,
+    1.14875,
+    0.93575,
+    0.962208
+   ],
+   "flush_ms": 0.000458,
+   "maxrss_mb": 129.984375
+  },
+  "telemetry": {
+   "requests": 15,
+   "telemetry_bytes": 2188702,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6186,
+    "upload": 2182402
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 2062626,
+    "capture_references": 53,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41403cd7c07aa9f33965825f2f2"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1025570,
+   "received": 2600,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:13.635823+00:00",
+  "wall_ms": 829.7757911495864,
+  "timing": {
+   "setup_ms": 722.6263750344515,
+   "call_ms": [
+    3.806875,
+    1.649375,
+    1.467166,
+    1.177541,
+    1.157875,
+    1.266791,
+    1.304625,
+    1.18775,
+    1.06625,
+    1.171708
+   ],
+   "flush_ms": 0.000625,
+   "maxrss_mb": 132.1875
+  },
+  "telemetry": {
+   "requests": 8,
+   "telemetry_bytes": 1152800,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 3176,
+    "upload": 1149510
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 1034925,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41408d371a68c17ab6d1127f31c"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1026300,
+   "received": 3360,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:14.908397+00:00",
+  "wall_ms": 840.7564170192927,
+  "timing": {
+   "setup_ms": 739.0521659981459,
+   "call_ms": [
+    3.148958,
+    0.698,
+    0.751708,
+    0.646458,
+    0.552917,
+    0.554917,
+    0.517875,
+    0.467333,
+    0.515125,
+    0.711959
+   ],
+   "flush_ms": 0.000542,
+   "maxrss_mb": 125.84375
+  },
+  "telemetry": {
+   "requests": 7,
+   "telemetry_bytes": 407301,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4038,
+    "upload": 403149
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 219406,
+    "capture_references": 53,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4140ddc7af5851e6e74c6fd76aa"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 103970,
+   "received": 2580,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 1024,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:16.184777+00:00",
+  "wall_ms": 3397.457249928266,
+  "timing": {
+   "setup_ms": 716.2301249336451,
+   "call_ms": [
+    257.966792,
+    255.82725,
+    256.176916,
+    256.588084,
+    256.171375,
+    257.087959,
+    257.744833,
+    256.703458,
+    255.510583,
+    257.233417
+   ],
+   "flush_ms": 0.001875,
+   "maxrss_mb": 128.859375
+  },
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 247990,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6084,
+    "upload": 241792
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 38558,
+    "capture_references": 145,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41412c171d19fb4433d5cf049de"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 14910,
+   "received": 6083,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:19.958115+00:00",
+  "wall_ms": 3403.5420001018792,
+  "timing": {
+   "setup_ms": 732.1121669374406,
+   "call_ms": [
+    256.918125,
+    256.727791,
+    256.0835,
+    254.2115,
+    254.77975,
+    255.649917,
+    256.409417,
+    256.913291,
+    257.1865,
+    259.241208
+   ],
+   "flush_ms": 0.001417,
+   "maxrss_mb": 132.5625
+  },
+  "telemetry": {
+   "requests": 21,
+   "telemetry_bytes": 2326210,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 12134,
+    "upload": 2313962
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 2088102,
+    "capture_references": 176,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4142188798d8f0440803bc54076"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 1028700,
+   "received": 6123,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 102400,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:23.755068+00:00",
+  "wall_ms": 3369.8162499349564,
+  "timing": {
+   "setup_ms": 694.2224579397589,
+   "call_ms": [
+    256.800875,
+    256.321709,
+    257.438292,
+    256.240708,
+    257.671625,
+    258.510541,
+    256.953125,
+    256.247166,
+    256.145709,
+    257.882083
+   ],
+   "flush_ms": 0.0015,
+   "maxrss_mb": 131.75
+  },
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 347721,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6167,
+    "upload": 341440
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 1052318,
+    "capture_references": 145,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414303a793ab4607220fea7e1a9"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 1028670,
+   "received": 6123,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 10240,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:27.482919+00:00",
+  "wall_ms": 3433.647166006267,
+  "timing": {
+   "setup_ms": 785.379207925871,
+   "call_ms": [
+    256.705625,
+    253.714167,
+    253.7405,
+    254.047875,
+    255.204042,
+    257.271542,
+    257.106125,
+    256.126,
+    256.564916,
+    255.042833
+   ],
+   "flush_ms": 0.000541,
+   "maxrss_mb": 127.15625
+  },
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 255995,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6004,
+    "upload": 249877
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 130718,
+    "capture_references": 145,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4143f2572c380add75e1a00f481"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 107070,
+   "received": 6103,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 10240,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:31.308873+00:00",
+  "wall_ms": 3444.395874859765,
+  "timing": {
+   "setup_ms": 762.4627500772476,
+   "call_ms": [
+    258.245667,
+    257.113042,
+    254.893791,
+    255.607333,
+    257.55925,
+    257.161833,
+    256.517041,
+    255.326833,
+    256.473916,
+    256.281125
+   ],
+   "flush_ms": 0.00225,
+   "maxrss_mb": 127.15625
+  },
+  "telemetry": {
+   "requests": 13,
+   "telemetry_bytes": 472849,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 9298,
+    "upload": 463437
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 244791,
+    "capture_references": 175,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4144e047606b52b1ecf68ea5aaf"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 107100,
+   "received": 6103,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 10240,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:35.613747+00:00",
+  "wall_ms": 1086.4998751785606,
+  "timing": {
+   "setup_ms": 721.6239171102643,
+   "call_ms": [
+    257.9885
+   ],
+   "flush_ms": 0.001042,
+   "maxrss_mb": 125.796875
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 117405,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4872,
+    "upload": 112419
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 15,
+    "logical_bytes": 24936,
+    "capture_references": 20,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4145eac7743898f6c9c83ab7714"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 9,
+     "network_announcement": 3,
+     "network_event": 9,
+     "network_completion": 3,
+     "function_completion": 9
+    }
+   },
+   "spans": 15
+  },
+  "model_http": {
+   "requests": 3,
+   "sent": 10707,
+   "received": 609,
+   "statuses": [
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:37.371309+00:00",
+  "wall_ms": 3371.8227909412235,
+  "timing": {
+   "setup_ms": 703.1040408182889,
+   "call_ms": [
+    257.57975,
+    256.575917,
+    256.175291,
+    256.803209,
+    256.887375,
+    256.029833,
+    256.621542,
+    255.27225,
+    256.794584,
+    256.587125
+   ],
+   "flush_ms": 0.0015,
+   "maxrss_mb": 126.421875
+  },
+  "telemetry": {
+   "requests": 11,
+   "telemetry_bytes": 290356,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 9170,
+    "upload": 281072
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 60451,
+    "capture_references": 175,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41465747da48da52276f489349d"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 14940,
+   "received": 6083,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:41.611444+00:00",
+  "wall_ms": 3372.3631659522653,
+  "timing": {
+   "setup_ms": 704.0549169760197,
+   "call_ms": [
+    255.92075,
+    256.082375,
+    255.091708,
+    254.806625,
+    257.435458,
+    256.982125,
+    257.274042,
+    255.8665,
+    255.101708,
+    256.635875
+   ],
+   "flush_ms": 0.001792,
+   "maxrss_mb": 126.453125
+  },
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 262586,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6655,
+    "upload": 255817
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 38588,
+    "capture_references": 145,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414760a717389772ff951e2289b"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 14940,
+   "received": 6083,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 10240,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:45.357420+00:00",
+  "wall_ms": 806.80170818232,
+  "timing": {
+   "setup_ms": 726.9102497957647,
+   "call_ms": [
+    2.903459,
+    0.726,
+    0.58375,
+    0.533042,
+    0.640584,
+    0.542334,
+    0.517042,
+    0.495125,
+    0.475125,
+    0.551958
+   ],
+   "flush_ms": 0.000666,
+   "maxrss_mb": 126.046875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 145757,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2182,
+    "upload": 143461
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 221585,
+    "capture_references": 52,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41484b97cabbe24cf1a945ae5f8"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 104670,
+   "received": 3340,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 1024,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:46.618349+00:00",
+  "wall_ms": 811.3474589772522,
+  "timing": {
+   "setup_ms": 724.3788749910891,
+   "call_ms": [
+    2.670459,
+    0.584417,
+    0.508875,
+    0.527208,
+    0.455583,
+    0.404,
+    0.4175,
+    0.48475,
+    0.431292,
+    0.419833
+   ],
+   "flush_ms": 0.000666,
+   "maxrss_mb": 125.171875
+  },
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 127008,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2118,
+    "upload": 124776
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 37245,
+    "capture_references": 52,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41489ab7f128d106892322e8619"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 12510,
+   "received": 3320,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:48.310994+00:00",
+  "wall_ms": 3387.3185419943184,
+  "timing": {
+   "setup_ms": 706.4902079291642,
+   "call_ms": [
+    258.527375,
+    258.678917,
+    256.533625,
+    258.142416,
+    257.75725,
+    258.681375,
+    257.870625,
+    256.668625,
+    257.733291,
+    258.184375
+   ],
+   "flush_ms": 0.001375,
+   "maxrss_mb": 131.953125
+  },
+  "telemetry": {
+   "requests": 15,
+   "telemetry_bytes": 1279167,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 7706,
+    "upload": 1271347
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 1052348,
+    "capture_references": 145,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b41490347ac3a308f57919db2fe8"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 1028700,
+   "received": 6123,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:52.055814+00:00",
+  "wall_ms": 777.2938748821616,
+  "timing": {
+   "setup_ms": 695.7292500883341,
+   "call_ms": [
+    2.72875,
+    0.634666,
+    0.470708,
+    0.418833,
+    0.415708,
+    0.395292,
+    0.396541,
+    0.43125,
+    0.483625,
+    0.50925
+   ],
+   "flush_ms": 0.000625,
+   "maxrss_mb": 125.265625
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 136818,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2100,
+    "upload": 134604
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 21165,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b4149ec976aba528bcd9c6cc8252"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 12540,
+   "received": 3320,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 10240,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:53.289564+00:00",
+  "wall_ms": 825.1406671479344,
+  "timing": {
+   "setup_ms": 728.3867499791086,
+   "call_ms": [
+    2.861584,
+    0.745333,
+    0.573291,
+    0.623417,
+    0.483958,
+    0.469208,
+    0.456458,
+    0.439708,
+    0.436583,
+    0.431041
+   ],
+   "flush_ms": 0.000834,
+   "maxrss_mb": 125.734375
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 129897,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1362,
+    "upload": 128421
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 113295,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414a3c4766eab7294cd11a2e324"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 104670,
+   "received": 3340,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 102400,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:54.584031+00:00",
+  "wall_ms": 786.7816248908639,
+  "timing": {
+   "setup_ms": 699.2667079903185,
+   "call_ms": [
+    3.269709,
+    1.195667,
+    1.260125,
+    1.183834,
+    0.999584,
+    0.994708,
+    1.1025,
+    1.103667,
+    0.991958,
+    0.973125
+   ],
+   "flush_ms": 0.000584,
+   "maxrss_mb": 130.140625
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 330991,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2346,
+    "upload": 328531
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 2064805,
+    "capture_references": 52,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414a8b07c2c83bffa3518526ea6"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1026270,
+   "received": 3360,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 1024,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:55.825024+00:00",
+  "wall_ms": 833.6518341675401,
+  "timing": {
+   "setup_ms": 731.9414580706507,
+   "call_ms": [
+    2.389708,
+    0.484708,
+    0.3675,
+    0.45,
+    0.341416,
+    0.405708,
+    0.408125,
+    0.481834,
+    0.356458,
+    0.339125
+   ],
+   "flush_ms": 0.0005,
+   "maxrss_mb": 126.90625
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 135390,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2018,
+    "upload": 133258
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 20325,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414ada8739fb68ea59d02128bcc"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 11810,
+   "received": 2560,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:57.115639+00:00",
+  "wall_ms": 779.610333032906,
+  "timing": {
+   "setup_ms": 695.240291999653,
+   "call_ms": [
+    3.419334,
+    1.165041,
+    1.08825,
+    1.104875,
+    1.116708,
+    1.314,
+    1.329958,
+    1.120708,
+    0.987542,
+    0.937916
+   ],
+   "flush_ms": 0.000625,
+   "maxrss_mb": 132.921875
+  },
+  "telemetry": {
+   "requests": 15,
+   "telemetry_bytes": 2191911,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6268,
+    "upload": 2185529
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 2064956,
+    "capture_references": 53,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414b2877757b916dbcd67df731a"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1026300,
+   "received": 3360,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "extract",
+  "size": 1024,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:58.344023+00:00",
+  "wall_ms": 801.3962081167847,
+  "timing": {
+   "setup_ms": 703.5551669541746,
+   "call_ms": [
+    2.691625
+   ],
+   "flush_ms": 0.000458,
+   "maxrss_mb": 124.484375
+  },
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 60052,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1379,
+    "upload": 58559
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 4125,
+    "capture_references": 7,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414b766783fbf32061948a0d9e8"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 1251,
+   "received": 332,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 1024,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:36:59.994771+00:00",
+  "wall_ms": 1141.2455830723047,
+  "timing": {
+   "setup_ms": 783.6217088624835,
+   "call_ms": [
+    258.517958
+   ],
+   "flush_ms": 0.001208,
+   "maxrss_mb": 125.484375
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 98917,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4872,
+    "upload": 93931
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 15,
+    "logical_bytes": 6502,
+    "capture_references": 20,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414be257107b87fc1b063a8ae23"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 9,
+     "network_announcement": 3,
+     "network_event": 9,
+     "network_completion": 3,
+     "function_completion": 9
+    }
+   },
+   "spans": 15
+  },
+  "model_http": {
+   "requests": 3,
+   "sent": 1491,
+   "received": 607,
+   "statuses": [
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 102400,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:37:02.331299+00:00",
+  "wall_ms": 3422.381958924234,
+  "timing": {
+   "setup_ms": 765.8004160039127,
+   "call_ms": [
+    256.744708,
+    254.847417,
+    255.025916,
+    255.830083,
+    255.553625,
+    257.034542,
+    258.027708,
+    257.65,
+    257.067041,
+    255.899958
+   ],
+   "flush_ms": 0.000625,
+   "maxrss_mb": 131.9375
+  },
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 461697,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 7795,
+    "upload": 453788
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 2087951,
+    "capture_references": 175,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414c73075acb07d9488c1cef118"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 1028670,
+   "received": 6123,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 102400,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:37:06.149150+00:00",
+  "wall_ms": 817.2646667808294,
+  "timing": {
+   "setup_ms": 734.4303750433028,
+   "call_ms": [
+    3.448916
+   ],
+   "flush_ms": 0.0005,
+   "maxrss_mb": 128.546875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 159948,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1443,
+    "upload": 158391
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 103890,
+    "capture_references": 6,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414d5f97c82be4733f1808c94cc"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 102627,
+   "received": 336,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "classify",
+  "size": 10240,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:37:07.414622+00:00",
+  "wall_ms": 823.8204999361187,
+  "timing": {
+   "setup_ms": 732.7540419064462,
+   "call_ms": [
+    2.685709,
+    0.54425,
+    0.626667,
+    0.564542,
+    0.490875,
+    0.524292,
+    0.497375,
+    0.446209,
+    0.413834,
+    0.427416
+   ],
+   "flush_ms": 0.000667,
+   "maxrss_mb": 125.5
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 143132,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2100,
+    "upload": 140918
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 219255,
+    "capture_references": 52,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414daef73a1a3dc298aaa5ddbe5"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 103940,
+   "received": 2580,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 102400,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:37:08.710750+00:00",
+  "wall_ms": 818.0360409896821,
+  "timing": {
+   "setup_ms": 718.4539581649005,
+   "call_ms": [
+    3.498667
+   ],
+   "flush_ms": 0.000458,
+   "maxrss_mb": 128.140625
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 158964,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1361,
+    "upload": 157489
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 103806,
+    "capture_references": 6,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414dfee7e9b87917a25b4b85e25"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 102554,
+   "received": 260,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge",
+  "app": "agent",
+  "size": 1024,
+  "batch": "10s",
+  "calls": 10,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:37:09.961113+00:00",
+  "wall_ms": 3413.852041820064,
+  "timing": {
+   "setup_ms": 755.0317090936005,
+   "call_ms": [
+    256.787959,
+    255.561167,
+    256.350875,
+    257.785208,
+    254.000667,
+    254.045,
+    253.186583,
+    255.153,
+    253.556875,
+    254.43075
+   ],
+   "flush_ms": 0.001125,
+   "maxrss_mb": 126.65625
+  },
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 259474,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 7959,
+    "upload": 251401
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 132,
+    "logical_bytes": 60391,
+    "capture_references": 175,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414e4f77b439779c545f64a96a7"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 90,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 90
+    }
+   },
+   "spans": 132
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 14910,
+   "received": 6083,
+   "statuses": [
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200,
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "agent",
+  "size": 10240,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:37:13.758789+00:00",
+  "wall_ms": 1100.167291937396,
+  "timing": {
+   "setup_ms": 732.900541042909,
+   "call_ms": [
+    258.865708
+   ],
+   "flush_ms": 0.000833,
+   "maxrss_mb": 125.421875
+  },
+  "telemetry": {
+   "requests": 6,
+   "telemetry_bytes": 105135,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 4544,
+    "upload": 100477
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 15,
+    "logical_bytes": 13536,
+    "capture_references": 17,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414f3b27862ab03c115267ee647"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 9,
+     "network_announcement": 3,
+     "network_event": 9,
+     "network_completion": 3,
+     "function_completion": 9
+    }
+   },
+   "spans": 15
+  },
+  "model_http": {
+   "requests": 3,
+   "sent": 10707,
+   "received": 609,
+   "statuses": [
+    200,
+    503,
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "extract",
+  "size": 10240,
+  "batch": "1",
+  "calls": 1,
+  "vary": false,
+  "hosted": false,
+  "utc": "2026-11-07T03:37:15.523568+00:00",
+  "wall_ms": 911.7160418536514,
+  "timing": {
+   "setup_ms": 814.1832079272717,
+   "call_ms": [
+    3.20075
+   ],
+   "flush_ms": 0.000458,
+   "maxrss_mb": 124.875
+  },
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 67598,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 1361,
+    "upload": 66123
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 6,
+    "logical_bytes": 11730,
+    "capture_references": 6,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b414faef7411bfff586f535bd3fe"
+    ],
+    "events": {
+     "thread_announcement": 3,
+     "thread_completion": 3,
+     "function_announcement": 2,
+     "network_announcement": 1,
+     "network_event": 3,
+     "network_completion": 1,
+     "function_completion": 2
+    }
+   },
+   "spans": 6
+  },
+  "model_http": {
+   "requests": 1,
+   "sent": 10467,
+   "received": 334,
+   "statuses": [
+    200
+   ]
+  }
+ },
+ {
+  "stack": "bridge-nobodies",
+  "app": "classify",
+  "size": 102400,
+  "batch": "10v",
+  "calls": 10,
+  "vary": true,
+  "hosted": false,
+  "utc": "2026-11-07T03:37:16.892187+00:00",
+  "wall_ms": 859.2559169046581,
+  "timing": {
+   "setup_ms": 759.8757077939808,
+   "call_ms": [
+    3.646333,
+    1.268209,
+    1.126166,
+    1.090708,
+    0.933417,
+    1.069875,
+    0.921292,
+    0.910333,
+    0.8935,
+    0.974167
+   ],
+   "flush_ms": 0.000708,
+   "maxrss_mb": 131.8125
+  },
+  "telemetry": {
+   "requests": 8,
+   "telemetry_bytes": 1151262,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 3094,
+    "upload": 1148054
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "billing": {
+    "spans": 42,
+    "logical_bytes": 1034085,
+    "capture_references": 42,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1b415000a7fa8aecb231efe037340"
+    ],
+    "events": {
+     "thread_announcement": 12,
+     "thread_completion": 12,
+     "function_announcement": 20,
+     "network_announcement": 10,
+     "network_event": 30,
+     "network_completion": 10,
+     "function_completion": 20
+    }
+   },
+   "spans": 42
+  },
+  "model_http": {
+   "requests": 10,
+   "sent": 1025570,
+   "received": 2600,
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  }
+ }
+]

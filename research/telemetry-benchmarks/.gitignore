@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 scratch/
 apps/py_bridge/
+apps/py_bridge_nobodies/

@@ -1,0 +1,60 @@
+[
+ {
+  "stack": "baml-medium",
+  "requests": 200,
+  "steps": 20,
+  "function_calls": 8200,
+  "bytes": 2947,
+  "spans": 2,
+  "billed": 445,
+  "events": {
+   "thread_announcement": 2,
+   "thread_completion": 2
+  }
+ },
+ {
+  "stack": "baml-high",
+  "requests": 200,
+  "steps": 20,
+  "function_calls": 8200,
+  "bytes": 436631,
+  "spans": 8203,
+  "billed": 445,
+  "events": {
+   "thread_announcement": 2,
+   "function_announcement": 8201,
+   "function_completion": 8201,
+   "thread_completion": 2
+  }
+ },
+ {
+  "stack": "logfire",
+  "requests": 200,
+  "steps": 20,
+  "function_calls": 8200,
+  "bytes": 74851,
+  "spans": 2576,
+  "pending_spans": 16,
+  "stored_records": 2560
+ },
+ {
+  "stack": "otel",
+  "requests": 200,
+  "steps": 20,
+  "function_calls": 8200,
+  "bytes": 48525,
+  "spans": 2560,
+  "pending_spans": 0,
+  "stored_records": 2560
+ },
+ {
+  "stack": "datadog",
+  "requests": 200,
+  "steps": 20,
+  "function_calls": 8200,
+  "bytes": 2753393,
+  "spans": 8200,
+  "pending_spans": 0,
+  "stored_records": 8200
+ }
+]

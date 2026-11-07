@@ -56,12 +56,13 @@ def run_python(stack, app, text, n, vary, model, tele):
            "TELEMETRY_URL": tele.url if tele else ""}
     if stack == "logfire":
         env["LOGFIRE_TOKEN"] = SECRETS["LOGFIRE_TOKEN"]
-    if stack == "bridge":
+    if stack.startswith("bridge"):
         for key in [k for k in env if k.startswith(("BOUNDARY_", "DD_", "LOGFIRE_"))]:
             del env[key]
-        env.update(PYTHONPATH=str(ROOT / "apps" / "py_bridge"), BAML_TELEMETRY="medium",
+        env.update(PYTHONPATH=str(ROOT / "apps" / ("py_bridge_nobodies" if stack == "bridge-nobodies" else "py_bridge")), BAML_TELEMETRY="medium",
                    BOUNDARY_API_KEY=tele.handle, BOUNDARY_API_URL=tele.url)
-    cmd = [PY, str(ROOT / "apps" / "py_apps.py"), stack, app, "--text", text, "--n", str(n)] + (["--vary"] if vary else [])
+    py_stack = "bridge" if stack.startswith("bridge") else stack
+    cmd = [PY, str(ROOT / "apps" / "py_apps.py"), py_stack, app, "--text", text, "--n", str(n)] + (["--vary"] if vary else [])
     start = time.perf_counter()
     proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
     wall = (time.perf_counter() - start) * 1000
@@ -146,7 +147,7 @@ def main():
         meter = tele = bcs = None
         started = datetime.now(timezone.utc).isoformat()
         try:
-            if stack == "bridge":
+            if stack.startswith("bridge"):
                 from logical_usage import Meter
                 meter = Meter()
                 bcs = bcs_relay(SECRETS["BOUNDARY_API_KEY"] if args.hosted else None, meter=meter)
