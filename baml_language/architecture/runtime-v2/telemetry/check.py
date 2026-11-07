@@ -46,7 +46,7 @@ def reader():
     (directory/'src/known_telemetry_divergences.rs').write_text((WS/'crates/baml_tests/rust_diff/known_telemetry_divergences.rs').read_text())
     shutil.copyfile(EVIDENCE/'reader_main.rs',directory/'src/main.rs')
     shutil.copyfile(WS/'Cargo.lock',directory/'Cargo.lock')
-    run(['cargo','build','--release','--manifest-path',directory/'Cargo.toml','--target-dir',OUT/'reader-target'],stdout=subprocess.DEVNULL)
+    run(['cargo','+1.98.0','build','--release','--manifest-path',directory/'Cargo.toml','--target-dir',OUT/'reader-target'],stdout=subprocess.DEVNULL)
     return OUT/'reader-target/release/v2-telemetry-reader'
 
 def build(names, backends):
@@ -69,6 +69,8 @@ def build(names, backends):
 
 def check(names,levels):
     normalizer=reader()
+    evidence=EVIDENCE/'parity.json'
+    previous=json.loads(evidence.read_text()) if evidence.exists() else []
     results=[]
     for name in names:
         for stress in ['0','1']:
@@ -98,7 +100,9 @@ def check(names,levels):
                     diff_path.write_text(diff)
                 row=dict(workload=name,level=level,stress=stress,strict_parity=strict_parity,parity=parity,parity_except_existing_gc_records=gc_diagnostic[0]==gc_diagnostic[1],diff=str(diff_path) if diff_path else None)
                 results.append(row); print(json.dumps(row),flush=True)
-                (EVIDENCE/'parity.json').write_text(json.dumps(results,indent=2)+'\n')
+                keys={(r['workload'],r['level'],r['stress']) for r in results}
+                retained=[r for r in previous if (r['workload'],r['level'],r['stress']) not in keys]
+                evidence.write_text(json.dumps(retained+results,indent=2)+'\n')
     if any(not row['parity'] for row in results):
         raise AssertionError('BTEL parity failed outside the C5 GC exception; per-case diffs are retained in target/telemetry')
 

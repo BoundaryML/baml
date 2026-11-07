@@ -1585,3 +1585,38 @@ Evidence: `telemetry/floor-{raw,summary}.json`, `clock-{cost.jsonl,source.txt,su
 and `richards-optimized-{profile.txt,lines.txt,profile-run.json}`. T2/T3 follow;
 this floor experiment neither weakens their parity requirements nor changes
 the telemetry default.
+
+## Telemetry T2a: high spans and noncapturing promotion
+
+The compiler dispatches span/promotion observations into a separate non-inlined
+helper. Ordinary medium calls retain their timing frame and direct aggregate
+slot update. Span frames allocate identities, announce entry, retain the active
+span as parent, and restore it on completion. Recursive calls preserve the
+reentry population. Completion uses the existing outcome-specialized records;
+the producer does not also aggregate a span, since the processor already does
+that. Timing policies can promote errors or elapsed durations to late
+completions without a fabricated entry announcement.
+
+The host integer formatter now instruments its stringify and naming calls at
+high as well. The direct checker retains prior rows on subset checks and pins
+its copied normalizer build to the workspace's Rust 1.98 toolchain.
+
+High parity: **4/4 pass**, binary-trees and Richards, normal and forced-GC runs.
+Only C5 collector maintenance differs. Exact captures are not implemented:
+policies requesting inputs/output/error still return the explicit unsupported
+runtime-v2 diagnostic. The generated workloads currently use `Policy::NONE`;
+the promotion regression directly exercises the producer's policy API. This
+is a T2 checkpoint, **not completion of T2's capture requirement**. Hook support
+remains restricted to the existing constant-Hidden case.
+
+Validation: runtime 18 tests and compiler 10 tests pass. The span regression
+checks nested/reentry ancestry, parent restoration, error and zero-duration
+promotion, absence of announcements for late spans, and exactly-once aggregate
+accounting. High matrix logs are `target/t2-{trees,richards}-high.log`; normalized
+recordings/diffs remain under `target/telemetry` and accepted rows are retained
+in `telemetry/parity.json`. No new performance claim is made for this checkpoint;
+the clock-floor gate and profile above remain the measured checkpoint results.
+
+The off/low/medium regression matrix was then rerun against the span-enabled
+binaries: **12/12 pass** normal/stress, for **16/16 accepted cases** across all
+four levels on the two workloads. Strict clippy passes for both touched crates.

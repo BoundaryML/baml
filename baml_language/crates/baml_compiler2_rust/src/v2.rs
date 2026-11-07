@@ -1821,7 +1821,7 @@ impl Emitter<'_, '_> {
             .collect::<Vec<_>>()
             .join(",");
         let mut code = format!(
-            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{if !rt::telemetry::enabled(&O{object}){{return f{object}_body({arguments});}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
+            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{let mode=rt::telemetry::mode(&O{object});if mode==0{{return f{object}_body({arguments});}}if mode>1{{return rt::telemetry::observe(telemetry_site,mode,||f{object}_body({arguments}));}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
         );
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {

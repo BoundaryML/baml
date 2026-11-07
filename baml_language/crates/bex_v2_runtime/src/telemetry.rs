@@ -89,6 +89,8 @@ struct State {
     #[allow(clippy::vec_box, reason = "stable addresses held by frames and caches")]
     slots: Vec<Box<[AggregateDelta; 2]>>,
     reader: DeltaClock,
+    active_span: Option<TelemetryId>,
+    policies: Vec<Policy>,
     active: CallPathId,
     active_function: Option<usize>,
     active_slot: *mut AggregateDelta,
@@ -225,7 +227,11 @@ pub unsafe fn enter(word: &AtomicU8, site_id: usize) -> Option<Frame> {
 }
 #[inline(always)]
 pub fn enabled(word: &AtomicU8) -> bool {
-    word.load(Ordering::Relaxed) != 0
+    mode(word) != 0
+}
+#[inline(always)]
+pub fn mode(word: &AtomicU8) -> u8 {
+    word.load(Ordering::Relaxed)
 }
 /// # Safety
 /// A session must own the current task, and the caller must finish this frame
@@ -303,6 +309,136 @@ impl Frame {
         state.active_slot = self.saved_slot;
     }
 }
+/// Span and promotion work is kept out of the ordinary timing frame.
+/// # Safety
+/// The same session and site requirements as `enter_observed` apply.
+#[inline(never)]
+pub unsafe fn observe<T>(site: usize, mode: u8, call: impl FnOnce() -> R<T>) -> R<T> {
+    let frame = unsafe { enter_observed(site) };
+    let state = unsafe { &mut *frame.state };
+    let saved_span = state.active_span;
+    let parent_id = saved_span.unwrap_or(state.thread);
+    let id = (mode == 2).then(allocate_telemetry_id);
+    let call_path = state.active;
+    let entered_at = frame.entered_at;
+    let policy = state.policies[state.sites[site].callee];
+    if mode == 2 {
+        let id = id.unwrap();
+        state.active_span = Some(id);
+        state.span(SpanRecord::FunctionSpanAnnouncement {
+            id,
+            parent_id,
+            call_path,
+            entered_at,
+            captured_inputs: None,
+            captured_type_args: None,
+        });
+    }
+    let mut result = call();
+    let state = unsafe { &mut *frame.state };
+    let (exited_at, outcome) = match &mut result {
+        Ok(_) => (state.read(), InvocationOutcome::Ok),
+        Err(error) => (
+            *error.telemetry_at.get_or_insert_with(|| state.read()),
+            outcome(error),
+        ),
+    };
+    let duration = entered_at.elapsed_until(exited_at);
+    let promoted = mode == 2
+        || policy.span_from_entry
+        || policy.promote_errors && outcome.is_error()
+        || policy
+            .promotion_duration_threshold
+            .is_some_and(|threshold| {
+                state
+                    .clock
+                    .threshold(threshold)
+                    .reached(duration, state.clock.domain())
+            });
+    if promoted {
+        let id = id.unwrap_or_else(allocate_telemetry_id);
+        let await_time = frame.await_duration;
+        macro_rules! completion {
+            ($variant:ident) => {
+                SpanRecord::$variant {
+                    id,
+                    parent_id,
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    captured_value: None,
+                }
+            };
+        }
+        let record = match (mode == 2, frame.flags != 0, outcome) {
+            (true, false, InvocationOutcome::Ok) => completion!(FunctionSpanCompletionOk),
+            (true, false, InvocationOutcome::Errored) => completion!(FunctionSpanCompletionErrored),
+            (true, false, InvocationOutcome::Cancelled) => {
+                completion!(FunctionSpanCompletionCancelled)
+            }
+            (true, false, InvocationOutcome::Panicked) => {
+                completion!(FunctionSpanCompletionPanicked)
+            }
+            (true, true, InvocationOutcome::Ok) => completion!(FunctionSpanCompletionOkReentry),
+            (true, true, InvocationOutcome::Errored) => {
+                completion!(FunctionSpanCompletionErroredReentry)
+            }
+            (true, true, InvocationOutcome::Cancelled) => {
+                completion!(FunctionSpanCompletionCancelledReentry)
+            }
+            (true, true, InvocationOutcome::Panicked) => {
+                completion!(FunctionSpanCompletionPanickedReentry)
+            }
+            (false, false, InvocationOutcome::Ok) => completion!(LateFunctionSpanCompletionOk),
+            (false, false, InvocationOutcome::Errored) => {
+                completion!(LateFunctionSpanCompletionErrored)
+            }
+            (false, false, InvocationOutcome::Cancelled) => {
+                completion!(LateFunctionSpanCompletionCancelled)
+            }
+            (false, false, InvocationOutcome::Panicked) => {
+                completion!(LateFunctionSpanCompletionPanicked)
+            }
+            (false, true, InvocationOutcome::Ok) => {
+                completion!(LateFunctionSpanCompletionOkReentry)
+            }
+            (false, true, InvocationOutcome::Errored) => {
+                completion!(LateFunctionSpanCompletionErroredReentry)
+            }
+            (false, true, InvocationOutcome::Cancelled) => {
+                completion!(LateFunctionSpanCompletionCancelledReentry)
+            }
+            (false, true, InvocationOutcome::Panicked) => {
+                completion!(LateFunctionSpanCompletionPanickedReentry)
+            }
+        };
+        state.span(record);
+    } else {
+        complete_unusual(state, frame.slot, duration, frame.await_duration, outcome);
+    }
+    state.active_span = saved_span;
+    state.active = frame.saved_path;
+    state.active_function = frame.saved_function;
+    state.active_slot = frame.saved_slot;
+    result
+}
+
+/// # Safety
+/// The same session and site requirements as `enter_observed` apply.
+pub unsafe fn observed_call<T>(word: &AtomicU8, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
+    match mode(word) {
+        0 => call(),
+        1 => {
+            let frame = unsafe { enter_observed(site) };
+            let mut result = call();
+            frame.finish(&mut result);
+            result
+        }
+        mode => unsafe { observe(site, mode, call) },
+    }
+}
+
 #[inline(always)]
 fn add_ok(slot: &mut AggregateDelta, duration: btel_types::ClockDuration) -> bool {
     let Some(count) = slot.count.checked_add(1) else {
@@ -485,10 +621,12 @@ impl Session {
             .iter()
             .map(|function| {
                 let word = observation(level, function.hidden, function.policy);
-                if word > 1 {
+                if function.policy.capture_inputs
+                    || function.policy.capture_output
+                    || function.policy.capture_error
+                {
                     return Err(Error::internal(
-                        "unsupported in runtime v2: span telemetry or promotion (T2 pending)"
-                            .into(),
+                        "unsupported in runtime v2: policy captures (T2 pending)".into(),
                     ));
                 }
                 Ok(word)
@@ -598,6 +736,8 @@ impl Session {
             histories: vec![Vec::new(); sites.len()],
             reader: DeltaClock::for_epoch(&clock),
             slots: Vec::new(),
+            active_span: None,
+            policies: functions.iter().map(|f| f.policy).collect(),
             active: CallPathId::ROOT,
             active_function: None,
             active_slot: std::ptr::null_mut(),
@@ -623,17 +763,12 @@ impl Session {
         self.run_at(site, || {
             // Typed specialization of stringify(int, Declared, 0, false):
             // resolve the naming mode, then encode the scalar without a heap.
-            let frame = unsafe { enter(word, site) };
-            let naming_frame = unsafe { enter(alias_word, site + 1) };
-            let mut aliased: R<bool> = Ok(false);
-            if let Some(frame) = naming_frame {
-                frame.finish(&mut aliased);
+            unsafe {
+                observed_call(word, site, || {
+                    let aliased: R<bool> = observed_call(alias_word, site + 1, || Ok(false));
+                    aliased.map(|_| value.to_string())
+                })
             }
-            let mut result = aliased.map(|_| value.to_string());
-            if let Some(frame) = frame {
-                frame.finish(&mut result);
-            }
-            result
         })
     }
     fn run_at<T>(&mut self, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
@@ -741,7 +876,7 @@ fn recording_root() -> Option<std::path::PathBuf> {
 }
 
 // Resolve once. Explicit policies override auto-low, but global off and
-// compiler passthrough functions remain hidden. Span/promotion is T2.
+// compiler passthrough functions remain hidden.
 fn observation(
     level: Option<btel_settings::mode::AutoTelemetryLevel>,
     hidden: bool,
@@ -843,30 +978,7 @@ mod tests {
             NonZeroUsize::new(8).unwrap(),
             NoSinkPublisher::default(),
         );
-        let allocator = btel_types::FunctionIdAllocator::default();
-        let clock = ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
-        let mut state = Box::new(State {
-            producer: pool.register_producer().unwrap(),
-            clock,
-            functions: vec![allocator.allocate().unwrap(), allocator.allocate().unwrap()],
-            names: vec![],
-            words: vec![],
-            name: None,
-            sites: SITES,
-            caches: vec![Cache::default(); 3],
-            paths: HashMap::new(),
-            histories: vec![Vec::new(); SITES.len()],
-            reader: DeltaClock::Epoch,
-            slots: Vec::new(),
-            active: CallPathId::ROOT,
-            active_function: None,
-            active_slot: std::ptr::null_mut(),
-            next_path: 0,
-            gc_function: allocator.allocate().unwrap(),
-            gc_started: None,
-            thread: allocate_telemetry_id(),
-            started: ClockInstant::from_ticks(0),
-        });
+        let mut state = test_state(&pool);
         state.producer.write_timing(TimingRecord::ThreadSelected {
             thread_id: state.thread,
         });
@@ -905,5 +1017,113 @@ mod tests {
         processor.process_available();
         processor.flush();
         assert_eq!(processor.publisher().stats().function_completions, 4);
+    }
+    fn test_state(pool: &Pool) -> Box<State> {
+        let allocator = btel_types::FunctionIdAllocator::default();
+        let clock = ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
+        Box::new(State {
+            producer: pool.register_producer().unwrap(),
+            clock,
+            functions: vec![allocator.allocate().unwrap(), allocator.allocate().unwrap()],
+            names: vec![],
+            words: vec![],
+            name: None,
+            sites: SITES,
+            caches: vec![Cache::default(); 3],
+            paths: HashMap::new(),
+            histories: vec![Vec::new(); SITES.len()],
+            reader: DeltaClock::Epoch,
+            slots: Vec::new(),
+            active_span: None,
+            policies: vec![Policy::NONE; 2],
+            active: CallPathId::ROOT,
+            active_function: None,
+            active_slot: std::ptr::null_mut(),
+            next_path: 0,
+            gc_function: allocator.allocate().unwrap(),
+            gc_started: None,
+            thread: allocate_telemetry_id(),
+            started: ClockInstant::from_ticks(0),
+        })
+    }
+
+    #[derive(Default)]
+    struct Spans {
+        announcements: Vec<(TelemetryId, TelemetryId)>,
+        completions: Vec<(TelemetryId, TelemetryId, bool, bool, InvocationOutcome)>,
+        count: u64,
+    }
+    impl btel_processor::Publisher<Snapshot, Snapshot> for Spans {
+        fn aggregate(&mut self, delta: AggregateDelta) {
+            self.count += delta.count;
+        }
+        fn span(&mut self, _: TelemetryId, record: &mut Span) {
+            if let SpanRecord::FunctionSpanAnnouncement { id, parent_id, .. } = record {
+                self.announcements.push((*id, *parent_id));
+            }
+            if let Some(done) = record.completion() {
+                self.completions.push((
+                    done.id,
+                    done.parent_id,
+                    done.late,
+                    done.reentry,
+                    done.outcome,
+                ));
+            }
+        }
+        fn flush(&mut self) {}
+    }
+    #[test]
+    fn spans_and_late_promotion_restore_parent_and_count_once() {
+        let pool = Pool::new(bex_chunkedringbuffer::Config::for_producers(
+            NonZeroUsize::new(1).unwrap(),
+        ))
+        .unwrap();
+        let mut processor = Processor::with_publisher(
+            pool.bind_consumer().unwrap(),
+            NonZeroUsize::new(8).unwrap(),
+            Spans::default(),
+        );
+        let mut state = test_state(&pool);
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
+        state.policies[1].promote_errors = true;
+        CURRENT.set(&mut *state);
+        let result = unsafe {
+            observe(0, 2, || {
+                let parent = (*CURRENT.get()).active_span;
+                observe(1, 2, || observe(2, 2, || Ok(())))?;
+                assert_eq!((*CURRENT.get()).active_span, parent);
+                // No announcement or aggregate duplication for a late completion.
+                let failed: R<()> = observe(1, 3, || Err(Error::internal("test".into())));
+                assert!(failed.is_err());
+                assert_eq!((*CURRENT.get()).active_span, parent);
+                observe(1, 3, || Ok(()))?;
+                (&mut (*CURRENT.get()).policies)[1].promotion_duration_threshold =
+                    Some(std::time::Duration::ZERO);
+                observe(1, 3, || Ok(()))
+            })
+        };
+        assert!(result.is_ok());
+        assert!(state.active_span.is_none());
+        assert_eq!(state.active, CallPathId::ROOT);
+        CURRENT.set(std::ptr::null_mut());
+        state.flush();
+        processor.process_available();
+        processor.flush();
+        let published = processor.publisher();
+        assert_eq!(published.count, 6);
+        assert_eq!(published.announcements.len(), 3);
+        assert_eq!(published.completions.len(), 5);
+        let root = published.announcements[0].0;
+        let child = published.announcements[1].0;
+        assert_eq!(published.announcements[0].1, state.thread);
+        assert_eq!(published.announcements[1].1, root);
+        assert_eq!(published.announcements[2].1, child);
+        assert!(published.completions[0].3);
+        assert!(published.completions[2].2);
+        assert_eq!(published.completions[2].1, root);
+        assert_eq!(published.completions[2].4, InvocationOutcome::Panicked);
     }
 }
