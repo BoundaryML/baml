@@ -8191,6 +8191,7 @@ mod type_identity_tests {
                 generic_param_count: 0,
                 owner: bex_vm_types::types::Owner::anonymous(),
                 telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                redact: false,
             })));
         let head = bex_vm_types::TypeHead::new(class, tag);
         let original = thread.vm.alloc_type(bex_vm_types::types::TypeValue::new(
@@ -8316,6 +8317,7 @@ mod type_identity_tests {
                     generic_param_count: 0,
                     owner: bex_vm_types::types::Owner::anonymous(),
                     telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                    redact: false,
                 })));
         let original = source_thread
             .vm

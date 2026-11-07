@@ -1127,6 +1127,37 @@ pub enum TirTypeError {
     /// JSON answer can never fill (a warning): its type has no JSON form
     /// besides `null`, so the field is always `null`.
     LlmOutputFieldAlwaysNull { field: Name },
+    /// `@json` attributes on a class that provides `baml.ToJson` or
+    /// `baml.FromJson`, which they would not reach.
+    JsonAttributesWithOverride { name: Name, interface: String },
+    /// `@json.flatten` or `@json.fallback` on a field that is not
+    /// `map<string, json>`.
+    JsonRestFieldType {
+        attribute: &'static str,
+        field: Name,
+    },
+    /// `@json.rename` on a `@json.flatten` or `@json.fallback` field, which has
+    /// no key of its own.
+    JsonRestRenamed {
+        attribute: &'static str,
+        field: Name,
+    },
+    /// `@skip` on a field JSON has to read: a `@json.flatten` or
+    /// `@json.fallback` field, or a fallback class's tag.
+    JsonAttributeSkipped { field: Name },
+    /// A class with a second `@json.flatten` or `@json.fallback` field.
+    JsonRestRepeated { class: Name },
+    /// A `@json.fallback` class with a field that is not a literal.
+    JsonFallbackFieldNotLiteral { class: Name, field: Name },
+    /// A `@json.fallback` class with no literal field to name its tag.
+    JsonFallbackNoTag { class: Name },
+    /// A union with a `@json.fallback` member and a member the tag can't
+    /// reach, so the fallback would take its objects or it would take every
+    /// object.
+    JsonFallbackUntaggedMember { fallback: Name, member: Ty },
+    /// A union with a `@json.fallback` member and two members no literal
+    /// field tells apart.
+    JsonFallbackOverlap { first: Ty, second: Ty },
     /// An assignment targets a top-level binding. `$init` sets every global
     /// once and requests then share it, so the binding is immutable; only
     /// what it holds may change.
@@ -2693,6 +2724,52 @@ impl TirTypeError {
                     f,
                     "the model can never fill `{field}`, so it is always null. Mark it @skip if \
                      that is intended"
+                ),
+                TirTypeError::JsonAttributesWithOverride { name, interface } => write!(
+                    f,
+                    "`{name}` implements `{interface}`, so its `@json` attributes would be \
+                     ignored. Remove the attributes or the override"
+                ),
+                TirTypeError::JsonAttributeSkipped { field } => write!(
+                    f,
+                    "`@skip` leaves `{field}` out of JSON, which its `@json` role needs"
+                ),
+                TirTypeError::JsonFallbackNoTag { class } => write!(
+                    f,
+                    "`{class}` has a `@json.fallback` field, so it needs a literal field to \
+                     name the union's tag, such as `type: \"UNKNOWN\"`"
+                ),
+                TirTypeError::JsonFallbackOverlap { first, second } => write!(
+                    f,
+                    "no literal field tells `{}` from `{}`, so this union can't pick between \
+                     them. Give one of them a literal the other doesn't have",
+                    first.spell(vp),
+                    second.spell(vp)
+                ),
+                TirTypeError::JsonRestFieldType { attribute, field } => write!(
+                    f,
+                    "`{attribute}` needs a `map<string, json>` field, and `{field}` is not one"
+                ),
+                TirTypeError::JsonRestRenamed { attribute, field } => write!(
+                    f,
+                    "`{field}` holds keys of the object through `{attribute}`, so it has no key \
+                     for `@json.rename` to set"
+                ),
+                TirTypeError::JsonRestRepeated { class } => write!(
+                    f,
+                    "`{class}` can have only one `@json.flatten` or `@json.fallback` field"
+                ),
+                TirTypeError::JsonFallbackFieldNotLiteral { class, field } => write!(
+                    f,
+                    "`{class}` has a `@json.fallback` field, so its other fields must be \
+                     literals, and `{field}` is not one"
+                ),
+                TirTypeError::JsonFallbackUntaggedMember { fallback, member } => write!(
+                    f,
+                    "`{fallback}` is this union's `@json.fallback` member, but `{}` has no \
+                     literal field for its tag, so the union can't tell when an object is one. \
+                     Add a literal field such as `type: \"name\"`, or remove `@json.fallback`",
+                    member.spell(vp)
                 ),
                 TirTypeError::InitThrowNotHandled {
                     declaration,

@@ -20,10 +20,16 @@
 //! keys only when two or more candidates count them. A member that fails deep
 //! inside falls through to the next.
 
+use std::sync::Arc;
+
+use baml_type::json_tags::{TagTree, Untagged, tag_tree};
 use bex_vm_types::{HeapPtr, Object, RealizedTy};
 use smallvec::SmallVec;
 
-use super::plan::Plans;
+use super::{
+    decode::Structural,
+    plan::{ClassPlan, Plans},
+};
 use crate::BexVm;
 
 /// What JSON value a union is decoding: what members are prefiltered by.
@@ -150,6 +156,176 @@ impl Candidates {
         // Stable: ties keep declaration order.
         ranked.sort_by(|(_, a), (_, b)| b.cmp(a));
         ranked.into_iter().map(|(index, _)| index).collect()
+    }
+}
+
+/// How a union with a `@json.fallback` member picks a member for an object.
+pub(super) struct UnionTags {
+    /// The tree over `members`, or why the union can't be told apart: a union
+    /// the compiler never saw, such as one spelled in a type argument.
+    tree: Result<TagTree<RealizedTy>, String>,
+    /// The members the tree picks from.
+    members: Vec<RealizedTy>,
+    fallback: RealizedTy,
+    /// The fallback class's tag, as its JSON keys and literals.
+    fallback_literals: Vec<(String, RealizedTy)>,
+}
+
+/// Why an object is none of a tagged union's members.
+pub(super) struct Refused {
+    pub(super) message: String,
+    /// The tag it is about, when the object holds it.
+    pub(super) key: Option<String>,
+}
+
+/// How the union of `members` picks a member, when one is a `@json.fallback`
+/// class.
+pub(super) fn union_tags(
+    vm: &BexVm,
+    members: &[RealizedTy],
+    plans: &mut Plans,
+) -> Option<Arc<UnionTags>> {
+    if let Some(tags) = plans.unions.get(members) {
+        return tags.clone();
+    }
+    let tags = build_union_tags(vm, members, plans).map(Arc::new);
+    plans.unions.insert(members.into(), tags.clone());
+    tags
+}
+
+fn build_union_tags(vm: &BexVm, members: &[RealizedTy], plans: &mut Plans) -> Option<UnionTags> {
+    let mut flat = Vec::new();
+    for member in members {
+        super::alias_members(vm, member, &mut Vec::new(), &mut flat);
+    }
+    let mut class_plan = |member: &RealizedTy| match member {
+        RealizedTy::Class(head, _) if vm.stdlib_heads().media_kind(*head).is_some() => None,
+        RealizedTy::Class(head, type_args) => plans.class(vm, *head, type_args).ok(),
+        _ => None,
+    };
+    let (fallback, fallback_literals) = flat.iter().find_map(|member| {
+        let plan = class_plan(member).filter(|plan| plan.is_fallback())?;
+        Some((member.clone(), literals(&plan, false)))
+    })?;
+    let mut tagged = Vec::new();
+    let mut tags = Vec::new();
+    let mut untagged = None;
+    for member in &flat {
+        if *member == fallback || fit(vm, member, Kind::Object).is_none() {
+            continue;
+        }
+        match class_plan(member) {
+            Some(plan) if !plan.is_fallback() => {
+                tags.push(literals(&plan, true));
+                tagged.push(member.clone());
+            }
+            _ => untagged = Some(member.clone()),
+        }
+    }
+    let tree = match untagged {
+        Some(member) => Err(format!(
+            "`{member}` has no literal field to tell it from the union's `@json.fallback` member"
+        )),
+        None => tag_tree(&tags, &fallback_literals).map_err(|untold| match untold {
+            Untagged::NoTag => "the union's `@json.fallback` class has no literal field".into(),
+            Untagged::Member(member) => format!(
+                "`{}` lacks the tag of the union's `@json.fallback` class",
+                tagged[member]
+            ),
+            Untagged::Overlap(first, second) => format!(
+                "no literal field tells `{}` from `{}`",
+                tagged[first], tagged[second]
+            ),
+        }),
+    };
+    Some(UnionTags {
+        tree,
+        members: tagged,
+        fallback,
+        fallback_literals,
+    })
+}
+
+/// Each literal field of `plan` as its JSON key and type. A fallback class
+/// holds its literals rather than reading them, so `shown` tells only for the
+/// other classes.
+fn literals(plan: &ClassPlan, shown_only: bool) -> Vec<(String, RealizedTy)> {
+    plan.fields
+        .iter()
+        .filter(|field| matches!(field.ty, RealizedTy::Literal(..)))
+        .filter(|field| field.shown || !shown_only)
+        .map(|field| (field.key.clone(), field.ty.clone()))
+        .collect()
+}
+
+/// The member a union with a `@json.fallback` member decodes the object at
+/// `ptr` as, or `None` for any other union: the member its [`TagTree`] leads
+/// to, the fallback for a tag value no member has, or why it is neither.
+pub(super) fn tagged_member(
+    vm: &mut BexVm,
+    members: &[RealizedTy],
+    ptr: HeapPtr,
+    plans: &mut Plans,
+) -> Option<Result<RealizedTy, Refused>> {
+    if !matches!(vm.get_object(ptr), Object::Map(_)) {
+        return None;
+    }
+    let tags = union_tags(vm, members, plans)?;
+    let mut node = match &tags.tree {
+        Ok(tree) => tree,
+        Err(message) => {
+            return Some(Err(Refused {
+                message: message.clone(),
+                key: None,
+            }));
+        }
+    };
+    loop {
+        let (key, arms) = match node {
+            TagTree::Member(member) => return Some(Ok(tags.members[*member].clone())),
+            TagTree::Read { key, arms } => (key, arms),
+        };
+        let Some(value) = super::object_get(vm, ptr, bex_vm_types::map_string_hash(key), key)
+        else {
+            return Some(Err(Refused {
+                message: format!("missing required field `{key}`"),
+                key: None,
+            }));
+        };
+        let mut next = None;
+        for (literal, tree) in arms {
+            if Structural::quiet(plans).decode(vm, value, literal).is_ok() {
+                next = Some(tree);
+                break;
+            }
+        }
+        match next {
+            Some(tree) => node = tree,
+            None => {
+                // Any literal this key could hold says what kind it can be.
+                let literals = arms.iter().map(|(literal, _)| literal).chain(
+                    tags.fallback_literals
+                        .iter()
+                        .filter(|(tag, _)| tag == key)
+                        .map(|(_, literal)| literal),
+                );
+                let mut kind = "";
+                let mut fits = false;
+                for literal in literals {
+                    let (literal_fits, literal_kind) = super::tag_kind(vm, value, literal);
+                    fits |= literal_fits;
+                    kind = literal_kind;
+                }
+                return Some(if fits {
+                    Ok(tags.fallback.clone())
+                } else {
+                    Err(Refused {
+                        message: format!("expected {kind}"),
+                        key: Some(key.clone()),
+                    })
+                });
+            }
+        }
     }
 }
 

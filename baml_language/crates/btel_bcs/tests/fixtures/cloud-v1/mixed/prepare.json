@@ -3,14 +3,14 @@
     "recording_id": "07070707070707070707070707070707",
     "recording_file_sequence": 1,
     "encoded_length": 304,
-    "sha256": "f2bfb21e3255144046c7e988f6c7c25a24d710669ca3fb97e5a651eea862755a"
+    "sha256": "5afdde3bf2a78e29469bdfa5b43d012cbd501e03640eec9d787774249f0074da"
   },
   "candidates": [
-    {"snapshot_id": "ad78fc866693c74ad8fc445516366c4c", "snapshot_format_version": 5},
-    {"snapshot_id": "5702f84cc09a7a3eb4779ce71cd333b7", "snapshot_format_version": 5},
-    {"snapshot_id": "7662f84ac18258042dd951719cfc2ad5", "snapshot_format_version": 5},
-    {"snapshot_id": "53576dc3ff6e18317765884d0459651b", "snapshot_format_version": 5, "size_class": "LARGE"},
-    {"snapshot_id": "00b804b61b0f0c0b1f6fcf9281493e14", "snapshot_format_version": 5}
+    {"snapshot_id": "d9f22247966309704806d4be5c69dbfc", "snapshot_format_version": 6},
+    {"snapshot_id": "b4dee55730ea935a9d48e88d1779342a", "snapshot_format_version": 6},
+    {"snapshot_id": "b8cbd5bb1b208da9e2d05fb971a764ae", "snapshot_format_version": 6},
+    {"snapshot_id": "f748287a6576ec6e8b03baf9ea57cd50", "snapshot_format_version": 6, "size_class": "LARGE"},
+    {"snapshot_id": "826dc2c26fe531c980216e702a3fef2f", "snapshot_format_version": 6}
   ],
   "proposed_uploads": [
     {"client_target_id": 0, "kind": "recording", "candidate_indices": [0]},

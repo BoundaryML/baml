@@ -411,6 +411,7 @@ mod tests {
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
             telemetry_definition: DefinitionCell::default(),
+            redact: false,
         }))
     }
 
@@ -436,6 +437,11 @@ mod tests {
             stream_done: false,
             must_exist: false,
             runtime_type: None,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
+            json_omit_null: false,
+            redact: false,
         });
     }
 

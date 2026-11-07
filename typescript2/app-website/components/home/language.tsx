@@ -152,31 +152,29 @@ const EXAMPLES = [
 ];
 
 // What BAML takes from each language, one line each in the page's ruled list. The language is named in
-// its color, and the two traits are set a little heavier, over a faint underline in the brand's purple.
-// Python's second trait is struck out in the same purple.
+// its color, and the traits are set a little heavier, over a faint underline in the brand's purple.
+// Python gives one trait, followed by a plain aside.
 const PARTS: {
+  aside?: string;
   color: string;
   name: string;
-  traits: [string, string];
-  struck?: boolean;
+  traits: [string] | [string, string];
 }[] = [
   { color: '#4b8fe0', name: 'TypeScript', traits: ['syntax', 'readability'] },
   { color: '#f0703a', name: 'Rust', traits: ['correctness', 'tooling'] },
   { color: '#00add8', name: 'Go', traits: ['compile times', 'concurrency'] },
   {
+    aside: 'and nothing else',
     color: '#e3b53c',
     name: 'Python',
-    struck: true,
-    traits: ['dynamism', 'nothing else'],
+    traits: ['dynamism'],
   },
 ];
 
-/** A trait, set a little heavier over a faint purple underline, or struck out in the same purple. */
-function Trait({ struck, text }: { struck?: boolean; text: string }) {
+/** A trait, set a little heavier over a faint purple underline. */
+function Trait({ text }: { text: string }) {
   return (
-    <span
-      className={`font-medium decoration-[1.5px] decoration-clover/50 ${struck ? 'line-through' : 'underline underline-offset-[5px]'}`}
-    >
+    <span className="font-medium underline decoration-[1.5px] decoration-clover/50 underline-offset-[5px]">
       {text}
     </span>
   );
@@ -191,8 +189,14 @@ function Parts() {
           className="v4-body text-head py-3.5 border-b border-rule"
           key={part.name}
         >
-          <Trait text={part.traits[0]} /> and{' '}
-          <Trait struck={part.struck} text={part.traits[1]} /> of{' '}
+          <Trait text={part.traits[0]} />
+          {part.traits[1] && (
+            <>
+              {' '}
+              and <Trait text={part.traits[1]} />
+            </>
+          )}
+          {part.aside && ` (${part.aside})`} of{' '}
           <strong className="font-semibold" style={{ color: part.color }}>
             {part.name}
           </strong>

@@ -1805,6 +1805,7 @@ mod tests {
                 description: None,
                 alias: None,
                 skip: false,
+                json_rename: None,
             }],
         };
         let mut enums = indexmap::IndexMap::new();
@@ -1859,6 +1860,7 @@ mod tests {
                     description: None,
                     alias: None,
                     skip: false,
+                    json_rename: None,
                 }],
             },
         );
@@ -2617,6 +2619,7 @@ mod tests {
                 description: None,
                 alias: None,
                 skip: false,
+                json_rename: None,
             }],
         };
         let mut enums = indexmap::IndexMap::new();
@@ -2715,6 +2718,9 @@ mod tests {
             docstring: None,
             alias: None,
             skip: false,
+            json_rename: None,
+            json_flatten: false,
+            json_fallback: false,
             stream_done: false,
             must_exist: false,
         }

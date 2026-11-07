@@ -428,7 +428,16 @@ mod schema {
             .declared_variants
             .iter()
             .filter(move |variant| naming.shows(variant.skip))
-            .map(move |variant| (naming.key(&variant.name, variant.alias.as_deref()), variant))
+            .map(move |variant| {
+                (
+                    naming.key(
+                        &variant.name,
+                        variant.alias.as_deref(),
+                        variant.json_rename.as_deref(),
+                    ),
+                    variant,
+                )
+            })
     }
 
     /// The tagged object a media value takes in JSON, as `baml.json` writes
@@ -535,7 +544,11 @@ mod schema {
                         })?;
                     Ok(json!({
                         "type": "string",
-                        "const": self.naming.key(&variant.name, variant.alias.as_deref()),
+                        "const": self.naming.key(
+                            &variant.name,
+                            variant.alias.as_deref(),
+                            variant.json_rename.as_deref(),
+                        ),
                     }))
                 }
                 SapTy::Media(kind) => Ok(media_schema(*kind)),
@@ -646,15 +659,33 @@ mod schema {
                 .ok_or_else(|| format!("json_schema: unknown class `{}`", head.display_name()))?;
 
             let naming = self.naming;
+            // A `@json.fallback` class is any object it does not recognize,
+            // and a `@json.flatten` field is the keys no field names.
+            let fallback = class_def.fields.iter().any(|field| field.json_fallback);
+            let flatten = class_def.fields.iter().any(|field| field.json_flatten);
             let mut properties = serde_json::Map::new();
             let mut required = Vec::new();
-            for field in class_def
-                .fields
-                .iter()
-                .filter(|field| naming.shows(field.skip))
-            {
-                let key = naming.key(&field.name, field.alias.as_deref());
+            for field in class_def.fields.iter().filter(|field| {
+                naming.shows(field.skip) && !field.json_flatten && !field.json_fallback
+            }) {
+                let key = naming.key(
+                    &field.name,
+                    field.alias.as_deref(),
+                    field.json_rename.as_deref(),
+                );
                 let mut property = self.emit(&field.field_type)?;
+                // A fallback class's literals name its tag: any value of the
+                // tag's kind is one, which is what makes it the fallback.
+                if fallback && let Some(tag) = property.as_object_mut() {
+                    let kind = tag.remove("const").map(|value| match value {
+                        Value::Bool(_) => "boolean",
+                        Value::Number(_) => "number",
+                        _ => "string",
+                    });
+                    if let Some(kind) = kind {
+                        tag.insert("type".to_string(), json!(kind));
+                    }
+                }
                 describe(
                     &mut property,
                     documentation(field.description.as_deref(), field.docstring.as_deref()),
@@ -670,6 +701,9 @@ mod schema {
                 "properties": properties,
                 "required": required,
             });
+            if flatten || fallback {
+                object["additionalProperties"] = json!(true);
+            }
             describe(
                 &mut object,
                 documentation(
@@ -847,6 +881,9 @@ mod schema {
                 docstring: None,
                 alias: None,
                 skip: false,
+                json_rename: None,
+                json_flatten: false,
+                json_fallback: false,
                 stream_done: false,
                 must_exist: false,
             }
@@ -964,6 +1001,7 @@ mod schema {
                             docstring: None,
                             alias: Some("ready-now".to_string()),
                             skip: false,
+                            json_rename: None,
                         },
                         EnumVariantDefinition {
                             name: "Done".to_string(),
@@ -971,6 +1009,7 @@ mod schema {
                             docstring: None,
                             alias: None,
                             skip: false,
+                            json_rename: None,
                         },
                     ],
                 },
@@ -998,6 +1037,7 @@ mod schema {
                 docstring: None,
                 alias: None,
                 skip: false,
+                json_rename: None,
             }
         }
 

@@ -13,7 +13,7 @@
       "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording", "x-amz-content-sha256": "UNSIGNED-PAYLOAD"},
       "body_file": "recording.hex",
       "length": 242,
-      "sha256": "347f63c2686bb50e8ed64c18f6378d1645b59a24cb625f670bf8875cd9f8acd2"
+      "sha256": "b63f786c0655e4431bf383009b3fd3d88e8901eeedb8bff8934c047a1541dee9"
     }
   ]
 }

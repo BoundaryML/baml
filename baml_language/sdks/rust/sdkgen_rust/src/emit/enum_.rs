@@ -3,7 +3,8 @@
 //! `naming_convention = "language"`); the wire carries
 //! each variant's declared *value*, so both conversion directions match
 //! on the value string, never the Rust identifier. Under the `serde`
-//! feature a variant is its name string, as in BAML's own JSON.
+//! feature a variant is its JSON string, its `@json.rename` or its name, as
+//! in BAML's own JSON.
 //!
 //! The impl shape is pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
@@ -27,9 +28,12 @@ pub(crate) fn emit(name: &Name, enum_: &Enum, names: &RustNames) -> TokenStream 
         let variant_ident = idents::ident(names.variant(name, &variant.name));
         let value = variant.value.as_str();
         let variant_docs = doc_attrs(variant.docstring.as_deref());
-        let variant_name = variant.name.as_str();
-        let serde_rename = (variant_ident != variant_name)
-            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #variant_name))] });
+        let json_string = variant
+            .json_rename
+            .as_deref()
+            .unwrap_or(variant.name.as_str());
+        let serde_rename = (variant_ident != json_string || json_string.starts_with("r#"))
+            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #json_string))] });
         variant_defs.push(quote! {
             #(#variant_docs)*
             #serde_rename

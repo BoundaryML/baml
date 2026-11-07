@@ -132,6 +132,28 @@ If you do not want editor integration, launch the playground:
 baml playground
 ```
 
+## 6. Install the BAML code quality action
+
+`BoundaryML/baml-action` checks, format-checks, and tests the project on each pull request, then comments with how its code quality (cognitive complexity, cyclomatic complexity, NPath, nesting, and exits) compares to the base branch.
+
+Add this workflow as `.github/workflows/baml.yml`:
+
+```yaml
+name: BAML
+on: [pull_request]
+permissions:
+  contents: read
+  pull-requests: write # for the code health comment
+jobs:
+  baml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: BoundaryML/baml-action@v1
+```
+
+Inputs, outputs, and multi-project setups are documented at https://github.com/BoundaryML/baml-action.
+
 ## Running BAML in production
 
 Boundary's cloud traces every BAML call and adds dashboards, alerts, and experiments on top. It is in early access. To use it, book a call with the founders and they will set it up with you:
@@ -160,6 +182,5 @@ After changing project toolchain versions, run `baml agent install` again if the
 
 - [Open the demo repository](https://github.com/boundaryml/baml-demos)
 - [Join the BAML Discord](https://boundaryml.com/discord)
-- [Book a free 45-minute onboarding session](https://boundaryml.com/eap)
 
 When asking for help, include the output of `baml --version` and the command or file that produced the problem.
