@@ -1240,3 +1240,712 @@ CARGO_TARGET_DIR="$PWD/target" cargo clippy --manifest-path baml_language/Cargo.
 ```
 
 Final validation logs: `target/phase1/json-stream-{regressions,backend-tests,final-clippy,backend-clippy,final-differential}.log`.
+
+## Telemetry aggregate transport checkpoint (incomplete producer job)
+
+The processor now accepts `TimingRecord::AggregateDeltas`, an owned boxed batch
+of per-path/reentry `AggregateDelta` values, alongside existing per-invocation
+completions. `AggregateDelta` lives in `btel_records` and remains re-exported by
+`btel_processor`; publishers retain the same type and behavior. Batches pass
+through the existing combining cache and publication path. The timing record
+still fits its existing 32-byte budget. No durable BTEL format changes.
+
+The mixed-input regression compares processor output from individual samples
+against pre-combined samples with identical clocks, including ordinary and
+recursive nodes, all four outcomes, self-await, chunk boundaries, a legacy
+completion and a function span. The totals are identical, including durations.
+The shared checked merge rejects different nodes and overflow in each sum so a
+producer can flush the old delta without losing a sample.
+
+This is only the Open 4.a transport prerequisite. The compiler/runtime v2
+producer is **not implemented** by this checkpoint: non-off levels still fail
+with the existing diagnostic. Workload BTEL parity (normal and stressed), the
+direct differential script, the five-round performance matrix, medium/off
+ratios and the Richards medium profile remain **unverified/not run**. No gate
+result or performance claim follows from these processor unit tests. Medium's
+contract/default and the decision-8 gate have not changed.
+
+Checkpoint validation commands (run from this worktree):
+
+```sh
+CARGO_TARGET_DIR="$PWD/target" cargo test --manifest-path baml_language/Cargo.toml \
+  -p btel_records -p btel_processor -p bex_vm
+CARGO_TARGET_DIR="$PWD/target" cargo clippy --manifest-path baml_language/Cargo.toml \
+  -p btel_records -p btel_processor -p bex_vm --all-targets --no-deps -- -D warnings
+```
+
+Both commands passed for this checkpoint; the VM suite retains one existing
+ignored test. The final aggregate-only rerun also passed after strengthening
+the regression to transfer multiple nodes in one batch. Local logs:
+`target-telemetry-tests.log`, `target-telemetry-aggregate-tests.log`, and
+`target-telemetry-clippy.log`.
+
+## T1 ordinary-function telemetry checkpoint
+
+The v2 emitter now resolves one atomic observation word per function at startup
+from the selected level, hidden status and supplied policy. Medium remains the
+default. Off/low wrappers branch straight to the body. Medium wrappers keep an
+on-stack frame, resolve static bytecode-mapped sites through one-entry
+parent/path caches, and update per-path/reentry aggregate slots. Cache misses
+emit the existing `CallPathDefined`; batches flush at safepoints, root completion
+and shutdown. The first observed error completion reads the unwind clock and
+outer frames reuse it. One bound producer supplies the existing processor and
+local publisher. Compiler metadata uses the same source-map construction as the
+VM. The pack host's integer JSON formatting task and `_aliased` call are also
+observed, matching the bytecode host's published work.
+
+Constant Hidden hooks are reached by the supported stdlib wrappers and resolve
+to hidden words. Other declaration hooks receive `unsupported in runtime v2`.
+High and promotion policies fail closed pending T2. The producer accepts explicit
+non-promoting timing policies, but generated ordinary functions currently supply
+`Policy::NONE`; no external policy-setting API is added by this checkpoint.
+
+### Acceptance boundary
+
+`telemetry/check.py` copies the differential harness's Rust normalizer unchanged
+into a standalone reader. Every run checks the program result and retains the
+normalized BTEL and unified diff under `target/telemetry`. Its acceptance result
+is **strict equality**. A separate diagnostic uses the harness's existing
+compiled-backend GC exception to identify GC-only differences; it does not
+change the v2 allowlist or turn a strict failure into a pass. `telemetry/parity.json`
+records both results.
+
+The contract question remains open: may v2 use that narrow exception for
+successful root `baml.gc` maintenance tasks? Bytecode records collector-specific
+heap occupancy, promotion and collection scheduling; v2 uses a different
+collector and currently emits no GC maintenance records. Reproducing bytecode's
+heap counts would not describe v2 execution. The harness deliberately excludes
+new backends from its existing exception. No exception has been granted or
+silently applied here. Whether v2 should separately publish its own maintenance
+tasks also needs resolution. Consequently this checkpoint does not claim T1's
+strict telemetry finish line, and T2/T3 remain pending.
+
+### Reproduction
+
+From the designated worktree:
+
+```sh
+CARGO_TARGET_DIR="$PWD/target" cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py build
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py check
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py bench --cpu 12
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py profile --cpu 12
+```
+
+The check command deliberately returns nonzero while strict GC differences
+remain. `BAML_GC_STRESS=1` forces v2 collection; the bytecode oracle retains its
+normal collector schedule (the existing VM stress knob targets compiled bodies).
+Native baselines use today's release/fat-LTO backend at medium with compiled
+bodies enabled. The oracle uses the same native host with compiled bodies
+disabled. No backend silently falls back during v2 execution.
+
+Touched runtime, compiler and VM-type tests passed (16, 10 and 133 respectively),
+as did the full Rust-backend suite (15 passed, one existing ignored test), the
+additional Hidden/unsupported-hook admission regression, and strict clippy for
+those crates and the backend test target. Logs are in
+`target/t1-{tests-final,backend-final,hook-test,clippy-final,backend-clippy}.log`.
+
+### T1 parity results
+
+| Workload | Mode | Off strict | Low strict | Medium strict | Excluding existing GC exception, diagnostic only |
+|---|---|---|---|---|---|
+| binary-trees-14 | normal | pass | GC-only mismatch | GC-only mismatch | all three pass |
+| binary-trees-14 | stress | pass | GC-only mismatch | GC-only mismatch | all three pass |
+| richards-50 | normal | pass | GC-only mismatch | GC-only mismatch | all three pass |
+| richards-50 | stress | pass | GC-only mismatch | GC-only mismatch | all three pass |
+
+All 24 executions returned the expected integer (3222190 for trees,
+1161046400 for Richards). Strict acceptance is 4/12, not 12/12. No workload
+aggregate or host-formatting differences remain in these cases. High,
+agent-loop telemetry, policy captures/promotions and recording error evidence
+remain unverified. Final matrix log: `target/t1-parity-final.log`.
+
+### T1 performance gate
+
+Five interleaved rounds, rotating backend order, pinned to CPU 12 on Spark
+(aarch64, 20 logical CPUs), one untimed warmup per process. Each trees round
+checks three timed jobs; each Richards round checks ten. These medians exclude
+startup and include the normal recording producer/processor path. BAML_HOME is
+worktree-local for every backend. Own builds/tests finished before timing.
+System 1/5/15-minute load ranges were 16.77–23.72 / 28.34–31.32 / 37.48–38.89;
+other machine work remained active, so these are loaded-machine measurements.
+
+| Workload | v2 off ms/job | v2 medium ms/job | Native medium ms/job | Node ms/job | v2 medium / off |
+|---|---:|---:|---:|---:|---:|
+| binary-trees-14 | 44.640 | 272.025 | 1038.930 | 41.469 | **6.094×** |
+| richards-50 | 3.934 | 82.122 | 289.194 | 4.173 | **20.876×** |
+
+**Decision-8 gate not met:** Richards is far above the approximately 1.5× target.
+Pre-combining removes per-invocation transport, but this implementation has not
+made medium cheap enough. Medium remains the default; neither precision nor
+coverage was reduced to improve the ratio. High and agent-loop rows are pending
+T2/T3. Raw rounds, medians, tool versions, affinity and binary hashes are in
+`telemetry/benchmark-{raw,summary,environment}.json`.
+
+### Richards medium profile
+
+A separate CPU-12 run checked 300 jobs plus one warmup and recorded 100,447
+cycle samples, with zero lost samples. Its profiled elapsed time was 25.329 s;
+this is not substituted for the benchmark median. Load moved from
+16.77/28.34/37.48 to 15.42/26.90/36.71. Kernel symbols are restricted; user symbols
+and source lines resolve. Raw perf.data stays under `target/telemetry`.
+
+| Flat symbol | Self samples |
+|---|---:|
+| Generated `entry` (including inlined telemetry) | 88.93% |
+| SipHash writes | 3.60% |
+| `AggregateDelta::checked_merge` | 3.25% |
+| Telemetry `State::path` | 2.65% |
+| Call-path key hashing | 1.27% |
+
+Source-line attribution helps expose the inlined work: ARM counter reads
+15.86%, the aggregate-merge call site 8.90%, static-site loading 6.08%, and
+slice indexing 5.29%. The largest other source buckets are Rust's `unlikely`
+intrinsic (26.05%) and vector-to-slice access (18.42%). These are optimized debug
+locations, not an exact causal breakdown: much of the instrumentation is
+inlined into `entry`, and source buckets must not be added to symbol buckets.
+The sample profile identifies entry/exit state, clock reads, aggregation and
+path lookup as areas requiring further work; it does not establish a path to
+1.5× without further measurement.
+
+Committed evidence: `telemetry/richards-medium-{profile.txt,lines.txt,profile-run.json}`.
+`check.py profile-report` regenerates the two flat reports without recording
+again. The initial callgraph-rendering command was stopped because it was
+unnecessarily expensive; flat report regeneration completed successfully from
+the unchanged recording (`target/t1-profile-report-final.log`).
+
+### Milestone status and questions
+
+- Open 4.a processor prerequisite: completed in `8789ff6964`.
+- T1 producer, direct matrix, measurements and profile: implemented/measured;
+  **acceptance incomplete** (GC contract decision and failed performance gate).
+- T2 high/spans/captures/promotion and T3 agent-loop telemetry: pending.
+- Contract question: extend the existing successful-root-GC exception to v2,
+  and separately require truthful v2 collector maintenance records? No v2
+  exception or fabricated collector data is included in this checkpoint.
+- Performance decision remains open under decision 8. The default remains
+  medium and the full observation contract remains the target; the measured
+  20.876× Richards ratio does not justify claiming the gate is met.
+
+## C5 collector telemetry follow-up
+
+The approved C5 exception now applies to `v2`/`runtime-v2` in the harness's GC
+filter only. Its comment points to CONTRACTS.md C5. Other backend exceptions
+(polling, errors, captures, etc.) are unchanged. The direct checker retains raw
+BTEL equality/diffs while its acceptance comparison applies only C5.
+
+The heap now offers a synchronous collection observer, independent of telemetry
+crates. The runtime emits the existing root `baml.gc` task/path/context formats
+for actual collections. Counts describe v2 allocation starts surviving or
+reclaimed by that collection; payload bytes exclude the eight-byte object
+header. This non-generational collector reports zero promotions. Automatic
+budget, stress and allocation-retry collections use `trigger=automatic`.
+Dropping a heap is not labeled a collection: no fictitious shutdown GC is emitted.
+
+The count regression keeps one object, reclaims a small and large object, then
+collects twice without roots, checking exact counts and payload sizes. Heap and
+runtime tests and strict clippy pass. The copied harness normalizer/exception
+module's 11 tests pass, including retaining user tasks, failed GC tasks and
+unknown backends. Logs: `target/t2-gc-{tests-final,clippy,harness-tests}.log`.
+
+Acceptance now passes **12/12** cases: trees and Richards at off/low/medium,
+normal and GC-stressed, with all program records strict and only C5 maintenance
+records exempt. Raw equality is retained separately (4/12 at off). Both v2
+recordings and bytecode recordings continue through the unchanged harness
+normalizer. Matrix logs: `target/t2-gc-{trees,richards}-parity.log`.
+
+## Richards medium floor and producer optimization
+
+The floor experiment builds diagnostic Cargo-feature variants from the emitted
+Richards source; these switches are not part of shipped compiler/runtime
+behavior. `floor-aggregate` adds one static slot per function, and `floor-ecv`
+selects the ordered ARM counter view. Both variants preserve the observation
+word and hidden functions. Variant a performs two reads and discards them;
+variant b additionally adds count/duration to its function's fixed slot. Neither
+uses call paths, a publisher or the normal telemetry state. A final diagnostic
+read of the counters prevents dead-store elimination and checks exactly
+1,736,751 observed program calls per job. The integer result is checked too.
+The full-medium control executable (c) is preserved before optimization.
+
+The producer now gives frames stable addresses for their aggregate slots,
+updates successful synchronous counts/durations in place, and only uses the
+shared checked merge on unusual outcomes/awaits or overflow. The overflow
+regression checks that a failed fast addition leaves the entire slot unchanged.
+A one-entry site cache still handles the immediate common case. Site-local
+parent histories handle repeated alternate parents without rehashing already
+known call paths; the map remains the canonical cold definition path. The test
+forces the one-entry cache empty, clears the hash map, grows the slot table
+while a parent frame is live, then confirms history reuse and correct completion.
+
+On ARM, startup selects the self-synchronizing `CNTVCTSS_EL0` view when Linux
+advertises FEAT_ECV and the calibrated epoch uses the system counter. Otherwise
+system-counter reads use `ISB; MRS CNTVCT_EL0`; OS-clock fallback stays in the
+original clock domain. Epoch calibration, conversion and boundary validation
+are unchanged. The views share the counter and tick scale. Unlike the existing
+Quanta raw read (`MRS CNTVCT_EL0`, no ISB), the ECV view provides architectural
+program-order timing without an explicit synchronization instruction. The asm
+also retains a compiler memory barrier. See [Arm's CNTVCTSS_EL0 specification](https://support.arm.com/documentation/111107/2026-03/AArch64-Registers/CNTVCTSS-EL0--Counter-timer-Self-Synchronized-Virtual-Count-Register).
+
+`floor.py clock` measures raw/unfenced, ISB-ordered, ECV, Quanta and OS monotonic
+reads in five rotated rounds on CPU 12, including an empty-loop control. It
+records wall and thread CPU time per read, monotonicity probes, actual Quanta
+source/calibration/fallback, and load. `floor.py bench` rotates off/a/b/c/optimized
+runs over five rounds with 20 timed jobs and two warmups, records binary hashes,
+checks b's call count and reads c/optimized clock sources from the actual BTEL
+files. An optimized-off row detects baseline code-generation changes.
+
+### Floor results (five interleaved rounds)
+
+CPU 12, five rotated rounds, 20 timed jobs and two untimed warmups per process.
+Own compilation/parity jobs had finished. Load ranges (1/5/15 minute) were
+18.64–25.14 / 38.67–42.92 / 40.28–41.64 on 20 CPUs. Every result and fixed-slot
+call count matched. All diagnostic Quanta selections and all full-medium BTEL
+clock definitions used the ARM system counter with no fallback.
+
+| Richards variant | Median ms/job | Relative to control off |
+|---|---:|---:|
+| Off, control binary | 3.937 | 1.000× |
+| a: two Quanta reads, discarded | 69.191 | 17.573× |
+| b: Quanta reads + fixed function slot | 69.125 | 17.557× |
+| c: full medium, before optimization | 82.833 | 21.038× |
+| a: two ordered ECV reads, discarded | 78.020 | 19.816× |
+| b: ECV reads + fixed function slot | 72.599 | 18.439× |
+| Optimized medium, ordered ECV reads | 79.785 | 20.264× |
+| Off, optimized binary | 3.704 | 0.941× |
+
+The optimized binary's own **medium/off ratio is 21.539×**, versus 21.038× in
+the control. Medium absolute time improves 3.68%, while its off path also gets
+faster; the ratio must not be reported as an improvement. The 1.5× gate is not
+met. The ECV a variant is noisy (69.23–109.91 ms); ECV b is 72.58–72.68 ms, and
+optimized medium is 79.37–80.91 ms. A/b subtraction is not a causal estimate of
+aggregate cost: register allocation, instruction overlap and scheduling differ.
+In particular, b being slightly faster than a does not mean aggregation is free
+or has negative cost.
+
+### Clock findings and practical floor
+
+Median per-read costs over five rotated 2,000,000-read loops on CPU 12:
+
+| Read | Wall ns | Thread CPU ns |
+|---|---:|---:|
+| Quanta Auto (system counter, no ISB) | 19.903 | 19.903 |
+| Direct CNTVCT_EL0, no ISB | 19.939 | 19.939 |
+| ISB + CNTVCT_EL0 | 30.384 | 30.384 |
+| CNTVCTSS_EL0, self-synchronized | 20.081 | 20.081 |
+| OS monotonic | 36.479 | 36.314 |
+| Empty black-box loop control | 0.359 | 0.359 |
+
+No backwards readings occurred in the monotonicity probes. Quanta converged and
+selected `SystemCounter`, without fallback. Microprobe load was
+22.37/42.92/41.64. CPU costs closely match wall costs, so the approximately 20 ns
+read cost is not explained by descheduling in this probe. The empty-loop control
+is reported, not silently subtracted. The shipped v2 producer uses ECV on this
+host; raw/unfenced reads remain diagnostic comparison points.
+
+At 1,736,751 calls/job, two ECV reads give 3,473,502 reads, approximately **69.75
+ms of read-loop cost** at measured throughput. The workload-only a result is
+about 69 ms with the existing clock; the ordered fixed-slot variant is 72.60 ms.
+Thus the practical full-precision floor here is roughly **70–73 ms/job**, before
+full path/state/publishing work, versus 3.70–3.94 ms off. Instruction overlap makes
+this an empirical floor, not a universal mathematical lower bound. Optimized
+medium remains about 7.19 ms above the ordered fixed-slot diagnostic. Hash/cache
+and merge engineering alone cannot bridge the approximately 70 ms floor to the
+5.56 ms budget implied by 1.5× optimized-off. Reducing the number or fidelity of
+clock observations would be a separate design/contract decision; neither was
+changed, and medium remains the default.
+
+The optimized profile has 97K cycle samples and zero lost samples: generated
+`entry` accounts for 99.72%; the previous standalone hashing, checked-merge and
+path-lookup rows are all below the 0.5% reporting threshold. Source locations
+attribute 55.66% to the ECV read/return region, 28.32% to Option comparisons
+(parent/reentry state), and 14.04% to the inlined count-add/overflow check. These
+are optimized debug locations, not an additive causal decomposition.
+
+### Validation and reproduction
+
+Optimized off/low/medium parity remains **12/12**, normal and stressed, under
+only C5. Runtime tests (17) and strict all-target clippy pass. Logs:
+`target/t2-optimized-{tests,clippy,trees-parity}.log` and `target/t2-floor-final.log`.
+The floor control binary was built at `347d928e04` and preserved before producer
+optimization. `floor.py build` preserves that control and builds diagnostic
+Cargo-feature variants; it refuses to label a newly optimized binary as the
+original control. Local binaries and generated sources remain under
+`target/telemetry`; committed SHA-256 hashes identify measured binaries.
+
+```sh
+# At the control checkpoint, after building Richards:
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/floor.py build
+# After rebuilding the optimized Richards and preserving it as richards-optimized:
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/floor.py clock
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/floor.py bench
+uv run --no-project python baml_language/architecture/runtime-v2/telemetry/check.py profile --profile-label optimized
+```
+
+Evidence: `telemetry/floor-{raw,summary}.json`, `clock-{cost.jsonl,source.txt,summary.json}`,
+and `richards-optimized-{profile.txt,lines.txt,profile-run.json}`. T2/T3 follow;
+this floor experiment neither weakens their parity requirements nor changes
+the telemetry default.
+
+## Telemetry T2a: high spans and noncapturing promotion
+
+The compiler dispatches span/promotion observations into a separate non-inlined
+helper. Ordinary medium calls retain their timing frame and direct aggregate
+slot update. Span frames allocate identities, announce entry, retain the active
+span as parent, and restore it on completion. Recursive calls preserve the
+reentry population. Completion uses the existing outcome-specialized records;
+the producer does not also aggregate a span, since the processor already does
+that. Timing policies can promote errors or elapsed durations to late
+completions without a fabricated entry announcement.
+
+The host integer formatter now instruments its stringify and naming calls at
+high as well. The direct checker retains prior rows on subset checks and pins
+its copied normalizer build to the workspace's Rust 1.98 toolchain.
+
+High parity: **4/4 pass**, binary-trees and Richards, normal and forced-GC runs.
+Only C5 collector maintenance differs. Exact captures are not implemented:
+policies requesting inputs/output/error still return the explicit unsupported
+runtime-v2 diagnostic. The generated workloads currently use `Policy::NONE`;
+the promotion regression directly exercises the producer's policy API. This
+is a T2 checkpoint, **not completion of T2's capture requirement**. Hook support
+remains restricted to the existing constant-Hidden case.
+
+Validation: runtime 18 tests and compiler 10 tests pass. The span regression
+checks nested/reentry ancestry, parent restoration, error and zero-duration
+promotion, absence of announcements for late spans, and exactly-once aggregate
+accounting. High matrix logs are `target/t2-{trees,richards}-high.log`; normalized
+recordings/diffs remain under `target/telemetry` and accepted rows are retained
+in `telemetry/parity.json`. No new performance claim is made for this checkpoint;
+the clock-floor gate and profile above remain the measured checkpoint results.
+
+The off/low/medium regression matrix was then rerun against the span-enabled
+binaries: **12/12 pass** normal/stress, for **16/16 accepted cases** across all
+four levels on the two workloads. Strict clippy passes for both touched crates.
+
+## Telemetry T3: agent-loop, recording error evidence, complete level matrix
+
+The JSON specialization now preserves both observable bytecode calls (`decode`
+and `_aliased`), their original compact call-site PCs, and their completion
+outcomes. Error records use the compiler's compact PC/source mapping. Raises
+share one clock read through unwinding; caught ends identify the handler and
+count unwound frames. Agent-loop's recording matches the oracle's **1,086 JSON
+boundary raises and 108 explicit throws** per job, including high-span links.
+
+When every function is observed, the call path already describes the stack:
+only a depth counter is needed to retain recursive frame counts. Low/hidden
+observations use recording-only, on-stack linked frames for explicit stacks.
+Those links are removed on Rust unwinding as well. Error evidence is skipped
+when no recording publisher is present. Native operations remain hidden.
+The observation word's zero branch remains first. A separate non-inlined
+function handles high/policy/explicit-stack dispatch, preserving the ordinary
+off/medium wrapper's inlining opportunity.
+
+**Parity: 24/24 pass**, all three workloads × off/low/medium/high × normal/GC
+stress. GC maintenance is the only filter; error records, spans, counts,
+outcomes, paths and all other published content remain strict. Six off cases
+also match without the GC filter. Evidence: `telemetry/parity.json` and
+`target/t3-cold-parity.log`. Runtime tests (19), compiler tests (10), and strict
+all-target clippy for both crates pass. The new error regression covers both
+explicit and call-path-backed stacks, low/timing/span/promotion observations,
+handler PCs and unwind counts.
+
+### Performance with high and error evidence enabled
+
+Pinned to CPU 12; five rotated, interleaved rounds; three timed jobs plus one
+warmup for binary-trees, ten plus one for Richards/agent-loop. Each workload
+runs v2 off/medium/high, native medium, and Node in each round. All results and
+job counts are checked. Medians in ms/job:
+
+| Workload | v2 off | v2 medium | v2 high | Native medium | Node | Medium/off |
+|---|---:|---:|---:|---:|---:|---:|
+| binary-trees-14 | 42.465 | 320.660 | 1431.860 | 1032.556 | 40.398 | **7.551×** |
+| richards-50 | 3.728 | 85.389 | 392.073 | 289.929 | 6.001 | **22.906×** |
+| agent-loop-300 | 3.582 | 5.190 | 9.392 | 58.376 | 8.294 | **1.449×** |
+
+The Richards ≤1.5× gate **fails**. Medium stays the default. Host load ranges
+(1/5/15 minutes) were **10.02–18.47 / 17.40–20.45 / 29.47–31.57**, on 20 CPUs;
+the machine was not isolated. Raw rounds, binary hashes and environment are in
+`telemetry/t3-cold-benchmark-{raw,summary,environment}.json`.
+
+Before outlining the dispatcher, the same five-round protocol measured
+Richards off at 9.179 ms and medium at 97.873 ms (10.663×). That ratio concealed
+an off-path regression; a quick adjacent pinned check measured 4.732 ms off
+for that binary and 3.754 ms after outlining. The final interleaved table above
+uses the outlined binary. Keep absolute costs alongside ratios. Earlier
+measurements remain in `telemetry/t3-benchmark-*.json`; preliminary agent-only
+measurements are in `telemetry/t3-agent-benchmark-*.json`.
+
+The final Richards medium profile has **104K cycle samples, zero lost**.
+Source-location attribution: ECV clock read/return **52.41%**, parent/reentry
+Option comparisons **23.44%**, checked aggregate additions **20.31%**. As with
+the floor profile, these locations describe inlined instructions, not an exact
+causal cost decomposition. Standalone hashing, aggregate merge and path lookup
+remain below the 0.5% reporting threshold. Evidence:
+`telemetry/richards-t3-cold-{profile.txt,lines.txt,profile-run.json}`.
+
+T3 is complete for the requested agent-loop subset. T2 high/default spans and
+noncapturing promotion are verified; **exact policy captures remain pending**.
+No exemption was added to accommodate that remaining work. Diagnostic floor
+source regeneration now supplies empty error-PC tables to its preserved
+pre-error-evidence source; its off-level diagnostic variants never use them.
+
+## T2b: policy captures and canonical snapshot identity
+
+The span producer now captures inputs/type arguments before its entry clock,
+and output/error values after its exit clock, only when the resolved policy
+requests them. Captured entries select the existing `NeedsAnnouncement`
+completion variants. Late promotion captures the result/error only; it never
+invents an entry announcement or captures entry arguments. Span completion
+continues to contribute exactly one aggregate sample through the processor.
+The ordinary off/medium wrapper retains its separate outlined span dispatcher.
+
+Generated packs carry canonical declaration-definition blobs frozen by the
+compiler through the existing VM definition encoder. The private compiler
+image boxes float constants before binding, as engine loading does. The VM is
+a compiler dependency, not a dependency of the generated v2 pack. Runtime
+capture traverses the admitted v2 layouts without managed allocation, collection,
+or user code, then releases every managed address. It preserves aliasing,
+cycles, declaration identity across duplicate layout descriptors, nullable
+pointers, typed lists/maps and enum values. JSON specializations capture `T`
+and preserve omitted naming arguments; host stringify preserves its three
+omitted defaults instead of recording their substituted values.
+
+The capture oracle test compiles the actual v2 traversal next to the VM's
+existing traversal (without linking the two fiber runtimes). Snapshot content
+IDs agree for primitive/omitted arguments, instances, repeated aliases, enum
+variants, strings, typed lists/maps and generic class type arguments. Separate
+runtime tests cover cyclic graphs, duplicate class layouts, empty container
+buffers, nullable pointers, capture policy gating, announcement dependencies,
+late error promotion and exactly-once aggregate accounting.
+
+Declaration hooks remain unsupported with the standard v2 diagnostic, except
+for the existing constant-Hidden admission. These workloads do not reach
+other hooks. Capture-enabled policies are exercised through producer tests;
+the three workload parity runs exercise their original/default policies. This
+is not an assertion that arbitrary hooked BAML programs are supported.
+
+### T2b verification and final gate refresh
+
+Tests pass: compiler **10**, runtime **23**, VM **178**. Strict all-target
+clippy passes for all three touched crates. After the checked-index conversion
+cleanup, the capture-focused runtime/VM tests also pass. Logs:
+`target/t2b-tests.log`, `target/t2b-clippy.log`, and
+`target/t2b-capture-final-tests.log`.
+
+Five rotated/interleaved rounds on CPU 12, with the same job/warmup counts as
+T3. All 75 timed runs returned the expected results. Medians in ms/job:
+
+| Workload | v2 off | v2 medium | v2 high | Native medium | Node | Medium/off |
+|---|---:|---:|---:|---:|---:|---:|
+| binary-trees-14 | 42.170 | 320.709 | 1429.673 | 1031.116 | 39.971 | **7.605×** |
+| richards-50 | 3.737 | 85.852 | 413.782 | 291.230 | 5.642 | **22.976×** |
+| agent-loop-300 | 3.602 | 5.173 | 9.436 | 57.729 | 7.816 | **1.436×** |
+
+Host load ranges (1/5/15 minutes): **5.21–11.16 / 9.10–11.05 / 13.56–14.64**,
+20 CPUs, not isolated. Evidence, including every round and binary hashes:
+`telemetry/t2b-benchmark-{raw,summary,environment}.json`. The earlier clock-floor
+measurements remain the relevant diagnostic comparison: about 70–73 ms/job
+for two full-precision reads per Richards call, already far above the ~5.6 ms
+budget implied by 1.5× off. The Richards gate still **fails**; no precision,
+normalization, default-level, or policy relaxation was introduced to meet it.
+
+The refreshed Richards medium profile has **104,901 samples, zero lost**.
+Inlined source attribution: ECV clock read/return **52.10%**, parent/reentry
+Option comparisons **23.90%**, checked aggregate additions **20.37%**. Standalone
+hashing, aggregate merging and path lookup remain below the 0.5% reporting
+threshold. These are optimized source locations, not a causal decomposition.
+Evidence: `telemetry/richards-t2b-{profile.txt,lines.txt,profile-run.json}`.
+
+No additional spec deviation is requested. The remaining design question is
+unchanged: how should the Richards ≤1.5× gate be reconciled with the measured
+full-precision clock floor? This implementation keeps the contract and medium
+default while reporting the gate failure; it does not sample or batch clocks.
+
+Final rebuilt binaries pass **24/24** parity cases: all three workloads at
+off/low/medium/high, normal and GC-stressed. All six off cases also match
+without the GC filter. Only C5 collector-maintenance records are exempt; all
+other normalized published output stays strict. Evidence: `telemetry/parity.json`
+and `target/t2b-final-parity.log`. T1, T2 and T3 are complete for the requested
+subsets; the performance gate remains failed, as quantified above.
+
+
+## Medium diagnostics: clock boundaries, bookkeeping and sampling
+
+These are experiments, not a change to shipped medium. The runtime code is
+behind the non-default `telemetry-diagnostics` Cargo feature. The compiler
+emits work markers only with `BAML_V2_DIAGNOSTIC_CODEGEN`; the diagnostic
+builder specializes generated wrappers by mode. Ordinary generated packs
+retain their existing wrappers and runtime implementation. Scope is the
+three requested synchronous workloads at their default medium policies,
+not arbitrary policy promotion or asynchronous programs.
+
+Reproduce from this worktree using `telemetry/check.py build --workloads
+trees,richards,agent` to populate the baseline packs and Node programs, then
+`telemetry/diagnostics.py build` and `telemetry/diagnostics.py run` (Python via
+`uv run python`, Rust 1.98.0). The builder preserves baseline packs before
+rewriting diagnostic wrappers; use a fresh `target/telemetry/diagnostics`
+directory when deliberately changing that baseline. Binary hashes identify
+the exact measured artifacts. `diagnostic-reference` uses the experimental
+frame layout with ordinary ordered timing and ordinary path bookkeeping,
+so its difference from shipped medium exposes scaffold/code-layout effects.
+
+The comparison uses actual recorded BTEL, canonical function identities and
+full paths plus the reentry bit. Counts and all outcomes must agree exactly.
+The existing differential normalizer checks all other non-duration fields;
+only C5 collector-maintenance records are exempt. No function aggregate is
+exempt. Timing error is measured separately, before normalization.
+
+Five rotated/interleaved rounds, pinned to CPU **12**; interval timer pinned
+to CPU **13**. Trees: 3 timed jobs + 1 warmup per process; Richards and agent:
+10 timed jobs + 1 warmup. Medians below are **ms/job**. Published aggregates
+include warmup as well as timed jobs for every compared variant. Load ranges
+(1/5/15 minutes): **9.15–23.49 / 14.83–18.31 / 16.38–17.56**, 20 CPUs,
+not isolated. All 180 timed runs returned the expected result. All **135**
+variant/round comparisons retained identical normalized non-duration output
+and exact per-path counts/outcomes versus current medium.
+
+All slash-separated triples below are **Richards / trees / agent**. Duration
+error is median per-round **WAPE**: `sum_path(abs(variant - reference)) /
+sum_path(reference)` for `total_duration`, including separate reentry slots.
+The last column gives **interleaved shipped-medium comparison → paired
+same-run audit**, both in percent. The interleaved comparison includes real
+execution-speed changes, instrumentation perturbation and scheduling noise;
+it is not a pure estimator-accuracy measurement. The paired audit timestamps
+every invocation with the ordered clock and checks estimated totals against
+those intervals, at the cost of perturbing execution itself. It runs separately
+from every timed binary; its overhead is never included in ms/job.
+
+| Variant | Richards ms | Trees ms | Agent ms | ×off (R/T/A) | ×Node (R/T/A) | Published contract impact | Duration WAPE %, interleaved → paired (R/T/A) |
+|---|---:|---:|---:|---|---|---|---|
+| off | 3.744 | 42.191 | 3.596 | 1.00 / 1.00 / 1.00 | 0.64 / 1.05 / 0.47 | Level off: function telemetry absent | — |
+| medium | 85.756 | 323.672 | 5.188 | 22.91 / 7.67 / 1.44 | 14.56 / 8.04 / 0.67 | Current contract (baseline) | reference |
+| diagnostic-reference | 85.641 | 320.587 | 5.118 | 22.88 / 7.60 / 1.42 | 14.55 / 7.96 / 0.66 | None; scaffold control | 1.3 / 1.5 / 1.6 → 0.000 / 0.000 / 0.000 |
+| raw-cntvct | 76.970 | 278.248 | 4.897 | 20.56 / 6.60 / 1.36 | 13.07 / 6.91 / 0.63 | Function durations lack boundary ordering guarantee; counts exact | 9.6 / 13.9 / 5.4 → 0.028 / 0.009 / 0.199 |
+| shared-boundary | 79.942 | 320.834 | 5.243 | 21.35 / 7.60 / 1.46 | 13.58 / 7.97 / 0.68 | No approximate/absent fields; real shared endpoints | 12.4 / 2.6 / 1.3 → 11.891 / 0.018 / 0.000 |
+| cheaper-bookkeeping | 85.552 | 319.692 | 5.135 | 22.85 / 7.58 / 1.43 | 14.53 / 7.94 / 0.67 | None; real durations, exact counts/outcomes | 1.4 / 1.4 / 1.2 → 0.000 / 0.000 / 0.000 |
+| best-exact | 79.504 | 323.729 | 5.275 | 21.24 / 7.67 / 1.47 | 13.50 / 8.04 / 0.68 | No approximate/absent fields; shared endpoints + cheaper bookkeeping | 12.9 / 1.4 / 2.0 → 11.775 / 0.018 / 0.000 |
+| count-only | 11.877 | 67.332 | 4.265 | 3.17 / 1.60 / 1.19 | 2.02 / 1.67 / 0.55 | Function total_duration_ticks forced to zero, not unknown | 100.0 / 100.0 / 100.0 → 100.000 / 100.000 / 100.000 |
+| sample-16 | 19.893 | 91.907 | 4.376 | 5.31 / 2.18 / 1.22 | 3.38 / 2.28 / 0.57 | Function total_duration_ticks estimated, 16 × sampled sum | 64.9 / 71.1 / 18.6 → 33.652 / 18.100 / 46.873 |
+| sample-64 | 15.596 | 78.178 | 4.319 | 4.17 / 1.85 / 1.20 | 2.65 / 1.94 / 0.56 | Function total_duration_ticks estimated, 64 × sampled sum | 76.4 / 74.0 / 49.6 → 42.661 / 37.536 / 48.780 |
+| interval-1khz | 15.389 | 77.126 | 4.309 | 4.11 / 1.83 / 1.20 | 2.61 / 1.92 / 0.56 | Function total_duration_ticks estimated per flush; unsampled batches zero | 84.6 / 68.0 / 77.5 → 87.286 / 125.590 / 83.036 |
+| node | 5.888 | 40.274 | 7.721 | 1.57 / 0.95 / 2.15 | 1.00 / 1.00 / 1.00 | No BTEL producer | — |
+
+**Clock findings.** Shipped medium selects the self-synchronizing ARM ECV
+`CNTVCTSS_EL0` source on this host (no explicit ISB); its epoch/conversion
+metadata comes from `btel_clock`/quanta. Five rotated microbenchmark rounds,
+2 million reads per measurement: plain `CNTVCT_EL0` **20.508 ns/read**,
+`CNTVCTSS_EL0` **20.487**, `ISB; CNTVCT_EL0` **30.645**, quanta auto **20.382**,
+OS monotonic **36.714**, empty black-box loop **0.358**. These are unadjusted
+loop averages. Auto selected `SystemCounter`, calibration converged, no
+fallback. Both counter probes retain a compiler memory barrier; raw omits
+hardware self-synchronization and ISB. Raw has no measured per-read advantage
+here, although its generated workloads execute faster. This experiment does
+not establish which instruction-scheduling effects cause that speedup.
+
+Raw's paired per-path WAPE is **0.028% / 0.009% / 0.199%**, with path-error
+p95 **3.60% / 0.03% / 4.17%**. No backwards intervals were observed in any
+audit or microbenchmark. This is consistency evidence, **not an ordering
+proof**: the audit surrounds raw samples with ordered reference reads, which
+can constrain or mask reordering. The uninstrumented raw variant's actual
+published durations are also compared against medium in the table. Raw
+changes successful function entry/exit reads only; shared ordered raise
+endpoints, task/GC clocks, error evidence and all other record fields remain
+as before. Raw is excluded from `best-exact` because it lacks the current
+boundary-ordering guarantee.
+
+**Shared boundaries.** The compiler inserts invalidation markers before BAML
+work; the experiment removes a pre-call marker only for a direct generated
+call with local/scalar arguments. Virtual dispatch, allocation/conversion,
+opaque runtime callbacks, control-flow work and yields retain markers. An
+adjacent child return/parent return or return/next direct entry can reuse the
+last real timestamp. There are 22 / 10 / 18 eligible direct call sites.
+Achieved function-boundary reads/call: **1.554686 / 1.996611 / 1.946373**,
+versus **2 / 2 / 1.946373** for the reference. Agent's lower baseline reflects
+its existing shared raise timestamps; task/GC/error-runtime reads are not
+counted as extra function-boundary reads. Sharing saves **22.27%** of Richards
+boundary reads, **0.17%** of trees', and none of agent's. Ordered-clock intervals
+remain measured, with exact counts and outcomes. They exclude administrative
+gaps that separate entry/exit reads include. The paired Richards difference
+(~11.8–11.9%) also includes removing audit-only work from those gaps; it must
+not be interpreted as clock inaccuracy or time spent in omitted BAML work.
+
+**Cheaper exact bookkeeping.** The hot path uses a single integer parent
+comparison (`u64::MAX` sentinel, without reserving any valid u32 path ID), a
+cached path/slot pointer, and a precomputed per-site direct-recursion flag.
+Reentry still checks the active callee; dynamic parent identity remains
+checked. The common path performs no hash lookup or aggregate merge. A
+successful completion touches only checked count and duration sums, retaining
+the overflow slow path; error/outcome handling remains exact. Statically
+assuming one parent for every site would be wrong for these dynamic call
+paths. This experiment does not claim a proof of globally minimal code.
+The change alone is small: **0.24% / 1.23% / 1.02%** below shipped medium.
+`best-exact` combines it with ordered shared boundaries; it is the requested
+combination's name, not a claim that it wins every workload. It improves
+Richards by **7.29%**, but is slightly slower than cheaper-bookkeeping alone
+on trees and agent. No exact experiment comes close to 1.5× off on Richards.
+
+**Count-only and sampling semantics.** Counts, paths, reentry and outcomes
+remain exact. Only function aggregate duration totals change; task spans,
+error evidence, GC records and self-await fields retain their normal handling
+(the workloads do not await). Count-only writes a zero scalar duration, which
+protobuf may omit on the wire: today's format does **not** interpret this as
+unknown/unobserved. All timing estimators likewise reuse that scalar without
+an approximation marker. These would be contract changes if shipped.
+
+N=16/64 select every Nth call per static site, with seeded initial phases
+(seeds 42–46) and counters continuing across jobs, then multiply each sampled
+interval by N. They do not stratify sampling by dynamic path. Rare paths may
+receive no samples; periodic behavior can alias with the schedule. Achieved
+reads/call are **0.124997 / 0.125000 / 0.121514** at N=16 and
+**0.031249 / 0.031250 / 0.030407** at N=64. Paired-audit path-error p95 is
+**73.81% / 100% / 100%** and **100% / 100% / 100%**, respectively. Exact
+counts alone do not make these duration estimates reliable.
+
+The interval experiment's separate thread sets a coalescing atomic flag at
+1 ms deadlines. The next **entry** boundary consumes it, measures that whole
+invocation through exit, and scales each `(path, reentry)` batch by
+`batch_count / sampled_count` at the existing flush point. Choosing an entry
+is necessary to measure a full invocation rather than retrospectively infer
+its start. This does not measure arbitrary exit-to-next-boundary intervals.
+Unsampled batches publish zero; flushes are not delayed to improve coverage.
+Achieved reads/call in the paired audit are **0.0001025 / 0.0001111 /
+0.0003369**. Its overhead changes the number of timer opportunities, so these
+are audit-run rates, not claims about uninstrumented timer coverage. Paired
+path-error p95 is **256.14% / 127.50% / 100%**. The estimator is sparse and
+selection-biased, not an acceptable accurate-duration replacement.
+
+**Decision data and limits.** Shipped medium/off remains **22.91× / 7.67× /
+1.44×**. The requested exact combination reaches **21.24× / 7.67× / 1.47×**.
+Even this count-only implementation is **3.17×** off on Richards; that is a
+measured implementation cost, not a proven physical lower bound. At the
+measured clock cost, two reads for its 1,736,751 calls cost roughly **71 ms**
+in isolation; the achieved shared-boundary read count suggests roughly
+**55 ms**. Those are clock microbenchmark projections, not additive causal
+components of the whole-program result. No measured variant meets Richards'
+~1.5× gate. Sampling trades away duration accuracy without reaching it either.
+The decision about the default/contract remains Hari's; shipped medium is
+unchanged.
+
+The accepted run's off ranges are Richards **3.735–3.751**, trees
+**41.495–42.325**, agent **3.583–3.610 ms/job**. Richards Node is noisier:
+**4.037–6.704** (median **5.888**); interpret its ×Node column accordingly.
+One earlier attempt stopped when clock calibration fell back to monotonic
+source 1. Its partial rows and failure are retained as
+`diagnostic-aborted-{raw,attempt}.json`; none enter the table. The runner now
+logs/retries only that explicit clock-domain mismatch (maximum five attempts),
+never a timing outlier or parity failure. The final 180 timed runs and 135
+audit runs needed **zero** retries. Every accepted recording uses source 4
+(ARM system counter) and one internally consistent conversion scale.
+
+Evidence: `telemetry/diagnostic-{raw,summary,environment}.json`,
+`diagnostic-{audit,audit-summary,clocks,path-errors}.json`; the path-error
+file gives signed relative error for every canonical path in every round
+against shipped medium. Raw files retain all per-path
+counts/durations, per-round error statistics, loads, and binary hashes. All
+135 paired audits matched their sidecar totals to the actual published
+aggregates. Default tests pass (compiler 10, runtime 23); diagnostic-feature
+tests pass (compiler 10, runtime 24), including shared-return reuse, work
+barriers and count-only completion accounting. Strict all-target clippy passes
+with and without the feature. Generated fixture packs retain the existing
+code-generator warnings; touched library crates are warning-clean under
+clippy. No default-level, policy, normalization or shipped producer changes
+were made by these experiments.

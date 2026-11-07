@@ -7,6 +7,7 @@ pub mod language;
 pub mod lists;
 pub mod maps;
 pub mod strings;
+pub mod telemetry;
 use bex_v2_heap::{Descriptor, Heap, RootSource};
 use bex_v2_loop::{Config, TaskCx, TaskLoop, Value};
 pub use language::*;
@@ -104,6 +105,7 @@ unsafe fn safepoint_slow() -> Result<(), bex_v2_loop::Err> {
             );
             // SAFETY: scoped TLS pointers remain valid throughout this root call.
             unsafe {
+                crate::telemetry::before_yield();
                 (&mut *task.get()).poll()?;
                 ROOTS.with(|roots| (&mut *heap.get()).safepoint(&Roots(&*roots.get())));
             }
@@ -131,6 +133,9 @@ impl Instance {
             .build()
             .unwrap();
         let mut heap = Heap::new(descriptors, pointer_types);
+        if btel_settings::mode::from_env().is_ok_and(|level| level.is_some()) {
+            heap.set_collection_observer(Some(crate::telemetry::collection));
+        }
         heap.set_stress(baml_env::raw_var("BAML_GC_STRESS").is_some_and(|value| value == "1"));
         heap.reserve_emergency()
             .expect("cannot reserve v2 emergency exception storage");

@@ -77,6 +77,16 @@ impl Repr {
         )
     }
 }
+// Explicit diagnostic builds alone emit work-boundary markers. Ordinary packs
+// have identical source and runtime behavior when this switch is absent.
+fn diagnostic_barrier() -> &'static str {
+    if baml_env::os_var("BAML_V2_DIAGNOSTIC_CODEGEN").is_some() {
+        "diag_boundary_work();\n"
+    } else {
+        ""
+    }
+}
+mod capture_codegen;
 struct Layout {
     fields: Vec<Repr>,
     offsets: Vec<usize>,
@@ -612,6 +622,25 @@ pub fn compile_v2(
             return Err(no("more than 1024 locals in one body"));
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+            let unsupported_hook = match &statement.kind {
+                StatementKind::Intrinsic {
+                    op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(mode),
+                    ..
+                } => *mode != baml_compiler2_mir::BuiltinTraceHook::Hidden,
+                StatementKind::Intrinsic {
+                    op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook,
+                    ..
+                }
+                | StatementKind::Assign {
+                    value: Rvalue::TraceHookSettings { .. },
+                    ..
+                } => true,
+                _ => false,
+            };
+            if unsupported_hook {
+                return Err(no("declaration hooks"));
+            }
+
             if let StatementKind::Assign {
                 value:
                     Rvalue::LoadType(
@@ -826,6 +855,12 @@ pub fn compile_v2(
         writeln!(&mut out, "Descriptor{{kind:Kind::List,size:8,ptr_slots:(0,0),tagged_slots:(0,0),elem:Some(bex_v2_heap::Elements{{offset:16,layout:bex_v2_heap::ElementLayout::{elem}}}),type_id:{},fields:&[],finalizer:None}},", desc+3).unwrap();
     }
     out.push_str("];\n");
+    out.push_str(&capture_codegen::emit(
+        &plan,
+        &descriptors,
+        &lists,
+        after_lists,
+    )?);
     for (&object, layout) in &plan.layouts {
         write!(
             &mut out,
@@ -848,6 +883,19 @@ pub fn compile_v2(
         }
         out.push_str("}\n");
     }
+    let host_function = |name: &str| {
+        program
+            .objects
+            .iter()
+            .enumerate()
+            .find_map(|(i, o)| {
+                (matches!(o, Object::Function(_)) && plan.index.display(i) == name).then_some(i)
+            })
+            .ok_or_else(|| no(format!("host function {name}")))
+    };
+    let stringify = host_function("baml.json.stringify")?;
+    let aliased = host_function("baml.json._aliased")?;
+    let alias_function = aliased;
     if let Some(callee) = json_decode {
         if plan.json_types.is_empty() {
             return Err(no("missing JSON specialization"));
@@ -1038,6 +1086,7 @@ pub fn compile_v2(
                     return Err(no("JSON wrapper body"));
                 };
                 let mut line = None;
+                let mut decode_pc = None;
                 for block in &body.blocks {
                     if let Some(Terminator::Call {
                         callee: Operand::Constant(Constant::Function(f)),
@@ -1046,17 +1095,39 @@ pub fn compile_v2(
                         && let Some((target, _)) = plan.index.function(db, *f)
                         && plan.index.display(target) == "baml.json._decode"
                     {
+                        let bytecode = plan.index.positions(callee);
+                        decode_pc = Some(
+                            bytecode
+                                .lower_to_compact_with_offsets()
+                                .offset_of(bytecode.block_pcs[block.id.0].terminator.unwrap())
+                                .unwrap(),
+                        );
                         line = plan.index.positions(callee).block_pcs[block.id.0]
                             .terminator
                             .map(|pc| plan.index.positions(callee).source_line_for_pc(pc));
                     }
                 }
                 let line = line.ok_or_else(|| no("JSON wrapper source line"))?;
+                let decode_pc = decode_pc.unwrap();
                 if specialization == 0 && !aliased {
-                    writeln!(&mut out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}]}};",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
+                    writeln!(&mut out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}],pcs:&[{decode_pc}],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
                 }
                 if !aliased {
-                    writeln!(&mut out,"unsafe fn f{callee}_json{code}(s:usize,naming:usize)->R<rt::Dyn>{{unsafe{{rt::observe(&O{callee});rt::check_stack().map_err(|e|e.at(&S{callee},0))?;if naming==0{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}}}}}").unwrap();
+                    let members = json_classes
+                        .iter()
+                        .map(|class| {
+                            format!("rt::telemetry::capture::Type::Class(CAPTURE_D{class})")
+                        })
+                        .collect::<Vec<_>>();
+                    let ty = if members.len() == 1 {
+                        members[0].clone()
+                    } else {
+                        format!(
+                            "rt::telemetry::capture::Type::Union(&[{}])",
+                            members.join(",")
+                        )
+                    };
+                    writeln!(&mut out,"unsafe fn f{callee}_json{code}(telemetry_site:usize,s:usize,naming:usize,omitted:bool)->R<rt::Dyn>{{unsafe{{rt::telemetry::observed_captured(&O{callee},telemetry_site,||{{let mut c=rt::telemetry::capture_arguments(&[rt::Dyn{{tag:3,payload:s as u64}},rt::Dyn{{tag:if omitted{{u64::MAX}}else{{CAPTURE_NAMING_TAG}},payload:naming as u64}}]);c.types=rt::telemetry::capture_type_args(&[(\"T\",&{ty})]);c}},|r|match r{{Ok(v)=>rt::telemetry::capture_value(*v),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::check_stack().map_err(|e|e.at(&S{callee},0))?;let aliased=rt::telemetry::observed_captured(&O{alias_function},JSON_ALIAS_SITE,||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;(if !aliased{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}).map_err(|e|e.at(&S{callee},0))}})}}}}").unwrap();
                 }
             }
         }
@@ -1072,6 +1143,7 @@ pub fn compile_v2(
         })
         .sum::<usize>()
         <= 1024;
+    let telemetry_sites = std::cell::RefCell::new(vec![(None, 0usize, entry)]);
     for &object in &reached {
         let mir = all[&object];
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
@@ -1101,25 +1173,122 @@ pub fn compile_v2(
             block: 0,
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
+            compact_sites: Vec::new(),
+            raise_kinds: Vec::new(),
+            telemetry_sites: &telemetry_sites,
             site: 0,
         };
         out.push_str(&emitter.function(mir.arity, small_program && !recursive(&calls, object))?);
     }
-    // Resolve once at startup. Opaque initialization keeps the observation
-    // load/branch real under LTO without imposing an opaque call on every entry.
-    let mut observation_init = if builtins.is_empty() {
-        String::new()
-    } else {
-        "init_builtin_observation();".to_owned()
+    // The pack host formats an integer through stringify and _aliased(Declared).
+    // Preserve these logical calls in the typed host specialization too.
+    let MirFunctionKind::Bytecode(host_body) = &all[&stringify].kind else {
+        return Err(no("host stringify body"));
     };
-    for id in reached.iter().chain(json_decode.as_ref()) {
-        write!(
-            &mut observation_init,
-            "O{id}.store(std::hint::black_box(0),std::sync::atomic::Ordering::Relaxed);"
+    let alias_block = host_body
+        .blocks
+        .iter()
+        .find(|b| {
+            matches!(&b.terminator,
+        Some(Terminator::Call { callee:Operand::Constant(Constant::Function(f)), .. })
+        if plan.index.function(db,*f).is_some_and(|(id,_)|id==aliased))
+        })
+        .ok_or_else(|| no("host naming call"))?;
+    let bytecode = plan.index.positions(stringify);
+    let alias_pc = bytecode
+        .lower_to_compact_with_offsets()
+        .offset_of(bytecode.block_pcs[alias_block.id.0].terminator.unwrap())
+        .unwrap();
+    let format_site = telemetry_sites.borrow().len();
+    telemetry_sites
+        .borrow_mut()
+        .extend([(None, 0, stringify), (Some(stringify), alias_pc, aliased)]);
+    let mut observed = reached.clone();
+    if let Some(decode) = json_decode {
+        observed.insert(decode);
+        let MirFunctionKind::Bytecode(body) = &all[&decode].kind else {
+            unreachable!()
+        };
+        let block = body
+            .blocks
+            .iter()
+            .find(|b| {
+                matches!(&b.terminator,
+            Some(Terminator::Call { callee: Operand::Constant(Constant::Function(f)), .. })
+            if plan.index.function(db,*f).is_some_and(|(id,_)|id==aliased))
+            })
+            .ok_or_else(|| no("decode naming call"))?;
+        let bytecode = plan.index.positions(decode);
+        let pc = bytecode
+            .lower_to_compact_with_offsets()
+            .offset_of(bytecode.block_pcs[block.id.0].terminator.unwrap())
+            .unwrap();
+        writeln!(
+            &mut out,
+            "const JSON_ALIAS_SITE:usize={};",
+            telemetry_sites.borrow().len()
+        )
+        .unwrap();
+        telemetry_sites
+            .borrow_mut()
+            .push((Some(decode), pc, aliased));
+    }
+    for id in [stringify, aliased] {
+        if observed.insert(id) {
+            writeln!(
+                &mut out,
+                "static O{id}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);"
+            )
+            .unwrap();
+        }
+    }
+    let function_ids: BTreeMap<_, _> = observed
+        .iter()
+        .enumerate()
+        .map(|(i, &id)| (id, i))
+        .collect();
+    out.push_str("static TELEMETRY_FUNCTIONS:&[rt::telemetry::Function]=&[\n");
+    let allocator = btel_types::FunctionIdAllocator::default();
+    for &id in &observed {
+        let mut info = plan.index.info(id).clone();
+        info.bytecode.compact = Some(info.bytecode.lower_to_compact());
+        let label = program
+            .packages
+            .iter()
+            .find(|p| {
+                p.objects
+                    .contains(&u32::try_from(id).expect("function index"))
+            })
+            .map(|p| baml_base::Name::new(&p.name));
+        let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
+        let metadata = telemetry_metadata_source(&metadata);
+        let hidden = info.trace_passthrough
+            || matches!(&all[&id].kind,
+            MirFunctionKind::Bytecode(body) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
+                StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
+
+        writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();
+    }
+    out.push_str("];\nstatic TELEMETRY_SITES:&[rt::telemetry::Site]=&[\n");
+    for &(caller, pc, callee) in telemetry_sites.borrow().iter() {
+        writeln!(
+            &mut out,
+            "rt::telemetry::Site{{caller:{:?},pc:{pc},callee:{}}},",
+            caller.map(|id| function_ids[&id]),
+            function_ids[&callee]
         )
         .unwrap();
     }
-    write!(&mut out,"fn entry()->R<i64>{{unsafe{{f{entry}()}}}}\nfn main()->std::process::ExitCode{{{observation_init}rt::driver(DESCRIPTORS,entry)}}\n").unwrap();
+    out.push_str("];\n");
+    let builtin_init = if builtins.is_empty() {
+        ""
+    } else {
+        "init_builtin_observation();"
+    };
+    write!(&mut out,"fn entry()->R<i64>{{unsafe{{f{entry}(0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_observed(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}\n").unwrap();
+    if !diagnostic_barrier().is_empty() {
+        out.push_str("#[inline(always)] fn diag_boundary_work() {}\n");
+    }
     Ok(out)
 }
 fn rt_descriptors() -> usize {
@@ -1139,9 +1308,26 @@ struct Emitter<'a, 'db> {
     block: usize,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
+    compact_sites: Vec<u32>,
+    raise_kinds: Vec<&'static str>,
+    telemetry_sites: &'a std::cell::RefCell<Vec<(Option<usize>, usize, usize)>>,
     site: usize,
 }
 impl Emitter<'_, '_> {
+    fn telemetry_site(&self, callee: usize) -> usize {
+        let bytecode = self.plan.index.positions(self.object);
+        let instruction = bytecode.block_pcs[self.block]
+            .terminator
+            .expect("call source position");
+        let pc = bytecode
+            .lower_to_compact_with_offsets()
+            .offset_of(instruction)
+            .expect("compact site");
+        let mut sites = self.telemetry_sites.borrow_mut();
+        let id = sites.len();
+        sites.push((Some(self.object), pc, callee));
+        id
+    }
     fn local(&self, i: usize) -> Gen<Repr> {
         if self
             .body
@@ -1157,7 +1343,25 @@ impl Emitter<'_, '_> {
         self.plan.local_repr(self.body, i, 0)
     }
     fn mark(&mut self, pc: Option<usize>) {
+        use bex_vm_types::bytecode::OpCode;
         if let Some(pc) = pc {
+            let bytecode = self.plan.index.positions(self.object);
+            let compact = bytecode.lower_to_compact_with_offsets();
+            let offset = compact.offset_of(pc).expect("source instruction");
+            self.compact_sites.push(u32::try_from(offset).unwrap());
+            let kind = match OpCode::try_from(bytecode.lower_to_compact().code[offset]).unwrap() {
+                OpCode::Throw => "Throw",
+                OpCode::Rethrow => "Rethrow",
+                OpCode::Call
+                | OpCode::CallHooked
+                | OpCode::CallLocal
+                | OpCode::CallExactArgs
+                | OpCode::CallIndirect
+                | OpCode::VirtualCall
+                | OpCode::SysOp => "NativeBoundary",
+                _ => "Runtime",
+            };
+            self.raise_kinds.push(kind);
             self.site = self.sites.len();
             self.sites.push(
                 self.plan
@@ -1172,8 +1376,13 @@ impl Emitter<'_, '_> {
             let landing = self.body.blocks[handler.0]
                 .landing
                 .expect("verified handler landing");
+            let bytecode = self.plan.index.positions(self.object);
+            let pc = bytecode
+                .lower_to_compact_with_offsets()
+                .offset_of(bytecode.block_pcs[handler.0].start.expect("handler pc"))
+                .expect("compact handler");
             format!(
-                "{{let error={error};if error.value==0{{return Err(error);}}let rooted=rt::CaughtError::new(error);let p=rooted.value();l{}=rt::Dyn{{tag:(*(p as *const bex_v2_heap::Header)).desc as u64+3,payload:p as u64}};caught{}=Some(rooted);{}}}",
+                "{{let mut error={error};rt::telemetry::evidence::caught(&mut error,{pc}u32);if error.value==0{{return Err(error);}}let rooted=rt::CaughtError::new(error);let p=rooted.value();l{}=rt::Dyn{{tag:(*(p as *const bex_v2_heap::Header)).desc as u64+3,payload:p as u64}};caught{}=Some(rooted);{}}}",
                 landing.error_local.0, handler.0, self.unwind_jumps[self.block]
             )
         } else {
@@ -1209,6 +1418,15 @@ impl Emitter<'_, '_> {
             format!("({})==0", value.0)
         } else {
             "false".into()
+        }
+    }
+    fn capture_value(&self, value: String, repr: Repr) -> Gen<String> {
+        match repr {
+            Repr::Dyn(_) | Repr::Tagged => Ok(value),
+            Repr::Naming => Ok(format!(
+                "rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:({value}) as u64}}"
+            )),
+            _ => self.coerce((value, repr), Repr::Tagged),
         }
     }
     fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
@@ -1704,12 +1922,22 @@ impl Emitter<'_, '_> {
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let attribute = if inline { "#[inline(always)]\n" } else { "" };
+        let object = self.object;
+        let returned = self.local(0)?.rust();
+        let arguments = (1..=arity)
+            .map(|i| format!("l{i}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let captured_args = (1..=arity)
+            .map(|i| self.capture_value(format!("l{i}"), self.local(i)?))
+            .collect::<Gen<Vec<_>>>()?
+            .join(",");
+        let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
+        let captures = format!(
+            "||rt::telemetry::capture_arguments(&[{captured_args}]),|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
+        );
         let mut code = format!(
-            "{attribute}unsafe fn f{}({params})->R<{}>{{unsafe{{rt::observe(&O{});rt::check_stack().map_err(|e|e.at(&S{},0))?;\n",
-            self.object,
-            self.local(0)?.rust(),
-            self.object,
-            self.object
+            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{let mode=rt::telemetry::mode(&O{object});if mode==0{{return f{object}_body({arguments});}}if mode!=1{{return f{object}_observed(telemetry_site,mode,{arguments});}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n#[inline(never)] unsafe fn f{object}_observed(telemetry_site:usize,mode:u8,{params})->R<{returned}>{{unsafe{{if mode>3{{rt::telemetry::evidence::observe_captured(telemetry_site,mode&3,{captures},||f{object}_body({arguments}))}}else{{rt::telemetry::observe_captured(telemetry_site,mode,{captures},||f{object}_body({arguments}))}}}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
         );
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {
@@ -1749,8 +1977,15 @@ impl Emitter<'_, '_> {
             .map(usize::to_string)
             .collect::<Vec<_>>()
             .join(",");
+        let pcs = format!("{:?}", self.compact_sites);
+        let kinds = self
+            .raise_kinds
+            .iter()
+            .map(|k| format!("rt::telemetry::RaiseKind::{k}"))
+            .collect::<Vec<_>>()
+            .join(",");
         Ok(format!(
-            "static O{}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);\nstatic S{}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{lines}]}};\n{code}",
+            "static O{}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);\nstatic S{}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{lines}],pcs:&{pcs},kinds:&[{kinds}]}};\n{code}",
             self.object,
             self.object,
             self.plan.index.info(self.object).source_file,
@@ -1807,6 +2042,9 @@ impl Emitter<'_, '_> {
         }
         for (i, s) in block.statements.iter().enumerate() {
             self.mark(pcs.statements.get(i).copied().flatten());
+            if !matches!(s.kind, StatementKind::Nop) {
+                out.push_str(diagnostic_barrier());
+            }
             match &s.kind {
                 StatementKind::Assign { destination, value } => {
                     out.push_str(
@@ -1827,6 +2065,9 @@ impl Emitter<'_, '_> {
         }
         self.mark(pcs.terminator);
         let term = block.terminator.as_ref().unwrap();
+        if !matches!(term, Terminator::Return) {
+            out.push_str(diagnostic_barrier());
+        }
         if let Some((iter, array)) =
             crate::analysis::array_iter_walk(self.db, self.body, self.arity, term, &self.iters)
         {
@@ -1891,7 +2132,7 @@ impl Emitter<'_, '_> {
                     .collect::<Vec<_>>()
                     .join(",");
                 let error = format!(
-                    "Box::new(rt::Error{{value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
+                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
                     self.object, self.site
                 );
                 writeln!(&mut out, "{{let p={value};{}}}", self.raise(&error)).unwrap();
@@ -1963,17 +2204,21 @@ impl Emitter<'_, '_> {
                     if *ntypeargs != 1 || args.len() != 3 || code < 3 {
                         return Err(no("JSON decode specialization/naming"));
                     }
-                    let naming = if matches!(args[2], Operand::Constant(Constant::OmittedArg)) {
+                    let omitted = matches!(args[2], Operand::Constant(Constant::OmittedArg));
+                    let naming = if omitted {
                         "0usize".to_owned()
                     } else {
                         self.coerce(self.operand(&args[2])?, Repr::Naming)?
                     };
                     let text = self.coerce(self.operand(&args[1])?, Repr::Str)?;
+                    let telemetry_site = self.telemetry_site(c);
                     let (destination, _) = crate::analysis::continuation(term).unwrap();
                     out.push_str(&self.assign(
                         destination,
                         (
-                            self.fallible(&format!("f{c}_json{code}({text},{naming})")),
+                            self.fallible(&format!(
+                                "f{c}_json{code}({telemetry_site},{text},{naming},{omitted})"
+                            )),
                             Repr::Tagged,
                         ),
                     )?);
@@ -2112,7 +2357,8 @@ impl Emitter<'_, '_> {
                     }
                     (
                         self.fallible(&format!(
-                            "f{c}({})",
+                            "f{c}({}, {})",
+                            self.telemetry_site(c),
                             values
                                 .iter()
                                 .map(|(v, _)| v.as_str())
@@ -2209,8 +2455,9 @@ impl Emitter<'_, '_> {
                     returned = Some(ty);
                     write!(
                         &mut expr,
-                        "{}=>f{callee}({arguments}),",
-                        self.descriptors[&class] + 3
+                        "{}=>f{callee}({},{arguments}),",
+                        self.descriptors[&class] + 3,
+                        self.telemetry_site(callee)
                     )
                     .unwrap();
                 }
@@ -2249,6 +2496,82 @@ fn recursive(calls: &BTreeMap<usize, BTreeSet<usize>>, function: usize) -> bool 
         }
     }
     false
+}
+
+fn telemetry_metadata_source(m: &btel_types::FunctionMetadata) -> String {
+    fn string(s: &str) -> String {
+        format!("{s:?}.into()")
+    }
+    fn optional(s: Option<&str>) -> String {
+        s.map_or_else(|| "None".into(), |s| format!("Some({})", string(s)))
+    }
+    fn key(k: Option<&btel_types::DefinitionKey>) -> String {
+        k.map_or_else(
+            || "None".into(),
+            |k| format!("Some(DefinitionKey({}))", string(&k.0)),
+        )
+    }
+    let span = m.source_span.as_ref().map_or_else(
+        || "None".into(),
+        |s| {
+            format!(
+                "Some(SourceSpan{{file_id:{},start:{},end:{}}})",
+                s.file_id, s.start, s.end
+            )
+        },
+    );
+    let args = m.argument_layout.as_ref().map_or_else(
+        || "None".into(),
+        |a| {
+            format!(
+                "Some(ArgumentLayout{{slots:vec![{}]}})",
+                a.slots
+                    .iter()
+                    .map(|s| format!(
+                        "ArgumentSlot{{name:{},receiver:{}}}",
+                        optional(s.name.as_deref()),
+                        s.receiver
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        },
+    );
+    let map = m.source_map.as_ref().map_or_else(
+        || "None".into(),
+        |s| {
+            format!(
+                "Some(SourceMap{{code_bytes:{},entries:vec![{}]}})",
+                s.code_bytes,
+                s.entries
+                    .iter()
+                    .map(|e| format!(
+                        "SourceMapEntry{{pc:{},file_id:{},start:{},end:{},line:{}}}",
+                        e.pc, e.file_id, e.start, e.end, e.line
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        },
+    );
+    format!(
+        "FunctionMetadata{{function_id,fqn:{},display_name:{},source_file:{},source_span:{span},kind:RuntimeFunctionKind::Bytecode,origin:RuntimeFunctionOrigin::{:?},owner_type:{},parent_function:{},lambda_path:{},definition_key:{},package_name:{},namespace:vec![{}],argument_layout:{args},source_map:{map},model_invoke:{}}}",
+        string(&m.fqn),
+        string(&m.display_name),
+        optional(m.source_file.as_deref()),
+        m.origin,
+        key(m.owner_type.as_ref()),
+        key(m.parent_function.as_ref()),
+        optional(m.lambda_path.as_deref()),
+        key(m.definition_key.as_ref()),
+        optional(m.package_name.as_deref()),
+        m.namespace
+            .iter()
+            .map(|s| string(s))
+            .collect::<Vec<_>>()
+            .join(","),
+        m.model_invoke
+    )
 }
 
 #[cfg(test)]

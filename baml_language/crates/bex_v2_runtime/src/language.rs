@@ -3,7 +3,6 @@
 use crate::Instance;
 use baml_type::Int63;
 use bex_v2_heap::{Descriptor, ElementLayout, Elements, Field, Header, Kind, SlotKind};
-use std::sync::atomic::{AtomicU8, Ordering};
 pub type Dyn = bex_v2_heap::TaggedSlot;
 pub type R<T> = Result<T, Box<Error>>;
 
@@ -74,6 +73,8 @@ pub struct Source {
     pub file: &'static str,
     pub function: &'static str,
     pub lines: &'static [usize],
+    pub pcs: &'static [u32],
+    pub kinds: &'static [crate::telemetry::RaiseKind],
 }
 #[derive(Debug)]
 pub struct Frame {
@@ -83,6 +84,8 @@ pub struct Frame {
 }
 #[derive(Debug)]
 pub struct Error {
+    pub telemetry_raise: Option<crate::telemetry::evidence::Raise>,
+    pub telemetry_at: Option<btel_types::ClockInstant>,
     /// Actual v2 heap instance of the panic class, zero only for internal errors.
     pub value: usize,
     pub class: &'static str,
@@ -94,6 +97,8 @@ impl Error {
     #[cold]
     pub fn internal(message: String) -> Box<Self> {
         Box::new(Self {
+            telemetry_raise: None,
+            telemetry_at: None,
             value: 0,
             class: "InternalError",
             message,
@@ -103,6 +108,7 @@ impl Error {
     }
     #[cold]
     pub fn at(mut self: Box<Self>, source: &'static Source, site: usize) -> Box<Self> {
+        crate::telemetry::evidence::raised(&mut self, source, site, None);
         self.frames.push(Frame {
             file: source.file,
             function: source.function,
@@ -128,6 +134,8 @@ fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
         };
         bex_v2_heap::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
+            telemetry_raise: None,
+            telemetry_at: None,
             value: object as usize,
             class,
             message,
@@ -210,11 +218,14 @@ pub fn nonnull(p: usize) -> R<usize> {
         ))
     }
 }
+/// Native builtin observation words remain hidden in the admitted subset.
 #[inline(always)]
-pub fn observe(word: &AtomicU8) {
-    if word.load(Ordering::Relaxed) != 0 {
-        unimplemented!("runtime v2 telemetry producer");
-    }
+pub fn observe(word: &std::sync::atomic::AtomicU8) {
+    assert_eq!(
+        word.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "unsupported in runtime v2: native observation policy"
+    );
 }
 #[inline(always)]
 pub fn poll() -> R<()> {
@@ -228,7 +239,25 @@ pub fn poll() -> R<()> {
 /// Native speedtest wire protocol with an optional plain single-call mode.
 /// Every warmup and measured return is checked, not just the first call.
 pub fn driver(descriptors: &'static [Descriptor], entry: fn() -> R<i64>) -> std::process::ExitCode {
-    match driver_inner(descriptors, entry) {
+    driver_observed(descriptors, entry, &[], &[], None)
+}
+pub fn driver_observed(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+) -> std::process::ExitCode {
+    let mut session = match crate::telemetry::Session::new(functions, sites) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{}", e.message);
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+    let result = driver_inner(descriptors, entry, &mut session, format_site);
+    session.finish(result.is_ok());
+    match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             let traceback = bex_vm_types::errors::format_traceback(
@@ -250,12 +279,12 @@ pub fn driver(descriptors: &'static [Descriptor], entry: fn() -> R<i64>) -> std:
         }
     }
 }
-fn driver_inner(descriptors: &'static [Descriptor], entry: fn() -> R<i64>) -> R<()> {
-    if baml_env::raw_var("BAML_TELEMETRY").is_some_and(|level| level != "off") {
-        return Err(Error::internal(
-            "unsupported in runtime v2: telemetry other than off".into(),
-        ));
-    }
+fn driver_inner(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    session: &mut crate::telemetry::Session,
+    format_site: Option<usize>,
+) -> R<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let mut jobs = None;
     let mut warmup = 1usize;
@@ -284,19 +313,23 @@ fn driver_inner(descriptors: &'static [Descriptor], entry: fn() -> R<i64>) -> R<
     let pointers = Box::leak(pointers.into_boxed_slice());
     let mut instance = Instance::new(descriptors, pointers);
     // SAFETY: compiler admission and descriptor construction enforce this ABI.
-    let result = unsafe { instance.run_baml(entry) }?;
+    let result = session.run(|| unsafe { instance.run_baml(entry) })?;
     let Some(jobs) = jobs else {
-        println!("{result}");
+        let text = match format_site {
+            Some(site) => session.format_int(result, site)?,
+            None => result.to_string(),
+        };
+        println!("{text}");
         return Ok(());
     };
     for _ in 1..warmup {
-        if unsafe { instance.run_baml(entry) }? != result {
+        if session.run(|| unsafe { instance.run_baml(entry) })? != result {
             return Err(Error::internal("warmup result mismatch".into()));
         }
     }
     let start = std::time::Instant::now();
     for _ in 0..jobs {
-        if unsafe { instance.run_baml(entry) }? != result {
+        if session.run(|| unsafe { instance.run_baml(entry) })? != result {
             return Err(Error::internal("timed result mismatch".into()));
         }
     }
@@ -387,6 +420,8 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
             crate::emergency_alloc(5, std::mem::size_of::<MessagePanic>()).cast::<MessagePanic>();
         bex_v2_heap::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
+            telemetry_raise: None,
+            telemetry_at: None,
             value: object as usize,
             class: "baml.panics.AllocFailure",
             message,
@@ -481,6 +516,8 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
         object.add(8).cast::<i64>().write(index);
         object.add(16).cast::<i64>().write(length as i64);
         Box::new(Error {
+            telemetry_raise: None,
+            telemetry_at: None,
             value: object as usize,
             class: "baml.panics.IndexOutOfBounds",
             message,
@@ -667,6 +704,8 @@ mod caught_tests {
     static SOURCE: Source = Source {
         file: "catch.baml",
         function: "user.raise",
+        pcs: &[],
+        kinds: &[],
         lines: &[7],
     };
     #[test]
@@ -790,6 +829,8 @@ fn division_zero(left: i64) -> Box<Error> {
         );
     }
     Box::new(Error {
+        telemetry_raise: None,
+        telemetry_at: None,
         value: p as usize,
         class: "baml.panics.DivisionByZero",
         message: format!("division by zero: {left} / 0"),

@@ -1,0 +1,21 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 100K of event 'armv8_pmuv3_0/cycles/P'
+# Event count (approx.): 69426299798
+#
+# Overhead  Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                           IPC   [IPC Coverage]
+# ........  ...............................................................................................................................................................................................................................................................................................................................................................................................................................................................  ....................
+#
+    88.93%  [.] baml_rust_program::entry                                                                                                                                                                                                                                                                                                                                                                                                                                     -      -
+     3.60%  [.] <core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write                                                                                                                                                                                                                                                                                                                                                                         -      -
+     3.25%  [.] <btel_records::aggregate::AggregateDelta>::checked_merge                                                                                                                                                                                                                                                                                                                                                                                                     -      -
+     2.65%  [.] <bex_v2_runtime::telemetry::State>::path                                                                                                                                                                                                                                                                                                                                                                                                                     -      -
+     1.27%  [.] <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&bex_v2_runtime::telemetry::Key>                                                                                                                                                                                                                                                                                                                                                     -      -
+
+
+#
+# (Tip: Customize output of perf script with: perf script -F event,ip,sym)
+#

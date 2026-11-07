@@ -1,0 +1,46 @@
+{
+  "cpu": "12",
+  "logical_cpus": 20,
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "load": [
+    34.302734375,
+    53.94140625,
+    51.95166015625
+  ],
+  "platform": [
+    "Linux",
+    "spark",
+    "7.0.14",
+    "#1-NixOS SMP PREEMPT_DYNAMIC Tue Jan  1 00:00:00 UTC 1980",
+    "aarch64"
+  ],
+  "node": "v24.15.0",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "base_commit": "74e47502b76d8192b2bf2674f548e006e602d423",
+  "binaries": {
+    "agent-v2": "b62f0d68e51a9ea49e210c994d6b3a21053b85bd6b3cbe9e2b868fcf3c6efb1a",
+    "agent-oracle": "d779ed0440d7547c6e1ff0b5841e3f1c3e2c0060d32438777a48fbbfc86681f6",
+    "agent-native": "c7bf24d831c40603382c19f42b961822e8e258a800c07fd770778a68e931beab"
+  }
+}

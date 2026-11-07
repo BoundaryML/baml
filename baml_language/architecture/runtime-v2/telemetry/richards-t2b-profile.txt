@@ -1,0 +1,17 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 104K of event 'armv8_pmuv3_0/cycles/P'
+# Event count (approx.): 72773659201
+#
+# Overhead  Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                           IPC   [IPC Coverage]
+# ........  ...............................................................................................................................................................................................................................................................................................................................................................................................................................................................  ....................
+#
+    99.76%  [.] baml_rust_program::entry                                                                                                                                                                                                                                                                                                                                                                                                                                     -      -
+
+
+#
+# (Tip: To see how parallelism changes over time, try: perf report -F time,latency,parallelism --time-quantum=1s)
+#

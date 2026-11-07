@@ -880,7 +880,9 @@ pub(crate) mod tests {
                 TimingRecord::FunctionTimingCompletion {
                     call_path, reentry, ..
                 } => Some((*call_path, *reentry)),
-                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+                TimingRecord::ThreadSelected { .. }
+                | TimingRecord::SysOpTime { .. }
+                | TimingRecord::AggregateDeltas(_) => None,
             })
             .collect();
         assert_eq!(

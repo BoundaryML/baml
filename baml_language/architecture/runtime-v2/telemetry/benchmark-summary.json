@@ -1,0 +1,20 @@
+{
+  "trees": {
+    "ms_per_job": {
+      "v2-off": 44.640338666666665,
+      "v2-medium": 272.0252486666667,
+      "native-medium": 1038.9298296666666,
+      "node": 41.46865233333334
+    },
+    "medium_over_off": 6.093709339839537
+  },
+  "richards": {
+    "ms_per_job": {
+      "v2-off": 3.9337382,
+      "v2-medium": 82.1224727,
+      "native-medium": 289.193792,
+      "node": 4.1725857
+    },
+    "medium_over_off": 20.8764458956623
+  }
+}
