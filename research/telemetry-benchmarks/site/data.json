@@ -45,12 +45,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 407301,
+   "bytes": 405784,
    "spans": 42,
-   "billed": 219406,
+   "billed": 219346,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103970
+   "prompt_bytes": 103940
   },
   {
    "stack": "datadog",
@@ -97,12 +97,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 22280,
+   "bytes": 144228,
    "spans": 22,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103870
+   "prompt_bytes": 103840
   },
   {
    "stack": "datadog",
@@ -110,12 +110,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2070975,
+   "bytes": 2070904,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025470
+   "prompt_bytes": 1025440
   },
   {
    "stack": "bridge",
@@ -123,12 +123,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 221122,
+   "bytes": 221713,
    "spans": 42,
-   "billed": 35066,
+   "billed": 35006,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11810
+   "prompt_bytes": 11780
   },
   {
    "stack": "bridge",
@@ -162,12 +162,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 41649,
+   "bytes": 41606,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11540
+   "prompt_bytes": 11510
   },
   {
    "stack": "datadog",
@@ -175,12 +175,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2069227,
+   "bytes": 2069169,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025300
+   "prompt_bytes": 1025270
   },
   {
    "stack": "baml",
@@ -279,12 +279,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 487396,
+   "bytes": 465272,
    "spans": 124,
-   "billed": 244791,
+   "billed": 244731,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 107100
+   "prompt_bytes": 107070
   },
   {
    "stack": "logfire",
@@ -292,12 +292,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 22110,
+   "bytes": 159342,
    "spans": 22,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103700
+   "prompt_bytes": 103670
   },
   {
    "stack": "bridge",
@@ -344,12 +344,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 81117,
-   "spans": 54,
+   "bytes": 169192,
+   "spans": 58,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 106020
+   "prompt_bytes": 105990
   },
   {
    "stack": "logfire",
@@ -357,12 +357,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 3351,
+   "bytes": 10533,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11710
+   "prompt_bytes": 11680
   },
   {
    "stack": "baml",
@@ -383,12 +383,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 343476,
+   "bytes": 343538,
    "spans": 42,
-   "billed": 221736,
+   "billed": 221676,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 104700
+   "prompt_bytes": 104670
   },
   {
    "stack": "logfire",
@@ -409,12 +409,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 23992,
-   "spans": 56,
+   "bytes": 36281,
+   "spans": 60,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 13860
+   "prompt_bytes": 13830
   },
   {
    "stack": "logfire",
@@ -448,12 +448,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2384205,
+   "bytes": 2313421,
    "spans": 124,
-   "billed": 2088102,
+   "billed": 2088042,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 1028700
+   "prompt_bytes": 1028670
   },
   {
    "stack": "baml",
@@ -461,12 +461,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2235710,
+   "bytes": 2184265,
    "spans": 34,
-   "billed": 2062626,
+   "billed": 2062657,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025570
+   "prompt_bytes": 1025540
   },
   {
    "stack": "bridge",
@@ -474,12 +474,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 472849,
+   "bytes": 474711,
    "spans": 132,
-   "billed": 244791,
+   "billed": 244731,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 107100
+   "prompt_bytes": 107070
   },
   {
    "stack": "logfire",
@@ -487,12 +487,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 3279,
-   "spans": 20,
+   "bytes": 12824,
+   "spans": 22,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11540
+   "prompt_bytes": 11510
   },
   {
    "stack": "baml",
@@ -513,12 +513,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2188702,
+   "bytes": 2189506,
    "spans": 42,
-   "billed": 2062626,
+   "billed": 2062566,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025570
+   "prompt_bytes": 1025540
   },
   {
    "stack": "bridge",
@@ -539,12 +539,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 223830,
+   "bytes": 158819,
    "spans": 42,
-   "billed": 37396,
+   "billed": 37336,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 12540
+   "prompt_bytes": 12510
   },
   {
    "stack": "datadog",
@@ -591,12 +591,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 1709103,
+   "bytes": 1632124,
    "spans": 22,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025470
+   "prompt_bytes": 1025440
   },
   {
    "stack": "datadog",
@@ -617,12 +617,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2191911,
+   "bytes": 2191824,
    "spans": 42,
-   "billed": 2064956,
+   "billed": 2064896,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1026300
+   "prompt_bytes": 1026270
   },
   {
    "stack": "datadog",
@@ -630,12 +630,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 226005,
+   "bytes": 225938,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103700
+   "prompt_bytes": 103670
   },
   {
    "stack": "bridge",
@@ -773,12 +773,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 247642,
+   "bytes": 247608,
    "spans": 40,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 106020
+   "prompt_bytes": 105990
   },
   {
    "stack": "baml",
@@ -786,12 +786,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 214818,
+   "bytes": 214889,
    "spans": 34,
-   "billed": 37396,
+   "billed": 37336,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 12540
+   "prompt_bytes": 12510
   },
   {
    "stack": "datadog",
@@ -851,12 +851,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 290356,
+   "bytes": 288073,
    "spans": 132,
-   "billed": 60451,
+   "billed": 60391,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 14940
+   "prompt_bytes": 14910
   },
   {
    "stack": "bridge",
@@ -864,12 +864,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2326210,
+   "bytes": 2326343,
    "spans": 132,
-   "billed": 2088102,
+   "billed": 2088042,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 1028700
+   "prompt_bytes": 1028670
   },
   {
    "stack": "datadog",
@@ -877,12 +877,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2090894,
+   "bytes": 2090801,
    "spans": 40,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 1027620
+   "prompt_bytes": 1027590
   },
   {
    "stack": "datadog",
@@ -903,12 +903,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 399310,
+   "bytes": 399291,
    "spans": 34,
-   "billed": 221736,
+   "billed": 221676,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 104700
+   "prompt_bytes": 104670
   },
   {
    "stack": "baml",
@@ -1007,12 +1007,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 396440,
+   "bytes": 396394,
    "spans": 34,
-   "billed": 219406,
+   "billed": 219346,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103970
+   "prompt_bytes": 103940
   },
   {
    "stack": "datadog",
@@ -1020,12 +1020,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 63306,
+   "bytes": 63252,
    "spans": 40,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 13860
+   "prompt_bytes": 13830
   },
   {
    "stack": "baml",
@@ -1176,12 +1176,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 302815,
+   "bytes": 279781,
    "spans": 124,
-   "billed": 60451,
+   "billed": 60391,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 14940
+   "prompt_bytes": 14910
   },
   {
    "stack": "logfire",
@@ -1228,12 +1228,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 1553353,
-   "spans": 20,
+   "bytes": 1476923,
+   "spans": 22,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025300
+   "prompt_bytes": 1025270
   },
   {
    "stack": "baml",
@@ -1293,12 +1293,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 227742,
+   "bytes": 227684,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103870
+   "prompt_bytes": 103840
   },
   {
    "stack": "bridge",
@@ -1397,12 +1397,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2108448,
-   "spans": 53,
+   "bytes": 2267104,
+   "spans": 58,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 1027620
+   "prompt_bytes": 1027590
   },
   {
    "stack": "baml",
@@ -1475,12 +1475,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2239430,
+   "bytes": 2187273,
    "spans": 34,
-   "billed": 2064956,
+   "billed": 2064987,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1026300
+   "prompt_bytes": 1026270
   },
   {
    "stack": "baml",
@@ -1488,12 +1488,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 211853,
+   "bytes": 211956,
    "spans": 34,
-   "billed": 35066,
+   "billed": 35006,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11810
+   "prompt_bytes": 11780
   },
   {
    "stack": "datadog",
@@ -1501,12 +1501,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 43406,
+   "bytes": 43343,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11710
+   "prompt_bytes": 11680
   },
   {
    "stack": "bridge",
@@ -1566,12 +1566,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 10410,
+   "bytes": 78925,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103700
+   "prompt_bytes": 103670
   },
   {
    "stack": "otel",
@@ -1618,12 +1618,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 773508,
+   "bytes": 773510,
    "spans": 40,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 1027620
+   "prompt_bytes": 1027590
   },
   {
    "stack": "otel",
@@ -1644,12 +1644,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 772887,
+   "bytes": 772663,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025470
+   "prompt_bytes": 1025440
   },
   {
    "stack": "otel",
@@ -1735,12 +1735,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2953,
+   "bytes": 10091,
    "spans": 40,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 13860
+   "prompt_bytes": 13830
   },
   {
    "stack": "otel",
@@ -1774,12 +1774,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 772008,
+   "bytes": 771990,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025300
+   "prompt_bytes": 1025270
   },
   {
    "stack": "otel",
@@ -1826,12 +1826,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 11254,
+   "bytes": 79952,
    "spans": 40,
    "billed": null,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 106020
+   "prompt_bytes": 105990
   },
   {
    "stack": "otel",
@@ -1852,12 +1852,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 10490,
+   "bytes": 79029,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103870
+   "prompt_bytes": 103840
   },
   {
    "stack": "otel",
@@ -1865,12 +1865,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2320,
+   "bytes": 9370,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11710
+   "prompt_bytes": 11680
   },
   {
    "stack": "otel",
@@ -1891,12 +1891,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 2263,
+   "bytes": 9299,
    "spans": 20,
    "billed": null,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11540
+   "prompt_bytes": 11510
   },
   {
    "stack": "otel",
@@ -1956,12 +1956,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 354525,
+   "bytes": 354851,
    "spans": 132,
-   "billed": 130748,
+   "billed": 130718,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 107100
+   "prompt_bytes": 107070
   },
   {
    "stack": "bridge-nobodies",
@@ -2008,12 +2008,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 227028,
+   "bytes": 227812,
    "spans": 42,
-   "billed": 112485,
+   "billed": 112455,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 103970
+   "prompt_bytes": 103940
   },
   {
    "stack": "bridge-nobodies",
@@ -2099,12 +2099,12 @@
    "size": 10240,
    "batch": "10v",
    "calls": 10,
-   "bytes": 228960,
+   "bytes": 228667,
    "spans": 42,
-   "billed": 113325,
+   "billed": 113295,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 104700
+   "prompt_bytes": 104670
   },
   {
    "stack": "bridge-nobodies",
@@ -2125,12 +2125,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 1152800,
+   "bytes": 1152531,
    "spans": 42,
-   "billed": 1034925,
+   "billed": 1034895,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1026300
+   "prompt_bytes": 1026270
   },
   {
    "stack": "bridge-nobodies",
@@ -2177,12 +2177,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 262586,
+   "bytes": 262614,
    "spans": 132,
-   "billed": 38588,
+   "billed": 38558,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 14940
+   "prompt_bytes": 14910
   },
   {
    "stack": "bridge-nobodies",
@@ -2190,12 +2190,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 1279167,
+   "bytes": 1279487,
    "spans": 132,
-   "billed": 1052348,
+   "billed": 1052318,
    "model_calls": 30,
    "model_ok": 20,
-   "prompt_bytes": 1028700
+   "prompt_bytes": 1028670
   },
   {
    "stack": "bridge-nobodies",
@@ -2203,12 +2203,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 136818,
+   "bytes": 136720,
    "spans": 42,
-   "billed": 21165,
+   "billed": 21135,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 12540
+   "prompt_bytes": 12510
   },
   {
    "stack": "bridge-nobodies",
@@ -2229,12 +2229,12 @@
    "size": 1024,
    "batch": "10v",
    "calls": 10,
-   "bytes": 135390,
+   "bytes": 134766,
    "spans": 42,
-   "billed": 20325,
+   "billed": 20295,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 11810
+   "prompt_bytes": 11780
   },
   {
    "stack": "bridge-nobodies",
@@ -2294,12 +2294,12 @@
    "size": 102400,
    "batch": "10v",
    "calls": 10,
-   "bytes": 1151262,
+   "bytes": 1151151,
    "spans": 42,
-   "billed": 1034085,
+   "billed": 1034055,
    "model_calls": 10,
    "model_ok": 10,
-   "prompt_bytes": 1025570
+   "prompt_bytes": 1025540
   }
  ],
  "overhead": {

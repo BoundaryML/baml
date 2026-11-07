@@ -77,8 +77,9 @@ function Agent(ticket: string) -> string {
 function Many(app: string, text: string, n: int, vary: bool) -> int {
     let done = 0;
     while (done < n) {
+        // With vary, `text` holds one document per call, separated by "|".
         let input = if (vary) {
-            `${text} #${done}`
+            text.split("|").at(done) ?? `${text} #${done}`
         } else {
             text
         };

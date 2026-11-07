@@ -19,6 +19,9 @@ def load(name):
 def wire():
     rows = load("wire-hosted.json") + [r for r in load("wire-python-local.json") if r["stack"] == "otel"]
     rows += load("wire-nobodies.json")
+    # Earlier "10v" runs varied only a short suffix, which gzip compresses across calls.
+    # wire-distinct.json reruns 10v with independent documents and replaces those rows.
+    rows += [r for r in load("wire-distinct.json") if not r.get("error")]
     out = []
     for r in rows:
         t = r["telemetry"]

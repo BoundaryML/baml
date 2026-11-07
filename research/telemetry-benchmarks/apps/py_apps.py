@@ -152,7 +152,9 @@ def main():
     fn = {"hello": lambda t: hello(), "classify": classify, "extract": extract, "agent": agent}[args.app]
     timings = []
     for i in range(args.n):
-        text = f"{args.text} #{i}" if args.vary else args.text
+        # With --vary, --text holds one document per call, separated by "|".
+        docs = args.text.split("|")
+        text = (docs[i] if len(docs) == args.n else f"{args.text} #{i}") if args.vary else args.text
         start = time.perf_counter_ns()
         fn(text)
         timings.append((time.perf_counter_ns() - start) / 1e6)

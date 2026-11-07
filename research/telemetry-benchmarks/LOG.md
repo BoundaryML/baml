@@ -219,3 +219,22 @@ Each trial runs a loop of `classify` calls against a mock model that takes 50 ms
 ## 2026-11-07: BCS Billing page confirms the billing replay
 
 After a reload, the Billing page (Oct 8 – Nov 7, 2026) shows **5,457 spans** and **34 MB**. The prediction from replaying the billing rules over the hosted matrix's upload bodies was 2,799 + 2,658 = **5,457 spans** (exact) and 4.5 MB + 29.55 MB ≈ **34.1 MB** (matches at the page's 1 MB display precision). All later experiments used local stand-ins and sent nothing to BCS. So `lab/logical_usage.py` reproduces BCS billing for these workloads, and every BCS cost figure here rests on measured, not estimated, billed bytes.
+
+## 2026-11-07: E1 rerun with independent documents (`results/wire-distinct.json`)
+
+**Flaw in the earlier "10v" batches:** the ten "varied" calls used one document with ` #0`…` #9` appended. Logfire and OTel gzip each export batch, and gzip's 32 KB window let calls 2–10 refer back to call 1. At 1 and 10 KiB their per-call bytes were therefore understated by about 4–8×. BAML and BCS were not affected, because content hashing matches only whole identical values and the suffix already made every value different. Datadog doesn't compress, so it wasn't affected either. At 100 KiB the previous document is outside gzip's window, so those rows were already honest.
+
+Fix: `wire.py` now passes ten independent random documents joined by `|`, and both `py_apps.py` and BAML's `Many` take document *i* for call *i*. Rerun locally for classify/extract/agent × 1/10/100 KiB × 6 stacks, 54 runs, 0 errors. The 100 KiB arguments (about 1 MB) fit under macOS `ARG_MAX` (1 MiB).
+
+Bytes on the wire per call, classify, 10 independent documents:
+
+| stack | 1 KiB old → new | 10 KiB old → new | 100 KiB old → new |
+|---|---|---|---|
+| Logfire | 328 → 1,282 | 2,211 → 15,934 | 155,335 → 147,692 |
+| OTel | 226 → 930 | 1,041 → 7,892 | 77,201 → 77,199 |
+| Datadog | 4,165 → 4,161 | 22,600 → 22,594 | 206,923 → 206,917 |
+| BAML CLI | 21,185 → 21,196 | 39,644 → 39,639 | 223,571 → 218,426 |
+
+BCS billed bytes didn't change (for example, 10 KiB classify: 219,406 → 219,346). Uncompressed, Logfire carries the prompt about 2.4× per call (function argument, chat message, and the pending span) and OTel 1× (only the decorator's `input` attribute; openai-v2 puts no message text on spans). gzip then shrinks this random text to about 65%. Real English text compresses further.
+
+Corrected comparison at 10 KiB: BAML sends 2.5× Logfire, 5× OTel and 1.75× Datadog per call. That includes about 5.5 KB per call of the one-time definitions upload spread over the 10 calls. Earlier it looked like 18× Logfire. The site and FINDINGS.md now use the rerun rows for every "10v" figure.

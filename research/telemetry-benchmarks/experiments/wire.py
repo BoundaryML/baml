@@ -121,7 +121,7 @@ def main():
     p.add_argument("--apps", nargs="+", default=list(APPS))
     p.add_argument("--sizes", nargs="+", type=int, default=[1024, 10240, 102400])
     p.add_argument("--batches", nargs="+", default=["1", "10v", "10s"],
-                   help="1 = one call; 10v = ten varied calls; 10s = ten identical calls")
+                   help="1 = one call; 10v = ten calls with independent documents; 10s = ten identical calls")
     p.add_argument("--hosted", action="store_true")
     p.add_argument("--seed", type=int, default=int(time.time()))
     p.add_argument("--out", required=True)
@@ -142,7 +142,11 @@ def main():
         n = 1 if batch == "1" else 10
         vary = batch.endswith("v")
         # A fresh seed per run keeps hosted content-addressed storage from reusing earlier uploads.
-        text = document(size, seed=args.seed * 1000 + i) if size else ""
+        if vary and size:
+            # Ten independent documents, so neither gzip nor content hashing can match one call to another.
+            text = "|".join(document(size, seed=(args.seed * 1000 + i) * 100 + k) for k in range(n))
+        else:
+            text = document(size, seed=args.seed * 1000 + i) if size else ""
         model = mock_llm(rule=agent_rule()) if app == "agent" else mock_llm()
         meter = tele = bcs = None
         started = datetime.now(timezone.utc).isoformat()

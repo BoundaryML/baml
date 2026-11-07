@@ -116,7 +116,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   <p class="lede">We wrote the same four small programs in BAML and in Python, traced them with Boundary Cloud (BCS), Pydantic Logfire, Datadog and plain OpenTelemetry, and measured what each one sends, stores, costs and loses.</p>
   <div class="hero">
     <div class="chart" id="hero"></div>
-    <p class="muted">One <code>classify</code> call with a 10 KiB document, made 10 times with different text. The bars show what each stack sends over the network per call, next to the prompt it sent to the model. BAML's figure includes a one-time upload of about 55 KB of program definitions per process, spread here over 10 calls.</p>
+    <p class="muted">One <code>classify</code> call with a 10 KiB document, made 10 times with 10 independent documents. The bars show what each stack sends over the network per call, next to the prompt it sent to the model. BAML's figure includes a one-time upload of about 55 KB of program definitions per process, spread here over 10 calls.</p>
   </div>
 </header>
 
@@ -163,13 +163,13 @@ logfire.instrument_openai()
 <section>
   <span class="eyebrow">Bytes on the wire</span>
   <h2>BAML records the whole exchange, so it sends more</h2>
-  <p class="col">BAML records every model call's raw HTTP request and response next to the function's inputs and output. The others record less by default: Logfire keeps function arguments and the chat messages but not return values, and OpenTelemetry's OpenAI instrumentation keeps no message text on spans at all. Pick a document size to see bytes sent per call.</p>
+  <p class="col">BAML records every model call's raw HTTP request and response next to the function's inputs and output. The others record less by default: Logfire keeps function arguments and the chat messages but not return values, and OpenTelemetry's OpenAI instrumentation keeps no message text on spans at all. Logfire and OpenTelemetry also gzip what they send; Datadog and BAML send it uncompressed. Pick a document size to see bytes sent per call.</p>
   <div class="tabs" role="group" aria-label="Document size" id="sizeTabs"></div>
   <div class="chart" id="wire"></div>
   <div class="legend" id="wireLegend"></div>
   <div class="callout col">
     <h3>Repeated input is nearly free on the wire</h3>
-    <p>BCS stores content by hash. Ten identical 100 KiB calls sent <b id="dedupSame"></b> from BAML versus <b id="dedupVary"></b> for ten different ones. Logfire's gzip gets part of that saving (781 KB vs 1.55 MB). Datadog sends uncompressed JSON, about 207 KB per call either way. The <b>bill</b> does not shrink: BCS counts every reference.</p>
+    <p>BCS stores content by hash. Ten identical 100 KiB calls sent <b id="dedupSame"></b> from BAML versus <b id="dedupVary"></b> for ten different ones. Logfire's gzip gets part of that saving (<b id="lfSame"></b> vs <b id="lfVary"></b>). Datadog sends uncompressed JSON, about 207 KB per call either way. The <b>bill</b> does not shrink: BCS counts every reference.</p>
   </div>
 </section>
 
@@ -341,7 +341,7 @@ function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === 
   document.getElementById("wireLegend").innerHTML = "";
   function draw(size) {
     const rows = [];
-    for (const s of order) for (const [b, bl] of [["10v", "different inputs"], ["10s", "same input"]]) {
+    for (const s of order) for (const [b, bl] of [["10v", "different documents"], ["10s", "same document"]]) {
       const r = wireRow(s, "classify", size, b); if (!r) continue;
       rows.push({label: `${STACKS[s].name} · ${bl}`, value: r.bytes / r.calls, color: STACKS[s].c, text: fmtB(r.bytes / r.calls),
         tip: `${STACKS[s].name}, 10 calls with ${bl}: ${fmtB(r.bytes)} total`});
@@ -354,6 +354,8 @@ function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === 
   const same = wireRow("baml", "classify", 102400, "10s"), vary = wireRow("baml", "classify", 102400, "10v");
   document.getElementById("dedupSame").textContent = fmtB(same.bytes);
   document.getElementById("dedupVary").textContent = fmtB(vary.bytes);
+  document.getElementById("lfSame").textContent = fmtB(wireRow("logfire", "classify", 102400, "10s").bytes);
+  document.getElementById("lfVary").textContent = fmtB(wireRow("logfire", "classify", 102400, "10v").bytes);
 })();
 
 // ---- cost calculator
@@ -402,7 +404,7 @@ function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === 
   }
   const p = D.pipeline.find(r => r.stack === "baml-high");
   t += `<tr><td>pipeline, 41 plain functions</td><td class="n">≈ 0 B</td><td class="n">$0</td><td class="n">$0</td><td class="n">$82</td><td class="n">APM: $70</td></tr>`;
-  el("costTable").innerHTML = t + `</tbody><caption class="muted" style="caption-side:bottom;text-align:left;padding-top:.5rem">Cost per million calls from measured runs (10 calls with different text each).</caption>`;
+  el("costTable").innerHTML = t + `</tbody><caption class="muted" style="caption-side:bottom;text-align:left;padding-top:.5rem">Cost per million calls from measured runs (10 calls, each with its own document).</caption>`;
 })();
 
 // ---- performance

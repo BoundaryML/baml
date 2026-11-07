@@ -41,6 +41,7 @@ All runs use a local fake OpenAI server, so the numbers measure tracing, not the
 
 - **Logfire** records function arguments but not return values by default. Its pending spans (633 on the wire for 525 stored records) cost bytes but are not stored.
 - **OTel's OpenAI instrumentation** records no message text on spans (content goes to log events), which is why its byte counts are so low. It also loses everything inside its 5 s batch window on a kill.
+- **Compression:** Logfire and OTel gzip their exports; Datadog and BAML send uncompressed bytes. With ten independent 10 KiB documents, per-call bytes are BAML 39.6 KB, Datadog 22.6 KB, Logfire 15.9 KB and OTel 7.9 KB. An earlier version of this comparison used near-identical documents, which gzip compressed across calls and made Logfire and OTel look 4–8× smaller (LOG.md, "E1 rerun").
 - **Datadog LLM Obs** sends uncompressed JSON (about 207 KB per 100 KiB call, with no dedup), adds about 1.2 s and 47 MB at startup, and has the highest cost per model call.
 
 ## Open items
