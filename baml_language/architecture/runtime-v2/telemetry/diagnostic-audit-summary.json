@@ -1,0 +1,224 @@
+{
+  "richards": {
+    "diagnostic-reference": {
+      "wape": 0.0,
+      "p95": 0.0,
+      "reads_per_call": 2.0,
+      "zero_paths": 0,
+      "paths": 80,
+      "backwards": 0
+    },
+    "raw-cntvct": {
+      "wape": 0.00028164437853492894,
+      "p95": 0.036036036036036036,
+      "reads_per_call": 2.0,
+      "zero_paths": 0,
+      "paths": 80,
+      "backwards": 0
+    },
+    "shared-boundary": {
+      "wape": 0.11891382427650396,
+      "p95": 0.3925497242302812,
+      "reads_per_call": 1.5546857321515866,
+      "zero_paths": 0,
+      "paths": 80,
+      "backwards": 0
+    },
+    "cheaper-bookkeeping": {
+      "wape": 0.0,
+      "p95": 0.0,
+      "reads_per_call": 2.0,
+      "zero_paths": 0,
+      "paths": 80,
+      "backwards": 0
+    },
+    "best-exact": {
+      "wape": 0.11775348324468217,
+      "p95": 0.38800986806516297,
+      "reads_per_call": 1.5546857321515866,
+      "zero_paths": 0,
+      "paths": 80,
+      "backwards": 0
+    },
+    "count-only": {
+      "wape": 1.0,
+      "p95": 1.0,
+      "reads_per_call": 0.0,
+      "zero_paths": 80,
+      "paths": 80,
+      "backwards": 0
+    },
+    "sample-16": {
+      "wape": 0.3365238250336094,
+      "p95": 0.7381342062193126,
+      "reads_per_call": 0.12499719303458008,
+      "zero_paths": 2,
+      "paths": 80,
+      "backwards": 0
+    },
+    "sample-64": {
+      "wape": 0.426610544232376,
+      "p95": 1.0,
+      "reads_per_call": 0.031248578523921967,
+      "zero_paths": 12,
+      "paths": 80,
+      "backwards": 0
+    },
+    "interval-1khz": {
+      "wape": 0.8728565679176175,
+      "p95": 2.5613653703523576,
+      "reads_per_call": 0.00010249022456299147,
+      "zero_paths": 55,
+      "paths": 80,
+      "backwards": 0
+    }
+  },
+  "trees": {
+    "diagnostic-reference": {
+      "wape": 0.0,
+      "p95": 0.0,
+      "reads_per_call": 2.0,
+      "zero_paths": 0,
+      "paths": 26,
+      "backwards": 0
+    },
+    "raw-cntvct": {
+      "wape": 8.630966045279742e-05,
+      "p95": 0.0002649613426643819,
+      "reads_per_call": 2.0,
+      "zero_paths": 0,
+      "paths": 26,
+      "backwards": 0
+    },
+    "shared-boundary": {
+      "wape": 0.00017553059673683109,
+      "p95": 0.003664951268245259,
+      "reads_per_call": 1.9966106907707661,
+      "zero_paths": 0,
+      "paths": 26,
+      "backwards": 0
+    },
+    "cheaper-bookkeeping": {
+      "wape": 0.0,
+      "p95": 0.0,
+      "reads_per_call": 2.0,
+      "zero_paths": 0,
+      "paths": 26,
+      "backwards": 0
+    },
+    "best-exact": {
+      "wape": 0.00017528027245939572,
+      "p95": 0.0036177504832898564,
+      "reads_per_call": 1.9966106907707661,
+      "zero_paths": 0,
+      "paths": 26,
+      "backwards": 0
+    },
+    "count-only": {
+      "wape": 1.0,
+      "p95": 1.0,
+      "reads_per_call": 0.0,
+      "zero_paths": 26,
+      "paths": 26,
+      "backwards": 0
+    },
+    "sample-16": {
+      "wape": 0.18099590587397116,
+      "p95": 1.0,
+      "reads_per_call": 0.12499990301628659,
+      "zero_paths": 10,
+      "paths": 26,
+      "backwards": 0
+    },
+    "sample-64": {
+      "wape": 0.3753591371380624,
+      "p95": 1.0,
+      "reads_per_call": 0.031249704199674103,
+      "zero_paths": 10,
+      "paths": 26,
+      "backwards": 0
+    },
+    "interval-1khz": {
+      "wape": 1.2559036685198222,
+      "p95": 1.27499958143165,
+      "reads_per_call": 0.0001111045420809229,
+      "zero_paths": 10,
+      "paths": 26,
+      "backwards": 0
+    }
+  },
+  "agent": {
+    "diagnostic-reference": {
+      "wape": 0.0,
+      "p95": 0.0,
+      "reads_per_call": 1.946373231529306,
+      "zero_paths": 0,
+      "paths": 40,
+      "backwards": 0
+    },
+    "raw-cntvct": {
+      "wape": 0.001986300719508385,
+      "p95": 0.041666666666666664,
+      "reads_per_call": 1.946373231529306,
+      "zero_paths": 0,
+      "paths": 40,
+      "backwards": 0
+    },
+    "shared-boundary": {
+      "wape": 0.0,
+      "p95": 0.0,
+      "reads_per_call": 1.946373231529306,
+      "zero_paths": 0,
+      "paths": 40,
+      "backwards": 0
+    },
+    "cheaper-bookkeeping": {
+      "wape": 0.0,
+      "p95": 0.0,
+      "reads_per_call": 1.946373231529306,
+      "zero_paths": 0,
+      "paths": 40,
+      "backwards": 0
+    },
+    "best-exact": {
+      "wape": 0.0,
+      "p95": 0.0,
+      "reads_per_call": 1.946373231529306,
+      "zero_paths": 0,
+      "paths": 40,
+      "backwards": 0
+    },
+    "count-only": {
+      "wape": 1.0,
+      "p95": 1.0,
+      "reads_per_call": 0.0,
+      "zero_paths": 40,
+      "paths": 40,
+      "backwards": 0
+    },
+    "sample-16": {
+      "wape": 0.468726827249088,
+      "p95": 1.0,
+      "reads_per_call": 0.1215135863462834,
+      "zero_paths": 4,
+      "paths": 40,
+      "backwards": 0
+    },
+    "sample-64": {
+      "wape": 0.48780376069799886,
+      "p95": 1.0,
+      "reads_per_call": 0.030406467549966315,
+      "zero_paths": 4,
+      "paths": 40,
+      "backwards": 0
+    },
+    "interval-1khz": {
+      "wape": 0.8303627292249713,
+      "p95": 1.0,
+      "reads_per_call": 0.00033685156074556477,
+      "zero_paths": 35,
+      "paths": 40,
+      "backwards": 0
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "reason": "ARM calibration fell back to monotonic source 1; strict reader rejected the run",
+  "workload": "agent",
+  "variant": "cheaper-bookkeeping",
+  "round": 2,
+  "accepted_partial_rows": 99,
+  "action": "Preserved partial rows; restarted all five rounds with explicit clock-domain retry logging. No retries were needed in the final benchmark or audits."
+}

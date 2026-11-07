@@ -1,8 +1,13 @@
 mod telemetry;
+mod duration_reader;
 mod known_telemetry_divergences;
 use prost::Message;
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
+    if args[1] == "--durations" {
+        println!("{}",duration_reader::read(std::path::Path::new(&args[2])));
+        return;
+    }
     if args[1] == "--clocks" {
         let home=std::path::Path::new(&args[2]);
         let root=home.join("btel");

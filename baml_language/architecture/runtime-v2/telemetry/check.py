@@ -45,6 +45,7 @@ def reader():
     (directory/'src/telemetry.rs').write_text(source)
     (directory/'src/known_telemetry_divergences.rs').write_text((WS/'crates/baml_tests/rust_diff/known_telemetry_divergences.rs').read_text())
     shutil.copyfile(EVIDENCE/'reader_main.rs',directory/'src/main.rs')
+    shutil.copyfile(EVIDENCE/'duration_reader.rs',directory/'src/duration_reader.rs')
     shutil.copyfile(WS/'Cargo.lock',directory/'Cargo.lock')
     run(['cargo','+1.98.0','build','--release','--manifest-path',directory/'Cargo.toml','--target-dir',OUT/'reader-target'],stdout=subprocess.DEVNULL)
     return OUT/'reader-target/release/v2-telemetry-reader'

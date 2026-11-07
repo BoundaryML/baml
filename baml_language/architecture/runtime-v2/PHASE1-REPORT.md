@@ -1766,3 +1766,186 @@ without the GC filter. Only C5 collector-maintenance records are exempt; all
 other normalized published output stays strict. Evidence: `telemetry/parity.json`
 and `target/t2b-final-parity.log`. T1, T2 and T3 are complete for the requested
 subsets; the performance gate remains failed, as quantified above.
+
+
+## Medium diagnostics: clock boundaries, bookkeeping and sampling
+
+These are experiments, not a change to shipped medium. The runtime code is
+behind the non-default `telemetry-diagnostics` Cargo feature. The compiler
+emits work markers only with `BAML_V2_DIAGNOSTIC_CODEGEN`; the diagnostic
+builder specializes generated wrappers by mode. Ordinary generated packs
+retain their existing wrappers and runtime implementation. Scope is the
+three requested synchronous workloads at their default medium policies,
+not arbitrary policy promotion or asynchronous programs.
+
+Reproduce from this worktree using `telemetry/check.py build --workloads
+trees,richards,agent` to populate the baseline packs and Node programs, then
+`telemetry/diagnostics.py build` and `telemetry/diagnostics.py run` (Python via
+`uv run python`, Rust 1.98.0). The builder preserves baseline packs before
+rewriting diagnostic wrappers; use a fresh `target/telemetry/diagnostics`
+directory when deliberately changing that baseline. Binary hashes identify
+the exact measured artifacts. `diagnostic-reference` uses the experimental
+frame layout with ordinary ordered timing and ordinary path bookkeeping,
+so its difference from shipped medium exposes scaffold/code-layout effects.
+
+The comparison uses actual recorded BTEL, canonical function identities and
+full paths plus the reentry bit. Counts and all outcomes must agree exactly.
+The existing differential normalizer checks all other non-duration fields;
+only C5 collector-maintenance records are exempt. No function aggregate is
+exempt. Timing error is measured separately, before normalization.
+
+Five rotated/interleaved rounds, pinned to CPU **12**; interval timer pinned
+to CPU **13**. Trees: 3 timed jobs + 1 warmup per process; Richards and agent:
+10 timed jobs + 1 warmup. Medians below are **ms/job**. Published aggregates
+include warmup as well as timed jobs for every compared variant. Load ranges
+(1/5/15 minutes): **9.15–23.49 / 14.83–18.31 / 16.38–17.56**, 20 CPUs,
+not isolated. All 180 timed runs returned the expected result. All **135**
+variant/round comparisons retained identical normalized non-duration output
+and exact per-path counts/outcomes versus current medium.
+
+All slash-separated triples below are **Richards / trees / agent**. Duration
+error is median per-round **WAPE**: `sum_path(abs(variant - reference)) /
+sum_path(reference)` for `total_duration`, including separate reentry slots.
+The last column gives **interleaved shipped-medium comparison → paired
+same-run audit**, both in percent. The interleaved comparison includes real
+execution-speed changes, instrumentation perturbation and scheduling noise;
+it is not a pure estimator-accuracy measurement. The paired audit timestamps
+every invocation with the ordered clock and checks estimated totals against
+those intervals, at the cost of perturbing execution itself. It runs separately
+from every timed binary; its overhead is never included in ms/job.
+
+| Variant | Richards ms | Trees ms | Agent ms | ×off (R/T/A) | ×Node (R/T/A) | Published contract impact | Duration WAPE %, interleaved → paired (R/T/A) |
+|---|---:|---:|---:|---|---|---|---|
+| off | 3.744 | 42.191 | 3.596 | 1.00 / 1.00 / 1.00 | 0.64 / 1.05 / 0.47 | Level off: function telemetry absent | — |
+| medium | 85.756 | 323.672 | 5.188 | 22.91 / 7.67 / 1.44 | 14.56 / 8.04 / 0.67 | Current contract (baseline) | reference |
+| diagnostic-reference | 85.641 | 320.587 | 5.118 | 22.88 / 7.60 / 1.42 | 14.55 / 7.96 / 0.66 | None; scaffold control | 1.3 / 1.5 / 1.6 → 0.000 / 0.000 / 0.000 |
+| raw-cntvct | 76.970 | 278.248 | 4.897 | 20.56 / 6.60 / 1.36 | 13.07 / 6.91 / 0.63 | Function durations lack boundary ordering guarantee; counts exact | 9.6 / 13.9 / 5.4 → 0.028 / 0.009 / 0.199 |
+| shared-boundary | 79.942 | 320.834 | 5.243 | 21.35 / 7.60 / 1.46 | 13.58 / 7.97 / 0.68 | No approximate/absent fields; real shared endpoints | 12.4 / 2.6 / 1.3 → 11.891 / 0.018 / 0.000 |
+| cheaper-bookkeeping | 85.552 | 319.692 | 5.135 | 22.85 / 7.58 / 1.43 | 14.53 / 7.94 / 0.67 | None; real durations, exact counts/outcomes | 1.4 / 1.4 / 1.2 → 0.000 / 0.000 / 0.000 |
+| best-exact | 79.504 | 323.729 | 5.275 | 21.24 / 7.67 / 1.47 | 13.50 / 8.04 / 0.68 | No approximate/absent fields; shared endpoints + cheaper bookkeeping | 12.9 / 1.4 / 2.0 → 11.775 / 0.018 / 0.000 |
+| count-only | 11.877 | 67.332 | 4.265 | 3.17 / 1.60 / 1.19 | 2.02 / 1.67 / 0.55 | Function total_duration_ticks forced to zero, not unknown | 100.0 / 100.0 / 100.0 → 100.000 / 100.000 / 100.000 |
+| sample-16 | 19.893 | 91.907 | 4.376 | 5.31 / 2.18 / 1.22 | 3.38 / 2.28 / 0.57 | Function total_duration_ticks estimated, 16 × sampled sum | 64.9 / 71.1 / 18.6 → 33.652 / 18.100 / 46.873 |
+| sample-64 | 15.596 | 78.178 | 4.319 | 4.17 / 1.85 / 1.20 | 2.65 / 1.94 / 0.56 | Function total_duration_ticks estimated, 64 × sampled sum | 76.4 / 74.0 / 49.6 → 42.661 / 37.536 / 48.780 |
+| interval-1khz | 15.389 | 77.126 | 4.309 | 4.11 / 1.83 / 1.20 | 2.61 / 1.92 / 0.56 | Function total_duration_ticks estimated per flush; unsampled batches zero | 84.6 / 68.0 / 77.5 → 87.286 / 125.590 / 83.036 |
+| node | 5.888 | 40.274 | 7.721 | 1.57 / 0.95 / 2.15 | 1.00 / 1.00 / 1.00 | No BTEL producer | — |
+
+**Clock findings.** Shipped medium selects the self-synchronizing ARM ECV
+`CNTVCTSS_EL0` source on this host (no explicit ISB); its epoch/conversion
+metadata comes from `btel_clock`/quanta. Five rotated microbenchmark rounds,
+2 million reads per measurement: plain `CNTVCT_EL0` **20.508 ns/read**,
+`CNTVCTSS_EL0` **20.487**, `ISB; CNTVCT_EL0` **30.645**, quanta auto **20.382**,
+OS monotonic **36.714**, empty black-box loop **0.358**. These are unadjusted
+loop averages. Auto selected `SystemCounter`, calibration converged, no
+fallback. Both counter probes retain a compiler memory barrier; raw omits
+hardware self-synchronization and ISB. Raw has no measured per-read advantage
+here, although its generated workloads execute faster. This experiment does
+not establish which instruction-scheduling effects cause that speedup.
+
+Raw's paired per-path WAPE is **0.028% / 0.009% / 0.199%**, with path-error
+p95 **3.60% / 0.03% / 4.17%**. No backwards intervals were observed in any
+audit or microbenchmark. This is consistency evidence, **not an ordering
+proof**: the audit surrounds raw samples with ordered reference reads, which
+can constrain or mask reordering. The uninstrumented raw variant's actual
+published durations are also compared against medium in the table. Raw
+changes successful function entry/exit reads only; shared ordered raise
+endpoints, task/GC clocks, error evidence and all other record fields remain
+as before. Raw is excluded from `best-exact` because it lacks the current
+boundary-ordering guarantee.
+
+**Shared boundaries.** The compiler inserts invalidation markers before BAML
+work; the experiment removes a pre-call marker only for a direct generated
+call with local/scalar arguments. Virtual dispatch, allocation/conversion,
+opaque runtime callbacks, control-flow work and yields retain markers. An
+adjacent child return/parent return or return/next direct entry can reuse the
+last real timestamp. There are 22 / 10 / 18 eligible direct call sites.
+Achieved function-boundary reads/call: **1.554686 / 1.996611 / 1.946373**,
+versus **2 / 2 / 1.946373** for the reference. Agent's lower baseline reflects
+its existing shared raise timestamps; task/GC/error-runtime reads are not
+counted as extra function-boundary reads. Sharing saves **22.27%** of Richards
+boundary reads, **0.17%** of trees', and none of agent's. Ordered-clock intervals
+remain measured, with exact counts and outcomes. They exclude administrative
+gaps that separate entry/exit reads include. The paired Richards difference
+(~11.8–11.9%) also includes removing audit-only work from those gaps; it must
+not be interpreted as clock inaccuracy or time spent in omitted BAML work.
+
+**Cheaper exact bookkeeping.** The hot path uses a single integer parent
+comparison (`u64::MAX` sentinel, without reserving any valid u32 path ID), a
+cached path/slot pointer, and a precomputed per-site direct-recursion flag.
+Reentry still checks the active callee; dynamic parent identity remains
+checked. The common path performs no hash lookup or aggregate merge. A
+successful completion touches only checked count and duration sums, retaining
+the overflow slow path; error/outcome handling remains exact. Statically
+assuming one parent for every site would be wrong for these dynamic call
+paths. This experiment does not claim a proof of globally minimal code.
+The change alone is small: **0.24% / 1.23% / 1.02%** below shipped medium.
+`best-exact` combines it with ordered shared boundaries; it is the requested
+combination's name, not a claim that it wins every workload. It improves
+Richards by **7.29%**, but is slightly slower than cheaper-bookkeeping alone
+on trees and agent. No exact experiment comes close to 1.5× off on Richards.
+
+**Count-only and sampling semantics.** Counts, paths, reentry and outcomes
+remain exact. Only function aggregate duration totals change; task spans,
+error evidence, GC records and self-await fields retain their normal handling
+(the workloads do not await). Count-only writes a zero scalar duration, which
+protobuf may omit on the wire: today's format does **not** interpret this as
+unknown/unobserved. All timing estimators likewise reuse that scalar without
+an approximation marker. These would be contract changes if shipped.
+
+N=16/64 select every Nth call per static site, with seeded initial phases
+(seeds 42–46) and counters continuing across jobs, then multiply each sampled
+interval by N. They do not stratify sampling by dynamic path. Rare paths may
+receive no samples; periodic behavior can alias with the schedule. Achieved
+reads/call are **0.124997 / 0.125000 / 0.121514** at N=16 and
+**0.031249 / 0.031250 / 0.030407** at N=64. Paired-audit path-error p95 is
+**73.81% / 100% / 100%** and **100% / 100% / 100%**, respectively. Exact
+counts alone do not make these duration estimates reliable.
+
+The interval experiment's separate thread sets a coalescing atomic flag at
+1 ms deadlines. The next **entry** boundary consumes it, measures that whole
+invocation through exit, and scales each `(path, reentry)` batch by
+`batch_count / sampled_count` at the existing flush point. Choosing an entry
+is necessary to measure a full invocation rather than retrospectively infer
+its start. This does not measure arbitrary exit-to-next-boundary intervals.
+Unsampled batches publish zero; flushes are not delayed to improve coverage.
+Achieved reads/call in the paired audit are **0.0001025 / 0.0001111 /
+0.0003369**. Its overhead changes the number of timer opportunities, so these
+are audit-run rates, not claims about uninstrumented timer coverage. Paired
+path-error p95 is **256.14% / 127.50% / 100%**. The estimator is sparse and
+selection-biased, not an acceptable accurate-duration replacement.
+
+**Decision data and limits.** Shipped medium/off remains **22.91× / 7.67× /
+1.44×**. The requested exact combination reaches **21.24× / 7.67× / 1.47×**.
+Even this count-only implementation is **3.17×** off on Richards; that is a
+measured implementation cost, not a proven physical lower bound. At the
+measured clock cost, two reads for its 1,736,751 calls cost roughly **71 ms**
+in isolation; the achieved shared-boundary read count suggests roughly
+**55 ms**. Those are clock microbenchmark projections, not additive causal
+components of the whole-program result. No measured variant meets Richards'
+~1.5× gate. Sampling trades away duration accuracy without reaching it either.
+The decision about the default/contract remains Hari's; shipped medium is
+unchanged.
+
+The accepted run's off ranges are Richards **3.735–3.751**, trees
+**41.495–42.325**, agent **3.583–3.610 ms/job**. Richards Node is noisier:
+**4.037–6.704** (median **5.888**); interpret its ×Node column accordingly.
+One earlier attempt stopped when clock calibration fell back to monotonic
+source 1. Its partial rows and failure are retained as
+`diagnostic-aborted-{raw,attempt}.json`; none enter the table. The runner now
+logs/retries only that explicit clock-domain mismatch (maximum five attempts),
+never a timing outlier or parity failure. The final 180 timed runs and 135
+audit runs needed **zero** retries. Every accepted recording uses source 4
+(ARM system counter) and one internally consistent conversion scale.
+
+Evidence: `telemetry/diagnostic-{raw,summary,environment}.json`,
+`diagnostic-{audit,audit-summary,clocks,path-errors}.json`; the path-error
+file gives signed relative error for every canonical path in every round
+against shipped medium. Raw files retain all per-path
+counts/durations, per-round error statistics, loads, and binary hashes. All
+135 paired audits matched their sidecar totals to the actual published
+aggregates. Default tests pass (compiler 10, runtime 23); diagnostic-feature
+tests pass (compiler 10, runtime 24), including shared-return reuse, work
+barriers and count-only completion accounting. Strict all-target clippy passes
+with and without the feature. Generated fixture packs retain the existing
+code-generator warnings; touched library crates are warning-clean under
+clippy. No default-level, policy, normalization or shipped producer changes
+were made by these experiments.

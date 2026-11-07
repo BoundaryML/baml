@@ -77,6 +77,15 @@ impl Repr {
         )
     }
 }
+// Explicit diagnostic builds alone emit work-boundary markers. Ordinary packs
+// have identical source and runtime behavior when this switch is absent.
+fn diagnostic_barrier() -> &'static str {
+    if baml_env::os_var("BAML_V2_DIAGNOSTIC_CODEGEN").is_some() {
+        "diag_boundary_work();\n"
+    } else {
+        ""
+    }
+}
 mod capture_codegen;
 struct Layout {
     fields: Vec<Repr>,
@@ -1277,6 +1286,9 @@ pub fn compile_v2(
         "init_builtin_observation();"
     };
     write!(&mut out,"fn entry()->R<i64>{{unsafe{{f{entry}(0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_observed(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}\n").unwrap();
+    if !diagnostic_barrier().is_empty() {
+        out.push_str("#[inline(always)] fn diag_boundary_work() {}\n");
+    }
     Ok(out)
 }
 fn rt_descriptors() -> usize {
@@ -2030,6 +2042,9 @@ impl Emitter<'_, '_> {
         }
         for (i, s) in block.statements.iter().enumerate() {
             self.mark(pcs.statements.get(i).copied().flatten());
+            if !matches!(s.kind, StatementKind::Nop) {
+                out.push_str(diagnostic_barrier());
+            }
             match &s.kind {
                 StatementKind::Assign { destination, value } => {
                     out.push_str(
@@ -2050,6 +2065,9 @@ impl Emitter<'_, '_> {
         }
         self.mark(pcs.terminator);
         let term = block.terminator.as_ref().unwrap();
+        if !matches!(term, Terminator::Return) {
+            out.push_str(diagnostic_barrier());
+        }
         if let Some((iter, array)) =
             crate::analysis::array_iter_walk(self.db, self.body, self.arity, term, &self.iters)
         {
