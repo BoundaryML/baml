@@ -1,95 +1,119 @@
-// BAML golden sample: one file that exercises the language surface used to
-// validate every highlighter port (TextMate, Sublime, highlight.js, KDE,
-// tree-sitter) and shipped as the Shiki registry sample. Every construct
-// below is real syntax taken from the compiler test suite — extend it when
-// the language grows, and keep it under 100 columns.
+// BAML golden sample: the file every highlighter port is checked against, and
+// the sample shipped to registries (Shiki, Linguist). It compiles and its test
+// passes on the current toolchain; keep it that way, keep it under 100
+// columns, and extend it when the language grows a new surface.
 
-class Resume {
-  name string @description("Candidate name") @alias("full_name")
-  email string?
-  skills string[]
-  scores map<string, int | float>
-  level: Level
-  @@dynamic
+// The return type of an LLM function is the schema the model must produce.
+enum Priority {
+    High,
+    Low,
 }
 
-enum Level {
-  Junior
-  Senior @description("Five or more years")
-  @@description("Seniority ladder")
+class LineItem {
+    name: string,
+    amount: float,
+    priority: Priority,
 }
 
-interface Scored<T, E> {
-  function score(self, value: T) -> float throws E
+class Invoice {
+    vendor: string @alias("seller"),
+    status: "draft" | "final" @description("invoice state"),
+    items: LineItem[],
+    note: string?,
 }
 
-client<llm> GPT4 {
-  provider openai
-  retry_policy SafeRetry
-  options {
-    model "gpt-4o"
-    api_key env.OPENAI_API_KEY
-  }
+// Clients are ordinary values, wrapped to add retries and fallbacks.
+client Fast = openai.ResponsesClient.new(model = "gpt-6-luna", api_key = env.OPENAI_API_KEY);
+
+client Reliable = ai.clients.Retry.new(inner = Fast, max_attempts = 3);
+
+function Extract(raw: string) -> Invoice {
+    client: Reliable
+    prompt: `Extract the invoice. ${ctx.output_format()}\n${raw}`
 }
 
-retry_policy SafeRetry {
-  max_retries 3
+const MAX_ATTEMPTS = 3;
+
+class Queued {
 }
 
-generator ts_target {
-  output_type: "typescript/node",
-  output_dir: "typescript_demo",
+class Retrying {
+    attempt: int,
 }
 
-template_string Persona(role: string) #"
-  You are a {{ role }} reviewing resumes.
-"#
-
-function ExtractResume(text: string, hints: string[]) -> Resume {
-  client GPT4
-  prompt #"
-    {{ Persona("recruiter") }}
-    {% for hint in hints %}
-    - Focus on {{ hint }}
-    {% endfor %}
-    Extract a structured resume from: {{ text }}
-  "#
+class Done {
+    invoice: Invoice,
 }
 
-function Tally(v: int | string, items: int[]) -> int {
-  const base: int = 16;
-  const big = 9007199254740993n;
-  const rate = 1.5e-3;
-  let total: int = v else { return base; };
-  for (let item in items) {
-    total += item;
-  };
-  while (total < 100) {
-    total = total * 2;
-  };
-  defer {
-    total;
-  }
-  match (v) {
-    let n: int => n + total,
-    string => total - 1,
-    _ => 0
-  }
+type Job = Queued | Retrying | Done;
+
+interface Labeled {
+    function label(self) -> string throws never;
 }
 
-function Describe(flag: bool) -> string {
-  let raw = ##"raw #"quoted"# text"##;
-  let ticked = `backtick with \` escape`;
-  if (flag) {
-    raw
-  } else {
-    ticked
-  }
+class Report {
+    jobs: Job[],
+    implements Labeled {
+        function label(self) -> string {
+            `${self.jobs.length()} jobs, ${total(self.jobs)} billed`
+        }
+    }
 }
 
-test "GoldenExtract" {
-  ExtractResume(
-    /* who */ "Jane Doe, 12 years of Rust",
-    ["skills", "email"],
-  )
+function status(job: Job) -> string {
+    match (job) {
+        Queued => "queued",
+        Retrying { attempt: let n } if n >= MAX_ATTEMPTS => "giving up",
+        Retrying { attempt: let n } => `retry ${n}`,
+        let d: Done => `done: ${d.invoice.vendor}`,
+    }
+}
+
+function total(jobs: Job[]) -> float {
+    jobs
+        .filter_map((j) -> {
+            if let d: Done = j {
+                d.invoice
+            } else {
+                null
+            }
+        })
+        .flat_map((inv) -> {
+            inv.items
+        })
+        .reduce(
+            (sum, item) -> {
+                sum + item.amount
+            },
+            0.0,
+        )
+}
+
+function extract_all(texts: string[]) -> Invoice[] {
+    let limit = baml.spawn.Limit.new(4);
+    let futures = texts.map((t) -> {
+        spawn with limit { Extract(t) }
+    });
+    await baml.future.all(futures)
+}
+
+function parse_count(text: string) -> int {
+    baml.Int.parse(text) catch (e) {
+        baml.errors.ParseError => 0
+    }
+}
+
+test "status and totals without calling the model" {
+    let reply = `{"seller": "Acme", "status": "final", "items": [], "note": null}`;
+    let inv = Extract@spec("raw").parse(reply);
+    inv.items.push(LineItem { name: "srv", amount: 900.0, priority: Priority.High });
+    let jobs: Job[] = [Queued {}, Retrying { attempt: 3 }, Done { invoice: inv }];
+    assert.equal(
+        jobs.map((j) -> {
+            status(j)
+        }),
+        ["queued", "giving up", "done: Acme"],
+    );
+    assert.equal(Report { jobs: jobs }.label(), "3 jobs, 900.0 billed");
+    assert.equal(parse_count("x"), 0)
 }
