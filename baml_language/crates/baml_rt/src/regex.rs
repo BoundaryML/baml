@@ -12,7 +12,7 @@ pub struct ClassLayout {
 }
 impl ClassLayout {
     fn new(&self, cx: &mut Cx) -> R<usize> {
-        Ok(unsafe { cx.alloc(self.desc, self.size)? } as usize)
+        Ok(cx.alloc(self.desc, self.size)? as usize)
     }
     unsafe fn pointer(&self, object: usize, index: usize, value: usize) {
         unsafe {
@@ -67,7 +67,8 @@ pub fn compile(cx: &mut Cx, pattern: Str, backtracking: bool, schema: &Schema) -
     let text = pattern.try_as_str(&read)?;
     match Program::compile(text, backtracking) {
         Ok(program) => {
-            let handle = crate::native::new(cx, program)?;
+            // Program owns only engine state and offsets, never managed values.
+            let handle = unsafe { crate::native::new(cx, program)? };
             let value = schema.regex.new(cx)?;
             unsafe { schema.regex.pointer(value, 0, handle) };
             Ok(value)
@@ -186,7 +187,7 @@ unsafe fn fixed_list(cx: &mut Cx, desc: u32, length: usize) -> R<usize> {
         .checked_mul(8)
         .and_then(|n| n.checked_add(16))
         .ok_or_else(|| crate::allocation_failure(usize::MAX))?;
-    let object = unsafe { cx.alloc(desc, bytes)? };
+    let object = cx.alloc(desc, bytes)?;
     unsafe { object.add(8).cast::<usize>().write(length) };
     Ok(object as usize)
 }
