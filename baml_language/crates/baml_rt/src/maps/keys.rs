@@ -72,15 +72,33 @@ unsafe fn feed(
         }
         _ => {}
     }
-    if value.payload == 0 {
-        state.write(&[0]);
-        return Ok(());
-    }
     let shape = &shapes[(value.tag - 3) as usize];
     if let Shape::Enum { declaration, .. } = shape {
         framed(state, 10, &declaration().tag.as_i64().to_le_bytes());
         state.write(&value.payload.to_le_bytes());
         return Ok(());
+    }
+    if value.payload == 0 {
+        state.write(&[0]);
+        return Ok(());
+    }
+    match shape {
+        Shape::Bigint => {
+            framed(
+                state,
+                4,
+                &unsafe { crate::native::bigint_owned(value.payload as usize) }
+                    .to_signed_bytes_le(),
+            );
+            return Ok(());
+        }
+        Shape::Bytes => {
+            framed(state, 6, &unsafe {
+                crate::native::bytes_owned(value.payload as usize)
+            });
+            return Ok(());
+        }
+        _ => {}
     }
     let pointer = value.payload as usize;
     if active.contains(&pointer) {
@@ -258,6 +276,14 @@ unsafe fn equal(
     let shape = &shapes[(left.tag - 3) as usize];
     let other_shape = &shapes[(right.tag - 3) as usize];
     let result = match (shape, other_shape) {
+        (Shape::Bigint, Shape::Bigint) => unsafe {
+            crate::native::bigint_owned(left.payload as usize)
+                == crate::native::bigint_owned(right.payload as usize)
+        },
+        (Shape::Bytes, Shape::Bytes) => unsafe {
+            crate::native::bytes_owned(left.payload as usize)
+                == crate::native::bytes_owned(right.payload as usize)
+        },
         (
             Shape::Class {
                 declaration,

@@ -449,6 +449,9 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
 
 pub enum Shape {
     Unsupported,
+    Enum(&'static [EnumVariant]),
+    Bigint,
+    Bytes,
     List {
         tag: u64,
         tagged: bool,
@@ -460,6 +463,11 @@ pub enum Shape {
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
     Function,
+}
+pub struct EnumVariant {
+    pub name: &'static str,
+    pub alias: &'static str,
+    pub skip: bool,
 }
 pub struct EncodeField {
     pub name: &'static str,
@@ -494,6 +502,31 @@ impl Encoder<'_> {
         }
     }
     unsafe fn value(&mut self, value: Dyn, path: &str, depth: usize) -> R<()> {
+        if value.tag >= 3 && value.tag != crate::FLOAT_TAG {
+            if let Some(Shape::Enum(variants)) = self.shapes.get((value.tag - 3) as usize) {
+                let variant = &variants[value.payload as usize];
+                if self.aliased && variant.skip {
+                    return Err(crate::list_errors::serialization(
+                        self.cx,
+                        format!(
+                            "enum variant `{}` is `@skip`, so JSON has no name for it",
+                            variant.name
+                        ),
+                        path,
+                        "enum",
+                    ));
+                }
+                self.out.push_str(
+                    &serde_json::to_string(if self.aliased {
+                        variant.alias
+                    } else {
+                        variant.name
+                    })
+                    .expect("enum JSON"),
+                );
+                return Ok(());
+            }
+        }
         let value = if value.payload == 0 && value.tag >= 3 && value.tag != crate::FLOAT_TAG {
             Dyn { tag: 2, payload: 0 }
         } else {
@@ -542,6 +575,19 @@ impl Encoder<'_> {
                     .get((tag - 3) as usize)
                     .unwrap_or(&Shape::Unsupported);
                 match shape {
+                    Shape::Enum(_) => unreachable!(),
+                    Shape::Bigint => self
+                        .out
+                        .push_str(&unsafe { crate::native::bigint_owned(pointer) }.to_string()),
+                    Shape::Bytes => {
+                        return Err(crate::list_errors::serialization(
+                            self.cx,
+                            "uint8array requires explicit encoding (use to_base64() or to_hex())"
+                                .into(),
+                            path,
+                            "uint8array",
+                        ));
+                    }
                     Shape::List { tag, tagged } => {
                         let ptr = pointer as *const usize;
                         let (buffer, len) = unsafe { (ptr.add(1).read(), ptr.add(2).read()) };
@@ -905,7 +951,7 @@ mod tests {
             DESCRIPTORS,
             &[
                 false, false, false, true, true, true, true, true, true, true, true, true, true,
-                true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true, true,
             ],
         );
         instance.set_stress(true);

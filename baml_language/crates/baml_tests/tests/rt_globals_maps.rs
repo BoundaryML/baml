@@ -167,6 +167,10 @@ function main()->int { GATE }"#,
         r#"function main()->int {let m=baml.json.decode<map<int,int>>(`{"a":7}`);m.length()}"#,
         r#"function main()->int {let m=baml.json.decode<map<string,int>>(`[]`);m.length()}"#,
         r#"function main()->int {let m=baml.json.decode<map<string,1|2>>(`{"a":3}`);m.length()}"#,
+        r#"function main()->int {let m:map<string,bigint> = {"a":123456789012345678901234567890n};let v=m.values();m.clear();baml.json.stringify({"kept":v[0]}).char_count()}"#,
+        r#"function main()->int {let m:map<bigint,int> = {123456789012345678901234567890n:7};m[123456789012345678901234567890n]}"#,
+        r#"enum Color{Red Blue} function main()->int {let m:map<Color,Color> = {Color.Red:Color.Blue};let k=m.keys();let v=m.values();m[k[0]]=Color.Red;baml.json.stringify(v).char_count()+m.length()}"#,
+        r#"function main()->int {let m:map<string,uint8array> = {"a":uint8array.from_array([1,2,3])};let v=m.values();m.clear();v[0].length()}"#,
     ];
     let selected = std::env::var("BAML_RT_GLOBALS_MAPS_CASES")
         .ok()

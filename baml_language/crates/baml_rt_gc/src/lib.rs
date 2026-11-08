@@ -435,6 +435,12 @@ impl Heap {
             word.set(word.get() | 2);
         }
     }
+    pub fn descriptor_index(&self, type_id: u32) -> Option<u32> {
+        self.descriptors
+            .iter()
+            .position(|desc| desc.type_id == type_id)
+            .map(|id| id as u32)
+    }
     pub fn stats(&self) -> Stats {
         let mut stats = self.stats;
         stats.allocated_since_gc = stats

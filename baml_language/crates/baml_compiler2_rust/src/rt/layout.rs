@@ -24,7 +24,9 @@ impl Plan<'_> {
             self.record(self.repr(ty)?)?;
         } else if let RuntimeTy::Union(members) = ty {
             for member in members {
-                self.record_ty(member)?;
+                if !recursive_container(member) {
+                    self.record_ty(member)?;
+                }
             }
         } else if let RuntimeTy::Map { key, value } = ty {
             self.record_ty(key)?;
@@ -47,7 +49,9 @@ impl Plan<'_> {
             self.record(self.field_repr(ty)?)?;
         } else if let bex_vm_types::RuntimeTy::Union(members) = ty {
             for member in members {
-                self.record_field_ty(member)?;
+                if !recursive_container(member) {
+                    self.record_field_ty(member)?;
+                }
             }
         } else if let bex_vm_types::RuntimeTy::Map { key, value } = ty {
             self.record_field_ty(key)?;
@@ -60,6 +64,9 @@ impl Plan<'_> {
     }
     pub(super) fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
+            Repr::Enum(e) => {
+                self.enums.insert(e);
+            }
             Repr::Closure | Repr::Cell => self.environments = true,
             Repr::Ptr(c) => self.add(c)?,
             Repr::List(id) => {
@@ -110,12 +117,6 @@ impl Plan<'_> {
                 self.lists.insert(repr);
                 self.record(Repr::ListStr)?;
             }
-            Repr::Dyn(i) => {
-                let classes: Vec<_> = self.implementors(i)?.iter().map(|(c, _)| *c).collect();
-                for c in classes {
-                    self.add(c)?;
-                }
-            }
             _ => {}
         }
         Ok(())
@@ -123,11 +124,16 @@ impl Plan<'_> {
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
+            RuntimeTy::Bigint | RuntimeTy::Literal(baml_type::Literal::Bigint(_), _) => {
+                Repr::Bigint
+            }
+            RuntimeTy::Uint8Array => Repr::Bytes,
+            RuntimeTy::RustType => Repr::Opaque,
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Float | RuntimeTy::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
-            RuntimeTy::Unknown => Repr::Tagged,
+            RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
             RuntimeTy::Function { .. } => Repr::Closure,
             RuntimeTy::Map { key, value } => self.map_repr(
                 if matches!(key.as_ref(), RuntimeTy::Union(_)) {
@@ -161,20 +167,23 @@ impl Plan<'_> {
                     }
                 }
             }
-            RuntimeTy::Interface(head, args, assoc) if args.is_empty() && assoc.is_empty() => {
-                Repr::Dyn(
-                    self.index
-                        .interface_at(head)
-                        .ok_or_else(|| no("interface"))?,
-                )
-            }
-            RuntimeTy::Enum(head)
+            RuntimeTy::Interface(head, _, _) => Repr::Dyn(
+                self.index
+                    .interface_at(head)
+                    .ok_or_else(|| no("interface"))?,
+            ),
+            RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _)
                 if Some(head.root()) == self.lang.get(baml_base::LangPackage::Baml)
                     && head.namespace().as_slice() == ["json"]
                     && head.name().as_str() == "Naming" =>
             {
                 Repr::Naming
             }
+            RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _) => Repr::Enum(
+                self.index
+                    .enum_at(head)
+                    .ok_or_else(|| no("unlinked enum"))?,
+            ),
             RuntimeTy::Class(head, args)
                 if args.is_empty()
                     && head.builtin_primitive(self.lang)
@@ -182,10 +191,21 @@ impl Plan<'_> {
             {
                 Repr::Str
             }
+            RuntimeTy::Class(head, args) if !args.is_empty() => {
+                let template = baml_compiler2_mir::TyTemplate::from(
+                    baml_compiler2_mir::RealizedTy::try_from(ty.clone())
+                        .map_err(|_| no("unrealized class"))?,
+                );
+                let anchored = self
+                    .index
+                    .anchor(&template)
+                    .ok_or_else(|| no("generic class head"))?;
+                self.field_repr(&anchored.substitute_symbolic(&[]))?
+            }
             RuntimeTy::Class(head, args) if args.is_empty() => Repr::Ptr(
                 self.index
                     .class_at(head)
-                    .ok_or_else(|| no("unlinked class"))?
+                    .ok_or_else(|| no(format!("unlinked class {head:?}")))?
                     .0,
             ),
             RuntimeTy::Union(members)
@@ -200,7 +220,9 @@ impl Plan<'_> {
             }
             RuntimeTy::Union(members) => {
                 for member in members {
-                    self.repr(member)?;
+                    if !recursive_container(member) {
+                        self.repr(member)?;
+                    }
                 }
                 Repr::Tagged
             }
@@ -210,11 +232,32 @@ impl Plan<'_> {
     pub(super) fn field_repr(&self, ty: &bex_vm_types::RuntimeTy) -> Gen<Repr> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
+            T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
+            T::Bigint | T::Literal(baml_type::Literal::Bigint(_),_) => Repr::Bigint,
+            T::Uint8Array => Repr::Bytes,
+            T::RustType => Repr::Opaque,
             T::Null => Repr::Null,
-            T::Unknown => Repr::Tagged,
+            T::Unknown | T::TypeAlias(_) => Repr::Tagged,
+            T::Enum(head) | T::EnumVariant(head, _)
+                if self.program.packages.iter().any(|p| {
+                    p.enums.iter().any(|(path, index)| {
+                        path.under(&p.name).to_string() == "baml.json.Naming"
+                            && matches!(&self.program.objects[*index], Object::Enum(e) if e.type_tag == head.tag())
+                    })
+                }) => Repr::Naming,
+            T::Enum(head) | T::EnumVariant(head, _) => Repr::Enum(
+                self.program
+                    .objects
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, o)| match o {
+                        Object::Enum(e) if e.type_tag == head.tag() => Some(i),
+                        _ => None,
+                    })
+                    .ok_or_else(|| no("enum field"))?,
+            ),
             T::Function { .. } => Repr::Closure,
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
-            T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             T::Map { key, value } => self.map_repr(
@@ -259,6 +302,15 @@ impl Plan<'_> {
                     })
                     .ok_or_else(|| no("interface field"))?,
             ),
+            T::Class(head, args) if !args.is_empty() => Repr::Ptr(
+                self.class_instances
+                    .iter()
+                    .find(|(c, a, _)| {
+                        self.class(*c).type_tag == head.tag() && a.as_slice() == args.as_ref()
+                    })
+                    .map(|(_, _, c)| *c)
+                    .ok_or_else(|| no("unregistered generic class"))?,
+            ),
             T::Class(head, args) if args.is_empty() => {
                 let object = self
                     .program
@@ -278,7 +330,9 @@ impl Plan<'_> {
             }
             T::Union(members) => {
                 for member in members {
-                    self.field_repr(member)?;
+                    if !recursive_container(member) {
+                        self.field_repr(member)?;
+                    }
                 }
                 Repr::Tagged
             }
@@ -289,40 +343,23 @@ impl Plan<'_> {
         if self.layouts.contains_key(&object) {
             return Ok(());
         }
-        let Object::Class(class) =
-            &self.program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
-        else {
-            return Err(no("non-class layout"));
-        };
-        // Runtime-produced exception descriptors are reserved. The runtime supports
-        // wildcard panic exclusion and user-defined typed catches; never emit a
-        // second, incompatible layout/tag for a builtin exception class.
-        if self.program.packages.iter().any(|package| {
-            package.name == "baml"
-                && package
-                    .objects
-                    .contains(&u32::try_from(object).expect("object index"))
-        }) && ((class.path.to_string().starts_with("panics.")
-            && class.path.to_string() != "panics.UserPanic")
-            || matches!(
-                class.path.to_string().as_str(),
-                "json.ParseError" | "json.DecodeError"
-            ))
-        {
-            return Err(no("typed builtin exception class"));
-        }
+        let class = self.class(object);
         registry::admit(registry::Admission::Class {
             cleanup: class.cleanup.is_some(),
-            generic: class.generic_param_count != 0,
+            generic: false,
         })?;
-        let fields = class
-            .fields
+        let field_types = self.class_field_types(object);
+        let fields = field_types
             .iter()
-            .map(|f| self.field_repr(&f.field_type))
+            .map(|t| {
+                self.field_repr(t).map_err(|e| {
+                    format!(
+                        "{e} (layout {}, object {object}, types {field_types:?})",
+                        class.path
+                    )
+                })
+            })
             .collect::<Gen<Vec<_>>>()?;
-        if fields.contains(&Repr::Null) {
-            return Err(no("null-only field"));
-        }
         let mut offsets = vec![0; fields.len()];
         let mut offset = 8;
         for group in 0..3 {
@@ -341,7 +378,7 @@ impl Plan<'_> {
             }
         }
         let children = fields.clone();
-        let field_types: Vec<_> = class.fields.iter().map(|f| f.field_type.clone()).collect();
+
         self.layouts.insert(
             object,
             Layout {
@@ -366,24 +403,26 @@ impl Plan<'_> {
 }
 
 pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
-    let program = plan.program;
-    let mut next_class = rt_descriptors();
+    let mut next = rt_descriptors();
     let descriptors: BTreeMap<_, _> = plan
         .layouts
         .keys()
-        .map(|c| {
-            let id = plan.list_error_descriptor(*c).unwrap_or_else(|| {
-                let id = next_class;
-                next_class += 1;
-                id
-            });
-            (*c, id)
+        .map(|&c| {
+            let desc = plan
+                .list_error_descriptor(c)
+                .or_else(|| super::builtin_classes::reserved(plan, c))
+                .unwrap_or_else(|| {
+                    let d = next;
+                    next += 1;
+                    d
+                });
+            (c, desc)
         })
         .collect();
     let lists: BTreeMap<_, _> = plan
         .lists
         .iter()
-        .scan(next_class, |next, r| {
+        .scan(next, |next, r| {
             let id = *next;
             *next += if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
                 4
@@ -407,63 +446,72 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             }
         })
         .max()
-        .unwrap_or(next_class);
+        .unwrap_or(next);
     let after_descriptors = after_lists
         + if plan.closure_descriptors().is_some() {
             2
         } else {
             0
         };
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::MAP_KEY_DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::ARGUMENT_DESC,rt::SCALAR_PARSE_DESC,rt::HOST_UNAVAILABLE_DESC,rt::IO_DESC,rt::MAP_KEY_DESC,rt::native::BIGINT_LAYOUT,rt::native::BYTES_LAYOUT,rt::opaque::descriptor(20),rt::native::BYTES_BUFFER_LAYOUT,rt::list_errors::SERIALIZATION_DESC,\n");
     for (&object, layout) in &plan.layouts {
-        if plan.list_error_descriptor(object).is_some() {
+        if plan.list_error_descriptor(object).is_some()
+            || super::builtin_classes::reserved(plan, object).is_some()
+        {
             continue;
         }
-        let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
-        else {
-            unreachable!()
-        };
-        let fields = class
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(i, f)| {
-                format!(
-                    "Field{{name:{:?},offset:{},slot:SlotKind::{},type_id:{}}}",
-                    f.name,
-                    layout.offsets[i],
-                    if layout.fields[i].pointer() {
-                        "Pointer"
-                    } else if matches!(layout.fields[i], Repr::Dyn(_) | Repr::Tagged) {
-                        "Tagged"
-                    } else {
-                        "Scalar"
-                    },
-                    match layout.fields[i] {
-                        Repr::Ptr(c) => descriptors[&c] + 3,
-                        r @ (Repr::List(_)
-                        | Repr::ListInt
-                        | Repr::ListPtr(_)
-                        | Repr::ListStr
-                        | Repr::ListListStr
-                        | Repr::ListClosure(_)
-                        | Repr::MapStrInt
-                        | Repr::Map(_)) => lists[&r] + 3,
-                        Repr::Tagged => after_descriptors + 3,
-                        Repr::Dyn(i) => after_descriptors + i + 4,
-                        Repr::Str => 3,
-                        Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
-                        Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
-                        Repr::Int => 0,
-                        Repr::Float => u32::MAX as usize - 1,
-                        Repr::Bool => 1,
-                        Repr::Iter | Repr::Naming | Repr::Null | Repr::Type(_) =>
-                            unreachable!("null/type fields are rejected"),
-                    }
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",");
+        let class = plan.class(object);
+        let fields =
+            class
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(i, f)| {
+                    format!(
+                        "Field{{name:{:?},offset:{},slot:SlotKind::{},type_id:{}}}",
+                        f.name,
+                        layout.offsets[i],
+                        if layout.fields[i].pointer() {
+                            "Pointer"
+                        } else if matches!(layout.fields[i], Repr::Dyn(_) | Repr::Tagged) {
+                            "Tagged"
+                        } else {
+                            "Scalar"
+                        },
+                        match layout.fields[i] {
+                            Repr::Ptr(c) => descriptors[&c] + 3,
+                            r @ (Repr::List(_)
+                            | Repr::ListInt
+                            | Repr::ListPtr(_)
+                            | Repr::ListStr
+                            | Repr::ListListStr
+                            | Repr::ListClosure(_)
+                            | Repr::MapStrInt
+                            | Repr::Map(_)) => lists[&r] + 3,
+                            Repr::Tagged => after_descriptors + 3,
+                            Repr::Dyn(i) => after_descriptors + i + 4,
+                            Repr::Bigint => 18,
+                            Repr::Bytes => 19,
+                            Repr::Opaque => 20,
+                            Repr::Str => 3,
+                            Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
+                            Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
+                            Repr::Int => 0,
+                            Repr::Float => u32::MAX as usize - 1,
+                            Repr::Bool => 1,
+                            Repr::Enum(e) =>
+                                after_descriptors
+                                    + 4
+                                    + plan.enums.iter().position(|i| *i == e).unwrap(),
+                            Repr::Naming => after_descriptors + 3,
+                            Repr::Null => 2,
+                            Repr::Iter | Repr::Type(_) =>
+                                unreachable!("null/type fields are rejected"),
+                        }
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
         writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
@@ -480,7 +528,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             }
             continue;
         }
-        if *repr == Repr::MapStrInt {
+        if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
             for i in 0..4 {
                 writeln!(&mut out, "rt::maps::descriptors({desc})[{i}],").unwrap();
             }
@@ -551,7 +599,73 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    13
+    20
+}
+
+pub(super) fn enum_tag(
+    plan: &Plan<'_>,
+    repr: Repr,
+    descriptors: &BTreeMap<usize, usize>,
+    lists: &BTreeMap<Repr, usize>,
+) -> usize {
+    let end = plan
+        .closure_descriptors()
+        .map(|(_, closure)| closure + 1)
+        .unwrap_or_else(|| {
+            lists
+                .iter()
+                .map(|(r, id)| {
+                    id + if matches!(r, Repr::Map(_) | Repr::MapStrInt) {
+                        4
+                    } else if r.growing() {
+                        2
+                    } else {
+                        1
+                    }
+                })
+                .max()
+                .unwrap_or_else(|| {
+                    descriptors
+                        .values()
+                        .map(|id| id + 1)
+                        .max()
+                        .unwrap_or(rt_descriptors())
+                        .max(rt_descriptors())
+                })
+        });
+    end + 3
+        + match repr {
+            Repr::Naming => 0,
+            Repr::Enum(e) => {
+                1 + plan
+                    .enums
+                    .iter()
+                    .position(|id| *id == e)
+                    .expect("registered enum")
+            }
+            _ => unreachable!(),
+        }
+}
+
+// A recursive alias's unfolded union can name containers whose concrete
+// element representation is chosen by the producing expression. Merely
+// carrying that union in a tagged local does not instantiate such a buffer.
+// Actual container construction and operations still require their layout.
+fn recursive_container<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool {
+    fn alias<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool {
+        use baml_type::RuntimeTy as T;
+        match ty {
+            T::TypeAlias(_) => true,
+            T::List(t) => alias(t),
+            T::Map { key, value } => alias(key) || alias(value),
+            T::Union(m) => m.iter().any(alias),
+            _ => false,
+        }
+    }
+    matches!(
+        ty,
+        baml_type::RuntimeTy::List(_) | baml_type::RuntimeTy::Map { .. }
+    ) && alias(ty)
 }
 
 impl Plan<'_> {
@@ -578,7 +692,10 @@ impl Plan<'_> {
             + self
                 .layouts
                 .keys()
-                .filter(|c| self.list_error_descriptor(**c).is_none())
+                .filter(|c| {
+                    self.list_error_descriptor(**c).is_none()
+                        && super::builtin_classes::reserved(self, **c).is_none()
+                })
                 .count()
             + lists;
         Some((cell, cell + 1))

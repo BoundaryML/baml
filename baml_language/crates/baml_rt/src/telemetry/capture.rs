@@ -24,6 +24,9 @@ pub struct Declaration {
     pub is_enum: bool,
 }
 pub enum Shape {
+    Bigint,
+    Bytes,
+    Opaque,
     String,
     Enum {
         declaration: fn() -> &'static Declaration,
@@ -32,6 +35,11 @@ pub enum Shape {
     Class {
         declaration: fn() -> &'static Declaration,
         fields: &'static [Field],
+    },
+    GenericClass {
+        declaration: fn() -> &'static Declaration,
+        fields: &'static [Field],
+        args: &'static [Type],
     },
     List {
         growing: bool,
@@ -48,25 +56,40 @@ pub enum Shape {
     Closure,
     Unsupported,
 }
+pub use baml_type::Freshness;
 pub enum Type {
-    IntLiteral(i64, bool),
-    BoolLiteral(bool, bool),
-    StringLiteral(&'static str, bool),
+    Bigint,
+    Bytes,
+    Opaque,
     Function {
         params: &'static [Parameter],
         ret: &'static Type,
         throws: &'static Type,
     },
-    Never,
-    Int,
-    Float,
-    Unknown,
     Null,
+    Never,
+    Unknown,
+    Int,
+    LiteralInt(i64, Freshness),
+    LiteralBool(bool, Freshness),
+    LiteralString(&'static str, Freshness),
+    LiteralFloat(&'static str, Freshness),
+    Float,
     Bool,
     String,
     Class(fn() -> &'static Declaration),
-    List(&'static Type),
+    GenericClass(fn() -> &'static Declaration, &'static [Type]),
+    Enum(fn() -> &'static Declaration),
+    EnumVariant(fn() -> &'static Declaration, &'static str),
+    Alias(i64, &'static [u8]),
+    Interface(
+        i64,
+        &'static [u8],
+        &'static [Type],
+        &'static [(&'static str, Type)],
+    ),
     Map(&'static Type, &'static Type),
+    List(&'static Type),
     Union(&'static [Type]),
 }
 pub struct Parameter {
@@ -77,16 +100,11 @@ pub struct Parameter {
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
-            Self::IntLiteral(value, fresh) => {
-                OwnedType::Literal(baml_type::Literal::Int(*value), freshness(*fresh))
-            }
-            Self::BoolLiteral(value, fresh) => {
-                OwnedType::Literal(baml_type::Literal::Bool(*value), freshness(*fresh))
-            }
-            Self::StringLiteral(value, fresh) => OwnedType::Literal(
-                baml_type::Literal::String((*value).into()),
-                freshness(*fresh),
-            ),
+            Self::Null => OwnedType::Null,
+            Self::Unknown => OwnedType::Unknown,
+            Self::Bigint => OwnedType::Bigint,
+            Self::Bytes => OwnedType::Uint8Array,
+            Self::Opaque => OwnedType::RustType,
             Self::Never => OwnedType::Never,
             Self::Function {
                 params,
@@ -109,12 +127,38 @@ impl Type {
                 throws: Box::new(throws.owned(leaves, carried)),
             },
             Self::Int => OwnedType::Int,
+            Self::LiteralInt(v, f) => OwnedType::Literal(baml_type::Literal::Int(*v), *f),
+            Self::LiteralBool(v, f) => OwnedType::Literal(baml_type::Literal::Bool(*v), *f),
+            Self::LiteralFloat(v, f) => {
+                OwnedType::Literal(baml_type::Literal::Float((*v).into()), *f)
+            }
+            Self::LiteralString(v, f) => {
+                OwnedType::Literal(baml_type::Literal::String((*v).into()), *f)
+            }
             Self::Float => OwnedType::Float,
-            Self::Unknown => OwnedType::Unknown,
-            Self::Null => OwnedType::Null,
-            Self::Map(key, value) => OwnedType::Map {
-                key: Box::new(key.owned(leaves, carried)),
-                value: Box::new(value.owned(leaves, carried)),
+            Self::Alias(tag, name) => OwnedType::TypeAlias(named_identity(*tag, name)),
+            Self::Interface(tag, name, args, assoc) => OwnedType::Interface(
+                named_identity(*tag, name),
+                args.iter().map(|t| t.owned(leaves, carried)).collect(),
+                assoc
+                    .iter()
+                    .map(|(n, t)| ((*n).into(), t.owned(leaves, carried)))
+                    .collect(),
+            ),
+            Self::EnumVariant(declaration, variant) => OwnedType::EnumVariant(
+                TypeIdentity::Defined(leaves.define(&declaration().definition, carried)),
+                (*variant).into(),
+            ),
+            Self::Enum(declaration) => OwnedType::Enum(TypeIdentity::Defined(
+                leaves.define(&declaration().definition, carried),
+            )),
+            Self::GenericClass(declaration, args) => OwnedType::Class(
+                TypeIdentity::Defined(leaves.define(&declaration().definition, carried)),
+                args.iter().map(|t| t.owned(leaves, carried)).collect(),
+            ),
+            Self::Map(k, v) => OwnedType::Map {
+                key: Box::new(k.owned(leaves, carried)),
+                value: Box::new(v.owned(leaves, carried)),
             },
             Self::Bool => OwnedType::Bool,
             Self::String => OwnedType::String,
@@ -220,7 +264,10 @@ impl Scratch {
         value: Dyn,
         depth: usize,
     ) -> SnapshotValue {
-        if value.tag == crate::FLOAT_TAG {
+        if value.tag == crate::scalars::FLOAT_TAG {
+            if leaves.limits().max_depth.is_some_and(|limit| depth > limit) {
+                return SnapshotValue::Truncated(Limit::Depth);
+            }
             return SnapshotValue::Float(f64::from_bits(value.payload));
         }
         let key = if value.tag >= 3
@@ -276,6 +323,10 @@ impl Scratch {
         if value.payload == 0 {
             return SnapshotValue::Null;
         }
+        if matches!(shape, Shape::Bigint) {
+            let owned = unsafe { crate::native::bigint_owned(value.payload as usize) };
+            return leaves.bigint(&std::sync::Arc::new(owned));
+        }
         let result = if matches!(shape, Shape::String) {
             let ptr = value.payload as *const u8;
             let len = unsafe { ptr.add(8).cast::<usize>().read() };
@@ -305,7 +356,9 @@ impl Scratch {
         depth: usize,
     ) -> SnapshotValue {
         let declaration = match &shapes[usize::try_from(tag - 3).expect("descriptor index")] {
-            Shape::Class { declaration, .. } | Shape::Enum { declaration, .. } => declaration(),
+            Shape::Class { declaration, .. }
+            | Shape::GenericClass { declaration, .. }
+            | Shape::Enum { declaration, .. } => declaration(),
             _ => unreachable!("declaration shape"),
         };
         let key = Key::Declaration(declaration.tag.as_i64().cast_unsigned());
@@ -340,7 +393,9 @@ impl Scratch {
             let object = match (key, shape) {
                 (
                     Key::Declaration(_),
-                    Shape::Class { declaration, .. } | Shape::Enum { declaration, .. },
+                    Shape::Class { declaration, .. }
+                    | Shape::GenericClass { declaration, .. }
+                    | Shape::Enum { declaration, .. },
                 ) => {
                     let declaration = declaration();
                     let definition = b.define(&declaration.definition, &mut self.carried);
@@ -351,34 +406,35 @@ impl Scratch {
                         Some(definition),
                     )
                 }
-                (Key::Value(pointer), Shape::Class { fields, .. }) => {
-                    match self.declaration(shapes, &mut b.leaves(), tag, depth + 1) {
-                        SnapshotValue::Object(declaration) => {
-                            b.instance(declaration, [], fields.iter(), |leaves, field| {
-                                let ptr = unsafe { (pointer as *const u8).add(field.offset) };
-                                let value = match field.slot {
-                                    SlotKind::Tagged => unsafe { ptr.cast::<Dyn>().read() },
-                                    _ => Dyn {
-                                        tag: u64::from(field.type_id),
-                                        payload: unsafe { ptr.cast::<u64>().read() },
-                                    },
-                                };
-                                let value = if matches!(field.slot, SlotKind::Pointer)
-                                    && value.payload == 0
-                                {
-                                    Dyn { tag: 2, payload: 0 }
-                                } else {
-                                    value
-                                };
-                                (field.name.into(), unsafe {
-                                    self.add(shapes, leaves, value, depth + 1)
-                                })
+                (
+                    Key::Value(pointer),
+                    Shape::Class { fields, .. } | Shape::GenericClass { fields, .. },
+                ) => match self.declaration(shapes, &mut b.leaves(), tag, depth + 1) {
+                    SnapshotValue::Object(declaration) => {
+                        let args = if let Shape::GenericClass { args, .. } = shape {
+                            args.iter()
+                                .map(|t| t.owned(&mut b.leaves(), &mut self.carried))
+                                .collect::<Vec<_>>()
+                        } else {
+                            Vec::new()
+                        };
+                        b.instance(declaration, args, fields.iter(), |leaves, field| {
+                            let ptr = unsafe { (pointer as *const u8).add(field.offset) };
+                            let value = match field.slot {
+                                SlotKind::Tagged => unsafe { ptr.cast::<Dyn>().read() },
+                                _ => Dyn {
+                                    tag: u64::from(field.type_id),
+                                    payload: unsafe { ptr.cast::<u64>().read() },
+                                },
+                            };
+                            (field.name.into(), unsafe {
+                                self.add(shapes, leaves, value, depth + 1)
                             })
-                        }
-                        SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
-                        _ => unreachable!("declaration identity"),
+                        })
                     }
-                }
+                    SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
+                    _ => unreachable!("declaration identity"),
+                },
                 (
                     Key::Value(pointer),
                     Shape::List {
@@ -462,6 +518,10 @@ impl Scratch {
                         )
                     })
                 }
+                (Key::Value(pointer), Shape::Bytes) => {
+                    b.bytes(&unsafe { crate::native::bytes_owned(pointer) })
+                }
+                (Key::Value(_), Shape::Opaque) => SnapshotObject::NonSnapshotableValue {},
                 (Key::Value(pointer), Shape::Closure) => {
                     let name = unsafe { crate::closures::name(pointer) };
                     SnapshotObject::Descriptive {
@@ -706,10 +766,9 @@ mod tests {
     }
 }
 
-fn freshness(fresh: bool) -> baml_type::Freshness {
-    if fresh {
-        baml_type::Freshness::Fresh
-    } else {
-        baml_type::Freshness::Regular
-    }
+fn named_identity(tag: i64, name: &[u8]) -> TypeIdentity {
+    TypeIdentity::Resolved(baml_type::TaggedTypeName::new(
+        baml_type::typetag::TypeTag::from_i64(tag),
+        borsh::from_slice(name).expect("frozen type name"),
+    ))
 }

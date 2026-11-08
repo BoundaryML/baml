@@ -76,11 +76,7 @@ impl SchemaEmitter<'_, '_> {
         if !self.classes.insert(c) {
             return Ok(symbol);
         }
-        let Object::Class(class) =
-            &self.plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-        else {
-            unreachable!()
-        };
+        let class = self.plan.class(c);
         // Preserve the existing closed-world decoder's admission for custom overrides.
         for package in &self.plan.program.packages {
             for rules in package.impl_rules.values() {
@@ -405,6 +401,10 @@ pub(super) fn emit_shapes(
             Repr::Null => 2,
             Repr::Str => 3,
             Repr::Float => u32::MAX as usize - 1,
+            Repr::Bigint => 18,
+            Repr::Bytes => 19,
+            Repr::Opaque => 20,
+            r @ (Repr::Enum(_) | Repr::Naming) => layout::enum_tag(plan, r, descriptors, lists),
             Repr::Ptr(c) => descriptors[&c] + 3,
             r if r.growing() || matches!(r, Repr::MapStrInt | Repr::Map(_)) => lists[&r] + 3,
             Repr::Tagged | Repr::Dyn(_) => 0,
@@ -416,7 +416,7 @@ pub(super) fn emit_shapes(
         for rules in package.impl_rules.values() {
             for rule in rules {
                 if rule.methods.contains_key("to_json")
-                    && matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if plan.layouts.keys().any(|c|matches!(&plan.program.objects[bex_vm_types::ObjectIndex::from_raw(*c)],Object::Class(class) if class.type_tag==head.tag())))
+                    && matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if plan.layouts.keys().any(|c|plan.class(*c).type_tag==head.tag()))
                 {
                     return Err(no("list JSON ToJson override"));
                 }
@@ -448,11 +448,7 @@ pub(super) fn emit_shapes(
         .map_or(last, |(_, closure)| closure + 1);
     for desc in 0..last {
         if let Some((&class, _)) = descriptors.iter().find(|(_, id)| **id == desc) {
-            let Object::Class(c) =
-                &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(class)]
-            else {
-                unreachable!()
-            };
+            let c = plan.class(class);
             let layout = &plan.layouts[&class];
             out.push_str("rt::json_lists::Shape::Class(&[");
             for (i, field) in c.fields.iter().enumerate() {
@@ -480,9 +476,41 @@ pub(super) fn emit_shapes(
             .unwrap();
         } else if plan.closure_descriptors().is_some_and(|(_, c)| c == desc) {
             out.push_str("rt::json_lists::Shape::Function,\n");
+        } else if desc == 15 {
+            out.push_str("rt::json_lists::Shape::Bigint,\n");
+        } else if desc == 16 {
+            out.push_str("rt::json_lists::Shape::Bytes,\n");
         } else {
             out.push_str("rt::json_lists::Shape::Unsupported,\n");
         }
+    }
+    let naming = plan
+        .program
+        .packages
+        .iter()
+        .find_map(|p| {
+            p.enums.iter().find_map(|(path, id)| {
+                (path.under(&p.name).to_string() == "baml.json.Naming").then_some(id.raw())
+            })
+        })
+        .ok_or_else(|| no("JSON naming enum"))?;
+    for id in std::iter::once(naming).chain(plan.enums.iter().copied()) {
+        let Object::Enum(enm) = &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(id)]
+        else {
+            unreachable!()
+        };
+        out.push_str("rt::json_lists::Shape::Enum(&[");
+        for v in &enm.variants {
+            write!(
+                out,
+                "rt::json_lists::EnumVariant{{name:{:?},alias:{:?},skip:{}}},",
+                v.name,
+                v.alias.as_ref().unwrap_or(&v.name),
+                v.skip
+            )
+            .unwrap();
+        }
+        out.push_str("]),\n");
     }
     out.push_str("];\n");
     Ok(())

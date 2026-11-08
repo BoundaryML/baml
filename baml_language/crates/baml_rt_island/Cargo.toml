@@ -1,0 +1,14 @@
+[package]
+name = "baml_rt_island"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bex_project.workspace = true
+serde_json.workspace = true
+vfs.workspace = true
+
+[dev-dependencies]
+sys_native.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

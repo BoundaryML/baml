@@ -21,7 +21,7 @@ use std::{
 
 pub mod capture;
 pub mod evidence;
-pub use btel_records::RaiseKind;
+pub use btel_records::{LogLevel, RaiseKind};
 pub use btel_types as types;
 pub type Policy = btel_settings::policy::TelemetryPolicy<std::time::Duration>;
 pub struct Function {
@@ -29,6 +29,7 @@ pub struct Function {
     pub metadata: fn(FunctionId) -> btel_types::FunctionMetadata,
     pub word: &'static AtomicU8,
     pub hidden: bool,
+    pub hook_mode: Option<btel_types::InvocationMode>,
     pub policy: Policy,
 }
 #[derive(Clone, Copy)]
@@ -103,6 +104,7 @@ struct State {
     active: CallPathId,
     active_function: Option<usize>,
     active_slot: *mut AggregateDelta,
+    sysop_await: AwaitDuration,
     next_path: u32,
     gc_function: FunctionId,
     gc_started: Option<ClockInstant>,
@@ -226,6 +228,7 @@ pub struct Frame {
     saved_slot: *mut AggregateDelta,
     slot: *mut AggregateDelta,
     pub await_duration: AwaitDuration,
+    saved_await: AwaitDuration,
     flags: u8,
 }
 /// # Safety
@@ -287,6 +290,7 @@ pub unsafe fn enter_observed(site_id: usize) -> Frame {
         saved_slot: state.active_slot,
         slot,
         await_duration: AwaitDuration::ZERO,
+        saved_await: std::mem::replace(&mut state.sysop_await, AwaitDuration::ZERO),
         flags: u8::from(reentry),
     };
     state.depth += 1;
@@ -301,8 +305,10 @@ pub unsafe fn enter_observed(site_id: usize) -> Frame {
 }
 impl Frame {
     #[inline(always)]
-    pub fn finish<T>(self, result: &mut R<T>) {
+    pub fn finish<T>(mut self, result: &mut R<T>) {
         let state = unsafe { &mut *self.state };
+        self.await_duration = self.await_duration.saturating_add(state.sysop_await.get());
+        state.sysop_await = self.saved_await;
         let (exited_at, outcome) = match result {
             Ok(_) => (state.read(), InvocationOutcome::Ok),
             Err(error) => (
@@ -456,7 +462,7 @@ pub unsafe fn observe_captured<T>(
         };
         let state = unsafe { &mut *frame.state };
         let id = id.unwrap_or_else(allocate_telemetry_id);
-        let await_time = frame.await_duration;
+        let await_time = frame.await_duration.saturating_add(state.sysop_await.get());
         macro_rules! completion {
             ($variant:ident) => {
                 SpanRecord::$variant {
@@ -545,11 +551,18 @@ pub unsafe fn observe_captured<T>(
         };
         state.span(record);
     } else {
-        complete_unusual(state, frame.slot, duration, frame.await_duration, outcome);
+        complete_unusual(
+            state,
+            frame.slot,
+            duration,
+            frame.await_duration.saturating_add(state.sysop_await.get()),
+            outcome,
+        );
     }
     let state = unsafe { &mut *frame.state };
     evidence::frame_completed(state, &mut result);
     state.depth -= 1;
+    state.sysop_await = frame.saved_await;
     state.active_span = saved_span;
     state.active = frame.saved_path;
     state.active_function = frame.saved_function;
@@ -772,7 +785,16 @@ impl Session {
         let words = functions
             .iter()
             .map(|function| {
-                let word = observation(level, function.hidden, function.policy);
+                let word = if level.is_some() && !function.hidden {
+                    match function.hook_mode {
+                        Some(btel_types::InvocationMode::Hidden) => 0,
+                        Some(btel_types::InvocationMode::Timing) => 1,
+                        Some(btel_types::InvocationMode::Span) => 2,
+                        _ => observation(level, function.hidden, function.policy),
+                    }
+                } else {
+                    0
+                };
                 Ok(word)
             })
             .collect::<R<Vec<_>>>()?;
@@ -784,7 +806,13 @@ impl Session {
                 .word
                 .store(word | if explicit_stack { 4 } else { 0 }, Ordering::Relaxed);
         }
-        let clocks = ClockRuntime::new(btel_settings::clock::DEFAULT_MODE);
+        // An unobserved run never reads this clock. Avoid hardware calibration
+        // (including its holdout sleep) when telemetry is disabled.
+        let clocks = ClockRuntime::new(if level.is_none() {
+            btel_clock::ClockMode::Monotonic
+        } else {
+            btel_settings::clock::DEFAULT_MODE
+        });
         let exit = Arc::new(btel_types::ProcessExitSlot::default());
         let mut session = Self {
             root_panicked: false,
@@ -896,6 +924,7 @@ impl Session {
             active: CallPathId::ROOT,
             active_function: None,
             active_slot: std::ptr::null_mut(),
+            sysop_await: AwaitDuration::ZERO,
             next_path: 0,
             gc_function,
             gc_started: None,
@@ -1284,6 +1313,7 @@ mod tests {
             active: CallPathId::ROOT,
             active_function: None,
             active_slot: std::ptr::null_mut(),
+            sysop_await: AwaitDuration::ZERO,
             next_path: 0,
             gc_function: allocator.allocate().unwrap(),
             gc_started: None,
@@ -1548,5 +1578,60 @@ mod tests {
             assert_eq!(published.stacks, if mode == 0 { vec![2] } else { vec![] });
             assert_eq!(published.ends, vec![(1, Some(42))]);
         }
+    }
+}
+
+/// Record a log with its actual statement PC, independently of call-frame state.
+/// # Safety
+/// Both values must be rooted in the running owner-thread task.
+pub unsafe fn log(
+    word: &AtomicU8,
+    pc: u32,
+    level: LogLevel,
+    name: Option<crate::strings::Str>,
+    data: crate::Dyn,
+) {
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        return;
+    }
+    let captured_data = unsafe { capture_value(data) };
+    let state = unsafe { &mut *ptr };
+    let function = state
+        .words
+        .iter()
+        .position(|w| std::ptr::eq(*w, word))
+        .expect("registered log function");
+    let event_name =
+        name.map(|s| Arc::<str>::from(s.as_str(&unsafe { crate::strings::Cx::current() })));
+    state.span(SpanRecord::Log {
+        parent_id: state.active_span.unwrap_or(state.thread),
+        function: state.functions[function],
+        pc,
+        at: state.clock.read(),
+        level,
+        event_name,
+        captured_data,
+    });
+}
+
+pub(crate) fn sysop_started() -> Option<ClockInstant> {
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { &*ptr }.clock.read())
+    }
+}
+pub(crate) fn sysop_finished(started: Option<ClockInstant>) {
+    let Some(started) = started else { return };
+    let state = unsafe { &mut *CURRENT.get() };
+    let elapsed = started.elapsed_until(state.clock.read());
+    state.sysop_await = state.sysop_await.saturating_add(elapsed);
+    if state.active != CallPathId::ROOT {
+        state.producer.write_timing(TimingRecord::SysOpTime {
+            call_path: state.active,
+            elapsed,
+        });
     }
 }

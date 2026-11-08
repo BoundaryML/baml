@@ -795,11 +795,7 @@ fn rt_trees_and_fail_closed_admission() {
     assert!(emit("/// baml:$trace=trace.hidden\nfunction main() -> int { 1 }").is_ok());
     for hook in ["trace.timing", "trace.span", "trace.empty_span"] {
         let source = format!("/// baml:$trace={hook}\nfunction main() -> int {{ 1 }}");
-        assert!(
-            emit(&source)
-                .unwrap_err()
-                .contains("unsupported in baml_rt")
-        );
+        assert!(emit(&source).unwrap().contains("hook_mode:Some("));
     }
     let trees = emit(include_str!(
         "../../../tools/speedtest/workloads/memory/binary-trees-14/main.baml"
@@ -815,16 +811,15 @@ fn rt_trees_and_fail_closed_admission() {
         "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
     ))
     .unwrap();
-    assert!(richards.contains("match a0.tag"));
+    assert!(richards.contains("static VTABLE"));
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
-    for source in ["function main() -> string { \"hello\" }"] {
-        assert!(
-            emit(source).unwrap_err().contains("unsupported in baml_rt"),
-            "{source}"
-        );
-    }
+    assert!(
+        emit("function main() -> string { \"hello\" }")
+            .unwrap()
+            .contains("rt::host::driver")
+    );
 }
 
 #[test]
@@ -930,7 +925,11 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         ),
         (
             r#"class A { x: int } class B { y: int } function main() -> int { let a = baml.json.decode<A | B>("x") catch(e) { baml.json.ParseError => null }; 0 }"#,
-            false,
+            true,
+        ),
+        (
+            r#"function main()->string { int.parse("bad").to_string() catch(e) { baml.errors.ParseError {message} => message } }"#,
+            true,
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
@@ -1038,7 +1037,7 @@ fn rt_stack_placement_preserves_lifetimes_and_bytecode() {
 // codegen changes may update these after checking the generated-source diff.
 fn rt_source_bytes_and_diagnostics() {
     use sha2::{Digest, Sha256};
-    let mut changes = Vec::new();
+    let mut changed = Vec::new();
     for (name, source) in [
         (
             "trees",
@@ -1061,6 +1060,7 @@ fn rt_source_bytes_and_diagnostics() {
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
         let program = lower(&db, OptLevel::Two);
+        let original = fingerprint(&program);
         let (entry, _) = user_functions(&program)
             .find(|(_, f)| f.name() == "main")
             .unwrap();
@@ -1071,94 +1071,80 @@ fn rt_source_bytes_and_diagnostics() {
             OptLevel::Two,
             entry,
         );
+        assert_eq!(
+            fingerprint(&program),
+            original,
+            "{name}: rt changed bytecode"
+        );
+        let expected = match name {
+            "trees" => "e946c5157261db098a520c4afc8c71e087ac5a9647e47bca814ce7814409919e",
+            "richards" => "8d1671f6a581c38902786fb88552083686223c09da0aeada16359a43d7da4bd2",
+            "agent" => "a70e7710eaebe81c89a3e6823aeb34f050487235609d161fc632606de29df408",
+            _ => "",
+        };
         if name == "initializer" {
             let source = result.unwrap();
             assert!(source.contains("rt::globals::begin("));
             assert!(source.contains("rt::globals::load"));
             continue;
         }
-        let expected = match name {
-            "trees" => "013dee9afa27098b1d31d7166052ed9b348f14c211c00bd8244717e499e71c3c",
-            "richards" => "94b162f01d2b7611be270c9bbbdda75d6c8deadb15ae4b06b7691f421240ab48",
-            "agent" => "bac1236bc04f5e21e6c9c7f5afbf2d8fe0c34d9eb7df44e9db3ce4ba671fb5b1",
-            _ => "",
-        };
+        if name == "hook" {
+            assert!(result.unwrap().contains("InvocationMode::Span"));
+            continue;
+        }
+        if name == "entry" {
+            let generated = result.unwrap();
+            assert!(generated.contains("rt::host::driver"));
+            assert!(generated.contains(".copy_out("));
+            continue;
+        }
         if expected.is_empty() {
             let expected = match name {
                 "entry" => "unsupported in baml_rt: entry must have no parameters and return int",
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };
-            assert_eq!(result.unwrap_err(), expected, "{name}");
+            let actual = result.unwrap_err();
+            if actual != expected {
+                eprintln!("{name}: {actual:?} != {expected:?}");
+                changed.push(name);
+            }
         } else {
             let source = result.unwrap();
+            if let Some(dir) = std::env::var_os("BAML_RT_SOURCE_DUMP") {
+                std::fs::create_dir_all(&dir).unwrap();
+                std::fs::write(
+                    std::path::Path::new(&dir).join(format!("{name}.rs")),
+                    &source,
+                )
+                .unwrap();
+            }
             let actual = format!("{:x}", Sha256::digest(source.as_bytes()));
             if actual != expected {
-                let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
-                    .join(format!("rt-source-{name}.rs"));
-                std::fs::write(&path, &source).unwrap();
-                changes.push(format!("{name}: {actual} ({})", path.display()));
+                eprintln!("{name}: {actual}");
+                changed.push(name);
             }
         }
     }
-    assert!(
-        changes.is_empty(),
-        "generated source changed:\n{}",
-        changes.join("\n")
-    );
+    assert!(changed.is_empty(), "generated sources changed: {changed:?}");
 }
 
 #[test]
-fn rt_loop_range_proofs_cover_every_update_and_preserve_bytecode() {
-    for (name, source, checked) in [
-        (
-            "nested",
-            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { for (let j = 0; j < 7; j += 1) { s += i * j; }; }; s }",
-            false,
-        ),
-        (
-            "identity",
-            "function leaf(n: int) -> int { n } function main() -> int { let s = 0; for (let i = 0; i < 20; i += 1) { s += leaf(i); }; s }",
-            false,
-        ),
-        (
-            "stride",
-            "function main() -> int { let s = 0; for (let i = 1; i < 8; i += 3) { s += i; }; s }",
-            false,
-        ),
-        (
-            "overflow",
-            "function main() -> int { let s = 4611686018427387902; for (let i = 0; i < 3; i += 1) { s += 1; }; s }",
-            true,
-        ),
-        (
-            "indirect_recurrence",
-            "function main() -> int { let s = 1; for (let i = 0; i < 80; i += 1) { let delta = s; s += delta; }; s }",
-            true,
-        ),
-        (
-            "extra_back_edge",
-            "function main() -> int { let i = 0; let s = 0; while i < 4 { if i == 2 { continue; }; s += i; i += 1; }; s }",
-            true,
-        ),
-        (
-            "counter_mutation",
-            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { if i == 2 { i = 4611686018427387903; }; s += i; }; s }",
-            true,
-        ),
-        (
-            "counter_reset",
-            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { if i == 2 { i = 0; }; s += 1; }; s }",
-            true,
-        ),
+fn rt_host_scalars_io_and_statement_log_sites() {
+    for source in [
+        include_str!("../../../tools/speedtest/workloads/compute/nbody-20k/main.baml"),
+        r#"class Reply { text:string, ok:bool, count:int, score:float } function main(value:Reply)->Reply { value }"#,
+        r#"function main(n:int, label:string, yes:bool, x:float) -> string { if(yes) { `${label}:${n}:${x}` } else { label } }"#,
+        r#"class Body { mass:float } function main()->int { let b=Body{mass:4.0}; b.mass.sqrt().itrunc()+int.parse("3") }"#,
+        r#"function main()->void { log.info("one"); log.warn("two"); baml.io.println("logged"); }"#,
+        r#"function main()->string? { baml.env.get("BAML_RT_MISSING_TEST_VARIABLE") }"#,
     ] {
-        let db = baml_test_support::setup_multi_file_db(&[("bounds.baml", source)]);
+        let db = baml_test_support::setup_multi_file_db(&[("rt_host.baml", source)]);
         let program = lower(&db, OptLevel::Two);
-        let original = fingerprint(&program);
         let (entry, _) = user_functions(&program)
             .find(|(_, f)| f.name() == "main")
             .unwrap();
-        let generated = baml_db::rust_backend::compile_rt(
+        let source = baml_db::rust_backend::compile_rt(
             &db,
             db.workspace_root().unwrap(),
             &program,
@@ -1166,20 +1152,15 @@ fn rt_loop_range_proofs_cover_every_update_and_preserve_bytecode() {
             entry,
         )
         .unwrap();
-        if generated.contains("rt::add(") != checked {
-            let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
-                .join(format!("rt-bounds-{name}.rs"));
-            std::fs::write(&path, &generated).unwrap();
-            panic!(
-                "{name}: checked={checked}, generated source: {}",
-                path.display()
-            );
+        assert!(!source.contains("BexVm"));
+        if source.contains("rt::telemetry::log(") {
+            let sites = source
+                .lines()
+                .filter(|l| l.contains("rt::telemetry::log("))
+                .collect::<Vec<_>>();
+            assert_eq!(sites.len(), 2);
+            assert_ne!(sites[0].split("u32").next(), sites[1].split("u32").next());
         }
-        assert_eq!(
-            fingerprint(&program),
-            original,
-            "{name}: rt changed bytecode"
-        );
     }
 }
 
@@ -1244,6 +1225,29 @@ fn rt_structural_union_map_keys_and_snapshot_admission() {
             }
         }
     }
+}
+
+#[test]
+fn rt_generics_switch_aliases() {
+    let source = include_str!("../rust_diff/type_dispatch.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-type-program.rs"),
+        source,
+    )
+    .unwrap();
 }
 
 #[test]

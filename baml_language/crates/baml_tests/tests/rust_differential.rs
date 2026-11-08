@@ -12,6 +12,9 @@ use std::{
 #[path = "../rust_diff/initializer_probes.rs"]
 mod initializer_probes;
 
+#[path = "../rust_diff/host.rs"]
+mod host;
+
 const PROBES: &[&str] = &[
     "StackAllocation",
     "RtClosures",
@@ -38,6 +41,8 @@ const PROBES: &[&str] = &[
     "RuntimeListJson",
     "RuntimeListJsonField",
     "RuntimeListJsonError",
+    "RtNativeMath",
+    "RtNativeBytes",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -299,7 +304,11 @@ fn probe_timeout_kills_and_reaps() {
 }
 
 fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
-    matches!(probe, "RtClosures" | "RtEmptyClosures").then(|| manifest.join("rt_fixtures/closures"))
+    match probe {
+        "RtClosures" | "RtEmptyClosures" => Some(manifest.join("rt_fixtures/closures")),
+        "RtNativeMath" | "RtNativeBytes" => Some(manifest.join("rt_fixtures/native")),
+        _ => None,
+    }
 }
 
 fn is_list_probe(probe: &str) -> bool {
@@ -372,7 +381,12 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .or_insert_with(|| executable.clone());
         }
     }
-    for probe in ["RtClosures", "RtEmptyClosures"] {
+    for probe in [
+        "RtClosures",
+        "RtEmptyClosures",
+        "RtNativeMath",
+        "RtNativeBytes",
+    ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
         }
@@ -591,13 +605,20 @@ fn rt_call_cost_semantics_at_every_telemetry_level() {
 #[ignore = "builds generated Rust crates with cargo"]
 #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
 fn rust_differential() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let timeout = std::env::var("BAML_RUST_DIFF_TIMEOUT_SECS")
         .map(|v| v.parse::<u64>().expect("timeout must be seconds"))
         .unwrap_or(120);
     assert!(timeout > 0);
     let timeout = Duration::from_secs(timeout);
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
-    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok();
+    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok().or_else(|| {
+        std::env::var("BAML_RUST_DIFF_RT_ONLY")
+            .is_ok_and(|v| v == "1")
+            .then(|| "rt,rt-gc-stress".into())
+    });
     if let Some(selected) = &selected {
         for name in selected.split(',') {
             assert!(
@@ -619,6 +640,7 @@ fn rust_differential() {
     let rt_only = backends
         .iter()
         .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
+    let levels = LEVELS;
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -687,7 +709,13 @@ fn rust_differential() {
                 || (*level == "default"
                     && !matches!(
                         probe.as_str(),
-                        "Scalars" | "Hooked" | "ManualSpan" | "RtClosures" | "RtEmptyClosures"
+                        "Scalars"
+                            | "Hooked"
+                            | "ManualSpan"
+                            | "RtClosures"
+                            | "RtEmptyClosures"
+                            | "RtNativeMath"
+                            | "RtNativeBytes"
                     ))
             {
                 continue;
@@ -913,22 +941,6 @@ fn rust_differential() {
                             known_telemetry_divergences::POLLING_REASON,
                             &diff(&expected, &actual, &mode),
                         );
-                    } else if known_telemetry_divergences::without_log_locations(
-                        &expected,
-                        &probe,
-                        backend.name,
-                    ) == known_telemetry_divergences::without_log_locations(
-                        &actual,
-                        &probe,
-                        backend.name,
-                    ) {
-                        report_known(
-                            &build,
-                            &probe,
-                            &mode,
-                            known_telemetry_divergences::LOG_REASON,
-                            &diff(&expected, &actual, &mode),
-                        );
                     } else if known_telemetry_divergences::without_timeout_wait(
                         &expected,
                         &probe,
@@ -1027,4 +1039,17 @@ fn diff(expected: &str, actual: &str, mode: &str) -> String {
         .map(|line| line.chars().take(800).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[path = "../rust_diff/type_dispatch.rs"]
+mod type_dispatch;
+static PACK_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
+fn rt_type_dispatch_semantics() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    type_dispatch::run();
 }

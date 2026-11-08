@@ -25,6 +25,9 @@ impl Emitter<'_, '_> {
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
+            Repr::Bigint => Ok(18),
+            Repr::Bytes => Ok(19),
+            Repr::Opaque => Ok(20),
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
@@ -60,17 +63,29 @@ impl Emitter<'_, '_> {
         if source.growing()
             && target.growing()
             && self.plan.element(source)? == self.plan.element(target)?
-            && capture_codegen::capture_type(self.plan, source)?
-                == capture_codegen::capture_type(self.plan, target)?
+            && capture_codegen::capture_repr_type(self.plan, source)?
+                == capture_codegen::capture_repr_type(self.plan, target)?
+        {
+            return Ok(value);
+        }
+        if source == Repr::Int && target == Repr::Float {
+            return Ok(format!("({value} as f64)"));
+        }
+        if matches!(source, Repr::Dyn(_)) && matches!(target, Repr::Tagged | Repr::Dyn(_))
+            || source == Repr::Tagged && matches!(target, Repr::Dyn(_))
         {
             return Ok(value);
         }
         if target == Repr::Tagged {
-            let tag = self.tag(source)?;
+            let tag = match source {
+                Repr::Naming => "CAPTURE_NAMING_TAG".into(),
+                Repr::Enum(e) => format!("CAPTURE_ENUM_{e}_TAG"),
+                _ => self.tag(source)?.to_string(),
+            };
             let test = if source.pointer() {
-                "if v==0 {2} else {TAG}".replace("TAG", &tag.to_string())
+                "if v==0 {2} else {TAG}".replace("TAG", &tag)
             } else {
-                tag.to_string()
+                tag
             };
             let payload = if source == Repr::Float {
                 "v.to_bits()"
@@ -81,23 +96,17 @@ impl Emitter<'_, '_> {
                 "{{let v={value};rt::Dyn{{tag:{test},payload:{payload}}}}}"
             ));
         }
-        if source == Repr::Tagged {
-            let tag = self.tag(target)?;
+        if matches!(source, Repr::Tagged | Repr::Dyn(_)) {
+            let tag = match target {
+                Repr::Naming => "CAPTURE_NAMING_TAG".into(),
+                Repr::Enum(e) => format!("CAPTURE_ENUM_{e}_TAG"),
+                _ => self.tag(target)?.to_string(),
+            };
             let bits = self.fallible(&format!("rt::untag({value},{tag},{})", target.pointer()));
             return Ok(target.decode_payload(&bits));
         }
-        if let (Repr::Ptr(c), Repr::Dyn(i)) = (source, target) {
-            if self
-                .plan
-                .implementors(i)?
-                .iter()
-                .any(|(class, _)| *class == c)
-            {
-                return Ok(format!(
-                    "rt::Dyn{{tag:{},payload:({value}) as u64}}",
-                    self.descriptors[&c] + 3
-                ));
-            }
+        if matches!(target, Repr::Dyn(_)) {
+            return self.coerce((value, source), Repr::Tagged);
         }
         Err(no(format!("conversion {source:?} to {target:?}")))
     }
@@ -163,6 +172,12 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (base, repr) = self.place(base)?;
+                if repr == Repr::Bytes {
+                    return Ok((
+                        self.fallible(&format!("rt::native::byte_index({base},l{})", index.0)),
+                        Repr::Int,
+                    ));
+                }
                 let element = self.plan.element(repr)?;
                 if self.local(index.0)? != Repr::Int {
                     return Err(no("non-int list index"));
@@ -198,6 +213,13 @@ impl Emitter<'_, '_> {
             Operand::Constant(Constant::Float(f)) => {
                 Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
             }
+            Operand::Constant(Constant::Bigint(value)) => Ok((
+                self.fallible(&format!(
+                    "rt::native::bigint_literal({:?})",
+                    value.to_string()
+                )),
+                Repr::Bigint,
+            )),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => Ok((
@@ -209,10 +231,10 @@ impl Emitter<'_, '_> {
             )),
             Operand::Constant(Constant::EnumVariant { enum_ref, index }) => {
                 let head = baml_compiler2_hir_ty::layout::enum_head(self.db, *enum_ref);
-                if self.plan.repr(&RuntimeTy::Enum(head))? != Repr::Naming || *index > 1 {
-                    return Err(no("enum constant"));
-                }
-                Ok((format!("{index}usize"), Repr::Naming))
+                Ok((
+                    format!("{index}usize"),
+                    self.plan.repr(&RuntimeTy::Enum(head))?,
+                ))
             }
             Operand::Constant(Constant::Function(f)) => {
                 let (object, _) = self
@@ -270,6 +292,12 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (obj, container) = self.place(base)?;
+                if container == Repr::Bytes {
+                    return Ok(format!(
+                        "{};\n",
+                        self.fallible(&format!("rt::native::byte_set({obj},l{},{src})", index.0))
+                    ));
+                }
                 if container.growing() {
                     let slot = repr.slot()?;
                     let value = repr.to_slot(&src)?;

@@ -16,6 +16,7 @@ pub unsafe trait Slot: Copy {
     }
 }
 unsafe impl Slot for i64 {}
+unsafe impl Slot for usize {}
 unsafe impl Slot for f64 {}
 unsafe impl Slot for bool {}
 unsafe impl Slot for Dyn {

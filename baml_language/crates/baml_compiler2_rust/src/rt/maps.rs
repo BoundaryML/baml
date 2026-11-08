@@ -76,8 +76,8 @@ impl Plan<'_> {
             (types[id].key_type.clone(), types[id].value_type.clone())
         } else {
             (
-                capture_codegen::capture_type(self, key)?,
-                capture_codegen::capture_type(self, value)?,
+                capture_codegen::capture_repr_type(self, key)?,
+                capture_codegen::capture_repr_type(self, value)?,
             )
         };
         let declared = if keys { key_type } else { value_type };
@@ -87,7 +87,11 @@ impl Plan<'_> {
             self.list_repr(element)
         };
         let expected = format!("rt::telemetry::capture::Type::List(&{declared})");
-        if capture_codegen::capture_type(self, default).ok().as_ref() == Some(&expected) {
+        if capture_codegen::capture_repr_type(self, default)
+            .ok()
+            .as_ref()
+            == Some(&expected)
+        {
             return Ok(default);
         }
         let storage = if element == Repr::Null {
@@ -134,6 +138,10 @@ pub(super) fn slot_type(
         Repr::Tagged | Repr::Dyn(_) => "rt::Dyn".into(),
         Repr::Str => "rt::strings::Str".into(),
         Repr::Closure => "rt::closures::Closure".into(),
+        Repr::Bigint => "rt::maps::Pointer<18>".into(),
+        Repr::Bytes => "rt::maps::Pointer<19>".into(),
+        Repr::Opaque => "rt::maps::Pointer<20>".into(),
+        Repr::Enum(_) | Repr::Naming => "usize".into(),
         Repr::Ptr(c) => format!("rt::maps::Pointer<{}>", descriptors[&c] + 3),
         r if r.pointer() => format!("rt::maps::Pointer<{}>", lists[&r] + 3),
         _ => return Err(no("map slot representation")),
@@ -232,7 +240,13 @@ impl Emitter<'_, '_> {
             Repr::Str => format!("rt::strings::Str::from_raw({value})"),
             Repr::Closure => format!("rt::closures::Closure::from_raw({value})"),
             Repr::Null => format!("{{let _={value};rt::maps::Null}}"),
-            Repr::Int | Repr::Float | Repr::Bool | Repr::Tagged | Repr::Dyn(_) => value.to_owned(),
+            Repr::Int
+            | Repr::Float
+            | Repr::Bool
+            | Repr::Tagged
+            | Repr::Dyn(_)
+            | Repr::Enum(_)
+            | Repr::Naming => value.to_owned(),
             r if r.pointer() => format!("rt::maps::Pointer::<{}>::from_raw({value})", self.tag(r)?),
             _ => return Err(no("map input representation")),
         })
@@ -257,11 +271,7 @@ impl Emitter<'_, '_> {
                 return Ok(());
             }
             if let Repr::Ptr(c) = repr {
-                let Object::Class(class) =
-                    &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-                else {
-                    unreachable!()
-                };
+                let class = plan.class(c);
                 for package in &plan.program.packages {
                     for (interface, rules) in &package.impl_rules {
                         let Object::Interface(def) = &plan.program.objects[*interface] else {

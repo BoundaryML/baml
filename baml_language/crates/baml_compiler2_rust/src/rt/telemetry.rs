@@ -210,7 +210,7 @@ pub(super) fn emit(
             .iter()
             .find(|p| {
                 p.objects
-                    .contains(&u32::try_from(id).expect("function index"))
+                    .contains(&u32::try_from(plan.index.rt_origin(id)).expect("function index"))
             })
             .map(|p| baml_base::Name::new(&p.name));
         let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
@@ -220,7 +220,40 @@ pub(super) fn emit(
             Some(MirFunctionKind::Bytecode(body)) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
                 StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
 
-        writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();
+        let hook = match all.get(&id).map(|mir| mir.kind.as_ref()) {
+            Some(MirFunctionKind::Bytecode(body)) => body
+                .blocks
+                .iter()
+                .flat_map(|b| &b.statements)
+                .find_map(|s| match &s.kind {
+                    StatementKind::Intrinsic {
+                        op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(mode),
+                        ..
+                    } => Some(mode),
+                    _ => None,
+                }),
+            _ => None,
+        };
+        use baml_compiler2_mir::BuiltinTraceHook as Hook;
+        let hook_mode = match hook {
+            Some(Hook::Hidden) => "Some(rt::telemetry::types::InvocationMode::Hidden)",
+            Some(Hook::Timing) => "Some(rt::telemetry::types::InvocationMode::Timing)",
+            Some(_) => "Some(rt::telemetry::types::InvocationMode::Span)",
+            None => "None",
+        };
+        let policy = match hook {
+            Some(Hook::Span) => {
+                "rt::telemetry::Policy{span_from_entry:true,capture_output:true,capture_error:true,..rt::telemetry::Policy::NONE}"
+            }
+            Some(Hook::Rich) => {
+                "rt::telemetry::Policy{span_from_entry:true,capture_inputs:true,capture_output:true,capture_error:true,..rt::telemetry::Policy::NONE}"
+            }
+            Some(Hook::EmptySpan) => {
+                "rt::telemetry::Policy{span_from_entry:true,..rt::telemetry::Policy::NONE}"
+            }
+            _ => "rt::telemetry::Policy::NONE",
+        };
+        writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:{policy},hidden:{hidden},hook_mode:{hook_mode}}},").unwrap();
     }
     out.push_str("];\nstatic TELEMETRY_SITES:&[rt::telemetry::Site]=&[\n");
     for &(caller, pc, callee) in telemetry_sites.borrow().iter() {
@@ -238,13 +271,27 @@ pub(super) fn emit(
 
 pub(super) struct Feature;
 impl registry::Feature for Feature {
+    fn statement(
+        &self,
+        _e: &mut Emitter<'_, '_>,
+        statement: &StatementKind<'_>,
+    ) -> Option<Gen<String>> {
+        match statement {
+            StatementKind::Intrinsic {
+                op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(_),
+                args,
+            } => Some(if args.is_empty() {
+                Ok(String::new())
+            } else {
+                Err(no("builtin hook arguments"))
+            }),
+            _ => None,
+        }
+    }
+
     fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
         if let registry::Admission::Statement(statement) = event {
             let unsupported_hook = match statement {
-                StatementKind::Intrinsic {
-                    op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(mode),
-                    ..
-                } => *mode != baml_compiler2_mir::BuiltinTraceHook::Hidden,
                 StatementKind::Intrinsic {
                     op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook,
                     ..

@@ -2,6 +2,9 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Repr {
+    Bigint,
+    Bytes,
+    Opaque,
     Int,
     Float,
     Bool,
@@ -19,6 +22,7 @@ pub(super) enum Repr {
     Map(usize),
     Iter,
     Naming,
+    Enum(usize),
     Null,
     Closure,
     Cell,
@@ -69,6 +73,7 @@ impl Repr {
             Self::Float => "f64",
             Self::Bool => "bool",
             Self::Str => "rt::lists::Ptr",
+            Self::Enum(_) | Self::Naming => "usize",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn",
             r if r.pointer() => "rt::lists::Ptr",
             _ => return Err(no("list element slot")),
@@ -93,6 +98,9 @@ impl Repr {
         matches!(
             self,
             Self::Str
+                | Self::Bigint
+                | Self::Bytes
+                | Self::Opaque
                 | Self::Ptr(_)
                 | Self::List(_)
                 | Self::ListInt

@@ -458,7 +458,7 @@ pub struct Adapter {
 pub fn string_key_type(ty: &crate::telemetry::capture::Type) -> bool {
     use crate::telemetry::capture::Type;
     match ty {
-        Type::String | Type::StringLiteral(..) => true,
+        Type::String | Type::LiteralString(..) => true,
         Type::Union(m) => m.iter().all(string_key_type),
         _ => false,
     }
@@ -469,7 +469,7 @@ pub fn key_fits(ty: &crate::telemetry::capture::Type, key: &str) -> bool {
     use crate::telemetry::capture::Type;
     match ty {
         Type::String => true,
-        Type::StringLiteral(value, _) => *value == key,
+        Type::LiteralString(value, _) => *value == key,
         Type::Union(m) => m.iter().any(|ty| key_fits(ty, key)),
         _ => false,
     }

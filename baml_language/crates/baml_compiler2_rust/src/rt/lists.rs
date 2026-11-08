@@ -18,8 +18,8 @@ impl Plan<'_> {
             return None;
         };
         match class.path.to_string().as_str() {
-            "json.SerializationError" => Some(10),
-            "errors.InvalidArgument" => Some(11),
+            "json.SerializationError" => Some(19),
+            "errors.InvalidArgument" => Some(10),
             _ => None,
         }
     }

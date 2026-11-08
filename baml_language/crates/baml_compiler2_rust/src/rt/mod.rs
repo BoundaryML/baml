@@ -17,8 +17,10 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
 
 type Gen<T> = Result<T, String>;
+#[derive(Clone)]
 struct MirFunction<'db> {
     arity: usize,
+    identity: Option<baml_compiler2_mir::MirFunctionId<'db>>,
     kind: std::borrow::Cow<'db, MirFunctionKind<'db>>,
     lambdas: std::borrow::Cow<'db, [baml_compiler2_mir::MirFunction<'db>]>,
 }
@@ -26,6 +28,7 @@ impl<'db> From<&'db baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
     fn from(mir: &'db baml_compiler2_mir::MirFunction<'db>) -> Self {
         Self {
             arity: mir.arity,
+            identity: Some(mir.identity.clone()),
             kind: std::borrow::Cow::Borrowed(&mir.kind),
             lambdas: std::borrow::Cow::Borrowed(&mir.lambdas),
         }
@@ -35,6 +38,7 @@ impl<'db> From<baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
     fn from(mir: baml_compiler2_mir::MirFunction<'db>) -> Self {
         Self {
             arity: mir.arity,
+            identity: Some(mir.identity),
             kind: std::borrow::Cow::Owned(mir.kind),
             lambdas: std::borrow::Cow::Owned(mir.lambdas),
         }
@@ -55,6 +59,7 @@ struct ListElement {
     declared: Option<String>,
 }
 struct Plan<'a> {
+    root: SourceRoot,
     lang: baml_base::LangRoots,
     index: ProgramIndex<'a>,
     program: &'a Program,
@@ -65,6 +70,16 @@ struct Plan<'a> {
     json_maps: BTreeMap<Repr, RuntimeTy>,
     globals: BTreeMap<usize, Repr>,
     init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
+    enums: BTreeSet<usize>,
+    specialized_calls: BTreeMap<(usize, usize), usize>,
+    type_codes: Vec<baml_compiler2_mir::TyTemplate>,
+    next_object: usize,
+    class_instances: Vec<(usize, Vec<bex_vm_types::RuntimeTy>, usize)>,
+    concrete_types: Vec<RuntimeTy>,
+    heads: BTreeMap<baml_type::typetag::TypeTag, baml_type::DeclName>,
+    dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
+    function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
+    alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
     environments: bool,
     captures: BTreeMap<usize, Vec<Repr>>,
     lambda_bodies: BTreeMap<usize, usize>,
@@ -108,6 +123,7 @@ struct ProgramEmission<'a, 'db> {
 
 mod admission;
 mod body;
+mod builtin_classes;
 mod builtins;
 mod call_cost;
 mod capture_codegen;
@@ -119,13 +135,17 @@ mod driver;
 mod errors;
 mod expressions;
 mod host;
+mod io;
 mod json;
 mod json_lists;
 mod layout;
 mod lists;
+mod logging;
 mod loop_ranges;
+mod native;
 mod places;
 mod repr;
+mod scalars;
 mod stack;
 mod statements;
 mod telemetry;
@@ -143,3 +163,9 @@ mod maps;
 mod registry;
 mod strings;
 mod tasks;
+
+mod switches;
+
+mod generics;
+
+mod interface_fields;

@@ -29,6 +29,7 @@ pub(super) fn prepare<'db>(
                 object,
                 MirFunction {
                     arity: 0,
+                    identity: None,
                     kind: std::borrow::Cow::Owned(MirFunctionKind::Bytecode(body)),
                     lambdas: std::borrow::Cow::Owned(lambdas),
                 },

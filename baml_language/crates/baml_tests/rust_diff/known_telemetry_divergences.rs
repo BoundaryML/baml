@@ -255,45 +255,6 @@ pub fn without_readiness_poll(trace: &str, probe: &str, backend: &str) -> String
         .join("--- recording ---\n")
 }
 
-pub const LOG_REASON: &str = "compiled log observations use a stale/function-entry PC instead of the log statement location; log values, levels, counts and parents still compare";
-
-pub fn without_log_locations(trace: &str, probe: &str, backend: &str) -> String {
-    if !matches!(probe, "Logs" | "LogsDeep")
-        || !matches!(
-            backend,
-            "compiled" | "gc-stress" | "vm-frames" | "vm-frames-gc-stress"
-        )
-    {
-        return trace.to_owned();
-    }
-    trace
-        .split("--- recording ---\n")
-        .map(|recording| {
-            let mut rows = std::collections::BTreeMap::<String, u64>::new();
-            for line in recording.lines() {
-                let (count, value) = line.split_once(' ').unwrap();
-                let mut row: Value = serde_json::from_str(value).unwrap();
-                let known_function = match probe {
-                    "Logs" => row[1]["payload"]["function_id"] == "user.Logs",
-                    _ => matches!(
-                        row[1]["payload"]["function_id"].as_str(),
-                        Some("user.LogChain" | ".<lambda(LogChain, 0)>" | "user.LogDefer")
-                    ),
-                };
-                if row[0] == "Log" && known_function {
-                    row[1]["payload"]["pc"] =
-                        Value::String("known compiled log location gap".into());
-                }
-                *rows.entry(row.to_string()).or_default() += count.parse::<u64>().unwrap();
-            }
-            rows.into_iter()
-                .map(|(row, count)| format!("{count} {row}\n"))
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("--- recording ---\n")
-}
-
 /// These probes deliberately test *relative* stack depth (see their BAML
 /// comments). Native fiber frames and interpreter frames have different byte
 /// sizes, hence different absolute populations and overflow evidence. This is
@@ -351,35 +312,6 @@ pub fn without_timeout_wait(trace: &str, probe: &str, backend: &str) -> String {
 mod scope_tests {
     use super::*;
     use serde_json::json;
-
-    #[test]
-    fn log_exception_keeps_values_levels_parents_and_new_backends() {
-        let record = |pc, value: &str, level, parent| {
-            format!(
-                "1 {}\n",
-                json!(["Log", {
-                    "payload": {"function_id": "user.Logs", "pc": pc, "value": value, "level": level, "parent_id": parent}
-                }])
-            )
-        };
-        let a = record(1, "hello", 2, 3);
-        let b = record(9, "hello", 2, 3);
-        assert_eq!(
-            without_log_locations(&a, "Logs", "compiled"),
-            without_log_locations(&b, "Logs", "compiled")
-        );
-        assert_eq!(without_log_locations(&a, "Logs", "rt"), a);
-        for changed in [
-            record(1, "changed", 2, 3),
-            record(1, "hello", 4, 3),
-            record(1, "hello", 2, 5),
-        ] {
-            assert_ne!(
-                without_log_locations(&a, "Logs", "compiled"),
-                without_log_locations(&changed, "Logs", "compiled")
-            );
-        }
-    }
 
     #[test]
     fn readiness_exception_keeps_errors_captures_and_other_calls() {

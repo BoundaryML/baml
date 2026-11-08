@@ -74,6 +74,7 @@ pub(super) trait Feature {
 }
 
 const FEATURES: &[&dyn Feature] = &[
+    &super::native::Feature,
     &stack::Feature,
     &globals::Feature,
     &closures::Feature,
@@ -82,9 +83,15 @@ const FEATURES: &[&dyn Feature] = &[
     &lists::Feature,
     &containers::Feature,
     &dispatch::Feature,
+    &super::interface_fields::Feature,
+    &super::switches::Feature,
     &strings::Feature,
     &telemetry::Feature,
+    &super::logging::Feature,
+    &super::scalars::Feature,
+    &super::io::Feature,
     &loop_ranges::Feature,
+    &super::generics::Feature,
     &calls::Feature,
 ];
 

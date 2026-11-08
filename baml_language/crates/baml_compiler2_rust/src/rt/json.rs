@@ -3,8 +3,14 @@ use super::*;
 impl Plan<'_> {
     pub(super) fn type_code(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<usize> {
         use baml_compiler2_mir::TyTemplate as T;
+        if let Some(index) = self.json_list_types.iter().position(|t| t == ty) {
+            return Ok(json_lists::TYPE_BASE + index);
+        }
         match ty {
             T::Function { .. } => Ok(usize::MAX - 1),
+            T::Bigint => Ok(89997),
+            T::Uint8Array => Ok(89995),
+            T::RustType => Ok(89994),
             T::Int => Ok(0),
             T::Bool => Ok(90000),
             T::Float => Ok(89998),
@@ -17,32 +23,34 @@ impl Plan<'_> {
                 Ok(super::map_json::code(repr)?)
             }
             T::String => Ok(1),
-            T::List(_) => self
-                .json_list_types
-                .iter()
-                .position(|t| t == ty)
-                .map(|i| i + json_lists::TYPE_BASE)
-                .ok_or_else(|| no("unregistered JSON list specialization")),
-            T::Union(_) if self.json_class_types(ty).is_err() => self
-                .json_list_types
-                .iter()
-                .position(|t| t == ty)
-                .map(|i| i + json_lists::TYPE_BASE)
-                .ok_or_else(|| no("unregistered JSON union specialization")),
-            _ => {
-                if let Ok(classes) = self.json_class_types(ty) {
-                    if let Some(index) = self.json_types.iter().position(|c| *c == classes) {
-                        return Ok(index + 3);
-                    }
-                }
-                let runtime = baml_compiler2_mir::RealizedTy::try_from(ty)
-                    .map(RuntimeTy::from)
-                    .map_err(|_| no("static type argument"))?;
-                // Other concrete arguments are consumed by feature adapters;
-                // they are never materialized as runtime type values.
-                self.repr(&runtime)?;
-                Ok(89996)
+            T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),
+            T::Class(_, _) | T::Union(_) => {
+                let Ok(classes) = self.json_class_types(ty) else {
+                    return self
+                        .type_codes
+                        .iter()
+                        .position(|t| t == ty)
+                        .map(|i| i + 100000)
+                        .ok_or_else(|| no("unregistered type argument"));
+                };
+                self.json_types
+                    .iter()
+                    .position(|c| *c == classes)
+                    .map(|i| i + 3)
+                    .or_else(|| {
+                        self.type_codes
+                            .iter()
+                            .position(|t| t == ty)
+                            .map(|i| i + 100000)
+                    })
+                    .ok_or_else(|| no("unregistered JSON specialization"))
             }
+            _ => self
+                .type_codes
+                .iter()
+                .position(|t| t == ty)
+                .map(|i| i + 100000)
+                .ok_or_else(|| no(format!("type argument {ty:?}"))),
         }
     }
     pub(super) fn json_class_types(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<Vec<usize>> {

@@ -70,7 +70,7 @@ pub(super) fn emit(
         let tag = lists[&repr] + 3;
         let desc = lists[&repr];
         let slot = maps::slot_type(value_repr, cx.descriptors, lists)?;
-        let ty = capture_codegen::capture_type(plan, repr)?;
+        let ty = capture_codegen::capture_repr_type(plan, repr)?;
         let decode = if recursive {
             format!(
                 "if naming==0{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}"
@@ -155,7 +155,7 @@ pub(super) fn schema(
     let key_type = if let Repr::Map(id) = repr {
         plan.map_types.borrow()[id].key_type.clone()
     } else {
-        capture_codegen::capture_type(plan, key)?
+        capture_codegen::capture_repr_type(plan, key)?
     };
     let key_slot = maps::slot_type(key, descriptors, lists)?;
     if !matches!(key, Repr::Str | Repr::Tagged) {
@@ -204,7 +204,7 @@ pub(super) fn encode_shape(
     let key_type = if let Repr::Map(id) = repr {
         plan.map_types.borrow()[id].key_type.clone()
     } else {
-        capture_codegen::capture_type(plan, key)?
+        capture_codegen::capture_repr_type(plan, key)?
     };
     let key = capture_codegen::capture_dyn(plan, key, "key", descriptors, lists)?;
     let value = capture_codegen::capture_dyn(plan, value, "value", descriptors, lists)?;

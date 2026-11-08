@@ -5,12 +5,17 @@
 pub mod calls;
 pub mod closures;
 pub mod globals;
+pub mod host;
+pub mod io;
 pub mod json;
 pub mod json_lists;
 pub mod language;
 pub mod list_errors;
 pub mod lists;
 pub mod maps;
+pub mod native;
+pub mod opaque;
+pub mod scalars;
 pub mod strings;
 pub mod telemetry;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
@@ -67,7 +72,12 @@ pub unsafe fn alloc(desc: u32, bytes: usize) -> *mut u8 {
             // SAFETY: the scoped binding owns this heap exclusively on its thread.
             // Allocation visits roots synchronously and never resumes another task.
             unsafe {
-                ROOTS.with(|roots| (&mut *heap.get()).alloc(desc, bytes, &Roots(&*roots.get())))
+                {
+                    let value = ROOTS
+                        .with(|roots| (&mut *heap.get()).alloc(desc, bytes, &Roots(&*roots.get())));
+                    opaque::drain();
+                    value
+                }
             }
         })
     })
@@ -85,6 +95,9 @@ pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
         );
         unsafe { (&mut *heap.get()).try_alloc(desc, bytes, &Roots(&*ROOTS.get())) }
     });
+    unsafe {
+        opaque::drain();
+    }
     result.map_err(|failure| language::allocation_failure(failure.bytes))
 }
 
@@ -123,6 +136,7 @@ unsafe fn safepoint_slow() -> Result<(), baml_rt_tasks::Err> {
                 crate::telemetry::before_yield();
                 (&mut *task.get()).poll()?;
                 ROOTS.with(|roots| (&mut *heap.get()).safepoint(&Roots(&*roots.get())));
+                opaque::drain();
             }
             Ok(())
         })
@@ -152,17 +166,19 @@ pub struct Instance {
     tasks: TaskLoop,
     _io: tokio::runtime::Runtime,
     functions: FunctionValues,
+    opaque: opaque::Store,
 }
 impl Instance {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
         assert!(
             descriptors
                 .iter()
-                .all(|descriptor| descriptor.finalizer.is_none()),
+                .all(|descriptor| descriptor.finalizer.is_none_or(|f| f == opaque::FINALIZER)),
             "baml_rt integration seam does not support finalizers"
         );
         let io = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
+            .enable_all()
             .build()
             .unwrap();
         let mut heap = Heap::new(descriptors, pointer_types);
@@ -190,6 +206,7 @@ impl Instance {
             tasks,
             _io: io,
             functions: FunctionValues::new(),
+            opaque: opaque::Store::new(),
         }
     }
 
@@ -213,16 +230,24 @@ impl Instance {
     pub unsafe fn run_baml(&mut self, entry: fn() -> R<i64>) -> R<i64> {
         unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
     }
-    unsafe fn execute<E: 'static>(
+    /// Execute a host adapter which copies its successful result to Rust storage.
+    /// # Safety
+    /// Generated code must uphold the allocation/rooting ABI. Successful values
+    /// must contain no managed addresses; errors have run_baml's inspection limit.
+    pub unsafe fn run_owned<T: 'static>(&mut self, entry: impl FnOnce() -> R<T> + 'static) -> R<T> {
+        unsafe { self.execute(entry) }.map_err(|e| Error::internal(format!("{e:?}")))?
+    }
+    unsafe fn execute<E: 'static, T: 'static>(
         &mut self,
-        entry: fn() -> Result<i64, E>,
-    ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
+        entry: impl FnOnce() -> Result<T, E> + 'static,
+    ) -> Result<Result<T, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;
         let globals = &self.globals as *const globals::Globals;
         let roots = self.tasks.integration_roots();
         let functions = &mut self.functions as *mut FunctionValues;
+        let opaque = &mut self.opaque as *mut opaque::Store;
         let future = self.tasks.spawn(move |cx| {
             struct Binding(
                 *mut Heap,
@@ -230,8 +255,9 @@ impl Instance {
                 *const baml_rt_tasks::IntegrationRoots,
                 usize,
                 *const Cell<u8>,
-                *const globals::Globals,
                 *mut FunctionValues,
+                *const globals::Globals,
+                *mut opaque::Store,
             );
             impl Drop for Binding {
                 fn drop(&mut self) {
@@ -240,12 +266,14 @@ impl Instance {
                     ROOTS.set(self.2);
                     STACK_LIMIT.set(self.3);
                     POLL_WORD.set(self.4);
-                    globals::CURRENT.set(self.5);
-                    FUNCTIONS.set(self.6);
+                    FUNCTIONS.set(self.5);
+                    globals::CURRENT.set(self.6);
+                    opaque::CURRENT.set(self.7);
                 }
             }
-            let previous_globals = globals::CURRENT.replace(globals);
             let previous_functions = FUNCTIONS.replace(functions);
+            let previous_globals = globals::CURRENT.replace(globals);
+            let previous_opaque = opaque::CURRENT.replace(opaque);
             let previous_heap = HEAP.replace(heap);
             // Erase the borrowed task lifetime only inside this scoped binding.
             let current: *mut TaskCx<'_> = cx;
@@ -260,8 +288,9 @@ impl Instance {
                 previous_roots,
                 previous_limit,
                 previous_poll,
-                previous_globals,
                 previous_functions,
+                previous_globals,
+                previous_opaque,
             );
             *output.borrow_mut() = Some(entry());
             Ok(Value::int(0))

@@ -4,6 +4,68 @@ use super::{
 };
 
 impl Plan<'_> {
+    pub(super) fn implementors(
+        &self,
+        interface: usize,
+    ) -> Gen<Vec<(usize, &bex_vm_types::types::ProgramImplRule)>> {
+        let Object::Interface(def) =
+            &self.program.objects[bex_vm_types::ObjectIndex::from_raw(interface)]
+        else {
+            return Err(no("non-interface dispatch"));
+        };
+        if def.structural_default.is_some()
+            || !def.args.is_empty()
+            || !def.assoc.is_empty()
+            || !def.requires.is_empty()
+        {
+            return Err(no("generic or structural interface"));
+        }
+        let mut result = Vec::new();
+        for package in &self.program.packages {
+            if let Some(rules) = package
+                .impl_rules
+                .get(&bex_vm_types::ObjectIndex::from_raw(interface))
+            {
+                for rule in rules {
+                    if !rule.generic_param_bounds.is_empty()
+                        || !rule.interface_args.is_empty()
+                        || !rule.interface_assoc.is_empty()
+                    {
+                        return Err(no("generic interface implementation"));
+                    }
+                    let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
+                        return Err(no("non-class implementation"));
+                    };
+                    if !args.is_empty() {
+                        return Err(no("generic implementor"));
+                    }
+                    result.push((self.class_tag(head.tag())?, rule));
+                }
+            }
+        }
+        if result.is_empty() {
+            return Err(no("interface without concrete implementations"));
+        }
+        Ok(result)
+    }
+    pub(super) fn targets(&self, interface: usize, method: &str) -> Gen<Vec<(usize, usize)>> {
+        self.implementors(interface)?
+            .into_iter()
+            .map(|(c, rule)| {
+                let body = rule
+                    .methods
+                    .get(method)
+                    .ok_or_else(|| no("adopted interface default"))?;
+                if !body.frame.is_empty() {
+                    return Err(no("generic dispatch frame"));
+                }
+                Ok((c, body.fqn.raw()))
+            })
+            .collect()
+    }
+}
+
+impl Plan<'_> {
     // Infer copy-assigned receiver storage; all definitions must agree.
     // Real callables retain a managed environment at every dynamic boundary.
     pub(super) fn closure_type(&self, ty: &RuntimeTy) -> Gen<(u64, baml_type::RuntimeTy<usize>)> {
@@ -135,17 +197,10 @@ impl Plan<'_> {
                 let Repr::Ptr(class) = self.storage_repr(body, base, depth)? else {
                     return Err(no("receiver field on non-class"));
                 };
-                let Object::Class(class) =
-                    &self.program.objects[bex_vm_types::ObjectIndex::from_raw(class)]
-                else {
-                    return Err(no("receiver class"));
-                };
                 self.field_repr(
-                    &class
-                        .fields
+                    self.class_field_types(class)
                         .get(*field)
-                        .ok_or_else(|| no("receiver field"))?
-                        .field_type,
+                        .ok_or_else(|| no("receiver field"))?,
                 )
             }
             Place::Index {
@@ -167,24 +222,27 @@ impl registry::Feature for Feature {
         plan: &mut Plan<'_>,
         all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
     ) -> Gen<Vec<usize>> {
-        let mut pending: Vec<_> = all
-            .values()
-            .flat_map(|m| m.lambdas.iter().cloned())
-            .collect();
-        let mut registered = Vec::new();
-        while let Some(lambda) = pending.pop() {
-            let object = plan
-                .index
-                .lambda(db, &lambda.identity)
-                .ok_or_else(|| no("unlinked lambda"))?;
-            pending.extend(lambda.lambdas.iter().cloned());
-            all.insert(object, super::MirFunction::from(lambda));
-            registered.push(object);
+        fn register<'db>(
+            db: &'db dyn super::Db,
+            plan: &mut Plan<'_>,
+            all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
+            lambdas: &[baml_compiler2_mir::MirFunction<'db>],
+        ) -> Gen<()> {
+            for lambda in lambdas {
+                let object = plan
+                    .index
+                    .lambda(db, &lambda.identity)
+                    .ok_or_else(|| no("unlinked lambda"))?;
+                all.insert(object, super::MirFunction::from(lambda.clone()));
+                register(db, plan, all, &lambda.lambdas)?;
+            }
+            Ok(())
         }
-        // Register addresses only after all insertions: owned initializer MIR
-        // and its children must not leave stale BTreeMap-value addresses.
-        for object in registered {
-            if let super::MirFunctionKind::Bytecode(body) = all[&object].kind.as_ref() {
+        for mir in all.values().cloned().collect::<Vec<_>>() {
+            register(db, plan, all, &mir.lambdas)?;
+        }
+        for (&object, mir) in all.iter() {
+            if let super::MirFunctionKind::Bytecode(body) = mir.kind.as_ref() {
                 plan.lambda_bodies.insert(body as *const _ as usize, object);
             }
         }

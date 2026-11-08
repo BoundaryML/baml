@@ -27,11 +27,11 @@ pub const MAP_KEY_DESC: Descriptor = Descriptor {
         slot: SlotKind::Pointer,
         type_id: 3,
     }],
-    type_id: 15,
+    type_id: 17,
     ..OVERFLOW_DESC
 };
 pub fn map_key_not_found() -> Box<Error> {
-    let mut error = panic_value(12, "baml.panics.MapKeyNotFound", "(unknown)".into());
+    let mut error = panic_value(14, "baml.panics.MapKeyNotFound", "(unknown)".into());
     error.display_value = Some(r#"baml.panics.MapKeyNotFound {key: "(unknown)"}"#.into());
     error
 }
@@ -49,6 +49,41 @@ pub const OVERFLOW_DESC: Descriptor = Descriptor {
     elem: None,
     type_id: 4,
     fields: MESSAGE_FIELDS,
+    finalizer: None,
+};
+pub const ARGUMENT_DESC: Descriptor = Descriptor {
+    type_id: 13,
+    ..OVERFLOW_DESC
+};
+pub const SCALAR_PARSE_DESC: Descriptor = Descriptor {
+    type_id: 14,
+    ..OVERFLOW_DESC
+};
+pub const IO_DESC: Descriptor = Descriptor {
+    type_id: 16,
+    ..OVERFLOW_DESC
+};
+pub const HOST_UNAVAILABLE_DESC: Descriptor = Descriptor {
+    kind: Kind::Class,
+    size: 24,
+    ptr_slots: (8, 2),
+    tagged_slots: (0, 0),
+    elem: None,
+    type_id: 15,
+    fields: &[
+        Field {
+            name: "resource",
+            offset: 8,
+            slot: SlotKind::Pointer,
+            type_id: 3,
+        },
+        Field {
+            name: "message",
+            offset: 16,
+            slot: SlotKind::Pointer,
+            type_id: 3,
+        },
+    ],
     finalizer: None,
 };
 pub const SHIFT_DESC: Descriptor = Descriptor {
@@ -154,7 +189,7 @@ impl Error {
     }
 }
 #[cold]
-fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
+pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
     // SAFETY: called only from a running generated root. The string is rooted
     // in this stack frame across the class allocation; initialization cannot GC.
     unsafe {
@@ -332,28 +367,10 @@ fn driver_with_initializer(
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            let traceback = bex_vm_types::errors::format_traceback(
-                error
-                    .frames
-                    .iter()
-                    .rev()
-                    .filter(|f| {
-                        error.value == 0
-                            || !f
-                                .file
-                                .starts_with(bex_vm_types::errors::BUILTIN_SOURCE_PREFIX)
-                    })
-                    .map(|f| (f.file, f.line, f.function)),
-            );
             if error.class == "InitFailed" {
                 eprintln!("error: {}", error.message);
-            } else if error.value == 0 {
-                eprintln!("error: {traceback}VM internal error: {}", error.message);
             } else {
-                let value = error
-                    .display_value
-                    .unwrap_or_else(|| format!("{} {{message: {:?}}}", error.class, error.message));
-                eprintln!("error: {traceback}uncaught throw: {value}");
+                print_error(error);
             }
             std::process::ExitCode::FAILURE
         }
@@ -426,7 +443,7 @@ fn driver_inner(
 }
 
 #[cold]
-fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
+pub(crate) fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
     use bex_vm_types::errors::VmPanic;
     // Same class and declaration-order fields as BexVm::panic_to_exception_value.
     match panic {
@@ -436,6 +453,7 @@ fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
         VmPanic::NegativeBitShift { message } => {
             panic_value(2, "baml.panics.NegativeBitShift", message)
         }
+        VmPanic::AllocFailure { message } => panic_value(5, "baml.panics.AllocFailure", message),
         VmPanic::StackOverflow => {
             panic_value(4, "baml.panics.StackOverflow", "stack overflow".into())
         }
@@ -977,5 +995,23 @@ pub fn rem(l: i64, r: i64) -> R<i64> {
         Err(division_zero(l))
     } else {
         Ok(l % r)
+    }
+}
+
+pub(crate) fn print_error(error: Box<Error>) {
+    let traceback = bex_vm_types::errors::format_traceback(
+        error
+            .frames
+            .iter()
+            .rev()
+            .map(|f| (f.file, f.line, f.function)),
+    );
+    if error.value == 0 {
+        eprintln!("error: {traceback}VM internal error: {}", error.message);
+    } else {
+        let value = error
+            .display_value
+            .unwrap_or_else(|| format!("{} {{message: {:?}}}", error.class, error.message));
+        eprintln!("error: {traceback}uncaught throw: {value}");
     }
 }
