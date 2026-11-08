@@ -51,6 +51,7 @@ pub(super) fn reserved(plan: &Plan<'_>, object: usize) -> Option<usize> {
         "baml.panics.HostUnavailable" => 12,
         "baml.errors.Io" => 13,
         "baml.panics.MapKeyNotFound" => 14,
+        "baml.panics.UserPanic" => 19,
         _ => return None,
     })
 }

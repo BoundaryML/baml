@@ -4,7 +4,8 @@
 use crate::{BamlType, BuiltinPipeline, NativeBuiltin, ReceiverType};
 
 pub fn supports_rt(path: &str) -> bool {
-    crate::codegen_rt_clock::supports(path)
+    crate::codegen_rt_random::supports(path)
+        || crate::codegen_rt_clock::supports(path)
         || crate::codegen_rt_bytes::supports(path)
         || crate::codegen_rt_bigint::supports(path)
         || crate::codegen_rt_io::supports(path)
@@ -39,6 +40,10 @@ pub fn generate_rt(
             .iter()
             .find(|d| d.path == *path)
             .ok_or_else(|| format!("baml_rt builtin declaration missing: {path}"))?;
+        if crate::codegen_rt_random::supports(path) {
+            output.push_str(&crate::codegen_rt_random::generate(declaration)?);
+            continue;
+        }
         if crate::codegen_rt_clock::supports(path) {
             output.push_str(&crate::codegen_rt_clock::generate(declaration)?);
             continue;

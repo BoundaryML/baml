@@ -28,8 +28,12 @@ impl registry::Feature for Feature {
         if !matches!(class, "baml.Int" | "baml.Float") {
             return None;
         }
+        // Source-defined scalar helpers compile as ordinary BAML bodies.
+        if !baml_builtins2_codegen::supports_rt(name) {
+            return None;
+        }
         Some((|| {
-            if !baml_builtins2_codegen::supports_rt(name) || !types.is_empty() {
+            if !types.is_empty() {
                 return Err(no(format!("builtin {name}")));
             }
             let (declarations, _, _) =

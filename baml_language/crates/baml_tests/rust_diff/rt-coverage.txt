@@ -1,4 +1,4 @@
-BAML runtime coverage (normal AND GC stress): 18 pass, 123 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 19 pass, 123 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: required for standalone closure and native probes
 Unselected rows retain results from the earlier full run.
@@ -159,3 +159,4 @@ programs::richards 50	pass
 string::concat loop 10k	pass
 string::split medium literal 10k	unsupported: baml.String.split
 RtNativeClock	pass
+RtNativeRandom	pass

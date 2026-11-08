@@ -52,7 +52,7 @@ impl Emitter<'_, '_> {
                     .index
                     .function(self.db, *f)
                     .ok_or_else(|| no("call"))?;
-                if self.plan.index.display(c) == "baml.json.decode" {
+                if self.plan.index.builtin_path(c) == "baml.json.decode" {
                     let Repr::Type(code) = self.operand(&args[0])?.1 else {
                         return Err(no("JSON type argument"));
                     };
@@ -97,7 +97,7 @@ impl Emitter<'_, '_> {
                         })
                         .collect::<Gen<_>>()?;
                 }
-                let name = self.plan.index.display(c);
+                let name = self.plan.index.builtin_path(c);
                 let expression = if let Some(result) = registry::call(self, name, &types, &values) {
                     result?
                 } else if name == "baml._to_string_default"
@@ -204,7 +204,7 @@ fn admit_call(db: &dyn Db, plan: &Plan<'_>, term: Option<&Terminator<'_>>) -> Ge
                 .index
                 .function(db, *f)
                 .ok_or_else(|| no("unlinked call"))?;
-            let name = plan.index.display(callee);
+            let name = plan.index.builtin_path(callee);
             if name == "baml.json.decode" {
                 reach.json_decode = Some(callee);
             } else if baml_builtins2_codegen::supports_rt(name) {

@@ -13,7 +13,7 @@ impl registry::Feature for Feature {
             return None;
         };
         let (id, _) = e.plan.index.function(e.db, *f)?;
-        let name = e.plan.index.display(id);
+        let name = e.plan.index.builtin_path(id);
         if !matches!(
             name,
             "baml.time.Instant.now"

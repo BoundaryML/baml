@@ -108,7 +108,7 @@ pub(super) fn collect<'db>(
                 if plan
                     .index
                     .function(db, *f)
-                    .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
+                    .is_some_and(|(id, _)| plan.index.builtin_path(id) == "baml.json.decode")
                 {
                     let ty = super::generics::type_operand(body, &args[0])?;
                     if matches!(&ty, RuntimeTy::Map { .. }) {
@@ -156,6 +156,17 @@ pub(super) fn collect<'db>(
             if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
                 for (repr, target) in targets {
                     plan.record(repr)?;
+                    let name = plan.index.builtin_path(target);
+                    if matches!(
+                        all.get(&target).map(|m| m.kind.as_ref()),
+                        Some(MirFunctionKind::Builtin(_))
+                    ) {
+                        if !baml_builtins2_codegen::supports_rt(name) {
+                            return Err(no(format!("interface builtin {name}")));
+                        }
+                        builtins.insert(name.into());
+                        continue;
+                    }
                     calls.entry(object).or_default().insert(target);
                     queue.push_back(target);
                 }

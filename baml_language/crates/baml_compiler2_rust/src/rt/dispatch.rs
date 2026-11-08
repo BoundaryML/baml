@@ -241,9 +241,6 @@ impl registry::Feature for Feature {
                 if !tags.insert(tag.clone()) {
                     return Err(no("overlapping dispatch storage tags"));
                 }
-                let MirFunctionKind::Bytecode(body) = e.all[&callee].kind.as_ref() else {
-                    return Err(no("interface builtin implementation"));
-                };
                 let mut call_values = values
                     .iter()
                     .enumerate()
@@ -275,6 +272,14 @@ impl registry::Feature for Feature {
                 if call_values.len() != e.all[&callee].arity {
                     return Err(no("interface call arity"));
                 }
+                let MirFunctionKind::Bytecode(body) = e.all[&callee].kind.as_ref() else {
+                    let name = e.plan.index.builtin_path(callee);
+                    let (value, repr) = registry::call(e, name, &[], &call_values)
+                        .ok_or_else(|| no(format!("interface native adapter {name}")))??;
+                    let result = e.coerce((value, repr), returned)?;
+                    write!(expression, "{tag}=>{{{result}}},").unwrap();
+                    continue;
+                };
                 let arguments = call_values
                     .into_iter()
                     .enumerate()

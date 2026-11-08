@@ -43,6 +43,7 @@ pub(super) fn emit(
     .into_iter()
     .collect::<Gen<Vec<_>>>()?;
     let naming = named("baml.json.Naming")?;
+    let user_panic = named("baml.panics.UserPanic")?;
     let mut extra = BTreeSet::new();
     for frame in plan.function_frames.values() {
         for (_, ty) in frame {
@@ -92,7 +93,7 @@ pub(super) fn emit(
         .copied()
         .chain(descriptors.keys().map(|c| plan.class_origin(*c)))
         .chain(signature_declarations)
-        .chain([naming])
+        .chain([naming, user_panic])
         .chain(plan.enums.iter().copied())
         .chain(extra)
         .collect();
@@ -113,7 +114,9 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
-        let class = if desc <= runtime.len() {
+        let class = if desc == 19 {
+            Some(user_panic)
+        } else if desc <= runtime.len() {
             Some(runtime[desc - 1])
         } else {
             descriptors

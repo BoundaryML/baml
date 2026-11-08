@@ -27,6 +27,10 @@ impl Failure {
 }
 fn failure(error: Failure) -> Box<Error> {
     match error.class {
+        "UserPanic" => crate::language::panic_value(19, "baml.panics.UserPanic", error.message),
+        "AllocFailure" => {
+            crate::language::panic_value(5, "baml.panics.AllocFailure", error.message)
+        }
         "ParseError" => crate::language::panic_value(11, "baml.errors.ParseError", error.message),
         "Io" => crate::language::panic_value(13, "baml.errors.Io", error.message),
         "HostUnavailable" => host_unavailable(error.resource, error.message),
@@ -82,6 +86,8 @@ pub fn perform(output: Output) -> R<Owned> {
                     if let Some(class) = value["error"].as_str() {
                         let class = match class {
                             "Io" => "Io",
+                            "UserPanic" => "UserPanic",
+                            "AllocFailure" => "AllocFailure",
                             "ParseError" => "ParseError",
                             "HostUnavailable" => "HostUnavailable",
                             _ => "InternalError",

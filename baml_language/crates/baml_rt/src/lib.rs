@@ -13,6 +13,7 @@ pub mod lists;
 pub mod maps;
 pub mod native;
 pub mod opaque;
+pub mod random;
 pub mod scalars;
 pub mod strings;
 pub mod telemetry;

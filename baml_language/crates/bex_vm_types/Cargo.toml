@@ -22,6 +22,7 @@ baml_builtins2 = { workspace = true }
 baml_builtins2_codegen = { workspace = true }
 
 [dependencies]
+rand_core.workspace = true
 jiff.workspace = true
 base64.workspace = true
 baml_base = { workspace = true }

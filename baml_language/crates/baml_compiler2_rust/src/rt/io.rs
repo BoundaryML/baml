@@ -19,7 +19,7 @@ impl registry::Feature for Feature {
                 .index
                 .function(db, *f)
                 .ok_or_else(|| no("unlinked sysop"))?;
-            let name = plan.index.display(callee);
+            let name = plan.index.builtin_path(callee);
             if !baml_builtins2_codegen::supports_rt(name) {
                 return Err(no(format!("sysop {name}")));
             }
@@ -45,7 +45,7 @@ impl registry::Feature for Feature {
                 .index
                 .function(e.db, *f)
                 .ok_or_else(|| no("sysop target"))?;
-            let name = e.plan.index.display(id);
+            let name = e.plan.index.builtin_path(id);
             let values = args
                 .iter()
                 .map(|v| {

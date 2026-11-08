@@ -92,7 +92,10 @@ impl Emitter<'_, '_> {
                     return Ok((format!("({l} {op} {r})"), repr));
                 }
                 if lt != Repr::Int || rt != Repr::Int {
-                    return Err(no("non-integer binary operation"));
+                    return Err(no(format!(
+                        "non-integer binary operation in {}: {lt:?} {op} {rt:?}",
+                        self.plan.index.display(self.object)
+                    )));
                 }
                 let helper = match op {
                     BinOp::Add => Some("add"),

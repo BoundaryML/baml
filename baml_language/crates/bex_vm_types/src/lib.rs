@@ -425,3 +425,5 @@ pub mod bigint;
 pub mod bytes;
 
 pub mod clock;
+
+pub mod random;

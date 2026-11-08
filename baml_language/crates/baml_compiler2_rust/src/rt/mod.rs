@@ -131,6 +131,7 @@ mod layout;
 mod logging;
 mod loop_ranges;
 mod native;
+mod random;
 mod places;
 mod repr;
 mod scalars;

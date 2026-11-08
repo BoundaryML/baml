@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+rand_core.workspace = true
+rand_chacha.workspace = true
+rand_xoshiro.workspace = true
+getrandom.workspace = true
 num-bigint.workspace = true
 baml_env.workspace = true
 baml_type.workspace = true

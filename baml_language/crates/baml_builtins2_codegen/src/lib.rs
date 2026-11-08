@@ -2,6 +2,7 @@ mod codegen_rt;
 mod codegen_rt_bigint;
 mod codegen_rt_bytes;
 mod codegen_rt_clock;
+mod codegen_rt_random;
 mod codegen_rt_io;
 mod codegen_rt_scalar;
 pub use codegen_rt::{generate_rt, supports_rt};

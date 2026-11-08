@@ -59,6 +59,10 @@ pub const SCALAR_PARSE_DESC: Descriptor = Descriptor {
     type_id: 14,
     ..OVERFLOW_DESC
 };
+pub const USER_PANIC_DESC: Descriptor = Descriptor {
+    type_id: 22,
+    ..OVERFLOW_DESC
+};
 pub const IO_DESC: Descriptor = Descriptor {
     type_id: 16,
     ..OVERFLOW_DESC
@@ -453,6 +457,7 @@ pub(crate) fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
         VmPanic::NegativeBitShift { message } => {
             panic_value(2, "baml.panics.NegativeBitShift", message)
         }
+        VmPanic::UserPanic { message } => panic_value(19, "baml.panics.UserPanic", message),
         VmPanic::AllocFailure { message } => panic_value(5, "baml.panics.AllocFailure", message),
         VmPanic::StackOverflow => {
             panic_value(4, "baml.panics.StackOverflow", "stack overflow".into())

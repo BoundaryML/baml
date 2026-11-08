@@ -14,6 +14,26 @@ fn rt_host_boundary() {
     let mut exercised = std::collections::BTreeSet::new();
     for (name, source, json) in [
         (
+            "random_seed",
+            r#"function main()->string { baml.random.ChaCha20._new(b"small"); "unexpected" }"#,
+            None,
+        ),
+        (
+            "random_negative",
+            r#"function main()->string { let r=baml.random.Xoshiro256PlusPlus._new(uint8array.zeroes(32)); {r.random(-1); "unexpected"} catch(e) { baml.panics.UserPanic {message} => message } }"#,
+            None,
+        ),
+        (
+            "random_system_negative",
+            r#"function main()->string { { baml.random.SystemRandom.get().random(-1); "unexpected" } catch(e) {baml.panics.UserPanic {message} => message} }"#,
+            None,
+        ),
+        (
+            "random_alloc",
+            r#"function main()->int { baml.random.ChaCha20._new(uint8array.zeroes(32)).random(int.max_value()).length() }"#,
+            None,
+        ),
+        (
             "clock_error",
             r#"function main()->string { { baml.time._tz_to_instant("UTC",1n << 200n,"compatible"); "unexpected" } catch(e) { baml.errors.Io {message} => message } }"#,
             None,
@@ -268,6 +288,8 @@ function main()->int { 7 }"#,
                         | "fs_error"
                         | "fs_utf8"
                         | "bigint_cap"
+                        | "random_seed"
+                        | "random_alloc"
                 );
                 assert_eq!(
                     expected.status.success(),

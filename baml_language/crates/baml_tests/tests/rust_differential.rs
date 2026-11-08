@@ -21,6 +21,7 @@ const PROBES: &[&str] = &[
     "RtNativeMath",
     "RtNativeBytes",
     "RtNativeClock",
+    "RtNativeRandom",
     "RtEmptyClosures",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
@@ -285,7 +286,7 @@ fn probe_timeout_kills_and_reaps() {
 fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
         "RtClosures" | "RtEmptyClosures" => Some(manifest.join("rt_fixtures/closures")),
-        "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" => {
+        "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" => {
             Some(manifest.join("rt_fixtures/native"))
         }
         _ => None,
@@ -363,6 +364,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         "RtNativeMath",
         "RtNativeBytes",
         "RtNativeClock",
+        "RtNativeRandom",
     ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
@@ -678,6 +680,7 @@ fn rust_differential() {
                             | "RtNativeMath"
                             | "RtNativeBytes"
                             | "RtNativeClock"
+                            | "RtNativeRandom"
                     ))
             {
                 continue;

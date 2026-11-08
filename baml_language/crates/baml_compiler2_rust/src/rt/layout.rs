@@ -445,7 +445,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         } else {
             0
         };
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::ARGUMENT_DESC,rt::SCALAR_PARSE_DESC,rt::HOST_UNAVAILABLE_DESC,rt::IO_DESC,rt::MAP_KEY_DESC,rt::native::BIGINT_LAYOUT,rt::native::BYTES_LAYOUT,rt::opaque::descriptor(20),rt::native::BYTES_BUFFER_LAYOUT,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::ARGUMENT_DESC,rt::SCALAR_PARSE_DESC,rt::HOST_UNAVAILABLE_DESC,rt::IO_DESC,rt::MAP_KEY_DESC,rt::native::BIGINT_LAYOUT,rt::native::BYTES_LAYOUT,rt::opaque::descriptor(20),rt::native::BYTES_BUFFER_LAYOUT,rt::USER_PANIC_DESC,\n");
     for (&object, layout) in &plan.layouts {
         if super::builtin_classes::reserved(plan, object).is_some() {
             continue;
@@ -588,7 +588,7 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    19
+    20
 }
 
 // A recursive alias's unfolded union can name containers whose concrete

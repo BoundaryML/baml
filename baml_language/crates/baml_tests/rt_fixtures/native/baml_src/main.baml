@@ -29,3 +29,36 @@ function RtNativeClock() -> int {
     let epoch=baml.time._tz_to_instant("Etc/UTC",0n,"compatible") ?? -1n;
     if (info.cpu_count >= 0 && info.platform.char_count()>0 && info.architecture.char_count()>0 && timezone.char_count()>0 && baml.sys.host_target().char_count()>0 && now._nanoseconds>0n && offset==0 && missing==null && epoch==0n) {7}else{9}
 }
+
+function SameNativeBytes(a:uint8array,b:uint8array)->bool {
+    if (a.length()!=b.length()) {return false;}
+    let i=0;
+    while(i<a.length()) {if(a[i]!=b[i]){return false;} i+=1;}
+    true
+}
+function DrawNativeRandom(rng:baml.random.Rng)->int {
+    let bytes=rng.random(9);
+    let n=rng.random_int();
+    if (bytes.length()==9 && n>=int.min_value() && n<=int.max_value()) {1}else{0}
+}
+function RtNativeRandom()->int {
+    let seed=uint8array.from_hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+    let x=baml.random.Xoshiro256PlusPlus._new(seed);
+    let alias=x;
+    let twin=baml.random.Xoshiro256PlusPlus._new(seed);
+    let c=baml.random.ChaCha20._new(seed);
+    let ct=baml.random.ChaCha20._new(seed);
+    let stream=x.random(8);
+    let other=twin.random(8);
+    let xi=alias.random_int(); let ti=twin.random_int();
+    let cs=c.random(11); let ts=ct.random(11);
+    let ci=c.random_int(); let cti=ct.random_int();
+    let a=DrawNativeRandom(x);
+    let b=DrawNativeRandom(c);
+    let s=DrawNativeRandom(baml.random.SystemRandom.get());
+    let default_seed=baml.random.ChaCha20._new(baml.random.SystemRandom.get().random(32));
+    baml.io.println(stream.to_hex());
+    baml.io.println(cs.to_hex());
+    baml.io.println(`${xi}:${ci}`);
+    if (SameNativeBytes(stream,other) && xi==ti && SameNativeBytes(cs,ts) && ci==cti && a+b+s==3 && default_seed.random(0).length()==0) {7}else{9}
+}
