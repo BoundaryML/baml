@@ -211,13 +211,18 @@ export function useTelemetry({
   }, [project]);
 
   // A revision that changes with the project counts another project's runs;
-  // no run ended, and the project change has already re-read.
+  // no run ended, and the project change has already re-read. A window the
+  // previous project's run opened has nothing to find in this one.
   const [settleUntil, setSettleUntil] = useState(0);
   const settled = useRef({ project, revision });
   useEffect(() => {
     const last = settled.current;
     settled.current = { project, revision };
-    if (last.project !== project || Object.is(last.revision, revision)) return;
+    if (last.project !== project) {
+      setSettleUntil(0);
+      return;
+    }
+    if (Object.is(last.revision, revision)) return;
     setSettleUntil(Date.now() + RUN_SETTLE_MS);
   }, [project, revision]);
 
