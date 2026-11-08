@@ -114,6 +114,7 @@ pub fn compile_rt(
             block: 0,
             statement: 0,
             stack: placements.remove(&object).unwrap(),
+            proven_arithmetic: BTreeSet::new(),
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
             compact_sites: Vec::new(),

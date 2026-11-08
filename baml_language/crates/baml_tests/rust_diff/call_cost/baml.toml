@@ -1,0 +1,5 @@
+[package]
+name = "call-cost-parity"
+
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"

@@ -219,7 +219,7 @@ impl Placement {
         for callee in &self.leaf_calls {
             writeln!(
                 &mut out,
-                "let stack_mode{callee}=rt::telemetry::mode(&O{callee});"
+                "let stack_mode{callee}=if OBSERVE {{rt::telemetry::mode(&O{callee})}} else {{0}};"
             )
             .unwrap();
         }
@@ -272,7 +272,9 @@ fn small_leaf(mir: &MirFunction<'_>) -> bool {
 impl Emitter<'_, '_> {
     pub(super) fn stack_leaf_call(&self, callee: usize, arguments: &str, observed: &str) -> String {
         if self.stack.leaf_calls.contains(&callee) {
-            format!("if stack_mode{callee}==0 {{f{callee}_body({arguments})}} else {{{observed}}}")
+            format!(
+                "if stack_mode{callee}==0 {{f{callee}_body::<OBSERVE>(cx,{arguments})}} else {{{observed}}}"
+            )
         } else {
             observed.to_owned()
         }

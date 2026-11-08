@@ -1,7 +1,8 @@
-Scope: stack allocation regression fixture and its five KPI workloads.
+Scope: stack allocation regression fixture, its five KPI workloads, and pure-call-1m integration.
+The standalone callcost fixture also passes at all five telemetry levels on both modes.
 This is a scoped baseline; the complete gate runs on the merged branch.
 
-BAML runtime coverage (normal AND GC stress): 6 pass, 0 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 7 pass, 0 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: not yet supported
 
@@ -10,6 +11,7 @@ First unsupported constructs (fixtures blocked):
 Per probe / KPI workload:
 StackAllocation	pass
 classes::method call 100k	pass
+compute::pure call 1m	pass
 interfaces::polymorphic dispatch 100k	pass
 memory::binary trees 14	pass
 programs::agent loop 300	pass

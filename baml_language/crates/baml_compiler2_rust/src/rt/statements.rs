@@ -11,7 +11,7 @@ impl Emitter<'_, '_> {
             writeln!(
                 &mut out,
                 "poll{b}=poll{b}.wrapping_add(1);if poll{b}&15==0{{{};}}",
-                self.fallible("rt::poll()")
+                self.fallible("cx.poll()")
             )
             .unwrap();
         }

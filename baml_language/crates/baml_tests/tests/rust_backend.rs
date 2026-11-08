@@ -1022,7 +1022,9 @@ fn rt_stack_placement_preserves_lifetimes_and_bytecode() {
                 assert_eq!(actual, sites, "{entry_name} at {opt:?}");
                 if source.contains("function norm2(self)") {
                     assert!(generated.contains("let stack_mode"));
+                    assert!(generated.contains("=if OBSERVE {rt::telemetry::mode("));
                     assert!(generated.contains("==0 {f"));
+                    assert!(generated.contains("_body::<OBSERVE>(cx,"));
                 }
             }
             assert_eq!(before, fingerprint(&program));
@@ -1040,6 +1042,7 @@ fn rt_stack_placement_preserves_lifetimes_and_bytecode() {
 // codegen changes may update these after checking the generated-source diff.
 fn rt_source_bytes_and_diagnostics() {
     use sha2::{Digest, Sha256};
+    let mut changes = Vec::new();
     for (name, source) in [
         (
             "trees",
@@ -1077,9 +1080,9 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "8e454ff27beebede04824c7259b943f7c6c9ade3cf87c9c690e1e24c4268385e",
-            "richards" => "51ded3f4ec2fd0b0dfe1566149179f7dca4d888bf9bfbb0f2e3d38cfde57f56d",
-            "agent" => "7aa17dcbe995532dfded81e1c55e8bfe57cc3eb13f1e4c84aec2af76946caec7",
+            "trees" => "bf2717f60b03353fda6186125f689db635c4caa61a726e5d73fc145a027f412e",
+            "richards" => "0c867b49faae02cb0234e265bf2f45c2bae544c8d9ddb061c1e146d63304ecfb",
+            "agent" => "b5d63e42968d30eb0397a54d2518fe9269895ad724a34f215268b8c34cc5cacb",
             _ => "",
         };
         if expected.is_empty() {
@@ -1093,11 +1096,93 @@ fn rt_source_bytes_and_diagnostics() {
             assert_eq!(result.unwrap_err(), expected, "{name}");
         } else {
             let source = result.unwrap();
-            assert_eq!(
-                format!("{:x}", Sha256::digest(source.as_bytes())),
-                expected,
-                "{name}: generated source changed"
+            let actual = format!("{:x}", Sha256::digest(source.as_bytes()));
+            if actual != expected {
+                let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                    .join(format!("rt-source-{name}.rs"));
+                std::fs::write(&path, &source).unwrap();
+                changes.push(format!("{name}: {actual} ({})", path.display()));
+            }
+        }
+    }
+    assert!(
+        changes.is_empty(),
+        "generated source changed:\n{}",
+        changes.join("\n")
+    );
+}
+
+#[test]
+fn rt_loop_range_proofs_cover_every_update_and_preserve_bytecode() {
+    for (name, source, checked) in [
+        (
+            "nested",
+            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { for (let j = 0; j < 7; j += 1) { s += i * j; }; }; s }",
+            false,
+        ),
+        (
+            "identity",
+            "function leaf(n: int) -> int { n } function main() -> int { let s = 0; for (let i = 0; i < 20; i += 1) { s += leaf(i); }; s }",
+            false,
+        ),
+        (
+            "stride",
+            "function main() -> int { let s = 0; for (let i = 1; i < 8; i += 3) { s += i; }; s }",
+            false,
+        ),
+        (
+            "overflow",
+            "function main() -> int { let s = 4611686018427387902; for (let i = 0; i < 3; i += 1) { s += 1; }; s }",
+            true,
+        ),
+        (
+            "indirect_recurrence",
+            "function main() -> int { let s = 1; for (let i = 0; i < 80; i += 1) { let delta = s; s += delta; }; s }",
+            true,
+        ),
+        (
+            "extra_back_edge",
+            "function main() -> int { let i = 0; let s = 0; while i < 4 { if i == 2 { continue; }; s += i; i += 1; }; s }",
+            true,
+        ),
+        (
+            "counter_mutation",
+            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { if i == 2 { i = 4611686018427387903; }; s += i; }; s }",
+            true,
+        ),
+        (
+            "counter_reset",
+            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { if i == 2 { i = 0; }; s += 1; }; s }",
+            true,
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("bounds.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let original = fingerprint(&program);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let generated = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        if generated.contains("rt::add(") != checked {
+            let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                .join(format!("rt-bounds-{name}.rs"));
+            std::fs::write(&path, &generated).unwrap();
+            panic!(
+                "{name}: checked={checked}, generated source: {}",
+                path.display()
             );
         }
+        assert_eq!(
+            fingerprint(&program),
+            original,
+            "{name}: rt changed bytecode"
+        );
     }
 }

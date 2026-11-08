@@ -171,7 +171,10 @@ impl Emitter<'_, '_> {
                         .map(|(v, _)| v.as_str())
                         .collect::<Vec<_>>()
                         .join(",");
-                    let observed = format!("f{c}({}, {arguments})", self.telemetry_site(c));
+                    let observed = format!(
+                        "f{c}::<OBSERVE>(cx,{}, {arguments})",
+                        self.telemetry_site(c)
+                    );
                     (
                         self.fallible(&self.stack_leaf_call(c, &arguments, &observed)),
                         self.plan.repr(&body.locals[0].ty)?,
