@@ -5,7 +5,7 @@ use super::{
 };
 
 pub(super) struct Admitted<'db> {
-    pub all: BTreeMap<usize, MirFunction<'db>>,
+    pub all: BTreeMap<usize, std::borrow::Cow<'db, MirFunction<'db>>>,
     pub reached: BTreeSet<usize>,
     pub calls: BTreeMap<usize, BTreeSet<usize>>,
     pub builtins: BTreeSet<String>,
@@ -19,7 +19,7 @@ pub(super) fn collect<'db>(
     benchmark: Option<(usize, usize)>,
     test_entry: bool,
     plan: &mut Plan<'_>,
-    prepared: Option<&BTreeMap<usize, MirFunction<'db>>>,
+    prepared: Option<&BTreeMap<usize, std::borrow::Cow<'db, MirFunction<'db>>>>,
 ) -> Gen<Admitted<'db>> {
     let mut all = prepared.cloned().unwrap_or_default();
     if prepared.is_none() {
@@ -38,7 +38,7 @@ pub(super) fn collect<'db>(
                     .as_ref()
                     .map_err(|e| no(format!("MIR: {e:?}")))?;
                 if let Some(object) = plan.index.declared(db, f) {
-                    all.insert(object, mir.clone());
+                    all.insert(object, std::borrow::Cow::Borrowed(mir));
                 }
             }
         }
@@ -70,6 +70,14 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
+            if let StatementKind::Assign {
+                value: Rvalue::IsType { test, .. },
+                ..
+            } = &statement.kind
+            {
+                super::exceptions::record_test(db, plan, test)?;
+            }
+
             if let StatementKind::Assign {
                 value:
                     Rvalue::Aggregate {
@@ -143,6 +151,9 @@ pub(super) fn collect<'db>(
             plan.record(repr)?;
         }
         for block in &body.blocks {
+            if let Some(Terminator::NarrowBind { test, .. }) = &block.terminator {
+                super::exceptions::record_test(db, plan, test)?;
+            }
             registry::admit(registry::Admission::ShieldedBlock(block.shielded))?;
             if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
                 for (repr, target) in targets {
@@ -223,17 +234,17 @@ fn insert_lambdas<'db>(
     db: &'db dyn Db,
     index: &crate::index::ProgramIndex<'_>,
     mir: &'db MirFunction<'db>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, std::borrow::Cow<'db, MirFunction<'db>>>,
 ) {
     for lambda in &mir.lambdas {
         if let Some(object) = index.lambda(db, &lambda.identity) {
-            all.insert(object, lambda.clone());
+            all.insert(object, std::borrow::Cow::Borrowed(lambda));
         }
         insert_lambdas(db, index, lambda, all);
     }
 }
 
-pub(super) type Prepared<'db> = Gen<BTreeMap<usize, MirFunction<'db>>>;
+pub(super) type Prepared<'db> = Gen<BTreeMap<usize, std::borrow::Cow<'db, MirFunction<'db>>>>;
 
 pub(super) fn prepare_tests<'db>(
     db: &'db dyn Db,
@@ -251,7 +262,7 @@ pub(super) fn prepare_tests<'db>(
                 .as_ref()
                 .map_err(|e| no(format!("MIR: {e:?}")))?;
             if let Some(object) = index.declared(db, function) {
-                all.insert(object, mir.clone());
+                all.insert(object, std::borrow::Cow::Borrowed(mir));
                 insert_lambdas(db, index, mir, &mut all);
             }
         }

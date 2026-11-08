@@ -1335,3 +1335,26 @@ test "unsupported sibling" { let callback = () -> int { 1 }; assert.equal(callba
         "the sibling's own reachable closure is rejected"
     );
 }
+
+#[test]
+fn rt_typed_exceptions_and_assertion_bodies_are_admitted() {
+    let source = include_str!("../rust_diff/exceptions/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("exceptions.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    for (entry, function) in user_functions(&program) {
+        if !["main", "uncaught", "assertion_failure"].contains(&function.name().as_str()) {
+            continue;
+        }
+        let generated = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        assert!(generated.contains("rt::exceptions::thrown"));
+    }
+    assert_eq!(fingerprint(&program), before);
+}

@@ -13,6 +13,9 @@ impl Plan<'_> {
             .ok_or_else(|| no("unlinked class tag"))
     }
     pub(super) fn record_ty(&mut self, ty: &RuntimeTy) -> Gen<()> {
+        if super::exceptions::dividend(ty) {
+            return Ok(());
+        }
         if let RuntimeTy::Union(members) = ty {
             for member in members {
                 if !recursive_container(member) {
@@ -25,6 +28,9 @@ impl Plan<'_> {
         Ok(())
     }
     pub(super) fn record_field_ty(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
+        if super::exceptions::dividend(ty) {
+            return Ok(());
+        }
         if let bex_vm_types::RuntimeTy::Union(members) = ty {
             for member in members {
                 if !recursive_container(member) {
@@ -68,6 +74,9 @@ impl Plan<'_> {
     }
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
+        if super::exceptions::dividend(ty) {
+            return Ok(Repr::Tagged);
+        }
         Ok(match ty {
             RuntimeTy::Float | RuntimeTy::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
@@ -171,6 +180,9 @@ impl Plan<'_> {
         })
     }
     pub(super) fn field_repr(&self, ty: &bex_vm_types::RuntimeTy) -> Gen<Repr> {
+        if super::exceptions::dividend(ty) {
+            return Ok(Repr::Tagged);
+        }
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
             T::Null => Repr::Null,
@@ -268,23 +280,6 @@ impl Plan<'_> {
             return Ok(());
         }
         let class = self.class(object);
-        // Runtime-produced exception descriptors are reserved. The runtime supports
-        // wildcard panic exclusion and user-defined typed catches; never emit a
-        // second, incompatible layout/tag for a builtin exception class.
-        if self.program.packages.iter().any(|package| {
-            package.name == "baml"
-                && package
-                    .objects
-                    .contains(&u32::try_from(object).expect("object index"))
-        }) && ((class.path.to_string().starts_with("panics.")
-            && class.path.to_string() != "panics.UserPanic")
-            || matches!(
-                class.path.to_string().as_str(),
-                "json.ParseError" | "json.DecodeError"
-            ))
-        {
-            return Err(no("typed builtin exception class"));
-        }
         registry::admit(registry::Admission::Class {
             cleanup: class.cleanup.is_some(),
             generic: false,
@@ -344,16 +339,23 @@ impl Plan<'_> {
 }
 
 pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
+    let mut next = rt_descriptors();
     let descriptors: BTreeMap<_, _> = plan
         .layouts
         .keys()
-        .enumerate()
-        .map(|(i, c)| (*c, i + rt_descriptors()))
+        .map(|&c| {
+            let id = super::exceptions::reserved(plan, c).unwrap_or_else(|| {
+                let id = next;
+                next += 1;
+                id
+            });
+            (c, id)
+        })
         .collect();
     let lists: BTreeMap<_, _> = plan
         .lists
         .iter()
-        .scan(descriptors.len() + rt_descriptors(), |next, r| {
+        .scan(next, |next, r| {
             let id = *next;
             *next += if matches!(*r, Repr::MapStrInt | Repr::MapStrPtr(_)) {
                 3
@@ -377,9 +379,12 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             }
         })
         .max()
-        .unwrap_or(rt_descriptors() + descriptors.len());
+        .unwrap_or(next);
     out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,\n");
     for (&object, layout) in &plan.layouts {
+        if super::exceptions::reserved(plan, object).is_some() {
+            continue;
+        }
         let class = plan.class(object);
         let fields = class
             .fields

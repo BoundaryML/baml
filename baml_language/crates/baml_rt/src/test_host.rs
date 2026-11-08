@@ -58,8 +58,9 @@ fn failure_message(error: &crate::Error) -> String {
             .map(|f| (f.file, f.line, f.function)),
     );
     let value = error
-        .display_value
+        .diagnostic_value
         .clone()
+        .or_else(|| error.display_value.clone())
         .unwrap_or_else(|| format!("{} {{ message: {:?} }}", error.class, error.message));
     format!("{}\n{value}", traceback.trim_end())
         .trim_end()
@@ -71,6 +72,7 @@ mod tests {
     use super::*;
     fn error(class: &'static str) -> crate::Error {
         crate::Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             value: 1,
@@ -81,6 +83,7 @@ mod tests {
                 function: "user.test",
                 line: 2,
             }],
+            diagnostic_value: None,
             display_value: Some(format!("{class} {{ code: 1 }}")),
         }
     }

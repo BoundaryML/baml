@@ -39,15 +39,15 @@ pub fn compile_rt_test(
     RtTestCompiler::new(db, root, program, opt).compile(entry)
 }
 
-fn compile_entry(
-    db: &dyn Db,
+fn compile_entry<'db>(
+    db: &'db dyn Db,
     root: SourceRoot,
     program: &Program,
     opt: OptLevel,
     entry: usize,
     benchmark: Option<(usize, usize)>,
     test_entry: bool,
-    prepared: Option<&RtTestCompiler<'_, '_>>,
+    prepared: Option<&RtTestCompiler<'db, '_>>,
 ) -> Gen<String> {
     let mut plan = Plan {
         root,
@@ -92,6 +92,7 @@ fn compile_entry(
             .map(|p| p.all.as_ref().map_err(Clone::clone))
             .transpose()?,
     )?;
+    super::assertions::validate(&plan, &builtins)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );

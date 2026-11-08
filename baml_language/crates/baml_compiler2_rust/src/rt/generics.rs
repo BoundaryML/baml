@@ -7,7 +7,7 @@ use baml_compiler2_mir::{TyTemplate, TypeTest};
 pub(super) fn expand<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, std::borrow::Cow<'db, MirFunction<'db>>>,
     roots: Vec<usize>,
 ) -> Gen<()> {
     let mut queue = VecDeque::from(roots);
@@ -537,7 +537,7 @@ impl Plan<'_> {
 pub(super) fn instance<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, std::borrow::Cow<'db, MirFunction<'db>>>,
     instances: &mut Vec<(usize, Vec<RuntimeTy>, usize)>,
     callee: usize,
     frame: Vec<RuntimeTy>,
@@ -576,7 +576,7 @@ pub(super) fn instance<'db>(
     let id = plan.next_object;
     plan.next_object += 1;
     plan.function_frames.insert(id, captures);
-    all.insert(id, specialized);
+    all.insert(id, std::borrow::Cow::Owned(specialized));
     std::rc::Rc::make_mut(&mut plan.index).rt_alias(id, callee);
     instances.push((callee, frame, id));
     Ok(id)

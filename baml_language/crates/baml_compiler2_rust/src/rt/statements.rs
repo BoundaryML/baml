@@ -47,43 +47,6 @@ impl Emitter<'_, '_> {
             return Ok(out);
         }
         match term {
-            Terminator::Throw { value } => {
-                let (value, Repr::Ptr(c)) = self.operand(value)? else {
-                    return Err(no("non-class throw"));
-                };
-                let Object::Class(class) =
-                    &self.plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-                else {
-                    unreachable!()
-                };
-                if self.plan.layouts[&c].fields.iter().any(|r| *r != Repr::Int) {
-                    return Err(no("throw class with non-int fields"));
-                }
-                let package = self
-                    .plan
-                    .program
-                    .packages
-                    .iter()
-                    .find(|p| p.objects.contains(&u32::try_from(c).expect("object index")))
-                    .ok_or_else(|| no("throw class package"))?;
-                let name = format!("{}.{}", package.name, class.path);
-                let fields = class
-                    .fields
-                    .iter()
-                    .map(|f| format!("{}: {{}}", f.name))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let display = format!("{name} {{{{{fields}}}}}");
-                let values = (0..class.fields.len())
-                    .map(|i| format!("(*(p as *const C{c})).f{i}"))
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let error = format!(
-                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
-                    self.object, self.site
-                );
-                writeln!(&mut out, "{{let p={value};{}}}", self.raise(&error)).unwrap();
-            }
             Terminator::Rethrow {
                 context: Operand::Copy(Place::Local(context)) | Operand::Move(Place::Local(context)),
                 ..
@@ -97,7 +60,7 @@ impl Emitter<'_, '_> {
                     .id
                     .0;
                 out.push_str(&self.raise(&format!(
-                    "caught{handler}.take().expect(\"missing caught error\").rethrow()"
+                    "caught{handler}.take().expect(\"missing caught error\").rethrow().rethrow_at(&S{},{})", self.object,self.site
                 )));
             }
 

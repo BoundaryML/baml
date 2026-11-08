@@ -6,7 +6,7 @@ use crate::{
 };
 use baml_rt_gc::{Field, SlotKind};
 
-unsafe fn field(pointer: usize, field: &Field) -> Dyn {
+pub(crate) unsafe fn field(pointer: usize, field: &Field) -> Dyn {
     let p = unsafe { (pointer as *const u8).add(field.offset) };
     match field.slot {
         SlotKind::Tagged => unsafe { p.cast::<Dyn>().read() },
@@ -16,7 +16,7 @@ unsafe fn field(pointer: usize, field: &Field) -> Dyn {
         },
     }
 }
-unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
+pub(crate) unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
     if value.tag < 3 || value.tag == 4294967294 || value.payload == 0 {
         return vec![];
     }
@@ -235,4 +235,15 @@ unsafe fn write(
         }
         _ => unreachable!("compiler checked structural formatting shape"),
     }
+}
+
+/// Render declaration-order fields without invoking user ToString methods.
+/// # Safety
+/// Values and metadata must describe the active heap.
+pub unsafe fn structural(value: Dyn, shapes: &[Shape]) -> String {
+    let mut out = String::new();
+    unsafe {
+        write(shapes, value, false, &[], &[], &mut 0, &mut out);
+    }
+    out
 }

@@ -17,6 +17,25 @@ pub struct Raise {
     depth: u32,
 }
 
+#[derive(Debug, Default)]
+pub struct History {
+    origin: Option<TelemetryId>,
+    previous: Option<TelemetryId>,
+}
+
+fn origin(state: &mut State, error: &Error, id: TelemetryId) {
+    if let Some(origin) = error.telemetry_history.origin {
+        state.span(SpanRecord::ErrorRaiseOrigin {
+            raise_id: id,
+            origin: btel_records::RaiseOrigin::Proven {
+                origin,
+                previous: error.telemetry_history.previous,
+                via: btel_records::OriginVia::Rethrow,
+            },
+        });
+    }
+}
+
 /// # Safety
 /// The current session owns this stack and `site` belongs to its program.
 #[inline(never)]
@@ -131,6 +150,7 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
         cursor = current.parent;
     }
     let raise_id = allocate_telemetry_id();
+    origin(state, error, raise_id);
     if !observed {
         state.span(SpanRecord::ErrorRaiseStack(Box::new(RaiseStack {
             raise_id,
@@ -177,6 +197,8 @@ pub(super) fn end(error: &mut Error, result: UnwindResult, handler_pc: Option<u3
         return;
     };
     let state = unsafe { &mut *CURRENT.get() };
+    error.telemetry_history.origin.get_or_insert(raise.id);
+    error.telemetry_history.previous = Some(raise.id);
     let handler_function = handler_pc.map(|_| {
         let function = if state.evidence_frame.is_null() {
             state.active_function.expect("observed handler")
@@ -202,6 +224,7 @@ fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, 
         return;
     };
     let raise_id = allocate_telemetry_id();
+    origin(state, error, raise_id);
     let mode = super::mode(state.words[function]) & 3;
     let raised_at = *error.telemetry_at.get_or_insert_with(|| state.read());
     state.span(SpanRecord::ErrorRaised {

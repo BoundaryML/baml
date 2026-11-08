@@ -104,6 +104,7 @@ pub struct Frame {
 }
 #[derive(Debug)]
 pub struct Error {
+    pub telemetry_history: crate::telemetry::evidence::History,
     pub telemetry_raise: Option<crate::telemetry::evidence::Raise>,
     pub telemetry_at: Option<btel_types::ClockInstant>,
     /// Actual rt heap instance of the panic class, zero only for internal errors.
@@ -112,17 +113,28 @@ pub struct Error {
     pub message: String,
     pub frames: Vec<Frame>,
     pub display_value: Option<String>,
+    pub diagnostic_value: Option<String>,
 }
 impl Error {
+    /// Start a new raise while preserving the carried value and original trace.
+    #[cold]
+    pub fn rethrow_at(mut self: Box<Self>, source: &'static Source, site: usize) -> Box<Self> {
+        self.telemetry_at = None;
+        crate::telemetry::evidence::raised(&mut self, source, site, None);
+        self
+    }
+
     #[cold]
     pub fn internal(message: String) -> Box<Self> {
         Box::new(Self {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             value: 0,
             class: "InternalError",
             message,
             frames: Vec::new(),
+            diagnostic_value: None,
             display_value: None,
         })
     }
@@ -153,12 +165,14 @@ pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Bo
         };
         baml_rt_gc::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             value: object as usize,
             class,
             message,
             frames: Vec::new(),
+            diagnostic_value: None,
             display_value: None,
         })
     }
@@ -512,12 +526,14 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
             crate::emergency_alloc(5, std::mem::size_of::<MessagePanic>()).cast::<MessagePanic>();
         baml_rt_gc::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             value: object as usize,
             class: "baml.panics.AllocFailure",
             message,
             frames: Vec::new(),
+            diagnostic_value: None,
             display_value: None,
         })
     }
@@ -608,12 +624,14 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
         object.add(8).cast::<i64>().write(index);
         object.add(16).cast::<i64>().write(length as i64);
         Box::new(Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             value: object as usize,
             class: "baml.panics.IndexOutOfBounds",
             message,
             frames: Vec::new(),
+            diagnostic_value: None,
             display_value: Some(format!(
                 "baml.panics.IndexOutOfBounds {{index: {index}, length: {length}}}"
             )),
@@ -958,12 +976,14 @@ fn division_zero(left: i64) -> Box<Error> {
         );
     }
     Box::new(Error {
+        telemetry_history: Default::default(),
         telemetry_raise: None,
         telemetry_at: None,
         value: p as usize,
         class: "baml.panics.DivisionByZero",
         message: format!("division by zero: {left} / 0"),
         frames: vec![],
+        diagnostic_value: None,
         display_value: Some(format!("baml.panics.DivisionByZero {{dividend: {left}}}")),
     })
 }

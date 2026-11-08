@@ -53,7 +53,7 @@ struct Emitter<'a, 'db> {
     object: usize,
     descriptors: &'a BTreeMap<usize, usize>,
     lists: &'a BTreeMap<Repr, usize>,
-    all: &'a BTreeMap<usize, MirFunction<'db>>,
+    all: &'a BTreeMap<usize, std::borrow::Cow<'db, MirFunction<'db>>>,
     iters: BTreeSet<usize>,
     iter_arrays: BTreeMap<usize, usize>,
     arity: usize,
@@ -74,11 +74,12 @@ struct Emitter<'a, 'db> {
 struct ProgramEmission<'a, 'db> {
     db: &'db dyn Db,
     plan: &'a Plan<'a>,
-    all: &'a BTreeMap<usize, MirFunction<'db>>,
+    all: &'a BTreeMap<usize, std::borrow::Cow<'db, MirFunction<'db>>>,
     descriptors: &'a BTreeMap<usize, usize>,
 }
 
 mod admission;
+mod assertions;
 mod body;
 mod builtins;
 mod call_cost;
@@ -89,6 +90,7 @@ mod diagnostics;
 mod dispatch;
 mod driver;
 mod errors;
+mod exceptions;
 mod expressions;
 mod host;
 mod json;
