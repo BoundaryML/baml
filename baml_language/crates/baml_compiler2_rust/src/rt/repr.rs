@@ -19,6 +19,8 @@ pub(super) enum Repr {
     Naming,
     Enum(usize),
     Null,
+    Future,
+    ListFuture(u64),
     Closure,
     Cell,
     ListClosure(u64),
@@ -54,7 +56,7 @@ impl Repr {
     pub(super) fn growing(self) -> bool {
         matches!(
             self,
-            Self::ListStr | Self::ListListStr | Self::ListClosure(_)
+            Self::ListStr | Self::ListListStr | Self::ListClosure(_) | Self::ListFuture(_)
         )
     }
     pub(super) fn slot(self) -> Gen<&'static str> {
@@ -62,6 +64,7 @@ impl Repr {
             Self::Str => Ok("rt::strings::Str"),
             Self::ListStr => Ok("rt::lists::List<rt::strings::Str>"),
             Self::Closure => Ok("rt::closures::Closure"),
+            Self::Future => Ok("rt::tasks::FutureSlot"),
             _ => Err(no("growing list element")),
         }
     }
@@ -75,6 +78,8 @@ impl Repr {
                 | Self::ListStr
                 | Self::ListListStr
                 | Self::MapStrInt
+                | Self::Future
+                | Self::ListFuture(_)
                 | Self::Closure
                 | Self::Cell
                 | Self::ListClosure(_)

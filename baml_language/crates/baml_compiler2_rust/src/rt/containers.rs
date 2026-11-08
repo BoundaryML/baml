@@ -6,6 +6,7 @@ impl Emitter<'_, '_> {
             Repr::ListInt => Ok(Repr::Int),
             Repr::ListStr => Ok(Repr::Str),
             Repr::ListClosure(_) => Ok(Repr::Closure),
+            Repr::ListFuture(_) => Ok(Repr::Future),
             Repr::ListListStr => Ok(Repr::ListStr),
             Repr::ListPtr(c) => Ok(Repr::Ptr(c)),
             _ => Err(no("indexed non-list")),

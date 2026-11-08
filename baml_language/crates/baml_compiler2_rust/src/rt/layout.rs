@@ -14,7 +14,10 @@ impl Plan<'_> {
     }
     pub(super) fn record_ty(&mut self, ty: &RuntimeTy) -> Gen<()> {
         if let RuntimeTy::List(element) = ty
-            && matches!(element.as_ref(), RuntimeTy::Function { .. })
+            && matches!(
+                element.as_ref(),
+                RuntimeTy::Function { .. } | RuntimeTy::Future(..)
+            )
         {
             let (id, ty) = self.closure_type(element)?;
             self.closure_lists.insert(id, ty);
@@ -32,7 +35,10 @@ impl Plan<'_> {
     }
     pub(super) fn record_field_ty(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
         if let bex_vm_types::RuntimeTy::List(element) = ty
-            && matches!(element.as_ref(), bex_vm_types::RuntimeTy::Function { .. })
+            && matches!(
+                element.as_ref(),
+                bex_vm_types::RuntimeTy::Function { .. } | bex_vm_types::RuntimeTy::Future(..)
+            )
         {
             let (id, ty) = self.closure_field_type(element)?;
             self.closure_lists.insert(id, ty);
@@ -50,6 +56,11 @@ impl Plan<'_> {
     }
     pub(super) fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
+            Repr::Future => self.task_support = true,
+            Repr::ListFuture(_) => {
+                self.task_support = true;
+                self.lists.insert(repr);
+            }
             Repr::Closure | Repr::Cell => self.environments = true,
             Repr::Enum(e) => {
                 self.enums.insert(e);
@@ -87,6 +98,7 @@ impl Plan<'_> {
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
             RuntimeTy::Function { .. } => Repr::Closure,
+            RuntimeTy::Future(..) => Repr::Future,
             RuntimeTy::Map { key, value }
                 if matches!(key.as_ref(), RuntimeTy::String)
                     && matches!(value.as_ref(), RuntimeTy::Int) =>
@@ -100,6 +112,7 @@ impl Plan<'_> {
                     Repr::ListStr
                 }
                 RuntimeTy::Function { .. } => Repr::ListClosure(self.closure_type(element)?.0),
+                RuntimeTy::Future(..) => Repr::ListFuture(self.closure_type(element)?.0),
                 RuntimeTy::List(t) if matches!(t.as_ref(), RuntimeTy::String) => Repr::ListListStr,
                 RuntimeTy::Union(_) | RuntimeTy::Class(..) => match self.repr(element)? {
                     Repr::Ptr(c) => Repr::ListPtr(c),
@@ -174,6 +187,7 @@ impl Plan<'_> {
         Ok(match ty {
             T::Null => Repr::Null,
             T::Function { .. } => Repr::Closure,
+            T::Future(..) => Repr::Future,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
             T::Enum(head) | T::EnumVariant(head, _)
                 if self.program.packages.iter().any(|p| {
@@ -206,6 +220,7 @@ impl Plan<'_> {
                 T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::ListInt,
                 T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::ListStr,
                 T::Function { .. } => Repr::ListClosure(self.closure_field_type(element)?.0),
+                T::Future(..) => Repr::ListFuture(self.closure_field_type(element)?.0),
                 T::List(t) if matches!(t.as_ref(), T::String) => Repr::ListListStr,
                 T::Union(_) | T::Class(..) => match self.field_repr(element)? {
                     Repr::Ptr(c) => Repr::ListPtr(c),
@@ -286,10 +301,15 @@ impl Plan<'_> {
             cleanup: class.cleanup.is_some(),
             generic: false,
         })?;
+        let opaque_task = super::tasks::class_is(self, object, "spawn.Limit")
+            || super::tasks::class_is(self, object, "spawn.CancelToken");
         let field_types = self.class_field_types(object);
         let fields = field_types
             .iter()
             .map(|t| {
+                if opaque_task && matches!(t, bex_vm_types::RuntimeTy::RustType) {
+                    return Ok(Repr::Int);
+                }
                 self.field_repr(t).map_err(|e| {
                     format!(
                         "{e} (layout {}, object {object}, types {field_types:?})",
@@ -331,6 +351,9 @@ impl Plan<'_> {
             },
         );
         for ty in &field_types {
+            if opaque_task && matches!(ty, bex_vm_types::RuntimeTy::RustType) {
+                continue;
+            }
             self.record_field_ty(ty)?;
         }
         for child in children {
@@ -376,6 +399,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         .max()
         .unwrap_or(rt_descriptors() + descriptors.len());
     let after_descriptors = after_lists
+        + usize::from(plan.task_support)
         + if plan.closure_descriptors().is_some() {
             2
         } else {
@@ -384,48 +408,63 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,\n");
     for (&object, layout) in &plan.layouts {
         let class = plan.class(object);
-        let fields = class
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(i, f)| {
-                format!(
-                    "Field{{name:{:?},offset:{},slot:SlotKind::{},type_id:{}}}",
-                    f.name,
-                    layout.offsets[i],
-                    if layout.fields[i].pointer() {
-                        "Pointer"
-                    } else if matches!(layout.fields[i], Repr::Dyn(_) | Repr::Tagged) {
-                        "Tagged"
-                    } else {
-                        "Scalar"
-                    },
-                    match layout.fields[i] {
-                        Repr::Ptr(c) => descriptors[&c] + 3,
-                        r @ (Repr::ListInt
-                        | Repr::ListPtr(_)
-                        | Repr::ListStr
-                        | Repr::ListListStr
-                        | Repr::ListClosure(_)
-                        | Repr::MapStrInt) => lists[&r] + 3,
-                        Repr::Tagged => after_descriptors + 3,
-                        Repr::Dyn(i) => after_descriptors + i + 4,
-                        Repr::Str => 3,
-                        Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
-                        Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
-                        Repr::Int => 0,
-                        Repr::Float => u32::MAX as usize - 1,
-                        Repr::Bool => 1,
-                        Repr::Enum(e) =>
-                            after_lists + 4 + plan.enums.iter().position(|i| *i == e).unwrap(),
-                        Repr::Naming => after_lists + 3,
-                        Repr::Null => 2,
-                        Repr::Iter | Repr::Type(_) => unreachable!("null/type fields are rejected"),
-                    }
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",");
+        if super::tasks::class_is(plan, object, "future.Future") {
+            writeln!(
+                &mut out,
+                "rt::tasks::future_descriptor({}),",
+                descriptors[&object] + 3
+            )
+            .unwrap();
+            continue;
+        }
+        let fields =
+            class
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(i, f)| {
+                    format!(
+                        "Field{{name:{:?},offset:{},slot:SlotKind::{},type_id:{}}}",
+                        f.name,
+                        layout.offsets[i],
+                        if layout.fields[i].pointer() {
+                            "Pointer"
+                        } else if matches!(layout.fields[i], Repr::Dyn(_) | Repr::Tagged) {
+                            "Tagged"
+                        } else {
+                            "Scalar"
+                        },
+                        match layout.fields[i] {
+                            Repr::Ptr(c) => descriptors[&c] + 3,
+                            r @ (Repr::ListInt
+                            | Repr::ListPtr(_)
+                            | Repr::ListStr
+                            | Repr::ListListStr
+                            | Repr::ListClosure(_)
+                            | Repr::ListFuture(_)
+                            | Repr::MapStrInt) => lists[&r] + 3,
+                            Repr::Tagged => after_descriptors + 3,
+                            Repr::Dyn(i) => after_descriptors + i + 4,
+                            Repr::Str => 3,
+                            Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
+                            Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
+                            Repr::Future => plan.future_descriptor().unwrap() + 3,
+                            Repr::Int => 0,
+                            Repr::Float => u32::MAX as usize - 1,
+                            Repr::Bool => 1,
+                            Repr::Enum(e) =>
+                                after_descriptors
+                                    + 4
+                                    + plan.enums.iter().position(|i| *i == e).unwrap(),
+                            Repr::Naming => after_descriptors + 3,
+                            Repr::Null => 2,
+                            Repr::Iter | Repr::Type(_) =>
+                                unreachable!("null/type fields are rejected"),
+                        }
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
         writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
@@ -462,6 +501,9 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             closure + 3
         )
         .unwrap();
+    }
+    if let Some(future) = plan.future_descriptor() {
+        writeln!(&mut out, "rt::tasks::future_descriptor({}),", future + 3).unwrap();
     }
     out.push_str("];\n");
     out.push_str(&capture_codegen::emit(
@@ -547,4 +589,31 @@ fn recursive_container<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool {
         ty,
         baml_type::RuntimeTy::List(_) | baml_type::RuntimeTy::Map { .. }
     ) && alias(ty)
+}
+
+impl Plan<'_> {
+    pub(super) fn future_descriptor(&self) -> Option<usize> {
+        self.task_support.then(|| {
+            self.closure_descriptors().map_or_else(
+                || {
+                    rt_descriptors()
+                        + self.layouts.len()
+                        + self
+                            .lists
+                            .iter()
+                            .map(|r| {
+                                if *r == Repr::MapStrInt {
+                                    3
+                                } else if r.growing() {
+                                    2
+                                } else {
+                                    1
+                                }
+                            })
+                            .sum::<usize>()
+                },
+                |(_, env)| env + 1,
+            )
+        })
+    }
 }

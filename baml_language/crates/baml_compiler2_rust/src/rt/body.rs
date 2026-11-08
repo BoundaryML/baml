@@ -17,7 +17,10 @@ impl Emitter<'_, '_> {
                 .map(|b| match b.terminator.as_ref().unwrap() {
                     Terminator::Goto { target }
                     | Terminator::Call { target, .. }
-                    | Terminator::VirtualCall { target, .. } => Ok(Flow::Goto(target.0)),
+                    | Terminator::VirtualCall { target, .. }
+                    | Terminator::Await { target, .. }
+                    | Terminator::AwaitAny { target, .. }
+                    | Terminator::SysOp { target, .. } => Ok(Flow::Goto(target.0)),
                     Terminator::Switch {
                         arms, otherwise, ..
                     } => Ok(Flow::Switch {
@@ -33,6 +36,7 @@ impl Emitter<'_, '_> {
                         else_block: else_block.0,
                     }),
                     Terminator::Unreachable => Ok(Flow::Exit),
+                    Terminator::Spawn { resume, .. } => Ok(Flow::Goto(resume.0)),
                     Terminator::Branch {
                         then_block,
                         else_block,

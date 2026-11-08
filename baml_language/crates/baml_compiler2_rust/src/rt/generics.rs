@@ -127,6 +127,7 @@ pub(super) fn expand<'db>(
                         };
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || plan.index.display(callee) == "baml.json.decode"
+                            || super::tasks::native(plan.index.display(callee))
                         {
                             continue;
                         }
@@ -401,15 +402,16 @@ impl registry::Feature for Feature {
                         values = mapping
                             .into_iter()
                             .map(|i| {
-                                i.map(|i| values[i].clone())
-                                    .ok_or_else(|| no("omitted generic argument"))
+                                Ok(i.map(|i| values[i].clone()).unwrap_or_else(|| {
+                                    ("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged)
+                                }))
                             })
                             .collect::<Gen<_>>()?;
                     }
                     let arguments = values
                         .into_iter()
                         .enumerate()
-                        .map(|(i, v)| e.coerce(v, e.plan.repr(&body.locals[i + 1].ty)?))
+                        .map(|(i, v)| e.coerce(v, e.plan.local_repr(body, i + 1, 0)?))
                         .collect::<Gen<Vec<_>>>()?
                         .join(",");
                     e.assign(

@@ -1192,3 +1192,28 @@ fn rt_generics_switch_aliases() {
     )
     .unwrap();
 }
+
+#[test]
+fn rt_generated_spawn_await() {
+    let source =
+        include_str!("../../../tools/speedtest/workloads/concurrency/spawn-await-x10k/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("tasks.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let entry = program.rendered_callables()["user.main"].object.raw();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    syn::parse_file(&source).unwrap();
+    assert!(source.contains("rt::tasks::spawn("));
+    assert!(source.contains("rt::tasks::await_future("));
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-spawn-await.rs"),
+        source,
+    )
+    .unwrap();
+}

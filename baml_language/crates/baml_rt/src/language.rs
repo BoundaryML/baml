@@ -96,13 +96,13 @@ pub struct Source {
     pub pcs: &'static [u32],
     pub kinds: &'static [crate::telemetry::RaiseKind],
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Frame {
     pub file: &'static str,
     pub function: &'static str,
     pub line: usize,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Error {
     pub telemetry_raise: Option<crate::telemetry::evidence::Raise>,
     pub telemetry_at: Option<btel_types::ClockInstant>,
@@ -362,7 +362,7 @@ fn driver_inner(
 }
 
 #[cold]
-fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
+pub(crate) fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
     use bex_vm_types::errors::VmPanic;
     // Same class and declaration-order fields as BexVm::panic_to_exception_value.
     match panic {

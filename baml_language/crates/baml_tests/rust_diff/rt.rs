@@ -8,10 +8,10 @@ use super::{Artifacts, PROBES, kpis, pack_result};
 const TELEMETRY_SUPPORTED: bool = false;
 // The standalone probes exercise closures without the shared project's global
 // initializer dependency. Their admission is a required coverage baseline.
-const REQUIRED_PROBES: &[&str] = &["RtClosures", "RtEmptyClosures"];
+const REQUIRED_PROBES: &[&str] = &["RtClosures", "RtEmptyClosures", "RtSpawnAwait"];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {
-    level == "off" || TELEMETRY_SUPPORTED || REQUIRED_PROBES.contains(&probe)
+    level == "off" || TELEMETRY_SUPPORTED || matches!(probe, "RtClosures" | "RtEmptyClosures")
 }
 
 #[derive(Debug, Clone)]
@@ -42,7 +42,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         let result = pack_result(
             build,
             workspace,
-            &super::standalone_closure_source(manifest, probe)
+            &super::standalone_source(manifest, probe)
                 .unwrap_or_else(|| manifest.join("rust_diff")),
             &executable,
             [if super::initializer_probes::collects_tests(probe) {

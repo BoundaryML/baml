@@ -54,6 +54,14 @@ type Span = SpanRecord<Snapshot, Snapshot>;
 type Pool = ChunkPool<TimingRecord, Span>;
 thread_local! { static CURRENT: Cell<*mut State> = const { Cell::new(std::ptr::null_mut()) }; }
 
+pub(crate) fn current_raw() -> *mut () {
+    CURRENT.get().cast()
+}
+/// The pointer is null or an owner-thread state that outlives the binding.
+pub(crate) unsafe fn replace_current_raw(state: *mut ()) {
+    CURRENT.set(state.cast());
+}
+
 #[derive(Clone, Copy)]
 enum DeltaClock {
     Epoch,

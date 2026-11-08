@@ -115,13 +115,18 @@ pub(super) fn emit(
                 .iter()
                 .find_map(|(&object, &index)| (index == desc).then_some(object))
         };
-        let shape = if plan
+        let shape = if plan.future_descriptor() == Some(desc) {
+            "Future".to_owned()
+        } else if plan
             .closure_descriptors()
             .is_some_and(|(_, closure)| desc == closure)
         {
             "Closure".to_owned()
         } else if let Some(class) = class {
-            if let Some((_, args, _)) = plan.class_instances.iter().find(|(_, _, id)| *id == class)
+            if super::tasks::class_is(plan, class, "future.Future") {
+                "Future".to_owned()
+            } else if let Some((_, args, _)) =
+                plan.class_instances.iter().find(|(_, _, id)| *id == class)
             {
                 let args = args
                     .iter()
@@ -149,6 +154,18 @@ pub(super) fn emit(
                         lists[&Repr::ListStr] + 3,
                         "List(&rt::telemetry::capture::Type::String)".to_owned(),
                     ),
+                    Repr::Future => {
+                        let Repr::ListFuture(id) = repr else {
+                            unreachable!()
+                        };
+                        let full = super::closures::capture_type(&plan.closure_lists[&id])?;
+                        (
+                            plan.future_descriptor().unwrap() + 3,
+                            full.strip_prefix("rt::telemetry::capture::Type::")
+                                .unwrap()
+                                .to_owned(),
+                        )
+                    }
                     Repr::Closure => {
                         let Repr::ListClosure(id) = repr else {
                             unreachable!()

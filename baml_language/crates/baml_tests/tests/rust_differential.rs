@@ -15,6 +15,7 @@ mod initializer_probes;
 const PROBES: &[&str] = &[
     "RtClosures",
     "RtEmptyClosures",
+    "RtSpawnAwait",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -275,8 +276,12 @@ fn probe_timeout_kills_and_reaps() {
     assert!(error.contains("kill: Ok(()), reap: Ok("), "{error}");
 }
 
-fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
-    matches!(probe, "RtClosures" | "RtEmptyClosures").then(|| manifest.join("rt_fixtures/closures"))
+fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
+    match probe {
+        "RtClosures" | "RtEmptyClosures" => Some(manifest.join("rt_fixtures/closures")),
+        "RtSpawnAwait" => Some(manifest.join("rt_fixtures/tasks")),
+        _ => None,
+    }
 }
 
 fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
@@ -284,7 +289,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
     let mut artifacts = std::collections::BTreeMap::new();
     if PROBES
         .iter()
-        .filter(|p| standalone_closure_source(manifest, p).is_none())
+        .filter(|p| standalone_source(manifest, p).is_none())
         .any(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
     {
         let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
@@ -297,7 +302,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .iter()
                 .copied()
                 .filter(|p| !initializer_probes::collects_tests(p))
-                .filter(|p| standalone_closure_source(manifest, p).is_none())
+                .filter(|p| standalone_source(manifest, p).is_none())
                 .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
                 .chain(["GlobalCalls", "GlobalCallPending", "InitializerTestSummary"]),
         );
@@ -337,14 +342,14 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         );
         for probe in PROBES
             .iter()
-            .filter(|p| standalone_closure_source(manifest, p).is_none())
+            .filter(|p| standalone_source(manifest, p).is_none())
         {
             artifacts
                 .entry((*probe).into())
                 .or_insert_with(|| executable.clone());
         }
     }
-    for probe in ["RtClosures", "RtEmptyClosures"] {
+    for probe in ["RtClosures", "RtEmptyClosures", "RtSpawnAwait"] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
         }
@@ -352,7 +357,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         pack(
             build,
             workspace,
-            &standalone_closure_source(manifest, probe).unwrap(),
+            &standalone_source(manifest, probe).unwrap(),
             &executable,
             [probe],
         );
@@ -612,7 +617,7 @@ fn rust_differential() {
     for probe in probes {
         let failures_before = failures.len();
         for level in levels {
-            if rt_only && *level != "off" && standalone_closure_source(manifest, &probe).is_none() {
+            if rt_only && !rt::supports_level(&probe, level) {
                 continue;
             }
             if (probe.contains("::") && matches!(*level, "default" | "low"))

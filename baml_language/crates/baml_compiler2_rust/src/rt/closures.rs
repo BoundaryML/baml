@@ -42,6 +42,15 @@ impl Plan<'_> {
         i: usize,
         depth: usize,
     ) -> Gen<Repr> {
+        if body.blocks.iter().any(|b| matches!(&b.terminator, Some(Terminator::Spawn {future:Place::Local(l),..}) if l.0==i)) { return Ok(Repr::Future); }
+        if i > 0
+            && self
+                .lambda_bodies
+                .get(&(body as *const _ as usize))
+                .is_some_and(|id| self.index.info(*id).param_has_default.get(i - 1) == Some(&true))
+        {
+            return Ok(Repr::Tagged);
+        }
         let definitions: Vec<_> = body
             .blocks
             .iter()
@@ -240,6 +249,37 @@ impl registry::Feature for Feature {
         value: &Rvalue<'_>,
         _expected: Repr,
     ) -> Option<Gen<(String, Repr)>> {
+        if let Rvalue::BinaryOp { op, left, right } = value {
+            if matches!(op, super::BinOp::Eq | super::BinOp::Ne)
+                && (matches!(left, Operand::Constant(super::Constant::OmittedArg))
+                    || matches!(right, Operand::Constant(super::Constant::OmittedArg)))
+            {
+                return Some((|| {
+                    let other = if matches!(right, Operand::Constant(super::Constant::OmittedArg)) {
+                        left
+                    } else {
+                        right
+                    };
+                    let raw = match other {
+                        Operand::Copy(p) | Operand::Move(p) => emitter.place(p)?,
+                        _ => emitter.operand(other)?,
+                    };
+                    let expression = if raw.1 == Repr::Tagged {
+                        format!("({}).tag==u64::MAX", raw.0)
+                    } else {
+                        "false".into()
+                    };
+                    Ok((
+                        if *op == super::BinOp::Ne {
+                            format!("!({expression})")
+                        } else {
+                            expression
+                        },
+                        Repr::Bool,
+                    ))
+                })());
+            }
+        }
         if let Rvalue::MakeVirtualBoundMethod {
             iface,
             method,
@@ -610,7 +650,7 @@ impl super::Emitter<'_, '_> {
     }
 }
 
-fn signature_key(ty: &baml_type::RuntimeTy<usize>) -> u64 {
+pub(super) fn signature_key(ty: &baml_type::RuntimeTy<usize>) -> u64 {
     // Stable across MIR's declaration heads and linked field metadata.
     borsh::to_vec(ty)
         .expect("runtime type")
@@ -623,6 +663,13 @@ fn signature_key(ty: &baml_type::RuntimeTy<usize>) -> u64 {
 pub(super) fn capture_type(ty: &baml_type::RuntimeTy<usize>) -> Gen<String> {
     use baml_type::RuntimeTy as T;
     let body = match ty {
+        T::Future(value, error) => format!(
+            "Future(&{},&{})",
+            capture_type(value)?,
+            capture_type(error)?
+        ),
+        T::Float => "Float".into(),
+        T::Enum(id) => format!("Enum(CAPTURE_D{id})"),
         T::Int => "Int".into(),
         T::Bool => "Bool".into(),
         T::String => "String".into(),

@@ -27,11 +27,13 @@ impl Emitter<'_, '_> {
             Repr::Str => Ok(3),
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
+            Repr::Future => Ok(self.plan.future_descriptor().unwrap() + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::ListInt
             | Repr::ListStr
             | Repr::ListListStr
             | Repr::ListClosure(_)
+            | Repr::ListFuture(_)
             | Repr::ListPtr(_)
             | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
@@ -169,7 +171,22 @@ impl Emitter<'_, '_> {
     }
     pub(super) fn operand(&self, o: &Operand<'_>) -> Gen<(String, Repr)> {
         match o {
-            Operand::Copy(p) | Operand::Move(p) => self.place(p),
+            Operand::Copy(p) | Operand::Move(p) => {
+                let value = self.place(p)?;
+                if let Place::Local(l) = p {
+                    if l.0 > 0
+                        && l.0 <= self.arity
+                        && !self.body.locals[l.0].is_captured
+                        && value.1 == Repr::Tagged
+                    {
+                        let repr = self.plan.repr(&self.body.locals[l.0].ty)?;
+                        if repr != Repr::Tagged {
+                            return Ok((self.coerce(value, repr)?, repr));
+                        }
+                    }
+                }
+                Ok(value)
+            }
             Operand::Constant(Constant::Float(f)) => {
                 Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
             }

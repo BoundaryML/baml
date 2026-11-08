@@ -33,6 +33,7 @@ struct Plan<'a> {
     lists: BTreeSet<Repr>,
     json_types: Vec<Vec<usize>>,
     environments: bool,
+    task_support: bool,
     captures: BTreeMap<usize, Vec<Repr>>,
     lambda_bodies: BTreeMap<usize, usize>,
     callables: BTreeSet<usize>,

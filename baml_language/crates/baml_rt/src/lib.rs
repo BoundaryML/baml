@@ -9,6 +9,7 @@ pub mod language;
 pub mod lists;
 pub mod maps;
 pub mod strings;
+pub mod tasks;
 pub mod telemetry;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
 use baml_rt_tasks::{Config, TaskCx, TaskLoop, Value};
@@ -113,6 +114,7 @@ unsafe fn safepoint_slow() -> Result<(), baml_rt_tasks::Err> {
                 crate::telemetry::before_yield();
                 (&mut *task.get()).poll()?;
                 ROOTS.with(|roots| (&mut *heap.get()).safepoint(&Roots(&*roots.get())));
+                tasks::drain_finalizers();
             }
             Ok(())
         })
@@ -141,15 +143,10 @@ pub struct Instance {
     tasks: TaskLoop,
     _io: tokio::runtime::Runtime,
     functions: FunctionValues,
+    finalizers: tasks::NativeFinalizers,
 }
 impl Instance {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
-        assert!(
-            descriptors
-                .iter()
-                .all(|descriptor| descriptor.finalizer.is_none()),
-            "baml_rt integration seam does not support finalizers"
-        );
         let io = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .build()
@@ -178,6 +175,7 @@ impl Instance {
             tasks,
             _io: io,
             functions: FunctionValues::new(),
+            finalizers: tasks::NativeFinalizers::default(),
         }
     }
 
@@ -209,47 +207,43 @@ impl Instance {
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;
         let roots = self.tasks.integration_roots();
-        let functions = &mut self.functions as *mut FunctionValues;
-        let future = self.tasks.spawn(move |cx| {
-            struct Binding(
-                *mut Heap,
-                *mut TaskCx<'static>,
-                *const baml_rt_tasks::IntegrationRoots,
-                usize,
-                *const Cell<u8>,
-                *mut FunctionValues,
-            );
-            impl Drop for Binding {
-                fn drop(&mut self) {
-                    HEAP.set(self.0);
-                    TASK.set(self.1);
-                    ROOTS.set(self.2);
-                    STACK_LIMIT.set(self.3);
-                    POLL_WORD.set(self.4);
-                    FUNCTIONS.set(self.5);
-                }
+        let poll_word = roots.poll_word();
+        struct HostBinding(
+            *mut Heap,
+            *const baml_rt_tasks::IntegrationRoots,
+            *const Cell<u8>,
+            *mut FunctionValues,
+            *mut tasks::NativeFinalizers,
+        );
+        impl Drop for HostBinding {
+            fn drop(&mut self) {
+                HEAP.set(self.0);
+                ROOTS.set(self.1);
+                POLL_WORD.set(self.2);
+                FUNCTIONS.set(self.3);
+                tasks::FINALIZERS.set(self.4);
             }
-            let previous_functions = FUNCTIONS.replace(functions);
-            let previous_heap = HEAP.replace(heap);
-            // Erase the borrowed task lifetime only inside this scoped binding.
-            let current: *mut TaskCx<'_> = cx;
-            let previous_task = TASK.replace(current.cast::<TaskCx<'static>>());
-            let previous_roots = ROOTS.replace(&roots);
-            let previous_limit = STACK_LIMIT.replace(roots.stack_limit(cx.id()));
-            let poll_word = roots.poll_word();
-            let previous_poll = POLL_WORD.replace(Rc::as_ptr(&poll_word));
-            let _binding = Binding(
-                previous_heap,
-                previous_task,
-                previous_roots,
-                previous_limit,
-                previous_poll,
-                previous_functions,
-            );
+        }
+        let _binding = HostBinding(
+            HEAP.replace(heap),
+            ROOTS.replace(&roots),
+            POLL_WORD.replace(Rc::as_ptr(&poll_word)),
+            FUNCTIONS.replace(&mut self.functions),
+            tasks::FINALIZERS.replace(&mut self.finalizers),
+        );
+        let future = self.tasks.spawn(move |cx| {
+            let telemetry = crate::telemetry::current_raw();
+            let mut binding = unsafe { tasks::FiberBinding::new(cx, telemetry) };
+            unsafe {
+                binding.install();
+            }
             *output.borrow_mut() = Some(entry());
             Ok(Value::int(0))
         });
         self.tasks.run_until(&future)?;
+        unsafe {
+            tasks::drain_finalizers();
+        }
         let result = result.borrow_mut().take().expect("root task completed");
         Ok(result)
     }
@@ -262,6 +256,15 @@ impl Instance {
     }
     pub fn set_stress(&mut self, enabled: bool) {
         self.heap.set_stress(enabled);
+    }
+}
+
+impl Drop for Instance {
+    fn drop(&mut self) {
+        self.tasks.shutdown(std::time::Duration::ZERO);
+        unsafe {
+            self.finalizers.destroy();
+        }
     }
 }
 

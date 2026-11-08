@@ -45,10 +45,12 @@ pub enum Shape {
     },
     MapStringInt,
     Closure,
+    Future,
     Unsupported,
 }
 pub use baml_type::Freshness;
 pub enum Type {
+    Future(&'static Type, &'static Type),
     Function {
         params: &'static [Parameter],
         ret: &'static Type,
@@ -88,6 +90,10 @@ pub struct Parameter {
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
+            Self::Future(value, error) => OwnedType::Future(
+                Box::new(value.owned(leaves, carried)),
+                Box::new(error.owned(leaves, carried)),
+            ),
             Self::Function {
                 params,
                 ret,
@@ -464,6 +470,10 @@ impl Scratch {
                         )
                     })
                 }
+                (Key::Value(_), Shape::Future) => SnapshotObject::Descriptive {
+                    kind: btel_snapshot::Description::Future,
+                    name: None,
+                },
                 (Key::Value(pointer), Shape::Closure) => {
                     let name = unsafe { crate::closures::name(pointer) };
                     SnapshotObject::Descriptive {

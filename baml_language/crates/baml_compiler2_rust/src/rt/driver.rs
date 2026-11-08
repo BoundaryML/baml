@@ -22,6 +22,7 @@ pub fn compile_rt(
         lists: BTreeSet::new(),
         json_types: Vec::new(),
         environments: false,
+        task_support: false,
         captures: BTreeMap::new(),
         lambda_bodies: BTreeMap::new(),
         callables: BTreeSet::new(),

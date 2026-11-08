@@ -8,7 +8,7 @@ pub(super) struct EvidenceFrame {
     pc: u32,
     mode: u8,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Raise {
     id: TelemetryId,
     unwound: u32,

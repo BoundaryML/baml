@@ -79,7 +79,22 @@ pub enum Err {
     InternalError(String),
 }
 pub type Outcome = Result<Value, Err>;
-type Body = Box<dyn FnOnce(&mut TaskCx<'_>) -> Outcome>;
+type RawBody = unsafe fn(&mut TaskCx<'_>, [usize; 4]) -> Outcome;
+enum Body {
+    Boxed(Box<dyn FnOnce(&mut TaskCx<'_>) -> Outcome>),
+    Managed { code: RawBody, data: [usize; 4] },
+}
+impl Body {
+    fn run(self, cx: &mut TaskCx<'_>) -> Outcome {
+        match self {
+            Self::Boxed(body) => {
+                cx.admit()?;
+                body(cx)
+            }
+            Self::Managed { code, data } => unsafe { code(cx, data) },
+        }
+    }
+}
 #[derive(Clone, Debug)]
 pub enum FutureState {
     Pending,
@@ -335,6 +350,8 @@ pub struct SpawnOptions {
     pub deadline: Option<Instant>,
     pub gate: Option<Gate>,
     pub roots: Vec<Value>,
+    /// Managed environments/results held by inline entry data before execution.
+    pub managed_roots: [usize; 2],
 }
 #[derive(Clone)]
 pub struct Config {
@@ -385,6 +402,7 @@ struct Task {
     timer: Option<Instant>,
     ticket: Option<Ticket>,
     roots: Vec<Value>,
+    managed_roots: [UnsafeCell<usize>; 2],
     host: Option<mpsc::Sender<Result<OwnedValue, Err>>>,
 }
 #[cfg(feature = "instrument")]
@@ -591,14 +609,19 @@ impl TaskLoop {
         &mut self,
         body: impl FnOnce(&mut TaskCx<'_>) -> Outcome + 'static,
     ) -> FutureHandle {
-        spawn(&self.core, None, SpawnOptions::default(), Box::new(body))
+        spawn(
+            &self.core,
+            None,
+            SpawnOptions::default(),
+            Body::Boxed(Box::new(body)),
+        )
     }
     pub fn spawn_with(
         &mut self,
         options: SpawnOptions,
         body: impl FnOnce(&mut TaskCx<'_>) -> Outcome + 'static,
     ) -> FutureHandle {
-        spawn(&self.core, None, options, Box::new(body))
+        spawn(&self.core, None, options, Body::Boxed(Box::new(body)))
     }
     pub fn task_count(&self) -> usize {
         self.core.borrow().tasks.len()
@@ -969,8 +992,7 @@ fn spawn(
         {
             cx.core.borrow_mut().metrics.slice_reads += 1;
         }
-        cx.admit()?;
-        body(&mut cx)
+        body.run(&mut cx)
     });
     c.tasks.insert(
         id,
@@ -992,6 +1014,7 @@ fn spawn(
             timer: None,
             ticket,
             roots: options.roots,
+            managed_roots: options.managed_roots.map(UnsafeCell::new),
             host: None,
         },
     );
@@ -1044,7 +1067,35 @@ impl TaskCx<'_> {
         options: SpawnOptions,
         body: impl FnOnce(&mut TaskCx<'_>) -> Outcome + 'static,
     ) -> FutureHandle {
-        spawn(&self.core, Some(self.id), options, Box::new(body))
+        spawn(
+            &self.core,
+            Some(self.id),
+            options,
+            Body::Boxed(Box::new(body)),
+        )
+    }
+    /// Enter a managed fiber without boxing its captured native entry data.
+    ///
+    /// # Safety
+    /// Code/data must outlive execution. `code` installs runtime bindings and
+    /// calls `admit` before executing any user code, including cancelled tasks.
+    /// Managed addresses in data must also be in options.managed_roots or roots.
+    pub unsafe fn spawn_managed(
+        &mut self,
+        options: SpawnOptions,
+        code: RawBody,
+        data: [usize; 4],
+    ) -> FutureHandle {
+        spawn(
+            &self.core,
+            Some(self.id),
+            options,
+            Body::Managed { code, data },
+        )
+    }
+    /// A ready await checks cancellation but does not yield or consume a slice.
+    pub fn check_cancel(&mut self) -> Result<(), Err> {
+        self.checkpoint()
     }
     fn enable_service(&mut self) {
         let mut c = self.core.borrow_mut();
@@ -1108,7 +1159,7 @@ impl TaskCx<'_> {
         self.scheduled = slice_clock::now();
         self.checkpoint()
     }
-    fn admit(&mut self) -> Result<(), Err> {
+    pub fn admit(&mut self) -> Result<(), Err> {
         loop {
             self.checkpoint()?;
             let admitted = self
@@ -1396,7 +1447,12 @@ fn message(core: &Rc<RefCell<Core>>, msg: Message) {
                 deadline: timeout.map(|d| Instant::now() + d),
                 ..Default::default()
             };
-            let f = spawn(core, None, opts, Box::new(move |cx| body(cx, args)));
+            let f = spawn(
+                core,
+                None,
+                opts,
+                Body::Boxed(Box::new(move |cx| body(cx, args))),
+            );
             core.borrow_mut().tasks.get_mut(&f.id()).unwrap().host = Some(reply);
         }
     }
