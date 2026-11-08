@@ -16,6 +16,7 @@ impl Emitter<'_, '_> {
             .unwrap();
         }
         for (i, s) in block.statements.iter().enumerate() {
+            self.statement = i;
             self.mark(pcs.statements.get(i).copied().flatten());
             if let Some(result) = registry::statement(self, &s.kind) {
                 out.push_str(&result?);

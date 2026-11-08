@@ -13,6 +13,7 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "StackAllocation",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -430,6 +431,29 @@ fn rust_differential() {
     assert!(timeout > 0);
     let timeout = Duration::from_secs(timeout);
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
+    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok();
+    if let Some(selected) = &selected {
+        for name in selected.split(',') {
+            assert!(
+                BACKENDS.iter().any(|b| b.name == name),
+                "unknown backend: {name}"
+            );
+        }
+    }
+    // The bytecode oracle is mandatory even for a scoped backend run.
+    let backends: Vec<_> = BACKENDS
+        .iter()
+        .filter(|backend| {
+            backend.name == "bytecode"
+                || selected
+                    .as_ref()
+                    .is_none_or(|names| names.split(',').any(|name| name == backend.name))
+        })
+        .collect();
+    let rt_only = backends
+        .iter()
+        .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
+    let levels = if rt_only { &["off"][..] } else { LEVELS };
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -452,7 +476,7 @@ fn rust_differential() {
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
-    for backend in BACKENDS {
+    for backend in &backends {
         artifacts.entry(backend.artifact_key).or_insert_with(|| {
             (backend.build)(
                 &build.join(backend.artifact_key),
@@ -462,7 +486,7 @@ fn rust_differential() {
             )
         });
     }
-    let reference = BACKENDS
+    let reference = backends
         .iter()
         .position(|b| b.name == "bytecode")
         .expect("bytecode reference");
@@ -477,11 +501,13 @@ fn rust_differential() {
             .is_none_or(|s| s.split(',').any(|p| p == probe))
     });
     assert!(!probes.is_empty(), "no probes selected");
-    let mut coverage = rt::Coverage::new(&artifacts["rt"]);
-    let mut failures = coverage.build_failures();
+    let mut coverage = artifacts.get("rt").map(rt::Coverage::new);
+    let mut failures = coverage
+        .as_ref()
+        .map_or_else(Vec::new, rt::Coverage::build_failures);
     for probe in probes {
         let failures_before = failures.len();
-        for level in LEVELS {
+        for level in levels {
             if (probe.contains("::") && matches!(*level, "default" | "low"))
                 || (*level == "default"
                     && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan"))
@@ -490,7 +516,7 @@ fn rust_differential() {
             }
             let mut outputs = Vec::new();
             let mut traces = Vec::new();
-            for backend in BACKENDS {
+            for backend in &backends {
                 if backend.artifact_key == "rt"
                     && (!rt::supports_level(level) || artifacts["rt"][&probe].is_err())
                 {
@@ -612,7 +638,7 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
-            for (index, backend) in BACKENDS.iter().enumerate() {
+            for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;
                 }
@@ -728,9 +754,13 @@ fn rust_differential() {
                 }
             }
         }
-        coverage.record(&probe, &failures[failures_before..]);
+        if let Some(coverage) = &mut coverage {
+            coverage.record(&probe, &failures[failures_before..]);
+        }
     }
-    coverage.write(&build);
+    if let Some(coverage) = coverage {
+        coverage.write(&build);
+    }
     for failure in &failures {
         eprintln!("{failure}");
     }

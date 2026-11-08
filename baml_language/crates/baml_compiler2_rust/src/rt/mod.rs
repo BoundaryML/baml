@@ -44,6 +44,8 @@ struct Emitter<'a, 'db> {
     iter_arrays: BTreeMap<usize, usize>,
     arity: usize,
     block: usize,
+    statement: usize,
+    stack: stack::Placement,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
     compact_sites: Vec<u32>,
@@ -75,6 +77,7 @@ mod json;
 mod layout;
 mod places;
 mod repr;
+mod stack;
 mod statements;
 mod telemetry;
 

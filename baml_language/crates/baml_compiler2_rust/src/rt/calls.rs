@@ -166,16 +166,14 @@ impl Emitter<'_, '_> {
                         let expected = self.plan.repr(&body.locals[i + 1].ty)?;
                         *value = (self.coerce(value.clone(), expected)?, expected);
                     }
+                    let arguments = values
+                        .iter()
+                        .map(|(v, _)| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let observed = format!("f{c}({}, {arguments})", self.telemetry_site(c));
                     (
-                        self.fallible(&format!(
-                            "f{c}({}, {})",
-                            self.telemetry_site(c),
-                            values
-                                .iter()
-                                .map(|(v, _)| v.as_str())
-                                .collect::<Vec<_>>()
-                                .join(",")
-                        )),
+                        self.fallible(&self.stack_leaf_call(c, &arguments, &observed)),
                         self.plan.repr(&body.locals[0].ty)?,
                     )
                 };

@@ -968,6 +968,74 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
 }
 
 #[test]
+fn rt_stack_placement_preserves_lifetimes_and_bytecode() {
+    for (source, sites) in [
+        (
+            include_str!("../../../tools/speedtest/workloads/classes/method-call-100k/main.baml"),
+            1,
+        ),
+        (
+            "class C { x: int } function make() -> C { C { x: 1 } } function main() -> int { make().x }",
+            0,
+        ),
+        (
+            "class C { x: int } function alias(c: C) -> C { c } function main() -> int { let c = C { x: 1 }; alias(c).x }",
+            1,
+        ),
+        (
+            "class C { x: int } function main() -> int { let p = C { x: 0 }; let sum = 0; for (let i = 1; i < 9; i += 1) { let c = C { x: i }; sum += p.x; p = c; }; sum + p.x }",
+            0,
+        ),
+        (
+            include_str!("../rust_diff/baml_src/stack_allocation.baml"),
+            4,
+        ),
+    ] {
+        let entry_name = if source.contains("function StackAllocation()") {
+            "StackAllocation"
+        } else {
+            "main"
+        };
+        let db = baml_test_support::setup_multi_file_db(&[("stack.baml", source)]);
+        for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+            let program = lower(&db, opt);
+            let before = fingerprint(&program);
+            let (entry, _) = user_functions(&program)
+                .find(|(_, f)| f.name() == entry_name)
+                .unwrap();
+            let generated = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap();
+            syn::parse_file(&generated).expect("stack layouts parse");
+            let actual = generated.matches("(&raw mut stack").count();
+            assert!(
+                actual <= sites,
+                "unexpected stack site: {entry_name} at {opt:?}"
+            );
+            // Unoptimized trace hooks can conservatively retain arguments.
+            if opt == OptLevel::Two {
+                assert_eq!(actual, sites, "{entry_name} at {opt:?}");
+                if source.contains("function norm2(self)") {
+                    assert!(generated.contains("let stack_mode"));
+                    assert!(generated.contains("==0 {f"));
+                }
+            }
+            assert_eq!(before, fingerprint(&program));
+            assert_eq!(
+                before,
+                fingerprint(&lower(&db, opt)),
+                "escape queries must not change emitted bytecode"
+            );
+        }
+    }
+}
+
+#[test]
 // Byte hashes captured from the unsplit rt emitter. Intentional future
 // codegen changes may update these after checking the generated-source diff.
 fn rt_source_bytes_and_diagnostics() {
@@ -1011,7 +1079,7 @@ fn rt_source_bytes_and_diagnostics() {
         let expected = match name {
             "trees" => "8e454ff27beebede04824c7259b943f7c6c9ade3cf87c9c690e1e24c4268385e",
             "richards" => "51ded3f4ec2fd0b0dfe1566149179f7dca4d888bf9bfbb0f2e3d38cfde57f56d",
-            "agent" => "b9fcb2efc8730021c760cd7b6ac0e27083d5d1cf66583d871802c360120276a7",
+            "agent" => "7aa17dcbe995532dfded81e1c55e8bfe57cc3eb13f1e4c84aec2af76946caec7",
             _ => "",
         };
         if expected.is_empty() {

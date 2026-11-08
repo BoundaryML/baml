@@ -245,6 +245,89 @@ pub fn analyze<'db>(
     facts
 }
 
+/// Function lifetime facts, using the same points-to graph and call summaries
+/// as thread locality. These facts do not change bytecode's locality masks.
+/// In particular, returning an object is thread-local but is a function escape.
+pub struct FunctionEscapeFacts {
+    resolved: Resolved,
+    locals: usize,
+}
+
+impl FunctionEscapeFacts {
+    /// Whether everything `local` can hold stays within this invocation.
+    /// Stack placement must additionally prove an allocation's storage is not
+    /// reused while an earlier instance remains reachable.
+    pub fn local_stays_in_function(&self, local: Local) -> bool {
+        local.0 < self.locals && !self.resolved.shared[self.resolved.roots[local.0]]
+    }
+
+    /// Stable alias group within these facts; useful for assigning stack slots.
+    pub fn alias_group(&self, local: Local) -> usize {
+        self.resolved.roots[local.0]
+    }
+
+    /// Can `from` reach `object`, directly or through fields/elements? With
+    /// `contents_only`, ignore the value itself (a store kills that value).
+    pub fn may_reach(&self, from: Local, object: Local, contents_only: bool) -> bool {
+        let target = self.alias_group(object);
+        let mut node = Some(self.alias_group(from));
+        if contents_only {
+            node = self.resolved.contents[node.unwrap()];
+        }
+        let mut seen = Vec::new();
+        while let Some(current) = node {
+            if current == target {
+                return true;
+            }
+            if seen.contains(&current) {
+                break;
+            }
+            seen.push(current);
+            node = self.resolved.contents[current];
+        }
+        false
+    }
+}
+
+/// Does an object leave the function that allocated it? Parameters and their
+/// contents belong to the caller; return values and their contents outlive the
+/// invocation. Calls still instantiate the existing summaries, so merely
+/// lending an object to a non-retaining callee does not make it escape.
+pub fn analyze_function<'db>(
+    db: &'db dyn crate::Db,
+    root: SourceRoot,
+    body: &MirFunctionBody<'db>,
+    arity: usize,
+    opt: OptLevel,
+) -> FunctionEscapeFacts {
+    let types = Types::new(db, root, body);
+    let mut graph = build(db, body, arity, opt, None, &types);
+    for local in 0..=arity.min(body.locals.len().saturating_sub(1)) {
+        graph.mark_shared(local);
+    }
+    // A finalizer observes the instance after ordinary references die. Its
+    // storage cannot disappear with this frame, even if its fields are scalar.
+    for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+        if let StatementKind::Assign {
+            destination,
+            value:
+                Rvalue::Aggregate {
+                    kind: crate::AggregateKind::Class { class, .. },
+                    ..
+                },
+        } = &statement.kind
+            && types.may_finalize(class)
+        {
+            let node = graph.read(destination);
+            graph.mark_shared(node);
+        }
+    }
+    FunctionEscapeFacts {
+        resolved: graph.resolve(),
+        locals: body.locals.len(),
+    }
+}
+
 /// What calling `function` does with its arguments and result, for callers:
 /// its graph, restricted to what its parameters and return value reach, with
 /// parameters assumed thread-local. `None` when the analysis cannot see the
