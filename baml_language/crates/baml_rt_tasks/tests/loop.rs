@@ -1057,3 +1057,102 @@ fn forced_unwind_installs_bindings_until_the_fiber_unregisters_them() {
     assert!(matches!(future.state(), FutureState::Cancelled));
     assert_eq!(CURRENT_ID.get(), 0);
 }
+
+#[test]
+fn local_tokens_cancel_queued_multi_limit_tasks_without_holding_partial_permits() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let first = Gate::new(1);
+    let second = Gate::new(1);
+    let f = lp.spawn(move |cx| {
+        let token = cx.new_cancel_token(vec![]);
+        let combined = cx.new_cancel_token(vec![token.clone()]);
+        let held = cx.spawn_with(
+            SpawnOptions {
+                gate: Some(second.clone()),
+                ..Default::default()
+            },
+            |cx| {
+                cx.sleep(Duration::from_secs(60))?;
+                Ok(Value::int(1))
+            },
+        );
+        let queued = cx.spawn_with(
+            SpawnOptions {
+                gates: vec![first.clone(), second.clone(), first.clone()],
+                local_linked: vec![combined],
+                ..Default::default()
+            },
+            |_| panic!("cancelled queued body ran"),
+        );
+        let after = cx.spawn_with(
+            SpawnOptions {
+                gate: Some(first.clone()),
+                ..Default::default()
+            },
+            |_| Ok(Value::int(42)),
+        );
+        cx.sleep(Duration::from_millis(1))?;
+        assert_eq!(first.counts(), (0, 2));
+        assert_eq!(second.counts(), (1, 1));
+        assert!(token.request_cancel());
+        assert!(!token.request_cancel());
+        assert_eq!(cx.await_future(&queued).unwrap_err(), Err::Cancelled);
+        assert_eq!(cx.await_future(&after)?.as_int(), 42);
+        assert_eq!(first.counts(), (0, 0));
+        assert_eq!(second.counts(), (1, 0));
+        held.request_cancel();
+        assert_eq!(cx.await_future(&held).unwrap_err(), Err::Cancelled);
+        Ok(Value::int(42))
+    });
+    assert_eq!(lp.run_until(&f).unwrap().as_int(), 42);
+}
+
+#[test]
+fn scalar_task_elision_requires_an_idle_loop_without_external_cancellation() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        assert!(cx.can_elide_scalar_task());
+        let child = cx.spawn(|_| Ok(Value::int(1)));
+        assert!(!cx.can_elide_scalar_task());
+        cx.await_future(&child)?;
+        assert!(cx.can_elide_scalar_task());
+        let deadline = cx.spawn_with(
+            SpawnOptions {
+                deadline: Some(Instant::now() + Duration::from_secs(60)),
+                ..Default::default()
+            },
+            |cx| {
+                assert!(!cx.can_elide_scalar_task());
+                Ok(Value::int(0))
+            },
+        );
+        cx.await_future(&deadline)?;
+        let linked = cx.spawn_with(
+            SpawnOptions {
+                linked: vec![tokio_util::sync::CancellationToken::new()],
+                ..Default::default()
+            },
+            |cx| {
+                assert!(!cx.can_elide_scalar_task());
+                Ok(Value::int(0))
+            },
+        );
+        cx.await_future(&linked)?;
+        Ok(Value::int(0))
+    });
+    lp.run_until(&root).unwrap();
+}
+
+#[test]
+fn exported_host_submission_disables_scalar_task_elision() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let _submission = lp.submission_handle();
+    let root = lp.spawn(|cx| {
+        assert!(!cx.can_elide_scalar_task());
+        Ok(Value::int(0))
+    });
+    lp.run_until(&root).unwrap();
+}

@@ -595,3 +595,32 @@ fn allocatable_descriptors_still_require_headers() {
     }];
     let _ = Heap::new(&D, &TYPES);
 }
+
+#[test]
+fn finalizer_indexes_survive_compaction_and_cleanup_latches_remain_once_only() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        let dead = h.alloc(1, 32, &roots);
+        let alive = h.alloc(1, 32, &roots);
+        assert!(h.begin_cleanup(dead as usize));
+        assert!(!h.begin_cleanup(dead as usize));
+        roots.precise.borrow_mut().push(alive as usize);
+        h.collect(&roots);
+        assert!(h.object_start(dead as usize).is_none());
+        assert!(h.begin_cleanup(alive as usize));
+        assert!(!h.begin_cleanup(alive as usize));
+        roots.precise.borrow_mut().clear();
+        h.collect(&roots);
+        assert!(h.take_pending_finalizers().is_empty());
+        let pending = h.alloc(1, 32, &NoRoots);
+        h.collect(&NoRoots);
+        let mut batch = h.take_pending_finalizers();
+        assert_eq!(batch[0].object(), pending);
+        assert!(h.begin_cleanup(pending as usize));
+        h.collect(&NoRoots);
+        h.complete_finalizer(batch.pop().unwrap());
+        h.collect(&NoRoots);
+        assert_eq!(h.stats().live_bytes, 0);
+    }
+}

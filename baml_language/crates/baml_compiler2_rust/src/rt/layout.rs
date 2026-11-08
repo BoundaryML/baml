@@ -56,6 +56,7 @@ impl Plan<'_> {
     }
     pub(super) fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
+            Repr::Bigint => self.bigint_support = true,
             Repr::Future => self.task_support = true,
             Repr::ListFuture(_) => {
                 self.task_support = true;
@@ -92,6 +93,9 @@ impl Plan<'_> {
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
+            RuntimeTy::Bigint | RuntimeTy::Literal(baml_type::Literal::Bigint(_), _) => {
+                Repr::Bigint
+            }
             RuntimeTy::Float | RuntimeTy::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
@@ -207,6 +211,7 @@ impl Plan<'_> {
                     })
                     .ok_or_else(|| no("enum field"))?,
             ),
+            T::Bigint | T::Literal(baml_type::Literal::Bigint(_), _) => Repr::Bigint,
             T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
@@ -400,6 +405,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         .unwrap_or(rt_descriptors() + descriptors.len());
     let after_descriptors = after_lists
         + usize::from(plan.task_support)
+        + usize::from(plan.bigint_support)
         + if plan.closure_descriptors().is_some() {
             2
         } else {
@@ -448,7 +454,16 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                             Repr::Str => 3,
                             Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
                             Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
+                            Repr::Bigint => plan.bigint_descriptor().unwrap() + 3,
                             Repr::Future => plan.future_descriptor().unwrap() + 3,
+                            Repr::Int
+                                if super::tasks::class_is(plan, object, "spawn.Limit")
+                                    || super::tasks::class_is(
+                                        plan,
+                                        object,
+                                        "spawn.CancelToken"
+                                    ) =>
+                                u32::MAX as usize - 2,
                             Repr::Int => 0,
                             Repr::Float => u32::MAX as usize - 1,
                             Repr::Bool => 1,
@@ -465,7 +480,16 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                 })
                 .collect::<Vec<_>>()
                 .join(",");
-        writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
+        let finalizer = if super::tasks::class_is(plan, object, "spawn.Limit")
+            || super::tasks::class_is(plan, object, "spawn.CancelToken")
+        {
+            "Some(rt::tasks::RESOURCE_FINALIZER)".to_owned()
+        } else if plan.cleanup_methods.contains_key(&object) {
+            format!("Some({object})")
+        } else {
+            "None".to_owned()
+        };
+        writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:{finalizer}}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
         if *repr == Repr::MapStrInt {
@@ -505,6 +529,10 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     if let Some(future) = plan.future_descriptor() {
         writeln!(&mut out, "rt::tasks::future_descriptor({}),", future + 3).unwrap();
     }
+    if let Some(bigint) = plan.bigint_descriptor() {
+        writeln!(&mut out, "rt::tasks::bigint_descriptor({}),", bigint + 3).unwrap();
+    }
+
     out.push_str("];\n");
     out.push_str(&capture_codegen::emit(
         plan,
@@ -614,6 +642,30 @@ impl Plan<'_> {
                 },
                 |(_, env)| env + 1,
             )
+        })
+    }
+}
+
+impl Plan<'_> {
+    pub(super) fn bigint_descriptor(&self) -> Option<usize> {
+        self.bigint_support.then(|| {
+            rt_descriptors()
+                + self.layouts.len()
+                + self
+                    .lists
+                    .iter()
+                    .map(|r| {
+                        if *r == Repr::MapStrInt {
+                            3
+                        } else if r.growing() {
+                            2
+                        } else {
+                            1
+                        }
+                    })
+                    .sum::<usize>()
+                + usize::from(self.environments || !self.callables.is_empty()) * 2
+                + usize::from(self.task_support)
         })
     }
 }

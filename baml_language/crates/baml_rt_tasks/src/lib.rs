@@ -128,6 +128,7 @@ struct CancelNode {
     cancelled: Cell<bool>,
     parent: Option<Rc<CancelNode>>,
     linked: Vec<CancellationToken>,
+    local_linked: Vec<TaskCancel>,
     external: bool,
     epoch: Rc<Cell<usize>>,
     poll_word: Rc<Cell<u8>>,
@@ -161,6 +162,7 @@ impl TaskCancel {
                 parent: None,
                 external: !linked.is_empty(),
                 linked,
+                local_linked: Vec::new(),
                 epoch,
                 poll_word: Rc::default(),
             }),
@@ -174,6 +176,7 @@ impl TaskCancel {
                 parent: Some(self.node.clone()),
                 external: self.node.external || !linked.is_empty(),
                 linked,
+                local_linked: Vec::new(),
                 epoch: self.node.epoch.clone(),
                 poll_word: self.node.poll_word.clone(),
             }),
@@ -183,6 +186,11 @@ impl TaskCancel {
     pub fn with_deadline(mut self, deadline: Instant) -> Self {
         self.deadline = Some(self.deadline.map_or(deadline, |d| d.min(deadline)));
         self
+    }
+    pub fn request_cancel(&self) -> bool {
+        let was = self.node.cancelled.get();
+        self.cancel();
+        !was
     }
     pub fn cancel(&self) {
         self.node.poll_word.set(self.node.poll_word.get() | 1);
@@ -194,7 +202,10 @@ impl TaskCancel {
     pub fn is_cancelled(&self) -> bool {
         let mut node = Some(&*self.node);
         while let Some(n) = node {
-            if n.cancelled.get() || n.linked.iter().any(CancellationToken::is_cancelled) {
+            if n.cancelled.get()
+                || n.linked.iter().any(CancellationToken::is_cancelled)
+                || n.local_linked.iter().any(TaskCancel::is_cancelled)
+            {
                 return true;
             }
             node = n.parent.as_deref();
@@ -257,6 +268,7 @@ impl Drop for FutureHandle {
             if let Some(node) = Rc::get_mut(&mut f.cancel.node) {
                 node.parent = None;
                 node.linked.clear();
+                node.local_linked.clear();
             }
             drop(f);
             pool.records.push(self.0.clone());
@@ -279,6 +291,15 @@ impl FutureHandle {
     /// Requests only: settlement occurs when the producer actually exits.
     pub fn request_cancel(&self) {
         self.0.borrow().cancel.cancel();
+    }
+    /// Fire the producer token once, without settling its future early.
+    pub fn try_cancel(&self) -> bool {
+        let future = self.0.borrow();
+        if !matches!(future.state, FutureState::Pending) || future.cancel.node.cancelled.get() {
+            return false;
+        }
+        future.cancel.cancel();
+        true
     }
     pub fn id(&self) -> usize {
         self.0.borrow().id
@@ -333,6 +354,22 @@ impl Ticket {
         self.admitted
     }
 }
+struct Tickets {
+    tickets: Vec<Ticket>,
+}
+impl Tickets {
+    fn acquire(&mut self) -> bool {
+        if self.tickets.iter().any(|ticket| {
+            !ticket.admitted && {
+                let gate = ticket.gate.0.borrow();
+                gate.active >= gate.limit || gate.queue.front() != Some(&ticket.id)
+            }
+        }) {
+            return false;
+        }
+        self.tickets.iter_mut().all(Ticket::acquire)
+    }
+}
 impl Drop for Ticket {
     fn drop(&mut self) {
         let mut g = self.gate.0.borrow_mut();
@@ -347,6 +384,8 @@ impl Drop for Ticket {
 pub struct SpawnOptions {
     pub detached: bool,
     pub linked: Vec<CancellationToken>,
+    pub local_linked: Vec<TaskCancel>,
+    pub gates: Vec<Gate>,
     pub deadline: Option<Instant>,
     pub gate: Option<Gate>,
     pub roots: Vec<Value>,
@@ -400,7 +439,7 @@ struct Task {
     io_epoch: u64,
     completion: Option<Result<OwnedValue, Err>>,
     timer: Option<Instant>,
-    ticket: Option<Ticket>,
+    ticket: Option<Tickets>,
     roots: Vec<Value>,
     managed_roots: [UnsafeCell<usize>; 2],
     host: Option<mpsc::Sender<Result<OwnedValue, Err>>>,
@@ -911,10 +950,12 @@ fn spawn(
         parent: inherited.as_ref().map(|p| p.node.clone()),
         external: !options.linked.is_empty() || inherited.as_ref().is_some_and(|p| p.node.external),
         linked: options.linked,
+        local_linked: options.local_linked,
         epoch: c.cancel_epoch.clone(),
         poll_word: c.poll_word.clone(),
     };
-    let needs_service = node.external || deadline.is_some() || options.gate.is_some();
+    let needs_service =
+        node.external || deadline.is_some() || options.gate.is_some() || !options.gates.is_empty();
     c.slow_tasks += usize::from(needs_service);
     let recycled = c.future_pool.borrow_mut().records.pop();
     let future = if let Some(f) = recycled {
@@ -961,14 +1002,33 @@ fn spawn(
         FutureHandle(f)
     };
     let cancel = future.0.borrow().cancel.clone();
-    let ticket = options.gate.map(|gate| {
-        gate.0.borrow_mut().queue.push_back(id);
-        Ticket {
-            gate,
-            id,
-            admitted: false,
+    let mut gates = options.gates;
+    if let Some(gate) = options.gate {
+        gates.push(gate);
+    }
+    let mut unique: Vec<Gate> = Vec::new();
+    for gate in gates {
+        if !unique.iter().any(|g| Rc::ptr_eq(&g.0, &gate.0)) {
+            unique.push(gate);
         }
-    });
+    }
+    let ticket = if unique.is_empty() {
+        None
+    } else {
+        Some(Tickets {
+            tickets: unique
+                .into_iter()
+                .map(|gate| {
+                    gate.0.borrow_mut().queue.push_back(id);
+                    Ticket {
+                        gate,
+                        id,
+                        admitted: false,
+                    }
+                })
+                .collect(),
+        })
+    };
     let stack = c.pool.pop().unwrap_or_else(|| {
         DefaultStack::new(c.config.stack_size).expect("fiber stack allocation failed")
     });
@@ -1032,6 +1092,17 @@ pub struct TaskCx<'a> {
     scheduled: slice_clock::Stamp,
 }
 impl TaskCx<'_> {
+    /// Whether a private, immediately awaited scalar task has no scheduling
+    /// observer. External cancellation and outstanding loop services disable it.
+    pub fn can_elide_scalar_task(&self) -> bool {
+        let core = self.core.borrow();
+        core.tasks.len() == 1
+            && !core.host_enabled
+            && core.ready.is_empty()
+            && core.slow_tasks == 0
+            && !self.cancel.node.external
+            && self.cancel.deadline.is_none()
+    }
     pub fn id(&self) -> usize {
         self.id
     }
@@ -1052,6 +1123,22 @@ impl TaskCx<'_> {
     }
     pub fn parent_id(&self) -> Option<usize> {
         self.core.borrow().tasks[&self.id].parent
+    }
+    /// A loop-owned token wakes checkpoints without cross-thread atomics.
+    pub fn new_cancel_token(&self, linked: Vec<TaskCancel>) -> TaskCancel {
+        let core = self.core.borrow();
+        TaskCancel {
+            node: Rc::new(CancelNode {
+                cancelled: Cell::new(false),
+                parent: None,
+                linked: Vec::new(),
+                local_linked: linked,
+                external: false,
+                epoch: core.cancel_epoch.clone(),
+                poll_word: core.poll_word.clone(),
+            }),
+            deadline: None,
+        }
     }
     pub fn cancel(&self) -> TaskCancel {
         self.cancel.clone()
@@ -1170,7 +1257,7 @@ impl TaskCx<'_> {
                 .unwrap()
                 .ticket
                 .as_mut()
-                .is_none_or(Ticket::acquire);
+                .is_none_or(Tickets::acquire);
             if admitted {
                 return Ok(());
             }
@@ -1395,6 +1482,23 @@ impl TaskCx<'_> {
             .expect("I/O completion before resume")
             .map(Value::Owned)
     }
+    /// Generated MIR shields one block at a time, with nested calls inheriting
+    /// the depth. The caller pairs this with `leave_shield` on every exit.
+    pub fn enter_shield(&mut self) {
+        self.shield += 1;
+        self.core
+            .borrow_mut()
+            .tasks
+            .get_mut(&self.id)
+            .unwrap()
+            .shield += 1;
+    }
+    pub fn leave_shield(&mut self) {
+        self.shield -= 1;
+        if let Some(task) = self.core.borrow_mut().tasks.get_mut(&self.id) {
+            task.shield -= 1;
+        }
+    }
     pub fn shield<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         struct Shield<'a, 'b>(&'a mut TaskCx<'b>);
         impl Drop for Shield<'_, '_> {
@@ -1510,7 +1614,7 @@ fn service(core: &Rc<RefCell<Core>>) {
             let cancelled = t.shield == 0 && t.cancel.is_cancelled();
             let timed = t.timer.is_some_and(|d| now >= d);
             let admitted = t.state == TaskState::Parked(WaitReason::Admission)
-                && t.ticket.as_mut().is_none_or(Ticket::acquire);
+                && t.ticket.as_mut().is_none_or(Tickets::acquire);
             (cancelled || timed || admitted).then_some(id)
         })
         .collect();

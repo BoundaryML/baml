@@ -78,6 +78,7 @@ const FEATURES: &[&dyn Feature] = &[
     &globals::Feature,
     &closures::Feature,
     &tasks::Feature,
+    &super::callbacks::Feature,
     &containers::Feature,
     &dispatch::Feature,
     &super::interface_fields::Feature,

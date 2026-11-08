@@ -8,10 +8,37 @@ use super::{Artifacts, PROBES, kpis, pack_result};
 const TELEMETRY_SUPPORTED: bool = false;
 // The standalone probes exercise closures without the shared project's global
 // initializer dependency. Their admission is a required coverage baseline.
-const REQUIRED_PROBES: &[&str] = &["RtClosures", "RtEmptyClosures", "RtSpawnAwait"];
+const REQUIRED_PROBES: &[&str] = &[
+    "RtClosures",
+    "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
+    "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
+];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {
-    level == "off" || TELEMETRY_SUPPORTED || matches!(probe, "RtClosures" | "RtEmptyClosures")
+    level == "off"
+        || TELEMETRY_SUPPORTED
+        || matches!(
+            probe,
+            "RtClosures"
+                | "RtEmptyClosures"
+                | "RtGenericClosures"
+                | "RtGenericMethods"
+                | "RtNativeCallback"
+                | "RtBuiltinCallbacks"
+                | "RtSpawnAwait"
+                | "RtTaskControls"
+                | "RtTaskSleep"
+                | "RtTaskModifiers"
+                | "RtScalarTaskOrder"
+        )
 }
 
 #[derive(Debug, Clone)]

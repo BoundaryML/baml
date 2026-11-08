@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Repr {
     Int,
+    Bigint,
     Float,
     Bool,
     Str,
@@ -71,7 +72,8 @@ impl Repr {
     pub(super) fn pointer(self) -> bool {
         matches!(
             self,
-            Self::Str
+            Self::Bigint
+                | Self::Str
                 | Self::Ptr(_)
                 | Self::ListInt
                 | Self::ListPtr(_)

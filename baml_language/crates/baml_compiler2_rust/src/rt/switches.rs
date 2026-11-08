@@ -181,6 +181,12 @@ impl Emitter<'_, '_> {
             return Ok("false".into());
         }
         let tag = match ty {
+            TyTemplate::Bigint => (self
+                .plan
+                .bigint_descriptor()
+                .ok_or_else(|| no("bigint membership"))?
+                + 3)
+            .to_string(),
             TyTemplate::Int => "0".into(),
             TyTemplate::Float => "4294967294".into(),
             TyTemplate::Bool => "1".into(),

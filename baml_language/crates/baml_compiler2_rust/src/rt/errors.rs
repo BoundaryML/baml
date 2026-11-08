@@ -10,14 +10,15 @@ impl Emitter<'_, '_> {
             self.compact_sites.push(u32::try_from(offset).unwrap());
             let kind = match OpCode::try_from(bytecode.lower_to_compact().code[offset]).unwrap() {
                 OpCode::Throw => "Throw",
+                OpCode::Await | OpCode::AwaitAny => "Await",
+                OpCode::SysOp => "HostBoundary",
                 OpCode::Rethrow => "Rethrow",
                 OpCode::Call
                 | OpCode::CallHooked
                 | OpCode::CallLocal
                 | OpCode::CallExactArgs
                 | OpCode::CallIndirect
-                | OpCode::VirtualCall
-                | OpCode::SysOp => "NativeBoundary",
+                | OpCode::VirtualCall => "NativeBoundary",
                 _ => "Runtime",
             };
             self.raise_kinds.push(kind);
@@ -49,6 +50,12 @@ impl Emitter<'_, '_> {
         }
     }
     pub(super) fn fallible(&self, code: &str) -> String {
+        if matches!(
+            self.all[&self.object].kind,
+            super::MirFunctionKind::Builtin(_)
+        ) {
+            return format!("({code})?");
+        }
         let error = format!("e.at(&S{},{})", self.object, self.site);
         format!(
             "match ({code}){{Ok(v)=>v,Err(e)=>{{{}}}}}",

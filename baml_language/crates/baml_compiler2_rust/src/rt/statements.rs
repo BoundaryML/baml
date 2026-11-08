@@ -6,7 +6,11 @@ impl Emitter<'_, '_> {
         let block = &self.body.blocks[b];
         let pcs = &self.plan.index.positions(self.object).block_pcs[b];
         self.mark(pcs.start);
-        let mut out = String::new();
+        let mut out = if block.shielded {
+            "{let _shield=rt::tasks::shield();".to_owned()
+        } else {
+            String::new()
+        };
         if headers.contains(&b) {
             writeln!(
                 &mut out,
@@ -44,6 +48,9 @@ impl Emitter<'_, '_> {
         let term = block.terminator.as_ref().unwrap();
         if let Some(result) = registry::terminator(self, term) {
             out.push_str(&result?);
+            if block.shielded {
+                out.push('}');
+            }
             return Ok(out);
         }
         match term {
@@ -79,7 +86,7 @@ impl Emitter<'_, '_> {
                     .collect::<Vec<_>>()
                     .join(",");
                 let error = format!(
-                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
+                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,telemetry_caught:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
                     self.object, self.site
                 );
                 writeln!(&mut out, "{{let p={value};{}}}", self.raise(&error)).unwrap();
@@ -97,7 +104,7 @@ impl Emitter<'_, '_> {
                     .id
                     .0;
                 out.push_str(&self.raise(&format!(
-                    "caught{handler}.take().expect(\"missing caught error\").rethrow()"
+                    "rt::telemetry::evidence::rethrow(caught{handler}.take().expect(\"missing caught error\").rethrow(),&S{}, {})",self.object,self.site
                 )));
             }
 
@@ -112,6 +119,9 @@ impl Emitter<'_, '_> {
                     let short = format!("!({})", Self::null_test(&(v.clone(), t)));
                     let store = self.assign(destination, (v, t))?;
                     writeln!(&mut out, "c{b}={short};if c{b}{{{store}}}").unwrap();
+                    if block.shielded {
+                        out.push('}');
+                    }
                     return Ok(out);
                 }
                 if t != Repr::Bool {
@@ -134,6 +144,9 @@ impl Emitter<'_, '_> {
             }
             Terminator::Return | Terminator::Goto { .. } => {}
             _ => return Err(no("terminator")),
+        }
+        if block.shielded {
+            out.push('}');
         }
         Ok(out)
     }

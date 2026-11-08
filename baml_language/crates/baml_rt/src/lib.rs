@@ -2,6 +2,7 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod callbacks;
 pub mod calls;
 pub mod closures;
 pub mod json;
@@ -32,6 +33,8 @@ impl RootSource for Roots<'_> {
 }
 
 thread_local! {
+    pub(crate) static ADMISSION_CANCELLED:Cell<bool>=const {Cell::new(false)};
+    pub(crate) static ENTRY_ERROR:Cell<*mut Error>=const {Cell::new(std::ptr::null_mut())};
     static POLL_WORD: Cell<*const Cell<u8>> = const { Cell::new(std::ptr::null()) };
     static STACK_LIMIT: Cell<usize> = const { Cell::new(0) };
     static ROOTS: Cell<*const baml_rt_tasks::IntegrationRoots> = const { Cell::new(std::ptr::null()) };
@@ -214,6 +217,7 @@ impl Instance {
             *const Cell<u8>,
             *mut FunctionValues,
             *mut tasks::NativeFinalizers,
+            Option<tasks::Cleanup>,
         );
         impl Drop for HostBinding {
             fn drop(&mut self) {
@@ -222,6 +226,7 @@ impl Instance {
                 POLL_WORD.set(self.2);
                 FUNCTIONS.set(self.3);
                 tasks::FINALIZERS.set(self.4);
+                tasks::CLEANUP.set(self.5);
             }
         }
         let _binding = HostBinding(
@@ -230,6 +235,7 @@ impl Instance {
             POLL_WORD.replace(Rc::as_ptr(&poll_word)),
             FUNCTIONS.replace(&mut self.functions),
             tasks::FINALIZERS.replace(&mut self.finalizers),
+            tasks::CLEANUP.replace(None),
         );
         let future = self.tasks.spawn(move |cx| {
             let telemetry = crate::telemetry::current_raw();

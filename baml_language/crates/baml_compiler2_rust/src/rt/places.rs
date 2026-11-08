@@ -21,6 +21,7 @@ impl Emitter<'_, '_> {
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
         match repr {
             Repr::Int => Ok(0),
+            Repr::Bigint => Ok(self.plan.bigint_descriptor().unwrap() + 3),
             Repr::Float => Ok(u32::MAX as usize - 1),
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
@@ -190,6 +191,14 @@ impl Emitter<'_, '_> {
             Operand::Constant(Constant::Float(f)) => {
                 Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
             }
+            Operand::Constant(Constant::Bigint(i)) => Ok((
+                self.fallible(&format!(
+                    "rt::tasks::bigint_text({}, {:?})",
+                    self.plan.bigint_descriptor().unwrap(),
+                    i.to_string()
+                )),
+                Repr::Bigint,
+            )),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => Ok((
@@ -221,6 +230,32 @@ impl Emitter<'_, '_> {
                     Repr::Closure,
                 ))
             }
+            Operand::Constant(Constant::GenericFunction { func, type_args }) => {
+                let (base, _) = self
+                    .plan
+                    .index
+                    .function(self.db, *func)
+                    .ok_or_else(|| no("generic function"))?;
+                let frame = type_args
+                    .iter()
+                    .map(|t| RuntimeTy::from(t.clone()))
+                    .collect::<Vec<_>>();
+                let object = self
+                    .plan
+                    .generic_functions
+                    .iter()
+                    .find(|(c, t, _)| *c == base && *t == frame)
+                    .map(|(_, _, id)| *id)
+                    .ok_or_else(|| no("generic function instance"))?;
+                Ok((
+                    self.fallible(&format!(
+                        "rt::closures::function({}, {object},closure{object},{:?})",
+                        self.plan.closure_descriptors().unwrap().1,
+                        self.plan.index.info(object).name().as_str()
+                    )),
+                    Repr::Closure,
+                ))
+            }
             Operand::Constant(Constant::OmittedArg) => {
                 Ok(("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged))
             }
@@ -235,7 +270,16 @@ impl Emitter<'_, '_> {
             return Ok(format!("rt::closures::store({cell},{value});\n"));
         }
         let (dst, repr) = self.place(p)?;
-        let src = self.coerce(value, repr)?;
+        // MIR uses anonymous null temporaries for discarded expressions.
+        // Evaluate the source (including fallible calls), then store null.
+        let discard = matches!(p,Place::Local(l) if self.body.locals[l.0].name.is_none())
+            && repr == Repr::Null;
+        let src = if discard {
+            format!("{{let _={};0usize}}", value.0)
+        } else {
+            self.coerce(value, repr)
+                .map_err(|error| format!("{error} (destination {p:?})"))?
+        };
         match p {
             Place::Local(_) => Ok(format!("{dst}={src};\n")),
             Place::Field { base, field } => {

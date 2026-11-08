@@ -15,7 +15,15 @@ mod initializer_probes;
 const PROBES: &[&str] = &[
     "RtClosures",
     "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
     "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -278,8 +286,10 @@ fn probe_timeout_kills_and_reaps() {
 
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
-        "RtClosures" | "RtEmptyClosures" => Some(manifest.join("rt_fixtures/closures")),
-        "RtSpawnAwait" => Some(manifest.join("rt_fixtures/tasks")),
+        "RtClosures" | "RtEmptyClosures" | "RtGenericClosures" | "RtGenericMethods"
+        | "RtNativeCallback" | "RtBuiltinCallbacks" => Some(manifest.join("rt_fixtures/closures")),
+        "RtSpawnAwait" | "RtTaskControls" | "RtTaskSleep" | "RtTaskModifiers"
+        | "RtScalarTaskOrder" => Some(manifest.join("rt_fixtures/tasks")),
         _ => None,
     }
 }
@@ -349,7 +359,19 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .or_insert_with(|| executable.clone());
         }
     }
-    for probe in ["RtClosures", "RtEmptyClosures", "RtSpawnAwait"] {
+    for probe in [
+        "RtClosures",
+        "RtEmptyClosures",
+        "RtGenericClosures",
+        "RtGenericMethods",
+        "RtNativeCallback",
+        "RtBuiltinCallbacks",
+        "RtSpawnAwait",
+        "RtTaskControls",
+        "RtTaskSleep",
+        "RtTaskModifiers",
+        "RtScalarTaskOrder",
+    ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
         }
@@ -624,7 +646,20 @@ fn rust_differential() {
                 || (*level == "default"
                     && !matches!(
                         probe.as_str(),
-                        "Scalars" | "Hooked" | "ManualSpan" | "RtClosures" | "RtEmptyClosures"
+                        "Scalars"
+                            | "Hooked"
+                            | "ManualSpan"
+                            | "RtClosures"
+                            | "RtEmptyClosures"
+                            | "RtGenericClosures"
+                            | "RtGenericMethods"
+                            | "RtNativeCallback"
+                            | "RtBuiltinCallbacks"
+                            | "RtSpawnAwait"
+                            | "RtTaskControls"
+                            | "RtTaskSleep"
+                            | "RtTaskModifiers"
+                            | "RtScalarTaskOrder"
                     ))
             {
                 continue;

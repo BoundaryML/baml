@@ -24,6 +24,7 @@ pub struct Declaration {
     pub is_enum: bool,
 }
 pub enum Shape {
+    Bigint,
     String,
     Enum {
         declaration: fn() -> &'static Declaration,
@@ -50,6 +51,7 @@ pub enum Shape {
 }
 pub use baml_type::Freshness;
 pub enum Type {
+    Bigint,
     Future(&'static Type, &'static Type),
     Function {
         params: &'static [Parameter],
@@ -114,6 +116,7 @@ impl Type {
                 ret: Box::new(ret.owned(leaves, carried)),
                 throws: Box::new(throws.owned(leaves, carried)),
             },
+            Self::Bigint => OwnedType::Bigint,
             Self::Int => OwnedType::Int,
             Self::LiteralInt(v, f) => OwnedType::Literal(baml_type::Literal::Int(*v), *f),
             Self::LiteralBool(v, f) => OwnedType::Literal(baml_type::Literal::Bool(*v), *f),
@@ -312,7 +315,11 @@ impl Scratch {
         if value.payload == 0 {
             return SnapshotValue::Null;
         }
-        let result = if matches!(shape, Shape::String) {
+        let result = if matches!(shape, Shape::Bigint) {
+            leaves.bigint(&std::sync::Arc::new(unsafe {
+                crate::tasks::bigint_value(value.payload as usize)
+            }))
+        } else if matches!(shape, Shape::String) {
             let ptr = value.payload as *const u8;
             let len = unsafe { ptr.add(8).cast::<usize>().read() };
             let bytes = unsafe { std::slice::from_raw_parts(ptr.add(16), len) };
@@ -412,9 +419,24 @@ impl Scratch {
                                     payload: unsafe { ptr.cast::<u64>().read() },
                                 },
                             };
-                            (field.name.into(), unsafe {
-                                self.add(shapes, leaves, value, depth + 1)
-                            })
+                            let captured = if field.type_id == u32::MAX - 2 {
+                                let key = Key::Value(ptr as usize);
+                                if let Some(value) = self.seen.get(&key) {
+                                    *value
+                                } else {
+                                    let value = leaves
+                                        .object(SnapshotObject::NonSnapshotableValue {})
+                                        .map_or(
+                                            SnapshotValue::Truncated(Limit::Objects),
+                                            SnapshotValue::Object,
+                                        );
+                                    self.seen.insert(key, value);
+                                    value
+                                }
+                            } else {
+                                unsafe { self.add(shapes, leaves, value, depth + 1) }
+                            };
+                            (field.name.into(), captured)
                         })
                     }
                     SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),

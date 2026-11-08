@@ -5,11 +5,17 @@ pub(super) fn emit(
     entry: usize,
     builtins: &BTreeSet<String>,
     format_site: usize,
+    cleanup: bool,
 ) {
     let builtin_init = if builtins.is_empty() {
         ""
     } else {
         "init_builtin_observation();"
     };
-    write!(&mut out,"fn entry()->R<i64>{{unsafe{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_observed(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}\n").unwrap();
+    let cleanup_init = if cleanup {
+        "rt::tasks::set_cleanup_dispatch(cleanup_dispatch);"
+    } else {
+        ""
+    };
+    write!(&mut out,"fn entry()->R<i64>{{unsafe{{{cleanup_init}let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_observed(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}\n").unwrap();
 }

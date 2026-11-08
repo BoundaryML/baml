@@ -1010,9 +1010,9 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "bf2717f60b03353fda6186125f689db635c4caa61a726e5d73fc145a027f412e",
+            "trees" => "3fb3c406a0d814f8f5586e44689d4c1c5606daa70a87548e178363e24342ee69",
             "richards" => "f4c83bcf39560550c9dbd702f85f5fb5c095ef1085f1cd3d7bef1fbdcd7e0d23",
-            "agent" => "f987fe9acc96151bab2e9a39e9c346df041e840ed2e029664534660050d09952",
+            "agent" => "97962f5266056d9db561903c04870df570c36c7b067c5e91300261a4bb3226de",
             _ => "",
         };
         if expected.is_empty() {
@@ -1210,10 +1210,76 @@ fn rt_generated_spawn_await() {
     .unwrap();
     syn::parse_file(&source).unwrap();
     assert!(source.contains("rt::tasks::spawn("));
-    assert!(source.contains("rt::tasks::await_future("));
+    assert!(source.contains("rt::tasks::await_scalar("));
+    assert!(source.contains("rt::tasks::can_elide_scalar_task()"));
     std::fs::write(
         std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-spawn-await.rs"),
         source,
     )
     .unwrap();
+}
+
+#[test]
+fn rt_generic_closures_and_callbacks() {
+    let source = include_str!("../rt_fixtures/closures/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("closures.baml", source)]);
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = lower(&db, opt);
+        for name in [
+            "RtGenericClosures",
+            "RtNativeCallback",
+            "RtBuiltinCallbacks",
+            "RtGenericMethods",
+        ] {
+            let entry = program.rendered_callables()[&format!("user.{name}")]
+                .object
+                .raw();
+            let source = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap();
+            syn::parse_file(&source).unwrap();
+            std::fs::write(
+                std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                    .join(format!("rt-{name}-{opt:?}.rs")),
+                source,
+            )
+            .unwrap();
+        }
+    }
+}
+
+#[test]
+fn rt_generated_task_controls() {
+    let source = include_str!("../rt_fixtures/tasks/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("tasks.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    for name in [
+        "RtTaskControls",
+        "RtTaskSleep",
+        "RtTaskModifiers",
+        "RtScalarTaskOrder",
+    ] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        syn::parse_file(&source).unwrap();
+        std::fs::write(
+            std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rt-{name}.rs")),
+            source,
+        )
+        .unwrap();
+    }
 }

@@ -80,6 +80,13 @@ pub(crate) fn check_stack_before(threshold: usize) -> R<()> {
 #[cold]
 #[inline(never)]
 fn stack_overflow() -> Box<Error> {
+    // A rejected task still enters its observed callable frame. Reuse the
+    // cold guard path to deliver admission failure before user code runs.
+    let error = crate::ENTRY_ERROR.replace(std::ptr::null_mut());
+    if !error.is_null() {
+        crate::ADMISSION_CANCELLED.set(true);
+        return unsafe { Box::from_raw(error) };
+    }
     from_panic(bex_vm_types::errors::VmPanic::StackOverflow)
 }
 
@@ -106,6 +113,7 @@ pub struct Frame {
 pub struct Error {
     pub telemetry_raise: Option<crate::telemetry::evidence::Raise>,
     pub telemetry_at: Option<btel_types::ClockInstant>,
+    pub telemetry_caught: Option<(btel_types::TelemetryId, btel_types::TelemetryId)>,
     /// Actual rt heap instance of the panic class, zero only for internal errors.
     pub value: usize,
     pub class: &'static str,
@@ -119,6 +127,7 @@ impl Error {
         Box::new(Self {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: 0,
             class: "InternalError",
             message,
@@ -156,6 +165,7 @@ fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
         Box::new(Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: object as usize,
             class,
             message,
@@ -442,6 +452,7 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
         Box::new(Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: object as usize,
             class: "baml.panics.AllocFailure",
             message,
@@ -538,6 +549,7 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
         Box::new(Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: object as usize,
             class: "baml.panics.IndexOutOfBounds",
             message,
@@ -888,6 +900,7 @@ fn division_zero(left: i64) -> Box<Error> {
     Box::new(Error {
         telemetry_raise: None,
         telemetry_at: None,
+        telemetry_caught: None,
         value: p as usize,
         class: "baml.panics.DivisionByZero",
         message: format!("division by zero: {left} / 0"),

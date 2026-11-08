@@ -1,7 +1,7 @@
 use super::*;
 
 impl Emitter<'_, '_> {
-    pub(super) fn function(&mut self, arity: usize, inline: bool) -> Gen<String> {
+    pub(super) fn function(&mut self, arity: usize, inline: bool, recursive: bool) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
             unwinds: self
@@ -133,6 +133,9 @@ impl Emitter<'_, '_> {
         );
         let mut code =
             call_cost::prologue(object, &params, &arguments, returned, &captures, attribute);
+        if recursive {
+            code.push_str(&format!("{};\n", self.fallible("cx.poll()")));
+        }
         for i in 1..=arity {
             if self.body.locals[i].is_captured {
                 let value = self.coerce(
@@ -153,6 +156,17 @@ impl Emitter<'_, '_> {
             }
             let t = self.local(i)?;
             writeln!(&mut code, "let mut l{i}:{}={};", t.rust(), t.zero()).unwrap();
+        }
+        for block in &self.body.blocks {
+            if let Some(term) = &block.terminator
+                && let Some(local) = super::tasks::ephemeral_plan(self, term)
+            {
+                writeln!(
+                    &mut code,
+                    "let mut fast_plan_body{local}=0usize;let mut fast_plan_name{local}=0usize;"
+                )
+                .unwrap();
+            }
         }
         for iter in &self.iters {
             writeln!(&mut code, "let mut iter_index{iter}=0i64;").unwrap();

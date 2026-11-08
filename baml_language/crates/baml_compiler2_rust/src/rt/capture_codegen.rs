@@ -115,7 +115,9 @@ pub(super) fn emit(
                 .iter()
                 .find_map(|(&object, &index)| (index == desc).then_some(object))
         };
-        let shape = if plan.future_descriptor() == Some(desc) {
+        let shape = if plan.bigint_descriptor() == Some(desc) {
+            "Bigint".to_owned()
+        } else if plan.future_descriptor() == Some(desc) {
             "Future".to_owned()
         } else if plan
             .closure_descriptors()
@@ -261,6 +263,7 @@ pub(super) fn capture_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
 fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     use bex_vm_types::RuntimeTy as T;
     let member = match ty {
+        T::Bigint => "Bigint".into(),
         T::Int => "Int".into(),
         T::Literal(lit, f) => match lit {
             baml_type::Literal::Int(v) => {

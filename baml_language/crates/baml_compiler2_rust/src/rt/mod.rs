@@ -34,8 +34,14 @@ struct Plan<'a> {
     json_types: Vec<Vec<usize>>,
     environments: bool,
     task_support: bool,
+    bigint_support: bool,
+    cleanup_methods: BTreeMap<usize, usize>,
     captures: BTreeMap<usize, Vec<Repr>>,
+    capture_types: BTreeMap<usize, Vec<RuntimeTy>>,
     lambda_bodies: BTreeMap<usize, usize>,
+    lambda_targets: BTreeMap<(usize, usize), usize>,
+    generic_functions: Vec<(usize, Vec<RuntimeTy>, usize)>,
+    generic_values: BTreeMap<(usize, usize, usize), usize>,
     callables: BTreeSet<usize>,
     closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
     enums: BTreeSet<usize>,
@@ -116,3 +122,7 @@ mod switches;
 mod generics;
 
 mod interface_fields;
+
+mod callbacks;
+
+mod scalar_tasks;

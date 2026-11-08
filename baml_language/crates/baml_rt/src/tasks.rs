@@ -14,6 +14,7 @@ struct Future {
     error: *mut Error,
     handle: Option<FutureHandle>,
     registration: usize,
+    telemetry: Option<Box<crate::telemetry::Task>>,
 }
 pub const fn future_descriptor(type_id: u32) -> Descriptor {
     Descriptor {
@@ -34,6 +35,7 @@ pub const fn future_descriptor(type_id: u32) -> Descriptor {
 pub(crate) struct NativeFinalizers {
     entries: Vec<usize>,
     free: Vec<usize>,
+    resources: std::collections::HashMap<usize, Resource>,
 }
 impl NativeFinalizers {
     fn register(&mut self, pointer: usize) -> usize {
@@ -57,6 +59,7 @@ impl NativeFinalizers {
             unsafe {
                 let f = &mut *(pointer as *mut Future);
                 f.handle.take();
+                f.telemetry.take();
                 if !f.error.is_null() {
                     drop(Box::from_raw(f.error));
                     f.error = ptr::null_mut();
@@ -64,6 +67,7 @@ impl NativeFinalizers {
             }
         }
         self.free.clear();
+        self.resources.clear();
     }
 }
 thread_local! { pub(crate) static FINALIZERS: Cell<*mut NativeFinalizers> = const { Cell::new(ptr::null_mut()) }; }
@@ -80,6 +84,7 @@ pub(crate) unsafe fn finalize(pointer: usize) {
     unsafe {
         let f = &mut *(pointer as *mut Future);
         f.handle.take();
+        f.telemetry.take();
         if !f.error.is_null() {
             drop(Box::from_raw(f.error));
             f.error = ptr::null_mut();
@@ -90,9 +95,18 @@ pub(crate) unsafe fn finalize(pointer: usize) {
 pub(crate) unsafe fn drain_finalizers() {
     let pending = unsafe { (&mut *crate::HEAP.get()).take_pending_finalizers() };
     for token in pending {
-        assert_eq!(token.cleanup, FUTURE_FINALIZER, "unknown generated cleanup");
         unsafe {
-            finalize(token.object() as usize);
+            if token.cleanup == FUTURE_FINALIZER {
+                finalize(token.object() as usize);
+            } else if token.cleanup == RESOURCE_FINALIZER {
+                (&mut *FINALIZERS.get())
+                    .resources
+                    .remove(&(token.object() as usize));
+            } else {
+                let callback = CLEANUP.get().expect("generated cleanup dispatcher");
+                let _shield = shield();
+                let _ = callback(token.cleanup, token.object() as usize);
+            }
             (&mut *crate::HEAP.get()).complete_finalizer(token);
         }
     }
@@ -101,7 +115,8 @@ pub(crate) unsafe fn drain_finalizers() {
 pub(crate) struct FiberBinding<'a> {
     cx: *mut TaskCx<'a>,
     limit: usize,
-    telemetry: *mut (),
+    telemetry: Option<crate::telemetry::Fiber>,
+    previous_entry_error: *mut Error,
     previous_task: *mut TaskCx<'static>,
     previous_limit: usize,
     previous_telemetry: *mut (),
@@ -112,7 +127,8 @@ impl<'a> FiberBinding<'a> {
             Self {
                 cx,
                 limit: (&*crate::ROOTS.get()).stack_limit(cx.id()),
-                telemetry,
+                telemetry: crate::telemetry::Fiber::current(telemetry),
+                previous_entry_error: crate::ENTRY_ERROR.replace(ptr::null_mut()),
                 previous_task: crate::TASK.get(),
                 previous_limit: crate::STACK_LIMIT.get(),
                 previous_telemetry: crate::telemetry::current_raw(),
@@ -132,13 +148,22 @@ impl<'a> FiberBinding<'a> {
 }
 unsafe fn enter(pointer: *mut ()) {
     unsafe {
-        let b = &*pointer.cast::<FiberBinding<'_>>();
+        let b = &mut *pointer.cast::<FiberBinding<'_>>();
         crate::TASK.set(b.cx.cast());
         crate::STACK_LIMIT.set(b.limit);
-        crate::telemetry::replace_current_raw(b.telemetry);
+        if let Some(telemetry) = &mut b.telemetry {
+            telemetry.enter();
+        } else {
+            crate::telemetry::replace_current_raw(ptr::null_mut());
+        }
     }
 }
-unsafe fn leave(_: *mut ()) {
+unsafe fn leave(pointer: *mut ()) {
+    unsafe {
+        if let Some(telemetry) = &mut (*pointer.cast::<FiberBinding<'_>>()).telemetry {
+            telemetry.leave();
+        }
+    }
     crate::TASK.set(ptr::null_mut());
     crate::STACK_LIMIT.set(0);
     unsafe {
@@ -148,6 +173,11 @@ unsafe fn leave(_: *mut ()) {
 impl Drop for FiberBinding<'_> {
     fn drop(&mut self) {
         unsafe {
+            crate::ADMISSION_CANCELLED.set(false);
+            let error = crate::ENTRY_ERROR.replace(self.previous_entry_error);
+            if !error.is_null() {
+                drop(Box::from_raw(error));
+            }
             (*self.cx).set_switch_hook(None);
             crate::telemetry::replace_current_raw(self.previous_telemetry);
         }
@@ -171,7 +201,9 @@ pub unsafe fn spawn(
     desc: u32,
     environment: usize,
     site: usize,
+    entry_site: usize,
     mut options: SpawnOptions,
+    name: Option<String>,
 ) -> R<usize> {
     unsafe {
         let pointer = crate::try_alloc(desc, size_of::<Future>())?.cast::<Future>();
@@ -182,12 +214,16 @@ pub unsafe fn spawn(
         };
         (*pointer).error = ptr::null_mut();
         ptr::write(&mut (*pointer).handle, None);
+        ptr::write(
+            &mut (*pointer).telemetry,
+            crate::telemetry::Task::spawn(site, name),
+        );
         (*pointer).registration = (&mut *FINALIZERS.get()).register(pointer as usize);
         options.managed_roots = [pointer as usize, 0];
         let handle = (&mut *crate::TASK.get()).spawn_managed(
             options,
             execute,
-            [pointer as usize, site, 0, 0],
+            [pointer as usize, site, entry_site, 0],
         );
         (*pointer).handle = Some(handle);
         Ok(pointer as usize)
@@ -196,12 +232,27 @@ pub unsafe fn spawn(
 unsafe fn execute(cx: &mut TaskCx<'_>, data: [usize; 4]) -> baml_rt_tasks::Outcome {
     unsafe {
         let f = data[0] as *mut Future;
+        let telemetry = (*f).telemetry.take();
         let mut binding = FiberBinding::new(cx, ptr::null_mut());
+        binding.telemetry = telemetry.as_ref().map(|task| task.fiber.clone());
         binding.install();
-        let result = cx
-            .admit()
-            .map_err(loop_error)
-            .and_then(|()| crate::closures::call((*f).environment, data[1], &[]));
+        if let Some(task) = &telemetry {
+            task.announce();
+        }
+        let admission = cx.admit().map_err(loop_error);
+        if let Some(task) = &telemetry {
+            task.running(admission.is_err());
+        }
+        if let Err(error) = admission {
+            crate::ENTRY_ERROR.set(Box::into_raw(error));
+        }
+        let mut result = crate::closures::call((*f).environment, data[2], &[]);
+        if let Err(error) = &mut result {
+            crate::telemetry::evidence::unhandled(error);
+        }
+        if let Some(task) = &telemetry {
+            task.finish(&result);
+        }
         baml_rt_gc::write_ptr(f.cast(), &mut (*f).environment, 0);
         let outcome = match result {
             Ok(value) => {
@@ -267,9 +318,17 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
             let _ = handle.result();
         }
         if !(*pointer).error.is_null() {
-            return Err(Box::new((*(*pointer).error).clone()));
+            let mut error = Box::new((*(*pointer).error).clone());
+            // A cancelled await is a fresh raise in the awaiting task.
+            error.telemetry_raise = None;
+            error.telemetry_at = None;
+            error.telemetry_caught = None;
+            return Err(error);
         }
-        release_registration(&mut *pointer);
+        if (*pointer).registration != usize::MAX {
+            release_registration(&mut *pointer);
+            (&mut *crate::HEAP.get()).suppress_finalizer(pointer as usize);
+        }
         Ok((*pointer).result)
     }
 }
@@ -279,13 +338,7 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
 pub unsafe fn cancel(pointer: usize) -> bool {
     unsafe {
         let f = &*(pointer as *const Future);
-        if let Some(handle) = &f.handle {
-            if matches!(handle.state(), baml_rt_tasks::FutureState::Pending) {
-                handle.request_cancel();
-                return true;
-            }
-        }
-        false
+        f.handle.as_ref().is_some_and(FutureHandle::try_cancel)
     }
 }
 
@@ -327,7 +380,7 @@ mod tests {
         unsafe {
             let cell = crate::closures::cell(10, Dyn { tag: 0, payload: 1 })?;
             let env = crate::closures::new(11, 123, child, &[cell])?;
-            let f = spawn(12, env, 0, SpawnOptions::default())?;
+            let f = spawn(12, env, 0, 0, SpawnOptions::default(), None)?;
             crate::closures::store(
                 cell,
                 Dyn {
@@ -336,8 +389,9 @@ mod tests {
                 },
             );
             assert_eq!(await_future(f)?.payload, 42);
-            let f = spawn(12, env, 0, SpawnOptions::default())?;
+            let f = spawn(12, env, 0, 0, SpawnOptions::default(), None)?;
             assert!(cancel(f));
+            assert!(!cancel(f));
             assert_eq!(await_future(f).unwrap_err().class, "baml.panics.Cancelled");
             Ok(42)
         }
@@ -380,4 +434,309 @@ impl crate::lists::Slot for FutureSlot {
     unsafe fn from_word(pointer: usize) -> Self {
         unsafe { Self::from_raw(pointer) }
     }
+}
+
+/// A block-scoped shield restores cancellation delivery on jumps and unwind.
+pub struct Shield(*mut TaskCx<'static>);
+impl Drop for Shield {
+    fn drop(&mut self) {
+        unsafe {
+            (&mut *self.0).leave_shield();
+        }
+    }
+}
+/// # Safety
+/// Drop on the same running fiber, before its runtime binding ends.
+pub unsafe fn shield() -> Shield {
+    let task = crate::TASK.get();
+    unsafe {
+        (&mut *task).enter_shield();
+    }
+    Shield(task)
+}
+/// # Safety
+/// The pointer names a live future in the active heap.
+pub unsafe fn state(pointer: usize) -> u32 {
+    let f = unsafe { &*(pointer as *const Future) };
+    if !f.error.is_null() {
+        return if unsafe { &*f.error }.class == "baml.panics.Cancelled" {
+            3
+        } else {
+            2
+        };
+    }
+    if f.result.tag != u64::MAX { 1 } else { 0 }
+}
+/// Select without observing the chosen future's result.
+/// # Safety
+/// Each pointer names a rooted future in this loop.
+pub unsafe fn await_any(pointers: &[usize]) -> R<i64> {
+    unsafe {
+        (&mut *crate::TASK.get())
+            .check_cancel()
+            .map_err(loop_error)?;
+        for (i, &p) in pointers.iter().enumerate() {
+            if state(p) != 0 {
+                return Ok(i as i64);
+            }
+        }
+        let handles = pointers
+            .iter()
+            .map(|&p| {
+                (*(p as *const Future))
+                    .handle
+                    .as_ref()
+                    .expect("pending future")
+                    .clone()
+            })
+            .collect::<Vec<_>>();
+        crate::telemetry::before_yield();
+        (&mut *crate::TASK.get())
+            .await_settled(&handles)
+            .map(|i| i as i64)
+            .map_err(loop_error)
+    }
+}
+
+pub type Cleanup = unsafe fn(u32, usize) -> R<()>;
+thread_local! {pub(crate) static CLEANUP:Cell<Option<Cleanup>>=const {Cell::new(None)};}
+/// # Safety
+/// The dispatcher belongs to the active generated program for this root run.
+pub unsafe fn set_cleanup_dispatch(callback: Cleanup) {
+    CLEANUP.set(Some(callback));
+}
+/// # Safety
+/// The pointer names a class instance in the active heap.
+pub unsafe fn cleanup_begin(object: usize) -> bool {
+    unsafe { (&mut *crate::HEAP.get()).begin_cleanup(object) }
+}
+/// Explicit collection waits for every callback found by this collection,
+/// including callbacks that allocate or suspend.
+/// # Safety
+/// Managed roots obey the ordinary safepoint contract.
+pub unsafe fn collect() -> R<()> {
+    unsafe {
+        (&mut *crate::HEAP.get()).collect(&crate::Roots(&*crate::ROOTS.get()));
+        drain_finalizers();
+    }
+    Ok(())
+}
+
+// Duration arithmetic stays exact. The managed value contains inline limbs;
+// temporary num_bigint values own no managed pointers and cannot outlive calls.
+pub const fn bigint_descriptor(type_id: u32) -> Descriptor {
+    Descriptor {
+        kind: Kind::Opaque,
+        size: 8,
+        ptr_slots: (0, 0),
+        tagged_slots: (0, 0),
+        elem: Some(baml_rt_gc::Elements {
+            offset: 24,
+            layout: baml_rt_gc::ElementLayout::Scalar,
+        }),
+        type_id,
+        fields: &[],
+        finalizer: None,
+    }
+}
+/// # Safety
+/// `desc` is an opaque bigint descriptor in the active heap.
+pub unsafe fn bigint(desc: u32, value: &num_bigint::BigInt) -> R<usize> {
+    let (sign, limbs) = value.to_u32_digits();
+    let bytes = 24 + (limbs.len() * 4).next_multiple_of(8);
+    let p = unsafe { crate::try_alloc(desc, bytes)? };
+    unsafe {
+        p.add(8).cast::<i64>().write(match sign {
+            num_bigint::Sign::Minus => -1,
+            num_bigint::Sign::NoSign => 0,
+            num_bigint::Sign::Plus => 1,
+        });
+        p.add(16).cast::<usize>().write(limbs.len());
+        std::ptr::copy_nonoverlapping(limbs.as_ptr(), p.add(24).cast(), limbs.len());
+    }
+    Ok(p as usize)
+}
+/// # Safety
+/// The pointer names a live managed bigint.
+pub unsafe fn bigint_value(pointer: usize) -> num_bigint::BigInt {
+    unsafe {
+        let p = pointer as *const u8;
+        let sign = match p.add(8).cast::<i64>().read() {
+            -1 => num_bigint::Sign::Minus,
+            0 => num_bigint::Sign::NoSign,
+            _ => num_bigint::Sign::Plus,
+        };
+        let len = p.add(16).cast::<usize>().read();
+        num_bigint::BigInt::new(
+            sign,
+            std::slice::from_raw_parts(p.add(24).cast(), len).to_vec(),
+        )
+    }
+}
+/// # Safety
+/// The pointer names a live managed bigint; roots follow the task ABI.
+pub unsafe fn sleep(nanos: usize) -> R<()> {
+    use num_traits::ToPrimitive;
+    let nanos = unsafe { bigint_value(nanos) };
+    let duration = if nanos.sign() == num_bigint::Sign::Minus {
+        std::time::Duration::ZERO
+    } else {
+        std::time::Duration::from_nanos(nanos.to_u64().unwrap_or(u64::MAX))
+    };
+    crate::telemetry::before_yield();
+    crate::telemetry::sysop(|| {
+        unsafe { (&mut *crate::TASK.get()).sleep(duration) }.map_err(loop_error)
+    })
+}
+
+pub fn integer(value: i64) -> num_bigint::BigInt {
+    num_bigint::BigInt::from(value)
+}
+/// # Safety
+/// The descriptor is a bigint layout and text is a compiler-produced integer.
+pub unsafe fn bigint_text(desc: u32, text: &str) -> R<usize> {
+    unsafe {
+        bigint(
+            desc,
+            &text.parse::<num_bigint::BigInt>().expect("integer literal"),
+        )
+    }
+}
+
+pub const RESOURCE_FINALIZER: u32 = u32::MAX - 1;
+#[derive(Clone)]
+enum Resource {
+    Limit(baml_rt_tasks::Gate),
+    Cancel(baml_rt_tasks::TaskCancel),
+}
+/// # Safety
+/// The descriptor is the generated one-word native resource class.
+pub unsafe fn limit_new(desc: u32, capacity: i64) -> R<usize> {
+    if capacity <= 0 {
+        return Err(Error::internal("Limit capacity must be positive".into()));
+    }
+    unsafe {
+        let p = crate::try_alloc(desc, 16)? as usize;
+        (&mut *FINALIZERS.get()).resources.insert(
+            p,
+            Resource::Limit(baml_rt_tasks::Gate::new(capacity as usize)),
+        );
+        Ok(p)
+    }
+}
+/// # Safety
+/// Inputs name live CancelToken objects, and desc is a CancelToken class.
+pub unsafe fn token_new(desc: u32, inputs: &[usize]) -> R<usize> {
+    unsafe {
+        let linked = inputs
+            .iter()
+            .map(|p| match (&*FINALIZERS.get()).resources.get(p).unwrap() {
+                Resource::Cancel(token) => token.clone(),
+                _ => unreachable!(),
+            })
+            .collect();
+        let token = (&*crate::TASK.get()).new_cancel_token(linked);
+        let p = crate::try_alloc(desc, 16)? as usize;
+        (&mut *FINALIZERS.get())
+            .resources
+            .insert(p, Resource::Cancel(token));
+        Ok(p)
+    }
+}
+/// # Safety
+/// The object is a live CancelToken.
+pub unsafe fn token_cancel(object: usize) -> i64 {
+    unsafe {
+        match &(&*FINALIZERS.get()).resources[&object] {
+            Resource::Cancel(token) => i64::from(token.request_cancel()),
+            _ => unreachable!(),
+        }
+    }
+}
+/// # Safety
+/// The object is a live CancelToken.
+pub unsafe fn token_is_cancelled(object: usize) -> bool {
+    unsafe {
+        match &(&*FINALIZERS.get()).resources[&object] {
+            Resource::Cancel(token) => token.is_cancelled(),
+            _ => unreachable!(),
+        }
+    }
+}
+/// # Safety
+/// The object is a live Limit.
+pub unsafe fn limit_counts(object: usize) -> (i64, i64) {
+    unsafe {
+        match &(&*FINALIZERS.get()).resources[&object] {
+            Resource::Limit(gate) => {
+                let (active, queued) = gate.counts();
+                (active as i64, queued as i64)
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+/// # Safety
+/// All objects are live native resources in the active heap.
+pub unsafe fn spawn_options(detached: bool, limits: &[usize], tokens: &[usize]) -> SpawnOptions {
+    unsafe {
+        let resources = &(&*FINALIZERS.get()).resources;
+        SpawnOptions {
+            detached,
+            gates: limits
+                .iter()
+                .map(|p| match &resources[p] {
+                    Resource::Limit(gate) => gate.clone(),
+                    _ => unreachable!(),
+                })
+                .collect(),
+            local_linked: tokens
+                .iter()
+                .map(|p| match &resources[p] {
+                    Resource::Cancel(token) => token.clone(),
+                    _ => unreachable!(),
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+}
+
+/// # Safety
+/// The pointer names a live fixed-layout pointer array.
+pub unsafe fn pointer_list<'a>(pointer: usize) -> &'a [usize] {
+    unsafe {
+        let length = *((pointer + 8) as *const usize);
+        std::slice::from_raw_parts((pointer + 16) as *const usize, length)
+    }
+}
+/// # Safety
+/// Inputs are rooted fixed pointer arrays and desc is their common layout.
+pub unsafe fn concat_pointers(desc: u32, a: usize, b: usize) -> R<usize> {
+    unsafe {
+        let a = pointer_list(a);
+        let b = pointer_list(b);
+        let len = a.len() + b.len();
+        let p = crate::try_alloc(desc, 16 + len * 8)?;
+        p.add(8).cast::<usize>().write(len);
+        for (i, &value) in a.iter().chain(b).enumerate() {
+            baml_rt_gc::write_ptr(p, p.add(16 + i * 8).cast(), value);
+        }
+        Ok(p as usize)
+    }
+}
+
+/// Compiler-private marker: scalar_tasks proves this future cannot escape.
+pub const SCALAR_FUTURE: usize = 1;
+pub fn can_elide_scalar_task() -> bool {
+    unsafe { (&*crate::TASK.get()).can_elide_scalar_task() }
+}
+/// # Safety
+/// A marker argument is produced only by the compiler's immediate scalar proof.
+pub unsafe fn await_scalar(pointer: usize, value: Dyn) -> R<Dyn> {
+    if pointer != SCALAR_FUTURE {
+        return unsafe { await_future(pointer) };
+    }
+    unsafe { (&mut *crate::TASK.get()).check_cancel() }.map_err(loop_error)?;
+    Ok(value)
 }
