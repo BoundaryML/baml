@@ -4,7 +4,7 @@
 1:16-17      ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 1:18-20      "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 1:21-25      "void"             source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-1:26-32      "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+1:26-32      "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 1:33-39      "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 1:40-41      "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 2:3-8        "throw"            source.baml meta.function.baml meta.block.function.baml keyword.control.flow.throw.baml
