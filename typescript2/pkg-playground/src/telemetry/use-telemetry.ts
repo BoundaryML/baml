@@ -210,13 +210,16 @@ export function useTelemetry({
     setSelectedId(null);
   }, [project]);
 
+  // A revision that changes with the project counts another project's runs;
+  // no run ended, and the project change has already re-read.
   const [settleUntil, setSettleUntil] = useState(0);
-  const settledRevision = useRef(revision);
+  const settled = useRef({ project, revision });
   useEffect(() => {
-    if (Object.is(revision, settledRevision.current)) return;
-    settledRevision.current = revision;
+    const last = settled.current;
+    settled.current = { project, revision };
+    if (last.project !== project || Object.is(last.revision, revision)) return;
     setSettleUntil(Date.now() + RUN_SETTLE_MS);
-  }, [revision]);
+  }, [project, revision]);
 
   const rows = useMemo(() => executions.map(toExecutionRow), [executions]);
   // An incomplete execution may still be recording, and only a re-read can

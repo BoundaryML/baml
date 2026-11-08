@@ -198,6 +198,17 @@ describe('useTelemetry while a playground run is in flight', () => {
     expect(listExecutions).toHaveBeenCalledTimes(1);
   });
 
+  it('reads once when the project changes, though its run count differs', async () => {
+    const { client, listExecutions } = storeClient([[quick]]);
+    const props = { active: true, client, llmFunctions };
+    await render({ ...props, project: '/a', revision: 3 });
+    await render({ ...props, project: '/b', revision: 1 });
+    expect(listExecutions).toHaveBeenCalledTimes(2);
+
+    await wait(10_000);
+    expect(listExecutions).toHaveBeenCalledTimes(2);
+  });
+
   it('does not poll while the tab is hidden', async () => {
     const { client, listExecutions } = storeClient([[quick]]);
     await render({
