@@ -769,3 +769,42 @@ fn direct_mark_stack_traces_deep_cycles_without_recursive_frames() {
         assert_eq!(h.object_start(head as usize), None);
     }
 }
+
+#[test]
+fn large_heap_stress_forces_bounded_full_collections_during_allocation_and_reads() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        let head = h.alloc(0, 32, &roots);
+        roots.precise.borrow_mut().push(head as usize);
+        let mut tail = head;
+        for _ in 1..20000 {
+            let p = h.alloc(0, 32, &roots);
+            link(tail, 1, p as usize);
+            tail = p;
+        }
+        h.collect(&roots);
+        h.set_stress(true);
+        let before = h.stats().collections;
+        for _ in 0..63 {
+            h.safepoint(&roots);
+        }
+        assert_eq!(h.stats().collections, before);
+        h.safepoint(&roots);
+        assert_eq!(h.stats().collections, before + 1);
+        assert_eq!(h.stats().live_bytes, 20000 * 32);
+        // Less than one normal collection budget, but exceeds stress headroom.
+        h.alloc(2, 8 + 40 * 1024, &roots);
+        h.safepoint(&roots);
+        assert_eq!(h.stats().collections, before + 2);
+        assert_eq!(h.stats().live_bytes, 20000 * 32);
+        roots.precise.borrow_mut().clear();
+        for _ in 0..64 {
+            h.safepoint(&roots);
+        }
+        assert_eq!(h.stats().live_bytes, 0);
+        let before = h.stats().collections;
+        h.safepoint(&roots);
+        assert_eq!(h.stats().collections, before + 1);
+    }
+}

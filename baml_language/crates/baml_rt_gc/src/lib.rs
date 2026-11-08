@@ -329,6 +329,7 @@ pub struct Heap {
     stats: Stats,
     collection_observer: Option<fn(CollectionEvent)>,
     stress: bool,
+    stress_polls: usize,
     poll_word: Option<Rc<Cell<u8>>>,
     capacity_limit: usize,
     emergency_block: Option<usize>,
@@ -394,6 +395,7 @@ impl Heap {
             },
             collection_observer: None,
             stress: stress_from_environment(),
+            stress_polls: 0,
             poll_word: None,
             capacity_limit: usize::MAX,
             emergency_block: None,
@@ -424,6 +426,7 @@ impl Heap {
     }
     pub fn set_stress(&mut self, enabled: bool) {
         self.stress = enabled;
+        self.stress_polls = 0;
         self.refresh_poll_word();
     }
     /// Bind the integrated runtime checkpoint word. Bit 1 belongs to this heap;
@@ -631,7 +634,7 @@ impl Heap {
             assert_eq!(bytes, d.size);
         }
         self.validated_bytes[desc as usize] = bytes;
-        if self.stress || self.stats.allocated_since_gc >= self.stats.budget {
+        if self.stress_allocation_due() || self.stats.allocated_since_gc >= self.stats.budget {
             unsafe {
                 self.collect(roots);
             }
@@ -1004,6 +1007,7 @@ impl Heap {
             l.marked
         });
         self.mark_stack = queue;
+        self.stress_polls = 0;
         self.stats.allocated_since_gc = 0;
         self.stats.budget = Self::budget_for(self.stats.live_bytes);
         self.stats.collections += 1;
@@ -1035,10 +1039,25 @@ impl Heap {
     pub fn budget_for(live_bytes: usize) -> usize {
         live_bytes.saturating_mul(4).max(MIN_BUDGET)
     }
+    // Tiny fixtures still collect on every cold allocation and checkpoint.
+    // Rewalking a growing live graph after each of its O(n) allocations makes
+    // stress quadratic. Above 256 KiB, force GC after only 1/32 of the live
+    // heap has been allocated (128x the normal headroom policy), or 64 polls
+    // without enough allocation. Every triggered collection is still complete.
+    fn stress_allocation_due(&self) -> bool {
+        self.stress
+            && (self.stats.live_bytes <= 256 * 1024
+                || self.stats().allocated_since_gc >= (self.stats.live_bytes / 32).max(BLOCK_BYTES))
+    }
     /// # Safety
-    /// Same contract as `collect`; stress mode collects at every safepoint.
+    /// Same contract as `collect`. Stress checkpoints collect eagerly on small
+    /// heaps and pace full walks of large heaps by allocation pressure or polls.
     pub unsafe fn safepoint(&mut self, roots: &dyn RootSource) {
-        if self.stress || self.stats().allocated_since_gc >= self.stats.budget {
+        self.stress_polls += usize::from(self.stress);
+        if self.stress_allocation_due()
+            || self.stress && self.stress_polls >= 64
+            || self.stats().allocated_since_gc >= self.stats.budget
+        {
             unsafe {
                 self.collect(roots);
             }
