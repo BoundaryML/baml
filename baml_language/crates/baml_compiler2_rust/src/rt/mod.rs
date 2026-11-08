@@ -44,7 +44,7 @@ struct Plan<'a> {
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
-    map_types: std::cell::RefCell<Vec<(Repr, Repr, String, String)>>,
+    map_types: std::cell::RefCell<Vec<maps::MapType>>,
     json_types: Vec<Vec<usize>>,
     json_maps: BTreeMap<Repr, RuntimeTy>,
     map_stringify: bool,

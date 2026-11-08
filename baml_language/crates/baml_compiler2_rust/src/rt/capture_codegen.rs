@@ -181,7 +181,7 @@ pub(super) fn capture_dyn(
 fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
     if let Repr::Map(id) = repr {
         let types = plan.map_types.borrow();
-        Ok((types[id].2.clone(), types[id].3.clone()))
+        Ok((types[id].key_type.clone(), types[id].value_type.clone()))
     } else {
         let (key, value) = plan.map_parts(repr)?;
         Ok((capture_type(plan, key)?, capture_type(plan, value)?))

@@ -1,5 +1,13 @@
 //! Map storage, literals, indexing and builtin lowering. Lists stay in containers.
 use super::*;
+#[derive(PartialEq, Eq)]
+pub(super) struct MapType {
+    pub key: Repr,
+    pub value: Repr,
+    pub key_type: String,
+    pub value_type: String,
+    pub scalar_json_value: bool,
+}
 impl Plan<'_> {
     pub(super) fn map_repr(
         &self,
@@ -7,6 +15,7 @@ impl Plan<'_> {
         value: Repr,
         key_ty: String,
         value_ty: String,
+        scalar_json_value: bool,
     ) -> Repr {
         if key == Repr::Str
             && value == Repr::Int
@@ -15,14 +24,18 @@ impl Plan<'_> {
         {
             return Repr::MapStrInt;
         }
+        let ty = MapType {
+            key,
+            value,
+            key_type: key_ty,
+            value_type: value_ty,
+            scalar_json_value,
+        };
         let mut types = self.map_types.borrow_mut();
-        let id = types
-            .iter()
-            .position(|t| t == &(key, value, key_ty.clone(), value_ty.clone()))
-            .unwrap_or_else(|| {
-                types.push((key, value, key_ty, value_ty));
-                types.len() - 1
-            });
+        let id = types.iter().position(|old| old == &ty).unwrap_or_else(|| {
+            types.push(ty);
+            types.len() - 1
+        });
         Repr::Map(id)
     }
     pub(super) fn map_parts(&self, repr: Repr) -> Gen<(Repr, Repr)> {
@@ -30,7 +43,7 @@ impl Plan<'_> {
             Repr::MapStrInt => Ok((Repr::Str, Repr::Int)),
             Repr::Map(id) => {
                 let types = self.map_types.borrow();
-                Ok((types[id].0, types[id].1))
+                Ok((types[id].key, types[id].value))
             }
             _ => Err(no("map receiver")),
         }
@@ -224,9 +237,9 @@ impl Emitter<'_, '_> {
                     let declared = {
                         let types = self.plan.map_types.borrow();
                         if method == "keys" {
-                            types[*id].2.clone()
+                            types[*id].key_type.clone()
                         } else {
-                            types[*id].3.clone()
+                            types[*id].value_type.clone()
                         }
                     };
                     if declared != capture_codegen::capture_type(self.plan, element)? {

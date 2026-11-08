@@ -59,11 +59,14 @@ pub(super) fn emit(
 fn encodable(plan: &Plan<'_>, repr: Repr) -> bool {
     match repr {
         Repr::Int | Repr::Float | Repr::Bool | Repr::Str | Repr::Null => true,
+        Repr::ListInt | Repr::ListStr | Repr::ListListStr => true,
         Repr::MapStrInt | Repr::Map(_) => {
             let Ok((key, value)) = plan.map_parts(repr) else {
                 return false;
             };
-            key != Repr::Str || encodable(plan, value)
+            key != Repr::Str
+                || encodable(plan, value)
+                || matches!(repr,Repr::Map(id) if value==Repr::Tagged && plan.map_types.borrow()[id].scalar_json_value)
         }
         _ => false,
     }
@@ -92,6 +95,10 @@ fn emit_encoders(
         let mut write = match value {
             Repr::Int | Repr::Bool => "out.push_str(&value.to_string());".to_owned(),
             Repr::Float => format!("rt::maps::json::write_float(cx,value,path,{error_desc},out)?;"),
+            Repr::Tagged => format!("rt::maps::json::write_scalar(cx,value,path,{error_desc},out)?;"),
+            Repr::ListInt => "rt::maps::json::write_int_list(value.as_raw(),out)?;".into(),
+            Repr::ListStr => "rt::maps::json::write_string_list(cx,rt::lists::List::from_raw(value.as_raw()),out)?;".into(),
+            Repr::ListListStr => "rt::maps::json::write_nested_string_list(cx,rt::lists::List::from_raw(value.as_raw()),out)?;".into(),
             Repr::Str => "rt::maps::json::write_string(out,value.as_str(cx));".to_owned(),
             Repr::Null => "out.push_str(\"null\");".to_owned(),
             Repr::MapStrInt | Repr::Map(_) => format!(

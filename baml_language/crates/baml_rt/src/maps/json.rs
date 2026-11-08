@@ -322,6 +322,73 @@ pub unsafe fn write_float(
     Ok(())
 }
 
+/// # Safety
+/// `value` has a scalar tag and all referenced strings belong to the active
+/// instance; `desc` has the contract of `serialization_error`.
+pub unsafe fn write_scalar(
+    cx: &mut Cx,
+    value: crate::Dyn,
+    path: &str,
+    desc: u32,
+    out: &mut String,
+) -> R<()> {
+    match value.tag {
+        0 => out.push_str(&(value.payload as i64).to_string()),
+        1 => out.push_str(if value.payload != 0 { "true" } else { "false" }),
+        2 => out.push_str("null"),
+        3 => write_string(
+            out,
+            unsafe { Str::from_raw(value.payload as usize) }.as_str(cx),
+        ),
+        crate::FLOAT_TAG => {
+            unsafe { write_float(cx, f64::from_bits(value.payload), path, desc, out) }?
+        }
+        _ => return Err(crate::Error::internal("non-scalar map JSON value".into())),
+    }
+    Ok(())
+}
+/// # Safety
+/// `list` is a live fixed integer list in the active instance.
+pub unsafe fn write_int_list(list: usize, out: &mut String) -> R<()> {
+    let len = unsafe { *((list + 8) as *const usize) };
+    out.push('[');
+    for i in 0..len {
+        if i != 0 {
+            out.push(',');
+        }
+        let value = unsafe { *(crate::list_slot(list, i as i64)?.cast::<i64>()) };
+        out.push_str(&value.to_string());
+    }
+    out.push(']');
+    Ok(())
+}
+pub fn write_string_list(cx: &Cx, list: crate::lists::List<Str>, out: &mut String) -> R<()> {
+    out.push('[');
+    for i in 0..list.len(cx) {
+        if i != 0 {
+            out.push(',');
+        }
+        write_string(out, list.get(cx, i)?.as_str(cx));
+    }
+    out.push(']');
+    Ok(())
+}
+pub fn write_nested_string_list(
+    cx: &Cx,
+    list: crate::lists::List<crate::lists::List<Str>>,
+    out: &mut String,
+) -> R<()> {
+    out.push('[');
+    for i in 0..list.len(cx) {
+        if i != 0 {
+            out.push(',');
+        }
+        write_string_list(cx, list.get(cx, i)?, out)?;
+    }
+    out.push(']');
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

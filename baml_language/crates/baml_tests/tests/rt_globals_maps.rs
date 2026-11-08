@@ -124,6 +124,10 @@ function main()->int { GATE }"#,
         r#"function main()->int {baml.json.stringify({"a":1},indent=-1).char_count()}"#,
         r#"function main()->int {baml.json.stringify({"a":1},indent="bad").char_count()}"#,
         r#"function main()->int {let m:map<int,int> = {1:2};baml.json.stringify(m).char_count()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,int?>>(`{"a":null,"b":7}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"function main()->int {let m:map<string,int|string|bool|float|null> = {"a":1,"b":"hello","c":true,"d":1.25,"e":null};let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"function main()->int {let m:map<string,int[]> = {"a":[1,2,3],"b":[]};let n=0;for(let c in baml.json.stringify(m,indent=2).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"function main()->int {let m:map<string,string[][]> = {"a":[["one","two"],[]],"b":[]};let n=0;for(let c in baml.json.stringify(m,indent=2).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
     ];
     let selected = std::env::var("BAML_RT_GLOBALS_MAPS_CASES")
         .ok()

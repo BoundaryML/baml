@@ -105,6 +105,7 @@ impl Plan<'_> {
                     self.repr(value)?,
                     capture_codegen::declared_type(self, key)?,
                     capture_codegen::declared_type(self, value)?,
+                    scalar_json_value(value),
                 )
             }
             RuntimeTy::Null => Repr::Null,
@@ -188,6 +189,7 @@ impl Plan<'_> {
                     self.field_repr(value)?,
                     capture_codegen::declared_field_type(self, key)?,
                     capture_codegen::declared_field_type(self, value)?,
+                    scalar_json_field_value(value),
                 )
             }
             T::List(element) => match element.as_ref() {
@@ -492,4 +494,19 @@ fn scalar_field_key(ty: &bex_vm_types::RuntimeTy) -> bool {
         ty,
         T::Int | T::Bool | T::Float | T::Null | T::String | T::Literal(_, _)
     )
+}
+
+fn scalar_json_value(ty: &RuntimeTy) -> bool {
+    if let RuntimeTy::Union(members) = ty {
+        members.iter().all(scalar_json_value)
+    } else {
+        scalar_key(ty)
+    }
+}
+fn scalar_json_field_value(ty: &bex_vm_types::RuntimeTy) -> bool {
+    if let bex_vm_types::RuntimeTy::Union(members) = ty {
+        members.iter().all(scalar_json_field_value)
+    } else {
+        scalar_field_key(ty)
+    }
 }
