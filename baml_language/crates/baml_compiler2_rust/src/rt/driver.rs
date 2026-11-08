@@ -70,6 +70,27 @@ pub fn compile_rt(
         .sum::<usize>()
         <= 1024;
     let telemetry_sites = std::cell::RefCell::new(vec![(None, 0usize, entry)]);
+    let mut placements = reached
+        .iter()
+        .map(|&object| {
+            let mir = &all[&object];
+            let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
+                unreachable!()
+            };
+            (
+                object,
+                super::stack::Placement::new(db, root, body, mir.arity, opt, &plan, &all),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let stack_leaves = placements
+        .values()
+        .flat_map(|p| p.leaf_calls.iter().copied())
+        .collect::<BTreeSet<_>>();
+    // Inlined bodies share one physical frame. Keep their combined object
+    // storage below the stack guard's 64 KiB reserve, including ordinary locals.
+    let small_program =
+        small_program && placements.values().map(|p| p.bytes(&plan)).sum::<usize>() <= 16 * 1024;
     for &object in &reached {
         let mir = &all[&object];
         let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
@@ -97,6 +118,9 @@ pub fn compile_rt(
             iter_arrays,
             arity: mir.arity,
             block: 0,
+            statement: 0,
+            stack: placements.remove(&object).unwrap(),
+            proven_arithmetic: BTreeSet::new(),
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
             compact_sites: Vec::new(),
@@ -104,7 +128,12 @@ pub fn compile_rt(
             telemetry_sites: &telemetry_sites,
             site: 0,
         };
-        out.push_str(&emitter.function(mir.arity, small_program && !recursive(&calls, object))?);
+        let stack_leaf = stack_leaves.contains(&object);
+        out.push_str(&emitter.function(
+            mir.arity,
+            (small_program || stack_leaf) && !recursive(&calls, object),
+            stack_leaf,
+        )?);
     }
     super::globals::emit(&mut out, &plan, &descriptors, &lists, &telemetry_sites)?;
     let format_site = telemetry::emit(

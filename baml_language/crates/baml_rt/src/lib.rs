@@ -3,6 +3,7 @@
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
 pub mod globals;
+pub mod calls;
 pub mod json;
 pub mod language;
 pub mod lists;

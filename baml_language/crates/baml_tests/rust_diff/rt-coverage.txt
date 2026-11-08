@@ -1,4 +1,4 @@
-BAML runtime coverage (normal AND GC stress): 11 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 12 pass, 124 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: not yet supported
 
@@ -113,6 +113,7 @@ SpawnPanicUncaught	unsupported: function-valued global
 SpawnThrowUncaught	unsupported: function-valued global
 SpawnedClosures	unsupported: function-valued global
 Spawns	unsupported: function-valued global
+StackAllocation	pass
 TaskOverflow	unsupported: function-valued global
 ThreadLocalParallel	unsupported: function-valued global
 TimeoutCancellation	unsupported: function-valued global

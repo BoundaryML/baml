@@ -22,5 +22,5 @@ pub(super) fn emit(
     } else {
         ""
     };
-    write!(&mut out,"fn entry()->R<i64>{{unsafe{{initialize_globals()?;f{entry}(0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}{driver}(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}){initialize})}}\n").unwrap();
+    write!(&mut out,"fn entry()->R<i64>{{unsafe{{initialize_globals()?;let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}{driver}(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}){initialize})}}\n").unwrap();
 }

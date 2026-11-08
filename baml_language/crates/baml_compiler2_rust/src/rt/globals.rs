@@ -151,7 +151,7 @@ pub(super) fn emit(
                 };
                 format!("rt::Dyn{{tag:{tag},payload:{payload}}}")
             };
-            writeln!(out,"let value=f{callee}({site}).map_err(|e|e.at(&S{chain},{step}))?;rt::globals::store({slot},{value},{});",repr.pointer()).unwrap();
+            writeln!(out,"let cx=rt::calls::Context::current();let value=(if rt::telemetry::active(){{f{callee}::<true>(cx,{site})}}else{{f{callee}::<false>(cx,{site})}}).map_err(|e|e.at(&S{chain},{step}))?;rt::globals::store({slot},{value},{});",repr.pointer()).unwrap();
         }
         let package = plan
             .program

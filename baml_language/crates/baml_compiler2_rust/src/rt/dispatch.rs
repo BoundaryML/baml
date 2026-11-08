@@ -166,7 +166,7 @@ impl Emitter<'_, '_> {
                     returned = Some(ty);
                     write!(
                         &mut expr,
-                        "{}=>f{callee}({},{arguments}),",
+                        "{}=>f{callee}::<OBSERVE>(cx,{},{arguments}),",
                         self.descriptors[&class] + 3,
                         self.telemetry_site(callee)
                     )

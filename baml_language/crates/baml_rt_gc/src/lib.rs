@@ -1010,9 +1010,21 @@ impl Heap {
     /// # Safety
     /// Root slots and traced fields must be readable, as for `collect`.
     pub unsafe fn verify(&self, roots: &dyn RootSource) {
+        // Verify managed candidates, just as marking classifies them. A local
+        // heap container may borrow a stack object; conservative false roots
+        // can retain that container even after the borrowed frame has returned.
+        // Such non-managed addresses must never be dereferenced here. Their
+        // lifetime is the compiler's proof, not an object-start bitmap entry.
         let check = |p| {
             assert!(
-                p == 0 || self.object_start(p).is_some_and(|base| self.marked(base)),
+                p == 0
+                    || match self.object_start(p) {
+                        Some(base) => self.marked(base),
+                        None => {
+                            !self.block_index.contains_key(&(p & !(BLOCK_BYTES - 1)))
+                                && p % std::mem::align_of::<Header>() == 0
+                        }
+                    },
                 "dangling precise GC pointer: {p:#x}"
             );
         };
@@ -1071,7 +1083,9 @@ impl Heap {
 /// write barrier. `obj` is reserved for future sticky marks.
 /// # Safety
 /// `slot` must be a writable, aligned pointer field of live `obj`; `value` must
-/// be null or a valid managed pointer, with no conflicting Rust references.
+/// be null or a valid object pointer, with no conflicting Rust references. A
+/// stack object's storage must outlive the borrow and remain in a conservative
+/// root range for as long as a heap object can reach it.
 #[inline(always)]
 pub unsafe fn write_ptr(_obj: *mut u8, slot: *mut usize, value: usize) {
     unsafe {
