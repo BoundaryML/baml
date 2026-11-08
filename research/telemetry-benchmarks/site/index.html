@@ -109,6 +109,12 @@ section h3 { margin-top: 0.8rem; }
 .scrub td:nth-child(2) { font-family: var(--f-mono); font-size: 0.8rem; }
 .hero svg { width: 100%; height: auto; display: block; }
 .hero .chart svg { min-width: 40rem; }
+section[id] { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 1rem); }
+.anchor { font: 600 0.72rem/1 var(--f-mono); color: var(--ink-3); text-decoration: none; border: 1px solid var(--rule); border-radius: 6px; padding: 0.25rem 0.45rem; background: var(--panel); cursor: pointer; vertical-align: middle; margin-left: 0.5rem; white-space: nowrap; letter-spacing: 0; }
+.anchor:hover, .anchor:focus-visible { color: var(--accent); border-color: var(--accent); }
+.toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; font: 600 0.78rem/1.4 var(--f-mono); }
+.toc a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.toc a:hover, .toc a:focus-visible { color: var(--accent); border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .bar .fill { transition: none; } }
 </style>
 
@@ -117,19 +123,20 @@ section h3 { margin-top: 0.8rem; }
   <span class="eyebrow">Benchmark notes · BAML 0.25.2 · November 2026</span>
   <h1>Telemetry Bench</h1>
   <p class="lede">We wrote the same four small programs in BAML and in Python, traced them with Boundary Cloud (BCS), Pydantic Logfire, Datadog and plain OpenTelemetry, and measured what each one sends, stores, costs and loses.</p>
+  <nav class="toc" id="toc" aria-label="Sections"></nav>
   <div class="hero">
     <div class="chart" id="hero"></div>
     <p class="muted">One <code>classify</code> call with a 10 KiB document, made 10 times with 10 independent documents. The bars show what each stack sends over the network per call, next to the prompt it sent to the model. BAML's figure includes a one-time upload of about 55 KB of program definitions per process, spread here over 10 calls.</p>
   </div>
 </header>
 
-<section>
+<section id="summary">
   <span class="eyebrow">Short version</span>
   <h2>What we found</h2>
   <ul class="plain score" id="score"></ul>
 </section>
 
-<section>
+<section id="setup">
   <span class="eyebrow">The setup</span>
   <h2>Same program, four ways to watch it</h2>
   <p class="col">Each app runs in a fresh process against a fake model server on the same machine, so the network and the model never add noise. The four apps grow in size: <b>hello</b> (no model), <b>classify</b> (yes/no about a document), <b>extract</b> (pull an invoice into a class) and <b>agent</b> (two model calls and a tool, where the first reply attempt fails with a 503 and is retried).</p>
@@ -163,7 +170,7 @@ logfire.instrument_openai()
   <div class="chart" id="loc"></div>
 </section>
 
-<section>
+<section id="bytes">
   <span class="eyebrow">Bytes on the wire</span>
   <h2>BAML records the whole exchange, so it sends more</h2>
   <p class="col">BAML records every model call's raw HTTP request and response next to the function's inputs and output. The others record less by default: Logfire keeps function arguments and the chat messages but not return values, and OpenTelemetry's OpenAI instrumentation keeps no message text on spans at all. Logfire and OpenTelemetry also gzip what they send; Datadog and BAML send it uncompressed. Pick a document size to see bytes sent per call. <a href="#logfire-bytes">Why Logfire's numbers move so much</a> is explained further down.</p>
@@ -222,7 +229,7 @@ logfire.instrument_openai()
   </div>
 </section>
 
-<section>
+<section id="cost">
   <span class="eyebrow">Cost</span>
   <h2>Who is cheapest depends on the shape of your data</h2>
   <p class="col">The three products bill different things. BCS bills captured data by the gigabyte, and spans are free. Logfire bills per span or log record. Datadog LLM Observability bills per model call. Move the sliders to match your app. The defaults are our measured <code>classify</code> app with a 10 KiB document.</p>
@@ -279,7 +286,7 @@ logfire.instrument_openai()
   <p class="muted col" id="chatTableNote"></p>
 </section>
 
-<section>
+<section id="speed">
   <span class="eyebrow">Speed and memory</span>
   <h2>A BAML process is done before Python finishes importing</h2>
   <p class="col">Each process made 51 <code>classify</code> calls to an instant fake model. These are medians over 12 fresh processes per stack.</p>
@@ -288,7 +295,7 @@ logfire.instrument_openai()
   <p class="muted col" id="perfNote"></p>
 </section>
 
-<section>
+<section id="reliability">
   <span class="eyebrow">Reliability</span>
   <h2>What survives a crash, a burst and a retry</h2>
   <div class="grid2">
@@ -309,7 +316,7 @@ logfire.instrument_openai()
   </div>
 </section>
 
-<section>
+<section id="scrubbing">
   <span class="eyebrow">What gets stored</span>
   <h2>Logfire's default scrubbing hides ordinary support tickets</h2>
   <p class="col">Logfire replaces any recorded value that contains words like <i>password</i>, <i>session</i> or <i>secret</i>. It replaces the whole value, not just the word. We sent ten ordinary tickets through a traced function and read back what Logfire stored for its argument.</p>
@@ -317,7 +324,7 @@ logfire.instrument_openai()
   <p class="muted col">The model-call span in the same trace kept the full text every time, because chat messages are on Logfire's safe list. So the ticket is still stored. It just disappears from the function span you would search. BAML never redacts unless you mark a field with <code>@trace.redact</code>.</p>
 </section>
 
-<section>
+<section id="freshness">
   <span class="eyebrow">Freshness</span>
   <h2>Time until a trace can be found</h2>
   <p class="col">From process exit to the first successful query for a unique marker, over 6 trials each.</p>
@@ -325,7 +332,7 @@ logfire.instrument_openai()
   <p class="muted col">Each vendor is polled through its own query API: <code>baml query</code> for BCS (about every second, counting each query's own time), Logfire's SQL API every 0.5 s and Datadog's span search every 2 s, which is rate-limited.</p>
 </section>
 
-<section>
+<section id="method">
   <span class="eyebrow">Method</span>
   <h2>How we measured</h2>
   <ul class="col">
@@ -762,5 +769,37 @@ const kib = s => s >= 1024 ? (s / 1024) + " KiB" : s + " B";
   const rows = [["bcs", "BCS", "baml"], ["logfire", "Logfire", "logfire"], ["datadog", "Datadog APM", "datadog"]].filter(([k]) => S[k]).map(([k, l, c]) => ({label: l, value: S[k].median, color: STACKS[c].c,
     text: `${S[k].median.toFixed(1)} s`, tip: `${l}: median ${S[k].median.toFixed(1)} s, range ${S[k].min.toFixed(1)}–${S[k].max.toFixed(1)} s over ${S[k].n} trials`}));
   hbars(document.getElementById("search"), rows, {labelW: 160});
+})();
+
+// ---- section links: a contents row, a copy-link button on every section, and #name deep links
+(function sectionLinks() {
+  const PAGE_URL = "https://claude.ai/artifact/EJopk9WZFEpG1o2pQmWSfz";
+  const sections = [...document.querySelectorAll("section[id]")];
+  document.getElementById("toc").innerHTML = sections.map(sec =>
+    `<a href="#${sec.id}">${esc(sec.querySelector(".eyebrow").textContent.replace(/^Deep dive · /, "").replace(/^Scenario · a s/, "S"))}</a>`).join("");
+  for (const sec of sections) {
+    const h = sec.querySelector("h2");
+    const a = document.createElement("a");
+    a.href = "#" + sec.id; a.className = "anchor"; a.textContent = "# link";
+    a.setAttribute("aria-label", "Copy a link to this section");
+    a.addEventListener("click", () => {
+      const url = PAGE_URL + "#" + sec.id;
+      const done = text => { a.textContent = text; setTimeout(() => { a.textContent = "# link"; }, 1600); };
+      try { navigator.clipboard.writeText(url).then(() => done("copied"), () => done("#" + sec.id)); } catch (e) { done("#" + sec.id); }
+    });
+    h.append(a);
+  }
+  // Scroll in script as well as by the hash, so links also work where the frame ignores fragment navigation.
+  document.addEventListener("click", e => {
+    const a = e.target.closest('a[href^="#"]'); if (!a) return;
+    const el = document.getElementById(a.getAttribute("href").slice(1)); if (!el) return;
+    e.preventDefault();
+    el.scrollIntoView();
+    try { if (location.hash !== "#" + el.id) location.hash = el.id; } catch (err) { /* hash not writable here */ }
+  });
+  const go = () => { const el = location.hash && document.getElementById(location.hash.slice(1)); if (el) el.scrollIntoView(); };
+  addEventListener("hashchange", go);
+  addEventListener("load", go);
+  go();
 })();
 </script>
