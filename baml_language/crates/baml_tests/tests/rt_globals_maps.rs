@@ -136,6 +136,13 @@ function main()->int { GATE }"#,
         r#"const CALLBACK=(v:int)->int {v/0}; const RESULT=CALLBACK(41); function main()->int {RESULT}"#,
         r#"const CALLBACK={let n=40;(v:int)->int {n+=v;n}}; const FUNCTIONS:map<string,(int)->int throws never> = {"f":CALLBACK}; function inspect(m:map<string,(int)->int throws never>)->int {let f=m["f"];f(1)} function main()->int {inspect(FUNCTIONS)+inspect(FUNCTIONS)}"#,
         r#"class Box {m:map<string,(int)->int throws never>} function main()->int {let b=Box{m:{"f":(n:int)->int {n+1}}};let f=b.m["f"];f(41)}"#,
+        r#"class Key {id:int text:string} function main()->int {let m:map<Key,string> = {Key{id:7,text:"x"}:"first"};m[Key{id:7,text:"x"}]="second";m[Key{id:8,text:"x"}]="third";m[Key{id:7,text:"x"}].char_count()+m.length()}"#,
+        r#"function main()->int {let m:map<int[],int> = {[1,2]:7,[3]:8};m.set([1,2],9);m.get_or_insert([4],10);m.delete([3]);m[[1,2]]+m.length()}"#,
+        r#"function main()->int {let m:map<map<string,int>,int> = {{"a":1,"b":2}:7};m[{"b":2,"a":1}]}"#,
+        r#"class Key {id:int} function main()->int {let m:map<Key|string|null,int> = {Key{id:7}:8,"x":9,null:10};m[Key{id:7}]+m["x"]+m[null]}"#,
+        r#"class Node {next:Node?} function main()->int {let n=Node{next:null};n.next=n;let m:map<Node,int> = {};m[n]=1;m.length()}"#,
+        r#"function ints()->int[] {[]} function strings()->string[] {[]} function main()->int {let m:map<int[]|string[],int> = {};m[ints()]=1;m[strings()]=2;m.length()}"#,
+        r#"function main()->int {let a:map<string,int> = {"a":1};let b:map<string,int?> = {"a":1};let m:map<map<string,int>|map<string,int?>,int> = {};m[a]=1;m[b]=2;m.length()}"#,
     ];
     let selected = std::env::var("BAML_RT_GLOBALS_MAPS_CASES")
         .ok()

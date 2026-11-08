@@ -1221,15 +1221,15 @@ fn rt_initializer_dependency_order_and_generic_maps() {
 }
 
 #[test]
-fn rt_structural_union_map_keys_fail_closed() {
+fn rt_structural_union_map_keys_and_snapshot_admission() {
     for (source, expected) in [
         (
             "class Key { x: int } function main()->int { let m:map<Key?,int> = {}; m[null]=1; m.length() }",
-            "map key callbacks",
+            None,
         ),
         (
             "class Box { x:int } function main()->int {let m:map<string,Box?> = {\"a\":Box{x:1},\"b\":null}; m.values().length()}",
-            "map snapshot declared list element type",
+            Some("map snapshot declared list element type"),
         ),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("admission.baml", source)]);
@@ -1242,10 +1242,15 @@ fn rt_structural_union_map_keys_fail_closed() {
             OptLevel::Two,
             entry,
         );
-        assert_eq!(
-            result.unwrap_err(),
-            format!("unsupported in baml_rt: {expected}")
-        );
+        match expected {
+            Some(expected) => assert_eq!(
+                result.unwrap_err(),
+                format!("unsupported in baml_rt: {expected}")
+            ),
+            None => {
+                syn::parse_file(&result.unwrap()).unwrap();
+            }
+        }
     }
 }
 

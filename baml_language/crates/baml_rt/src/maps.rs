@@ -8,6 +8,7 @@ use crate::{
     strings::{Cx, Str},
 };
 use baml_rt_gc::{Descriptor, ElementLayout, Elements, Header, Kind, write_ptr};
+pub mod keys;
 pub use slots::{Key, Null, Pointer, Slot};
 use std::{
     marker::PhantomData,

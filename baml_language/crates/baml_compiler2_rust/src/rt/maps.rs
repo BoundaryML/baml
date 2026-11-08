@@ -8,6 +8,25 @@ pub(super) struct MapType {
     pub value_type: String,
     pub scalar_json_value: bool,
 }
+pub(super) fn callback_key(key: Repr) -> bool {
+    !matches!(
+        key,
+        Repr::Str | Repr::Int | Repr::Float | Repr::Bool | Repr::Null
+    )
+}
+pub(super) fn panic_class(plan: &Plan<'_>) -> Gen<usize> {
+    plan.program
+        .packages
+        .iter()
+        .find(|p| p.name == "baml")
+        .and_then(|p| {
+            p.classes
+                .iter()
+                .find(|(path, _)| path.to_string() == "panics.UserPanic")
+                .map(|(_, id)| id.raw())
+        })
+        .ok_or_else(|| no("map key panic declaration"))
+}
 impl Plan<'_> {
     pub(super) fn map_repr(
         &self,
@@ -187,14 +206,84 @@ impl Emitter<'_, '_> {
         ))
     }
     fn check_map_key(&self, repr: Repr) -> Gen<()> {
-        if matches!(
-            repr,
-            Repr::Str | Repr::Int | Repr::Float | Repr::Bool | Repr::Null | Repr::Tagged
-        ) {
+        fn check(plan: &Plan<'_>, repr: Repr, seen: &mut BTreeSet<Repr>) -> Gen<()> {
+            if !seen.insert(repr) {
+                return Ok(());
+            }
+            if let Repr::Ptr(c) = repr {
+                let Object::Class(class) =
+                    &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
+                else {
+                    unreachable!()
+                };
+                for package in &plan.program.packages {
+                    for (interface, rules) in &package.impl_rules {
+                        let Object::Interface(def) = &plan.program.objects[*interface] else {
+                            continue;
+                        };
+                        if !matches!(def.path.to_string().as_str(), "Hash" | "ops.Equals") {
+                            continue;
+                        }
+                        for rule in rules {
+                            if matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if head.tag()==class.type_tag)
+                                && rule.methods.values().any(|m| {
+                                    matches!(
+                                        &plan.index.info(m.fqn.raw()).identity,
+                                        bex_vm_types::types::FunctionIdentity::Declared(_)
+                                    )
+                                })
+                            {
+                                return Err(no("custom map hash/equality callback"));
+                            }
+                        }
+                    }
+                }
+                for &field in &plan.layouts[&c].fields {
+                    check(plan, field, seen)?;
+                }
+            } else if matches!(repr, Repr::Tagged | Repr::Dyn(_)) {
+                for &class in plan.layouts.keys() {
+                    check(plan, Repr::Ptr(class), seen)?;
+                }
+            } else if let Repr::Map(_) | Repr::MapStrInt = repr {
+                let (k, v) = plan.map_parts(repr)?;
+                check(plan, k, seen)?;
+                check(plan, v, seen)?;
+            } else if matches!(
+                repr,
+                Repr::ListInt | Repr::ListStr | Repr::ListListStr | Repr::ListPtr(_)
+            ) {
+                check(plan, Emitter::element(repr)?, seen)?;
+            } else if matches!(repr, Repr::Closure | Repr::Cell | Repr::ListClosure(_)) {
+                return Err(no("unhashable map key"));
+            }
             Ok(())
-        } else {
-            Err(no("map key callbacks"))
         }
+        check(self.plan, repr, &mut BTreeSet::new())
+    }
+    fn map_operation(
+        &self,
+        map: &str,
+        key: Repr,
+        method: &str,
+        k: &str,
+        value: Option<&str>,
+    ) -> Gen<String> {
+        if !callback_key(key) {
+            let v = value.map(|v| format!(",{v}")).unwrap_or_default();
+            return Ok(format!(
+                "{map}.{method}(&mut rt::strings::Cx::current(),{k}{v})"
+            ));
+        }
+        let desc = self.descriptors[&panic_class(self.plan)?];
+        let dyn_key =
+            capture_codegen::capture_dyn(self.plan, key, "key", self.descriptors, self.lists)?;
+        let a = capture_codegen::capture_dyn(self.plan, key, "a", self.descriptors, self.lists)?;
+        let b = capture_codegen::capture_dyn(self.plan, key, "b", self.descriptors, self.lists)?;
+        let v = value.map(|v| format!(",{v}")).unwrap_or_default();
+        Ok(format!(
+            "{{let key={k};let mut key_cx=rt::strings::Cx::current();rt::maps::keys::hash(&mut key_cx,{dyn_key},CAPTURE_SHAPES,|cx,message|rt::maps::keys::panic(cx,{desc},message)).and_then(|hash|{map}.{method}_with(&mut key_cx,key{v},hash,|cx,a,b|rt::maps::keys::equals(cx,{a},{b},CAPTURE_SHAPES)))}}"
+        ))
     }
     fn map_literal(
         &self,
@@ -212,11 +301,13 @@ impl Emitter<'_, '_> {
         for (k, v) in entries {
             let k = self.coerce(self.operand(k)?, key)?;
             let v = self.coerce(self.operand(v)?, value)?;
-            let set = self.fallible(&format!(
-                "map.set(&mut rt::strings::Cx::current(),{}, {})",
-                self.map_in(&k, key)?,
-                self.map_in(&v, value)?
-            ));
+            let set = self.fallible(&self.map_operation(
+                "map",
+                key,
+                "set",
+                &self.map_in(&k, key)?,
+                Some(&self.map_in(&v, value)?),
+            )?);
             write!(out, "{set};").unwrap();
         }
         out.push_str("map.as_raw()}");
@@ -255,25 +346,30 @@ impl Emitter<'_, '_> {
                 let k = values.get(1).ok_or_else(|| no("map key argument"))?;
                 let k = self.coerce(k.clone(), key)?;
                 let k = self.map_in(&k, key)?;
-                let mut arguments = format!("&mut rt::strings::Cx::current(),{k}");
-                if method == "set" || method == "get_or_insert" {
+                let v = if method == "set" || method == "get_or_insert" {
                     let v = values.get(2).ok_or_else(|| no("map value argument"))?;
                     let v = self.coerce(v.clone(), value)?;
-                    write!(arguments, ",{}", self.map_in(&v, value)?).unwrap();
-                }
+                    Some(self.map_in(&v, value)?)
+                } else {
+                    None
+                };
+                let operation = self.map_operation(
+                    &map,
+                    key,
+                    if method == "index" { "get" } else { method },
+                    &k,
+                    v.as_deref(),
+                )?;
                 if method == "has" {
-                    return Ok((
-                        self.fallible(&format!("{map}.has({arguments})")),
-                        Repr::Bool,
-                    ));
+                    return Ok((self.fallible(&operation), Repr::Bool));
                 }
                 if method == "index" {
                     let expr = self.fallible(&format!(
-                        "{map}.get({arguments}).and_then(|v|v.ok_or_else(rt::map_key_not_found))"
+                        "{operation}.and_then(|v|v.ok_or_else(rt::map_key_not_found))"
                     ));
                     return Ok((self.map_out(&expr, value), value));
                 }
-                let expr = format!("{map}.{method}({arguments})");
+                let expr = operation;
                 if method == "get_or_insert" {
                     let expr = self.fallible(&expr);
                     return Ok((self.map_out(&expr, value), value));

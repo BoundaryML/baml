@@ -63,6 +63,9 @@ impl Plan<'_> {
             Repr::Map(_) => {
                 self.lists.insert(repr);
                 let (key, value) = self.map_parts(repr)?;
+                if maps::callback_key(key) {
+                    self.add(maps::panic_class(self)?)?;
+                }
                 self.record(key)?;
                 self.record(value)?;
                 for element in [key, value] {
@@ -108,24 +111,17 @@ impl Plan<'_> {
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown => Repr::Tagged,
             RuntimeTy::Function { .. } => Repr::Closure,
-            RuntimeTy::Map { key, value } => {
-                if matches!(key.as_ref(), RuntimeTy::Union(m) if !m.iter().all(scalar_key))
-                    || matches!(key.as_ref(), RuntimeTy::Unknown)
-                {
-                    return Err(no("map key callbacks"));
-                }
-                self.map_repr(
-                    if matches!(key.as_ref(), RuntimeTy::Union(_)) {
-                        Repr::Tagged
-                    } else {
-                        self.repr(key)?
-                    },
-                    self.repr(value)?,
-                    capture_codegen::declared_type(self, key)?,
-                    capture_codegen::declared_type(self, value)?,
-                    scalar_json_value(value),
-                )
-            }
+            RuntimeTy::Map { key, value } => self.map_repr(
+                if matches!(key.as_ref(), RuntimeTy::Union(_)) {
+                    Repr::Tagged
+                } else {
+                    self.repr(key)?
+                },
+                self.repr(value)?,
+                capture_codegen::declared_type(self, key)?,
+                capture_codegen::declared_type(self, value)?,
+                scalar_json_value(value),
+            ),
             RuntimeTy::Null => Repr::Null,
             RuntimeTy::List(element) => match element.as_ref() {
                 RuntimeTy::Int => Repr::ListInt,
@@ -194,24 +190,17 @@ impl Plan<'_> {
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
-            T::Map { key, value } => {
-                if matches!(key.as_ref(), T::Union(m) if !m.iter().all(scalar_field_key))
-                    || matches!(key.as_ref(), T::Unknown)
-                {
-                    return Err(no("map key callbacks"));
-                }
-                self.map_repr(
-                    if matches!(key.as_ref(), T::Union(_)) {
-                        Repr::Tagged
-                    } else {
-                        self.field_repr(key)?
-                    },
-                    self.field_repr(value)?,
-                    capture_codegen::declared_field_type(self, key)?,
-                    capture_codegen::declared_field_type(self, value)?,
-                    scalar_json_field_value(value),
-                )
-            }
+            T::Map { key, value } => self.map_repr(
+                if matches!(key.as_ref(), T::Union(_)) {
+                    Repr::Tagged
+                } else {
+                    self.field_repr(key)?
+                },
+                self.field_repr(value)?,
+                capture_codegen::declared_field_type(self, key)?,
+                capture_codegen::declared_field_type(self, value)?,
+                scalar_json_field_value(value),
+            ),
             T::List(element) => match element.as_ref() {
                 T::Int => Repr::ListInt,
                 T::String => Repr::ListStr,
@@ -277,7 +266,8 @@ impl Plan<'_> {
                 && package
                     .objects
                     .contains(&u32::try_from(object).expect("object index"))
-        }) && (class.path.to_string().starts_with("panics.")
+        }) && ((class.path.to_string().starts_with("panics.")
+            && class.path.to_string() != "panics.UserPanic")
             || matches!(
                 class.path.to_string().as_str(),
                 "json.ParseError" | "json.DecodeError"
