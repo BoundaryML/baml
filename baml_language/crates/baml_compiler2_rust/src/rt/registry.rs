@@ -1,7 +1,8 @@
 //! Ordered extension points. First matching lowering wins; errors never fall through.
 use super::{
     BTreeMap, Db, Emitter, Gen, MirFunction, Plan, Repr, Rvalue, SourceRoot, StatementKind,
-    Terminator, calls, closures, containers, dispatch, globals, lists, loop_ranges, stack, strings, tasks, telemetry,
+    Terminator, calls, closures, containers, dispatch, globals, lists, loop_ranges, stack, strings,
+    tasks, telemetry,
 };
 
 #[derive(Clone, Copy)]
@@ -22,7 +23,7 @@ pub(super) trait Feature {
         _db: &'db dyn Db,
         _root: SourceRoot,
         _plan: &mut Plan<'_>,
-        _all: &mut BTreeMap<usize, &'db MirFunction<'db>>,
+        _all: &mut BTreeMap<usize, MirFunction<'db>>,
     ) -> Gen<Vec<usize>> {
         Ok(Vec::new())
     }
@@ -81,9 +82,12 @@ const FEATURES: &[&dyn Feature] = &[
     &lists::Feature,
     &containers::Feature,
     &dispatch::Feature,
+    &super::interface_fields::Feature,
+    &super::switches::Feature,
     &strings::Feature,
     &telemetry::Feature,
     &loop_ranges::Feature,
+    &super::generics::Feature,
     &calls::Feature,
 ];
 
@@ -146,7 +150,7 @@ pub(super) fn prepare<'db>(
     db: &'db dyn Db,
     root: SourceRoot,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, &'db MirFunction<'db>>,
+    all: &mut BTreeMap<usize, MirFunction<'db>>,
 ) -> Gen<Vec<usize>> {
     let mut roots = Vec::new();
     for feature in FEATURES {

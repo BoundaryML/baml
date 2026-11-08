@@ -815,7 +815,7 @@ fn rt_trees_and_fail_closed_admission() {
         "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
     ))
     .unwrap();
-    assert!(richards.contains("match a0.tag"));
+    assert!(richards.contains("static VTABLE"));
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
@@ -1179,4 +1179,26 @@ fn rt_loop_range_proofs_cover_every_update_and_preserve_bytecode() {
             "{name}: rt changed bytecode"
         );
     }
+}
+#[test]
+fn rt_generics_switch_aliases() {
+    let source = include_str!("../rust_diff/type_dispatch.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-type-program.rs"),
+        source,
+    )
+    .unwrap();
 }

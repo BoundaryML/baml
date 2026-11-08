@@ -1,11 +1,11 @@
 use super::{
-    BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, Rvalue,
-    SourceRoot, StatementKind, Terminator, VecDeque, file_functions, file_lets,
+    BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, RuntimeTy,
+    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions, file_lets,
     is_required_interface_method, lower_function, no, registry, world_files,
 };
 
 pub(super) struct Admitted<'db> {
-    pub all: BTreeMap<usize, &'db MirFunction<'db>>,
+    pub all: BTreeMap<usize, MirFunction<'db>>,
     pub reached: BTreeSet<usize>,
     pub calls: BTreeMap<usize, BTreeSet<usize>>,
     pub builtins: BTreeSet<String>,
@@ -32,12 +32,13 @@ pub(super) fn collect<'db>(
                 .as_ref()
                 .map_err(|e| no(format!("MIR: {e:?}")))?;
             if let Some(object) = plan.index.declared(db, f) {
-                all.insert(object, mir);
+                all.insert(object, mir.clone());
             }
         }
     }
     let mut queue = VecDeque::from([entry]);
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
+    super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -58,40 +59,64 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
-
             if let StatementKind::Assign {
                 value:
-                    Rvalue::LoadType(
-                        ty @ (baml_compiler2_mir::TyTemplate::List(_)
-                        | baml_compiler2_mir::TyTemplate::Union(_)),
-                    ),
+                    Rvalue::Aggregate {
+                        kind:
+                            super::AggregateKind::Class {
+                                class,
+                                type_arg_templates,
+                            },
+                        ..
+                    },
                 ..
             } = &statement.kind
             {
-                if !plan.json_list_types.contains(ty)
-                    && let Ok(repr) = plan.template_repr(ty)
-                {
-                    plan.record(repr)?;
-                    plan.json_list_types.push(ty.clone());
-                }
+                let ty = RuntimeTy::Class(
+                    baml_compiler2_hir_ty::layout::class_head(db, *class),
+                    type_arg_templates
+                        .iter()
+                        .map(|t| t.substitute_symbolic(&[]))
+                        .collect(),
+                );
+                plan.record_ty(&ty)
+                    .map_err(|e| format!("{e} (constructor in {})", plan.index.display(object)))?;
             }
-            if let StatementKind::Assign {
-                value:
-                    Rvalue::LoadType(
-                        ty @ (baml_compiler2_mir::TyTemplate::Union(_)
-                        | baml_compiler2_mir::TyTemplate::Class(..)),
-                    ),
+        }
+        // A generic type argument is not a JSON schema request. In particular
+        // generic class heads may occur as type values without field bindings.
+        // Plan schemas only for the concrete argument to decode itself.
+        for block in &body.blocks {
+            if let Some(Terminator::Call {
+                callee: super::Operand::Constant(super::Constant::Function(f)),
+                args,
                 ..
-            } = &statement.kind
+            }) = &block.terminator
             {
-                let Ok(classes) = plan.json_class_types(ty) else {
-                    continue;
-                };
-                for &c in &classes {
-                    plan.add(c)?;
-                }
-                if !plan.json_types.contains(&classes) {
-                    plan.json_types.push(classes);
+                if plan
+                    .index
+                    .function(db, *f)
+                    .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
+                {
+                    let ty = super::generics::type_operand(body, &args[0])?;
+                    let template = baml_compiler2_mir::TyTemplate::from(
+                        baml_compiler2_mir::RealizedTy::try_from(ty)
+                            .map_err(|_| no("non-concrete JSON argument"))?,
+                    );
+                    if let Ok(classes) = plan.json_class_types(&template) {
+                        for &c in &classes {
+                            plan.add(c)?;
+                        }
+                        if !plan.json_types.contains(&classes) {
+                            plan.json_types.push(classes);
+                        }
+                    } else {
+                        let repr = plan.template_repr(&template)?;
+                        plan.record(repr)?;
+                        if !plan.json_list_types.contains(&template) {
+                            plan.json_list_types.push(template);
+                        }
+                    }
                 }
             }
         }
@@ -103,12 +128,31 @@ pub(super) fn collect<'db>(
             }
             let repr = plan.local_repr(body, i, 0)?;
             if !matches!(repr, Repr::Type(_)) {
-                plan.record_ty(&local.ty)?;
+                plan.record_ty(&local.ty).map_err(|e| {
+                    format!(
+                        "{e} ({} local {i}: {:?})",
+                        plan.index.display(object),
+                        local.ty
+                    )
+                })?;
             }
             plan.record(repr)?;
         }
         for block in &body.blocks {
             registry::admit(registry::Admission::ShieldedBlock(block.shielded))?;
+            if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
+                for (repr, target) in targets {
+                    plan.record(repr)?;
+                    calls.entry(object).or_default().insert(target);
+                    queue.push_back(target);
+                }
+                continue;
+            }
+            if let Some(&target) = plan.specialized_calls.get(&(object, block.id.0)) {
+                calls.entry(object).or_default().insert(target);
+                queue.push_back(target);
+                continue;
+            }
             if let Some(term) = &block.terminator
                 && (crate::analysis::array_iter_walk(db, body, mir.arity, term, &iters).is_some()
                     || crate::analysis::array_next_call(db, term, &iters).is_some())
@@ -134,24 +178,6 @@ pub(super) fn collect<'db>(
                     }
                     if let Some(callee) = reach.json_decode {
                         json_decode = Some(callee);
-                        let Some(Terminator::Call { args, .. }) = &block.terminator else {
-                            unreachable!()
-                        };
-                        let code = match &args[0] {
-                            baml_compiler2_mir::Operand::Copy(
-                                baml_compiler2_mir::Place::Local(l),
-                            )
-                            | baml_compiler2_mir::Operand::Move(
-                                baml_compiler2_mir::Place::Local(l),
-                            ) => {
-                                let Repr::Type(code) = plan.local_repr(body, l.0, 0)? else {
-                                    return Err(no("JSON type argument"));
-                                };
-                                code
-                            }
-                            _ => return Err(no("JSON type argument storage")),
-                        };
-                        plan.json_decode_codes.insert(code);
                     }
                     for target in reach.targets {
                         calls.entry(object).or_default().insert(target);
@@ -161,7 +187,7 @@ pub(super) fn collect<'db>(
             }
         }
     }
-    let mir = all[&entry];
+    let mir = &all[&entry];
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         unreachable!()
     };

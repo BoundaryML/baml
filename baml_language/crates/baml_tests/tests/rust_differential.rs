@@ -569,6 +569,9 @@ fn rt_call_cost_semantics_at_every_telemetry_level() {
 #[ignore = "builds generated Rust crates with cargo"]
 #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
 fn rust_differential() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let timeout = std::env::var("BAML_RUST_DIFF_TIMEOUT_SECS")
         .map(|v| v.parse::<u64>().expect("timeout must be seconds"))
         .unwrap_or(120);
@@ -980,4 +983,17 @@ fn diff(expected: &str, actual: &str, mode: &str) -> String {
         .map(|line| line.chars().take(800).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[path = "../rust_diff/type_dispatch.rs"]
+mod type_dispatch;
+static PACK_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
+fn rt_type_dispatch_semantics() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    type_dispatch::run();
 }

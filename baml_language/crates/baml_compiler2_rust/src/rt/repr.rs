@@ -18,6 +18,7 @@ pub(super) enum Repr {
     MapStrInt,
     Iter,
     Naming,
+    Enum(usize),
     Null,
 }
 impl Repr {

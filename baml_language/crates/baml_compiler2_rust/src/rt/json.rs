@@ -26,9 +26,20 @@ impl Plan<'_> {
                     .iter()
                     .position(|c| *c == classes)
                     .map(|i| i + 3)
+                    .or_else(|| {
+                        self.type_codes
+                            .iter()
+                            .position(|t| t == ty)
+                            .map(|i| i + 100000)
+                    })
                     .ok_or_else(|| no("unregistered JSON specialization"))
             }
-            _ => Err(no(format!("type argument {ty:?}"))),
+            _ => self
+                .type_codes
+                .iter()
+                .position(|t| t == ty)
+                .map(|i| i + 100000)
+                .ok_or_else(|| no(format!("type argument {ty:?}"))),
         }
     }
     pub(super) fn json_class_types(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<Vec<usize>> {
@@ -283,7 +294,7 @@ pub(super) fn emit(
                         .unwrap();
                     }
                 }
-                let mir = all[&callee];
+                let mir = &all[&callee];
                 let MirFunctionKind::Bytecode(body) = &mir.kind else {
                     return Err(no("JSON wrapper body"));
                 };
