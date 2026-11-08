@@ -202,6 +202,25 @@ impl TaskCancel {
     }
     #[inline]
     pub fn is_cancelled(&self) -> bool {
+        if self.deadline.is_none()
+            && self.node.linked.is_empty()
+            && self.node.local_linked.is_empty()
+        {
+            let n = &self.node;
+            match n.parent.as_deref() {
+                None => return n.cancelled.get(),
+                Some(p)
+                    if p.parent.is_none() && p.linked.is_empty() && p.local_linked.is_empty() =>
+                {
+                    return n.cancelled.get() || p.cancelled.get();
+                }
+                _ => {}
+            }
+        }
+        self.is_cancelled_slow()
+    }
+    #[cold]
+    fn is_cancelled_slow(&self) -> bool {
         let mut pending = Vec::new();
         let mut token = self;
         loop {
@@ -443,10 +462,21 @@ pub struct SwitchHook {
     pub enter: unsafe fn(*mut ()),
     pub leave: unsafe fn(*mut ()),
 }
-type Fiber = Coroutine<(), (), Outcome>;
+// None parks a live task; Some completes a logical task while keeping the
+// executor parked for reuse. No task-local state survives that completion.
+type Fiber = Coroutine<usize, Option<Outcome>, Outcome>;
+enum PooledFiber {
+    Idle {
+        fiber: Fiber,
+        base: usize,
+        limit: usize,
+    },
+    Stack(DefaultStack),
+}
 struct Task {
     hook: Option<SwitchHook>,
     fiber: Option<Fiber>,
+    body: Option<Body>,
     base: usize,
     parked_sp: Option<usize>,
     stack_limit: usize,
@@ -495,7 +525,7 @@ struct Core {
     metrics: Metrics,
     tasks: tasks::Tasks,
     ready: VecDeque<usize>,
-    pool: Vec<DefaultStack>,
+    pool: Vec<PooledFiber>,
     config: Config,
     tx: mpsc::Sender<Message>,
     runtime: tokio::runtime::Handle,
@@ -693,11 +723,12 @@ impl TaskLoop {
         for t in c.tasks.values() {
             visit(t.stack_limit as *const u8, t.base - t.stack_limit);
         }
-        for stack in &c.pool {
-            visit(
-                stack.limit().get() as *const u8,
-                stack.base().get() - stack.limit().get(),
-            );
+        for pooled in &c.pool {
+            let (base, limit) = match pooled {
+                PooledFiber::Idle { base, limit, .. } => (*base, *limit),
+                PooledFiber::Stack(stack) => (stack.base().get(), stack.limit().get()),
+            };
+            visit(limit as *const u8, base - limit);
         }
     }
     pub fn pooled_stacks(&self) -> usize {
@@ -892,7 +923,7 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
         fiber
     };
     // No Core borrow survives a context switch: TaskCx may freely access it.
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| fiber.resume(())))
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| fiber.resume(id)))
         .unwrap_or_else(|_| {
             CoroutineResult::Return(Err(Err::InternalError("task panicked".into())))
         });
@@ -907,10 +938,10 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
     let mut c = core.borrow_mut();
     c.running_base = None;
     match result {
-        CoroutineResult::Yield(()) => {
+        CoroutineResult::Yield(None) => {
             c.tasks.get_mut(&id).unwrap().fiber = Some(fiber);
         }
-        CoroutineResult::Return(result) => {
+        CoroutineResult::Yield(Some(result)) | CoroutineResult::Return(result) => {
             let mut task = c.tasks.remove(&id).unwrap();
             task.state = TaskState::Done;
             if result.is_err() {
@@ -943,9 +974,16 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
                 task.future.0.borrow_mut().observed = true;
                 let _ = reply.send(result.and_then(Value::owned));
             }
-            let stack = fiber.into_stack();
             if c.pool.len() < c.config.pool_capacity {
-                c.pool.push(stack);
+                c.pool.push(if fiber.done() {
+                    PooledFiber::Stack(fiber.into_stack())
+                } else {
+                    PooledFiber::Idle {
+                        fiber,
+                        base: task.base,
+                        limit: task.stack_limit,
+                    }
+                });
             }
             // Ticket drops here, after producer frames have unwound.
         }
@@ -1073,36 +1111,58 @@ fn spawn(
                 .collect(),
         })
     };
-    let stack = c.pool.pop().unwrap_or_else(|| {
-        DefaultStack::new(c.config.stack_size).expect("fiber stack allocation failed")
-    });
-    let base = stack.base().get();
-    let stack_limit = stack.limit().get();
-    let weak = Rc::downgrade(core);
-    let fiber = Coroutine::with_stack(stack, move |yielder, ()| {
-        let core = weak.upgrade().expect("loop alive");
-        let cancel = core.borrow().tasks[&id].cancel.clone();
-        let mut cx = TaskCx {
-            core,
-            id,
-            yielder,
-            cancel,
-            shield: 0,
-            scheduled: slice_clock::now(),
-        };
-        // Driver catches user panics after corosensei unwinds the fiber. Forced
-        // unwind on shutdown runs through this boundary without being caught.
-        #[cfg(feature = "instrument")]
-        {
-            cx.core.borrow_mut().metrics.slice_reads += 1;
+    let (fiber, base, stack_limit) = match c.pool.pop() {
+        Some(PooledFiber::Idle { fiber, base, limit }) => (fiber, base, limit),
+        pooled => {
+            let stack = match pooled {
+                Some(PooledFiber::Stack(stack)) => stack,
+                None => {
+                    DefaultStack::new(c.config.stack_size).expect("fiber stack allocation failed")
+                }
+                _ => unreachable!(),
+            };
+            let base = stack.base().get();
+            let limit = stack.limit().get();
+            let weak = Rc::downgrade(core);
+            let fiber = Coroutine::with_stack(stack, move |yielder, mut id| {
+                loop {
+                    let result = {
+                        let core = weak.upgrade().expect("loop alive");
+                        let (body, cancel) = {
+                            let mut c = core.borrow_mut();
+                            let task = c.tasks.get_mut(&id).unwrap();
+                            (task.body.take().unwrap(), task.cancel.clone())
+                        };
+                        let mut cx = TaskCx {
+                            core,
+                            id,
+                            yielder,
+                            cancel,
+                            shield: 0,
+                            scheduled: slice_clock::now(),
+                        };
+                        // Driver catches panics after corosensei unwinds the fiber.
+                        // Forced shutdown unwind must pass through this boundary.
+                        #[cfg(feature = "instrument")]
+                        {
+                            cx.core.borrow_mut().metrics.slice_reads += 1;
+                        }
+                        body.run(&mut cx)
+                    };
+                    // All bindings, captures and strong Core references have dropped.
+                    // The driver retires the task before this executor can be reused.
+                    id = yielder.suspend(Some(result));
+                }
+            });
+            (fiber, base, limit)
         }
-        body.run(&mut cx)
-    });
+    };
     c.tasks.insert(
         id,
         Task {
             hook: None,
             fiber: Some(fiber),
+            body: Some(body),
             base,
             parked_sp: None,
             stack_limit,
@@ -1130,7 +1190,7 @@ fn spawn(
 pub struct TaskCx<'a> {
     core: Rc<RefCell<Core>>,
     id: usize,
-    yielder: &'a Yielder<(), ()>,
+    yielder: &'a Yielder<usize, Option<Outcome>>,
     cancel: TaskCancel,
     shield: usize,
     scheduled: slice_clock::Stamp,
@@ -1256,7 +1316,7 @@ impl TaskCx<'_> {
                 .get_mut(&self.id)
                 .unwrap()
                 .parked_sp = Some(sp);
-            self.yielder.suspend(());
+            self.yielder.suspend(None);
             self.core
                 .borrow_mut()
                 .tasks

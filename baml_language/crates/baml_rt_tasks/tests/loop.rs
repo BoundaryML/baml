@@ -1166,3 +1166,47 @@ fn failure_preserves_cancellation_received_through_a_linked_token() {
     });
     assert_eq!(lp.run_until(&root).unwrap().as_int(), 1);
 }
+
+#[test]
+fn completed_executors_release_locals_and_reuse_after_errors_and_panics() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let live = Rc::new(());
+    let mut retained = Vec::new();
+    for n in 0..64 {
+        let capture = live.clone();
+        let future = lp.spawn(move |cx| {
+            assert_eq!(Rc::strong_count(&capture), 2);
+            let token = cx.cancel();
+            let child = cx.spawn(move |cx| {
+                assert!(!cx.cancel().is_cancelled());
+                if n % 4 == 0 {
+                    panic!("executor test panic");
+                }
+                if n % 4 == 1 {
+                    return Err(error("executor test error"));
+                }
+                Ok(Value::int(n))
+            });
+            let result = cx.await_future(&child);
+            token.cancel();
+            result
+        });
+        let result = lp.run_until(&future);
+        match n % 4 {
+            0 => assert!(matches!(result, Err(Err::InternalError(_)))),
+            1 => assert_eq!(result.unwrap_err(), error("executor test error")),
+            _ => assert_eq!(result.unwrap().as_int(), n),
+        }
+        // Even a retained future must not keep the completed body's captures or
+        // native stack locals alive. A new logical task has fresh cancellation.
+        assert_eq!(Rc::strong_count(&live), 1);
+        retained.push(future);
+    }
+    let next = lp.spawn(|cx| {
+        cx.check_cancel()?;
+        Ok(Value::int(42))
+    });
+    assert_eq!(lp.run_until(&next).unwrap().as_int(), 42);
+    assert!(lp.shutdown(Duration::ZERO).leaked.is_empty());
+}

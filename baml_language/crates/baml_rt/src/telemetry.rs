@@ -171,6 +171,12 @@ impl State {
             }
         }
         if !batch.is_empty() {
+            // Select only when there is timing data to attribute. A fiber can
+            // enter/leave without completing an observed call; publishing an
+            // otherwise empty selector chunk costs a transport handoff.
+            self.producer.write_timing(TimingRecord::ThreadSelected {
+                thread_id: self.thread,
+            });
             self.producer
                 .write_timing(TimingRecord::AggregateDeltas(batch.into_boxed_slice()));
         }
@@ -291,9 +297,6 @@ impl Fiber {
         state.name = self.name.clone();
         state.started = self.started;
         CURRENT.set(self.state);
-        state.producer.write_timing(TimingRecord::ThreadSelected {
-            thread_id: self.thread,
-        });
     }
     pub(crate) unsafe fn leave(&mut self) {
         *self = unsafe { Self::current(self.state.cast()) }.unwrap();
@@ -839,6 +842,9 @@ fn complete_unusual(
     if let Some(sum) = slot.checked_merge(sample) {
         *slot = sum;
     } else {
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
         state.producer.write_timing(TimingRecord::AggregateDeltas(
             vec![*slot].into_boxed_slice(),
         ));
@@ -1746,6 +1752,9 @@ pub(crate) fn sysop<T>(call: impl FnOnce() -> R<T>) -> R<T> {
     let result = call();
     let state = unsafe { &mut *pointer };
     if path != CallPathId::ROOT && state.active_function.is_some() {
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
         state.producer.write_timing(TimingRecord::SysOpTime {
             call_path: path,
             elapsed: started.elapsed_until(state.read()),
