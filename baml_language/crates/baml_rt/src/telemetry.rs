@@ -245,6 +245,13 @@ pub fn enabled(word: &AtomicU8) -> bool {
 pub fn mode(word: &AtomicU8) -> u8 {
     word.load(Ordering::Relaxed)
 }
+
+/// Global off has no producer installed. A hidden/unobserved function at low
+/// still has one, so its descendants must keep their own observation policies.
+#[inline(always)]
+pub fn active() -> bool {
+    !CURRENT.get().is_null()
+}
 /// # Safety
 /// A session must own the current task, and the caller must finish this frame
 /// before leaving that task. The site must belong to the compiled program.
@@ -1057,7 +1064,7 @@ impl Session {
         self.exit.set(btel_types::ProcessExit {
             status: match result {
                 Ok(_) => btel_types::ProcessStatus::Success,
-                Err(error) if outcome(error) == InvocationOutcome::Panicked => {
+                Err(error) if error.value != 0 && outcome(error) == InvocationOutcome::Panicked => {
                     btel_types::ProcessStatus::Panicked
                 }
                 Err(_) => btel_types::ProcessStatus::Error,

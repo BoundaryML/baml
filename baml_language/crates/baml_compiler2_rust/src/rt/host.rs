@@ -121,7 +121,7 @@ pub(super) fn emit(
         "init_builtin_observation();"
     };
     if mir.arity == 0 && plan.repr(&body.locals[0].ty)? == Repr::Int {
-        writeln!(&mut out,"fn entry()->R<i64>{{unsafe{{f{entry}(0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_observed(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}").unwrap();
+        writeln!(&mut out,"fn entry()->R<i64>{{unsafe{{if rt::telemetry::active(){{f{entry}::<true>(rt::calls::Context::current(),0)}}else{{f{entry}::<false>(rt::calls::Context::current(),0)}}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_observed(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}").unwrap();
         return Ok(());
     }
     let mut classes = BTreeSet::new();
@@ -191,7 +191,7 @@ pub(super) fn emit(
             _ => format!("d{i}.payload as {}", repr.rust()),
         });
     }
-    write!(&mut out, "let value=f{entry}(0,{})?;", args.join(",")).unwrap();
+    write!(&mut out, "let value=if rt::telemetry::active(){{f{entry}::<true>(rt::calls::Context::current(),0,{0})}}else{{f{entry}::<false>(rt::calls::Context::current(),0,{0})}}?;", args.join(",")).unwrap();
     let repr = plan.repr(&body.locals[0].ty)?;
     let tag = match repr {
         Repr::Int => "0",

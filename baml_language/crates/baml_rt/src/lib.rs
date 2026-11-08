@@ -4,6 +4,7 @@
 //! No managed pointer may escape that call's owned result boundary.
 pub mod host;
 pub mod io;
+pub mod calls;
 pub mod json;
 pub mod language;
 pub mod lists;

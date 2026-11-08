@@ -44,6 +44,9 @@ struct Emitter<'a, 'db> {
     iter_arrays: BTreeMap<usize, usize>,
     arity: usize,
     block: usize,
+    statement: usize,
+    stack: stack::Placement,
+    proven_arithmetic: BTreeSet<(usize, usize)>,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
     compact_sites: Vec<u32>,
@@ -63,6 +66,7 @@ mod admission;
 mod body;
 mod builtin_classes;
 mod builtins;
+mod call_cost;
 mod capture_codegen;
 mod closures;
 mod containers;
@@ -76,9 +80,11 @@ mod io;
 mod json;
 mod layout;
 mod logging;
+mod loop_ranges;
 mod places;
 mod repr;
 mod scalars;
+mod stack;
 mod statements;
 mod telemetry;
 
