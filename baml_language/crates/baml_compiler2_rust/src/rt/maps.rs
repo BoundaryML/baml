@@ -73,7 +73,11 @@ impl registry::Feature for Feature {
         let name = plan.index.display(callee).to_owned();
         if name == "baml.json.stringify" {
             plan.map_stringify = true;
-            return Some(Ok(registry::Reach::default()));
+            return Some((|| {
+                let error = map_json::serialization_error_class(plan)?;
+                plan.add(error)?;
+                Ok(registry::Reach::default())
+            })());
         }
         name.starts_with("baml.Map.").then(|| {
             if !matches!(

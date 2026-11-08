@@ -114,6 +114,15 @@ pub fn boolean(cx: &mut Cx, reader: &mut Reader<'_>, path: &str) -> R<bool> {
 pub fn stringify<V: Slot>(
     cx: &mut Cx,
     map: Map<Str, V>,
+    encode: impl FnMut(&mut Cx, V, &str, &mut String) -> R<()>,
+) -> R<Str> {
+    stringify_at(cx, map, "", encode)
+}
+/// Serialize a nested map while retaining its absolute error path.
+pub fn stringify_at<V: Slot>(
+    cx: &mut Cx,
+    map: Map<Str, V>,
+    prefix: &str,
     mut encode: impl FnMut(&mut Cx, V, &str, &mut String) -> R<()>,
 ) -> R<Str> {
     let entries = map.snapshot(cx)?;
@@ -124,7 +133,7 @@ pub fn stringify<V: Slot>(
             out.push(',');
         }
         let written = serde_json::to_string(key.as_str(cx)).expect("string serialization");
-        let path = format!("[{written}]");
+        let path = format!("{prefix}[{:?}]", key.as_str(cx));
         out.push_str(&written);
         out.push(':');
         encode(cx, value, &path, &mut out)?;
@@ -216,4 +225,156 @@ pub fn pretty(cx: &mut Cx, text: Str, indent: &str) -> R<Str> {
         }
     }
     cx.string(std::str::from_utf8(&output).expect("JSON and indent are UTF-8"))
+}
+
+/// Construct the ordinary language exception with its compiler-planned layout.
+/// # Safety
+/// `desc` describes SerializationError's three pointer fields in declaration order.
+pub unsafe fn serialization_error(
+    cx: &mut Cx,
+    desc: u32,
+    message: String,
+    path: &str,
+    reason: &str,
+) -> Box<crate::Error> {
+    let display = format!(
+        "baml.json.SerializationError {{message: {message:?}, path: {path:?}, reason: {reason:?}}}"
+    );
+    let value = (|| -> R<usize> {
+        let message = cx.string(&message)?;
+        let path = cx.string(path)?;
+        let reason = cx.string(reason)?;
+        let value = unsafe { crate::try_alloc(desc, 32) }?;
+        for (offset, text) in [(8, message), (16, path), (24, reason)] {
+            unsafe { baml_rt_gc::write_ptr(value, value.add(offset).cast(), text.as_raw()) };
+        }
+        Ok(value as usize)
+    })();
+    match value {
+        Err(error) => error,
+        Ok(value) => Box::new(crate::Error {
+            telemetry_raise: None,
+            telemetry_at: None,
+            value,
+            class: "baml.json.SerializationError",
+            message,
+            frames: Vec::new(),
+            display_value: Some(display),
+        }),
+    }
+}
+/// # Safety
+/// The exception descriptor has the contract of `serialization_error`.
+pub unsafe fn indent(cx: &mut Cx, value: crate::Dyn, desc: u32) -> R<String> {
+    let message = match value.tag {
+        0 => {
+            let count = value.payload as i64;
+            if (0..=10).contains(&count) {
+                return Ok(" ".repeat(count as usize));
+            }
+            if count < 0 {
+                format!("indent must not be negative, got {count}")
+            } else {
+                format!("indent must be at most 10 spaces, got {count}")
+            }
+        }
+        3 => {
+            let read = unsafe { Cx::current() };
+            let text = unsafe { Str::from_raw(value.payload as usize) }.as_str(&read);
+            let width = text.chars().count();
+            if width > 10 {
+                format!("indent must be at most 10 characters, got {width}")
+            } else if text.chars().all(|c| matches!(c, ' ' | '\t' | '\r' | '\n')) {
+                return Ok(text.into());
+            } else {
+                format!("indent must hold only spaces, tabs, and line breaks, got {text:?}")
+            }
+        }
+        _ => {
+            return Err(crate::Error::internal(
+                "invalid JSON indent representation".into(),
+            ));
+        }
+    };
+    Err(unsafe { serialization_error(cx, desc, message, "", "indent") })
+}
+/// # Safety
+/// The exception descriptor has the contract of `serialization_error`.
+pub unsafe fn write_float(
+    cx: &mut Cx,
+    value: f64,
+    path: &str,
+    desc: u32,
+    out: &mut String,
+) -> R<()> {
+    if !value.is_finite() {
+        return Err(unsafe {
+            serialization_error(
+                cx,
+                desc,
+                format!("{value} has no JSON form: a JSON number is finite"),
+                path,
+                "non_finite",
+            )
+        });
+    }
+    out.push_str(&serde_json::to_string(&value).expect("finite float"));
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_rt_gc::{Descriptor, Kind};
+    static DESCRIPTORS: &[Descriptor] = &[
+        crate::STRING_DESC,
+        Descriptor {
+            kind: Kind::Class,
+            size: 32,
+            ptr_slots: (8, 3),
+            tagged_slots: (0, 0),
+            elem: None,
+            type_id: 4,
+            fields: &[],
+            finalizer: None,
+        },
+    ];
+    #[test]
+    fn non_finite_errors_trace_message_path_and_reason() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            for number in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                let error = unsafe {
+                    write_float(
+                        &mut cx,
+                        number,
+                        "[\"outer\"][\"bad\"]",
+                        1,
+                        &mut String::new(),
+                    )
+                }
+                .unwrap_err();
+                assert_eq!(error.class, "baml.json.SerializationError");
+                assert_eq!(
+                    error.message,
+                    format!("{number} has no JSON form: a JSON number is finite")
+                );
+                let object = error.value;
+                for _ in 0..32 {
+                    cx.string("collect between construction and reading exception fields")?;
+                }
+                let path = unsafe { *((object + 16) as *const usize) };
+                let reason = unsafe { *((object + 24) as *const usize) };
+                assert_eq!(
+                    unsafe { Str::from_raw(path) }.as_str(&cx),
+                    "[\"outer\"][\"bad\"]"
+                );
+                assert_eq!(unsafe { Str::from_raw(reason) }.as_str(&cx), "non_finite");
+            }
+            Ok(0)
+        }
+        let mut instance = crate::Instance::new(DESCRIPTORS, &[false, false, false, true, true]);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 0);
+    }
 }

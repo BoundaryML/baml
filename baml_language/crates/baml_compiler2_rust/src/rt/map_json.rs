@@ -58,12 +58,12 @@ pub(super) fn emit(
 
 fn encodable(plan: &Plan<'_>, repr: Repr) -> bool {
     match repr {
-        Repr::Int | Repr::Bool | Repr::Str | Repr::Null => true,
+        Repr::Int | Repr::Float | Repr::Bool | Repr::Str | Repr::Null => true,
         Repr::MapStrInt | Repr::Map(_) => {
             let Ok((key, value)) = plan.map_parts(repr) else {
                 return false;
             };
-            key == Repr::Str && encodable(plan, value)
+            key != Repr::Str || encodable(plan, value)
         }
         _ => false,
     }
@@ -76,19 +76,26 @@ fn emit_encoders(
     if !cx.plan.map_stringify {
         return Ok(());
     }
+    let error_desc = cx.descriptors[&serialization_error_class(cx.plan)?];
     for (&repr, &desc) in lists {
         if !matches!(repr, Repr::MapStrInt | Repr::Map(_)) || !encodable(cx.plan, repr) {
             continue;
         }
-        let (_, value) = cx.plan.map_parts(repr)?;
+        let (key, value) = cx.plan.map_parts(repr)?;
+        if key != Repr::Str {
+            let code = code(repr)?;
+            writeln!(out,"unsafe fn rt_map_json_encode_{code}(cx:&mut rt::strings::Cx,p:usize,path:&str)->R<rt::strings::Str>{{Err(unsafe{{rt::maps::json::serialization_error(cx,{error_desc},\"JSON requires maps with string keys\".into(),path,\"map_key\")}})}}").unwrap();
+            continue;
+        }
         let slot = maps::slot_type(value, cx.descriptors, lists)?;
         let code = code(repr)?;
         let mut write = match value {
             Repr::Int | Repr::Bool => "out.push_str(&value.to_string());".to_owned(),
+            Repr::Float => format!("rt::maps::json::write_float(cx,value,path,{error_desc},out)?;"),
             Repr::Str => "rt::maps::json::write_string(out,value.as_str(cx));".to_owned(),
             Repr::Null => "out.push_str(\"null\");".to_owned(),
             Repr::MapStrInt | Repr::Map(_) => format!(
-                "let text=rt_map_json_encode_{}(cx,value.as_raw())?;out.push_str(text.as_str(cx));",
+                "let text=rt_map_json_encode_{}(cx,value.as_raw(),path)?;out.push_str(text.as_str(cx));",
                 self::code(value)?
             ),
             _ => unreachable!(),
@@ -96,7 +103,7 @@ fn emit_encoders(
         if value.pointer() {
             write = format!("if value.as_raw()==0{{out.push_str(\"null\");}}else{{{write}}}");
         }
-        writeln!(out,"unsafe fn rt_map_json_encode_{code}(cx:&mut rt::strings::Cx,p:usize)->R<rt::strings::Str>{{unsafe{{rt::maps::json::stringify(cx,rt::maps::Map::<rt::strings::Str,{slot}>::from_raw(p),|cx,value,path,out|{{{write}Ok(())}})}}}}").unwrap();
+        writeln!(out,"unsafe fn rt_map_json_encode_{code}(cx:&mut rt::strings::Cx,p:usize,path:&str)->R<rt::strings::Str>{{unsafe{{rt::maps::json::stringify_at(cx,rt::maps::Map::<rt::strings::Str,{slot}>::from_raw(p),path,|cx,value,path,out|{{{write}Ok(())}})}}}}").unwrap();
         let _ = desc;
     }
     Ok(())
@@ -163,20 +170,6 @@ pub(super) fn terminator(emitter: &Emitter<'_, '_>, term: &Terminator<'_>) -> Op
         } else {
             "rt::Dyn{tag:CAPTURE_NAMING_TAG,payload:naming as u64}".into()
         };
-        let indent = if omitted(2) {
-            String::new()
-        } else {
-            match constant(emitter.body, &args[2], 0)? {
-                Constant::Int(width) if (0..=10).contains(width) => " ".repeat(*width as usize),
-                Constant::String(value)
-                    if value.chars().count() <= 10
-                        && value.chars().all(|c| matches!(c, ' ' | '\t' | '\r' | '\n')) =>
-                {
-                    value.to_string()
-                }
-                _ => return Err(no("JSON map stringify dynamic or invalid indent")),
-            }
-        };
         let (indent_binding, indent_capture) = if omitted(2) {
             (String::new(), "rt::Dyn{tag:u64::MAX,payload:0}".into())
         } else {
@@ -233,17 +226,29 @@ pub(super) fn terminator(emitter: &Emitter<'_, '_>, term: &Terminator<'_>) -> Op
             .telemetry_sites
             .borrow_mut()
             .push((Some(callee), pc, alias));
-        let encoded = if indent.is_empty() {
-            format!(
-                "rt_map_json_encode_{code}(&mut rt::strings::Cx::current(),p).map(|s|s.as_raw())"
-            )
+        let error_desc = emitter.descriptors[&serialization_error_class(emitter.plan)?];
+        let indent_value = if omitted(2) {
+            "rt::Dyn{tag:0,payload:0}".to_owned()
         } else {
-            format!(
-                "rt_map_json_encode_{code}(&mut rt::strings::Cx::current(),p).and_then(|s|rt::maps::json::pretty(&mut rt::strings::Cx::current(),s,{indent:?})).map(|s|s.as_raw())"
-            )
+            indent_capture.clone()
         };
+        let native=body.blocks.iter().find(|b| matches!(&b.terminator,Some(Terminator::Call{callee:Operand::Constant(Constant::Function(f)),..}) if emitter.plan.index.function(emitter.db,*f).is_some_and(|(id,_)|emitter.plan.index.display(id)=="baml.json._stringify"))).ok_or_else(||no("JSON stringify source location"))?;
+        let native_pc = bytecode.block_pcs[native.id.0].terminator.unwrap();
+        let line = bytecode.source_line_for_pc(native_pc);
+        let native_pc = bytecode
+            .lower_to_compact_with_offsets()
+            .offset_of(native_pc)
+            .unwrap();
+        let file = &emitter.plan.index.info(callee).source_file;
+        let function = emitter.plan.index.display(callee);
+        let source = format!(
+            "static SOURCE:rt::Source=rt::Source{{file:{file:?},function:{function:?},lines:&[{line}],pcs:&[{native_pc}],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};"
+        );
+        let encoded = format!(
+            "(||->R<usize>{{let indent=rt::maps::json::indent(&mut rt::strings::Cx::current(),{indent_value},{error_desc})?;let text=rt_map_json_encode_{code}(&mut rt::strings::Cx::current(),p,\"\")?;rt::maps::json::pretty(&mut rt::strings::Cx::current(),text,&indent).map(|s|s.as_raw())}})().map_err(|mut e|{{rt::telemetry::evidence::raised(&mut e,&SOURCE,0,None);e}})"
+        );
         let call = format!(
-            "{{let p={pointer};let naming={naming};{indent_binding}{omit_binding}rt::telemetry::observed_captured(&O{callee},{site},||rt::telemetry::capture_arguments(&[{value},{naming_capture},{indent_capture},{omit_capture}]),|r:&R<usize>|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::telemetry::observed_captured(&O{alias},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r:&R<bool>|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;{encoded}}})}}"
+            "{{{source}let p={pointer};let naming={naming};{indent_binding}{omit_binding}rt::telemetry::observed_captured(&O{callee},{site},||rt::telemetry::capture_arguments(&[{value},{naming_capture},{indent_capture},{omit_capture}]),|r:&R<usize>|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::telemetry::observed_captured(&O{alias},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r:&R<bool>|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;{encoded}}})}}"
         );
         emitter.assign(destination, (emitter.fallible(&call), Repr::Str))
     })())
@@ -296,37 +301,14 @@ fn decode_value(
     })
 }
 
-fn constant<'a, 'db>(
-    body: &'a MirFunctionBody<'db>,
-    operand: &'a Operand<'db>,
-    depth: usize,
-) -> Gen<&'a Constant<'db>> {
-    if depth > body.locals.len() {
-        return Err(no("JSON map stringify dynamic indent"));
-    }
-    match operand {
-        Operand::Constant(value) => Ok(value),
-        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-            let mut found: Option<&'a Constant<'db>> = None;
-            for statement in body.blocks.iter().flat_map(|b| &b.statements) {
-                if let StatementKind::Assign {
-                    destination: Place::Local(dst),
-                    value,
-                } = &statement.kind
-                    && dst == local
-                {
-                    let Rvalue::Use(operand) = value else {
-                        return Err(no("JSON map stringify dynamic indent"));
-                    };
-                    let value = constant(body, operand, depth + 1)?;
-                    if found.is_some_and(|old| !matches!((old,value),(Constant::Int(a),Constant::Int(b)) if a==b) && !matches!((old,value),(Constant::String(a),Constant::String(b)) if a==b)) {
-                        return Err(no("JSON map stringify dynamic indent"));
-                    }
-                    found = Some(value);
-                }
-            }
-            found.ok_or_else(|| no("JSON map stringify dynamic indent"))
-        }
-        _ => Err(no("JSON map stringify dynamic indent")),
-    }
+/// The linked declaration supplies the error descriptor and canonical captures;
+/// maps do not introduce a second runtime exception layout.
+pub(super) fn serialization_error_class(plan: &Plan<'_>) -> Gen<usize> {
+    plan.program
+        .packages
+        .iter()
+        .filter(|p| p.name == "baml")
+        .flat_map(|p| &p.classes)
+        .find_map(|(path, id)| (path.to_string() == "json.SerializationError").then_some(id.raw()))
+        .ok_or_else(|| no("JSON serialization error class"))
 }
