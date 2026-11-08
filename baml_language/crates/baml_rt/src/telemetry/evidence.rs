@@ -8,9 +8,10 @@ pub(super) struct EvidenceFrame {
     pc: u32,
     mode: u8,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Raise {
     id: TelemetryId,
+    origin: Option<TelemetryId>,
     unwound: u32,
     frame: usize,
     may_promote: bool,
@@ -81,9 +82,47 @@ pub unsafe fn observe_captured<T>(
     result
 }
 
+fn propagated_origin(
+    state: &mut State,
+    error: &Error,
+    kind: RaiseKind,
+    raise_id: TelemetryId,
+) -> Option<TelemetryId> {
+    let via = match kind {
+        RaiseKind::Rethrow => btel_records::OriginVia::Rethrow,
+        RaiseKind::Await => btel_records::OriginVia::Await,
+        _ => return None,
+    };
+    if let Some((origin, previous)) = error.telemetry_caught {
+        state.span(SpanRecord::ErrorRaiseOrigin {
+            raise_id,
+            origin: btel_records::RaiseOrigin::Proven {
+                origin,
+                previous: Some(previous),
+                via,
+            },
+        });
+        Some(origin)
+    } else {
+        if kind == RaiseKind::Await {
+            state.span(SpanRecord::ErrorRaiseOrigin {
+                raise_id,
+                origin: btel_records::RaiseOrigin::Unresolved {
+                    reason: btel_records::UnresolvedOrigin::FutureLinkMissing,
+                    via,
+                },
+            });
+        }
+        None
+    }
+}
+
 /// Called before the first frame completion; all unwound frames share its clock.
 #[cold]
 pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Option<usize>) {
+    if crate::ADMISSION_CANCELLED.replace(false) {
+        return;
+    }
     let ptr = CURRENT.get();
     if ptr.is_null() || error.telemetry_raise.is_some() {
         return;
@@ -106,6 +145,11 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
         .get(site)
         .copied()
         .unwrap_or(RaiseKind::Runtime);
+    let kind = if kind == RaiseKind::Await && error.class == "baml.panics.Cancelled" {
+        RaiseKind::AwaitCancelled
+    } else {
+        kind
+    };
     let mut frames = Vec::new();
     if let Some(function) = native {
         frames.push(ErrorFrame {
@@ -141,6 +185,7 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
     }
     let raised_at = *error.telemetry_at.get_or_insert_with(|| state.read());
     let may_promote = unsafe { (*frame).mode } == 3;
+    let origin = propagated_origin(state, error, kind, raise_id);
     state.span(SpanRecord::ErrorRaised {
         raise_id,
         raised_at,
@@ -160,6 +205,7 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
     });
     error.telemetry_raise = Some(Raise {
         id: raise_id,
+        origin,
         unwound: 0,
         frame: frame as usize,
         may_promote,
@@ -177,6 +223,9 @@ pub(super) fn end(error: &mut Error, result: UnwindResult, handler_pc: Option<u3
         return;
     };
     let state = unsafe { &mut *CURRENT.get() };
+    if matches!(result, UnwindResult::Caught | UnwindResult::Unhandled) {
+        error.telemetry_caught = Some((raise.origin.unwrap_or(raise.id), raise.id));
+    }
     let handler_function = handler_pc.map(|_| {
         let function = if state.evidence_frame.is_null() {
             state.active_function.expect("observed handler")
@@ -204,14 +253,21 @@ fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, 
     let raise_id = allocate_telemetry_id();
     let mode = super::mode(state.words[function]) & 3;
     let raised_at = *error.telemetry_at.get_or_insert_with(|| state.read());
+    let kind = source
+        .kinds
+        .get(site)
+        .copied()
+        .unwrap_or(RaiseKind::Runtime);
+    let kind = if kind == RaiseKind::Await && error.class == "baml.panics.Cancelled" {
+        RaiseKind::AwaitCancelled
+    } else {
+        kind
+    };
+    let origin = propagated_origin(state, error, kind, raise_id);
     state.span(SpanRecord::ErrorRaised {
         raise_id,
         raised_at,
-        kind: source
-            .kinds
-            .get(site)
-            .copied()
-            .unwrap_or(RaiseKind::Runtime),
+        kind,
         function: Some(state.functions[function]),
         pc: source.pcs.get(site).copied(),
         raise_call: if mode == 2 { state.active_span } else { None },
@@ -221,6 +277,7 @@ fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, 
     });
     error.telemetry_raise = Some(Raise {
         id: raise_id,
+        origin,
         unwound: 0,
         frame: 0,
         may_promote: mode == 3,
@@ -239,4 +296,15 @@ pub(super) fn frame_completed<T>(state: &mut State, result: &mut R<T>) {
             raise.may_promote = false;
         }
     }
+}
+
+/// End producer-side evidence before transferring a future's saved error.
+pub(crate) fn unhandled(error: &mut Error) {
+    end(error, UnwindResult::Unhandled, None);
+}
+/// A defer's rethrow preserves the language context and starts a new raise.
+pub fn rethrow(mut error: Box<Error>, source: &'static crate::Source, site: usize) -> Box<Error> {
+    error.telemetry_at = None;
+    raised(&mut error, source, site, None);
+    error
 }

@@ -1,7 +1,13 @@
 use super::*;
 
 impl Emitter<'_, '_> {
-    pub(super) fn function(&mut self, arity: usize, inline: bool, stack_leaf: bool) -> Gen<String> {
+    pub(super) fn function(
+        &mut self,
+        arity: usize,
+        inline: bool,
+        stack_leaf: bool,
+        recursive: bool,
+    ) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
             unwinds: self
@@ -17,7 +23,10 @@ impl Emitter<'_, '_> {
                 .map(|b| match b.terminator.as_ref().unwrap() {
                     Terminator::Goto { target }
                     | Terminator::Call { target, .. }
-                    | Terminator::VirtualCall { target, .. } => Ok(Flow::Goto(target.0)),
+                    | Terminator::VirtualCall { target, .. }
+                    | Terminator::Await { target, .. }
+                    | Terminator::AwaitAny { target, .. }
+                    | Terminator::SysOp { target, .. } => Ok(Flow::Goto(target.0)),
                     Terminator::Switch {
                         arms, otherwise, ..
                     } => Ok(Flow::Switch {
@@ -33,6 +42,7 @@ impl Emitter<'_, '_> {
                         else_block: else_block.0,
                     }),
                     Terminator::Unreachable => Ok(Flow::Exit),
+                    Terminator::Spawn { resume, .. } => Ok(Flow::Goto(resume.0)),
                     Terminator::Branch {
                         then_block,
                         else_block,
@@ -75,10 +85,21 @@ impl Emitter<'_, '_> {
         if positions.block_pcs.len() != self.body.blocks.len() {
             return Err(no("missing/mismatched MIR source positions"));
         }
+        let environment = self.plan.captures.contains_key(&self.object);
         let params = (1..=arity)
-            .map(|i| Ok(format!("mut l{i}:{}", self.local(i)?.rust())))
+            .map(|i| {
+                Ok(format!(
+                    "mut l{i}:{}",
+                    self.plan.local_repr(self.body, i, 0)?.rust()
+                ))
+            })
             .collect::<Gen<Vec<_>>>()?
             .join(",");
+        let params = if environment {
+            format!("env:usize,{params}")
+        } else {
+            params
+        };
         let attribute = if inline { "#[inline(always)]\n" } else { "" };
         let object = self.object;
         // These bounded leaf bodies are forced inline at every call site, so
@@ -94,8 +115,13 @@ impl Emitter<'_, '_> {
             .map(|i| format!("l{i}"))
             .collect::<Vec<_>>()
             .join(",");
+        let arguments = if environment {
+            format!("env,{arguments}")
+        } else {
+            arguments
+        };
         let captured_args = (1..=arity)
-            .map(|i| self.capture_value(format!("l{i}"), self.local(i)?))
+            .map(|i| self.capture_value(format!("l{i}"), self.plan.local_repr(self.body, i, 0)?))
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
@@ -122,12 +148,40 @@ impl Emitter<'_, '_> {
         let mut code = call_cost::prologue(
             object, &params, &arguments, returned, &captures, attribute, &guard,
         );
+        if recursive {
+            code.push_str(&format!("{};\n", self.fallible("cx.poll()")));
+        }
+        for i in 1..=arity {
+            if self.body.locals[i].is_captured {
+                let value = self.coerce(
+                    (format!("l{i}"), self.plan.local_repr(self.body, i, 0)?),
+                    Repr::Tagged,
+                )?;
+                writeln!(
+                    &mut code,
+                    "let mut l{i}=rt::closures::cell({},{value}).map_err(|e|e.at(&S{object},0))?;",
+                    self.plan.closure_descriptors().unwrap().0
+                )
+                .unwrap();
+            }
+        }
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {
                 continue;
             }
             let t = self.local(i)?;
             writeln!(&mut code, "let mut l{i}:{}={};", t.rust(), t.zero()).unwrap();
+        }
+        for block in &self.body.blocks {
+            if let Some(term) = &block.terminator
+                && let Some(local) = super::tasks::ephemeral_plan(self, term)
+            {
+                writeln!(
+                    &mut code,
+                    "let mut fast_plan_body{local}=0usize;let mut fast_plan_name{local}=0usize;"
+                )
+                .unwrap();
+            }
         }
         for iter in &self.iters {
             writeln!(&mut code, "let mut iter_index{iter}=0i64;").unwrap();
@@ -177,6 +231,7 @@ impl Emitter<'_, '_> {
             .map(|k| format!("rt::telemetry::RaiseKind::{k}"))
             .collect::<Vec<_>>()
             .join(",");
+        code.push_str(&self.closure_adapter()?);
         Ok(format!(
             "static O{}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);\nstatic S{}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{lines}],pcs:&{pcs},kinds:&[{kinds}]}};\n{code}",
             self.object,

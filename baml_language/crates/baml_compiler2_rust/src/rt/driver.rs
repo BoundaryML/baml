@@ -44,6 +44,19 @@ fn compile(
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
         json_types: Vec::new(),
+        environments: false,
+        task_support: false,
+        bigint_support: false,
+        cleanup_methods: BTreeMap::new(),
+        captures: BTreeMap::new(),
+        capture_types: BTreeMap::new(),
+        lambda_bodies: BTreeMap::new(),
+        lambda_targets: BTreeMap::new(),
+        generic_functions: Vec::new(),
+        generic_values: BTreeMap::new(),
+        virtual_values: BTreeMap::new(),
+        callables: BTreeSet::new(),
+        closure_lists: BTreeMap::new(),
         enums: BTreeSet::new(),
         specialized_calls: BTreeMap::new(),
         type_codes: Vec::new(),
@@ -124,7 +137,7 @@ fn compile(
         .map(|&object| {
             let mir = &all[&object];
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
-                unreachable!()
+                return (object, super::stack::Placement::default());
             };
             (
                 object,
@@ -142,8 +155,12 @@ fn compile(
         small_program && placements.values().map(|p| p.bytes(&plan)).sum::<usize>() <= 16 * 1024;
     for &object in &reached {
         let mir = &all[&object];
-        let MirFunctionKind::Bytecode(body) = &mir.kind else {
-            unreachable!()
+        let body = match &mir.kind {
+            MirFunctionKind::Bytecode(body) => body,
+            MirFunctionKind::Builtin(_) => match &all[&entry].kind {
+                MirFunctionKind::Bytecode(body) => body,
+                _ => unreachable!(),
+            },
         };
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         let iter_arrays = body
@@ -179,6 +196,10 @@ fn compile(
             string_cx: std::cell::Cell::new(false),
             string_literals: std::cell::RefCell::new(BTreeMap::new()),
         };
+        if matches!(mir.kind, MirFunctionKind::Builtin(_)) {
+            out.push_str(&emitter.native_closure_adapter()?);
+            continue;
+        }
         let stack_leaf = stack_leaves.contains(&object);
         out.push_str(
             &emitter
@@ -186,10 +207,21 @@ fn compile(
                     mir.arity,
                     (small_program || stack_leaf) && !recursive(&calls, object),
                     stack_leaf,
+                    recursive(&calls, object),
                 )
                 .map_err(|e| format!("{e} (emitting {})", plan.index.display(object)))?,
         );
     }
+    if !plan.cleanup_methods.is_empty() {
+        out.push_str("unsafe fn cleanup_dispatch(id:u32,object:usize)->R<()>{unsafe{match id{");
+        for (&class, &method) in &plan.cleanup_methods {
+            let site = telemetry_sites.borrow().len();
+            telemetry_sites.borrow_mut().push((None, 0, method));
+            out.push_str(&format!("{class}=>rt::tasks::run_cleanup({site},object,move ||{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{method}::<true>(cx,{site},object)?;}}else{{f{method}::<false>(cx,{site},object)?;}}Ok(())}}),"));
+        }
+        out.push_str("_=>unreachable!(),}}}\n");
+    }
+    super::callbacks::callback_tables(&mut out, &plan, &telemetry_sites);
     // Membership helpers are mutually recursive for recursive alias groups.
     let mut emitted = BTreeSet::new();
     loop {
@@ -257,9 +289,23 @@ fn compile(
         &telemetry_sites,
     )?;
     if let Some((setup, run)) = benchmark {
-        host::emit_benchmark(&mut out, entry, setup, run, &builtins, format_site);
+        host::emit_benchmark(
+            &mut out,
+            entry,
+            setup,
+            run,
+            &builtins,
+            format_site,
+            !plan.cleanup_methods.is_empty(),
+        );
     } else {
-        host::emit(&mut out, entry, &builtins, format_site);
+        host::emit(
+            &mut out,
+            entry,
+            &builtins,
+            format_site,
+            !plan.cleanup_methods.is_empty(),
+        );
     }
     Ok(out)
 }

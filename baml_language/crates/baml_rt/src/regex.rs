@@ -109,6 +109,7 @@ fn build_error(cx: &mut Cx, pattern: Str, error: &BuildError, schema: &Schema) -
     }
     let offset = |n: Option<i64>| n.map_or_else(|| "null".to_owned(), |n| n.to_string());
     Ok(Box::new(Error {
+        telemetry_caught: None,
         telemetry_at: None,
         telemetry_raise: None,
         value,

@@ -52,6 +52,9 @@ pub fn fixtures(workspace: &Path, only: Option<&str>) -> Vec<Fixture> {
                 .map(|w| w.as_str().unwrap().to_owned())
         })
         .collect();
+    // Task integration also gates the spawn benchmark requested by the runtime
+    // job, using its original source and the same strict telemetry comparison.
+    wanted.insert("concurrency::spawn await x10k".into());
     let mut fixtures = Vec::new();
     for entry in walkdir::WalkDir::new(root.join("workloads")) {
         let entry = entry.unwrap();

@@ -13,6 +13,31 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "RtClosures",
+    "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
+    "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
     "StackAllocation",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
@@ -274,11 +299,36 @@ fn probe_timeout_kills_and_reaps() {
     assert!(error.contains("kill: Ok(()), reap: Ok("), "{error}");
 }
 
+fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
+    match probe {
+        "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
+            Some(manifest.join("rt_fixtures/task_terminal"))
+        }
+        "RtTaskLimits" | "RtTaskTimeout" | "RtAutomaticCleanup" => {
+            Some(manifest.join("rt_fixtures/task_timeouts"))
+        }
+        "RtVirtualGenericClosures"
+        | "RtBoundGenericClosures"
+        | "RtVirtualOwnGenericClosure"
+        | "RtNativeHigherOrderValue"
+        | "RtDefaultCallbacks" => Some(manifest.join("rt_fixtures/closure_edges")),
+        "RtTaskErrors" | "RtBackgroundTask" | "RtBackgroundError" | "RtTokenComposition" => {
+            Some(manifest.join("rt_fixtures/task_edges"))
+        }
+        "RtClosures" | "RtEmptyClosures" | "RtGenericClosures" | "RtGenericMethods"
+        | "RtNativeCallback" | "RtBuiltinCallbacks" => Some(manifest.join("rt_fixtures/closures")),
+        "RtSpawnAwait" | "RtTaskControls" | "RtTaskSleep" | "RtTaskModifiers"
+        | "RtScalarTaskOrder" => Some(manifest.join("rt_fixtures/tasks")),
+        _ => None,
+    }
+}
+
 fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
     std::fs::create_dir_all(build).unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
     if PROBES
         .iter()
+        .filter(|p| standalone_source(manifest, p).is_none())
         .any(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
     {
         let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
@@ -291,6 +341,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .iter()
                 .copied()
                 .filter(|p| !initializer_probes::collects_tests(p))
+                .filter(|p| standalone_source(manifest, p).is_none())
                 .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
                 .chain(["GlobalCalls", "GlobalCallPending", "InitializerTestSummary"]),
         );
@@ -328,11 +379,54 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .into_iter()
                 .map(|(name, path)| (name.to_owned(), path)),
         );
-        for probe in PROBES {
+        for probe in PROBES
+            .iter()
+            .filter(|p| standalone_source(manifest, p).is_none())
+        {
             artifacts
                 .entry((*probe).into())
                 .or_insert_with(|| executable.clone());
         }
+    }
+    for probe in [
+        "RtClosures",
+        "RtEmptyClosures",
+        "RtGenericClosures",
+        "RtGenericMethods",
+        "RtNativeCallback",
+        "RtBuiltinCallbacks",
+        "RtSpawnAwait",
+        "RtTaskControls",
+        "RtTaskSleep",
+        "RtTaskModifiers",
+        "RtScalarTaskOrder",
+        "RtTaskErrors",
+        "RtBackgroundTask",
+        "RtBackgroundError",
+        "RtTokenComposition",
+        "RtVirtualGenericClosures",
+        "RtBoundGenericClosures",
+        "RtVirtualOwnGenericClosure",
+        "RtNativeHigherOrderValue",
+        "RtDefaultCallbacks",
+        "RtTaskLimits",
+        "RtTaskTimeout",
+        "RtAutomaticCleanup",
+        "RtCancelledFailure",
+        "RtLinkedCancelledFailure",
+    ] {
+        if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
+            continue;
+        }
+        let executable = build.join(probe);
+        pack(
+            build,
+            workspace,
+            &standalone_source(manifest, probe).unwrap(),
+            &executable,
+            [probe],
+        );
+        artifacts.insert(probe.into(), executable);
     }
     for fixture in kpis::fixtures(workspace, only) {
         let dir = build.join("kpis").join(&fixture.slug);
@@ -590,6 +684,9 @@ fn rust_differential() {
             );
         }
     }
+    // Focused runtime jobs retain the bytecode oracle and both GC modes, while
+    // avoiding unrelated compiled-VM variants and unsupported telemetry levels.
+    // The default merged-branch gate still runs the complete matrix.
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
@@ -651,7 +748,37 @@ fn rust_differential() {
             if !probe.starts_with("strings::")
                 && ((probe.contains("::") && matches!(*level, "default" | "low"))
                     || (*level == "default"
-                        && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan")))
+                        && !matches!(
+                            probe.as_str(),
+                            "Scalars"
+                                | "Hooked"
+                                | "ManualSpan"
+                                | "RtClosures"
+                                | "RtEmptyClosures"
+                                | "RtGenericClosures"
+                                | "RtGenericMethods"
+                                | "RtNativeCallback"
+                                | "RtBuiltinCallbacks"
+                                | "RtSpawnAwait"
+                                | "RtTaskControls"
+                                | "RtTaskSleep"
+                                | "RtTaskModifiers"
+                                | "RtScalarTaskOrder"
+                                | "RtTaskErrors"
+                                | "RtBackgroundTask"
+                                | "RtBackgroundError"
+                                | "RtTokenComposition"
+                                | "RtVirtualGenericClosures"
+                                | "RtBoundGenericClosures"
+                                | "RtVirtualOwnGenericClosure"
+                                | "RtNativeHigherOrderValue"
+                                | "RtDefaultCallbacks"
+                                | "RtTaskLimits"
+                                | "RtTaskTimeout"
+                                | "RtAutomaticCleanup"
+                                | "RtCancelledFailure"
+                                | "RtLinkedCancelledFailure"
+                        )))
             {
                 continue;
             }

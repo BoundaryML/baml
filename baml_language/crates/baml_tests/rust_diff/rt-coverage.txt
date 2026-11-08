@@ -1,7 +1,7 @@
-BAML runtime coverage (normal AND GC stress): 25 pass, 123 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 51 pass, 123 unsupported, 0 fail
 Telemetry off: required
-String probes: off/low/medium/high/default required
-Telemetry low/medium/high/default for other probes: not yet supported
+Telemetry low/medium/high/default: required for standalone closure/task/string probes and spawn KPI; otherwise not yet supported
+Includes independent type-dispatch and retained-setup-state projects.
 
 First unsupported constructs (fixtures blocked):
 103	top-level initializers
@@ -12,8 +12,8 @@ First unsupported constructs (fixtures blocked):
 1	baml.Array.pop
 1	baml.Float.itrunc
 1	baml.Map.get
+1	baml._is_primitive_array
 1	baml.json._stringify
-1	closures
 1	growing list builtin receiver (emitting user.main)
 1	list field element (layout JArray, object 4180, types [List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4279) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4280) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])]))]) (user.main local 8: Union([Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JArray" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JLiteral" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JNumber" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JObject" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JString" }, [])]))
 1	list field element (layout Request, object 4186, types [String, Union([String, Null]), List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])])), List(Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4284) }, [])), Union([String, Null]), Union([Float, Null]), Union([Float, Null]), Int, Bool, Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4285) }, []), Null]), Map { key: String, value: String }, Bool, Union([String, Null]), Bool]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Request" }, []))
@@ -108,6 +108,31 @@ ManualSpan	unsupported: top-level initializers
 NoLeaks	unsupported: top-level initializers
 Overflow	unsupported: top-level initializers
 RecursiveCancellation	unsupported: top-level initializers
+RtAutomaticCleanup	pass
+RtBackgroundError	pass
+RtBackgroundTask	pass
+RtBoundGenericClosures	pass
+RtBuiltinCallbacks	pass
+RtCancelledFailure	pass
+RtClosures	pass
+RtDefaultCallbacks	pass
+RtEmptyClosures	pass
+RtGenericClosures	pass
+RtGenericMethods	pass
+RtLinkedCancelledFailure	pass
+RtNativeCallback	pass
+RtNativeHigherOrderValue	pass
+RtScalarTaskOrder	pass
+RtSpawnAwait	pass
+RtTaskControls	pass
+RtTaskErrors	pass
+RtTaskLimits	pass
+RtTaskModifiers	pass
+RtTaskSleep	pass
+RtTaskTimeout	pass
+RtTokenComposition	pass
+RtVirtualGenericClosures	pass
+RtVirtualOwnGenericClosure	pass
 RuntimeClass	unsupported: top-level initializers
 Scalars	unsupported: top-level initializers
 Shapes	unsupported: top-level initializers
@@ -128,7 +153,7 @@ classes::method call 100k	pass
 compute::array build sum 100k	unsupported: growing list builtin receiver (emitting user.main)
 compute::array traversal 8k	unsupported: growing list builtin receiver (emitting user.setup)
 compute::fib32 recursive	pass
-compute::generate sort 8k	unsupported: closures
+compute::generate sort 8k	unsupported: baml._is_primitive_array
 compute::json aggregate 2k	unsupported: JSON union member
 compute::json hello	unsupported: baml.json._stringify
 compute::json ndjson events	pass
@@ -140,6 +165,7 @@ compute::nbody 20k	unsupported: baml.Float.itrunc
 compute::nested loops 500x500	pass
 compute::pure call 1m	pass
 compute::quick sort 3-way 1k	unsupported: list element
+concurrency::spawn await x10k	pass
 interfaces::polymorphic dispatch 100k	pass
 memory::allocation high retention	unsupported: list element
 memory::allocation low retention	unsupported: list element

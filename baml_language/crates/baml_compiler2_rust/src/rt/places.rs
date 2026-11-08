@@ -10,6 +10,9 @@ impl Emitter<'_, '_> {
         {
             return Ok(Repr::Tagged);
         }
+        if self.body.locals[i].is_captured {
+            return Ok(Repr::Cell);
+        }
         if self.iters.contains(&i) {
             return Ok(Repr::Iter);
         }
@@ -21,16 +24,22 @@ impl Emitter<'_, '_> {
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
         match repr {
             Repr::Int => Ok(0),
+            Repr::Bigint => Ok(self.plan.bigint_descriptor().unwrap() + 3),
             Repr::Float => Ok(u32::MAX as usize - 1),
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
+            Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
+            Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
+            Repr::Future => Ok(self.plan.future_descriptor().unwrap() + 3),
             Repr::Opaque => Ok(15),
             Repr::Bytes => Ok(16),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::ListInt
             | Repr::ListStr
             | Repr::ListListStr
+            | Repr::ListClosure(_)
+            | Repr::ListFuture(_)
             | Repr::ListPtr(_)
             | Repr::MapStrInt
             | Repr::MapStrPtr(_)) => Ok(self.lists[&r] + 3),
@@ -48,7 +57,11 @@ impl Emitter<'_, '_> {
     }
     pub(super) fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
         let (value, source) = value;
-        if source == target || (source == Repr::Null && target.pointer()) {
+        if source == target
+            || (source == Repr::Null && target.pointer())
+            || (matches!(source, Repr::Dyn(_)) && target == Repr::Tagged)
+            || (source == Repr::Tagged && matches!(target, Repr::Dyn(_)))
+        {
             return Ok(value);
         }
         if matches!(source, Repr::Dyn(_)) && matches!(target, Repr::Tagged | Repr::Dyn(_))
@@ -83,13 +96,7 @@ impl Emitter<'_, '_> {
                 _ => self.tag(target)?.to_string(),
             };
             let bits = self.fallible(&format!("rt::untag({value},{tag},{})", target.pointer()));
-            return Ok(if target == Repr::Float {
-                format!("f64::from_bits({bits})")
-            } else if target == Repr::Bool {
-                format!("({bits}!=0)")
-            } else {
-                format!("({bits} as {})", target.rust())
-            });
+            return Ok(target.decode_payload(&bits));
         }
         if matches!(target, Repr::Dyn(_)) {
             return self.coerce((value, source), Repr::Tagged);
@@ -99,6 +106,14 @@ impl Emitter<'_, '_> {
     pub(super) fn place(&self, p: &Place) -> Gen<(String, Repr)> {
         match p {
             Place::Local(l) => Ok((format!("l{}", l.0), self.local(l.0)?)),
+            Place::Capture(i) => Ok((format!("rt::closures::capture(env,{i})"), Repr::Cell)),
+            Place::Deref(cell) => {
+                let (cell, repr) = self.closure_cell(cell)?;
+                Ok((
+                    self.coerce((format!("rt::closures::load({cell})"), Repr::Tagged), repr)?,
+                    repr,
+                ))
+            }
             Place::Field { base, field } => {
                 let (base, repr) = self.place(base)?;
                 if repr == Repr::Tagged {
@@ -163,10 +178,33 @@ impl Emitter<'_, '_> {
     }
     pub(super) fn operand(&self, o: &Operand<'_>) -> Gen<(String, Repr)> {
         match o {
-            Operand::Copy(p) | Operand::Move(p) => self.place(p),
+            Operand::Copy(p) | Operand::Move(p) => {
+                let value = self.place(p)?;
+                if let Place::Local(l) = p {
+                    if l.0 > 0
+                        && l.0 <= self.arity
+                        && !self.body.locals[l.0].is_captured
+                        && value.1 == Repr::Tagged
+                    {
+                        let repr = self.plan.repr(&self.body.locals[l.0].ty)?;
+                        if repr != Repr::Tagged {
+                            return Ok((self.coerce(value, repr)?, repr));
+                        }
+                    }
+                }
+                Ok(value)
+            }
             Operand::Constant(Constant::Float(f)) => {
                 Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
             }
+            Operand::Constant(Constant::Bigint(i)) => Ok((
+                self.fallible(&format!(
+                    "rt::tasks::bigint_text({}, {:?})",
+                    self.plan.bigint_descriptor().unwrap(),
+                    i.to_string()
+                )),
+                Repr::Bigint,
+            )),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => self.string_literal(text.as_str()),
@@ -177,9 +215,47 @@ impl Emitter<'_, '_> {
                     self.plan.repr(&RuntimeTy::Enum(head))?,
                 ))
             }
-            Operand::Constant(Constant::OmittedArg)
-                if super::string_defaults::allows_omission(self) =>
-            {
+            Operand::Constant(Constant::Function(f)) => {
+                let (object, _) = self
+                    .plan
+                    .index
+                    .function(self.db, *f)
+                    .ok_or_else(|| no("unlinked function value"))?;
+                Ok((
+                    self.fallible(&format!(
+                        "rt::closures::function({}, {object},closure{object},{:?})",
+                        self.plan.closure_descriptors().unwrap().1,
+                        self.plan.index.info(object).name().as_str()
+                    )),
+                    Repr::Closure,
+                ))
+            }
+            Operand::Constant(Constant::GenericFunction { func, type_args }) => {
+                let (base, _) = self
+                    .plan
+                    .index
+                    .function(self.db, *func)
+                    .ok_or_else(|| no("generic function"))?;
+                let frame = type_args
+                    .iter()
+                    .map(|t| RuntimeTy::from(t.clone()))
+                    .collect::<Vec<_>>();
+                let object = self
+                    .plan
+                    .generic_functions
+                    .iter()
+                    .find(|(c, t, _)| *c == base && *t == frame)
+                    .map(|(_, _, id)| *id)
+                    .ok_or_else(|| no("generic function instance"))?;
+                Ok((
+                    self.fallible(&format!(
+                        "rt::closures::generic_function({}, {object},closure{object})",
+                        self.plan.closure_descriptors().unwrap().1
+                    )),
+                    Repr::Closure,
+                ))
+            }
+            Operand::Constant(Constant::OmittedArg) => {
                 Ok(("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged))
             }
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),
@@ -187,8 +263,22 @@ impl Emitter<'_, '_> {
         }
     }
     pub(super) fn assign(&self, p: &Place, value: (String, Repr)) -> Gen<String> {
+        if let Place::Deref(cell) = p {
+            let (cell, _) = self.closure_cell(cell)?;
+            let value = self.coerce(value, Repr::Tagged)?;
+            return Ok(format!("rt::closures::store({cell},{value});\n"));
+        }
         let (dst, repr) = self.place(p)?;
-        let src = self.coerce(value, repr)?;
+        // MIR uses anonymous null temporaries for discarded expressions.
+        // Evaluate the source (including fallible calls), then store null.
+        let discard = matches!(p,Place::Local(l) if self.body.locals[l.0].name.is_none())
+            && repr == Repr::Null;
+        let src = if discard {
+            format!("{{let _={};0usize}}", value.0)
+        } else {
+            self.coerce(value, repr)
+                .map_err(|error| format!("{error} (destination {p:?})"))?
+        };
         match p {
             Place::Local(_) => Ok(format!("{dst}={src};\n")),
             Place::Field { base, field } => {

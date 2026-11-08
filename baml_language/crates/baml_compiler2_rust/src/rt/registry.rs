@@ -79,6 +79,7 @@ const FEATURES: &[&dyn Feature] = &[
     &globals::Feature,
     &closures::Feature,
     &tasks::Feature,
+    &super::callbacks::Feature,
     &super::string_defaults::Feature,
     &super::string_bytes::Feature,
     &super::regex::Feature,

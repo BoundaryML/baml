@@ -19,12 +19,159 @@ pub(super) fn expand<'db>(
             if !seen.insert(object) {
                 continue;
             }
-            let Some(mir) = all.get(&object).cloned() else {
+            let Some(mut mir) = all.get(&object).cloned() else {
                 continue;
             };
+            specialize_bound_values(plan, object, &mut mir)?;
+            all.insert(object, mir.clone());
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
             };
+            // Materialized lambdas belong to this concrete parent instance.
+            // Keep the source identity for positions/telemetry, but never share
+            // typed MIR or capture layouts between distinct generic frames.
+            for (i, lambda) in mir.lambdas.iter().enumerate() {
+                let key = (object, i);
+                let target = if let Some(&target) = plan.lambda_targets.get(&key) {
+                    target
+                } else {
+                    let origin = plan
+                        .index
+                        .lambda(db, &lambda.identity)
+                        .ok_or_else(|| no("unlinked generic lambda"))?;
+                    let target = if plan.function_frames.contains_key(&object) {
+                        let target = plan.next_object;
+                        plan.next_object += 1;
+                        plan.index.rt_alias(target, origin);
+                        plan.function_frames
+                            .insert(target, plan.function_frames[&object].clone());
+                        all.insert(target, lambda.clone());
+                        target
+                    } else {
+                        origin
+                    };
+                    plan.lambda_targets.insert(key, target);
+                    target
+                };
+                queue.push_back(target);
+            }
+            // Function constants may occur in returns, fields and builtin
+            // callback arguments as well as ordinary calls.
+            let mut function_values = Vec::new();
+            for b in &body.blocks {
+                let mut visit = |operand: &Operand<'db>| match operand {
+                    Operand::Constant(Constant::Function(f)) => {
+                        if let Some((id, _)) = plan.index.function(db, *f) {
+                            function_values.push((id, Vec::new()));
+                        }
+                    }
+                    Operand::Constant(Constant::GenericFunction { func, type_args }) => {
+                        if let Some((id, _)) = plan.index.function(db, *func) {
+                            function_values.push((
+                                id,
+                                type_args
+                                    .iter()
+                                    .map(|t| RuntimeTy::from(t.clone()))
+                                    .collect(),
+                            ));
+                        }
+                    }
+                    _ => {}
+                };
+                for statement in &b.statements {
+                    crate::operands::walk_statement_operands(&statement.kind, &mut visit);
+                }
+                if let Some(Terminator::Call { args, .. } | Terminator::VirtualCall { args, .. }) =
+                    &b.terminator
+                {
+                    for arg in args {
+                        visit(arg);
+                    }
+                }
+            }
+            for (callee, frame) in function_values {
+                if frame.is_empty() {
+                    queue.push_back(callee);
+                } else {
+                    queue.push_back(instance(db, plan, all, &mut instances, callee, frame)?);
+                }
+            }
+            for b in &body.blocks {
+                for (i, statement) in b.statements.iter().enumerate() {
+                    if let StatementKind::Assign {
+                        value:
+                            Rvalue::MakeClosure {
+                                lambda_idx,
+                                captures,
+                                ..
+                            },
+                        ..
+                    } = &statement.kind
+                    {
+                        let target = plan.lambda_targets[&(object, *lambda_idx)];
+                        let types = captures
+                            .iter()
+                            .map(|c| {
+                                operand_ty(plan, object, body, c)
+                                    .ok_or_else(|| no("capture runtime type"))
+                            })
+                            .collect::<Gen<Vec<_>>>()?;
+                        plan.capture_types.insert(target, types);
+                    }
+                    if let StatementKind::Assign {
+                        value:
+                            Rvalue::MakeBoundMethod {
+                                func,
+                                receiver,
+                                frame,
+                            },
+                        ..
+                    } = &statement.kind
+                    {
+                        let (callee, _) = plan
+                            .index
+                            .function(db, *func)
+                            .ok_or_else(|| no("generic bound target"))?;
+                        let types = match frame {
+                            baml_compiler2_mir::BoundFrame::Explicit(types) => {
+                                types.iter().map(|t| t.substitute_symbolic(&[])).collect()
+                            }
+                            baml_compiler2_mir::BoundFrame::Receiver => {
+                                match operand_ty(plan, object, body, receiver) {
+                                    Some(RuntimeTy::Class(_, types)) => types.to_vec(),
+                                    Some(RuntimeTy::List(element)) => vec![*element],
+                                    Some(RuntimeTy::Map { key, value }) => vec![*key, *value],
+                                    _ => Vec::new(),
+                                }
+                            }
+                        };
+                        let target = instance(db, plan, all, &mut instances, callee, types)?;
+                        plan.generic_values.insert((object, b.id.0, i), target);
+                        queue.push_back(target);
+                    }
+                    if let StatementKind::Assign {
+                        value:
+                            Rvalue::MakeGenericFunction {
+                                func,
+                                type_arg_templates,
+                            },
+                        ..
+                    } = &statement.kind
+                    {
+                        let (callee, _) = plan
+                            .index
+                            .function(db, *func)
+                            .ok_or_else(|| no("generic function value"))?;
+                        let frame = type_arg_templates
+                            .iter()
+                            .map(|t| t.substitute_symbolic(&[]))
+                            .collect();
+                        let target = instance(db, plan, all, &mut instances, callee, frame)?;
+                        plan.generic_values.insert((object, b.id.0, i), target);
+                        queue.push_back(target);
+                    }
+                }
+            }
             let iters = crate::analysis::array_iterators(db, body, mir.arity);
             for (i, local) in body.locals.iter().enumerate() {
                 if iters.contains(&i) {
@@ -63,9 +210,98 @@ pub(super) fn expand<'db>(
             for t in constants {
                 plan.candidate(&t);
             }
+            for ty in plan.concrete_types.clone() {
+                let RuntimeTy::Class(_, args) = &ty else {
+                    continue;
+                };
+                let Repr::Ptr(class) = plan.repr(&ty)? else {
+                    continue;
+                };
+                let info = plan.class(class);
+                if let Some(cleanup) = info.cleanup {
+                    let callee = info
+                        .methods
+                        .get_index(cleanup)
+                        .expect("cleanup method")
+                        .1
+                        .function
+                        .raw();
+                    let target = instance(db, plan, all, &mut instances, callee, args.to_vec())?;
+                    plan.cleanup_methods.insert(class, target);
+                    queue.push_back(target);
+                }
+            }
             for b in &body.blocks {
-                for s in &b.statements {
+                for (statement, s) in b.statements.iter().enumerate() {
                     if let StatementKind::Assign { value, .. } = &s.kind {
+                        let virtual_value = match value {
+                            Rvalue::MakeVirtualBoundMethod {
+                                iface,
+                                method,
+                                receiver,
+                                type_args,
+                            } => Some((
+                                iface,
+                                method,
+                                operand_ty(plan, object, body, receiver),
+                                type_args
+                                    .iter()
+                                    .map(|t| t.substitute_symbolic(&[]))
+                                    .collect::<Vec<_>>(),
+                            )),
+                            Rvalue::MakeVirtualFunction {
+                                iface,
+                                method,
+                                self_ty,
+                                type_args,
+                            } => Some((
+                                iface,
+                                method,
+                                Some(self_ty.substitute_symbolic(&[])),
+                                type_args
+                                    .iter()
+                                    .map(|arg| type_operand(body, arg))
+                                    .collect::<Gen<Vec<_>>>()?,
+                            )),
+                            _ => None,
+                        };
+                        if let Some((iface, method, receiver, method_args)) = virtual_value {
+                            plan.remember_heads(&iface.to_template().substitute_symbolic(&[]));
+                            let candidates = match receiver {
+                                Some(RuntimeTy::Union(types)) => types.to_vec(),
+                                Some(
+                                    RuntimeTy::Interface(..)
+                                    | RuntimeTy::Unknown
+                                    | RuntimeTy::Function { .. },
+                                )
+                                | None => plan.concrete_types.clone(),
+                                Some(concrete) => vec![concrete],
+                            };
+                            let mut targets = Vec::new();
+                            for concrete in candidates {
+                                if let Some((callee, frame)) = super::dispatch::resolve(
+                                    db,
+                                    plan,
+                                    &concrete,
+                                    iface,
+                                    method,
+                                    &method_args,
+                                )? {
+                                    let target =
+                                        instance(db, plan, all, &mut instances, callee, frame)?;
+                                    let repr = plan.repr(&concrete)?;
+                                    if !targets.contains(&(repr, target)) {
+                                        targets.push((repr, target));
+                                    }
+                                    queue.push_back(target);
+                                }
+                            }
+                            if !targets.is_empty() {
+                                plan.virtual_values
+                                    .insert((object, b.id.0, statement), targets);
+                            }
+                        }
+
                         // A constructor can write straight into an interface or
                         // unknown slot; its concrete type need not occur in any
                         // local declaration (e.g. `return Square { ... }`).
@@ -122,11 +358,19 @@ pub(super) fn expand<'db>(
                         ntypeargs,
                         ..
                     }) => {
+                        if super::tasks::resource_concat(
+                            db,
+                            plan,
+                            body,
+                            b.terminator.as_ref().unwrap(),
+                        ) {
+                            continue;
+                        }
                         let Some((callee, _)) = plan.index.function(db, *f) else {
                             continue;
                         };
                         if plan.index.display(callee) == "baml._to_string_default" {
-                            let ty = operand_ty(plan, body, &args[*ntypeargs]);
+                            let ty = operand_ty(plan, object, body, &args[*ntypeargs]);
                             if !matches!(
                                 ty,
                                 Some(
@@ -143,6 +387,8 @@ pub(super) fn expand<'db>(
                         }
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || plan.index.display(callee) == "baml.json.decode"
+                            || super::tasks::native(plan.index.display(callee))
+                            || super::callbacks::native(plan.index.display(callee))
                         {
                             continue;
                         }
@@ -171,7 +417,8 @@ pub(super) fn expand<'db>(
                             .iter()
                             .map(|a| type_operand(body, a))
                             .collect::<Gen<Vec<_>>>()?;
-                        let receiver = operand_ty(plan, body, &args[*ntypeargs + *self_arg]);
+                        let receiver =
+                            operand_ty(plan, object, body, &args[*ntypeargs + *self_arg]);
                         let candidates = receiver
                             .as_ref()
                             .map(|t| match t {
@@ -226,6 +473,130 @@ pub(super) fn expand<'db>(
         }
         queue.extend(seen.iter().copied());
         seen.clear();
+    }
+    plan.generic_functions = instances;
+    Ok(())
+}
+// The lowerer emits a private bound-method temporary before specializing its
+// callable-owned suffix. Fuse that one-use pair without constructing an open
+// generic adapter. The receiver and its owner frame are preserved exactly.
+fn specialize_bound_values(plan: &Plan<'_>, object: usize, mir: &mut MirFunction<'_>) -> Gen<()> {
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        return Ok(());
+    };
+    let mut replacements = Vec::new();
+    for (bi, block) in body.blocks.iter().enumerate() {
+        for (si, statement) in block.statements.iter().enumerate() {
+            let StatementKind::Assign {
+                value:
+                    Rvalue::MakeGenericFunctionFromValue {
+                        value:
+                            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)),
+                        type_arg_templates,
+                    },
+                ..
+            } = &statement.kind
+            else {
+                continue;
+            };
+            if body.locals[local.0].name.is_some() || body.locals[local.0].is_captured {
+                continue;
+            }
+            let mut uses = 0;
+            let mut count = |operand: &Operand<'_>| {
+                if matches!(operand,Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) if l==local)
+                {
+                    uses += 1;
+                }
+            };
+            for b in &body.blocks {
+                for s in &b.statements {
+                    crate::operands::walk_statement_operands(&s.kind, &mut count);
+                }
+                if let Some(t) = &b.terminator {
+                    crate::operands::walk_terminator_operands(t, &mut count);
+                }
+            }
+            if uses != 1 {
+                continue;
+            }
+            let Some((from, source)) =
+                block.statements[..si]
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find_map(|(i, s)| match &s.kind {
+                        StatementKind::Assign {
+                            destination: Place::Local(l),
+                            value,
+                        } if l == local => Some((i, value)),
+                        _ => None,
+                    })
+            else {
+                continue;
+            };
+            let value = match source {
+                Rvalue::MakeBoundMethod {
+                    func,
+                    receiver,
+                    frame,
+                } => {
+                    let mut prefix = match frame {
+                        baml_compiler2_mir::BoundFrame::Explicit(types) => types.clone(),
+                        baml_compiler2_mir::BoundFrame::Receiver => {
+                            let types = match operand_ty(plan, object, body, receiver) {
+                                Some(RuntimeTy::Class(_, args)) => args.to_vec(),
+                                Some(RuntimeTy::List(element)) => vec![*element],
+                                Some(RuntimeTy::Map { key, value }) => vec![*key, *value],
+                                _ => vec![],
+                            };
+                            types
+                                .into_iter()
+                                .map(|t| {
+                                    baml_compiler2_mir::RealizedTy::try_from(t)
+                                        .map(TyTemplate::from)
+                                        .map_err(|_| no("bound generic owner frame"))
+                                })
+                                .collect::<Gen<Vec<_>>>()?
+                        }
+                    };
+                    prefix.extend(type_arg_templates.iter().cloned());
+                    Rvalue::MakeBoundMethod {
+                        func: *func,
+                        receiver: receiver.clone(),
+                        frame: baml_compiler2_mir::BoundFrame::Explicit(prefix),
+                    }
+                }
+                Rvalue::MakeVirtualBoundMethod {
+                    iface,
+                    method,
+                    receiver,
+                    type_args,
+                } => {
+                    let mut args = type_args.clone();
+                    args.extend(type_arg_templates.iter().cloned());
+                    Rvalue::MakeVirtualBoundMethod {
+                        iface: iface.clone(),
+                        method: method.clone(),
+                        receiver: receiver.clone(),
+                        type_args: args,
+                    }
+                }
+                _ => continue,
+            };
+            replacements.push((bi, from, si, value));
+        }
+    }
+    let MirFunctionKind::Bytecode(body) = &mut mir.kind else {
+        unreachable!()
+    };
+    for (bi, from, si, value) in replacements {
+        body.blocks[bi].statements[from].kind = StatementKind::Nop;
+        let StatementKind::Assign { value: target, .. } = &mut body.blocks[bi].statements[si].kind
+        else {
+            unreachable!()
+        };
+        *target = value;
     }
     Ok(())
 }
@@ -340,6 +711,27 @@ pub(super) fn specialize<'db>(
                 if let StatementKind::Assign { value, .. } = &mut s.kind {
                     match value {
                         Rvalue::LoadType(t) | Rvalue::Array(t, _) => *t = template(t)?,
+                        Rvalue::MakeBoundMethod {
+                            frame: baml_compiler2_mir::BoundFrame::Explicit(types),
+                            ..
+                        } => {
+                            for t in types {
+                                *t = template(t)?;
+                            }
+                        }
+                        Rvalue::MakeClosure {
+                            type_arg_templates, ..
+                        }
+                        | Rvalue::MakeGenericFunction {
+                            type_arg_templates, ..
+                        }
+                        | Rvalue::MakeGenericFunctionFromValue {
+                            type_arg_templates, ..
+                        } => {
+                            for t in type_arg_templates {
+                                *t = template(t)?;
+                            }
+                        }
                         Rvalue::Map(k, v, _) => {
                             *k = template(k)?;
                             *v = template(v)?;
@@ -356,6 +748,28 @@ pub(super) fn specialize<'db>(
                             }
                         }
                         Rvalue::IsType { test: t, .. } => test(t)?,
+                        Rvalue::MakeVirtualBoundMethod {
+                            iface, type_args, ..
+                        } => {
+                            for ty in type_args {
+                                *ty = template(ty)?;
+                            }
+                            for ty in &mut iface.generics {
+                                *ty = template(ty)?;
+                            }
+                            for (_, ty) in &mut iface.associated_types {
+                                *ty = template(ty)?;
+                            }
+                        }
+                        Rvalue::MakeVirtualFunction { iface, self_ty, .. } => {
+                            *self_ty = template(self_ty)?;
+                            for ty in &mut iface.generics {
+                                *ty = template(ty)?;
+                            }
+                            for (_, ty) in &mut iface.associated_types {
+                                *ty = template(ty)?;
+                            }
+                        }
                         Rvalue::VirtualFieldAccess { iface, .. } => {
                             for t in &mut iface.generics {
                                 *t = template(t)?;
@@ -392,6 +806,11 @@ pub(super) fn specialize<'db>(
             }
         }
     }
+    mir.lambdas = mir
+        .lambdas
+        .iter()
+        .map(|lambda| specialize(lambda, params, args, runtime))
+        .collect::<Gen<_>>()?;
     Ok(mir)
 }
 pub(super) struct Feature;
@@ -426,18 +845,20 @@ impl registry::Feature for Feature {
                         values = mapping
                             .into_iter()
                             .map(|i| {
-                                i.map(|i| values[i].clone())
-                                    .ok_or_else(|| no("omitted generic argument"))
+                                Ok(i.map(|i| values[i].clone()).unwrap_or_else(|| {
+                                    ("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged)
+                                }))
                             })
                             .collect::<Gen<_>>()?;
                     }
+                    let fast = super::tasks::fast_plan(e, term, &values)?;
                     let arguments = values
                         .into_iter()
                         .enumerate()
-                        .map(|(i, v)| e.coerce(v, e.plan.repr(&body.locals[i + 1].ty)?))
+                        .map(|(i, v)| e.coerce(v, e.plan.local_repr(body, i + 1, 0)?))
                         .collect::<Gen<Vec<_>>>()?
                         .join(",");
-                    e.assign(
+                    let ordinary = e.assign(
                         destination,
                         (
                             e.fallible(&e.stack_leaf_call(
@@ -450,7 +871,10 @@ impl registry::Feature for Feature {
                             )),
                             e.plan.repr(&body.locals[0].ty)?,
                         ),
-                    )
+                    )?;
+                    Ok(fast.map_or(ordinary.clone(), |fast| {
+                        format!("if OBSERVE{{{ordinary}}}else{{{fast}}}")
+                    }))
                 })()
             })
     }
@@ -583,17 +1007,53 @@ pub(super) fn instance<'db>(
 }
 fn operand_ty(
     plan: &Plan<'_>,
+    object: usize,
     body: &MirFunctionBody<'_>,
     operand: &Operand<'_>,
 ) -> Option<RuntimeTy> {
-    fn place(_plan: &Plan<'_>, body: &MirFunctionBody<'_>, p: &Place) -> Option<RuntimeTy> {
+    fn place(
+        plan: &Plan<'_>,
+        object: usize,
+        body: &MirFunctionBody<'_>,
+        p: &Place,
+        depth: usize,
+    ) -> Option<RuntimeTy> {
+        if depth > body.locals.len() {
+            return None;
+        }
         match p {
-            Place::Local(l) => Some(body.locals[l.0].ty.clone()),
+            Place::Capture(i) | Place::Deref(baml_compiler2_mir::CellId::Capture(i)) => {
+                plan.capture_types.get(&object)?.get(*i).cloned()
+            }
+            Place::Local(l) | Place::Deref(baml_compiler2_mir::CellId::Local(l)) => {
+                let ty = &body.locals[l.0].ty;
+                if body.locals[l.0].name.is_none()
+                    && matches!(
+                        ty,
+                        RuntimeTy::Function { .. } | RuntimeTy::Unknown | RuntimeTy::Null
+                    )
+                {
+                    for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+                        if let StatementKind::Assign {
+                            destination: Place::Local(dst),
+                            value: Rvalue::Use(Operand::Copy(from) | Operand::Move(from)),
+                        } = &statement.kind
+                        {
+                            if dst == l {
+                                if let Some(ty) = place(plan, object, body, from, depth + 1) {
+                                    return Some(ty);
+                                }
+                            }
+                        }
+                    }
+                }
+                Some(ty.clone())
+            }
             _ => None,
         }
     }
     match operand {
-        Operand::Copy(p) | Operand::Move(p) => place(plan, body, p),
+        Operand::Copy(p) | Operand::Move(p) => place(plan, object, body, p, 0),
         Operand::Constant(Constant::Int(_)) => Some(RuntimeTy::Int),
         Operand::Constant(Constant::Bool(_)) => Some(RuntimeTy::Bool),
         Operand::Constant(Constant::String(_)) => Some(RuntimeTy::String),
@@ -656,6 +1116,7 @@ impl Plan<'_> {
                 self.candidate(&RuntimeTy::String)
             }
             RuntimeTy::Int
+            | RuntimeTy::Bigint
             | RuntimeTy::Bool
             | RuntimeTy::String
             | RuntimeTy::Null

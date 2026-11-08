@@ -1012,6 +1012,8 @@ dependencies = [
  "btel_snapshot",
  "btel_types",
  "libc",
+ "num-bigint",
+ "num-traits",
  "serde_json",
  "sys_regex",
  "tokio",

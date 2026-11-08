@@ -622,6 +622,12 @@ impl Heap {
     #[inline(always)]
     fn register_finalizer(&mut self, object: usize) {
         if let Some(cleanup) = self.layout_finalizer {
+            let index =
+                u32::try_from(self.finalizable.len() + 1).expect("finalizer table exhausted");
+            assert!(index <= u32::MAX / 2, "finalizer table exhausted");
+            unsafe {
+                (*(object as *mut Header)).aux = index << 1;
+            }
             self.finalizable.push(Finalizable {
                 object,
                 cleanup,
@@ -996,6 +1002,13 @@ impl Heap {
             .into_iter()
             .filter(|f| self.marked(f.object))
             .collect();
+        for (index, record) in self.finalizable.iter().enumerate() {
+            unsafe {
+                let header = &mut *(record.object as *mut Header);
+                header.aux = (((index + 1) as u32) << 1) | (header.aux & 1);
+            }
+        }
+
         for b in &mut self.blocks {
             b.needs_sweep = true;
         }
@@ -1087,22 +1100,47 @@ impl Heap {
             }
         }
     }
+    pub fn has_pending_finalizers(&self) -> bool {
+        !self.ready.is_empty()
+    }
     pub fn take_pending_finalizers(&mut self) -> Vec<Finalizer> {
         std::mem::take(&mut self.ready)
     }
-    pub fn complete_finalizer(&mut self, token: Finalizer) {
-        let f = self
-            .finalizable
-            .iter_mut()
-            .find(|f| f.object == token.object && f.state == 1)
-            .expect("finalizer not pending on this heap");
-        f.state = 2;
+    fn finalizer_record(&mut self, object: usize) -> Option<&mut Finalizable> {
+        let index = unsafe { (*(object as *const Header)).aux >> 1 };
+        if index == 0 {
+            return None;
+        }
+        self.finalizable
+            .get_mut(index as usize - 1)
+            .filter(|f| f.object == object)
     }
-    /// Suppress GC cleanup after explicit/defer cleanup; also valid while rooted.
+    pub fn complete_finalizer(&mut self, token: Finalizer) {
+        let record = self
+            .finalizer_record(token.object)
+            .expect("finalizer belongs to heap");
+        assert_eq!(record.state, 1, "finalizer not pending");
+        record.state = 2;
+    }
+    /// Aux bit zero is the class run-once latch; upper bits index its finalizer.
+    pub unsafe fn begin_cleanup(&mut self, object: usize) -> bool {
+        let header = unsafe { &mut *(object as *mut Header) };
+        if header.aux & 1 != 0 {
+            return false;
+        }
+        header.aux |= 1;
+        if let Some(record) = self.finalizer_record(object)
+            && record.state == 0
+        {
+            record.state = 2;
+        }
+        true
+    }
+    /// Suppress after native resources were released by an explicit observer.
     pub fn suppress_finalizer(&mut self, object: usize) {
-        if let Some(f) = self.finalizable.iter_mut().find(|f| f.object == object) {
-            assert_eq!(f.state, 0);
-            f.state = 2;
+        if let Some(record) = self.finalizer_record(object) {
+            assert_eq!(record.state, 0);
+            record.state = 2;
         }
     }
     /// Attach owner-thread native state to a managed opaque handle.

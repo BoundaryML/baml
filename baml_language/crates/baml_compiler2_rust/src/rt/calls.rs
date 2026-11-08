@@ -92,8 +92,9 @@ impl Emitter<'_, '_> {
                     values = mapping
                         .into_iter()
                         .map(|i| {
-                            i.map(|i| values[i].clone())
-                                .ok_or_else(|| no("omitted argument"))
+                            Ok(i.map(|i| values[i].clone()).unwrap_or_else(|| {
+                                ("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged)
+                            }))
                         })
                         .collect::<Gen<_>>()?;
                 }
@@ -169,7 +170,7 @@ impl Emitter<'_, '_> {
                         {
                             repr
                         } else {
-                            self.plan.repr(&body.locals[i + 1].ty)?
+                            self.plan.local_repr(body, i + 1, 0)?
                         };
                         *value = (self.coerce(value.clone(), expected)?, expected);
                     }

@@ -8,7 +8,7 @@ use crate::{
 use baml_rt_gc::{Descriptor, ElementLayout, Elements, Header, Kind, write_ptr};
 use std::{marker::PhantomData, rc::Rc};
 
-mod sealed {
+pub(crate) mod sealed {
     pub trait Sealed {}
 }
 /// Supported eight-byte elements. Pointer writes use the heap hook.
