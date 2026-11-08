@@ -38,10 +38,19 @@ pub(super) fn emit(
     .into_iter()
     .collect::<Gen<Vec<_>>>()?;
     let naming = named("baml.json.Naming")?;
+    // Empty callable lists can mention classes never allocated by the entry.
+    // Their type captures still require the declaration, without a heap layout.
+    let mut signature_declarations = BTreeSet::new();
+    for signature in plan.closure_lists.values() {
+        signature.visit_heads(&mut |object| {
+            signature_declarations.insert(*object);
+        });
+    }
     let objects: BTreeSet<_> = runtime
         .iter()
         .copied()
         .chain(descriptors.keys().copied())
+        .chain(signature_declarations)
         .chain([naming])
         .collect();
     let objects: Vec<_> = objects.into_iter().collect();
@@ -56,14 +65,19 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
-        let class = if desc < rt_descriptors() {
+        let class = if desc < layout::rt_descriptors() {
             Some(runtime[desc - 1])
         } else {
             descriptors
                 .iter()
                 .find_map(|(&object, &index)| (index == desc).then_some(object))
         };
-        let shape = if let Some(class) = class {
+        let shape = if plan
+            .closure_descriptors()
+            .is_some_and(|(_, closure)| desc == closure)
+        {
+            "Closure".to_owned()
+        } else if let Some(class) = class {
             format!("Class{{declaration:CAPTURE_D{class},fields:DESCRIPTORS[{desc}].fields}}")
         } else if let Some((&repr, _)) = lists.iter().find(|(_, index)| **index == desc) {
             if repr == Repr::MapStrInt {
@@ -80,6 +94,18 @@ pub(super) fn emit(
                         lists[&Repr::ListStr] + 3,
                         "List(&rt::telemetry::capture::Type::String)".to_owned(),
                     ),
+                    Repr::Closure => {
+                        let Repr::ListClosure(id) = repr else {
+                            unreachable!()
+                        };
+                        let full = super::closures::capture_type(&plan.closure_lists[&id])?;
+                        (
+                            plan.closure_descriptors().unwrap().1 + 3,
+                            full.strip_prefix("rt::telemetry::capture::Type::")
+                                .unwrap()
+                                .to_owned(),
+                        )
+                    }
                     _ => return Err(no("capture list type")),
                 };
                 format!(

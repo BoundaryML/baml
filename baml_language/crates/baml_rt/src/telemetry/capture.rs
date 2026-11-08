@@ -39,9 +39,18 @@ pub enum Shape {
         element: &'static Type,
     },
     MapStringInt,
+    Closure,
     Unsupported,
 }
 pub enum Type {
+    Function {
+        params: &'static [Parameter],
+        ret: &'static Type,
+        throws: &'static Type,
+    },
+    Null,
+    Never,
+    Unknown,
     Int,
     Bool,
     String,
@@ -49,9 +58,37 @@ pub enum Type {
     List(&'static Type),
     Union(&'static [Type]),
 }
+pub struct Parameter {
+    pub name: Option<&'static str>,
+    pub optional: bool,
+    pub ty: &'static Type,
+}
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
+            Self::Null => OwnedType::Null,
+            Self::Never => OwnedType::Never,
+            Self::Unknown => OwnedType::Unknown,
+            Self::Function {
+                params,
+                ret,
+                throws,
+            } => OwnedType::Function {
+                params: params
+                    .iter()
+                    .map(|p| baml_type::RealizedFunctionParamTy {
+                        name: p.name.map(baml_type::Name::new),
+                        mode: if p.optional {
+                            baml_type::FunctionParamMode::Optional
+                        } else {
+                            baml_type::FunctionParamMode::Required
+                        },
+                        ty: p.ty.owned(leaves, carried),
+                    })
+                    .collect(),
+                ret: Box::new(ret.owned(leaves, carried)),
+                throws: Box::new(throws.owned(leaves, carried)),
+            },
             Self::Int => OwnedType::Int,
             Self::Bool => OwnedType::Bool,
             Self::String => OwnedType::String,
@@ -352,6 +389,19 @@ impl Scratch {
                             SnapshotValue::Int((data.add(i * 2 + 1).read() as u64).cast_signed()),
                         )
                     })
+                }
+                (Key::Value(pointer), Shape::Closure) => {
+                    let name = unsafe { crate::closures::name(pointer) };
+                    SnapshotObject::Descriptive {
+                        kind: if name.is_some() {
+                            btel_snapshot::Description::Function
+                        } else if unsafe { crate::closures::is_bound(pointer) } {
+                            btel_snapshot::Description::BoundMethod
+                        } else {
+                            btel_snapshot::Description::Closure
+                        },
+                        name: name.and_then(|name| b.leaves().label(&name.into())),
+                    }
                 }
                 _ => unreachable!("compiler admitted an unsupported capture shape"),
             };

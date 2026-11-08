@@ -31,6 +31,11 @@ struct Plan<'a> {
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
     json_types: Vec<Vec<usize>>,
+    environments: bool,
+    captures: BTreeMap<usize, Vec<Repr>>,
+    lambda_bodies: BTreeMap<usize, usize>,
+    callables: BTreeSet<usize>,
+    closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -89,5 +94,3 @@ mod globals;
 mod registry;
 mod strings;
 mod tasks;
-
-use layout::rt_descriptors;

@@ -20,6 +20,11 @@ pub fn compile_rt(
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
         json_types: Vec::new(),
+        environments: false,
+        captures: BTreeMap::new(),
+        lambda_bodies: BTreeMap::new(),
+        callables: BTreeSet::new(),
+        closure_lists: BTreeMap::new(),
     };
     let admission::Admitted {
         all,

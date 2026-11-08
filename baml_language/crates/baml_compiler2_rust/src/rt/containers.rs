@@ -5,6 +5,7 @@ impl Emitter<'_, '_> {
         match repr {
             Repr::ListInt => Ok(Repr::Int),
             Repr::ListStr => Ok(Repr::Str),
+            Repr::ListClosure(_) => Ok(Repr::Closure),
             Repr::ListListStr => Ok(Repr::ListStr),
             Repr::ListPtr(c) => Ok(Repr::Ptr(c)),
             _ => Err(no("indexed non-list")),

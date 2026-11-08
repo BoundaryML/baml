@@ -853,7 +853,7 @@ fn allocation_failure_constructor_matches_interpreter_exception() {
 }
 
 #[test]
-fn rt_string_receiver_storage_and_function_value_rejection() {
+fn rt_string_receiver_storage_and_function_values() {
     for (source, accepted) in [
         (
             include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
@@ -861,7 +861,7 @@ fn rt_string_receiver_storage_and_function_value_rejection() {
         ),
         (
             "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
-            false,
+            true,
         ),
         ("function main() -> int { \"x\".trim().length() }", false),
     ] {
@@ -880,8 +880,8 @@ fn rt_string_receiver_storage_and_function_value_rejection() {
         );
         if accepted {
             let source = result.unwrap();
-            assert!(source.contains("fn rt_string_slice("));
             assert!(source.contains("fn rt_string_char_count("));
+            syn::parse_file(&source).expect("receiver and function value Rust");
         } else {
             assert!(result.unwrap_err().contains("unsupported in baml_rt"));
         }
@@ -1031,5 +1031,105 @@ fn rt_source_bytes_and_diagnostics() {
                 "{name}: generated source changed"
             );
         }
+    }
+}
+
+#[test]
+fn rt_shared_recursive_forwarded_and_stored_closures() {
+    let source = r#"
+class UnallocatedArgument { value: int }
+interface Adder { function add(self, n: int) -> int throws never; }
+class Counter {
+    value: int,
+    implements Adder {
+        function add(self, n: int) -> int throws never { self.value += n; self.value }
+    }
+}
+function bind(value: Adder) -> (int) -> int throws never { value.add }
+class Boxed { callback: (int) -> int throws never }
+function increment(n: int) -> int { n + 1 }
+function negate(value: bool) -> bool { !value }
+function invoke(f: (int) -> int throws never, n: int) -> int { f(n) }
+function make(n: int) -> (int) -> int throws never {
+    let shared = n;
+    (x: int) -> int { shared += x; shared }
+}
+function empty() -> int {
+    let fns: ((UnallocatedArgument) -> int throws never)[] = [];
+    fns.length()
+}
+function main() -> int {
+    let unused: ((UnallocatedArgument) -> int throws never)[] = [];
+    let _ = unused.length();
+    let count = 1;
+    let outer = () -> ((int) -> int throws never) throws never {
+        (n: int) -> int { count += n; count }
+    };
+    let f = outer();
+    let recursive: (int) -> int throws never = (n: int) -> int { n };
+    recursive = (n: int) -> int {
+        if (n == 0) { count } else { recursive(n - 1) + 1 }
+    };
+    let stored = Boxed { callback: f };
+    let callbacks: ((int) -> int throws never)[] = [increment, stored.callback, make(2)];
+    let predicate = negate;
+    let delta = if (predicate(false)) { 0 } else { 100 };
+    let text = "abc";
+    let length = () -> int { text.length() };
+    let counter = Counter { value: 3 };
+    let method = counter.add;
+    let virtual_method = bind(counter);
+    let each: (() -> int throws never)[] = [];
+    for (let i = 0; i < 3; i += 1) {
+        let n = i;
+        each.push(() -> int { n });
+    }
+    invoke(callbacks[0], recursive(2)) + callbacks[1](3) + callbacks[2](4) + method(5) + each[0]() + each[1]() + each[2]() + length() + virtual_method(2) + delta
+}
+"#;
+    let db = baml_test_support::setup_multi_file_db(&[("closures.baml", source)]);
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = lower(&db, opt);
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let emitted = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            opt,
+            entry,
+        )
+        .unwrap();
+        let empty = program.rendered_callables()["user.empty"].object.raw();
+        let empty_source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            opt,
+            empty,
+        )
+        .unwrap();
+        syn::parse_file(&empty_source).expect("empty callable list Rust");
+        assert!(empty_source.contains("rt::closures::closure_descriptor("));
+        if std::env::var_os("BAML_RT_DUMP_SOURCE").is_some() {
+            std::fs::write(format!("/tmp/rt-empty-closures-{opt:?}.rs"), &empty_source).unwrap();
+        }
+        syn::parse_file(&emitted).expect("closures emit valid Rust");
+        assert!(emitted.contains("rt::closures::capture(env,"));
+        assert!(emitted.contains("rt::closures::store("));
+        assert!(!emitted.contains("BexVm"));
+        if std::env::var_os("BAML_RT_DUMP_SOURCE").is_some() {
+            std::fs::write(format!("/tmp/rt-closures-{opt:?}.rs"), &emitted).unwrap();
+        }
+        assert_eq!(
+            runtime
+                .block_on(baml_tests::engine::try_call_by_name(program, "user.main"))
+                .unwrap(),
+            bex_engine::BexExternalValue::Int(38),
+        );
     }
 }
