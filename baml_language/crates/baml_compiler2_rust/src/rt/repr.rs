@@ -20,6 +20,9 @@ pub(super) enum Repr {
     Naming,
     Enum(usize),
     Null,
+    Closure,
+    Cell,
+    ListClosure(u64),
 }
 impl Repr {
     pub(super) fn rust(self) -> &'static str {
@@ -29,6 +32,14 @@ impl Repr {
             Self::Bool => "bool",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn",
             _ => "usize",
+        }
+    }
+    // Shared by ordinary dynamic boundaries and erased callable adapters.
+    pub(super) fn decode_payload(self, bits: &str) -> String {
+        if self == Self::Bool {
+            format!("({bits}!=0)")
+        } else {
+            format!("({bits} as {})", self.rust())
         }
     }
     pub(super) fn zero(self) -> &'static str {
@@ -82,6 +93,9 @@ impl Repr {
                 | Self::ListStr
                 | Self::ListListStr
                 | Self::MapStrInt
+                | Self::Closure
+                | Self::Cell
+                | Self::ListClosure(_)
         )
     }
 }

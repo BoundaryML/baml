@@ -76,10 +76,20 @@ pub(super) fn emit(
             });
         }
     }
+    // Empty callable lists can mention classes never allocated by the entry.
+    // Their type captures still require the declaration, without a heap layout.
+    let mut signature_declarations = BTreeSet::new();
+    for signature in plan.closure_lists.values() {
+        signature.visit_heads(&mut |object| {
+            signature_declarations.insert(*object);
+        });
+    }
     let objects: BTreeSet<_> = runtime
         .iter()
         .copied()
         .chain(descriptors.keys().map(|c| plan.class_origin(*c)))
+        .chain(descriptors.keys().copied())
+        .chain(signature_declarations)
         .chain([naming])
         .chain(plan.enums.iter().copied())
         .chain(extra)
@@ -101,14 +111,19 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
-        let class = if desc < rt_descriptors() {
+        let class = if desc < layout::rt_descriptors() {
             Some(runtime[desc - 1])
         } else {
             descriptors
                 .iter()
                 .find_map(|(&object, &index)| (index == desc).then_some(object))
         };
-        let shape = if let Some(class) = class {
+        let shape = if plan
+            .closure_descriptors()
+            .is_some_and(|(_, closure)| desc == closure)
+        {
+            "Closure".to_owned()
+        } else if let Some(class) = class {
             if let Some((_, args, _)) = plan.class_instances.iter().find(|(_, _, id)| *id == class)
             {
                 let args = args

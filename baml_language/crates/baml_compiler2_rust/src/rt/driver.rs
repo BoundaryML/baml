@@ -36,6 +36,11 @@ pub fn compile_rt(
         dispatches: BTreeMap::new(),
         function_frames: BTreeMap::new(),
         alias_tests: std::cell::RefCell::new(BTreeSet::new()),
+        environments: false,
+        captures: BTreeMap::new(),
+        lambda_bodies: BTreeMap::new(),
+        callables: BTreeSet::new(),
+        closure_lists: BTreeMap::new(),
     };
     let admission::Admitted {
         all,

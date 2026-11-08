@@ -36,6 +36,8 @@ const PROBES: &[&str] = &[
     "RuntimeListJsonField",
     "RuntimeListJsonError",
     "StackAllocation",
+    "RtClosures",
+    "RtEmptyClosures",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -300,11 +302,16 @@ fn is_list_probe(probe: &str) -> bool {
     probe.starts_with("RuntimeList")
 }
 
+fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
+    matches!(probe, "RtClosures" | "RtEmptyClosures").then(|| manifest.join("rt_fixtures/closures"))
+}
+
 fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
     std::fs::create_dir_all(build).unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
     if PROBES
         .iter()
+        .filter(|p| standalone_closure_source(manifest, p).is_none())
         .any(|p| !is_list_probe(p) && only.is_none_or(|o| o.split(',').any(|name| name == *p)))
     {
         let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
@@ -316,8 +323,9 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
             PROBES
                 .iter()
                 .copied()
-                .filter(|p| !is_list_probe(p))
+                .filter(|p| !is_list_probe(p) && standalone_closure_source(manifest, p).is_none())
                 .filter(|p| !initializer_probes::collects_tests(p))
+                .filter(|p| standalone_closure_source(manifest, p).is_none())
                 .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
                 .chain(["GlobalCalls", "GlobalCallPending", "InitializerTestSummary"]),
         );
@@ -355,7 +363,10 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .into_iter()
                 .map(|(name, path)| (name.to_owned(), path)),
         );
-        for probe in PROBES {
+        for probe in PROBES
+            .iter()
+            .filter(|p| standalone_closure_source(manifest, p).is_none())
+        {
             if is_list_probe(probe) {
                 continue;
             }
@@ -382,6 +393,20 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         for probe in list_probes {
             artifacts.insert(probe.into(), executable.clone());
         }
+    }
+    for probe in ["RtClosures", "RtEmptyClosures"] {
+        if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
+            continue;
+        }
+        let executable = build.join(probe);
+        pack(
+            build,
+            workspace,
+            &standalone_closure_source(manifest, probe).unwrap(),
+            &executable,
+            [probe],
+        );
+        artifacts.insert(probe.into(), executable);
     }
     for fixture in kpis::fixtures(workspace, only) {
         let dir = build.join("kpis").join(&fixture.slug);
@@ -666,7 +691,10 @@ fn rust_differential() {
         for level in levels {
             if (probe.contains("::") && matches!(*level, "default" | "low"))
                 || (*level == "default"
-                    && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan"))
+                    && !matches!(
+                        probe.as_str(),
+                        "Scalars" | "Hooked" | "ManualSpan" | "RtClosures" | "RtEmptyClosures"
+                    ))
             {
                 continue;
             }
@@ -674,7 +702,7 @@ fn rust_differential() {
             let mut traces = Vec::new();
             for backend in &backends {
                 if backend.artifact_key == "rt"
-                    && (!rt::supports_level(level) || artifacts["rt"][&probe].is_err())
+                    && (!rt::supports_level(&probe, level) || artifacts["rt"][&probe].is_err())
                 {
                     outputs.push(None);
                     traces.push(String::new());
@@ -822,10 +850,32 @@ fn rust_differential() {
                 }
                 if traces[reference] != traces[index] {
                     if backend.artifact_key == "rt" {
-                        failures.push(format!(
-                            "{probe}/{mode}: telemetry mismatch\n{}",
-                            diff(&traces[reference], &traces[index], &mode)
-                        ));
+                        // C5 already applies to both runtime modes. Use their
+                        // shared artifact key for the existing GC-only filter;
+                        // none of the legacy backend's other exceptions apply.
+                        let expected = known_telemetry_divergences::without_gc(
+                            &traces[reference],
+                            backend.artifact_key,
+                        );
+                        let actual = known_telemetry_divergences::without_gc(
+                            &traces[index],
+                            backend.artifact_key,
+                        );
+                        let detail = diff(&traces[reference], &traces[index], &mode);
+                        if expected == actual {
+                            report_known(
+                                &build,
+                                &probe,
+                                &mode,
+                                known_telemetry_divergences::GC_REASON,
+                                &detail,
+                            );
+                        } else {
+                            failures.push(format!(
+                                "{probe}/{mode}: telemetry mismatch\n{}",
+                                diff(&expected, &actual, &mode)
+                            ));
+                        }
                         continue;
                     }
                     if let Some(reason) =
