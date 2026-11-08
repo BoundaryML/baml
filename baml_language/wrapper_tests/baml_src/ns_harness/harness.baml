@@ -163,6 +163,30 @@ class Fixture {
         baml.fs.read(`${self.root}/${path}`)
     }
 
+    /// Every path under `path` with file sizes and modification times, to detect any write.
+    function tree(self, path: string) -> string[] {
+        let entries: string[] = [];
+        let directories = [path];
+        let index = 0;
+        while (index < directories.length()) {
+            let directory = directories[index];
+            index += 1;
+            for (let entry in baml.fs.read_dir(`${self.root}/${directory}`)) {
+                let child = `${directory}/${entry.name}`;
+                if (entry.is_dir) {
+                    directories.push(child);
+                    entries.push(`${child}/`);
+                } else {
+                    let file = `${self.root}/${child}`;
+                    entries.push(
+                        `${child} ${baml.fs.size(file)} ${baml.fs.metadata(file).modified_ms ?? 0}`,
+                    );
+                }
+            }
+        }
+        entries.sort()
+    }
+
     function os(self, args: string[]) -> null {
         let result = helper([args[0], self.root].concat(args.slice(1, args.length())));
         require(result.ok(), result.stderr.to_string());
