@@ -31,6 +31,16 @@ impl<'db> From<&'db baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
         }
     }
 }
+impl<'db> From<baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
+    fn from(mir: baml_compiler2_mir::MirFunction<'db>) -> Self {
+        Self {
+            arity: mir.arity,
+            kind: std::borrow::Cow::Owned(mir.kind),
+            lambdas: std::borrow::Cow::Owned(mir.lambdas),
+        }
+    }
+}
+
 struct Layout {
     fields: Vec<Repr>,
     offsets: Vec<usize>,
@@ -50,6 +60,11 @@ struct Plan<'a> {
     map_stringify: bool,
     globals: BTreeMap<usize, Repr>,
     init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
+    environments: bool,
+    captures: BTreeMap<usize, Vec<Repr>>,
+    lambda_bodies: BTreeMap<usize, usize>,
+    callables: BTreeSet<usize>,
+    closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -116,5 +131,3 @@ mod maps;
 mod registry;
 mod strings;
 mod tasks;
-
-use layout::rt_descriptors;

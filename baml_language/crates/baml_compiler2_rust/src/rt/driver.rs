@@ -25,6 +25,11 @@ pub fn compile_rt(
         map_stringify: false,
         globals: BTreeMap::new(),
         init_chains: Vec::new(),
+        environments: false,
+        captures: BTreeMap::new(),
+        lambda_bodies: BTreeMap::new(),
+        callables: BTreeSet::new(),
+        closure_lists: BTreeMap::new(),
     };
     let admission::Admitted {
         all,

@@ -358,8 +358,17 @@ pub trait LoopHeap {
 impl LoopHeap for () {
     fn collect(&mut self, _: &dyn RootSource) {}
 }
+/// Owner-thread bindings installed whenever a fiber resumes. The pointed-to
+/// context must outlive registration, including forced shutdown unwinding.
+#[derive(Clone, Copy)]
+pub struct SwitchHook {
+    pub data: *mut (),
+    pub enter: unsafe fn(*mut ()),
+    pub leave: unsafe fn(*mut ()),
+}
 type Fiber = Coroutine<(), (), Outcome>;
 struct Task {
+    hook: Option<SwitchHook>,
     fiber: Option<Fiber>,
     base: usize,
     parked_sp: Option<usize>,
@@ -395,6 +404,8 @@ pub struct Metrics {
     pub cancel_allocations: usize,
 }
 struct Core {
+    active_hook: Option<SwitchHook>,
+    inline_child: bool,
     slow_tasks: usize,
     io_pending: usize,
     host_enabled: bool,
@@ -538,8 +549,10 @@ impl TaskLoop {
         let host_gate = std::sync::Arc::new(std::sync::Mutex::new(Some(tx.clone())));
         Self {
             core: Rc::new(RefCell::new(Core {
+                active_hook: None,
                 #[cfg(feature = "instrument")]
                 metrics: Metrics::default(),
+                inline_child: false,
                 slow_tasks: 0,
                 io_pending: 0,
                 host_enabled: false,
@@ -663,73 +676,7 @@ impl TaskLoop {
         }
     }
     fn run_one(&mut self, id: usize) {
-        #[cfg(feature = "instrument")]
-        {
-            let mut c = self.core.borrow_mut();
-            c.metrics.resumes += 1;
-            c.metrics.switches += 2;
-        }
-        let mut fiber = {
-            let mut c = self.core.borrow_mut();
-            refresh_poll_word(&c, id);
-            let t = c.tasks.get_mut(&id).unwrap();
-            t.state = TaskState::Running;
-            let base = t.base;
-            let fiber = t.fiber.take().unwrap();
-            c.running_base = Some(base);
-            fiber
-        };
-        // No Core borrow survives a context switch: TaskCx may freely access it.
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| fiber.resume(())))
-            .unwrap_or_else(|_| {
-                CoroutineResult::Return(Err(Err::InternalError("task panicked".into())))
-            });
-        let mut c = self.core.borrow_mut();
-        c.running_base = None;
-        match result {
-            CoroutineResult::Yield(()) => {
-                c.tasks.get_mut(&id).unwrap().fiber = Some(fiber);
-            }
-            CoroutineResult::Return(result) => {
-                let mut task = c.tasks.remove(&id).unwrap();
-                task.state = TaskState::Done;
-                if result.is_err() {
-                    task.cancel.cancel();
-                }
-                if let Some(token) = task.io_cancel.take() {
-                    token.cancel();
-                }
-                c.slow_tasks -= usize::from(task.needs_service);
-                let state = match &result {
-                    Ok(v) => FutureState::Ready(v.clone()),
-                    Err(Err::Cancelled) => FutureState::Cancelled,
-                    Err(Err::Error { message, trace }) => FutureState::Error {
-                        message: message.clone(),
-                        trace: trace.clone(),
-                    },
-                    Err(Err::InternalError(e)) => FutureState::InternalError(e.clone()),
-                };
-                {
-                    let mut f = task.future.0.borrow_mut();
-                    f.state = state;
-                    for waiter in f.waiters.drain(..) {
-                        wake(&mut c, waiter);
-                    }
-                }
-                if let Some(reply) = task.host.take() {
-                    task.future.0.borrow_mut().observed = true;
-                    let _ = reply.send(result.and_then(Value::owned));
-                }
-                let stack = fiber.into_stack();
-                if c.pool.len() < c.config.pool_capacity {
-                    c.pool.push(stack);
-                }
-                // Ticket drops here, after producer frames have unwound.
-            }
-        }
-        if c.futures.len() > c.tasks.len() * 2 + 1024 {
-            c.futures.retain(|f| f.strong_count() > 0);
-        }
+        run_one(&self.core, id);
     }
     /// Cooperative grace, followed by forced fiber unwinding. Non-polling CPU
     /// code cannot be preempted; callers must honor the poll contract.
@@ -763,7 +710,27 @@ impl TaskLoop {
             if let Some(token) = t.io_cancel.take() {
                 token.cancel();
             }
+            // Forced unwinding executes code on this fiber too. Install its
+            // owner-thread bindings before running destructors, just as on a
+            // normal resume. A binding may unregister itself while unwinding;
+            // read active_hook afterwards instead of retaining its stack pointer.
+            let previous = self.core.borrow_mut().active_hook.take();
+            if let Some(hook) = previous {
+                unsafe { (hook.leave)(hook.data) };
+            }
+            self.core.borrow_mut().active_hook = t.hook;
+            if let Some(hook) = t.hook {
+                unsafe { (hook.enter)(hook.data) };
+            }
             drop(t.fiber.take());
+            let current = self.core.borrow_mut().active_hook.take();
+            if let Some(hook) = current {
+                unsafe { (hook.leave)(hook.data) };
+            }
+            self.core.borrow_mut().active_hook = previous;
+            if let Some(hook) = previous {
+                unsafe { (hook.enter)(hook.data) };
+            }
             t.future.0.borrow_mut().state = FutureState::Cancelled;
             if let Some(reply) = t.host.take() {
                 let _ = reply.send(Err(Err::Cancelled));
@@ -797,6 +764,93 @@ impl Drop for TaskLoop {
         self.shutdown(Duration::ZERO);
     }
 }
+fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
+    #[cfg(feature = "instrument")]
+    {
+        let mut c = core.borrow_mut();
+        c.metrics.resumes += 1;
+        c.metrics.switches += 2;
+    }
+    let previous = core.borrow_mut().active_hook.take();
+    if let Some(hook) = previous {
+        unsafe { (hook.leave)(hook.data) };
+    }
+    let hook = core.borrow().tasks[&id].hook;
+    core.borrow_mut().active_hook = hook;
+    if let Some(hook) = hook {
+        unsafe { (hook.enter)(hook.data) };
+    }
+    let mut fiber = {
+        let mut c = core.borrow_mut();
+        refresh_poll_word(&c, id);
+        let t = c.tasks.get_mut(&id).unwrap();
+        t.state = TaskState::Running;
+        let base = t.base;
+        let fiber = t.fiber.take().unwrap();
+        c.running_base = Some(base);
+        fiber
+    };
+    // No Core borrow survives a context switch: TaskCx may freely access it.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| fiber.resume(())))
+        .unwrap_or_else(|_| {
+            CoroutineResult::Return(Err(Err::InternalError("task panicked".into())))
+        });
+    let current = core.borrow_mut().active_hook.take();
+    if let Some(hook) = current {
+        unsafe { (hook.leave)(hook.data) };
+    }
+    core.borrow_mut().active_hook = previous;
+    if let Some(hook) = previous {
+        unsafe { (hook.enter)(hook.data) };
+    }
+    let mut c = core.borrow_mut();
+    c.running_base = None;
+    match result {
+        CoroutineResult::Yield(()) => {
+            c.tasks.get_mut(&id).unwrap().fiber = Some(fiber);
+        }
+        CoroutineResult::Return(result) => {
+            let mut task = c.tasks.remove(&id).unwrap();
+            task.state = TaskState::Done;
+            if result.is_err() {
+                task.cancel.cancel();
+            }
+            if let Some(token) = task.io_cancel.take() {
+                token.cancel();
+            }
+            c.slow_tasks -= usize::from(task.needs_service);
+            let state = match &result {
+                Ok(v) => FutureState::Ready(v.clone()),
+                Err(Err::Cancelled) => FutureState::Cancelled,
+                Err(Err::Error { message, trace }) => FutureState::Error {
+                    message: message.clone(),
+                    trace: trace.clone(),
+                },
+                Err(Err::InternalError(e)) => FutureState::InternalError(e.clone()),
+            };
+            {
+                let mut f = task.future.0.borrow_mut();
+                f.state = state;
+                for waiter in f.waiters.drain(..) {
+                    wake(&mut c, waiter);
+                }
+            }
+            if let Some(reply) = task.host.take() {
+                task.future.0.borrow_mut().observed = true;
+                let _ = reply.send(result.and_then(Value::owned));
+            }
+            let stack = fiber.into_stack();
+            if c.pool.len() < c.config.pool_capacity {
+                c.pool.push(stack);
+            }
+            // Ticket drops here, after producer frames have unwound.
+        }
+    }
+    if c.futures.len() > c.tasks.len() * 2 + 1024 {
+        c.futures.retain(|f| f.strong_count() > 0);
+    }
+}
+
 fn wake(c: &mut Core, id: usize) {
     if let Some(t) = c.tasks.get_mut(&id)
         && matches!(t.state, TaskState::Parked(_))
@@ -921,6 +975,7 @@ fn spawn(
     c.tasks.insert(
         id,
         Task {
+            hook: None,
             fiber: Some(fiber),
             base,
             parked_sp: None,
@@ -956,6 +1011,21 @@ pub struct TaskCx<'a> {
 impl TaskCx<'_> {
     pub fn id(&self) -> usize {
         self.id
+    }
+    /// # Safety
+    /// A registered context stays alive until unregistered, on this fiber. Its
+    /// callbacks must only update thread-local bindings, must not unwind, and
+    /// may not reenter the loop.
+    pub unsafe fn set_switch_hook(&mut self, hook: Option<SwitchHook>) {
+        let mut core = self.core.borrow_mut();
+        if let Some(task) = core.tasks.get_mut(&self.id) {
+            task.hook = hook;
+        } else {
+            // Shutdown removes records before force-unwinding their fibers.
+            // A binding's destructor must still be able to unregister itself.
+            assert!(hook.is_none(), "registering a hook on a retired task");
+        }
+        core.active_hook = hook;
     }
     pub fn parent_id(&self) -> Option<usize> {
         self.core.borrow().tasks[&self.id].parent
@@ -1061,6 +1131,65 @@ impl TaskCx<'_> {
             return Err(Err::InternalError("future belongs to another loop".into()));
         }
         self.checkpoint()?;
+        // At a pending await, the FIFO head may run directly on its own fiber.
+        // The awaiting parent's stack is parked and scanned, exactly as at a
+        // switch through tick(). Bound nesting so a spawn chain cannot build a
+        // recursive scheduler stack. Spawn itself still never runs the child.
+        let direct = {
+            let c = self.core.borrow();
+            !c.inline_child && c.ready.front() == Some(&future.id())
+        };
+        if direct {
+            maintenance(&self.core);
+            let child = {
+                let mut c = self.core.borrow_mut();
+                c.inline_child = true;
+                c.ready.pop_front().expect("FIFO head")
+            };
+            roots::with_registers(|sp, _| {
+                self.core
+                    .borrow_mut()
+                    .tasks
+                    .get_mut(&self.id)
+                    .unwrap()
+                    .parked_sp = Some(sp);
+                run_one(&self.core, child);
+                let mut c = self.core.borrow_mut();
+                let t = c.tasks.get_mut(&self.id).unwrap();
+                t.parked_sp = None;
+                let base = t.base;
+                c.running_base = Some(base);
+                c.inline_child = false;
+                refresh_poll_word(&c, self.id);
+            });
+            // Settlement readies the waiter behind tasks already queued. A
+            // direct return is legal only when that FIFO has no predecessors.
+            let (yield_ready, settled) = {
+                let mut c = self.core.borrow_mut();
+                let settled = !matches!(future.0.borrow().state, FutureState::Pending);
+                let cancelled = self.shield == 0 && self.cancel.is_cancelled();
+                if (settled || cancelled) && !c.ready.is_empty() {
+                    c.tasks.get_mut(&self.id).unwrap().state = TaskState::Ready;
+                    c.ready.push_back(self.id);
+                    (true, settled)
+                } else {
+                    (false, settled)
+                }
+            };
+            #[cfg(feature = "instrument")]
+            if yield_ready || settled {
+                self.core.borrow_mut().metrics.slice_reads += 1;
+            }
+            if yield_ready {
+                self.yield_with_roots();
+                self.scheduled = slice_clock::now();
+            } else if settled {
+                // A completed handoff is a new parent slice, just like a
+                // resume through tick(); child CPU time is not its budget.
+                self.scheduled = slice_clock::now();
+            }
+            self.checkpoint()?;
+        }
         {
             let mut f = future.0.borrow_mut();
             if let Some(result) = f.state.result() {
@@ -1080,6 +1209,16 @@ impl TaskCx<'_> {
             .expect("await resumed only by settlement or cancellation")
     }
     pub fn await_any(&mut self, futures: &[FutureHandle]) -> Result<(usize, Value), Err> {
+        let index = self.await_settled(futures)?;
+        futures[index]
+            .result()
+            .expect("settled future")
+            .map(|v| (index, v))
+    }
+    /// BAML's __await_any reports the first settled input in input order,
+    /// including failed/cancelled inputs. Only awaiting the selected future
+    /// observes its result; choosing an index must not consume an error.
+    pub fn await_settled(&mut self, futures: &[FutureHandle]) -> Result<usize, Err> {
         if futures
             .iter()
             .any(|f| !f.0.borrow().owner.ptr_eq(&Rc::downgrade(&self.core)))
@@ -1092,8 +1231,8 @@ impl TaskCx<'_> {
         self.checkpoint()?;
         loop {
             for (index, f) in futures.iter().enumerate() {
-                if let Some(result) = f.result() {
-                    return result.map(|v| (index, v));
+                if !matches!(f.0.borrow().state, FutureState::Pending) {
+                    return Ok(index);
                 }
             }
             for f in futures {

@@ -45,12 +45,19 @@ pub enum Shape {
         len: unsafe fn(usize) -> usize,
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
+    Closure,
     Unsupported,
 }
 pub enum Type {
     IntLiteral(i64, bool),
     BoolLiteral(bool, bool),
     StringLiteral(&'static str, bool),
+    Function {
+        params: &'static [Parameter],
+        ret: &'static Type,
+        throws: &'static Type,
+    },
+    Never,
     Int,
     Float,
     Unknown,
@@ -61,6 +68,11 @@ pub enum Type {
     List(&'static Type),
     Map(&'static Type, &'static Type),
     Union(&'static [Type]),
+}
+pub struct Parameter {
+    pub name: Option<&'static str>,
+    pub optional: bool,
+    pub ty: &'static Type,
 }
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
@@ -75,6 +87,27 @@ impl Type {
                 baml_type::Literal::String((*value).into()),
                 freshness(*fresh),
             ),
+            Self::Never => OwnedType::Never,
+            Self::Function {
+                params,
+                ret,
+                throws,
+            } => OwnedType::Function {
+                params: params
+                    .iter()
+                    .map(|p| baml_type::RealizedFunctionParamTy {
+                        name: p.name.map(baml_type::Name::new),
+                        mode: if p.optional {
+                            baml_type::FunctionParamMode::Optional
+                        } else {
+                            baml_type::FunctionParamMode::Required
+                        },
+                        ty: p.ty.owned(leaves, carried),
+                    })
+                    .collect(),
+                ret: Box::new(ret.owned(leaves, carried)),
+                throws: Box::new(throws.owned(leaves, carried)),
+            },
             Self::Int => OwnedType::Int,
             Self::Float => OwnedType::Float,
             Self::Unknown => OwnedType::Unknown,
@@ -409,6 +442,19 @@ impl Scratch {
                             SnapshotValue::Int(map.entry(i).unwrap().1),
                         )
                     })
+                }
+                (Key::Value(pointer), Shape::Closure) => {
+                    let name = unsafe { crate::closures::name(pointer) };
+                    SnapshotObject::Descriptive {
+                        kind: if name.is_some() {
+                            btel_snapshot::Description::Function
+                        } else if unsafe { crate::closures::is_bound(pointer) } {
+                            btel_snapshot::Description::BoundMethod
+                        } else {
+                            btel_snapshot::Description::Closure
+                        },
+                        name: name.and_then(|name| b.leaves().label(&name.into())),
+                    }
                 }
                 _ => unreachable!("compiler admitted an unsupported capture shape"),
             };

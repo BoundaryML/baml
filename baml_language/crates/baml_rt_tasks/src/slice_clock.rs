@@ -50,6 +50,21 @@ pub fn now() -> Stamp {
     #[cfg(target_arch = "aarch64")]
     {
         let value: u64;
+        // FEAT_ECV supplies an ordered read without the pipeline-wide ISB.
+        // Cache the hardware capability on the owner thread, with no shared
+        // synchronization or process-global mutable state.
+        #[cfg(target_os = "linux")]
+        {
+            thread_local! {
+                static SELF_SYNCHRONIZED: bool = unsafe { libc::getauxval(libc::AT_HWCAP2) } & (1 << 19) != 0;
+            }
+            if SELF_SYNCHRONIZED.with(|available| *available) {
+                unsafe {
+                    std::arch::asm!("mrs {v}, S3_3_C14_C0_6", v = out(reg) value, options(nostack, preserves_flags));
+                }
+                return value;
+            }
+        }
         // SAFETY: read-only monotonic architectural timer, shared across cores.
         unsafe {
             std::arch::asm!("isb", "mrs {v}, cntvct_el0", v = out(reg) value, options(nostack, preserves_flags));

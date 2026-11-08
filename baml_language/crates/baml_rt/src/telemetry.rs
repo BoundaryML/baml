@@ -1059,7 +1059,10 @@ impl Session {
         self.exit.set(btel_types::ProcessExit {
             status: match result {
                 Ok(_) => btel_types::ProcessStatus::Success,
-                Err(error) if self.root_panicked || error.value != 0 && outcome(error) == InvocationOutcome::Panicked => {
+                Err(error)
+                    if self.root_panicked
+                        || error.value != 0 && outcome(error) == InvocationOutcome::Panicked =>
+                {
                     btel_types::ProcessStatus::Panicked
                 }
                 Err(_) => btel_types::ProcessStatus::Error,

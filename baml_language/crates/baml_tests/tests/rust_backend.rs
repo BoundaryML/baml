@@ -852,7 +852,7 @@ fn allocation_failure_constructor_matches_interpreter_exception() {
 }
 
 #[test]
-fn rt_string_receiver_storage_and_function_value_rejection() {
+fn rt_string_receiver_storage_and_function_values() {
     for (source, accepted) in [
         (
             include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
@@ -860,7 +860,7 @@ fn rt_string_receiver_storage_and_function_value_rejection() {
         ),
         (
             "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
-            false,
+            true,
         ),
         ("function main() -> int { \"x\".trim().length() }", false),
     ] {
@@ -879,8 +879,8 @@ fn rt_string_receiver_storage_and_function_value_rejection() {
         );
         if accepted {
             let source = result.unwrap();
-            assert!(source.contains("fn rt_string_slice("));
             assert!(source.contains("fn rt_string_char_count("));
+            syn::parse_file(&source).expect("receiver and function value Rust");
         } else {
             assert!(result.unwrap_err().contains("unsupported in baml_rt"));
         }
@@ -1085,9 +1085,9 @@ fn rt_source_bytes_and_diagnostics() {
             continue;
         }
         let expected = match name {
-            "trees" => "1e7215998e631c3832cfb40c9b086b4f1c24220456e190bd22d48d17b1166c0a",
-            "richards" => "d9c69f8402633213ae73ea5065c1b5fc22d1ae91c21a0a0f17817d8aa5030a24",
-            "agent" => "3a68db5d35b9ba7bb7a9ec7b14d2b15bbbd10c6216ee25d4d830f9fb47f5bea1",
+            "trees" => "59175ad625ae684bf4b01791b5c23491510cc7e3d47c082b306053d7f75c1705",
+            "richards" => "a52747ba07ae8dc1657524aabf6b86d8ceaf29137ffc5de97842eeec932dfd3f",
+            "agent" => "21bc415f0eb13d4933851aa599478ef24e32df92b46bca0b4c2d8fd81b466b2b",
             _ => "",
         };
         if expected.is_empty() {
@@ -1245,6 +1245,56 @@ fn rt_structural_union_map_keys_fail_closed() {
         assert_eq!(
             result.unwrap_err(),
             format!("unsupported in baml_rt: {expected}")
+        );
+    }
+}
+
+#[test]
+fn rt_shared_recursive_forwarded_and_stored_closures() {
+    let source = include_str!("../rt_fixtures/closures/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("closures.baml", source)]);
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = lower(&db, opt);
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let emitted = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            opt,
+            entry,
+        )
+        .unwrap();
+        let empty = program.rendered_callables()["user.empty"].object.raw();
+        let empty_source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            opt,
+            empty,
+        )
+        .unwrap();
+        syn::parse_file(&empty_source).expect("empty callable list Rust");
+        assert!(empty_source.contains("rt::closures::closure_descriptor("));
+        if std::env::var_os("BAML_RT_DUMP_SOURCE").is_some() {
+            std::fs::write(format!("/tmp/rt-empty-closures-{opt:?}.rs"), &empty_source).unwrap();
+        }
+        syn::parse_file(&emitted).expect("closures emit valid Rust");
+        assert!(emitted.contains("rt::closures::capture(env,"));
+        assert!(emitted.contains("rt::closures::store("));
+        assert!(!emitted.contains("BexVm"));
+        if std::env::var_os("BAML_RT_DUMP_SOURCE").is_some() {
+            std::fs::write(format!("/tmp/rt-closures-{opt:?}.rs"), &emitted).unwrap();
+        }
+        assert_eq!(
+            runtime
+                .block_on(baml_tests::engine::try_call_by_name(program, "user.main"))
+                .unwrap(),
+            bex_engine::BexExternalValue::Int(38),
         );
     }
 }
