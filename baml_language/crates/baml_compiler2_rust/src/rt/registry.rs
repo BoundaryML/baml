@@ -81,6 +81,9 @@ const FEATURES: &[&dyn Feature] = &[
     &dispatch::Feature,
     &strings::Feature,
     &telemetry::Feature,
+    &super::logging::Feature,
+    &super::scalars::Feature,
+    &super::io::Feature,
     &calls::Feature,
 ];
 

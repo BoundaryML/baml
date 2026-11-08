@@ -12,6 +12,9 @@ use std::{
 #[path = "../rust_diff/initializer_probes.rs"]
 mod initializer_probes;
 
+#[path = "../rust_diff/host.rs"]
+mod host;
+
 const PROBES: &[&str] = &[
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
@@ -430,6 +433,31 @@ fn rust_differential() {
     assert!(timeout > 0);
     let timeout = Duration::from_secs(timeout);
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
+    // Restrict expensive backend builds/runs for scoped jobs, keeping the VM
+    // oracle and both rt modes mandatory. An unset selector keeps the full gate.
+    let selected_backends = std::env::var("BAML_RUST_DIFF_BACKENDS").ok();
+    if let Some(names) = &selected_backends {
+        for name in names.split(',') {
+            assert!(
+                BACKENDS.iter().any(|b| b.name == name),
+                "unknown backend: {name}"
+            );
+        }
+    }
+    let backends: Vec<_> = BACKENDS
+        .iter()
+        .filter(|b| {
+            selected_backends
+                .as_ref()
+                .is_none_or(|s| s.split(',').any(|n| n == b.name))
+        })
+        .collect();
+    for name in ["bytecode", "rt", "rt-gc-stress"] {
+        assert!(
+            backends.iter().any(|b| b.name == name),
+            "backend selection must include {name}"
+        );
+    }
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -452,7 +480,7 @@ fn rust_differential() {
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
-    for backend in BACKENDS {
+    for backend in &backends {
         artifacts.entry(backend.artifact_key).or_insert_with(|| {
             (backend.build)(
                 &build.join(backend.artifact_key),
@@ -462,7 +490,7 @@ fn rust_differential() {
             )
         });
     }
-    let reference = BACKENDS
+    let reference = backends
         .iter()
         .position(|b| b.name == "bytecode")
         .expect("bytecode reference");
@@ -482,6 +510,11 @@ fn rust_differential() {
     for probe in probes {
         let failures_before = failures.len();
         for level in LEVELS {
+            if !backends.iter().any(|b| {
+                b.name != "bytecode" && (b.artifact_key != "rt" || rt::supports_level(level))
+            }) {
+                continue;
+            }
             if (probe.contains("::") && matches!(*level, "default" | "low"))
                 || (*level == "default"
                     && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan"))
@@ -490,7 +523,7 @@ fn rust_differential() {
             }
             let mut outputs = Vec::new();
             let mut traces = Vec::new();
-            for backend in BACKENDS {
+            for backend in &backends {
                 if backend.artifact_key == "rt"
                     && (!rt::supports_level(level) || artifacts["rt"][&probe].is_err())
                 {
@@ -612,7 +645,7 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
-            for (index, backend) in BACKENDS.iter().enumerate() {
+            for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;
                 }
@@ -685,22 +718,6 @@ fn rust_differential() {
                             &probe,
                             &mode,
                             known_telemetry_divergences::POLLING_REASON,
-                            &diff(&expected, &actual, &mode),
-                        );
-                    } else if known_telemetry_divergences::without_log_locations(
-                        &expected,
-                        &probe,
-                        backend.name,
-                    ) == known_telemetry_divergences::without_log_locations(
-                        &actual,
-                        &probe,
-                        backend.name,
-                    ) {
-                        report_known(
-                            &build,
-                            &probe,
-                            &mode,
-                            known_telemetry_divergences::LOG_REASON,
                             &diff(&expected, &actual, &mode),
                         );
                     } else if known_telemetry_divergences::without_timeout_wait(

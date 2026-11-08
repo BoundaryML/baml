@@ -16,8 +16,8 @@ impl Emitter<'_, '_> {
                 | OpCode::CallLocal
                 | OpCode::CallExactArgs
                 | OpCode::CallIndirect
-                | OpCode::VirtualCall
-                | OpCode::SysOp => "NativeBoundary",
+                | OpCode::VirtualCall => "NativeBoundary",
+                OpCode::SysOp => "HostBoundary",
                 _ => "Runtime",
             };
             self.raise_kinds.push(kind);

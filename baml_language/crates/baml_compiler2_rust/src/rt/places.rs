@@ -18,6 +18,7 @@ impl Emitter<'_, '_> {
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
         match repr {
             Repr::Int => Ok(0),
+            Repr::Float => Ok(u32::MAX as usize - 1),
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
@@ -44,6 +45,9 @@ impl Emitter<'_, '_> {
         if source == target || (source == Repr::Null && target.pointer()) {
             return Ok(value);
         }
+        if source == Repr::Int && target == Repr::Float {
+            return Ok(format!("({value} as f64)"));
+        }
         if target == Repr::Tagged {
             let tag = self.tag(source)?;
             let test = if source.pointer() {
@@ -51,14 +55,21 @@ impl Emitter<'_, '_> {
             } else {
                 tag.to_string()
             };
+            let payload = if source == Repr::Float {
+                "v.to_bits()"
+            } else {
+                "v as u64"
+            };
             return Ok(format!(
-                "{{let v={value};rt::Dyn{{tag:{test},payload:v as u64}}}}"
+                "{{let v={value};rt::Dyn{{tag:{test},payload:{payload}}}}}"
             ));
         }
         if source == Repr::Tagged {
             let tag = self.tag(target)?;
             let bits = self.fallible(&format!("rt::untag({value},{tag},{})", target.pointer()));
-            return Ok(if target == Repr::Bool {
+            return Ok(if target == Repr::Float {
+                format!("f64::from_bits({bits})")
+            } else if target == Repr::Bool {
                 format!("({bits}!=0)")
             } else {
                 format!("({bits} as {})", target.rust())
@@ -148,6 +159,9 @@ impl Emitter<'_, '_> {
         match o {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
+            Operand::Constant(Constant::Float(v)) => {
+                Ok((format!("f64::from_bits({}u64)", v.to_bits()), Repr::Float))
+            }
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => Ok((
                 self.fallible(&format!(

@@ -4,7 +4,7 @@ use super::{
     recursive, telemetry,
 };
 
-/// Emit a single parameterless integer entry, including a compatible benchmark host.
+/// Emit a typed entry and its owned host adapter, including a benchmark driver.
 /// Layouts and direct call bodies come exclusively from MIR and linked metadata.
 pub fn compile_rt(
     db: &dyn Db,
@@ -108,6 +108,15 @@ pub fn compile_rt(
         (stringify, aliased),
         &telemetry_sites,
     )?;
-    host::emit(&mut out, entry, &builtins, format_site);
+    host::emit(
+        &mut out,
+        &plan,
+        all[&entry],
+        &lists,
+        &descriptors,
+        entry,
+        &builtins,
+        format_site,
+    )?;
     Ok(out)
 }

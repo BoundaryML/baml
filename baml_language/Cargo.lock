@@ -1025,6 +1025,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_rt_island"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_project",
+ "serde_json",
+ "sys_native",
+ "tokio",
+ "vfs",
+]
+
+[[package]]
 name = "baml_rt_tasks"
 version = "0.0.0-beta"
 dependencies = [

@@ -1,4 +1,6 @@
 mod codegen_rt;
+mod codegen_rt_io;
+mod codegen_rt_scalar;
 pub use codegen_rt::{generate_rt, supports_rt};
 mod codegen;
 mod codegen_errors;
@@ -30,3 +32,9 @@ fn format_tokens(tokens: &proc_macro2::TokenStream) -> String {
     let syntax_tree = syn::parse_file(&code_string).expect("Failed to parse generated code");
     prettyplease::unparse(&syntax_tree)
 }
+
+mod triage;
+pub use triage::{
+    BuiltinGroup, RtDisposition, RtStrategy, classify_builtin, implementation_strategy,
+    native_inventory,
+};

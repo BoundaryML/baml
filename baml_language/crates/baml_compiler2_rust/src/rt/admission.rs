@@ -58,6 +58,7 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
+            super::builtin_classes::record_test(db, plan, &statement.kind)?;
 
             if let StatementKind::Assign {
                 value:
@@ -126,12 +127,7 @@ pub(super) fn collect<'db>(
         }
     }
     let mir = all[&entry];
-    let MirFunctionKind::Bytecode(body) = &mir.kind else {
-        unreachable!()
-    };
-    if mir.arity != 0 || plan.repr(&body.locals[0].ty)? != Repr::Int {
-        return Err(no("entry must have no parameters and return int"));
-    }
+    super::host::admit(plan, mir)?;
     Ok(Admitted {
         all,
         reached,

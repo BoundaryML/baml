@@ -193,7 +193,18 @@ impl BexVm {
             Some(std::sync::Arc::<str>::from(name.as_str()))
         };
         let at = Self::record_frame(frame);
+        // Generated bodies use instruction indices; recorded PCs are compact
+        // byte offsets, just as when this statement runs in the interpreter.
+        let compact_pc = self
+            .get_object(frame.function())
+            .as_callable()
+            .ok()
+            .and_then(|function| function.bytecode.compact.as_ref())
+            .and_then(|code| code.offset_of(pc as usize))
+            .unwrap_or(pc as usize);
+        let previous_pc = std::mem::replace(&mut self.cur_pc, compact_pc);
         self.record_log_at(at, level, name.clone(), data);
+        self.cur_pc = previous_pc;
         let source_location = self
             .get_object(frame.function())
             .as_callable()

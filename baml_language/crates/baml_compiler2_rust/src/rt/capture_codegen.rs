@@ -33,6 +33,10 @@ pub(super) fn emit(
         "baml.json.ParseError",
         "baml.json.DecodeError",
         "baml.panics.DivisionByZero",
+        "baml.errors.InvalidArgument",
+        "baml.errors.ParseError",
+        "baml.panics.HostUnavailable",
+        "baml.errors.Io",
     ]
     .map(named)
     .into_iter()

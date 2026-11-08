@@ -17,7 +17,8 @@ impl Emitter<'_, '_> {
                 .map(|b| match b.terminator.as_ref().unwrap() {
                     Terminator::Goto { target }
                     | Terminator::Call { target, .. }
-                    | Terminator::VirtualCall { target, .. } => Ok(Flow::Goto(target.0)),
+                    | Terminator::VirtualCall { target, .. }
+                    | Terminator::SysOp { target, .. } => Ok(Flow::Goto(target.0)),
                     Terminator::Branch {
                         then_block,
                         else_block,

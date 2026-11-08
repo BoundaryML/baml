@@ -43,6 +43,7 @@ pub enum Shape {
 }
 pub enum Type {
     Int,
+    Float,
     Bool,
     String,
     Class(fn() -> &'static Declaration),
@@ -53,6 +54,7 @@ impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
             Self::Int => OwnedType::Int,
+            Self::Float => OwnedType::Float,
             Self::Bool => OwnedType::Bool,
             Self::String => OwnedType::String,
             Self::Class(declaration) => OwnedType::Class(
@@ -157,6 +159,12 @@ impl Scratch {
         value: Dyn,
         depth: usize,
     ) -> SnapshotValue {
+        if value.tag == crate::scalars::FLOAT_TAG {
+            if leaves.limits().max_depth.is_some_and(|limit| depth > limit) {
+                return SnapshotValue::Truncated(Limit::Depth);
+            }
+            return SnapshotValue::Float(f64::from_bits(value.payload));
+        }
         let key = if value.tag >= 3
             && value.tag != u64::MAX
             && matches!(

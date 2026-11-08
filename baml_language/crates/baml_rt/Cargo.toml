@@ -13,7 +13,7 @@ borsh.workspace = true
 serde_json.workspace = true
 baml_rt_gc = { path = "../baml_rt_gc" }
 baml_rt_tasks = { path = "../baml_rt_tasks" }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "io-util", "io-std", "time", "fs"] }
 
 bex_chunkedringbuffer.workspace = true
 btel_clock.workspace = true

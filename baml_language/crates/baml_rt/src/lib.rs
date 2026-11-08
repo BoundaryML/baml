@@ -2,10 +2,13 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod host;
+pub mod io;
 pub mod json;
 pub mod language;
 pub mod lists;
 pub mod maps;
+pub mod scalars;
 pub mod strings;
 pub mod telemetry;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
@@ -130,6 +133,7 @@ impl Instance {
         );
         let io = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
+            .enable_all()
             .build()
             .unwrap();
         let mut heap = Heap::new(descriptors, pointer_types);
@@ -178,10 +182,17 @@ impl Instance {
     pub unsafe fn run_baml(&mut self, entry: fn() -> R<i64>) -> R<i64> {
         unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
     }
-    unsafe fn execute<E: 'static>(
+    /// Execute a host adapter which copies its successful result to Rust storage.
+    /// # Safety
+    /// Generated code must uphold the allocation/rooting ABI. Successful values
+    /// must contain no managed addresses; errors have run_baml's inspection limit.
+    pub unsafe fn run_owned<T: 'static>(&mut self, entry: impl FnOnce() -> R<T> + 'static) -> R<T> {
+        unsafe { self.execute(entry) }.map_err(|e| Error::internal(format!("{e:?}")))?
+    }
+    unsafe fn execute<E: 'static, T: 'static>(
         &mut self,
-        entry: fn() -> Result<i64, E>,
-    ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
+        entry: impl FnOnce() -> Result<T, E> + 'static,
+    ) -> Result<Result<T, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;

@@ -66,6 +66,7 @@ impl Plan<'_> {
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
+            RuntimeTy::Float | RuntimeTy::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             RuntimeTy::Unknown => Repr::Tagged,
             RuntimeTy::Map { key, value }
                 if matches!(key.as_ref(), RuntimeTy::String)
@@ -78,7 +79,7 @@ impl Plan<'_> {
                 RuntimeTy::Int => Repr::ListInt,
                 RuntimeTy::String => Repr::ListStr,
                 RuntimeTy::List(t) if matches!(t.as_ref(), RuntimeTy::String) => Repr::ListListStr,
-                RuntimeTy::Union(_) => match self.repr(element)? {
+                RuntimeTy::Class(_, _) | RuntimeTy::Union(_) => match self.repr(element)? {
                     Repr::Ptr(c) => Repr::ListPtr(c),
                     _ => return Err(no("list element")),
                 },
@@ -133,6 +134,7 @@ impl Plan<'_> {
     pub(super) fn field_repr(&self, ty: &bex_vm_types::RuntimeTy) -> Gen<Repr> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
+            T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             T::Null => Repr::Null,
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
@@ -146,7 +148,7 @@ impl Plan<'_> {
                 T::Int => Repr::ListInt,
                 T::String => Repr::ListStr,
                 T::List(t) if matches!(t.as_ref(), T::String) => Repr::ListListStr,
-                T::Union(_) => match self.field_repr(element)? {
+                T::Class(_, _) | T::Union(_) => match self.field_repr(element)? {
                     Repr::Ptr(c) => Repr::ListPtr(c),
                     _ => return Err(no("list field element")),
                 },
@@ -201,16 +203,18 @@ impl Plan<'_> {
         // Runtime-produced exception descriptors are reserved. The runtime supports
         // wildcard panic exclusion and user-defined typed catches; never emit a
         // second, incompatible layout/tag for a builtin exception class.
-        if self.program.packages.iter().any(|package| {
-            package.name == "baml"
-                && package
-                    .objects
-                    .contains(&u32::try_from(object).expect("object index"))
-        }) && (class.path.to_string().starts_with("panics.")
-            || matches!(
-                class.path.to_string().as_str(),
-                "json.ParseError" | "json.DecodeError"
-            ))
+        if super::builtin_classes::reserved(self, object).is_none()
+            && self.program.packages.iter().any(|package| {
+                package.name == "baml"
+                    && package
+                        .objects
+                        .contains(&u32::try_from(object).expect("object index"))
+            })
+            && (class.path.to_string().starts_with("panics.")
+                || matches!(
+                    class.path.to_string().as_str(),
+                    "json.ParseError" | "json.DecodeError"
+                ))
         {
             return Err(no("typed builtin exception class"));
         }
@@ -270,16 +274,23 @@ impl Plan<'_> {
 
 pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     let program = plan.program;
+    let mut next = rt_descriptors();
     let descriptors: BTreeMap<_, _> = plan
         .layouts
         .keys()
-        .enumerate()
-        .map(|(i, c)| (*c, i + rt_descriptors()))
+        .map(|&c| {
+            let desc = super::builtin_classes::reserved(plan, c).unwrap_or_else(|| {
+                let d = next;
+                next += 1;
+                d
+            });
+            (c, desc)
+        })
         .collect();
     let lists: BTreeMap<_, _> = plan
         .lists
         .iter()
-        .scan(descriptors.len() + rt_descriptors(), |next, r| {
+        .scan(next, |next, r| {
             let id = *next;
             *next += if *r == Repr::MapStrInt {
                 3
@@ -303,9 +314,12 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             }
         })
         .max()
-        .unwrap_or(rt_descriptors() + descriptors.len());
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,\n");
+        .unwrap_or(next);
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::ARGUMENT_DESC,rt::SCALAR_PARSE_DESC,rt::HOST_UNAVAILABLE_DESC,rt::IO_DESC,\n");
     for (&object, layout) in &plan.layouts {
+        if super::builtin_classes::reserved(plan, object).is_some() {
+            continue;
+        }
         let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
         else {
             unreachable!()
@@ -337,6 +351,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                         Repr::Dyn(i) => after_lists + i + 4,
                         Repr::Str => 3,
                         Repr::Int => 0,
+                        Repr::Float => u32::MAX as usize - 1,
                         Repr::Bool => 1,
                         Repr::Iter | Repr::Naming | Repr::Null | Repr::Type(_) =>
                             unreachable!("null/type fields are rejected"),
@@ -409,5 +424,5 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    10
+    14
 }

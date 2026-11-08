@@ -61,6 +61,7 @@ struct ProgramEmission<'a, 'db> {
 
 mod admission;
 mod body;
+mod builtin_classes;
 mod builtins;
 mod capture_codegen;
 mod closures;
@@ -71,10 +72,13 @@ mod driver;
 mod errors;
 mod expressions;
 mod host;
+mod io;
 mod json;
 mod layout;
+mod logging;
 mod places;
 mod repr;
+mod scalars;
 mod statements;
 mod telemetry;
 
