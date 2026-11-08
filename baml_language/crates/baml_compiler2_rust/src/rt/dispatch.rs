@@ -124,7 +124,7 @@ impl Emitter<'_, '_> {
                         .all
                         .get(&callee)
                         .ok_or_else(|| no("dispatch body missing"))?;
-                    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+                    let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
                         return Err(no("non-bytecode dispatch body"));
                     };
                     let mut values: Vec<_> = reps

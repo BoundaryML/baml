@@ -18,6 +18,7 @@ impl Emitter<'_, '_> {
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
         match repr {
             Repr::Int => Ok(0),
+            Repr::Float => Ok(u32::MAX as usize - 1),
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
@@ -26,7 +27,8 @@ impl Emitter<'_, '_> {
             | Repr::ListStr
             | Repr::ListListStr
             | Repr::ListPtr(_)
-            | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
+            | Repr::MapStrInt
+            | Repr::Map(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
     }
@@ -51,14 +53,21 @@ impl Emitter<'_, '_> {
             } else {
                 tag.to_string()
             };
+            let payload = if source == Repr::Float {
+                "v.to_bits()"
+            } else {
+                "v as u64"
+            };
             return Ok(format!(
-                "{{let v={value};rt::Dyn{{tag:{test},payload:v as u64}}}}"
+                "{{let v={value};rt::Dyn{{tag:{test},payload:{payload}}}}}"
             ));
         }
         if source == Repr::Tagged {
             let tag = self.tag(target)?;
             let bits = self.fallible(&format!("rt::untag({value},{tag},{})", target.pointer()));
-            return Ok(if target == Repr::Bool {
+            return Ok(if target == Repr::Float {
+                format!("f64::from_bits({bits})")
+            } else if target == Repr::Bool {
                 format!("({bits}!=0)")
             } else {
                 format!("({bits} as {})", target.rust())
@@ -80,6 +89,9 @@ impl Emitter<'_, '_> {
         Err(no(format!("conversion {source:?} to {target:?}")))
     }
     pub(super) fn place(&self, p: &Place) -> Gen<(String, Repr)> {
+        if let Some(result) = self.map_place(p) {
+            return result;
+        }
         match p {
             Place::Local(l) => Ok((format!("l{}", l.0), self.local(l.0)?)),
             Place::Field { base, field } => {
@@ -147,6 +159,24 @@ impl Emitter<'_, '_> {
     pub(super) fn operand(&self, o: &Operand<'_>) -> Gen<(String, Repr)> {
         match o {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
+            Operand::Constant(Constant::GlobalItem(binding)) => {
+                let slot = self
+                    .plan
+                    .index
+                    .let_slot(self.db, *binding)
+                    .ok_or_else(|| no("unlinked global"))?;
+                let repr = *self
+                    .plan
+                    .globals
+                    .get(&slot)
+                    .ok_or_else(|| no("unplanned global"))?;
+                let name = baml_compiler2_mir::global_display_name(self.db, *binding);
+                let value = self.fallible(&format!("rt::globals::load_named({slot},{name:?})"));
+                Ok((self.coerce((value, Repr::Tagged), repr)?, repr))
+            }
+            Operand::Constant(Constant::Float(f)) => {
+                Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
+            }
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => Ok((
@@ -168,6 +198,9 @@ impl Emitter<'_, '_> {
         }
     }
     pub(super) fn assign(&self, p: &Place, value: (String, Repr)) -> Gen<String> {
+        if let Some(result) = self.map_assign(p, value.clone()) {
+            return result;
+        }
         let (dst, repr) = self.place(p)?;
         let src = self.coerce(value, repr)?;
         match p {

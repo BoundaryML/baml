@@ -424,6 +424,30 @@ fn pack_result<'a>(
 #[ignore = "builds generated Rust crates with cargo"]
 #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
 fn rust_differential() {
+    // Narrow backend runs retain the bytecode oracle and the same comparison
+    // logic as the full matrix, avoiding unnecessary legacy builds locally.
+    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok();
+    if let Some(selected) = &selected {
+        for name in selected.split(',') {
+            assert!(
+                BACKENDS.iter().any(|b| b.name == name),
+                "unknown backend: {name}"
+            );
+        }
+    }
+    let backends: Vec<_> = BACKENDS
+        .iter()
+        .filter(|b| {
+            b.name == "bytecode"
+                || selected
+                    .as_ref()
+                    .is_none_or(|s| s.split(',').any(|n| n == b.name))
+        })
+        .collect();
+    assert!(
+        backends.iter().any(|b| b.artifact_key == "rt"),
+        "backend selection must include rt or rt-gc-stress for the coverage report"
+    );
     let timeout = std::env::var("BAML_RUST_DIFF_TIMEOUT_SECS")
         .map(|v| v.parse::<u64>().expect("timeout must be seconds"))
         .unwrap_or(120);
@@ -452,7 +476,7 @@ fn rust_differential() {
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
-    for backend in BACKENDS {
+    for backend in &backends {
         artifacts.entry(backend.artifact_key).or_insert_with(|| {
             (backend.build)(
                 &build.join(backend.artifact_key),
@@ -462,7 +486,7 @@ fn rust_differential() {
             )
         });
     }
-    let reference = BACKENDS
+    let reference = backends
         .iter()
         .position(|b| b.name == "bytecode")
         .expect("bytecode reference");
@@ -490,7 +514,7 @@ fn rust_differential() {
             }
             let mut outputs = Vec::new();
             let mut traces = Vec::new();
-            for backend in BACKENDS {
+            for backend in &backends {
                 if backend.artifact_key == "rt"
                     && (!rt::supports_level(level) || artifacts["rt"][&probe].is_err())
                 {
@@ -612,7 +636,7 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
-            for (index, backend) in BACKENDS.iter().enumerate() {
+            for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;
                 }

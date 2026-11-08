@@ -9,14 +9,28 @@ use baml_compiler2_hir::{
     package::world_files,
 };
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, Constant, Db, MirFunction, MirFunctionBody, MirFunctionKind, Operand,
-    OptLevel, Place, RuntimeTy, Rvalue, StatementKind, Terminator, UnaryOp, lower_function,
+    AggregateKind, BinOp, Constant, Db, MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place,
+    RuntimeTy, Rvalue, StatementKind, Terminator, UnaryOp, lower_function,
 };
 use bex_vm_types::{Object, Program};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
 
 type Gen<T> = Result<T, String>;
+struct MirFunction<'db> {
+    arity: usize,
+    kind: std::borrow::Cow<'db, MirFunctionKind<'db>>,
+    lambdas: std::borrow::Cow<'db, [baml_compiler2_mir::MirFunction<'db>]>,
+}
+impl<'db> From<&'db baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
+    fn from(mir: &'db baml_compiler2_mir::MirFunction<'db>) -> Self {
+        Self {
+            arity: mir.arity,
+            kind: std::borrow::Cow::Borrowed(&mir.kind),
+            lambdas: std::borrow::Cow::Borrowed(&mir.lambdas),
+        }
+    }
+}
 struct Layout {
     fields: Vec<Repr>,
     offsets: Vec<usize>,
@@ -30,7 +44,12 @@ struct Plan<'a> {
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
+    map_types: std::cell::RefCell<Vec<(Repr, Repr, String, String)>>,
     json_types: Vec<Vec<usize>>,
+    json_maps: BTreeMap<Repr, RuntimeTy>,
+    map_stringify: bool,
+    globals: BTreeMap<usize, Repr>,
+    init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -39,7 +58,7 @@ struct Emitter<'a, 'db> {
     object: usize,
     descriptors: &'a BTreeMap<usize, usize>,
     lists: &'a BTreeMap<Repr, usize>,
-    all: &'a BTreeMap<usize, &'db MirFunction<'db>>,
+    all: &'a BTreeMap<usize, MirFunction<'db>>,
     iters: BTreeSet<usize>,
     iter_arrays: BTreeMap<usize, usize>,
     arity: usize,
@@ -55,7 +74,7 @@ struct Emitter<'a, 'db> {
 struct ProgramEmission<'a, 'db> {
     db: &'db dyn Db,
     plan: &'a Plan<'a>,
-    all: &'a BTreeMap<usize, &'db MirFunction<'db>>,
+    all: &'a BTreeMap<usize, MirFunction<'db>>,
     descriptors: &'a BTreeMap<usize, usize>,
 }
 
@@ -86,6 +105,8 @@ pub use driver::compile_rt;
 
 mod calls;
 mod globals;
+mod map_json;
+mod maps;
 mod registry;
 mod strings;
 mod tasks;

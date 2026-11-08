@@ -141,7 +141,7 @@ fn check(value: &Value, schema: &Schema) -> Result<(), Report> {
     }
     Ok(())
 }
-fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<Error> {
+pub(crate) fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<Error> {
     fn build(cx: &mut Cx, message: &str, path: Option<&str>) -> R<usize> {
         let msg = cx.string(message)?;
         let path = path.map(|p| cx.string(p)).transpose()?;

@@ -33,6 +33,7 @@ pub(super) fn emit(
         "baml.json.ParseError",
         "baml.json.DecodeError",
         "baml.panics.DivisionByZero",
+        "baml.panics.MapKeyNotFound",
     ]
     .map(named)
     .into_iter()
@@ -68,6 +69,17 @@ pub(super) fn emit(
         } else if let Some((&repr, _)) = lists.iter().find(|(_, index)| **index == desc) {
             if repr == Repr::MapStrInt {
                 "MapStringInt".to_owned()
+            } else if matches!(repr, Repr::Map(_)) {
+                let (key, value) = plan.map_parts(repr)?;
+                let key_slot = maps::slot_type(key, descriptors, lists)?;
+                let value_slot = maps::slot_type(value, descriptors, lists)?;
+                let map = format!("rt::maps::Map::<{key_slot},{value_slot}>");
+                let (key_ty, value_ty) = map_types(plan, repr)?;
+                let key_dyn = capture_dyn(key, "key", descriptors, lists)?;
+                let value_dyn = capture_dyn(value, "value", descriptors, lists)?;
+                format!(
+                    "Map{{key:&{key_ty},value:&{value_ty},len:|p|unsafe{{{map}::from_raw(p).len()}},entry:|p,i|unsafe{{let (key,value)={map}::from_raw(p).entry(i).unwrap();({key_dyn},{value_dyn})}}}}"
+                )
             } else {
                 let element = Emitter::element(repr)?;
                 let (tag, ty) = match element {
@@ -118,4 +130,114 @@ fn emit_group(
         .join(",");
     writeln!(out,"fn CAPTURE_G{index}()->std::sync::Arc<rt::telemetry::types::DefinitionBlob>{{static VALUE:std::sync::OnceLock<std::sync::Arc<rt::telemetry::types::DefinitionBlob>>=std::sync::OnceLock::new();VALUE.get_or_init(||std::sync::Arc::new(rt::telemetry::types::DefinitionBlob::new({:?},vec!{:?}.into_boxed_slice(),vec![{children}].into_boxed_slice()))).clone()}}",group.id(),group.bytes()).unwrap();
     index
+}
+
+pub(super) fn capture_type(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
+    let prefix = "rt::telemetry::capture::Type::";
+    Ok(match repr {
+        Repr::Int => format!("{prefix}Int"),
+        Repr::Float => format!("{prefix}Float"),
+        Repr::Bool => format!("{prefix}Bool"),
+        Repr::Str => format!("{prefix}String"),
+        Repr::Null => format!("{prefix}Null"),
+        Repr::Tagged | Repr::Dyn(_) => format!("{prefix}Unknown"),
+        Repr::Ptr(c) => format!("{prefix}Class(CAPTURE_D{c})"),
+        Repr::Map(_) | Repr::MapStrInt => {
+            let (key, value) = map_types(plan, repr)?;
+            format!("{prefix}Map(&{key},&{value})")
+        }
+        other => format!(
+            "{prefix}List(&{})",
+            capture_type(plan, Emitter::element(other)?)?
+        ),
+    })
+}
+pub(super) fn capture_dyn(
+    repr: Repr,
+    value: &str,
+    descriptors: &BTreeMap<usize, usize>,
+    lists: &BTreeMap<Repr, usize>,
+) -> Gen<String> {
+    if matches!(repr, Repr::Tagged | Repr::Dyn(_)) {
+        return Ok(value.to_owned());
+    }
+    let (tag, raw) = match repr {
+        Repr::Float => {
+            return Ok(format!(
+                "rt::Dyn{{tag:rt::FLOAT_TAG,payload:({value}).to_bits()}}"
+            ));
+        }
+        Repr::Int => (0, value.to_owned()),
+        Repr::Bool => (1, value.to_owned()),
+        Repr::Null => (2, "0usize".into()),
+        Repr::Str => (3, format!("{value}.as_raw()")),
+        Repr::Ptr(c) => (descriptors[&c] + 3, format!("{value}.as_raw()")),
+        r if r.pointer() => (lists[&r] + 3, format!("{value}.as_raw()")),
+        _ => return Err(no("map capture slot")),
+    };
+    Ok(format!("rt::Dyn{{tag:{tag},payload:({raw}) as u64}}"))
+}
+
+fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
+    if let Repr::Map(id) = repr {
+        let types = plan.map_types.borrow();
+        Ok((types[id].2.clone(), types[id].3.clone()))
+    } else {
+        let (key, value) = plan.map_parts(repr)?;
+        Ok((capture_type(plan, key)?, capture_type(plan, value)?))
+    }
+}
+/// Preserve declared map types: equal storage layouts can have different
+/// nullable/union element types in the recorder's canonical value encoding.
+pub(super) fn declared_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
+    match ty {
+        RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
+        RuntimeTy::Union(members) => {
+            let members = members
+                .iter()
+                .map(|m| declared_type(plan, m))
+                .collect::<Gen<Vec<_>>>()?
+                .join(",");
+            Ok(format!("rt::telemetry::capture::Type::Union(&[{members}])"))
+        }
+        RuntimeTy::List(element) => Ok(format!(
+            "rt::telemetry::capture::Type::List(&{})",
+            declared_type(plan, element)?
+        )),
+        _ => capture_type(plan, plan.repr(ty)?),
+    }
+}
+pub(super) fn declared_field_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
+    match ty {
+        bex_vm_types::RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
+        bex_vm_types::RuntimeTy::Union(members) => {
+            let members = members
+                .iter()
+                .map(|m| declared_field_type(plan, m))
+                .collect::<Gen<Vec<_>>>()?
+                .join(",");
+            Ok(format!("rt::telemetry::capture::Type::Union(&[{members}])"))
+        }
+        bex_vm_types::RuntimeTy::List(element) => Ok(format!(
+            "rt::telemetry::capture::Type::List(&{})",
+            declared_field_type(plan, element)?
+        )),
+        _ => capture_type(plan, plan.field_repr(ty)?),
+    }
+}
+
+fn literal_type(literal: &baml_type::Literal, freshness: baml_type::Freshness) -> Gen<String> {
+    let fresh = freshness == baml_type::Freshness::Fresh;
+    Ok(match literal {
+        baml_type::Literal::Int(value) => {
+            format!("rt::telemetry::capture::Type::IntLiteral({value},{fresh})")
+        }
+        baml_type::Literal::Bool(value) => {
+            format!("rt::telemetry::capture::Type::BoolLiteral({value},{fresh})")
+        }
+        baml_type::Literal::String(value) => {
+            format!("rt::telemetry::capture::Type::StringLiteral({value:?},{fresh})")
+        }
+        _ => return Err(no("map literal type")),
+    })
 }

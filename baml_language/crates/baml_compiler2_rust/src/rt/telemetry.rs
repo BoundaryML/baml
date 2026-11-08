@@ -115,7 +115,7 @@ pub(super) fn emit(
     let (stringify, aliased) = host;
     // The pack host formats an integer through stringify and _aliased(Declared).
     // Preserve these logical calls in the typed host specialization too.
-    let MirFunctionKind::Bytecode(host_body) = &all[&stringify].kind else {
+    let MirFunctionKind::Bytecode(host_body) = all[&stringify].kind.as_ref() else {
         return Err(no("host stringify body"));
     };
     let alias_block = host_body
@@ -137,9 +137,17 @@ pub(super) fn emit(
         .borrow_mut()
         .extend([(None, 0, stringify), (Some(stringify), alias_pc, aliased)]);
     let mut observed = reached.clone();
+    for (chain, _) in &plan.init_chains {
+        observed.insert(*chain);
+        writeln!(
+            out,
+            "static O{chain}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);"
+        )
+        .unwrap();
+    }
     if let Some(decode) = json_decode {
         observed.insert(decode);
-        let MirFunctionKind::Bytecode(body) = &all[&decode].kind else {
+        let MirFunctionKind::Bytecode(body) = all[&decode].kind.as_ref() else {
             unreachable!()
         };
         let block = body
@@ -196,8 +204,8 @@ pub(super) fn emit(
         let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
         let metadata = telemetry_metadata_source(&metadata);
         let hidden = info.trace_passthrough
-            || matches!(&all[&id].kind,
-            MirFunctionKind::Bytecode(body) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
+            || matches!(all.get(&id).map(|m| m.kind.as_ref()),
+            Some(MirFunctionKind::Bytecode(body)) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
                 StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
 
         writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();

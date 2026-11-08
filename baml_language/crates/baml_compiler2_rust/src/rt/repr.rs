@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Repr {
     Int,
+    Float,
     Bool,
     Str,
     Ptr(usize),
@@ -14,6 +15,7 @@ pub(super) enum Repr {
     Dyn(usize),
     Tagged,
     MapStrInt,
+    Map(usize),
     Iter,
     Naming,
     Null,
@@ -22,6 +24,7 @@ impl Repr {
     pub(super) fn rust(self) -> &'static str {
         match self {
             Self::Int => "i64",
+            Self::Float => "f64",
             Self::Bool => "bool",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn",
             _ => "usize",
@@ -30,6 +33,7 @@ impl Repr {
     pub(super) fn zero(self) -> &'static str {
         match self {
             Self::Bool => "false",
+            Self::Float => "0.0",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn{tag:2,payload:0}",
             _ => "0",
         }
@@ -54,6 +58,7 @@ impl Repr {
                 | Self::ListStr
                 | Self::ListListStr
                 | Self::MapStrInt
+                | Self::Map(_)
         )
     }
 }

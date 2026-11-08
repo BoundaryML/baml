@@ -1,11 +1,11 @@
 use super::{
-    BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, Rvalue,
-    SourceRoot, StatementKind, Terminator, VecDeque, file_functions, file_lets,
-    is_required_interface_method, lower_function, no, registry, world_files,
+    BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, SourceRoot,
+    Terminator, VecDeque, file_functions, is_required_interface_method, lower_function, no,
+    registry, world_files,
 };
 
 pub(super) struct Admitted<'db> {
-    pub all: BTreeMap<usize, &'db MirFunction<'db>>,
+    pub all: BTreeMap<usize, MirFunction<'db>>,
     pub reached: BTreeSet<usize>,
     pub calls: BTreeMap<usize, BTreeSet<usize>>,
     pub builtins: BTreeSet<String>,
@@ -19,11 +19,8 @@ pub(super) fn collect<'db>(
     plan: &mut Plan<'_>,
 ) -> Gen<Admitted<'db>> {
     let mut all = BTreeMap::new();
+    let initializer_roots = super::globals::prepare(db, root, opt, plan, &mut all)?;
     for &file in world_files(db, root) {
-        registry::admit(registry::Admission::Initializers(
-            file.source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib
-                && !file_lets(db, file).is_empty(),
-        ))?;
         for &f in file_functions(db, file) {
             if is_required_interface_method(db, f) {
                 continue;
@@ -32,11 +29,12 @@ pub(super) fn collect<'db>(
                 .as_ref()
                 .map_err(|e| no(format!("MIR: {e:?}")))?;
             if let Some(object) = plan.index.declared(db, f) {
-                all.insert(object, mir);
+                all.insert(object, MirFunction::from(mir));
             }
         }
     }
     let mut queue = VecDeque::from([entry]);
+    queue.extend(initializer_roots);
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
@@ -49,7 +47,7 @@ pub(super) fn collect<'db>(
         let mir = all
             .get(&object)
             .ok_or_else(|| no(format!("missing MIR for {}", plan.index.display(object))))?;
-        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
             return Err(no(plan.index.display(object)));
         };
         registry::admit(registry::Admission::Function(mir))?;
@@ -58,25 +56,8 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
-
-            if let StatementKind::Assign {
-                value:
-                    Rvalue::LoadType(
-                        ty @ (baml_compiler2_mir::TyTemplate::Union(_)
-                        | baml_compiler2_mir::TyTemplate::Class(..)),
-                    ),
-                ..
-            } = &statement.kind
-            {
-                let classes = plan.json_class_types(ty)?;
-                for &c in &classes {
-                    plan.add(c)?;
-                }
-                if !plan.json_types.contains(&classes) {
-                    plan.json_types.push(classes);
-                }
-            }
         }
+        super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
             registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;
@@ -125,8 +106,8 @@ pub(super) fn collect<'db>(
             }
         }
     }
-    let mir = all[&entry];
-    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+    let mir = &all[&entry];
+    let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
         unreachable!()
     };
     if mir.arity != 0 || plan.repr(&body.locals[0].ty)? != Repr::Int {

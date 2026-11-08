@@ -822,7 +822,6 @@ fn rt_trees_and_fail_closed_admission() {
     for source in [
         "function main() -> string { \"hello\" }",
         "function main() -> int { let a = [[1], [2]]; a[0][0] }",
-        "const X = 1; function main() -> int { X }",
     ] {
         assert!(
             emit(source).unwrap_err().contains("unsupported in baml_rt"),
@@ -938,11 +937,11 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
-            false,
+            true,
         ),
         (
             "function main() -> int { let m: map<string,string> = {}; m[\"a\"] = \"b\"; 0 }",
-            false,
+            true,
         ),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("agent.baml", source)]);
@@ -1008,15 +1007,20 @@ fn rt_source_bytes_and_diagnostics() {
             OptLevel::Two,
             entry,
         );
+        if name == "initializer" {
+            let source = result.unwrap();
+            assert!(source.contains("rt::globals::begin("));
+            assert!(source.contains("rt::globals::load"));
+            continue;
+        }
         let expected = match name {
-            "trees" => "8e454ff27beebede04824c7259b943f7c6c9ade3cf87c9c690e1e24c4268385e",
-            "richards" => "51ded3f4ec2fd0b0dfe1566149179f7dca4d888bf9bfbb0f2e3d38cfde57f56d",
-            "agent" => "b9fcb2efc8730021c760cd7b6ac0e27083d5d1cf66583d871802c360120276a7",
+            "trees" => "1e7215998e631c3832cfb40c9b086b4f1c24220456e190bd22d48d17b1166c0a",
+            "richards" => "d9c69f8402633213ae73ea5065c1b5fc22d1ae91c21a0a0f17817d8aa5030a24",
+            "agent" => "3a68db5d35b9ba7bb7a9ec7b14d2b15bbbd10c6216ee25d4d830f9fb47f5bea1",
             _ => "",
         };
         if expected.is_empty() {
             let expected = match name {
-                "initializer" => "unsupported in baml_rt: top-level initializers",
                 "entry" => "unsupported in baml_rt: entry must have no parameters and return int",
                 "nested_list" => "unsupported in baml_rt: list element",
                 "hook" => "unsupported in baml_rt: declaration hooks",
@@ -1031,5 +1035,57 @@ fn rt_source_bytes_and_diagnostics() {
                 "{name}: generated source changed"
             );
         }
+    }
+}
+
+#[test]
+fn rt_initializer_dependency_order_and_generic_maps() {
+    for source in [
+        "function main()->int { let m:map<string?,int> = {}; m[null]=1; m[\"key\"]=2; m[null]+m[\"key\"] }",
+        "const SECOND = FIRST + 1; const FIRST = 41; function main() -> int { SECOND }",
+        "const M: map<string,int> = {\"a\":1,\"b\":2}; function main() -> int { M.set(\"a\",3); M[\"a\"] + M.length() }",
+        "class Box { m: map<int,string> } function main() -> int { let b=Box{m:{1:\"a\",2:\"b\"}}; b.m[1]=\"c\"; b.m.delete(2); b.m.length() }",
+        "function main() -> int { let m: map<string,int?> = {\"null\":null,\"some\":7}; if(m.has(\"null\")){m.get(\"some\") ?? 0}else{99} }",
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("maps_globals.baml", source)]);
+        for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+            let program = lower(&db, opt);
+            let (entry, _) = user_functions(&program)
+                .find(|(_, f)| f.name() == "main")
+                .unwrap();
+            let emitted = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap_or_else(|e| panic!("{source} at {opt:?}: {e}"));
+            assert!(!emitted.contains("BexVm"));
+            syn::parse_file(&emitted).unwrap_or_else(|e| panic!("{source}: {e}"));
+        }
+    }
+}
+
+#[test]
+fn rt_structural_union_map_keys_fail_closed() {
+    for (source, expected) in [(
+        "class Key { x: int } function main()->int { let m:map<Key?,int> = {}; m[null]=1; m.length() }",
+        "map key callbacks",
+    )] {
+        let db = baml_test_support::setup_multi_file_db(&[("admission.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let result = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        assert_eq!(
+            result.unwrap_err(),
+            format!("unsupported in baml_rt: {expected}")
+        );
     }
 }

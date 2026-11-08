@@ -2,6 +2,7 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod globals;
 pub mod json;
 pub mod language;
 pub mod lists;
@@ -23,6 +24,11 @@ impl RootSource for Roots<'_> {
     }
     fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
         self.0.with_roots(|roots| roots.precise_roots(visit));
+        globals::CURRENT.with(|current| {
+            if !current.get().is_null() {
+                unsafe { (&*current.get()).roots(visit) };
+            }
+        });
     }
 }
 
@@ -117,6 +123,7 @@ unsafe fn safepoint_slow() -> Result<(), baml_rt_tasks::Err> {
 /// A reusable, single-owner program instance. Heap capacity survives jobs.
 pub struct Instance {
     heap: Heap,
+    globals: globals::Globals,
     tasks: TaskLoop,
     _io: tokio::runtime::Runtime,
 }
@@ -153,6 +160,7 @@ impl Instance {
         heap.bind_poll_word(tasks.integration_roots().poll_word());
         Self {
             heap,
+            globals: globals::Globals::new(pointer_types),
             tasks,
             _io: io,
         }
@@ -185,6 +193,7 @@ impl Instance {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;
+        let globals = &self.globals as *const globals::Globals;
         let roots = self.tasks.integration_roots();
         let future = self.tasks.spawn(move |cx| {
             struct Binding(
@@ -193,6 +202,7 @@ impl Instance {
                 *const baml_rt_tasks::IntegrationRoots,
                 usize,
                 *const Cell<u8>,
+                *const globals::Globals,
             );
             impl Drop for Binding {
                 fn drop(&mut self) {
@@ -201,8 +211,10 @@ impl Instance {
                     ROOTS.set(self.2);
                     STACK_LIMIT.set(self.3);
                     POLL_WORD.set(self.4);
+                    globals::CURRENT.set(self.5);
                 }
             }
+            let previous_globals = globals::CURRENT.replace(globals);
             let previous_heap = HEAP.replace(heap);
             // Erase the borrowed task lifetime only inside this scoped binding.
             let current: *mut TaskCx<'_> = cx;
@@ -217,6 +229,7 @@ impl Instance {
                 previous_roots,
                 previous_limit,
                 previous_poll,
+                previous_globals,
             );
             *output.borrow_mut() = Some(entry());
             Ok(Value::int(0))

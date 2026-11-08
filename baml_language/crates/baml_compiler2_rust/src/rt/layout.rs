@@ -17,6 +17,10 @@ impl Plan<'_> {
             for member in members {
                 self.record_ty(member)?;
             }
+        } else if let RuntimeTy::Map { key, value } = ty {
+            self.record_ty(key)?;
+            self.record_ty(value)?;
+            self.record(self.repr(ty)?)?;
         } else if !matches!(ty, RuntimeTy::Function { .. }) {
             self.record(self.repr(ty)?)?;
         }
@@ -27,6 +31,10 @@ impl Plan<'_> {
             for member in members {
                 self.record_field_ty(member)?;
             }
+        } else if let bex_vm_types::RuntimeTy::Map { key, value } = ty {
+            self.record_field_ty(key)?;
+            self.record_field_ty(value)?;
+            self.record(self.field_repr(ty)?)?;
         } else {
             self.record(self.field_repr(ty)?)?;
         }
@@ -38,6 +46,20 @@ impl Plan<'_> {
             Repr::ListPtr(c) => {
                 self.lists.insert(repr);
                 self.add(c)?;
+            }
+            Repr::Map(_) => {
+                self.lists.insert(repr);
+                let (key, value) = self.map_parts(repr)?;
+                self.record(key)?;
+                self.record(value)?;
+                for element in [key, value] {
+                    if let Repr::Ptr(c) = element {
+                        self.record(Repr::ListPtr(c))?;
+                    }
+                    if element == Repr::ListStr {
+                        self.record(Repr::ListListStr)?;
+                    }
+                }
             }
             Repr::MapStrInt => {
                 self.lists.insert(repr);
@@ -63,15 +85,27 @@ impl Plan<'_> {
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
+            RuntimeTy::Float => Repr::Float,
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown => Repr::Tagged,
-            RuntimeTy::Map { key, value }
-                if matches!(key.as_ref(), RuntimeTy::String)
-                    && matches!(value.as_ref(), RuntimeTy::Int) =>
-            {
-                Repr::MapStrInt
+            RuntimeTy::Map { key, value } => {
+                if matches!(key.as_ref(), RuntimeTy::Union(m) if !m.iter().all(scalar_key))
+                    || matches!(key.as_ref(), RuntimeTy::Unknown)
+                {
+                    return Err(no("map key callbacks"));
+                }
+                self.map_repr(
+                    if matches!(key.as_ref(), RuntimeTy::Union(_)) {
+                        Repr::Tagged
+                    } else {
+                        self.repr(key)?
+                    },
+                    self.repr(value)?,
+                    capture_codegen::declared_type(self, key)?,
+                    capture_codegen::declared_type(self, value)?,
+                )
             }
             RuntimeTy::Null => Repr::Null,
             RuntimeTy::List(element) => match element.as_ref() {
@@ -134,13 +168,27 @@ impl Plan<'_> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
             T::Null => Repr::Null,
+            T::Unknown => Repr::Tagged,
+            T::Float => Repr::Float,
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
-            T::Map { key, value }
-                if matches!(key.as_ref(), T::String) && matches!(value.as_ref(), T::Int) =>
-            {
-                Repr::MapStrInt
+            T::Map { key, value } => {
+                if matches!(key.as_ref(), T::Union(m) if !m.iter().all(scalar_field_key))
+                    || matches!(key.as_ref(), T::Unknown)
+                {
+                    return Err(no("map key callbacks"));
+                }
+                self.map_repr(
+                    if matches!(key.as_ref(), T::Union(_)) {
+                        Repr::Tagged
+                    } else {
+                        self.field_repr(key)?
+                    },
+                    self.field_repr(value)?,
+                    capture_codegen::declared_field_type(self, key)?,
+                    capture_codegen::declared_field_type(self, value)?,
+                )
             }
             T::List(element) => match element.as_ref() {
                 T::Int => Repr::ListInt,
@@ -281,8 +329,8 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         .iter()
         .scan(descriptors.len() + rt_descriptors(), |next, r| {
             let id = *next;
-            *next += if *r == Repr::MapStrInt {
-                3
+            *next += if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
+                4
             } else if r.growing() {
                 2
             } else {
@@ -294,8 +342,8 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     let after_lists = lists
         .iter()
         .map(|(repr, id)| {
-            id + if *repr == Repr::MapStrInt {
-                3
+            id + if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
+                4
             } else if repr.growing() {
                 2
             } else {
@@ -304,7 +352,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         })
         .max()
         .unwrap_or(rt_descriptors() + descriptors.len());
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::MAP_KEY_DESC,\n");
     for (&object, layout) in &plan.layouts {
         let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
         else {
@@ -332,11 +380,13 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                         | Repr::ListPtr(_)
                         | Repr::ListStr
                         | Repr::ListListStr
-                        | Repr::MapStrInt) => lists[&r] + 3,
+                        | Repr::MapStrInt
+                        | Repr::Map(_)) => lists[&r] + 3,
                         Repr::Tagged => after_lists + 3,
                         Repr::Dyn(i) => after_lists + i + 4,
                         Repr::Str => 3,
                         Repr::Int => 0,
+                        Repr::Float => u32::MAX as usize - 1,
                         Repr::Bool => 1,
                         Repr::Iter | Repr::Naming | Repr::Null | Repr::Type(_) =>
                             unreachable!("null/type fields are rejected"),
@@ -348,8 +398,21 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
+        if let Repr::Map(_) = repr {
+            let (key, value) = plan.map_parts(*repr)?;
+            let key = maps::slot_type(key, &descriptors, &lists)?;
+            let value = maps::slot_type(value, &descriptors, &lists)?;
+            for i in 0..4 {
+                writeln!(
+                    out,
+                    "rt::maps::typed_descriptors::<{key},{value}>({desc})[{i}],"
+                )
+                .unwrap();
+            }
+            continue;
+        }
         if *repr == Repr::MapStrInt {
-            for i in 0..3 {
+            for i in 0..4 {
                 writeln!(&mut out, "rt::maps::descriptors({desc})[{i}],").unwrap();
             }
             continue;
@@ -409,5 +472,24 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    10
+    11
+}
+
+fn scalar_key(ty: &RuntimeTy) -> bool {
+    matches!(
+        ty,
+        RuntimeTy::Int
+            | RuntimeTy::Bool
+            | RuntimeTy::Float
+            | RuntimeTy::Null
+            | RuntimeTy::String
+            | RuntimeTy::Literal(_, _)
+    )
+}
+fn scalar_field_key(ty: &bex_vm_types::RuntimeTy) -> bool {
+    use bex_vm_types::RuntimeTy as T;
+    matches!(
+        ty,
+        T::Int | T::Bool | T::Float | T::Null | T::String | T::Literal(_, _)
+    )
 }
