@@ -451,6 +451,71 @@ pub struct EncodeField {
     pub tag: u64,
     pub tagged: bool,
 }
+// Error paths borrow the active recursion stack. Materialize them only when
+// serialization fails, rather than allocating a String for every visited field.
+enum Path<'a> {
+    Root,
+    Field(&'a Path<'a>, &'a str),
+    Index(&'a Path<'a>, usize),
+    Key(&'a Path<'a>, &'a str),
+}
+impl Path<'_> {
+    fn append(&self, out: &mut String) {
+        match self {
+            Self::Root => {}
+            Self::Field(parent, name) => {
+                parent.append(out);
+                write!(out, ".{name}").expect("String write");
+            }
+            Self::Index(parent, index) => {
+                parent.append(out);
+                write!(out, "[{index}]").expect("String write");
+            }
+            Self::Key(parent, name) => {
+                parent.append(out);
+                write!(out, "[{name:?}]").expect("String write");
+            }
+        }
+    }
+    fn render(&self) -> String {
+        let mut out = String::new();
+        self.append(&mut out);
+        out
+    }
+}
+
+// Match serde_json's UTF-8 escaping directly into the final buffer. ASCII
+// escapes are always character boundaries, so the untouched runs remain &str.
+fn write_string(out: &mut String, value: &str) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    out.push('"');
+    let mut start = 0;
+    for (i, byte) in value.bytes().enumerate() {
+        let escaped = match byte {
+            b'"' => "\\\"",
+            b'\\' => "\\\\",
+            b'\n' => "\\n",
+            b'\r' => "\\r",
+            b'\t' => "\\t",
+            8 => "\\b",
+            12 => "\\f",
+            0..=31 => "",
+            _ => continue,
+        };
+        out.push_str(&value[start..i]);
+        if escaped.is_empty() {
+            out.push_str("\\u00");
+            out.push(HEX[(byte >> 4) as usize] as char);
+            out.push(HEX[(byte & 15) as usize] as char);
+        } else {
+            out.push_str(escaped);
+        }
+        start = i + 1;
+    }
+    out.push_str(&value[start..]);
+    out.push('"');
+}
+
 struct Encoder<'a> {
     shapes: &'static [Shape],
     cx: &'a mut Cx,
@@ -458,7 +523,7 @@ struct Encoder<'a> {
     omit_nulls: bool,
     indent: String,
     out: String,
-    ancestors: std::collections::BTreeSet<usize>,
+    ancestors: Vec<usize>,
 }
 impl Encoder<'_> {
     fn separator(&mut self, first: bool, depth: usize) {
@@ -475,7 +540,7 @@ impl Encoder<'_> {
             self.out.push_str(&self.indent);
         }
     }
-    unsafe fn value(&mut self, value: Dyn, path: &str, depth: usize) -> R<()> {
+    unsafe fn value(&mut self, value: Dyn, path: &Path<'_>, depth: usize) -> R<()> {
         let value = if value.payload == 0 && value.tag >= 3 && value.tag != u32::MAX as u64 {
             Dyn { tag: 2, payload: 0 }
         } else {
@@ -489,9 +554,7 @@ impl Encoder<'_> {
             2 => self.out.push_str("null"),
             3 => {
                 let text = unsafe { Str::from_raw(value.payload as usize) };
-                self.out.push_str(
-                    &serde_json::to_string(text.try_as_str(self.cx)?).expect("string JSON"),
-                );
+                write_string(&mut self.out, text.try_as_str(self.cx)?);
             }
             tag if tag == u32::MAX as u64 => {
                 let f = f64::from_bits(value.payload);
@@ -499,12 +562,11 @@ impl Encoder<'_> {
                     return Err(crate::list_errors::serialization(
                         self.cx,
                         format!("{f} has no JSON form: a JSON number is finite"),
-                        path,
+                        &path.render(),
                         "non_finite",
                     ));
                 }
-                self.out
-                    .push_str(&serde_json::to_string(&f).expect("finite float JSON"));
+                self.out.push_str(zmij::Buffer::new().format_finite(f));
             }
             tag => {
                 let pointer = value.payload as usize;
@@ -512,14 +574,15 @@ impl Encoder<'_> {
                     self.out.push_str("null");
                     return Ok(());
                 }
-                if !self.ancestors.insert(pointer) {
+                if self.ancestors.contains(&pointer) {
                     return Err(crate::list_errors::serialization(
                         self.cx,
                         "value contains itself, so it has no JSON form".into(),
-                        path,
+                        &path.render(),
                         "cycle",
                     ));
                 }
+                self.ancestors.push(pointer);
                 let shape = self
                     .shapes
                     .get((tag - 3) as usize)
@@ -542,17 +605,7 @@ impl Encoder<'_> {
                                     }
                                 }
                             };
-                            // Scalar leaves cannot fail except for a non-finite
-                            // float. Build an indexed error path only when the
-                            // value can actually need it.
-                            let scalar = matches!(value.tag, 0..=3)
-                                || (value.tag == crate::FLOAT_TAG
-                                    && f64::from_bits(value.payload).is_finite());
-                            if scalar {
-                                unsafe { self.value(value, "", depth + 1) }?;
-                            } else {
-                                unsafe { self.value(value, &format!("{path}[{i}]"), depth + 1) }?;
-                            }
+                            unsafe { self.value(value, &Path::Index(path, i), depth + 1) }?;
                             if i & 255 == 255 {
                                 self.cx.poll()?;
                             }
@@ -571,7 +624,7 @@ impl Encoder<'_> {
                             return Err(crate::list_errors::serialization(
                                 self.cx,
                                 "JSON requires maps with string keys".into(),
-                                path,
+                                &path.render(),
                                 "map_key",
                             ));
                         }
@@ -579,17 +632,16 @@ impl Encoder<'_> {
                         self.out.push('{');
                         for i in 0..len {
                             let (key, value) = unsafe { entry(pointer, i) };
-                            let key = unsafe { Str::from_raw(key.payload as usize) }
-                                .try_as_str(self.cx)?
-                                .to_owned();
+                            let read = unsafe { Cx::current() };
+                            let key =
+                                unsafe { Str::from_raw(key.payload as usize) }.try_as_str(&read)?;
                             self.separator(i == 0, depth + 1);
-                            self.out
-                                .push_str(&serde_json::to_string(&key).expect("key JSON"));
+                            write_string(&mut self.out, key);
                             self.out.push(':');
                             if !self.indent.is_empty() {
                                 self.out.push(' ');
                             }
-                            unsafe { self.value(value, &format!("{path}[{key:?}]"), depth + 1) }?;
+                            unsafe { self.value(value, &Path::Key(path, key), depth + 1) }?;
                             if i & 255 == 255 {
                                 self.cx.poll()?;
                             }
@@ -632,13 +684,12 @@ impl Encoder<'_> {
                             } else {
                                 field.name
                             };
-                            self.out
-                                .push_str(&serde_json::to_string(name).expect("key JSON"));
+                            write_string(&mut self.out, name);
                             self.out.push(':');
                             if !self.indent.is_empty() {
                                 self.out.push(' ');
                             }
-                            unsafe { self.value(value, &format!("{path}.{name}"), depth + 1) }?;
+                            unsafe { self.value(value, &Path::Field(path, name), depth + 1) }?;
                         }
                         if !first && !self.indent.is_empty() {
                             self.newline(depth);
@@ -649,12 +700,12 @@ impl Encoder<'_> {
                         return Err(crate::list_errors::serialization(
                             self.cx,
                             "value has no JSON form".into(),
-                            path,
+                            &path.render(),
                             "unserializable",
                         ));
                     }
                 }
-                self.ancestors.remove(&pointer);
+                self.ancestors.pop();
             }
         }
         Ok(())
@@ -715,9 +766,9 @@ pub unsafe fn stringify(
         omit_nulls,
         indent: indentation,
         out: String::new(),
-        ancestors: std::collections::BTreeSet::new(),
+        ancestors: Vec::new(),
     };
-    unsafe { encoder.value(value, "", 0) }?;
+    unsafe { encoder.value(value, &Path::Root, 0) }?;
     let result = encoder.out;
     encoder.cx.string(&result)
 }
@@ -727,6 +778,58 @@ mod tests {
     use super::*;
     use crate::{Instance, language::*, lists};
     use baml_rt_gc::{Descriptor, Field as GcField, Kind, SlotKind};
+
+    #[test]
+    fn string_escaping_matches_serde_json() {
+        let ascii: String = (0..=127).map(char::from).collect();
+        for value in [
+            "",
+            ascii.as_str(),
+            "é🙂\u{2028}\u{2029}中",
+            "a\"b\\c\n🙂\0z",
+        ] {
+            let mut out = String::from("prefix");
+            write_string(&mut out, value);
+            assert_eq!(
+                out,
+                format!("prefix{}", serde_json::to_string(value).unwrap())
+            );
+        }
+    }
+
+    #[test]
+    fn float_format_matches_serde_json() {
+        let mut bits = 0u64;
+        for value in [
+            0.0,
+            -0.0,
+            f64::MIN,
+            f64::MAX,
+            f64::MIN_POSITIVE,
+            f64::from_bits(1),
+        ]
+        .into_iter()
+        .chain((0..10_000).map(|_| {
+            bits = bits.wrapping_mul(6364136223846793005).wrapping_add(1);
+            f64::from_bits(bits)
+        }))
+        .filter(|value| value.is_finite())
+        {
+            assert_eq!(
+                zmij::Buffer::new().format_finite(value),
+                serde_json::to_string(&value).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn lazy_paths_preserve_field_index_and_quoted_map_keys() {
+        let root = Path::Root;
+        let field = Path::Field(&root, "items");
+        let index = Path::Index(&field, 12);
+        let key = Path::Key(&index, "a\"\n🙂");
+        assert_eq!(key.render(), format!(".items[12][{:?}]", "a\"\n🙂"));
+    }
     static DESCRIPTORS: &[Descriptor] = &[
         STRING_DESC,
         OVERFLOW_DESC,

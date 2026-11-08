@@ -346,7 +346,12 @@ function RuntimeListJsonMaps() -> int {
     let rows=baml.json.decode<RuntimeListJsonMapBox>("{\"values\":[{\"z\":2,\"a\":1.5},{\"tail\":-3}]}");
     let flags=baml.json.decode<map<string,bool>[]>("[{\"ok\":true}]");
     let nested=baml.json.decode<map<string,float[]>[]>("[{\"xs\":[1.5,2.5]}]");
-    if(baml.json.stringify(rows)=="{\"values\":[{\"z\":2,\"a\":1.5},{\"tail\":-3}]}" && flags[0]["ok"] && nested[0]["xs"][1]==2.5){1}else{-1}
+    let escaped:map<string,string>[]=[{"quote\"\n🙂":"\\\tλ"}];
+    if(baml.json.stringify(rows)=="{\"values\":[{\"z\":2,\"a\":1.5},{\"tail\":-3}]}" && flags[0]["ok"] && nested[0]["xs"][1]==2.5 && baml.json.stringify(escaped)=="[{\"quote\\\"\\n🙂\":\"\\\\\\tλ\"}]"){1}else{-1}
+}
+function RuntimeListJsonMapNonFinite() -> int {
+    let rows:map<string,float>[]=[{"quote\"\n🙂":1.0/0.0}];
+    baml.json.stringify(rows).length()
 }
 function RuntimeListJsonMapError() -> int {
     baml.json.decode<map<string,int>[]>("[{\"quote\\\"\":[1]}]").length()

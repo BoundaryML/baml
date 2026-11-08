@@ -32,6 +32,7 @@ const REQUIRED_LIST_COVERAGE: &[&str] = &[
     "RuntimeListSortBoolError",
     "RuntimeListPointerCallbacks",
     "RuntimeListJsonMaps",
+    "RuntimeListJsonMapNonFinite",
     "RuntimeListJsonMapError",
     "RuntimeListJsonMapKeyError",
     "RuntimeListJsonAliases",

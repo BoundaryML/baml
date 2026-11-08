@@ -1016,6 +1016,7 @@ dependencies = [
  "sys_regex",
  "tokio",
  "xxhash-rust",
+ "zmij",
 ]
 
 [[package]]

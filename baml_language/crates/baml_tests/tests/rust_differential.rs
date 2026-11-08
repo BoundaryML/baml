@@ -25,6 +25,7 @@ const PROBES: &[&str] = &[
     "RuntimeListSortBoolError",
     "RuntimeListPointerCallbacks",
     "RuntimeListJsonMaps",
+    "RuntimeListJsonMapNonFinite",
     "RuntimeListJsonMapError",
     "RuntimeListJsonMapKeyError",
     "RuntimeListJsonAliases",
