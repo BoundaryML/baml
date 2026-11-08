@@ -686,16 +686,16 @@ contexts:
       push: client--body
   client-value--body:
     - meta_scope: meta.client.baml
-    - match: '(?=[;}]|$)'
+    - match: '(?=;|^\s*(?:client|retry_policy|generator|template_string|class|enum|interface|implements|implement|function|testset|test|type)\b|^\s*(?:let|const)\b)'
       pop: true
     - include: comments
-    - include: assignment-operator
     - include: expression
   client-value:
-    - match: '^\s*(client)\s+(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(?==(?!=))'
+    - match: '^\s*(client)\s+(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(=)(?!=)'
       captures:
         1: keyword.declaration.client.baml
         2: entity.name.client.baml
+        3: keyword.operator.assignment.baml
       push: client-value--body
   code-block--body:
     - meta_scope: meta.block.code.baml

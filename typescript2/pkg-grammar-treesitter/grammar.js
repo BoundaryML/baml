@@ -890,14 +890,15 @@ module.exports = grammar({
         ),
       ),
 
-    // `Extract@spec(raw)`, `Extract@parse(reply)`: a function's companion.
-    // The real parser accepts exactly these names, with no newline before `@`.
+    // `Extract@spec(raw)`, `Extract @parse(reply)`: a function's companion.
+    // The real parser accepts exactly these names, with spaces but no newline
+    // before `@`; the immediate token skips no extras, so it can't cross one.
     companion_expression: ($) =>
       prec(
         PREC.MEMBER,
         seq(
           field('function', $._expression),
-          token.immediate('@'),
+          token.immediate(/[ \t]*@/),
           field(
             'companion',
             alias(

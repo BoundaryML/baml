@@ -753,6 +753,7 @@ function companions
 
 let a = Extract@spec("raw").parse(reply);
 let b = Extract@parse(reply);
+let c = Extract @spec("raw");
 
 ---
 
@@ -781,4 +782,14 @@ let b = Extract@parse(reply);
         (identifier)
         (property_identifier))
       (arguments
-        (identifier)))))
+        (identifier))))
+  (let_declaration
+    (type_pattern
+      (type_path
+        (identifier)))
+    (call_expression
+      (companion_expression
+        (identifier)
+        (property_identifier))
+      (arguments
+        (string)))))

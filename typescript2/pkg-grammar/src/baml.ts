@@ -2140,17 +2140,20 @@ const clientItem: Rule = {
 
 // `client Name = <expr>;` binds a client value (anything implementing
 // `ai.Client`). The legacy `client<llm> Name { ... }` block above still
-// parses, so the compiler can point at the migration.
+// parses, so the compiler can point at the migration. The initializer may
+// start on the next line and the `;` is optional, so the rule stays open
+// until the `;` or the next top-level item.
 const clientValueItem: Rule = {
   key: 'client-value',
   scope: 'meta.client.baml',
-  begin: String.raw`^\s*(client)\s+(${IDENT})\s*(?==(?!=))`,
+  begin: String.raw`^\s*(client)\s+(${IDENT})\s*(=)(?!=)`,
   beginCaptures: {
     '1': { scope: 'keyword.declaration.client.baml' },
     '2': { scope: 'entity.name.client.baml' },
+    '3': { scope: 'keyword.operator.assignment.baml' },
   },
-  end: STATEMENT_END,
-  patterns: [comments, assignmentOperator, expression],
+  end: String.raw`(?=;|${TOP_LEVEL_ITEM_START}|^\s*${BINDING_INTRO}\b)`,
+  patterns: [comments, expression],
 };
 
 const retryPolicyItem: Rule = {
