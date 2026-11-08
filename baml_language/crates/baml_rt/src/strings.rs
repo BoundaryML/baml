@@ -116,7 +116,9 @@ impl Cx {
     pub(crate) fn alloc(&self, desc: u32, bytes: usize) -> R<*mut u8> {
         // The invocation owns both pointers for this context's entire lifetime.
         // Construct mutable heap access only for the synchronous allocation.
-        unsafe { (&mut *self.heap).try_alloc(desc, bytes, &crate::Roots(&*self.roots)) }
+        // Builtin strings, byte buffers, lists and regex records never have
+        // language cleanup methods. User class allocation uses try_alloc.
+        unsafe { (&mut *self.heap).try_alloc_unfinalized(desc, bytes, &crate::Roots(&*self.roots)) }
             .map_err(|failure| allocation_failure(failure.bytes))
     }
     pub fn poll(&mut self) -> R<()> {

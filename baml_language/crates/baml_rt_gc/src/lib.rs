@@ -467,6 +467,29 @@ impl Heap {
         bytes: usize,
         roots: &dyn RootSource,
     ) -> Result<*mut u8, AllocFailure> {
+        unsafe { self.try_alloc_impl::<true>(desc, bytes, roots) }
+    }
+    /// Allocate a builtin value whose descriptor has no cleanup method.
+    ///
+    /// # Safety
+    /// Same contract as `try_alloc`, and `desc` must have no finalizer.
+    #[inline(always)]
+    pub unsafe fn try_alloc_unfinalized(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        roots: &dyn RootSource,
+    ) -> Result<*mut u8, AllocFailure> {
+        debug_assert!(self.descriptors[desc as usize].finalizer.is_none());
+        unsafe { self.try_alloc_impl::<false>(desc, bytes, roots) }
+    }
+    #[inline(always)]
+    unsafe fn try_alloc_impl<const FINALIZERS: bool>(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        roots: &dyn RootSource,
+    ) -> Result<*mut u8, AllocFailure> {
         let aligned = bytes.checked_add(15).ok_or(AllocFailure { bytes })? & !15;
         if bytes > LARGE_THRESHOLD
             || self.layout_key != ((u64::from(desc) << 32) | bytes as u64)
@@ -475,7 +498,7 @@ impl Heap {
         {
             return unsafe { self.alloc_slow(desc, bytes, aligned, roots) };
         }
-        Ok(unsafe { self.bump(desc, bytes, aligned) })
+        Ok(unsafe { self.bump::<FINALIZERS>(desc, bytes, aligned) })
     }
     /// Limit usable ordinary block capacity plus live large-object backing.
     /// Existing blocks are retained; set before ordinary allocations for a hard
@@ -554,7 +577,12 @@ impl Heap {
         Ok(p)
     }
     #[inline(always)]
-    unsafe fn bump(&mut self, desc: DescId, bytes: usize, aligned: usize) -> *mut u8 {
+    unsafe fn bump<const FINALIZERS: bool>(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        aligned: usize,
+    ) -> *mut u8 {
         // Boxed metadata stays put when the block directory grows. Collection
         // invalidates the run before touching metadata; acquiring a run installs
         // a fresh pointer before the next bump.
@@ -571,7 +599,9 @@ impl Heap {
         unsafe {
             p.cast::<Header>().write(Header { desc, aux: 0 });
         }
-        self.register_finalizer(p as usize);
+        if FINALIZERS {
+            self.register_finalizer(p as usize);
+        }
         p
     }
     // Only used by the cold allocator. The fast allocation guard routes the
@@ -583,7 +613,7 @@ impl Heap {
         aligned: usize,
     ) -> *mut u8 {
         self.budget_guard = self.budget_end.saturating_sub(aligned);
-        let pointer = unsafe { self.bump(desc, bytes, aligned) };
+        let pointer = unsafe { self.bump::<true>(desc, bytes, aligned) };
         if self.cursor >= self.budget_end {
             self.request_poll();
         }
