@@ -460,3 +460,50 @@ function RuntimeListRopes() -> int {
         string.from_code_points(view.to_code_points()).length()
     } else { -1 }
 }
+
+class RuntimeListJoinMoney {
+    cents:int
+    implements baml.ToString {
+        function to_string(self) -> string { "$" + self.cents.to_string() }
+    }
+}
+class RuntimeListJoinWallet { owner:string money:RuntimeListJoinMoney }
+enum RuntimeListJoinColor { Red Blue }
+function RuntimeListJoinGeneric<T>(values:T[]) -> string { values.join("|") }
+function RuntimeListJoinOverrides() -> int {
+    let money=RuntimeListJoinMoney{cents:5};
+    let wallet=RuntimeListJoinWallet{owner:"a",money:money};
+    let nested=[[money],[RuntimeListJoinMoney{cents:7}]];
+    let mapping:map<string,RuntimeListJoinMoney>[]=[{"cash":money}];
+    let mixed:(RuntimeListJoinMoney|string|float|null)[]=[money,"bare",2.5,null];
+    if(RuntimeListJoinGeneric([money])=="$5" && [wallet].join(",")=="RuntimeListJoinWallet { owner: \"a\", money: $5 }" && nested.join(";")=="[$5];[$7]" && mapping.join(",")=="{\"cash\": $5}" && mixed.join("|")=="$5|bare|2.5|null" && [RuntimeListJoinColor.Red,RuntimeListJoinColor.Blue].join(",")=="Red,Blue"){1}else{-1}
+}
+class RuntimeListJoinMutable {
+    name:string
+    source:unknown[]
+    log:string[]
+    implements baml.ToString {
+        function to_string(self) -> string {
+            self.source.clear();
+            self.log.push(self.name);
+            self.name + "!"
+        }
+    }
+}
+function RuntimeListJoinMutation() -> int {
+    let source:unknown[]=[];
+    let log:string[]=[];
+    source.push(RuntimeListJoinMutable{name:"a",source:source,log:log});
+    source.push(RuntimeListJoinMutable{name:"b",source:source,log:log});
+    let result=source.join(",");
+    if(result=="a!,b!" && source.length()==0 && log.join(",")=="a,b"){1}else{-1}
+}
+class RuntimeListJoinBad {
+    value:int
+    implements baml.ToString {
+        function to_string(self) -> string { (self.value / 0).to_string() }
+    }
+}
+function RuntimeListJoinThrow() -> int {
+    [RuntimeListJoinBad{value:1}].join(",").length()
+}

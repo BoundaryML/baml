@@ -15,11 +15,15 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
         || TELEMETRY_SUPPORTED
         || REQUIRED_PROBES.contains(&probe)
         || probe.starts_with("strings::")
+        || probe.starts_with("RuntimeListJoin")
 }
 
 // List coverage baseline: each admitted fixture must keep passing both runtime
 // variants. An admission regression is a failure, never an unsupported skip.
 const REQUIRED_LIST_COVERAGE: &[&str] = &[
+    "RuntimeListJoinOverrides",
+    "RuntimeListJoinMutation",
+    "RuntimeListJoinThrow",
     "RuntimeListRopes",
     "RuntimeListCallbacks",
     "RuntimeListPublicSort",

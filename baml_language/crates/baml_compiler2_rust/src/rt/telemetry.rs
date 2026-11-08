@@ -195,6 +195,17 @@ pub(super) fn emit(
             .unwrap();
         }
     }
+    // Native container continuations need declaration metadata for error
+    // frames even though their bodies are not emitted as managed functions.
+    for &(_, _, callee) in telemetry_sites.borrow().iter() {
+        if observed.insert(callee) {
+            writeln!(
+                out,
+                "static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);"
+            )
+            .unwrap();
+        }
+    }
     let function_ids: BTreeMap<_, _> = observed
         .iter()
         .enumerate()

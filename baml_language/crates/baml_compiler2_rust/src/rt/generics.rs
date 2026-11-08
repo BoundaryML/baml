@@ -156,6 +156,19 @@ pub(super) fn expand<'db>(
                         let Some((callee, _)) = plan.index.function(db, *f) else {
                             continue;
                         };
+                        // Join's structural elements use the same nested ToString
+                        // witnesses as string.from. Link overrides before admission.
+                        if plan.index.display(callee) == "baml.Array.join" {
+                            let element = operand_ty(plan, body, &args[*ntypeargs])
+                                .and_then(|ty| plan.repr(&ty).ok())
+                                .and_then(|repr| plan.element(repr).ok());
+                            if !matches!(
+                                element,
+                                Some(Repr::Int | Repr::Float | Repr::Bool | Repr::Str)
+                            ) {
+                                plan.structural_strings = true;
+                            }
+                        }
                         if plan.index.display(callee) == "baml._to_string_default" {
                             let ty = operand_ty(plan, body, &args[*ntypeargs]);
                             if !matches!(

@@ -339,10 +339,30 @@ impl Emitter<'_, '_> {
                 Ok((self.fallible(&format!("rt::lists::join_pointers({cx},{list},rt::strings::Str::from_raw({separator})).map(|v|v.as_raw())")), Repr::Str))
             }
             ("join", 2) => {
-                self.plan.list_render_roots.borrow_mut().insert(repr);
                 let separator = self.coerce(values[1].clone(), Repr::Str)?;
-                let value = self.coerce((element.from_slot("value"), element), Repr::Tagged)?;
-                Ok((self.fallible(&format!("rt::lists::join_with({cx},{list},rt::strings::Str::from_raw({separator}),|value|rt::lists::structural_string(&mut rt::strings::Cx::current(),{value},DESCRIPTORS,LIST_RENDER_SHAPES)).map(|v|v.as_raw())")),Repr::Str))
+                let value = self.capture_value(element.from_slot("value"), element)?;
+                let render = super::formatting::render(self, &value)?;
+                let Some(Terminator::Call {
+                    callee: Operand::Constant(Constant::Function(function)),
+                    ..
+                }) = &self.body.blocks[self.block].terminator
+                else {
+                    return Err(no("join native callback boundary"));
+                };
+                let (callee, info) = self
+                    .plan
+                    .index
+                    .function(self.db, *function)
+                    .ok_or_else(|| no("join native callback metadata"))?;
+                let site = self.telemetry_site(callee);
+                let body = format!(
+                    "rt::lists::join_with({cx},{list},rt::strings::Str::from_raw({separator}),|value|{render}).map(|v|v.as_raw())"
+                );
+                let body = format!(
+                    "{{static SOURCE:rt::Source=rt::Source{{file:{:?},function:\"baml.Array.join\",lines:&[0],pcs:&[0],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};rt::telemetry::evidence::native_callback({site},||({body}).map_err(|error|error.at(&SOURCE,0)))}}",
+                    info.source_file
+                );
+                Ok((self.fallible(&body), Repr::Str))
             }
             _ => Err(no(format!("list builtin {method} arguments"))),
         }

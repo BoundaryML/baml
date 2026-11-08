@@ -1,8 +1,9 @@
-BAML runtime coverage baseline: 78 pass, 107 unsupported, 0 fail
+BAML runtime coverage baseline: 81 pass, 107 unsupported, 0 fail
 Telemetry off: required
-Current scoped verification: 50 list probes and both standalone closure probes pass on rt and rt-gc-stress.
+Current scoped verification: 53 list probes and both standalone closure probes pass on rt and rt-gc-stress.
 After encoder allocation changes: all 18 selected JSON/list probes pass on both runtime variants; four affected KPIs build and verify in all four rows.
 Direct code-point list construction: two list probes and three string probes pass in both GC modes; JSON parser verifies in all four KPI rows.
+Join overrides: generic, nested, enum, mutation and throw cases match the VM at off/low/medium/high/default in both GC modes.
 All 10 string probes pass on rt and rt-gc-stress at off/low/medium/high/default telemetry.
 Call-cost main/uncaught/stack_calls match the VM in both GC modes at all five telemetry levels.
 KPI admission and execution: 16/16 list KPIs plus concat and split verify on rt-off, rt-medium, vm-off and Node (3 trials, 216 successful trials).
@@ -121,6 +122,9 @@ RuntimeListFloatTruncationError	pass
 RuntimeListGenericJson	pass
 RuntimeListInsertError	pass
 RuntimeListInvalidCodePoint	pass
+RuntimeListJoinMutation	pass
+RuntimeListJoinOverrides	pass
+RuntimeListJoinThrow	pass
 RuntimeListJson	pass
 RuntimeListJsonAliases	pass
 RuntimeListJsonError	pass

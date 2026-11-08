@@ -7,6 +7,7 @@ pub(super) struct EvidenceFrame {
     function: usize,
     pc: u32,
     mode: u8,
+    native: bool,
 }
 #[derive(Debug)]
 pub struct Raise {
@@ -47,6 +48,7 @@ pub unsafe fn observe_captured<T>(
         function: site_info.callee,
         pc: 0,
         mode,
+        native: false,
     };
     state.evidence_frame = &mut frame;
     struct Restore(*mut State, *mut EvidenceFrame);
@@ -78,6 +80,49 @@ pub unsafe fn observe_captured<T>(
             raise.may_promote = false;
         }
     }
+    result
+}
+
+/// Preserve a native container frame while it invokes managed callbacks. Native
+/// frames contribute error evidence, but do not create observed call paths or
+/// count as unwound bytecode frames.
+/// # Safety
+/// The current session owns this stack and `site` names the native builtin.
+#[inline]
+pub unsafe fn native_callback<T>(site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        return call();
+    }
+    let state = unsafe { &mut *ptr };
+    let info = state.sites[site];
+    let parent = state.evidence_frame;
+    let mut frame = EvidenceFrame {
+        parent,
+        function: info.callee,
+        pc: 0,
+        mode: 1,
+        native: true,
+    };
+    if state.evidence {
+        if !parent.is_null() {
+            unsafe { (*parent).pc = info.pc };
+        }
+        state.evidence_frame = &mut frame;
+    }
+    state.depth += 1;
+    struct Restore(*mut State, *mut EvidenceFrame);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            unsafe {
+                (*self.0).depth -= 1;
+                (*self.0).evidence_frame = self.1;
+            }
+        }
+    }
+    let restore = Restore(ptr, parent);
+    let result = call();
+    drop(restore);
     result
 }
 
@@ -124,8 +169,8 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
         if frames.len() < btel_records::MAX_ERROR_FRAMES {
             frames.push(ErrorFrame {
                 function: Some(state.functions[current.function]),
-                pc: Some(current.pc),
-                native: false,
+                pc: (!current.native).then_some(current.pc),
+                native: current.native,
             });
         }
         cursor = current.parent;

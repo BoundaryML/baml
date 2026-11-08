@@ -72,6 +72,7 @@ impl Repr {
             Self::Int => "i64",
             Self::Float => "f64",
             Self::Bool => "bool",
+            Self::Enum(_) => "usize",
             Self::Str => "rt::lists::Ptr",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn",
             r if r.pointer() => "rt::lists::Ptr",

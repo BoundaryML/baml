@@ -254,8 +254,8 @@ fn capture_element(
     descriptors: &BTreeMap<usize, usize>,
     lists: &BTreeMap<Repr, usize>,
     repr: Repr,
-) -> Gen<(usize, String)> {
-    Ok(match repr {
+) -> Gen<(String, String)> {
+    let (tag, ty) = match repr {
         Repr::Int => (0, "Int".into()),
         Repr::Bool => (1, "Bool".into()),
         Repr::Float => (u32::MAX as usize, "Float".into()),
@@ -287,8 +287,15 @@ fn capture_element(
         }
         Repr::Dyn(_) | Repr::Tagged => (usize::MAX - 1, "Unknown".into()),
         Repr::Null => (2, "Null".into()),
+        Repr::Enum(e) => {
+            return Ok((
+                format!("CAPTURE_ENUM_{e}_TAG"),
+                format!("Enum(CAPTURE_D{e})"),
+            ));
+        }
         _ => return Err(no("capture list element")),
-    })
+    };
+    Ok((tag.to_string(), ty))
 }
 
 fn capture_list_element(
@@ -296,11 +303,11 @@ fn capture_list_element(
     descriptors: &BTreeMap<usize, usize>,
     lists: &BTreeMap<Repr, usize>,
     repr: Repr,
-) -> Gen<(usize, String)> {
+) -> Gen<(String, String)> {
     if let Repr::ListClosure(id) = repr {
         let ty = super::closures::capture_type(&plan.closure_lists[&id])?;
         return Ok((
-            plan.closure_descriptors().unwrap().1 + 3,
+            (plan.closure_descriptors().unwrap().1 + 3).to_string(),
             ty.strip_prefix("rt::telemetry::capture::Type::")
                 .unwrap()
                 .into(),

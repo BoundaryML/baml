@@ -13,6 +13,9 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "RuntimeListJoinOverrides",
+    "RuntimeListJoinMutation",
+    "RuntimeListJoinThrow",
     "RuntimeListRopes",
     "RuntimeListCallbacks",
     "RuntimeListPublicSort",

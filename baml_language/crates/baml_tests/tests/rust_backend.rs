@@ -1396,6 +1396,9 @@ fn rt_list_callbacks_are_typed_and_closed() {
     let program = lower(&db, OptLevel::Two);
     let before = fingerprint(&program);
     for name in [
+        "RuntimeListJoinOverrides",
+        "RuntimeListJoinMutation",
+        "RuntimeListJoinThrow",
         "RuntimeListCallbacks",
         "RuntimeListPublicSort",
         "RuntimeListSortClasses",
