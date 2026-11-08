@@ -1,7 +1,8 @@
-BAML runtime differential coverage (normal AND GC stress): 61 pass, 108 unsupported, 0 fail
+BAML runtime differential coverage (normal AND GC stress): 62 pass, 108 unsupported, 0 fail
 Telemetry off: required
-Scoped verification: 47 list probes and both standalone closure probes pass.
-KPI admission: 16/16; full-size benchmark verification follows separately.
+Scoped verification: 48 list probes and both standalone closure probes pass.
+KPI admission and execution: 16/16 verified on rt-off, rt-medium, vm-off and Node (3 trials, 0 failures).
+KPI rows marked verified record normal execution; full-size GC stress is not rerun for the retained memory graphs.
 The independent type-dispatch project passes in both GC modes.
 Retained setup benchmarks pass for integer and owned string results, including GC stress and medium telemetry.
 Unselected rows retain prior verification; the full merged differential gate is deferred.
@@ -139,6 +140,7 @@ RuntimeListPublicSort	pass
 RuntimeListRecursiveJson	pass
 RuntimeListReductionOverflow	pass
 RuntimeListReductions	pass
+RuntimeListSavedTypeTest	pass
 RuntimeListScalarBoundaries	pass
 RuntimeListSortBoolError	pass
 RuntimeListSortClasses	pass
@@ -168,34 +170,34 @@ ThreadLocalParallel	unsupported: top-level initializers
 TimeoutCancellation	unsupported: top-level initializers
 Uncaught	unsupported: top-level initializers
 classes::method call 100k	pass
-compute::array build sum 100k	admitted
-compute::array traversal 8k	admitted
+compute::array build sum 100k	verified
+compute::array traversal 8k	verified
 compute::fib32 recursive	pass
 compute::generate sort 8k	unsupported: closures
-compute::json aggregate 2k	admitted
+compute::json aggregate 2k	verified
 compute::json hello	unsupported: baml.json._stringify
 compute::json ndjson events	pass
-compute::json request body	admitted
+compute::json request body	verified
 compute::json tree path	unsupported: list field element (layout Tree, object 4182, types [TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }), List(TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }))]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Tree" }, []))
 compute::k-nucleotide 25k	unsupported: baml.Map.get
-compute::merge sort 20k	admitted
-compute::nbody 20k	admitted
+compute::merge sort 20k	verified
+compute::nbody 20k	verified
 compute::nested loops 500x500	pass
 compute::pure call 1m	pass
-compute::quick sort 3-way 1k	admitted
+compute::quick sort 3-way 1k	verified
 interfaces::polymorphic dispatch 100k	pass
-memory::allocation high retention	admitted
-memory::allocation low retention	admitted
+memory::allocation high retention	verified
+memory::allocation low retention	verified
 memory::binary trees 14	pass
-memory::cycles into live	admitted
-memory::cyclic churn	admitted
-memory::heap calls	admitted
-memory::live heap	admitted
-memory::live walk	admitted
-memory::splay 2k	admitted
+memory::cycles into live	verified
+memory::cyclic churn	verified
+memory::heap calls	verified
+memory::live heap	verified
+memory::live walk	verified
+memory::splay 2k	verified
 process::startup	pass
 programs::agent loop 300	pass
-programs::json parser 15	admitted
+programs::json parser 15	verified
 programs::richards 50	pass
 rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass

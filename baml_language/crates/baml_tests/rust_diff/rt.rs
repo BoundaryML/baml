@@ -37,6 +37,7 @@ const REQUIRED_LIST_COVERAGE: &[&str] = &[
     "RuntimeListSortSingletons",
     "RuntimeListSortMutation",
     "RuntimeListEmptyCallbacks",
+    "RuntimeListSavedTypeTest",
     "RuntimeListValidationThrow",
     "RuntimeListScalarBoundaries",
     "RuntimeListInvalidCodePoint",

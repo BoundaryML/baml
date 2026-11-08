@@ -33,6 +33,7 @@ const PROBES: &[&str] = &[
     "RuntimeListSortSingletons",
     "RuntimeListSortMutation",
     "RuntimeListEmptyCallbacks",
+    "RuntimeListSavedTypeTest",
     "RuntimeListValidationThrow",
     "RuntimeListScalarBoundaries",
     "RuntimeListInvalidCodePoint",

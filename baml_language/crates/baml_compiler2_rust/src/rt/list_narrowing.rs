@@ -66,7 +66,7 @@ pub(super) fn analyze(
     let mut tests = BTreeMap::new();
     let mut definitions = BTreeMap::<usize, usize>::new();
     for block in &body.blocks {
-        for s in &block.statements {
+        for (at, s) in block.statements.iter().enumerate() {
             if let StatementKind::Assign {
                 destination: Place::Local(dst),
                 value,
@@ -74,13 +74,13 @@ pub(super) fn analyze(
             {
                 *definitions.entry(dst.0).or_default() += 1;
                 if let Rvalue::TypeTag(Place::Local(src)) = value {
-                    tags.insert(dst.0, src.0);
+                    tags.insert(dst.0, (src.0, block.id.0, at));
                 }
                 if let Rvalue::IsType { operand, test } = value {
                     if let (Some(subject), Ok(Repr::Ptr(class))) =
                         (local(operand), plan.template_repr(&test.template(db)))
                     {
-                        tests.insert(dst.0, (subject, class));
+                        tests.insert(dst.0, (subject, class, block.id.0, at));
                     }
                 }
             }
@@ -93,6 +93,14 @@ pub(super) fn analyze(
             *definitions.entry(dst.0).or_default() += 1;
         }
     }
+    // A saved type test describes the value read at that point, not a later
+    // assignment to the same local. Only carry facts from a fresh test.
+    let fresh = |block: &baml_compiler2_mir::BasicBlock<'_>,
+                 subject: usize,
+                 origin: usize,
+                 at: usize| {
+        block.id.0==origin && !block.statements[at+1..].iter().any(|s|matches!(&s.kind,StatementKind::Assign{destination:Place::Local(dst),..} if dst.0==subject))
+    };
     tags.retain(|l, _| definitions.get(l) == Some(&1));
     tests.retain(|l, _| definitions.get(l) == Some(&1));
     let mut incoming = vec![None::<Facts>; body.blocks.len()];
@@ -117,15 +125,25 @@ pub(super) fn analyze(
             .collect::<Vec<_>>();
         match term {
             Terminator::Branch { condition, .. } => {
-                if let Some(&(subject, class)) = local(condition).and_then(|l| tests.get(&l)) {
-                    edges[0].1.insert(subject, BTreeSet::from([class]));
-                    exclude(&mut edges[1].1, subject, &BTreeSet::from([class]));
+                if let Some(&(subject, class, origin, definition)) =
+                    local(condition).and_then(|l| tests.get(&l))
+                {
+                    if fresh(block, subject, origin, definition) {
+                        edges[0].1.insert(subject, BTreeSet::from([class]));
+                        exclude(&mut edges[1].1, subject, &BTreeSet::from([class]));
+                    }
                 }
             }
             Terminator::Switch {
                 discriminant, arms, ..
             } => {
-                if let Some(subject) = local(discriminant).and_then(|l| tags.get(&l)).copied() {
+                if let Some((subject, _, _)) = local(discriminant)
+                    .and_then(|l| tags.get(&l))
+                    .copied()
+                    .filter(|&(subject, origin, definition)| {
+                        fresh(block, subject, origin, definition)
+                    })
+                {
                     let mut excluded = BTreeSet::new();
                     for (i, (key, _)) in arms.iter().enumerate() {
                         if let SwitchKey::Class(class) = key {

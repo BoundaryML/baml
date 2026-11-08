@@ -425,3 +425,12 @@ function RuntimeListEmptyCallbacks() -> int {
     let generated=baml.Array.generate(-1,(i:int)->int{calls.push(i);i});
     if(!some && every && found== -1 && last== -1 && total==7 && generated.length()==0 && calls.length()==0){1}else{-1}
 }
+
+function RuntimeListNarrowSavedTest(v:RuntimeListNarrowInts|RuntimeListNarrowFloats) -> int {
+    let was_ints=v is RuntimeListNarrowInts;
+    v=RuntimeListNarrowFloats{values:[2.5]};
+    if(was_ints){v.values[0].itrunc()}else{0}
+}
+function RuntimeListSavedTypeTest() -> int {
+    if(RuntimeListNarrowSavedTest(RuntimeListNarrowInts{values:[1]})==2 && RuntimeListNarrowSavedTest(RuntimeListNarrowFloats{values:[1.5]})==0){1}else{-1}
+}
