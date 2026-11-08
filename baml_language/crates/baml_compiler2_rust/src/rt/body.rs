@@ -172,7 +172,7 @@ impl Emitter<'_, '_> {
             self.object,
             self.object,
             self.plan.index.info(self.object).source_file,
-            self.plan.index.display(self.object)
+            self.plan.index.name(self.object)
         ))
     }
     pub(super) fn stmts(&mut self, stmts: &[Stmt], headers: &BTreeSet<usize>) -> Gen<String> {

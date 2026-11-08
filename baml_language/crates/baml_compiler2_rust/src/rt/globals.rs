@@ -64,9 +64,6 @@ pub(super) fn prepare<'db>(
                             return Err(no("initializer body"));
                         };
                         roots.push(object);
-                        if matches!(body.locals[0].ty, RuntimeTy::Function { .. }) {
-                            return Err(no("function-valued global"));
-                        }
                         plan.repr(&body.locals[0].ty)?
                     } else {
                         return Err(no("initializer MIR unavailable"));
@@ -137,6 +134,7 @@ pub(super) fn emit(
                 Repr::Null => 2,
                 Repr::Str => 3,
                 Repr::Ptr(c) => descriptors[&c] + 3,
+                Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
                 r if r.pointer() => lists[&r] + 3,
                 Repr::Tagged | Repr::Dyn(_) => 0,
                 _ => return Err(no("global representation")),
@@ -148,6 +146,11 @@ pub(super) fn emit(
                     "value.to_bits()"
                 } else {
                     "value as u64"
+                };
+                let tag = if repr.pointer() {
+                    format!("if value==0{{2}}else{{{tag}}}")
+                } else {
+                    tag.to_string()
                 };
                 format!("rt::Dyn{{tag:{tag},payload:{payload}}}")
             };

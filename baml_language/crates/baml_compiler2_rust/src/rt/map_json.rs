@@ -293,7 +293,7 @@ fn decode_value(
             let member_repr = plan.repr(member)?;
             if repr == Repr::Tagged {
                 let tagged =
-                    capture_codegen::capture_dyn(member_repr, "value", descriptors, lists)?;
+                    capture_codegen::capture_dyn(plan, member_repr, "value", descriptors, lists)?;
                 format!(
                     "if reader.peek()==Some(b'n'){{rt::maps::json::null(cx,reader,path).map(|_|rt::Dyn{{tag:2,payload:0}})}}else{{({nested}).map(|value|{tagged})}}"
                 )

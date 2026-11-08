@@ -128,6 +128,14 @@ function main()->int { GATE }"#,
         r#"function main()->int {let m:map<string,int|string|bool|float|null> = {"a":1,"b":"hello","c":true,"d":1.25,"e":null};let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
         r#"function main()->int {let m:map<string,int[]> = {"a":[1,2,3],"b":[]};let n=0;for(let c in baml.json.stringify(m,indent=2).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
         r#"function main()->int {let m:map<string,string[][]> = {"a":[["one","two"],[]],"b":[]};let n=0;for(let c in baml.json.stringify(m,indent=2).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"function add(n:int)->int {n+1} const CALLBACK=add; const ALIAS=CALLBACK; function main()->int {ALIAS(41)}"#,
+        r#"const CALLBACK={let n=40;(v:int)->int {n+=v;n}}; function main()->int {CALLBACK(1)+CALLBACK(1)}"#,
+        r#"class Box {n:int function add(self,v:int)->int {self.n+v}} const BOX=Box{n:40}; const CALLBACK=BOX.add; function main()->int {CALLBACK(2)}"#,
+        r#"const CALLBACK=(v:int)->int {v+1}; const RESULT=CALLBACK(41); function main()->int {RESULT}"#,
+        r#"const CALLBACK={let text="kept by global";(v:int)->int {text.char_count()+v}}; function main()->int {let i=0;while(i<100){let m:map<string,string> = {"x":"churn"};i+=m.length();}CALLBACK(7)}"#,
+        r#"const CALLBACK=(v:int)->int {v/0}; const RESULT=CALLBACK(41); function main()->int {RESULT}"#,
+        r#"const CALLBACK={let n=40;(v:int)->int {n+=v;n}}; const FUNCTIONS:map<string,(int)->int throws never> = {"f":CALLBACK}; function inspect(m:map<string,(int)->int throws never>)->int {let f=m["f"];f(1)} function main()->int {inspect(FUNCTIONS)+inspect(FUNCTIONS)}"#,
+        r#"class Box {m:map<string,(int)->int throws never>} function main()->int {let b=Box{m:{"f":(n:int)->int {n+1}}};let f=b.m["f"];f(41)}"#,
     ];
     let selected = std::env::var("BAML_RT_GLOBALS_MAPS_CASES")
         .ok()

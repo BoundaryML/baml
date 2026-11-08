@@ -89,8 +89,8 @@ pub(super) fn emit(
                 let value_slot = maps::slot_type(value, descriptors, lists)?;
                 let map = format!("rt::maps::Map::<{key_slot},{value_slot}>");
                 let (key_ty, value_ty) = map_types(plan, repr)?;
-                let key_dyn = capture_dyn(key, "key", descriptors, lists)?;
-                let value_dyn = capture_dyn(value, "value", descriptors, lists)?;
+                let key_dyn = capture_dyn(plan, key, "key", descriptors, lists)?;
+                let value_dyn = capture_dyn(plan, value, "value", descriptors, lists)?;
                 format!(
                     "Map{{key:&{key_ty},value:&{value_ty},len:|p|unsafe{{{map}::from_raw(p).len()}},entry:|p,i|unsafe{{let (key,value)={map}::from_raw(p).entry(i).unwrap();({key_dyn},{value_dyn})}}}}"
                 )
@@ -179,6 +179,7 @@ pub(super) fn capture_type(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
     })
 }
 pub(super) fn capture_dyn(
+    plan: &Plan<'_>,
     repr: Repr,
     value: &str,
     descriptors: &BTreeMap<usize, usize>,
@@ -197,11 +198,13 @@ pub(super) fn capture_dyn(
         Repr::Bool => (1, value.to_owned()),
         Repr::Null => (2, "0usize".into()),
         Repr::Str => (3, format!("{value}.as_raw()")),
+        Repr::Closure => (plan.closure_descriptors().unwrap().1 + 3, format!("{value}.as_raw()")),
         Repr::Ptr(c) => (descriptors[&c] + 3, format!("{value}.as_raw()")),
         r if r.pointer() => (lists[&r] + 3, format!("{value}.as_raw()")),
         _ => return Err(no("map capture slot")),
     };
-    Ok(format!("rt::Dyn{{tag:{tag},payload:({raw}) as u64}}"))
+    let tag = if repr.pointer() { format!("if raw==0{{2}}else{{{tag}}}") } else {tag.to_string()};
+    Ok(format!("{{let raw={raw};rt::Dyn{{tag:{tag},payload:raw as u64}}}}"))
 }
 
 fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
@@ -217,6 +220,7 @@ fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
 /// nullable/union element types in the recorder's canonical value encoding.
 pub(super) fn declared_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
     match ty {
+        RuntimeTy::Function { .. } => super::closures::capture_type(&plan.closure_type(ty)?.1),
         RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
         RuntimeTy::Union(members) => {
             let members = members
@@ -235,6 +239,7 @@ pub(super) fn declared_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
 }
 pub(super) fn declared_field_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     match ty {
+        bex_vm_types::RuntimeTy::Function { .. } => super::closures::capture_type(&plan.closure_field_type(ty)?.1),
         bex_vm_types::RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
         bex_vm_types::RuntimeTy::Union(members) => {
             let members = members

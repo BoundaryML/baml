@@ -120,7 +120,8 @@ pub(super) fn collect<'db>(
                     b.terminator,
                     Some(Terminator::Call {
                         callee: baml_compiler2_mir::Operand::Copy(_)
-                            | baml_compiler2_mir::Operand::Move(_),
+                            | baml_compiler2_mir::Operand::Move(_)
+                            | baml_compiler2_mir::Operand::Constant(baml_compiler2_mir::Constant::GlobalItem(_)),
                         ..
                     })
                 )

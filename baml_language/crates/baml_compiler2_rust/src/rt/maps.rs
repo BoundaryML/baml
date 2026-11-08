@@ -61,6 +61,7 @@ pub(super) fn slot_type(
         Repr::Bool => "bool".into(),
         Repr::Tagged | Repr::Dyn(_) => "rt::Dyn".into(),
         Repr::Str => "rt::strings::Str".into(),
+        Repr::Closure => "rt::closures::Closure".into(),
         Repr::Ptr(c) => format!("rt::maps::Pointer<{}>", descriptors[&c] + 3),
         r if r.pointer() => format!("rt::maps::Pointer<{}>", lists[&r] + 3),
         _ => return Err(no("map slot representation")),
@@ -164,6 +165,7 @@ impl Emitter<'_, '_> {
     fn map_in(&self, value: &str, repr: Repr) -> Gen<String> {
         Ok(match repr {
             Repr::Str => format!("rt::strings::Str::from_raw({value})"),
+            Repr::Closure => format!("rt::closures::Closure::from_raw({value})"),
             Repr::Null => format!("{{let _={value};rt::maps::Null}}"),
             Repr::Int | Repr::Float | Repr::Bool | Repr::Tagged | Repr::Dyn(_) => value.to_owned(),
             r if r.pointer() => format!("rt::maps::Pointer::<{}>::from_raw({value})", self.tag(r)?),

@@ -30,6 +30,12 @@ unsafe impl Slot for Str {
         unsafe { write_ptr(owner, target.cast(), value.as_raw()) };
     }
 }
+unsafe impl Slot for crate::closures::Closure {
+    const POINTER: bool = true;
+    unsafe fn store(owner: *mut u8, target: *mut Self, value: Self) {
+        unsafe { write_ptr(owner, target.cast(), value.as_raw()) };
+    }
+}
 /// A statically tagged pointer slot (classes, containers, closures, futures).
 #[repr(transparent)]
 #[derive(Clone, Copy)]
