@@ -154,6 +154,11 @@ impl Plan<'_> {
                         .ok_or_else(|| no("receiver field"))?,
                 )
             }
+            Place::Index {
+                base,
+                kind: baml_compiler2_mir::IndexKind::Array,
+                ..
+            } => self.element(self.storage_repr(body, base, depth)?),
             _ => Err(no("receiver storage place")),
         }
     }
@@ -177,12 +182,18 @@ impl registry::Feature for Feature {
             for lambda in &mir.lambdas {
                 let object = plan
                     .index
-                    .lambda(db, &lambda.identity)
+                    .lambda(
+                        db,
+                        lambda
+                            .identity
+                            .as_ref()
+                            .ok_or_else(|| no("lambda identity"))?,
+                    )
                     .ok_or_else(|| no("unlinked lambda"))?;
                 // Prepared tests already register borrowed lambda MIR. Keep it
                 // shared instead of cloning every corpus lambda for each leaf.
                 all.entry(object)
-                    .or_insert_with(|| std::borrow::Cow::Owned(lambda.clone()));
+                    .or_insert_with(|| std::rc::Rc::new(lambda.clone()));
                 if let super::MirFunctionKind::Bytecode(body) = &lambda.kind {
                     plan.lambda_bodies.insert(body as *const _ as usize, object);
                 }
@@ -725,7 +736,7 @@ impl super::Emitter<'_, '_> {
                 } else {
                     format!("args.get(if rt::closures::is_bound(env){{{}}}else{{{}}}).copied().unwrap_or(rt::Dyn{{tag:u64::MAX,payload:0}})",i-2,i-1)
                 };
-                self.closure_argument(value, self.plan.local_repr(self.body, i, 0)?)
+                self.closure_argument(value, self.argument_repr(i)?)
             })
             .collect::<Gen<Vec<_>>>()?
             .join(",");

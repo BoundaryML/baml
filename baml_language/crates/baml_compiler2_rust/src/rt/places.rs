@@ -1,6 +1,14 @@
 use super::*;
 
 impl Emitter<'_, '_> {
+    /// Entry ABI before captured parameters are moved into shared cells.
+    pub(super) fn argument_repr(&self, i: usize) -> Gen<Repr> {
+        if let Some(repr) = super::string_defaults::parameter(self.plan, self.object, i) {
+            return Ok(repr);
+        }
+        self.plan.local_repr(self.body, i, 0)
+    }
+
     pub(super) fn local(&self, i: usize) -> Gen<Repr> {
         if self
             .body
@@ -24,24 +32,26 @@ impl Emitter<'_, '_> {
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
         match repr {
             Repr::Int => Ok(0),
-            Repr::Bigint => Ok(self.plan.bigint_descriptor().unwrap() + 3),
+            Repr::Bigint => Ok(self.plan.bigint_descriptor() + 3),
             Repr::Float => Ok(u32::MAX as usize - 1),
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
+            Repr::Opaque => Ok(18),
+            Repr::Bytes => Ok(19),
             Repr::Future => Ok(self.plan.future_descriptor().unwrap() + 3),
-            Repr::Opaque => Ok(15),
-            Repr::Bytes => Ok(16),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
-            r @ (Repr::ListInt
+            r @ (Repr::List(_)
+            | Repr::ListInt
             | Repr::ListStr
             | Repr::ListListStr
             | Repr::ListClosure(_)
             | Repr::ListFuture(_)
             | Repr::ListPtr(_)
             | Repr::MapStrInt
+            | Repr::Map(_)
             | Repr::MapStrPtr(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
@@ -80,13 +90,13 @@ impl Emitter<'_, '_> {
             } else {
                 tag
             };
-            let bits = if source == Repr::Float {
+            let payload = if source == Repr::Float {
                 "v.to_bits()"
             } else {
                 "v as u64"
             };
             return Ok(format!(
-                "{{let v={value};rt::Dyn{{tag:{test},payload:{bits}}}}}"
+                "{{let v={value};rt::Dyn{{tag:{test},payload:{payload}}}}}"
             ));
         }
         if matches!(source, Repr::Tagged | Repr::Dyn(_)) {
@@ -104,6 +114,9 @@ impl Emitter<'_, '_> {
         Err(no(format!("conversion {source:?} to {target:?}")))
     }
     pub(super) fn place(&self, p: &Place) -> Gen<(String, Repr)> {
+        if let Some(result) = self.map_place(p) {
+            return result;
+        }
         match p {
             Place::Local(l) => Ok((format!("l{}", l.0), self.local(l.0)?)),
             Place::Capture(i) => Ok((format!("rt::closures::capture(env,{i})"), Repr::Cell)),
@@ -162,13 +175,13 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (base, repr) = self.place(base)?;
-                let element = Self::element(repr)?;
+                let element = self.plan.element(repr)?;
                 if self.local(index.0)? != Repr::Int {
                     return Err(no("non-int list index"));
                 }
                 if repr.growing() {
                     let slot = element.slot()?;
-                    return Ok((self.fallible(&format!("rt::lists::List::<{slot}>::from_raw({base}).get(&rt::strings::Cx::current(),l{}).map(|v|v.as_raw())", index.0)), element));
+                    return Ok((self.fallible(&format!("rt::lists::List::<{slot}>::from_raw({base}).get(&rt::strings::Cx::current(),l{}).map(|v|{})", index.0, element.from_slot("v"))), element));
                 }
                 let slot = self.fallible(&format!("rt::list_slot({base},l{})", index.0));
                 Ok((format!("*({slot} as *const {})", element.rust()), element))
@@ -194,13 +207,28 @@ impl Emitter<'_, '_> {
                 }
                 Ok(value)
             }
+            Operand::Constant(Constant::GlobalItem(binding)) => {
+                let slot = self
+                    .plan
+                    .index
+                    .let_slot(self.db, *binding)
+                    .ok_or_else(|| no("unlinked global"))?;
+                let repr = *self
+                    .plan
+                    .globals
+                    .get(&slot)
+                    .ok_or_else(|| no("unplanned global"))?;
+                let name = baml_compiler2_mir::global_display_name(self.db, *binding);
+                let value = self.fallible(&format!("rt::globals::load_named({slot},{name:?})"));
+                Ok((self.coerce((value, Repr::Tagged), repr)?, repr))
+            }
             Operand::Constant(Constant::Float(f)) => {
                 Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
             }
             Operand::Constant(Constant::Bigint(i)) => Ok((
                 self.fallible(&format!(
                     "rt::tasks::bigint_text({}, {:?})",
-                    self.plan.bigint_descriptor().unwrap(),
+                    self.plan.bigint_descriptor(),
                     i.to_string()
                 )),
                 Repr::Bigint,
@@ -268,6 +296,9 @@ impl Emitter<'_, '_> {
             let value = self.coerce(value, Repr::Tagged)?;
             return Ok(format!("rt::closures::store({cell},{value});\n"));
         }
+        if let Some(result) = self.map_assign(p, value.clone()) {
+            return result;
+        }
         let (dst, repr) = self.place(p)?;
         // MIR uses anonymous null temporaries for discarded expressions.
         // Evaluate the source (including fallible calls), then store null.
@@ -303,7 +334,10 @@ impl Emitter<'_, '_> {
             } => {
                 let (obj, container) = self.place(base)?;
                 if container.growing() {
-                    return Err(no("growing list indexed assignment"));
+                    let slot = repr.slot()?;
+                    let value = repr.to_slot(&src)?;
+                    let store = self.fallible(&format!("rt::lists::List::<{slot}>::from_raw(object).set(&rt::strings::Cx::current(),l{},value)", index.0));
+                    return Ok(format!("{{let value={value};let object={obj};{store};}}\n"));
                 }
                 let slot = self.fallible(&format!("rt::list_slot(object,l{})", index.0));
                 let write = if repr.pointer() {

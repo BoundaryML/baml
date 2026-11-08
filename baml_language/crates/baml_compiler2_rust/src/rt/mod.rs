@@ -9,16 +9,33 @@ use baml_compiler2_hir::{
     package::world_files,
 };
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, Constant, Db, MirFunction, MirFunctionBody, MirFunctionKind, Operand,
-    OptLevel, Place, RuntimeTy, Rvalue, StatementKind, Terminator, UnaryOp, lower_function,
+    AggregateKind, BinOp, Constant, Db, MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place,
+    RuntimeTy, Rvalue, StatementKind, Terminator, UnaryOp, lower_function,
 };
 use bex_vm_types::{Object, Program};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
 
-type TestMir<'db> = std::borrow::Cow<'db, MirFunction<'db>>;
+type TestMir<'db> = std::rc::Rc<MirFunction<'db>>;
 
 type Gen<T> = Result<T, String>;
+#[derive(Clone)]
+struct MirFunction<'db> {
+    identity: Option<baml_compiler2_mir::MirFunctionId<'db>>,
+    arity: usize,
+    kind: MirFunctionKind<'db>,
+    lambdas: Vec<MirFunction<'db>>,
+}
+impl<'db> From<&baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
+    fn from(mir: &baml_compiler2_mir::MirFunction<'db>) -> Self {
+        Self {
+            identity: Some(mir.identity.clone()),
+            arity: mir.arity,
+            kind: mir.kind.clone(),
+            lambdas: mir.lambdas.iter().map(Self::from).collect(),
+        }
+    }
+}
 struct Layout {
     fields: Vec<Repr>,
     offsets: Vec<usize>,
@@ -26,17 +43,27 @@ struct Layout {
     pointers: usize,
     tagged: usize,
 }
+#[derive(Clone, PartialEq, Eq)]
+struct ListElement {
+    repr: Repr,
+    members: Vec<Repr>,
+    declared: Option<String>,
+}
 struct Plan<'a> {
     root: SourceRoot,
     lang: baml_base::LangRoots,
     index: std::rc::Rc<ProgramIndex<'a>>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
+    bigints: bool,
+    json_tree: bool,
+    json_public_to: bool,
+    json_to_types: Vec<baml_compiler2_mir::TyTemplate>,
     lists: BTreeSet<Repr>,
+    list_elements: std::cell::RefCell<Vec<ListElement>>,
     json_types: Vec<Vec<usize>>,
     environments: bool,
     task_support: bool,
-    bigint_support: bool,
     cleanup_methods: BTreeMap<usize, usize>,
     captures: BTreeMap<usize, Vec<Repr>>,
     capture_types: BTreeMap<usize, Vec<RuntimeTy>>,
@@ -60,6 +87,15 @@ struct Plan<'a> {
     structural_string_calls: BTreeSet<(usize, usize, Repr)>,
     string_overrides: BTreeMap<Repr, usize>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
+    list_stringify: bool,
+    list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
+    json_decode_codes: BTreeSet<usize>,
+    json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
+    map_types: std::cell::RefCell<Vec<maps::MapType>>,
+    json_maps: BTreeMap<Repr, RuntimeTy>,
+    map_stringify: bool,
+    globals: BTreeMap<usize, Repr>,
+    init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -107,7 +143,12 @@ mod errors;
 mod expressions;
 mod host;
 mod json;
+mod json_flat_lists;
+mod json_lists;
+mod json_scalars;
+mod json_tree;
 mod layout;
+mod lists;
 mod loop_ranges;
 mod places;
 mod repr;
@@ -124,12 +165,16 @@ pub use driver::{RtTestCompiler, compile_rt, compile_rt_benchmark, compile_rt_te
 mod calls;
 mod formatting;
 mod globals;
+mod map_json;
+mod maps;
 mod regex;
 mod registry;
 mod string_bytes;
 mod string_defaults;
 mod strings;
 mod tasks;
+
+use layout::rt_descriptors;
 
 mod switches;
 

@@ -157,23 +157,17 @@ impl StringPtrMap {
         Ok(0)
     }
     /// # Safety
-    /// `desc` describes the existing fixed pointer-list layout (length at 8, pointers
-    /// elements at 16), and the result follows Cx's rooting contract.
-    pub unsafe fn values(self, _cx: &mut Cx, desc: u32) -> R<usize> {
-        let object = self.pointer as *const Object;
-        let len = unsafe { (*object).len };
-        let bytes = len
-            .checked_mul(8)
-            .and_then(|n| n.checked_add(16))
-            .ok_or_else(|| allocation_failure(usize::MAX))?;
-        let list = unsafe { crate::try_alloc(desc, bytes) }?;
-        unsafe {
-            list.add(8).cast::<usize>().write(len);
-            for i in 0..len {
-                let entry = (((*object).entries + 16) as *const Entry).add(i);
-                write_ptr(list, list.add(16).cast::<usize>().add(i), (*entry).value);
-            }
+    /// `desc` describes a growing pointer list and its buffer.
+    pub unsafe fn values(self, cx: &mut Cx, desc: u32) -> R<usize> {
+        let len = unsafe { (*(self.pointer as *const Object)).len };
+        let list =
+            unsafe { crate::lists::List::<crate::lists::Ptr>::with_capacity(cx, desc, len) }?;
+        for i in 0..len {
+            let value = unsafe {
+                (*(((*(self.pointer as *const Object)).entries + 16) as *const Entry).add(i)).value
+            };
+            list.push(cx, unsafe { crate::lists::Ptr::from_raw(value) })?;
         }
-        Ok(list as usize)
+        Ok(list.as_raw())
     }
 }

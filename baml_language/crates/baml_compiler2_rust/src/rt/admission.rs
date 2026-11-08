@@ -1,6 +1,6 @@
 use super::{
     BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, RuntimeTy,
-    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions, file_lets,
+    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions,
     is_required_interface_method, lower_function, no, registry, world_files,
 };
 
@@ -22,14 +22,9 @@ pub(super) fn collect<'db>(
     prepared: Option<&BTreeMap<usize, super::TestMir<'db>>>,
 ) -> Gen<Admitted<'db>> {
     let mut all = prepared.cloned().unwrap_or_default();
+    let initializer_roots = super::globals::prepare(db, root, opt, plan, &mut all)?;
     if prepared.is_none() {
         for &file in world_files(db, root) {
-            if !test_entry {
-                registry::admit(registry::Admission::Initializers(
-                    file.source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib
-                        && !file_lets(db, file).is_empty(),
-                ))?;
-            }
             for &f in file_functions(db, file) {
                 if is_required_interface_method(db, f) {
                     continue;
@@ -38,10 +33,9 @@ pub(super) fn collect<'db>(
                     .as_ref()
                     .map_err(|e| no(format!("MIR: {e:?}")))?;
                 if let Some(object) = plan.index.declared(db, f) {
-                    all.insert(object, std::borrow::Cow::Borrowed(mir));
-                    if test_entry {
-                        insert_lambdas(db, &plan.index, mir, &mut all);
-                    }
+                    let mir = std::rc::Rc::new(MirFunction::from(mir));
+                    insert_lambdas(db, &plan.index, &mir, &mut all);
+                    all.insert(object, mir);
                 }
             }
         }
@@ -50,6 +44,7 @@ pub(super) fn collect<'db>(
     if let Some((setup, run)) = benchmark {
         queue.extend([setup, run]);
     }
+    queue.extend(initializer_roots);
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
     plan.lambda_bodies.clear();
@@ -129,6 +124,22 @@ pub(super) fn collect<'db>(
                     .map_err(|e| format!("{e} (constructor in {})", plan.index.display(object)))?;
             }
         }
+        // Type-test declarations may occur only in a catch arm, including
+        // native-produced errors which have no constructor in reachable MIR.
+        for block in &body.blocks {
+            if let Some(Terminator::NarrowBind { test, .. }) = &block.terminator {
+                super::switches::record_test(plan, &test.template(db))?;
+            }
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    value: Rvalue::IsType { test, .. },
+                    ..
+                } = &statement.kind
+                {
+                    super::switches::record_test(plan, &test.template(db))?;
+                }
+            }
+        }
         // A generic type argument is not a JSON schema request. In particular
         // generic class heads may occur as type values without field bindings.
         // Plan schemas only for the concrete argument to decode itself.
@@ -139,6 +150,11 @@ pub(super) fn collect<'db>(
                 ..
             }) = &block.terminator
             {
+                if plan.index.function(db, *f).is_some_and(|(id, _)| {
+                    matches!(plan.index.display(id), "baml.json._to" | "baml.json.to")
+                }) {
+                    super::json_tree::register_to(plan, body, args)?;
+                }
                 if plan
                     .index
                     .function(db, *f)
@@ -149,16 +165,28 @@ pub(super) fn collect<'db>(
                         baml_compiler2_mir::RealizedTy::try_from(ty)
                             .map_err(|_| no("non-concrete JSON argument"))?,
                     );
-                    let classes = plan.json_class_types(&template)?;
-                    for &c in &classes {
-                        plan.add(c)?;
+                    super::json_lists::record_schema(plan, &template)?;
+                    if matches!(template, baml_compiler2_mir::TyTemplate::Map { .. }) {
+                        continue;
                     }
-                    if !plan.json_types.contains(&classes) {
-                        plan.json_types.push(classes);
+                    if let Ok(classes) = plan.json_class_types(&template) {
+                        for &c in &classes {
+                            plan.add(c)?;
+                        }
+                        if !plan.json_types.contains(&classes) {
+                            plan.json_types.push(classes);
+                        }
+                    } else {
+                        let repr = plan.template_repr(&template)?;
+                        plan.record(repr)?;
+                        if !plan.json_list_types.contains(&template) {
+                            plan.json_list_types.push(template);
+                        }
                     }
                 }
             }
         }
+        super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
             registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;
@@ -229,6 +257,24 @@ pub(super) fn collect<'db>(
                     }
                     if let Some(callee) = reach.json_decode {
                         json_decode = Some(callee);
+                        let Some(Terminator::Call { args, .. }) = &block.terminator else {
+                            unreachable!()
+                        };
+                        let code = match &args[0] {
+                            baml_compiler2_mir::Operand::Copy(
+                                baml_compiler2_mir::Place::Local(l),
+                            )
+                            | baml_compiler2_mir::Operand::Move(
+                                baml_compiler2_mir::Place::Local(l),
+                            ) => {
+                                let Repr::Type(code) = plan.local_repr(body, l.0, 0)? else {
+                                    return Err(no("JSON type argument"));
+                                };
+                                code
+                            }
+                            _ => return Err(no("JSON type argument storage")),
+                        };
+                        plan.json_decode_codes.insert(code);
                     }
                     for target in reach.targets {
                         calls.entry(object).or_default().insert(target);
@@ -260,13 +306,18 @@ pub(super) fn collect<'db>(
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         unreachable!()
     };
+    let result = plan.repr(&body.locals[0].ty)?;
     if mir.arity != 0
-        || plan.repr(&body.locals[0].ty)? != if test_entry { Repr::Null } else { Repr::Int }
+        || if test_entry {
+            result != Repr::Null
+        } else {
+            !matches!(result, Repr::Int | Repr::Str)
+        }
     {
         return Err(no(if test_entry {
             "test entry must have no parameters and return null"
         } else {
-            "entry must have no parameters and return int"
+            "entry must have no parameters and return int or string"
         }));
     }
     Ok(Admitted {
@@ -281,12 +332,12 @@ pub(super) fn collect<'db>(
 fn insert_lambdas<'db>(
     db: &'db dyn Db,
     index: &crate::index::ProgramIndex<'_>,
-    mir: &'db MirFunction<'db>,
+    mir: &MirFunction<'db>,
     all: &mut BTreeMap<usize, super::TestMir<'db>>,
 ) {
     for lambda in &mir.lambdas {
-        if let Some(object) = index.lambda(db, &lambda.identity) {
-            all.insert(object, std::borrow::Cow::Borrowed(lambda));
+        if let Some(object) = index.lambda(db, lambda.identity.as_ref().expect("lambda identity")) {
+            all.insert(object, std::rc::Rc::new(lambda.clone()));
         }
         insert_lambdas(db, index, lambda, all);
     }
@@ -310,8 +361,9 @@ pub(super) fn prepare_tests<'db>(
                 .as_ref()
                 .map_err(|e| no(format!("MIR: {e:?}")))?;
             if let Some(object) = index.declared(db, function) {
-                all.insert(object, std::borrow::Cow::Borrowed(mir));
-                insert_lambdas(db, index, mir, &mut all);
+                let mir = std::rc::Rc::new(MirFunction::from(mir));
+                insert_lambdas(db, index, &mir, &mut all);
+                all.insert(object, mir);
             }
         }
     }

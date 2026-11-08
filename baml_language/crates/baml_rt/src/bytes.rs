@@ -13,7 +13,7 @@ pub const DESC: Descriptor = Descriptor {
         offset: 16,
         layout: ElementLayout::Scalar,
     }),
-    type_id: 16,
+    type_id: 19,
     fields: &[],
     finalizer: None,
 };
@@ -29,7 +29,7 @@ pub fn new(cx: &mut Cx, data: &[u8]) -> R<usize> {
         .map(|n| n & !7)
         .and_then(|n| n.checked_add(16))
         .ok_or_else(|| crate::allocation_failure(usize::MAX))?;
-    let p = cx.alloc(13, size)?;
+    let p = cx.alloc(16, size)?;
     unsafe {
         p.add(8).cast::<usize>().write(data.len());
         std::ptr::copy_nonoverlapping(data.as_ptr(), p.add(16), data.len());

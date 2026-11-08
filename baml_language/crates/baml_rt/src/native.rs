@@ -8,7 +8,7 @@ pub const DESC: Descriptor = Descriptor {
     ptr_slots: (0, 0),
     tagged_slots: (0, 0),
     elem: None,
-    type_id: 15,
+    type_id: 18,
     fields: &[],
     finalizer: None,
 };
@@ -16,7 +16,7 @@ pub const DESC: Descriptor = Descriptor {
 /// The payload must not contain managed pointers. Its handle's descriptor has
 /// no pointer slots; the collector cannot trace Rust-owned payload fields.
 pub unsafe fn new<T: std::any::Any>(cx: &mut Cx, payload: T) -> R<usize> {
-    let object = cx.alloc(12, 8)? as usize;
+    let object = cx.alloc(15, 8)? as usize;
     unsafe {
         (&mut *crate::HEAP.get()).attach_native(object, Rc::new(payload));
     }

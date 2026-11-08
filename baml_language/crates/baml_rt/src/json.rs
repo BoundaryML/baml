@@ -5,7 +5,8 @@ use crate::{
     strings::{Cx, Str},
 };
 use baml_rt_gc::{Descriptor, Field, Kind, SlotKind, write_ptr};
-use bex_vm_types::json_text::{Reader, Refusal, bigint_limit_message, refusal};
+pub use bex_vm_types::json_text::Reader;
+use bex_vm_types::json_text::{Refusal, bigint_limit_message, refusal};
 use serde_json::Value;
 #[derive(Clone, Copy)]
 pub enum Ty {
@@ -143,7 +144,7 @@ fn check(value: &Value, schema: &Schema) -> Result<(), Report> {
     }
     Ok(())
 }
-fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<Error> {
+pub(crate) fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<Error> {
     fn build(cx: &mut Cx, message: &str, path: Option<&str>) -> R<usize> {
         let msg = cx.string(message)?;
         let path = path.map(|p| cx.string(p)).transpose()?;
@@ -213,10 +214,20 @@ fn owned(reader: &mut Reader<'_>) -> Result<Value, bex_vm_types::json_text::Stop
             let number = reader.number()?;
             match number.as_i64() {
                 Some(n) => Value::from(n),
-                None => Value::from(number.as_f64().unwrap_or(1e100)),
+                None => Value::Number(number.text.parse().expect("validated JSON number")),
             }
         }
     })
+}
+pub(crate) fn parse_owned(cx: &mut Cx, source: &str) -> R<Value> {
+    let mut reader = Reader::new(source);
+    if reader.skip_value().is_err() || reader.finish().is_err() {
+        return Err(syntax_error(cx, source));
+    }
+    Ok(owned(&mut Reader::new(source)).expect("shared scanner accepted JSON"))
+}
+pub(crate) fn decode_error(cx: &mut Cx, message: String, path: String) -> Box<Error> {
+    error(cx, message, Some(path))
 }
 /// # Safety
 /// Schemas describe actual class descriptors/offsets, including tagged optional
@@ -371,8 +382,9 @@ impl<'a, const N: usize> Stream<'a, N> {
                 first = false;
                 let slot = field(key);
                 if let Some(slot) = slot {
+                    let next = reader.peek();
                     let mark = reader.mark();
-                    fields[slot] = Some(match reader.peek() {
+                    fields[slot] = Some(match next {
                         Some(b'"') => match reader.borrowed_string()? {
                             Some(value) => Token::String(value),
                             None => Token::Escaped(mark),
@@ -437,10 +449,7 @@ impl<'a, const N: usize> Stream<'a, N> {
     fn text(&mut self, token: Token<'a>) -> Option<&str> {
         match token {
             Token::String(s) => Some(s),
-            Token::Escaped(mark) => {
-                self.reader.reset(mark);
-                Some(self.reader.string().expect("validated escape"))
-            }
+            Token::Escaped(mark) => Some(self.reader.string_at(mark).expect("validated escape")),
             _ => None,
         }
     }

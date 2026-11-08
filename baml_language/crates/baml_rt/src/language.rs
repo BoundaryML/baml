@@ -3,6 +3,7 @@
 use crate::Instance;
 use baml_rt_gc::{Descriptor, ElementLayout, Elements, Field, Header, Kind, SlotKind};
 use baml_type::Int63;
+pub const FLOAT_TAG: u64 = u32::MAX as u64 - 1;
 pub type Dyn = baml_rt_gc::TaggedSlot;
 pub type R<T> = Result<T, Box<Error>>;
 
@@ -19,6 +20,21 @@ pub const STRING_DESC: Descriptor = Descriptor {
     fields: &[],
     finalizer: None,
 };
+pub const MAP_KEY_DESC: Descriptor = Descriptor {
+    fields: &[Field {
+        name: "key",
+        offset: 8,
+        slot: SlotKind::Pointer,
+        type_id: 3,
+    }],
+    type_id: 15,
+    ..OVERFLOW_DESC
+};
+pub fn map_key_not_found() -> Box<Error> {
+    let mut error = panic_value(12, "baml.panics.MapKeyNotFound", "(unknown)".into());
+    error.display_value = Some(r#"baml.panics.MapKeyNotFound {key: "(unknown)"}"#.into());
+    error
+}
 const MESSAGE_FIELDS: &[Field] = &[Field {
     name: "message",
     offset: 8,
@@ -277,11 +293,39 @@ pub fn driver_observed(
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
 ) -> std::process::ExitCode {
-    driver_configured(descriptors, entry, None, functions, sites, format_site)
+    driver_configured(
+        descriptors,
+        entry,
+        None,
+        functions,
+        sites,
+        format_site,
+        None,
+    )
 }
 
 /// Native benchmark entry. Setup state stays on the root fiber's scanned stack.
-pub type Benchmark = fn(usize, usize, &std::cell::Cell<u128>) -> R<i64>;
+pub type Benchmark<T = i64> = fn(usize, usize, &std::cell::Cell<u128>) -> R<T>;
+/// Owned results accepted by the native command and benchmark driver.
+pub trait DriverValue: PartialEq + std::fmt::Display + 'static {
+    fn formatted(&self, session: &mut crate::telemetry::Session, site: Option<usize>) -> R<String>;
+}
+impl DriverValue for i64 {
+    fn formatted(&self, session: &mut crate::telemetry::Session, site: Option<usize>) -> R<String> {
+        match site {
+            Some(site) => session.format_int(*self, site),
+            None => Ok(self.to_string()),
+        }
+    }
+}
+impl DriverValue for String {
+    fn formatted(&self, session: &mut crate::telemetry::Session, site: Option<usize>) -> R<String> {
+        match site {
+            Some(site) => session.format_string(self, site),
+            None => Ok(serde_json::to_string(self).expect("string JSON")),
+        }
+    }
+}
 
 pub fn driver_observed_benchmark(
     descriptors: &'static [Descriptor],
@@ -298,16 +342,38 @@ pub fn driver_observed_benchmark(
         functions,
         sites,
         format_site,
+        None,
     )
 }
 
-fn driver_configured(
+/// Run package startup as separate observed roots before invoking user code.
+pub fn driver_observed_initialized(
     descriptors: &'static [Descriptor],
     entry: fn() -> R<i64>,
-    benchmark: Option<Benchmark>,
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
+    initialize: fn(&mut Instance, &mut crate::telemetry::Session) -> R<()>,
+) -> std::process::ExitCode {
+    driver_configured(
+        descriptors,
+        entry,
+        None,
+        functions,
+        sites,
+        format_site,
+        Some(initialize),
+    )
+}
+type Initializer = fn(&mut Instance, &mut crate::telemetry::Session) -> R<()>;
+pub fn driver_configured<T: DriverValue>(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<T>,
+    benchmark: Option<Benchmark<T>>,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+    initialize: Option<Initializer>,
 ) -> std::process::ExitCode {
     let mut session = match crate::telemetry::Session::new(functions, sites) {
         Ok(s) => s,
@@ -316,8 +382,22 @@ fn driver_configured(
             return std::process::ExitCode::FAILURE;
         }
     };
-    let result = driver_inner(descriptors, entry, benchmark, &mut session, format_site);
-    session.finish(&result);
+    let result = driver_inner(
+        descriptors,
+        entry,
+        benchmark,
+        &mut session,
+        format_site,
+        initialize,
+    );
+    if result
+        .as_ref()
+        .is_err_and(|error| error.class == "InitFailed")
+    {
+        session.finish_initialization_failure();
+    } else {
+        session.finish(&result);
+    }
     match result {
         Ok(reports) => {
             let failed = reports.iter().any(|r| !r.cancelled);
@@ -357,6 +437,10 @@ fn render_error(error: Box<Error>, background: Option<bool>) {
         Some(false) => "error: unhandled spawned task failed: ",
         None => "error: ",
     };
+    if error.class == "InitFailed" {
+        eprintln!("error: {}", error.message);
+        return;
+    }
     if error.value == 0 {
         eprintln!("{prefix}{traceback}VM internal error: {}", error.message);
     } else {
@@ -367,12 +451,13 @@ fn render_error(error: Box<Error>, background: Option<bool>) {
     }
 }
 
-fn driver_inner(
+fn driver_inner<T: DriverValue>(
     descriptors: &'static [Descriptor],
-    entry: fn() -> R<i64>,
-    benchmark: Option<Benchmark>,
+    entry: fn() -> R<T>,
+    benchmark: Option<Benchmark<T>>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
+    initialize: Option<Initializer>,
 ) -> R<Vec<crate::tasks::UnhandledTaskError>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let mut jobs = None;
@@ -401,15 +486,18 @@ fn driver_inner(
     pointers.extend(vec![true; descriptors.len()]);
     let pointers = Box::leak(pointers.into_boxed_slice());
     let mut instance = Instance::new(descriptors, pointers);
+    if let Some(initialize) = initialize {
+        initialize(&mut instance, session)?;
+    }
     // SAFETY: compiler admission and descriptor construction enforce this ABI.
     let mut unhandled = Vec::new();
-    fn run(
+    fn run<T: DriverValue>(
         instance: &mut Instance,
         session: &mut crate::telemetry::Session,
-        entry: fn() -> R<i64>,
+        entry: fn() -> R<T>,
         unhandled: &mut Vec<crate::tasks::UnhandledTaskError>,
-    ) -> R<i64> {
-        let result = session.run(|| unsafe { instance.run_baml(entry) });
+    ) -> R<T> {
+        let result = session.run(|| unsafe { instance.run_baml_value(entry) });
         unhandled.extend(instance.take_unhandled_reports());
         result
     }
@@ -418,24 +506,21 @@ fn driver_inner(
     // collecting calls; no managed pointer is kept in untraced host storage.
     let result = if let (Some(benchmark), Some(jobs)) = (benchmark, jobs) {
         let elapsed = elapsed.clone();
-        let result =
-            session.run(|| unsafe { instance.run_baml(move || benchmark(jobs, warmup, &elapsed)) });
+        let result = session
+            .run(|| unsafe { instance.run_baml_value(move || benchmark(jobs, warmup, &elapsed)) });
         result?
     } else {
         // SAFETY: compiler admission and descriptor construction enforce this ABI.
         run(&mut instance, session, entry, &mut unhandled)?
     };
     let Some(jobs) = jobs else {
-        let text = match format_site {
-            Some(site) => session.format_int(result, site)?,
-            None => result.to_string(),
-        };
+        let text = result.formatted(session, format_site)?;
         println!("{text}");
         return Ok(unhandled);
     };
     if benchmark.is_some() {
         unhandled.extend(instance.take_unhandled_reports());
-        print_benchmark_result(result, jobs, elapsed.get());
+        print_benchmark_result(&result, jobs, elapsed.get());
         return Ok(unhandled);
     }
     for _ in 1..warmup {
@@ -450,11 +535,11 @@ fn driver_inner(
         }
     }
     let elapsed = start.elapsed().as_nanos();
-    print_benchmark_result(result, jobs, elapsed);
+    print_benchmark_result(&result, jobs, elapsed);
     Ok(unhandled)
 }
 
-fn print_benchmark_result(result: i64, jobs: usize, elapsed: u128) {
+fn print_benchmark_result(result: &impl std::fmt::Display, jobs: usize, elapsed: u128) {
     println!(
         "{}",
         serde_json::json!({"result":result.to_string(),"jobs":jobs,"elapsed_ns":elapsed})
@@ -478,6 +563,34 @@ pub fn benchmark_loop(
     let start = std::time::Instant::now();
     for _ in 0..jobs {
         if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("timed result mismatch".into()));
+        }
+    }
+    elapsed.set(start.elapsed().as_nanos());
+    Ok(result)
+}
+
+/// Retain the expected text on the fiber, comparing without a per-job copy.
+pub fn benchmark_string_loop(
+    mut job: impl FnMut() -> R<usize>,
+    jobs: usize,
+    warmup: usize,
+    elapsed: &std::cell::Cell<u128>,
+) -> R<String> {
+    let cx = unsafe { crate::strings::Cx::current() };
+    let result = unsafe { crate::strings::Str::from_raw(std::hint::black_box(&mut job)()?) }
+        .try_as_str(&cx)?
+        .to_owned();
+    for _ in 1..warmup {
+        let value = unsafe { crate::strings::Str::from_raw(std::hint::black_box(&mut job)()?) };
+        if value.try_as_str(&cx)? != result {
+            return Err(Error::internal("warmup result mismatch".into()));
+        }
+    }
+    let start = std::time::Instant::now();
+    for _ in 0..jobs {
+        let value = unsafe { crate::strings::Str::from_raw(std::hint::black_box(&mut job)()?) };
+        if value.try_as_str(&cx)? != result {
             return Err(Error::internal("timed result mismatch".into()));
         }
     }

@@ -8,6 +8,7 @@ pub fn run(
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
     name: &str,
+    initialize: Option<fn(&mut Instance, &mut crate::telemetry::Session) -> R<()>>,
 ) -> std::process::ExitCode {
     let mut session = match crate::telemetry::Session::new(functions, sites) {
         Ok(s) => s,
@@ -20,10 +21,22 @@ pub fn run(
     pointers.extend(vec![true; descriptors.len()]);
     let mut instance = Instance::new(descriptors, Box::leak(pointers.into_boxed_slice()));
     // SAFETY: same admitted entry ABI as driver_observed; the instance owns the heap.
-    let result = session.run(|| unsafe { instance.run_baml(entry) });
-    session.finish(&result);
+    let initialized = initialize.map_or(Ok(()), |run| run(&mut instance, &mut session));
+    let result = initialized.and_then(|()| session.run(|| unsafe { instance.run_baml(entry) }));
+    if result
+        .as_ref()
+        .is_err_and(|error| error.class == "InitFailed")
+    {
+        session.finish_initialization_failure();
+    } else {
+        session.finish(&result);
+    }
     let (outcome, message) = match result {
         Ok(_) => ("pass", None),
+        Err(e) if e.class == "InitFailed" => {
+            eprintln!("{}", e.message);
+            return std::process::ExitCode::FAILURE;
+        }
         Err(e) if e.value == 0 => {
             eprintln!("VM internal error: {}", e.message);
             return std::process::ExitCode::FAILURE;
@@ -97,5 +110,54 @@ mod tests {
         );
         assert_eq!(failure_message(&error("baml.panics.UserPanic")), "boom");
         assert!(failure_message(&error("user.UserPanic")).contains("Traceback"));
+    }
+
+    #[test]
+    fn initializer_runs_before_test_entry() {
+        thread_local! { static PHASE: std::cell::Cell<u8> = const { std::cell::Cell::new(0) }; }
+        fn initialize(_: &mut Instance, _: &mut crate::telemetry::Session) -> R<()> {
+            PHASE.with(|phase| phase.set(1));
+            Ok(())
+        }
+        fn entry() -> R<i64> {
+            assert_eq!(PHASE.with(|phase| phase.replace(2)), 1);
+            Ok(0)
+        }
+        assert_eq!(
+            run(
+                &[],
+                entry,
+                &[],
+                &[],
+                "initializer ordering",
+                Some(initialize)
+            ),
+            std::process::ExitCode::SUCCESS
+        );
+        assert_eq!(PHASE.with(std::cell::Cell::get), 2);
+    }
+
+    #[test]
+    fn initializer_failure_does_not_run_test_entry() {
+        fn initialize(_: &mut Instance, _: &mut crate::telemetry::Session) -> R<()> {
+            Err(crate::globals::init_failed(
+                crate::Error::internal("failed".into()),
+                "user",
+            ))
+        }
+        fn entry() -> R<i64> {
+            panic!("entry must not run after initializer failure");
+        }
+        assert_eq!(
+            run(
+                &[],
+                entry,
+                &[],
+                &[],
+                "initializer failure",
+                Some(initialize)
+            ),
+            std::process::ExitCode::FAILURE
+        );
     }
 }

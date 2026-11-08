@@ -26,6 +26,7 @@ pub struct Reader<'a> {
     depth: u32,
     /// The decoded text of the last string that held an escape.
     scratch: String,
+    scratch_span: Option<(usize, usize)>,
 }
 
 /// A number token, as written.
@@ -94,6 +95,7 @@ impl<'a> Reader<'a> {
             pos: 0,
             depth: 0,
             scratch: String::new(),
+            scratch_span: None,
         }
     }
 
@@ -238,6 +240,19 @@ impl<'a> Reader<'a> {
         Ok(self.span_str(start))
     }
 
+    /// Decode a previously validated string, reusing the last escaped result.
+    /// A mark must belong to this reader and point at its opening quote.
+    pub fn string_at(&mut self, mark: Mark) -> Result<&str, Stop> {
+        self.reset(mark);
+        if let Some((start, end)) = self.scratch_span {
+            if start == mark.pos {
+                self.pos = end;
+                return Ok(&self.scratch);
+            }
+        }
+        self.string()
+    }
+
     /// Validate and consume a string, borrowing its source bytes when unescaped.
     /// Escaped strings return None; callers may save a mark and decode them later.
     pub fn borrowed_string(&mut self) -> Result<Option<&'a str>, Stop> {
@@ -266,6 +281,7 @@ impl<'a> Reader<'a> {
         let bytes = self.bytes();
         self.pos += 1;
         let start = self.pos;
+        self.pos += plain_run(&bytes[self.pos..]);
         loop {
             match bytes.get(self.pos) {
                 Some(b'"') => {
@@ -277,12 +293,14 @@ impl<'a> Reader<'a> {
                 Some(_) => self.pos += 1,
             }
         }
+        self.scratch_span = None;
         self.scratch.clear();
         self.scratch.push_str(&self.src[start..self.pos]);
         loop {
             match bytes.get(self.pos) {
                 Some(b'"') => {
                     self.pos += 1;
+                    self.scratch_span = Some((start - 1, self.pos));
                     return Ok(None);
                 }
                 Some(b'\\') => {
@@ -292,11 +310,7 @@ impl<'a> Reader<'a> {
                 Some(0..=0x1f) | None => return Err(Stop),
                 Some(_) => {
                     let run = self.pos;
-                    while let Some(byte) = bytes.get(self.pos)
-                        && !matches!(byte, b'"' | b'\\' | 0..=0x1f)
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos += plain_run(&bytes[self.pos..]);
                     self.scratch.push_str(&self.src[run..self.pos]);
                 }
             }
@@ -834,4 +848,74 @@ mod tests {
             assert_eq!(number.as_f64(), serde.as_f64(), "as_f64 of {token}");
         }
     }
+}
+
+#[inline]
+pub fn plain_run(bytes: &[u8]) -> usize {
+    const LO: u64 = 0x0101010101010101;
+    const HI: u64 = 0x8080808080808080;
+    let zero = |x: u64| x.wrapping_sub(LO) & !x & HI != 0;
+    let mut n = 0;
+    while n + 8 <= bytes.len() {
+        let w = u64::from_ne_bytes(bytes[n..n + 8].try_into().unwrap());
+        if zero(w ^ (LO * 34)) || zero(w ^ (LO * 92)) || zero(w & 0xe0e0e0e0e0e0e0e0) {
+            break;
+        }
+        n += 8;
+    }
+    while n < bytes.len() && !matches!(bytes[n], b'"' | b'\\' | 0..=0x1f) {
+        n += 1;
+    }
+    n
+}
+
+#[test]
+fn plain_runs_match_scalar_scanning() {
+    for len in 0..80 {
+        for at in 0..=len {
+            for byte in 0..=255u8 {
+                let mut s = vec![b'a'; len];
+                if at < len {
+                    s[at] = byte;
+                }
+                let expected = s
+                    .iter()
+                    .position(|b| matches!(*b, b'"' | b'\\' | 0..=31))
+                    .unwrap_or(len);
+                assert_eq!(plain_run(&s), expected, "len={len} at={at} byte={byte}");
+            }
+        }
+    }
+    let mut state = 11u64;
+    for len in 0..1000 {
+        let s: Vec<u8> = (0..len)
+            .map(|_| {
+                state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+                (state >> 32) as u8
+            })
+            .collect();
+        let expected = s
+            .iter()
+            .position(|b| matches!(*b, b'"' | b'\\' | 0..=31))
+            .unwrap_or(len);
+        assert_eq!(plain_run(&s), expected);
+    }
+}
+
+#[test]
+fn escaped_string_cache_tracks_marks_and_scratch_replacement() {
+    let mut reader = Reader::new(r#"[ "first\n", "second\t", "plain" ]"#);
+    reader.open_array().unwrap();
+    assert!(reader.next_element(true).unwrap());
+    let first = reader.mark();
+    assert_eq!(reader.borrowed_string().unwrap(), None);
+    assert!(reader.next_element(false).unwrap());
+    let second = reader.mark();
+    assert_eq!(reader.borrowed_string().unwrap(), None);
+    assert!(reader.next_element(false).unwrap());
+    assert_eq!(reader.borrowed_string().unwrap(), Some("plain"));
+    assert_eq!(reader.string_at(second).unwrap(), "second\t");
+    assert_eq!(reader.string_at(first).unwrap(), "first\n");
+    assert_eq!(reader.string_at(second).unwrap(), "second\t");
+    assert_eq!(reader.string_at(second).unwrap(), "second\t");
 }

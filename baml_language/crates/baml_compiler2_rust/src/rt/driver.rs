@@ -1,7 +1,7 @@
 use super::{
     BTreeMap, BTreeSet, Db, Emitter, Gen, MirFunctionKind, Object, OptLevel, Plan, Program,
-    ProgramEmission, ProgramIndex, SourceRoot, admission, builtins, host, json, layout, no,
-    recursive, telemetry,
+    ProgramEmission, ProgramIndex, SourceRoot, admission, builtins, host, json, json_lists, layout,
+    no, recursive, telemetry,
 };
 use std::fmt::Write as _;
 
@@ -48,11 +48,15 @@ fn compile_entry<'db>(
         ),
         program,
         layouts: BTreeMap::new(),
+        bigints: false,
+        json_tree: false,
+        json_public_to: false,
+        json_to_types: Vec::new(),
         lists: BTreeSet::new(),
+        list_elements: std::cell::RefCell::new(Vec::new()),
         json_types: Vec::new(),
         environments: false,
         task_support: false,
-        bigint_support: false,
         cleanup_methods: BTreeMap::new(),
         captures: BTreeMap::new(),
         capture_types: BTreeMap::new(),
@@ -76,6 +80,15 @@ fn compile_entry<'db>(
         structural_string_calls: BTreeSet::new(),
         string_overrides: BTreeMap::new(),
         alias_tests: std::cell::RefCell::new(BTreeSet::new()),
+        list_stringify: false,
+        list_render_roots: std::cell::RefCell::new(BTreeSet::new()),
+        json_decode_codes: BTreeSet::new(),
+        json_list_types: Vec::new(),
+        map_types: Default::default(),
+        json_maps: BTreeMap::new(),
+        map_stringify: false,
+        globals: BTreeMap::new(),
+        init_chains: Vec::new(),
     };
     let admission::Admitted {
         all,
@@ -120,7 +133,12 @@ fn compile_entry<'db>(
         all: &all,
         descriptors: &descriptors,
     };
-    json::emit(&mut out, &cx, json_decode, alias_function)?;
+    json::emit(&mut out, &cx, json_decode, alias_function, &lists)?;
+    if plan.list_stringify {
+        json_lists::emit_shapes(&mut out, &plan, &descriptors, &lists)?;
+    }
+    super::json_tree::emit(&mut out, &cx, &lists)?;
+    super::map_json::emit(&mut out, &cx, &lists, json_decode, alias_function)?;
     // Bound forced inlining by the same total-local budget as a single body.
     // Recursive SCCs retain real frames and the normal per-entry stack guard.
     let small_program = reached
@@ -131,6 +149,11 @@ fn compile_entry<'db>(
         })
         .sum::<usize>()
         <= 1024;
+    let MirFunctionKind::Bytecode(entry_body) = &all[&entry].kind else {
+        unreachable!()
+    };
+    let result_repr = plan.repr(&entry_body.locals[0].ty)?;
+    let string_result = result_repr == super::Repr::Str;
     let mut host_sites = vec![(None, 0usize, entry)];
     if let Some((setup, run)) = benchmark {
         let MirFunctionKind::Bytecode(setup_body) = &all[&setup].kind else {
@@ -142,9 +165,11 @@ fn compile_entry<'db>(
         if all[&setup].arity != 0
             || all[&run].arity != 1
             || setup_body.locals[0].ty != run_body.locals[1].ty
-            || plan.repr(&run_body.locals[0].ty)? != super::Repr::Int
+            || plan.repr(&run_body.locals[0].ty)? != result_repr
         {
-            return Err(no("benchmark requires setup() -> S and run(S) -> int"));
+            return Err(no(
+                "benchmark requires setup() -> S and run(S) matching the entry result",
+            ));
         }
         host_sites.extend([(None, 0usize, setup), (None, 0usize, run)]);
     }
@@ -162,7 +187,7 @@ fn compile_entry<'db>(
             )
         })
         .collect::<BTreeMap<_, _>>();
-    let stack_leaves = placements
+    let mut stack_leaves = placements
         .values()
         .flat_map(|p| p.leaf_calls.iter().copied())
         .collect::<BTreeSet<_>>();
@@ -170,6 +195,9 @@ fn compile_entry<'db>(
     // storage below the stack guard's 64 KiB reserve, including ordinary locals.
     let small_program =
         small_program && placements.values().map(|p| p.bytes(&plan)).sum::<usize>() <= 16 * 1024;
+    if small_program {
+        stack_leaves.extend(super::dispatch::inline_leaves(&plan, &all));
+    }
     for &object in &reached {
         let mir = &all[&object];
         let body = match &mir.kind {
@@ -297,6 +325,8 @@ fn compile_entry<'db>(
             emitted.insert(head);
         }
     }
+    super::lists::emit_render_shapes(&mut out, &plan, &descriptors, &lists)?;
+    super::globals::emit(&mut out, &plan, &descriptors, &lists, &telemetry_sites)?;
     let format_site = telemetry::emit(
         &mut out,
         &cx,
@@ -311,7 +341,12 @@ fn compile_entry<'db>(
         "rt::tasks::set_cleanup_dispatch(cleanup_dispatch);"
     };
     if test_entry {
-        write!(&mut out, "fn entry()->R<i64>{{unsafe{{{cleanup_init}let cx=rt::calls::Context::current();(if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}})?;Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name)}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
+        let initializer = if plan.init_chains.is_empty() {
+            "None"
+        } else {
+            "Some(initialize_program)"
+        };
+        write!(&mut out, "fn entry()->R<i64>{{unsafe{{{cleanup_init}let cx=rt::calls::Context::current();(if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}})?;Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name,{initializer})}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
     } else if let Some((setup, run)) = benchmark {
         host::emit_benchmark(
             &mut out,
@@ -320,6 +355,8 @@ fn compile_entry<'db>(
             run,
             &builtins,
             format_site,
+            !plan.init_chains.is_empty(),
+            string_result,
             !plan.cleanup_methods.is_empty(),
         );
     } else {
@@ -328,6 +365,8 @@ fn compile_entry<'db>(
             entry,
             &builtins,
             format_site,
+            !plan.init_chains.is_empty(),
+            string_result,
             !plan.cleanup_methods.is_empty(),
         );
     }

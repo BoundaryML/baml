@@ -88,7 +88,7 @@ fn emit(
     result: Repr,
 ) -> Gen<(String, Repr)> {
     let input = values[0].1;
-    let element = Emitter::element(input)?;
+    let element = e.plan.element(input)?;
     let callback = e.coerce(values[1].clone(), Repr::Closure)?;
     let desc = e.lists[&input] + usize::from(input.growing());
     let value = e.coerce(
@@ -140,7 +140,7 @@ fn emit(
         code.push_str(&format!("let mut answer={every};for i in 0..length{{{poll}let value={value};let selected={selected};if {test}{{answer={};break;}}}}answer}}",!every));
         return Ok((code, Repr::Bool));
     }
-    let output = Emitter::element(result)?;
+    let output = e.plan.element(result)?;
     let out_desc = e.lists[&result];
     if result.growing() {
         let slot = output.slot()?;

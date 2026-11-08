@@ -552,14 +552,14 @@ impl FutureSlot {
         self.pointer
     }
 }
-impl crate::lists::sealed::Sealed for FutureSlot {}
-impl crate::lists::Slot for FutureSlot {
-    const POINTER: bool = true;
-    fn word(self) -> usize {
-        self.pointer
+unsafe impl crate::lists::Slot for FutureSlot {
+    const SIZE: usize = 8;
+    const LAYOUT: baml_rt_gc::ElementLayout = baml_rt_gc::ElementLayout::Pointer;
+    unsafe fn read(slot: *const u8) -> Self {
+        unsafe { Self::from_raw(slot.cast::<usize>().read()) }
     }
-    unsafe fn from_word(pointer: usize) -> Self {
-        unsafe { Self::from_raw(pointer) }
+    unsafe fn write(self, owner: *mut u8, slot: *mut u8) {
+        unsafe { baml_rt_gc::write_ptr(owner, slot.cast(), self.pointer) }
     }
 }
 

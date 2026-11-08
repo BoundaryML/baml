@@ -22,12 +22,19 @@ impl Plan<'_> {
             let (id, ty) = self.closure_type(element)?;
             self.closure_lists.insert(id, ty);
         }
-        if let RuntimeTy::Union(members) = ty {
+        if let RuntimeTy::List(element) = ty {
+            self.record_ty(element)?;
+            self.record(self.repr(ty)?)?;
+        } else if let RuntimeTy::Union(members) = ty {
             for member in members {
                 if !recursive_container(member) {
                     self.record_ty(member)?;
                 }
             }
+        } else if let RuntimeTy::Map { key, value } = ty {
+            self.record_ty(key)?;
+            self.record_ty(value)?;
+            self.record(self.repr(ty)?)?;
         } else if !matches!(ty, RuntimeTy::Function { .. }) {
             self.record(self.repr(ty)?)?;
         }
@@ -43,12 +50,19 @@ impl Plan<'_> {
             let (id, ty) = self.closure_field_type(element)?;
             self.closure_lists.insert(id, ty);
         }
-        if let bex_vm_types::RuntimeTy::Union(members) = ty {
+        if let bex_vm_types::RuntimeTy::List(element) = ty {
+            self.record_field_ty(element)?;
+            self.record(self.field_repr(ty)?)?;
+        } else if let bex_vm_types::RuntimeTy::Union(members) = ty {
             for member in members {
                 if !recursive_container(member) {
                     self.record_field_ty(member)?;
                 }
             }
+        } else if let bex_vm_types::RuntimeTy::Map { key, value } = ty {
+            self.record_field_ty(key)?;
+            self.record_field_ty(value)?;
+            self.record(self.field_repr(ty)?)?;
         } else {
             self.record(self.field_repr(ty)?)?;
         }
@@ -56,7 +70,7 @@ impl Plan<'_> {
     }
     pub(super) fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
-            Repr::Bigint => self.bigint_support = true,
+            Repr::Bigint => self.bigints = true,
             Repr::Future => self.task_support = true,
             Repr::ListFuture(_) => {
                 self.task_support = true;
@@ -67,9 +81,31 @@ impl Plan<'_> {
                 self.enums.insert(e);
             }
             Repr::Ptr(c) => self.add(c)?,
+            Repr::List(id) => {
+                self.lists.insert(repr);
+                let element = self.list_elements.borrow()[id].clone();
+                self.record(element.repr)?;
+                for member in element.members {
+                    self.record(member)?;
+                }
+            }
             Repr::ListPtr(c) => {
                 self.lists.insert(repr);
                 self.add(c)?;
+            }
+            Repr::Map(_) => {
+                self.lists.insert(repr);
+                let (key, value) = self.map_parts(repr)?;
+                self.record(key)?;
+                self.record(value)?;
+                for element in [key, value] {
+                    if let Repr::Ptr(c) = element {
+                        self.record(Repr::ListPtr(c))?;
+                    }
+                    if element == Repr::ListStr {
+                        self.record(Repr::ListListStr)?;
+                    }
+                }
             }
             Repr::MapStrPtr(c) => {
                 self.lists.insert(repr);
@@ -106,37 +142,56 @@ impl Plan<'_> {
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
-            RuntimeTy::Function { .. } => Repr::Closure,
             RuntimeTy::Future(..) => Repr::Future,
             RuntimeTy::Uint8Array => Repr::Bytes,
             RuntimeTy::RustType => Repr::Opaque,
+            RuntimeTy::Function { .. } => Repr::Closure,
             RuntimeTy::Map { key, value }
                 if matches!(key.as_ref(), RuntimeTy::String)
-                    && matches!(value.as_ref(), RuntimeTy::Int) =>
-            {
-                Repr::MapStrInt
-            }
-            RuntimeTy::Map { key, value } if matches!(key.as_ref(), RuntimeTy::String) => {
-                match self.repr(value)? {
-                    Repr::Ptr(c) => Repr::MapStrPtr(c),
-                    _ => return Err(no("map value")),
+                    && self.repr(value).is_ok_and(|r| matches!(r, Repr::Ptr(c) if Some(c) == super::strings::builtin_class(self,"baml.regex.Group").ok())) =>
+            { let Repr::Ptr(c)=self.repr(value)? else {return Err(no("regex group map"))}; Repr::MapStrPtr(c) }
+            RuntimeTy::Map { key, value } => {
+                if matches!(key.as_ref(), RuntimeTy::Union(m) if !m.iter().all(scalar_key))
+                    || matches!(key.as_ref(), RuntimeTy::Unknown)
+                {
+                    return Err(no("map key callbacks"));
                 }
+                self.map_repr(
+                    if matches!(key.as_ref(), RuntimeTy::Union(_)) {
+                        Repr::Tagged
+                    } else {
+                        self.repr(key)?
+                    },
+                    self.repr(value)?,
+                    capture_codegen::declared_type(self, key)?,
+                    capture_codegen::declared_type(self, value)?,
+                    scalar_json_value(value),
+                )
             }
             RuntimeTy::Null => Repr::Null,
-            RuntimeTy::List(element) => match element.as_ref() {
-                RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::ListInt,
-                RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => {
-                    Repr::ListStr
+            RuntimeTy::List(element) => {
+                if matches!(element.as_ref(), RuntimeTy::Future(..)) {return Ok(Repr::ListFuture(self.closure_type(element)?.0));}
+                if matches!(element.as_ref(), RuntimeTy::Function { .. }) {
+                    return Ok(Repr::ListClosure(self.closure_type(element)?.0));
                 }
-                RuntimeTy::Function { .. } => Repr::ListClosure(self.closure_type(element)?.0),
-                RuntimeTy::Future(..) => Repr::ListFuture(self.closure_type(element)?.0),
-                RuntimeTy::List(t) if matches!(t.as_ref(), RuntimeTy::String) => Repr::ListListStr,
-                RuntimeTy::Union(_) | RuntimeTy::Class(..) => match self.repr(element)? {
-                    Repr::Ptr(c) => Repr::ListPtr(c),
-                    _ => return Err(no("list element")),
-                },
-                _ => return Err(no("list element")),
-            },
+                if matches!(element.as_ref(), RuntimeTy::TypeAlias(_)) {
+                    self.alias_list_repr(capture_codegen::capture_type(self, element)?)
+                } else if let RuntimeTy::Union(members) = element.as_ref() {
+                    self.list_union_repr(
+                        self.repr(element)?,
+                        members
+                            .iter()
+                            .map(|m| self.repr(m))
+                            .collect::<Gen<Vec<_>>>()?,
+                    )
+                } else {
+                    if matches!(element.as_ref(), RuntimeTy::Null) {
+                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+                    } else {
+                        self.list_repr(self.repr(element)?)
+                    }
+                }
+            }
             RuntimeTy::Interface(head, _, _) => Repr::Dyn(
                 self.index
                     .interface_at(head)
@@ -239,23 +294,48 @@ impl Plan<'_> {
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             T::Map { key, value }
-                if matches!(key.as_ref(), T::String) && matches!(value.as_ref(), T::Int) =>
-            {
-                Repr::MapStrInt
+                if matches!(key.as_ref(), T::String)
+                    && self.field_repr(value).is_ok_and(|r| matches!(r, Repr::Ptr(c) if Some(c) == super::strings::builtin_class(self,"baml.regex.Group").ok())) =>
+            { let Repr::Ptr(c)=self.field_repr(value)? else {return Err(no("regex group map"))}; Repr::MapStrPtr(c) }
+            T::Map { key, value } => {
+                if matches!(key.as_ref(), T::Union(m) if !m.iter().all(scalar_field_key))
+                    || matches!(key.as_ref(), T::Unknown)
+                {
+                    return Err(no("map key callbacks"));
+                }
+                self.map_repr(
+                    if matches!(key.as_ref(), T::Union(_)) {
+                        Repr::Tagged
+                    } else {
+                        self.field_repr(key)?
+                    },
+                    self.field_repr(value)?,
+                    capture_codegen::declared_field_type(self, key)?,
+                    capture_codegen::declared_field_type(self, value)?,
+                    scalar_json_field_value(value),
+                )
             }
-            T::Map {key,value} if matches!(key.as_ref(),T::String)=>match self.field_repr(value)? { Repr::Ptr(c)=>Repr::MapStrPtr(c),_=>return Err(no("map field value")) },
-            T::List(element) => match element.as_ref() {
-                T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::ListInt,
-                T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::ListStr,
-                T::Function { .. } => Repr::ListClosure(self.closure_field_type(element)?.0),
-                T::Future(..) => Repr::ListFuture(self.closure_field_type(element)?.0),
-                T::List(t) if matches!(t.as_ref(), T::String) => Repr::ListListStr,
-                T::Union(_) | T::Class(..) => match self.field_repr(element)? {
-                    Repr::Ptr(c) => Repr::ListPtr(c),
-                    _ => return Err(no("list field element")),
-                },
-                _ => return Err(no("list field element")),
-            },
+            T::List(element) => {
+                if matches!(element.as_ref(),T::Future(..)) {return Ok(Repr::ListFuture(self.closure_field_type(element)?.0));}
+                if matches!(element.as_ref(),T::Function {..}) { return Ok(Repr::ListClosure(self.closure_field_type(element)?.0)); }
+                if matches!(element.as_ref(),T::TypeAlias(_)) {
+                    self.alias_list_repr(capture_codegen::capture_wire_type(self,element)?)
+                }else if let T::Union(members) = element.as_ref() {
+                    self.list_union_repr(
+                        self.field_repr(element)?,
+                        members
+                            .iter()
+                            .map(|m| self.field_repr(m))
+                            .collect::<Gen<Vec<_>>>()?,
+                    )
+                } else {
+                    if matches!(element.as_ref(), T::Null) {
+                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+                    } else {
+                        self.list_repr(self.field_repr(element)?)
+                    }
+                }
+            }
             T::Interface(head, _, _) => Repr::Dyn(
                 self.program
                     .objects
@@ -318,12 +398,13 @@ impl Plan<'_> {
                 && package
                     .objects
                     .contains(&u32::try_from(object).expect("object index"))
-        }) && ((class.path.to_string().starts_with("panics.")
-            && class.path.to_string() != "panics.UserPanic")
-            || matches!(
-                class.path.to_string().as_str(),
-                "json.ParseError" | "json.DecodeError"
-            ))
+        }) && self.list_error_descriptor(object).is_none()
+            && ((class.path.to_string().starts_with("panics.")
+                && class.path.to_string() != "panics.UserPanic")
+                || matches!(
+                    class.path.to_string().as_str(),
+                    "json.ParseError" | "json.DecodeError"
+                ))
         {
             return Err(no("typed builtin exception class"));
         }
@@ -394,18 +475,27 @@ impl Plan<'_> {
 }
 
 pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
+    let mut next_class = rt_descriptors();
     let descriptors: BTreeMap<_, _> = plan
         .layouts
         .keys()
-        .enumerate()
-        .map(|(i, c)| (*c, i + rt_descriptors()))
+        .map(|c| {
+            let id = plan.list_error_descriptor(*c).unwrap_or_else(|| {
+                let id = next_class;
+                next_class += 1;
+                id
+            });
+            (*c, id)
+        })
         .collect();
     let lists: BTreeMap<_, _> = plan
         .lists
         .iter()
-        .scan(descriptors.len() + rt_descriptors(), |next, r| {
+        .scan(next_class, |next, r| {
             let id = *next;
-            *next += if matches!(*r, Repr::MapStrInt | Repr::MapStrPtr(_)) {
+            *next += if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
+                4
+            } else if matches!(*r, Repr::MapStrPtr(_)) {
                 3
             } else if r.growing() {
                 2
@@ -418,7 +508,9 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     let after_lists = lists
         .iter()
         .map(|(repr, id)| {
-            id + if matches!(*repr, Repr::MapStrInt | Repr::MapStrPtr(_)) {
+            id + if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
+                4
+            } else if matches!(repr, Repr::MapStrPtr(_)) {
                 3
             } else if repr.growing() {
                 2
@@ -427,17 +519,20 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             }
         })
         .max()
-        .unwrap_or(rt_descriptors() + descriptors.len());
+        .unwrap_or(next_class);
     let after_descriptors = after_lists
         + usize::from(plan.task_support)
-        + usize::from(plan.bigint_support)
+        + usize::from(plan.bigints)
         + if plan.closure_descriptors().is_some() {
             2
         } else {
             0
         };
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::MAP_KEY_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,\n");
     for (&object, layout) in &plan.layouts {
+        if plan.list_error_descriptor(object).is_some() {
+            continue;
+        }
         let class = plan.class(object);
         if super::tasks::class_is(plan, object, "future.Future") {
             writeln!(
@@ -467,22 +562,24 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                         },
                         match layout.fields[i] {
                             Repr::Ptr(c) => descriptors[&c] + 3,
-                            r @ (Repr::ListInt
+                            r @ (Repr::List(_)
+                            | Repr::ListInt
                             | Repr::ListPtr(_)
                             | Repr::ListStr
                             | Repr::ListListStr
                             | Repr::ListClosure(_)
                             | Repr::ListFuture(_)
                             | Repr::MapStrInt
+                            | Repr::Map(_)
                             | Repr::MapStrPtr(_)) => lists[&r] + 3,
                             Repr::Tagged => after_descriptors + 3,
                             Repr::Dyn(i) => after_descriptors + i + 4,
                             Repr::Str => 3,
-                            Repr::Opaque => 15,
-                            Repr::Bytes => 16,
+                            Repr::Opaque => 18,
+                            Repr::Bytes => 19,
                             Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
                             Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
-                            Repr::Bigint => plan.bigint_descriptor().unwrap() + 3,
+                            Repr::Bigint => plan.bigint_descriptor() + 3,
                             Repr::Future => plan.future_descriptor().unwrap() + 3,
                             Repr::Int
                                 if super::tasks::class_is(plan, object, "spawn.Limit")
@@ -520,22 +617,36 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:{finalizer}}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
-        if matches!(*repr, Repr::MapStrInt | Repr::MapStrPtr(_)) {
+        if matches!(*repr, Repr::MapStrPtr(_)) {
             for i in 0..3 {
-                let module = if matches!(*repr, Repr::MapStrPtr(_)) {
-                    "regex_map"
-                } else {
-                    "maps"
-                };
-                writeln!(&mut out, "rt::{module}::descriptors({desc})[{i}],").unwrap();
+                writeln!(out, "rt::regex_map::descriptors({desc})[{i}],").unwrap();
+            }
+            continue;
+        }
+        if let Repr::Map(_) = repr {
+            let (key, value) = plan.map_parts(*repr)?;
+            let key = maps::slot_type(key, &descriptors, &lists)?;
+            let value = maps::slot_type(value, &descriptors, &lists)?;
+            for i in 0..4 {
+                writeln!(
+                    out,
+                    "rt::maps::typed_descriptors::<{key},{value}>({desc})[{i}],"
+                )
+                .unwrap();
+            }
+            continue;
+        }
+        if *repr == Repr::MapStrInt {
+            for i in 0..4 {
+                writeln!(&mut out, "rt::maps::descriptors({desc})[{i}],").unwrap();
             }
             continue;
         }
         if repr.growing() {
-            let slot = Emitter::element(*repr)?.slot()?;
+            let slot = plan.element(*repr)?.slot()?;
             writeln!(
                 &mut out,
-                "rt::lists::descriptor({}),rt::lists::buffer_descriptor::<{slot}>({}),",
+                "rt::lists::descriptor::<{slot}>({}),rt::lists::buffer_descriptor::<{slot}>({}),",
                 desc + 3,
                 desc + 4
             )
@@ -560,13 +671,25 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         .unwrap();
     }
     if let Some(future) = plan.future_descriptor() {
-        writeln!(&mut out, "rt::tasks::future_descriptor({}),", future + 3).unwrap();
+        writeln!(out, "rt::tasks::future_descriptor({}),", future + 3).unwrap();
     }
-    if let Some(bigint) = plan.bigint_descriptor() {
-        writeln!(&mut out, "rt::tasks::bigint_descriptor({}),", bigint + 3).unwrap();
+    if plan.bigints {
+        writeln!(
+            out,
+            "rt::bigint::descriptor({}),",
+            plan.bigint_descriptor() + 3
+        )
+        .unwrap();
     }
-
     out.push_str("];\n");
+    if plan.bigints {
+        writeln!(
+            out,
+            "const BIGINT_TAG:u64={};",
+            plan.bigint_descriptor() + 3
+        )
+        .unwrap();
+    }
     out.push_str(&capture_codegen::emit(
         plan,
         &descriptors,
@@ -603,31 +726,44 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    14
+    17
 }
 
 impl Plan<'_> {
     // Feature descriptors follow the ordinary typed layouts. Constructors take
     // their ids explicitly so other features can extend the runtime prefix.
+    fn descriptor_tail(&self) -> usize {
+        rt_descriptors()
+            + self
+                .layouts
+                .keys()
+                .filter(|c| self.list_error_descriptor(**c).is_none())
+                .count()
+            + self
+                .lists
+                .iter()
+                .map(|r| {
+                    if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
+                        4
+                    } else if matches!(r, Repr::MapStrPtr(_)) {
+                        3
+                    } else if r.growing() {
+                        2
+                    } else {
+                        1
+                    }
+                })
+                .sum::<usize>()
+    }
     pub(super) fn closure_descriptors(&self) -> Option<(usize, usize)> {
-        if !self.environments && self.callables.is_empty() {
-            return None;
-        }
-        let lists = self
-            .lists
-            .iter()
-            .map(|repr| {
-                if matches!(*repr, Repr::MapStrInt | Repr::MapStrPtr(_)) {
-                    3
-                } else if repr.growing() {
-                    2
-                } else {
-                    1
-                }
-            })
-            .sum::<usize>();
-        let cell = rt_descriptors() + self.layouts.len() + lists;
-        Some((cell, cell + 1))
+        (self.environments || !self.callables.is_empty()).then(|| {
+            let n = self.descriptor_tail();
+            (n, n + 1)
+        })
+    }
+    pub(super) fn future_descriptor(&self) -> Option<usize> {
+        self.task_support
+            .then(|| self.descriptor_tail() + usize::from(self.closure_descriptors().is_some()) * 2)
     }
 }
 
@@ -653,52 +789,48 @@ fn recursive_container<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool {
 }
 
 impl Plan<'_> {
-    pub(super) fn future_descriptor(&self) -> Option<usize> {
-        self.task_support.then(|| {
-            self.closure_descriptors().map_or_else(
-                || {
-                    rt_descriptors()
-                        + self.layouts.len()
-                        + self
-                            .lists
-                            .iter()
-                            .map(|r| {
-                                if matches!(*r, Repr::MapStrInt | Repr::MapStrPtr(_)) {
-                                    3
-                                } else if r.growing() {
-                                    2
-                                } else {
-                                    1
-                                }
-                            })
-                            .sum::<usize>()
-                },
-                |(_, env)| env + 1,
-            )
-        })
+    // Feature descriptors follow the ordinary typed layouts. Constructors take
+    // their ids explicitly so other features can extend the runtime prefix.
+}
+
+fn scalar_key(ty: &RuntimeTy) -> bool {
+    matches!(
+        ty,
+        RuntimeTy::Int
+            | RuntimeTy::Bool
+            | RuntimeTy::Float
+            | RuntimeTy::Null
+            | RuntimeTy::String
+            | RuntimeTy::Literal(_, _)
+    )
+}
+fn scalar_field_key(ty: &bex_vm_types::RuntimeTy) -> bool {
+    use bex_vm_types::RuntimeTy as T;
+    matches!(
+        ty,
+        T::Int | T::Bool | T::Float | T::Null | T::String | T::Literal(_, _)
+    )
+}
+
+fn scalar_json_value(ty: &RuntimeTy) -> bool {
+    if let RuntimeTy::Union(members) = ty {
+        members.iter().all(scalar_json_value)
+    } else {
+        scalar_key(ty)
+    }
+}
+fn scalar_json_field_value(ty: &bex_vm_types::RuntimeTy) -> bool {
+    if let bex_vm_types::RuntimeTy::Union(members) = ty {
+        members.iter().all(scalar_json_field_value)
+    } else {
+        scalar_field_key(ty)
     }
 }
 
 impl Plan<'_> {
-    pub(super) fn bigint_descriptor(&self) -> Option<usize> {
-        self.bigint_support.then(|| {
-            rt_descriptors()
-                + self.layouts.len()
-                + self
-                    .lists
-                    .iter()
-                    .map(|r| {
-                        if matches!(*r, Repr::MapStrInt | Repr::MapStrPtr(_)) {
-                            3
-                        } else if r.growing() {
-                            2
-                        } else {
-                            1
-                        }
-                    })
-                    .sum::<usize>()
-                + usize::from(self.environments || !self.callables.is_empty()) * 2
-                + usize::from(self.task_support)
-        })
+    pub(super) fn bigint_descriptor(&self) -> usize {
+        self.descriptor_tail()
+            + usize::from(self.closure_descriptors().is_some()) * 2
+            + usize::from(self.task_support)
     }
 }
