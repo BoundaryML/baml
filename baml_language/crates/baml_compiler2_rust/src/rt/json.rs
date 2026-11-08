@@ -11,6 +11,7 @@ impl Plan<'_> {
                 .ok_or_else(|| no("unregistered type argument"))
         };
         match ty {
+            T::Function { .. } => Ok(usize::MAX - 1),
             T::Int => Ok(0),
             T::String => Ok(1),
             T::List(_) | T::Union(_) => {

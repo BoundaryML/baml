@@ -59,6 +59,11 @@ fn compile(
         list_render_roots: std::cell::RefCell::new(BTreeSet::new()),
         json_decode_codes: BTreeSet::new(),
         json_list_types: Vec::new(),
+        environments: false,
+        captures: BTreeMap::new(),
+        lambda_bodies: BTreeMap::new(),
+        callables: BTreeSet::new(),
+        closure_lists: BTreeMap::new(),
     };
     let admission::Admitted {
         all,

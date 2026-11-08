@@ -6,9 +6,12 @@ use super::{Artifacts, PROBES, kpis, pack_result};
 // Enable only when all telemetry matrix cells pass, including non-empty
 // recordings and exact normalized equality.
 const TELEMETRY_SUPPORTED: bool = false;
+// The standalone probes exercise closures without the shared project's global
+// initializer dependency. Their admission is a required coverage baseline.
+const REQUIRED_PROBES: &[&str] = &["RtClosures", "RtEmptyClosures"];
 
-pub fn supports_level(level: &str) -> bool {
-    level == "off" || TELEMETRY_SUPPORTED
+pub fn supports_level(probe: &str, level: &str) -> bool {
+    level == "off" || TELEMETRY_SUPPORTED || REQUIRED_PROBES.contains(&probe)
 }
 
 // List coverage baseline: each admitted fixture must keep passing both runtime
@@ -105,7 +108,8 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         } else if super::is_list_probe(probe) {
             manifest.join("rust_diff/list_probes")
         } else {
-            manifest.join("rust_diff")
+            super::standalone_closure_source(manifest, probe)
+                .unwrap_or_else(|| manifest.join("rust_diff"))
         };
         let result = pack_result(
             build,
@@ -182,7 +186,16 @@ impl Coverage {
                 .map(|(name, result)| {
                     (
                         name.clone(),
-                        result.as_ref().map(|_| ()).map_err(Clone::clone),
+                        match result {
+                            Err(Rejection::Unsupported(reason))
+                                if REQUIRED_PROBES.contains(&name.as_str()) =>
+                            {
+                                Err(Rejection::Fail(format!(
+                                    "required rt coverage regressed: {reason}"
+                                )))
+                            }
+                            _ => result.as_ref().map(|_| ()).map_err(Clone::clone),
+                        },
                     )
                 })
                 .collect(),
@@ -251,7 +264,7 @@ impl Coverage {
             if TELEMETRY_SUPPORTED {
                 "required"
             } else {
-                "not yet supported"
+                "not yet supported generally; required for standalone closure probes"
             }
         );
         for (construct, count) in blockers {
@@ -315,4 +328,19 @@ fn list_coverage_baseline_rejects_admission_regressions() {
         require_list_coverage::<()>("Closures", Err(Rejection::Unsupported("closures".into()))),
         Err(Rejection::Unsupported(_))
     ));
+}
+
+#[test]
+fn standalone_closure_coverage_cannot_silently_become_unsupported() {
+    let artifacts = BTreeMap::from([(
+        "RtClosures".into(),
+        Err(Rejection::Unsupported("captured local".into())),
+    )]);
+    let coverage = Coverage::new(&artifacts);
+    assert_eq!(coverage.build_failures().len(), 1);
+    assert!(coverage.report().contains("required rt coverage regressed"));
+    for level in ["off", "low", "medium", "high", "default"] {
+        assert!(supports_level("RtClosures", level));
+        assert!(supports_level("RtEmptyClosures", level));
+    }
 }

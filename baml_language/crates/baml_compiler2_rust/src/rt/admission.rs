@@ -43,6 +43,13 @@ pub(super) fn collect<'db>(
     }
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
+    // Specialization owns and inserts MIR. Record body addresses only after that
+    // map is complete, including the clones of closure bodies.
+    for (&object, mir) in &all {
+        if let MirFunctionKind::Bytecode(body) = &mir.kind {
+            plan.lambda_bodies.insert(body as *const _ as usize, object);
+        }
+    }
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -58,6 +65,10 @@ pub(super) fn collect<'db>(
             return Err(no(plan.index.display(object)));
         };
         registry::admit(registry::Admission::Function(mir))?;
+        for target in super::closures::discover(db, plan, object, mir)? {
+            calls.entry(object).or_default().insert(target);
+            queue.push_back(target);
+        }
         if body.locals.len() > 1024 {
             return Err(no("more than 1024 locals in one body"));
         }
@@ -127,6 +138,7 @@ pub(super) fn collect<'db>(
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
             registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;
+            plan.environments |= local.is_captured;
             if iters.contains(&i) {
                 continue;
             }
@@ -207,6 +219,24 @@ pub(super) fn collect<'db>(
                     }
                 }
             }
+        }
+    }
+    // Dynamic call cycles need real native frames and the stack guard too.
+    // Every materialized callable has already been reached by discover().
+    for &object in &reached {
+        if let MirFunctionKind::Bytecode(body) = &all[&object].kind
+            && body.blocks.iter().any(|b| {
+                matches!(
+                    b.terminator,
+                    Some(Terminator::Call {
+                        callee: baml_compiler2_mir::Operand::Copy(_)
+                            | baml_compiler2_mir::Operand::Move(_),
+                        ..
+                    })
+                )
+            })
+        {
+            calls.entry(object).or_default().extend(&plan.callables);
         }
     }
     let mir = &all[&entry];

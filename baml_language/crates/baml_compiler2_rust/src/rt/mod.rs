@@ -52,6 +52,11 @@ struct Plan<'a> {
     list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
     json_decode_codes: BTreeSet<usize>,
     json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
+    environments: bool,
+    captures: BTreeMap<usize, Vec<Repr>>,
+    lambda_bodies: BTreeMap<usize, usize>,
+    callables: BTreeSet<usize>,
+    closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,

@@ -76,10 +76,19 @@ pub(super) fn emit(
             });
         }
     }
+    // Empty callable lists can mention classes never allocated by the entry.
+    // Their type captures still require the declaration, without a heap layout.
+    let mut signature_declarations = BTreeSet::new();
+    for signature in plan.closure_lists.values() {
+        signature.visit_heads(&mut |object| {
+            signature_declarations.insert(*object);
+        });
+    }
     let objects: BTreeSet<_> = runtime
         .iter()
         .copied()
         .chain(descriptors.keys().map(|c| plan.class_origin(*c)))
+        .chain(signature_declarations)
         .chain([naming])
         .chain(plan.enums.iter().copied())
         .chain(extra)
@@ -101,14 +110,19 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
-        let class = if desc < rt_descriptors() {
+        let class = if desc < layout::rt_descriptors() {
             Some(runtime[desc - 1])
         } else {
             descriptors
                 .iter()
                 .find_map(|(&object, &index)| (index == desc).then_some(object))
         };
-        let shape = if let Some(class) = class {
+        let shape = if plan
+            .closure_descriptors()
+            .is_some_and(|(_, closure)| desc == closure)
+        {
+            "Closure".to_owned()
+        } else if let Some(class) = class {
             if let Some((_, args, _)) = plan.class_instances.iter().find(|(_, _, id)| *id == class)
             {
                 let args = args
@@ -364,6 +378,15 @@ fn capture_list_element(
     lists: &BTreeMap<Repr, usize>,
     repr: Repr,
 ) -> Gen<(usize, String)> {
+    if let Repr::ListClosure(id) = repr {
+        let full = super::closures::capture_type(&plan.closure_lists[&id])?;
+        return Ok((
+            plan.closure_descriptors().unwrap().1 + 3,
+            full.strip_prefix("rt::telemetry::capture::Type::")
+                .unwrap()
+                .to_owned(),
+        ));
+    }
     let (tag, mut ty) = capture_element(plan, descriptors, lists, plan.element(repr)?)?;
     if let Repr::List(id) = repr {
         let members = plan.list_elements.borrow()[id].members.clone();
