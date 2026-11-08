@@ -2188,10 +2188,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     return map;
   }, [functions]);
 
-  // Telemetry reads the profile store, so it refreshes when a run completes
-  // rather than following the in-memory run patches.
-  const completedRunCount = executionSnapshot.runs.filter(
-    (run) => run.completedAtMs != null,
+  // Telemetry reads the profile store, so it refreshes when a run completes,
+  // and polls while one is in flight, rather than following the in-memory
+  // run patches. A run's end arrives as a patch that sets its status but not
+  // `completedAtMs`, so the status is what says it ended.
+  const completedRunCount = executionSnapshot.runs.filter((run) =>
+    isTerminalRunStatus(run.status),
   ).length;
   const telemetry = useTelemetry({
     active: activeTab === 'telemetry',
@@ -2199,6 +2201,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     llmFunctions: llmFunctionNames,
     project: selectedProject,
     revision: completedRunCount,
+    running: completedRunCount < executionSnapshot.runs.length,
   });
   const handleOpenTelemetrySource = useCallback(
     (file: string, line: number | null) => {
