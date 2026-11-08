@@ -23,7 +23,8 @@ impl Emitter<'_, '_> {
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
-            r @ (Repr::ListInt
+            r @ (Repr::List(_)
+            | Repr::ListInt
             | Repr::ListStr
             | Repr::ListListStr
             | Repr::ListPtr(_)
@@ -141,13 +142,13 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (base, repr) = self.place(base)?;
-                let element = Self::element(repr)?;
+                let element = self.plan.element(repr)?;
                 if self.local(index.0)? != Repr::Int {
                     return Err(no("non-int list index"));
                 }
                 if repr.growing() {
                     let slot = element.slot()?;
-                    return Ok((self.fallible(&format!("rt::lists::List::<{slot}>::from_raw({base}).get(&rt::strings::Cx::current(),l{}).map(|v|v.as_raw())", index.0)), element));
+                    return Ok((self.fallible(&format!("rt::lists::List::<{slot}>::from_raw({base}).get(&rt::strings::Cx::current(),l{}).map(|v|{})", index.0, element.from_slot("v"))), element));
                 }
                 let slot = self.fallible(&format!("rt::list_slot({base},l{})", index.0));
                 Ok((format!("*({slot} as *const {})", element.rust()), element))
@@ -158,10 +159,29 @@ impl Emitter<'_, '_> {
     pub(super) fn operand(&self, o: &Operand<'_>) -> Gen<(String, Repr)> {
         match o {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
-            Operand::Constant(Constant::Float(f)) => {
-                Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
-            }
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
+            Operand::Constant(Constant::Float(f)) => {
+                // Bytecode pools constants by floating-point equality, so the
+                // first signed zero in this function supplies both zero signs.
+                // Use that exact constant's bits, matching the VM's loads.
+                let bits = self
+                    .plan
+                    .index
+                    .positions(self.object)
+                    .constants
+                    .iter()
+                    .find_map(|value| {
+                        if let bex_vm_types::ConstValue::Float(value) = value
+                            && value == f
+                        {
+                            Some(value.to_bits())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| f.to_bits());
+                Ok((format!("f64::from_bits({bits})"), Repr::Float))
+            }
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => Ok((
                 self.fallible(&format!(
@@ -208,7 +228,10 @@ impl Emitter<'_, '_> {
             } => {
                 let (obj, container) = self.place(base)?;
                 if container.growing() {
-                    return Err(no("growing list indexed assignment"));
+                    let slot = repr.slot()?;
+                    let value = repr.to_slot(&src)?;
+                    let store = self.fallible(&format!("rt::lists::List::<{slot}>::from_raw(object).set(&rt::strings::Cx::current(),l{},value)", index.0));
+                    return Ok(format!("{{let value={value};let object={obj};{store};}}\n"));
                 }
                 let slot = self.fallible(&format!("rt::list_slot(object,l{})", index.0));
                 let write = if repr.pointer() {

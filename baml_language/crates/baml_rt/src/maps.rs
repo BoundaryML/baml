@@ -76,6 +76,21 @@ impl StringIntMap {
             owner: PhantomData,
         }
     }
+    pub(crate) fn structural_string(self, cx: &Cx) -> String {
+        use std::fmt::Write;
+        let object = self.pointer as *const Object;
+        let mut text = String::from("{");
+        for i in 0..unsafe { (*object).len } {
+            if i != 0 {
+                text.push_str(", ");
+            }
+            let entry = unsafe { &*(((*object).entries + 16) as *const Entry).add(i) };
+            let key = unsafe { Str::from_raw(entry.key) };
+            write!(&mut text, "{:?}: {}", key.as_str(cx), entry.value).unwrap();
+        }
+        text.push('}');
+        text
+    }
     pub fn as_raw(self) -> usize {
         self.pointer
     }
@@ -126,6 +141,18 @@ impl StringIntMap {
             (*object).len = len + 1;
         }
         Ok(Dyn { tag: 2, payload: 0 })
+    }
+    /// # Safety
+    /// `desc` and `desc+1` describe a growing List<i64> and its buffer.
+    pub unsafe fn growing_values(self, cx: &mut Cx, desc: u32) -> R<usize> {
+        let object = self.pointer as *const Object;
+        let len = unsafe { (*object).len };
+        let list = unsafe { crate::lists::List::<i64>::with_capacity(cx, desc, len) }?;
+        for i in 0..len {
+            let value = unsafe { (*(((*object).entries + 16) as *const Entry).add(i)).value };
+            list.push(cx, value)?;
+        }
+        Ok(list.as_raw())
     }
     /// # Safety
     /// `desc` describes the existing fixed int-list layout (length at 8, i64

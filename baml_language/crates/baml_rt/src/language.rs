@@ -317,6 +317,12 @@ fn driver_configured(
                     .frames
                     .iter()
                     .rev()
+                    .filter(|f| {
+                        error.value == 0
+                            || !f
+                                .file
+                                .starts_with(bex_vm_types::errors::BUILTIN_SOURCE_PREFIX)
+                    })
                     .map(|f| (f.file, f.line, f.function)),
             );
             if error.value == 0 {

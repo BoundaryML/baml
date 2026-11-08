@@ -79,17 +79,53 @@ impl Emitter<'_, '_> {
                 {
                     return Ok((format!("({l} {op} {r})"), Repr::Bool));
                 }
-                if lt == Repr::Float && rt == Repr::Float {
-                    let repr = match op {
-                        BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
-                            Repr::Float
-                        }
-                        BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                            Repr::Bool
-                        }
-                        _ => return Err(no("float binary operation")),
-                    };
-                    return Ok((format!("({l} {op} {r})"), repr));
+                if lt == Repr::Str && rt == Repr::Str && matches!(op, BinOp::Eq | BinOp::Ne) {
+                    let expression = format!(
+                        "{{let a={l};let b={r};if a==0 || b==0 {{a==b}} else {{rt::strings::Str::from_raw(a).as_str(&rt::strings::Cx::current())==rt::strings::Str::from_raw(b).as_str(&rt::strings::Cx::current())}}}}"
+                    );
+                    return Ok((
+                        if *op == BinOp::Ne {
+                            format!("!({expression})")
+                        } else {
+                            expression
+                        },
+                        Repr::Bool,
+                    ));
+                }
+                if lt == Repr::Bool && rt == Repr::Bool && matches!(op, BinOp::Eq | BinOp::Ne) {
+                    return Ok((format!("({l} {op} {r})"), Repr::Bool));
+                }
+                if matches!(lt, Repr::Float | Repr::Int)
+                    && matches!(rt, Repr::Float | Repr::Int)
+                    && (lt == Repr::Float || rt == Repr::Float)
+                {
+                    let compare = matches!(
+                        op,
+                        BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge
+                    );
+                    if compare {
+                        let expression = match op {
+                            BinOp::Eq => format!("rt::float_eq(({l}) as f64,({r}) as f64)"),
+                            BinOp::Ne => format!("!rt::float_eq(({l}) as f64,({r}) as f64)"),
+                            op => {
+                                let method = match op {
+                                    BinOp::Lt => "is_lt",
+                                    BinOp::Le => "is_le",
+                                    BinOp::Gt => "is_gt",
+                                    BinOp::Ge => "is_ge",
+                                    _ => unreachable!(),
+                                };
+                                format!("rt::float_cmp(({l}) as f64,({r}) as f64).{method}()")
+                            }
+                        };
+                        return Ok((expression, Repr::Bool));
+                    }
+                    if matches!(
+                        op,
+                        BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod
+                    ) {
+                        return Ok((format!("(({l}) as f64 {op} ({r}) as f64)"), Repr::Float));
+                    }
                 }
                 if lt != Repr::Int || rt != Repr::Int {
                     return Err(no("non-integer binary operation"));
@@ -115,6 +151,17 @@ impl Emitter<'_, '_> {
                     _ => return Err(no("division/remainder")),
                 };
                 Ok((format!("({l} {op} {r})"), ty))
+            }
+            Rvalue::UnaryOp {
+                op: UnaryOp::Neg,
+                operand,
+            } => {
+                let (v, ty) = self.operand(operand)?;
+                match ty {
+                    Repr::Float => Ok((format!("-({v})"), ty)),
+                    Repr::Int => Ok((self.fallible(&format!("rt::sub(0,{v})")), ty)),
+                    _ => Err(no("non-numeric negation")),
+                }
             }
             Rvalue::UnaryOp {
                 op: UnaryOp::Not,

@@ -107,12 +107,19 @@ pub(super) fn collect<'db>(
                         baml_compiler2_mir::RealizedTy::try_from(ty)
                             .map_err(|_| no("non-concrete JSON argument"))?,
                     );
-                    let classes = plan.json_class_types(&template)?;
-                    for &c in &classes {
-                        plan.add(c)?;
-                    }
-                    if !plan.json_types.contains(&classes) {
-                        plan.json_types.push(classes);
+                    if let Ok(classes) = plan.json_class_types(&template) {
+                        for &c in &classes {
+                            plan.add(c)?;
+                        }
+                        if !plan.json_types.contains(&classes) {
+                            plan.json_types.push(classes);
+                        }
+                    } else {
+                        let repr = plan.template_repr(&template)?;
+                        plan.record(repr)?;
+                        if !plan.json_list_types.contains(&template) {
+                            plan.json_list_types.push(template);
+                        }
                     }
                 }
             }
@@ -175,6 +182,24 @@ pub(super) fn collect<'db>(
                     }
                     if let Some(callee) = reach.json_decode {
                         json_decode = Some(callee);
+                        let Some(Terminator::Call { args, .. }) = &block.terminator else {
+                            unreachable!()
+                        };
+                        let code = match &args[0] {
+                            baml_compiler2_mir::Operand::Copy(
+                                baml_compiler2_mir::Place::Local(l),
+                            )
+                            | baml_compiler2_mir::Operand::Move(
+                                baml_compiler2_mir::Place::Local(l),
+                            ) => {
+                                let Repr::Type(code) = plan.local_repr(body, l.0, 0)? else {
+                                    return Err(no("JSON type argument"));
+                                };
+                                code
+                            }
+                            _ => return Err(no("JSON type argument storage")),
+                        };
+                        plan.json_decode_codes.insert(code);
                     }
                     for target in reach.targets {
                         calls.entry(object).or_default().insert(target);

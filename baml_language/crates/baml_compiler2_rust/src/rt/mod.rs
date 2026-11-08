@@ -24,6 +24,11 @@ struct Layout {
     pointers: usize,
     tagged: usize,
 }
+#[derive(Clone, PartialEq, Eq)]
+struct ListElement {
+    repr: Repr,
+    members: Vec<Repr>,
+}
 struct Plan<'a> {
     root: SourceRoot,
     lang: baml_base::LangRoots,
@@ -31,6 +36,7 @@ struct Plan<'a> {
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
+    list_elements: std::cell::RefCell<Vec<ListElement>>,
     json_types: Vec<Vec<usize>>,
     enums: BTreeSet<usize>,
     specialized_calls: BTreeMap<(usize, usize), usize>,
@@ -42,6 +48,10 @@ struct Plan<'a> {
     dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
     function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
+    list_stringify: bool,
+    list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
+    json_decode_codes: BTreeSet<usize>,
+    json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -87,7 +97,9 @@ mod errors;
 mod expressions;
 mod host;
 mod json;
+mod json_lists;
 mod layout;
+mod lists;
 mod loop_ranges;
 mod places;
 mod repr;

@@ -14,6 +14,28 @@ mod initializer_probes;
 
 const PROBES: &[&str] = &[
     "StackAllocation",
+    "RuntimeListFloatConstants",
+    "RuntimeListStructuralJoin",
+    "RuntimeListFloatSpecials",
+    "RuntimeListJsonNonFinite",
+    "RuntimeListReductions",
+    "RuntimeListReductionOverflow",
+    "RuntimeListMedianError",
+    "RuntimeListMaps",
+    "RuntimeListRecursiveJson",
+    "RuntimeListLiteralJson",
+    "RuntimeListLiteralJsonError",
+    "RuntimeListJsonFieldError",
+    "RuntimeListJsonOptional",
+    "RuntimeListJsonOptionalError",
+    "RuntimeListBuiltins",
+    "RuntimeListInsertError",
+    "RuntimeLists",
+    "RuntimeListBounds",
+    "RuntimeListStoreBounds",
+    "RuntimeListJson",
+    "RuntimeListJsonField",
+    "RuntimeListJsonError",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -274,12 +296,16 @@ fn probe_timeout_kills_and_reaps() {
     assert!(error.contains("kill: Ok(()), reap: Ok("), "{error}");
 }
 
+fn is_list_probe(probe: &str) -> bool {
+    probe.starts_with("RuntimeList")
+}
+
 fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
     std::fs::create_dir_all(build).unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
     if PROBES
         .iter()
-        .any(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
+        .any(|p| !is_list_probe(p) && only.is_none_or(|o| o.split(',').any(|name| name == *p)))
     {
         let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
         pack(
@@ -290,6 +316,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
             PROBES
                 .iter()
                 .copied()
+                .filter(|p| !is_list_probe(p))
                 .filter(|p| !initializer_probes::collects_tests(p))
                 .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
                 .chain(["GlobalCalls", "GlobalCallPending", "InitializerTestSummary"]),
@@ -329,9 +356,31 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .map(|(name, path)| (name.to_owned(), path)),
         );
         for probe in PROBES {
+            if is_list_probe(probe) {
+                continue;
+            }
             artifacts
                 .entry((*probe).into())
                 .or_insert_with(|| executable.clone());
+        }
+    }
+    let list_probes: Vec<_> = PROBES
+        .iter()
+        .copied()
+        .filter(|p| is_list_probe(p))
+        .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
+        .collect();
+    if !list_probes.is_empty() {
+        let executable = build.join("list-probes");
+        pack(
+            build,
+            workspace,
+            &manifest.join("rust_diff/list_probes"),
+            &executable,
+            list_probes.iter().copied(),
+        );
+        for probe in list_probes {
+            artifacts.insert(probe.into(), executable.clone());
         }
     }
     for fixture in kpis::fixtures(workspace, only) {
@@ -586,6 +635,15 @@ fn rust_differential() {
             );
         }
     }
+    // Focused runtime jobs retain the bytecode oracle and both GC modes, while
+    // avoiding unrelated compiled-VM variants and unsupported telemetry levels.
+    // The default merged-branch gate still runs the complete matrix.
+    let rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
+    let backends: Vec<_> = BACKENDS
+        .iter()
+        .filter(|b| !rt_only || matches!(b.name, "bytecode" | "rt" | "rt-gc-stress"))
+        .collect();
+    let levels: &[&str] = if rt_only { &["off"] } else { LEVELS };
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();

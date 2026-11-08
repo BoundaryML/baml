@@ -124,7 +124,11 @@ impl Emitter<'_, '_> {
             Repr::Bool => Some(2),
             Repr::Null => Some(3),
             Repr::Naming | Repr::Enum(_) => Some(5),
-            Repr::ListInt | Repr::ListStr | Repr::ListListStr | Repr::ListPtr(_) => Some(6),
+            Repr::List(_)
+            | Repr::ListInt
+            | Repr::ListStr
+            | Repr::ListListStr
+            | Repr::ListPtr(_) => Some(6),
             Repr::MapStrInt => Some(7),
             Repr::Ptr(c) => {
                 let c = self.plan.class(c);

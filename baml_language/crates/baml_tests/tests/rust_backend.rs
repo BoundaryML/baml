@@ -817,11 +817,10 @@ fn rt_trees_and_fail_closed_admission() {
     .unwrap();
     assert!(richards.contains("static VTABLE"));
     assert!(richards.contains("rt::write_dyn("));
-    assert!(richards.contains("rt::list_slot("));
-    assert!(richards.contains("ElementLayout::Pointer"));
+    assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
+    assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
     for source in [
         "function main() -> string { \"hello\" }",
-        "function main() -> int { let a = [[1], [2]]; a[0][0] }",
         "const X = 1; function main() -> int { X }",
     ] {
         assert!(
@@ -890,7 +889,7 @@ fn rt_string_receiver_storage_and_function_value_rejection() {
 }
 
 #[test]
-fn rt_growing_lists_and_fail_closed_mutation() {
+fn rt_growing_lists_and_indexed_mutation() {
     for (source, accepted) in [
         (
             include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
@@ -898,7 +897,7 @@ fn rt_growing_lists_and_fail_closed_mutation() {
         ),
         (
             "function main() -> int { let xs: string[] = [\"a\"]; xs[0] = \"b\"; xs.length() }",
-            false,
+            true,
         ),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("lists.baml", source)]);
@@ -916,8 +915,8 @@ fn rt_growing_lists_and_fail_closed_mutation() {
         );
         if accepted {
             let source = result.unwrap();
-            assert!(source.contains("rt::lists::buffer_descriptor::<rt::strings::Str>"));
-            assert!(source.contains("fn rt_array_push"));
+            assert!(source.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
+            assert!(source.contains("rt::lists::List::<rt::lists::Ptr>"));
         } else {
             assert!(result.unwrap_err().contains("unsupported in baml_rt"));
         }
@@ -989,10 +988,6 @@ fn rt_source_bytes_and_diagnostics() {
         ("initializer", "const X = 1; function main() -> int { X }"),
         ("entry", "function main() -> string { \"hello\" }"),
         (
-            "nested_list",
-            "function main() -> int { let a = [[1], [2]]; a[0][0] }",
-        ),
-        (
             "hook",
             "/// baml:$trace=trace.span\nfunction main() -> int { 1 }",
         ),
@@ -1010,16 +1005,15 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "bf2717f60b03353fda6186125f689db635c4caa61a726e5d73fc145a027f412e",
-            "richards" => "8620e40942cf422fc276b7d49ef78c7103042ddee5acc5077f45cac3d06e3654",
-            "agent" => "b5d63e42968d30eb0397a54d2518fe9269895ad724a34f215268b8c34cc5cacb",
+            "trees" => "90e124f246d50406fed8944a576b747fd1997745d3abb5c578a705113b0cdb9b",
+            "richards" => "23e2a639daea95631843ce00f994ee2b46ec0acc07dea7e49dc9b0600b791c1b",
+            "agent" => "b35618f3249b9b661b05ab62fbff79be4dd43812d0e15d8c2e3240b24b9dec29",
             _ => "",
         };
         if expected.is_empty() {
             let expected = match name {
                 "initializer" => "unsupported in baml_rt: top-level initializers",
                 "entry" => "unsupported in baml_rt: entry must have no parameters and return int",
-                "nested_list" => "unsupported in baml_rt: list element",
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };

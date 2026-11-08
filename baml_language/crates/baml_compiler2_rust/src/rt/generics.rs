@@ -126,7 +126,11 @@ pub(super) fn expand<'db>(
                             continue;
                         };
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
-                            || plan.index.display(callee) == "baml.json.decode"
+                            || lists::handles(plan.index.display(callee))
+                            || matches!(
+                                plan.index.display(callee),
+                                "baml.json.decode" | "baml.json.stringify" | "baml.Array.filled"
+                            )
                         {
                             continue;
                         }

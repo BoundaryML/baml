@@ -105,7 +105,7 @@ pub fn generate_rt(
             output.push_str(if set {
                 "#[inline(always)] fn rt_map_set(cx:&mut rt::strings::Cx,map:rt::maps::StringIntMap,key:rt::strings::Str,value:i64)->rt::R<rt::Dyn>{map.set(cx,key,value)}\n"
             } else {
-                "#[inline(always)] unsafe fn rt_map_values(cx:&mut rt::strings::Cx,map:rt::maps::StringIntMap,desc:u32)->rt::R<usize>{unsafe{map.values(cx,desc)}}\n"
+                "#[inline(always)] unsafe fn rt_map_values(cx:&mut rt::strings::Cx,map:rt::maps::StringIntMap,desc:u32)->rt::R<usize>{unsafe{map.growing_values(cx,desc)}}\n"
             });
             continue;
         }
