@@ -85,6 +85,12 @@ fn witness<'p>(
     iface: &TyTemplateInterface,
 ) -> Gen<Option<Witness<'p>>> {
     let requested = iface.to_template().substitute_symbolic(&[]);
+    // The checker resolver requires deeply realized types, including interface
+    // arguments and associated bindings. Dynamic requests remain unsupported.
+    baml_compiler2_mir::RealizedTy::try_from(concrete.clone())
+        .map_err(|_| no("non-concrete dispatch receiver"))?;
+    baml_compiler2_mir::RealizedTy::try_from(requested.clone())
+        .map_err(|_| no("non-concrete dispatch interface"))?;
     let RuntimeTy::Interface(name, args, assoc) = requested else {
         unreachable!()
     };

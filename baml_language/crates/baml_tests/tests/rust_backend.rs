@@ -1335,3 +1335,211 @@ test "unsupported sibling" { let callback = () -> int { 1 }; assert.equal(callba
         "the sibling's own reachable closure is rejected"
     );
 }
+
+fn rt_admission_probe(source: &str) -> Result<String, String> {
+    let db = baml_test_support::setup_multi_file_db(&[("admission.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let original = fingerprint(&program);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, function)| function.name() == "main")
+        .expect("probe entry");
+    let result = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    );
+    assert_eq!(
+        fingerprint(&program),
+        original,
+        "admission changed bytecode"
+    );
+    result
+}
+
+#[test]
+fn rt_admission_rejects_reachable_closures_before_iterator_expansion() {
+    let error = rt_admission_probe(
+        r#"
+function lazy() -> int[] {
+    let xs = [1, 2];
+    let seen = 0;
+    let it = xs.iter().filter((x: int) -> bool { seen += 1; x % 2 == 1 });
+    xs.push(3);
+    it.collect()
+}
+function main() -> int { lazy().length() }
+"#,
+    )
+    .unwrap_err();
+    assert_eq!(error, "unsupported in baml_rt: closures");
+}
+
+#[test]
+fn rt_admission_iterator_error_unions_reach_a_fixed_point() {
+    // No lambda: the expanding closed-world iterator witness set used to hit
+    // the corpus's 120-second watchdog by repeatedly nesting its error union.
+    let result = rt_admission_probe(
+        r#"
+function main() -> int {
+    let values = [1, 2].iter().chain([3, 4]).collect();
+    values.length()
+}
+"#,
+    );
+    assert!(
+        result
+            .as_ref()
+            .is_err_and(|error| error.starts_with("unsupported in baml_rt:")),
+        "{result:?}"
+    );
+}
+
+#[test]
+fn rt_admission_recursive_layouts_close_or_report_expansion() {
+    let cases = [
+        (
+            "self",
+            "class Node<T> { next: Node<T>? }",
+            "Node<int>",
+            false,
+        ),
+        (
+            "optional",
+            "class Opt<T> { next: Opt<T?>? }",
+            "Opt<int>",
+            false,
+        ),
+        (
+            "union",
+            "class Grow<T> { next: Grow<T | int>? }",
+            "Grow<string>",
+            false,
+        ),
+        (
+            "permutation",
+            "class Swap<A,B> { next: Swap<B,A | B>? }",
+            "Swap<int,string>",
+            false,
+        ),
+        (
+            "finite transform",
+            "class Step<A,B> { next: Step<B[],int>? }",
+            "Step<string,bool>",
+            false,
+        ),
+        (
+            "list growth",
+            "class Nest<T> { next: Nest<T[]>? }",
+            "Nest<int>",
+            true,
+        ),
+        (
+            "class growth",
+            "class Chain<T> { next: Chain<Chain<T>>? }",
+            "Chain<int>",
+            true,
+        ),
+        (
+            "mutual growth",
+            "class Ping<T> { next: Pong<T[]>? } class Pong<T> { next: Ping<T>? }",
+            "Ping<int>",
+            true,
+        ),
+        (
+            "interface growth",
+            "interface Wrapped<T> { value: T } class WrappedChain<T> { next: WrappedChain<Wrapped<T>>? }",
+            "WrappedChain<int>",
+            true,
+        ),
+    ];
+    // Share the checked world, and keep every class reachable through an
+    // ordinary typed call without requiring generic field-read coercions.
+    let source = cases.iter().enumerate().map(|(i, (_, declarations, ty, _))| format!(
+        "{declarations}\nfunction take_{i}(node: {ty}) -> int {{ 7 }}\nfunction probe_{i}() -> int {{ take_{i}({ty} {{ next: null }}) }}\n"
+    )).collect::<String>();
+    let db = baml_test_support::setup_multi_file_db(&[("layouts.baml", &source)]);
+    let program = lower(&db, OptLevel::Two);
+    let original = fingerprint(&program);
+    for (i, (name, _, _, expands)) in cases.iter().enumerate() {
+        let (entry, _) = user_functions(&program)
+            .find(|(_, function)| function.name() == format!("probe_{i}"))
+            .unwrap();
+        let result = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if *expands {
+            assert_eq!(
+                result.unwrap_err(),
+                "unsupported in baml_rt: non-regular recursive generic class layouts",
+                "{name}"
+            );
+        } else {
+            assert!(result.is_ok(), "{name}: {result:?}");
+        }
+    }
+    assert_eq!(fingerprint(&program), original);
+}
+
+#[test]
+fn rt_admission_stdlib_specialization_keeps_user_recursive_aliases() {
+    let result = rt_admission_probe(
+        r#"
+type Nest = Nest[] | int;
+function main() -> int {
+    let input: json = [1];
+    let nest = baml.json.to<Nest>(input);
+    0
+}
+"#,
+    );
+    // Decoding this alias is still outside the current RT feature set, but the
+    // caller's alias must survive specialization of the stdlib generic callee.
+    assert!(
+        result
+            .as_ref()
+            .is_err_and(|error| error.starts_with("unsupported in baml_rt:")),
+        "{result:?}"
+    );
+}
+
+#[test]
+fn rt_admission_dynamic_interface_requests_are_errors_not_resolver_panics() {
+    for source in [
+        r#"
+interface Named { function name(self) -> string throws never }
+class Person { implements Named { function name(self) -> string throws never { "Ada" } } }
+function dynamic(t: reflect.Type) -> int {
+    let type T extends Named = t else { return 0; };
+    let value = baml.json.to<T>({});
+    value.name().length()
+}
+function main() -> int { dynamic(Person.type()) }
+"#,
+        r#"
+class Holder<T> {
+    items: T[],
+    function count(self) -> int { self.items.length() }
+}
+function main() -> int {
+    let item = reflect.Class.new("Item", { "value": string.type() }).as_type();
+    let type Bound = item;
+    let holder = Holder<Bound> { items: [] };
+    holder.count()
+}
+"#,
+    ] {
+        let result = rt_admission_probe(source);
+        assert!(
+            result
+                .as_ref()
+                .is_err_and(|error| error.starts_with("unsupported in baml_rt:")),
+            "{result:?}"
+        );
+    }
+}

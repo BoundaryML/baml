@@ -226,15 +226,16 @@ impl Plan<'_> {
                     })
                     .ok_or_else(|| no("interface field"))?,
             ),
-            T::Class(head, args) if !args.is_empty() => Repr::Ptr(
-                self.class_instances
+            T::Class(head, args) if !args.is_empty() => {
+                let args = args.iter().map(super::generics::canonical_type).collect::<Vec<_>>();
+                Repr::Ptr(self.class_instances
                     .iter()
                     .find(|(c, a, _)| {
-                        self.class(*c).type_tag == head.tag() && a.as_slice() == args.as_ref()
+                        self.class(*c).type_tag == head.tag() && *a == args
                     })
                     .map(|(_, _, c)| *c)
-                    .ok_or_else(|| no("unregistered generic class"))?,
-            ),
+                    .ok_or_else(|| no("unregistered generic class"))?)
+            },
             T::Class(head, args) if args.is_empty() => {
                 let object = self
                     .program
