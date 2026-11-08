@@ -1,7 +1,8 @@
 //! Ordered extension points. First matching lowering wins; errors never fall through.
 use super::{
     BTreeMap, Db, Emitter, Gen, MirFunction, Plan, Repr, Rvalue, SourceRoot, StatementKind,
-    Terminator, calls, closures, containers, dispatch, globals, strings, tasks, telemetry,
+    Terminator, calls, closures, containers, dispatch, globals, loop_ranges, strings, tasks,
+    telemetry,
 };
 
 #[derive(Clone, Copy)]
@@ -81,6 +82,7 @@ const FEATURES: &[&dyn Feature] = &[
     &dispatch::Feature,
     &strings::Feature,
     &telemetry::Feature,
+    &loop_ranges::Feature,
     &calls::Feature,
 ];
 

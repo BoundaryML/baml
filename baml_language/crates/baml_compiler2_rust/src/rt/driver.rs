@@ -91,6 +91,8 @@ pub fn compile_rt(
             iter_arrays,
             arity: mir.arity,
             block: 0,
+            statement: 0,
+            proven_arithmetic: BTreeSet::new(),
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
             compact_sites: Vec::new(),
