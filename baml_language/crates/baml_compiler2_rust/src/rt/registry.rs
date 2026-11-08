@@ -22,7 +22,7 @@ pub(super) trait Feature {
         _db: &'db dyn Db,
         _root: SourceRoot,
         _plan: &mut Plan<'_>,
-        _all: &mut BTreeMap<usize, &'db MirFunction<'db>>,
+        _all: &mut BTreeMap<usize, MirFunction<'db>>,
     ) -> Gen<Vec<usize>> {
         Ok(Vec::new())
     }
@@ -79,8 +79,11 @@ const FEATURES: &[&dyn Feature] = &[
     &tasks::Feature,
     &containers::Feature,
     &dispatch::Feature,
+    &super::interface_fields::Feature,
+    &super::switches::Feature,
     &strings::Feature,
     &telemetry::Feature,
+    &super::generics::Feature,
     &calls::Feature,
 ];
 
@@ -143,7 +146,7 @@ pub(super) fn prepare<'db>(
     db: &'db dyn Db,
     root: SourceRoot,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, &'db MirFunction<'db>>,
+    all: &mut BTreeMap<usize, MirFunction<'db>>,
 ) -> Gen<Vec<usize>> {
     let mut roots = Vec::new();
     for feature in FEATURES {

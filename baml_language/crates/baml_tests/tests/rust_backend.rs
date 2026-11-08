@@ -815,7 +815,7 @@ fn rt_trees_and_fail_closed_admission() {
         "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
     ))
     .unwrap();
-    assert!(richards.contains("match a0.tag"));
+    assert!(richards.contains("static VTABLE"));
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::list_slot("));
     assert!(richards.contains("ElementLayout::Pointer"));
@@ -972,6 +972,7 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
 // codegen changes may update these after checking the generated-source diff.
 fn rt_source_bytes_and_diagnostics() {
     use sha2::{Digest, Sha256};
+    let mut mismatches = Vec::new();
     for (name, source) in [
         (
             "trees",
@@ -1010,7 +1011,7 @@ fn rt_source_bytes_and_diagnostics() {
         );
         let expected = match name {
             "trees" => "8e454ff27beebede04824c7259b943f7c6c9ade3cf87c9c690e1e24c4268385e",
-            "richards" => "51ded3f4ec2fd0b0dfe1566149179f7dca4d888bf9bfbb0f2e3d38cfde57f56d",
+            "richards" => "f469bf3036af9d7251399a3fee7edb57cfedf05c51cc5c5ee72e94c2df838817",
             "agent" => "b9fcb2efc8730021c760cd7b6ac0e27083d5d1cf66583d871802c360120276a7",
             _ => "",
         };
@@ -1022,14 +1023,45 @@ fn rt_source_bytes_and_diagnostics() {
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };
-            assert_eq!(result.unwrap_err(), expected, "{name}");
+            let actual = result.unwrap_err();
+            if actual != expected {
+                mismatches.push(format!("{name}: {actual:?} != {expected:?}"));
+            }
         } else {
             let source = result.unwrap();
-            assert_eq!(
-                format!("{:x}", Sha256::digest(source.as_bytes())),
-                expected,
-                "{name}: generated source changed"
-            );
+            std::fs::write(
+                std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rt-{name}.rs")),
+                &source,
+            )
+            .unwrap();
+            let actual = format!("{:x}", Sha256::digest(source.as_bytes()));
+            if actual != expected {
+                mismatches.push(format!("{name}: {actual} != {expected}"));
+            }
         }
     }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+#[test]
+fn rt_generics_switch_aliases() {
+    let source = include_str!("../rust_diff/type_dispatch.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-type-program.rs"),
+        source,
+    )
+    .unwrap();
 }

@@ -25,12 +25,23 @@ struct Layout {
     tagged: usize,
 }
 struct Plan<'a> {
+    root: SourceRoot,
     lang: baml_base::LangRoots,
     index: ProgramIndex<'a>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
     json_types: Vec<Vec<usize>>,
+    enums: BTreeSet<usize>,
+    specialized_calls: BTreeMap<(usize, usize), usize>,
+    type_codes: Vec<baml_compiler2_mir::TyTemplate>,
+    next_object: usize,
+    class_instances: Vec<(usize, Vec<bex_vm_types::RuntimeTy>, usize)>,
+    concrete_types: Vec<RuntimeTy>,
+    heads: BTreeMap<baml_type::typetag::TypeTag, baml_type::DeclName>,
+    dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
+    function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
+    alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -39,7 +50,7 @@ struct Emitter<'a, 'db> {
     object: usize,
     descriptors: &'a BTreeMap<usize, usize>,
     lists: &'a BTreeMap<Repr, usize>,
-    all: &'a BTreeMap<usize, &'db MirFunction<'db>>,
+    all: &'a BTreeMap<usize, MirFunction<'db>>,
     iters: BTreeSet<usize>,
     iter_arrays: BTreeMap<usize, usize>,
     arity: usize,
@@ -55,7 +66,7 @@ struct Emitter<'a, 'db> {
 struct ProgramEmission<'a, 'db> {
     db: &'db dyn Db,
     plan: &'a Plan<'a>,
-    all: &'a BTreeMap<usize, &'db MirFunction<'db>>,
+    all: &'a BTreeMap<usize, MirFunction<'db>>,
     descriptors: &'a BTreeMap<usize, usize>,
 }
 
@@ -91,3 +102,9 @@ mod strings;
 mod tasks;
 
 use layout::rt_descriptors;
+
+mod switches;
+
+mod generics;
+
+mod interface_fields;

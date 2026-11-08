@@ -24,6 +24,7 @@ use crate::coords::{
 
 pub(crate) struct ProgramIndex<'p> {
     program: &'p Program,
+    rt_origins: HashMap<usize, usize>,
     names: Vec<(String, String)>,
     /// Package ordinals derived from the linked dependency edges.
     packages: HashMap<SourceRoot, u32>,
@@ -55,6 +56,7 @@ impl<'p> ProgramIndex<'p> {
     ) -> Self {
         let mut index = Self {
             program,
+            rt_origins: HashMap::new(),
             names: vec![(String::new(), String::new()); program.objects.len()],
             packages: package_ordinals(db, root, program),
             let_helpers: HashMap::new(),
@@ -339,11 +341,20 @@ impl<'p> ProgramIndex<'p> {
             .position(|constant| constant == wanted)
     }
 
+    pub(crate) fn rt_origin(&self, object: usize) -> usize {
+        self.rt_origins.get(&object).copied().unwrap_or(object)
+    }
+
+    pub(crate) fn rt_alias(&mut self, object: usize, origin: usize) {
+        self.rt_origins.insert(object, origin);
+    }
+
     pub(crate) fn positions(&self, object: usize) -> &Bytecode {
         &self.info(object).bytecode
     }
 
     pub(crate) fn info(&self, object: usize) -> &bex_vm_types::types::Function {
+        let object = self.rt_origins.get(&object).copied().unwrap_or(object);
         let Object::Function(function) = &self.program.objects[ObjectIndex::from_raw(object)]
         else {
             unreachable!("function metadata")
@@ -364,7 +375,7 @@ impl<'p> ProgramIndex<'p> {
     /// [`Self::name`] under its package's label; see
     /// [`crate::CompiledFunction::display`].
     pub(crate) fn display(&self, object: usize) -> &str {
-        &self.names[object].1
+        &self.names[self.rt_origins.get(&object).copied().unwrap_or(object)].1
     }
 
     fn key(&self, (root, path): DeclCoords) -> Option<(u32, DeclPath)> {
