@@ -135,17 +135,10 @@ impl Plan<'_> {
                 let Repr::Ptr(class) = self.storage_repr(body, base, depth)? else {
                     return Err(no("receiver field on non-class"));
                 };
-                let Object::Class(class) =
-                    &self.program.objects[bex_vm_types::ObjectIndex::from_raw(class)]
-                else {
-                    return Err(no("receiver class"));
-                };
                 self.field_repr(
-                    &class
-                        .fields
+                    self.class_field_types(class)
                         .get(*field)
-                        .ok_or_else(|| no("receiver field"))?
-                        .field_type,
+                        .ok_or_else(|| no("receiver field"))?,
                 )
             }
             _ => Err(no("receiver storage place")),
@@ -160,20 +153,20 @@ impl registry::Feature for Feature {
         db: &'db dyn super::Db,
         _root: super::SourceRoot,
         plan: &mut Plan<'_>,
-        all: &mut super::BTreeMap<usize, &'db super::MirFunction<'db>>,
+        all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
     ) -> Gen<Vec<usize>> {
         fn register<'db>(
             db: &'db dyn super::Db,
             plan: &mut Plan<'_>,
-            all: &mut super::BTreeMap<usize, &'db super::MirFunction<'db>>,
-            mir: &'db super::MirFunction<'db>,
+            all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
+            mir: &super::MirFunction<'db>,
         ) -> Gen<()> {
             for lambda in &mir.lambdas {
                 let object = plan
                     .index
                     .lambda(db, &lambda.identity)
                     .ok_or_else(|| no("unlinked lambda"))?;
-                all.insert(object, lambda);
+                all.insert(object, lambda.clone());
                 if let super::MirFunctionKind::Bytecode(body) = &lambda.kind {
                     plan.lambda_bodies.insert(body as *const _ as usize, object);
                 }
@@ -181,8 +174,8 @@ impl registry::Feature for Feature {
             }
             Ok(())
         }
-        for mir in all.values().copied().collect::<Vec<_>>() {
-            register(db, plan, all, mir)?;
+        for mir in all.values().cloned().collect::<Vec<_>>() {
+            register(db, plan, all, &mir)?;
         }
         Ok(Vec::new())
     }
@@ -612,7 +605,7 @@ impl super::Emitter<'_, '_> {
             Repr::Tagged,
         )?;
         Ok(format!(
-            "unsafe fn closure{object}(env:usize,site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let value=f{object}(site,{env}{arguments})?;Ok({value})}}}}\n"
+            "unsafe fn closure{object}(env:usize,site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let cx=rt::calls::Context::current();let value=if rt::telemetry::active(){{f{object}::<true>(cx,site,{env}{arguments})}}else{{f{object}::<false>(cx,site,{env}{arguments})}}?;Ok({value})}}}}\n"
         ))
     }
 }
@@ -672,4 +665,66 @@ pub(super) fn capture_type(ty: &baml_type::RuntimeTy<usize>) -> Gen<String> {
         _ => return Err(no("closure capture signature")),
     };
     Ok(format!("rt::telemetry::capture::Type::{body}"))
+}
+
+impl Plan<'_> {
+    pub(super) fn implementors(
+        &self,
+        interface: usize,
+    ) -> Gen<Vec<(usize, &bex_vm_types::types::ProgramImplRule)>> {
+        let Object::Interface(def) =
+            &self.program.objects[bex_vm_types::ObjectIndex::from_raw(interface)]
+        else {
+            return Err(no("non-interface dispatch"));
+        };
+        if def.structural_default.is_some()
+            || !def.args.is_empty()
+            || !def.assoc.is_empty()
+            || !def.requires.is_empty()
+        {
+            return Err(no("generic or structural interface"));
+        }
+        let mut result = Vec::new();
+        for package in &self.program.packages {
+            if let Some(rules) = package
+                .impl_rules
+                .get(&bex_vm_types::ObjectIndex::from_raw(interface))
+            {
+                for rule in rules {
+                    if !rule.generic_param_bounds.is_empty()
+                        || !rule.interface_args.is_empty()
+                        || !rule.interface_assoc.is_empty()
+                    {
+                        return Err(no("generic interface implementation"));
+                    }
+                    let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
+                        return Err(no("non-class implementation"));
+                    };
+                    if !args.is_empty() {
+                        return Err(no("generic implementor"));
+                    }
+                    result.push((self.class_tag(head.tag())?, rule));
+                }
+            }
+        }
+        if result.is_empty() {
+            return Err(no("interface without concrete implementations"));
+        }
+        Ok(result)
+    }
+    pub(super) fn targets(&self, interface: usize, method: &str) -> Gen<Vec<(usize, usize)>> {
+        self.implementors(interface)?
+            .into_iter()
+            .map(|(c, rule)| {
+                let body = rule
+                    .methods
+                    .get(method)
+                    .ok_or_else(|| no("adopted interface default"))?;
+                if !body.frame.is_empty() {
+                    return Err(no("generic dispatch frame"));
+                }
+                Ok((c, body.fqn.raw()))
+            })
+            .collect()
+    }
 }

@@ -73,6 +73,24 @@ impl Emitter<'_, '_> {
                 if *op == BinOp::Add && lt == Repr::Str && rt == Repr::Str {
                     return Ok((self.fallible(&format!("rt::strings::concat(&mut rt::strings::Cx::current(),&[rt::strings::Str::from_raw({l}),rt::strings::Str::from_raw({r})]).map(|s|s.as_raw())")), Repr::Str));
                 }
+                if matches!(lt, Repr::Enum(_) | Repr::Naming)
+                    && lt == rt
+                    && matches!(op, BinOp::Eq | BinOp::Ne)
+                {
+                    return Ok((format!("({l} {op} {r})"), Repr::Bool));
+                }
+                if lt == Repr::Float && rt == Repr::Float {
+                    let repr = match op {
+                        BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
+                            Repr::Float
+                        }
+                        BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
+                            Repr::Bool
+                        }
+                        _ => return Err(no("float binary operation")),
+                    };
+                    return Ok((format!("({l} {op} {r})"), repr));
+                }
                 if lt != Repr::Int || rt != Repr::Int {
                     return Err(no("non-integer binary operation"));
                 }
@@ -115,12 +133,26 @@ impl Emitter<'_, '_> {
                         type_arg_templates,
                     },
                 fields,
-            } if type_arg_templates.is_empty() => {
+            } => {
                 let (c, _) = self
                     .plan
                     .index
                     .class(self.db, *class)
                     .ok_or_else(|| no("class"))?;
+                let c = if type_arg_templates.is_empty() {
+                    c
+                } else {
+                    let head = baml_compiler2_hir_ty::layout::class_head(self.db, *class);
+                    let ty = baml_compiler2_mir::TyTemplate::Class(
+                        head,
+                        type_arg_templates.clone().into_boxed_slice(),
+                    )
+                    .substitute_symbolic(&[]);
+                    let Repr::Ptr(c) = self.plan.repr(&ty)? else {
+                        return Err(no("generic class representation"));
+                    };
+                    c
+                };
                 let layout = &self.plan.layouts[&c];
                 if fields.len() != layout.fields.len() {
                     return Err(no("partial class literal"));

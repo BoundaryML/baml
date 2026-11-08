@@ -815,7 +815,7 @@ fn rt_trees_and_fail_closed_admission() {
         "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
     ))
     .unwrap();
-    assert!(richards.contains("match a0.tag"));
+    assert!(richards.contains("static VTABLE"));
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::list_slot("));
     assert!(richards.contains("ElementLayout::Pointer"));
@@ -1011,7 +1011,7 @@ fn rt_source_bytes_and_diagnostics() {
         );
         let expected = match name {
             "trees" => "bf2717f60b03353fda6186125f689db635c4caa61a726e5d73fc145a027f412e",
-            "richards" => "0c867b49faae02cb0234e265bf2f45c2bae544c8d9ddb061c1e146d63304ecfb",
+            "richards" => "f4c83bcf39560550c9dbd702f85f5fb5c095ef1085f1cd3d7bef1fbdcd7e0d23",
             "agent" => "f987fe9acc96151bab2e9a39e9c346df041e840ed2e029664534660050d09952",
             _ => "",
         };
@@ -1023,7 +1023,10 @@ fn rt_source_bytes_and_diagnostics() {
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };
-            assert_eq!(result.unwrap_err(), expected, "{name}");
+            let actual = result.unwrap_err();
+            if actual != expected {
+                changes.push(format!("{name}: {actual:?} != {expected:?}"));
+            }
         } else {
             let source = result.unwrap();
             let actual = format!("{:x}", Sha256::digest(source.as_bytes()));
@@ -1165,4 +1168,27 @@ fn rt_shared_recursive_forwarded_and_stored_closures() {
             bex_engine::BexExternalValue::Int(38),
         );
     }
+}
+
+#[test]
+fn rt_generics_switch_aliases() {
+    let source = include_str!("../rust_diff/type_dispatch.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-type-program.rs"),
+        source,
+    )
+    .unwrap();
 }

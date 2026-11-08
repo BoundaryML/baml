@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Repr {
     Int,
+    Float,
     Bool,
     Str,
     Ptr(usize),
@@ -16,6 +17,7 @@ pub(super) enum Repr {
     MapStrInt,
     Iter,
     Naming,
+    Enum(usize),
     Null,
     Closure,
     Cell,
@@ -25,6 +27,7 @@ impl Repr {
     pub(super) fn rust(self) -> &'static str {
         match self {
             Self::Int => "i64",
+            Self::Float => "f64",
             Self::Bool => "bool",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn",
             _ => "usize",
@@ -32,7 +35,9 @@ impl Repr {
     }
     // Shared by ordinary dynamic boundaries and erased callable adapters.
     pub(super) fn decode_payload(self, bits: &str) -> String {
-        if self == Self::Bool {
+        if self == Self::Float {
+            format!("f64::from_bits({bits})")
+        } else if self == Self::Bool {
             format!("({bits}!=0)")
         } else {
             format!("({bits} as {})", self.rust())
@@ -41,6 +46,7 @@ impl Repr {
     pub(super) fn zero(self) -> &'static str {
         match self {
             Self::Bool => "false",
+            Self::Float => "0.0",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn{tag:2,payload:0}",
             _ => "0",
         }
