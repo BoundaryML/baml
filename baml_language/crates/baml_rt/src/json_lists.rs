@@ -435,7 +435,7 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
     // The reader borrows the non-moving string. Its interior pointer remains
     // on the scanned fiber stack through every managed allocation.
     let read_cx = unsafe { Cx::current() };
-    let source = text.as_str(&read_cx);
+    let source = text.try_as_str(&read_cx)?;
     let mut syntax = bex_vm_types::json_text::Reader::new(source);
     if syntax.skip_value().is_err() || syntax.finish().is_err() {
         return Err(crate::json::syntax_error(cx, source));
@@ -496,7 +496,7 @@ impl Encoder<'_> {
             match step {
                 PathStep::Field(name) => write!(path, ".{name}").unwrap(),
                 PathStep::Index(i) => write!(path, "[{i}]").unwrap(),
-                PathStep::Key(key) => write!(path, "[{:?}]", key.as_str(self.cx)).unwrap(),
+                PathStep::Key(key) => write!(path, "[{:?}]", key.text(self.cx)).unwrap(),
             }
         }
         crate::list_errors::serialization(self.cx, message, &path, reason)
@@ -582,7 +582,7 @@ impl Encoder<'_> {
                 .push_str(if value.payload == 0 { "false" } else { "true" }),
             3 => {
                 let cx = unsafe { Cx::current() };
-                self.quoted(unsafe { Str::from_raw(value.payload as usize) }.as_str(&cx));
+                self.quoted(unsafe { Str::from_raw(value.payload as usize) }.try_as_str(&cx)?);
             }
             _ => {
                 self.path
@@ -625,7 +625,7 @@ impl Encoder<'_> {
             3 => {
                 let text = unsafe { Str::from_raw(value.payload as usize) };
                 let cx = unsafe { Cx::current() };
-                self.quoted(text.as_str(&cx));
+                self.quoted(text.try_as_str(&cx)?);
             }
             tag if tag == (u32::MAX - 1) as u64 => {
                 let f = f64::from_bits(value.payload);
@@ -659,7 +659,7 @@ impl Encoder<'_> {
                     Shape::ClassEncoded(encode) => unsafe { encode(self, pointer, depth) }?,
                     Shape::Bigint => {
                         let text = unsafe { Str::from_raw(pointer) };
-                        self.out.push_str(text.as_str(self.cx));
+                        self.out.push_str(text.try_as_str(self.cx)?);
                     }
                     Shape::List { tag, tagged } => {
                         let ptr = pointer as *const usize;
@@ -751,7 +751,7 @@ impl Encoder<'_> {
                             let key = unsafe { Str::from_raw(key.payload as usize) };
                             self.separator(i == 0, depth + 1);
                             let read_cx = unsafe { Cx::current() };
-                            self.quoted(key.as_str(&read_cx));
+                            self.quoted(key.try_as_str(&read_cx)?);
                             self.out.push(':');
                             if !self.indent.is_empty() {
                                 self.out.push(' ');
@@ -811,7 +811,7 @@ pub unsafe fn stringify(
         " ".repeat(n as usize)
     } else {
         let text = unsafe { Str::from_raw(indent.payload as usize) }
-            .as_str(cx)
+            .try_as_str(cx)?
             .to_owned();
         let width = text.chars().count();
         if width > 10 {

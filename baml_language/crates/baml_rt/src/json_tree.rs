@@ -64,7 +64,7 @@ impl Config {
         }
         for i in 0..self.object_len(v)? {
             let (k, value) = self.entry(v, i);
-            if k.tag == 3 && unsafe { Str::from_raw(k.payload as usize) }.as_str(cx) == key {
+            if k.tag == 3 && unsafe { Str::from_raw(k.payload as usize) }.text(cx) == key {
                 return Some(value);
             }
         }
@@ -246,7 +246,7 @@ impl From<Box<Error>> for ReadError {
 /// All Config descriptors match their growing containers in the active instance.
 pub unsafe fn parse(cx: &mut Cx, config: &Config, text: Str) -> R<Dyn> {
     let read_cx = unsafe { Cx::current() };
-    let source = text.as_str(&read_cx);
+    let source = text.try_as_str(&read_cx)?;
     let mut syntax = Reader::new(source);
     if syntax.skip_value().is_err() || syntax.finish().is_err() {
         return Err(crate::json::syntax_error(cx, source));
@@ -262,7 +262,7 @@ pub unsafe fn parse(cx: &mut Cx, config: &Config, text: Str) -> R<Dyn> {
 /// Every dynamic value uses the layouts in Config.
 pub unsafe fn path(cx: &mut Cx, config: &Config, mut value: Dyn, selector: Str) -> R<Dyn> {
     let read_cx = unsafe { Cx::current() };
-    let selector = selector.as_str(&read_cx);
+    let selector = selector.try_as_str(&read_cx)?;
     let bytes = selector.as_bytes();
     if !matches!(bytes.first(), Some(b'.' | b'[')) {
         return Err(config.path_error(
@@ -379,7 +379,7 @@ fn field_required(cx: &mut Cx, config: &Config, value: Dyn, key: &str, selector:
 /// # Safety
 /// The dynamic value uses Config's layouts and `key` is a live string.
 pub unsafe fn field(cx: &Cx, config: &Config, value: Dyn, key: Str) -> Dyn {
-    config.get(cx, value, key.as_str(cx)).unwrap_or(NULL)
+    config.get(cx, value, &key.text(cx)).unwrap_or(NULL)
 }
 
 struct Visiting {
@@ -454,7 +454,7 @@ impl Config {
                     write!(
                         text,
                         "[{:?}]",
-                        unsafe { Str::from_raw(key.payload as usize) }.as_str(cx)
+                        unsafe { Str::from_raw(key.payload as usize) }.text(cx)
                     )
                     .unwrap();
                 }
@@ -471,8 +471,8 @@ impl Config {
             2 => Value::Null,
             3 => Value::String(
                 unsafe { Str::from_raw(value.payload as usize) }
-                    .as_str(cx)
-                    .into(),
+                    .text(cx)
+                    .into_owned(),
             ),
             crate::FLOAT_TAG => {
                 let number = f64::from_bits(value.payload);
@@ -488,7 +488,7 @@ impl Config {
                 if value.tag == self.bigint as u64 + 3 {
                     Value::Number(
                         unsafe { Str::from_raw(value.payload as usize) }
-                            .as_str(cx)
+                            .text(cx)
                             .parse()
                             .expect("normalized bigint"),
                     )
@@ -504,9 +504,7 @@ impl Config {
                             .map(|i| {
                                 let (k, v) = self.entry(value, i);
                                 (
-                                    unsafe { Str::from_raw(k.payload as usize) }
-                                        .as_str(cx)
-                                        .into(),
+                                    unsafe { Str::from_raw(k.payload as usize) }.text(cx).into(),
                                     self.owned(cx, v),
                                 )
                             })
@@ -576,7 +574,7 @@ unsafe fn fast(
                 crate::FLOAT_TAG => Some(f64::from_bits(value.payload)),
                 tag if tag == config.bigint as u64 + 3 => {
                     unsafe { Str::from_raw(value.payload as usize) }
-                        .as_str(cx)
+                        .try_as_str(cx)?
                         .parse::<f64>()
                         .ok()
                         .filter(|f| f.is_finite())
@@ -601,7 +599,7 @@ unsafe fn fast(
                 } else if value.tag == 3 {
                     Some(
                         unsafe { Str::from_raw(value.payload as usize) }
-                            .as_str(&read_cx)
+                            .try_as_str(&read_cx)?
                             .to_owned(),
                     )
                 } else {
@@ -626,7 +624,7 @@ unsafe fn fast(
         }
         Ty::Literal(w)
             if value.tag == 3
-                && unsafe { Str::from_raw(value.payload as usize) }.as_str(cx) == *w =>
+                && unsafe { Str::from_raw(value.payload as usize) }.try_as_str(cx)? == *w =>
         {
             Some(value)
         }

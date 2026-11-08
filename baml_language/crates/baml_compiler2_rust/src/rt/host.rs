@@ -57,7 +57,7 @@ fn emit_host(
         "None"
     };
     let result_type = if string_result { "String" } else { "i64" };
-    let entry_result = if string_result {".map(|value|rt::strings::Str::from_raw(value).as_str(&rt::strings::Cx::current()).to_owned())"} else {""};
+    let entry_result = if string_result {".map(|value|rt::strings::Str::from_raw(value).to_owned())"} else {""};
     let benchmark_loop = if string_result {"benchmark_string_loop"} else {"benchmark_loop"};
     write!(&mut out,"fn entry()->R<{result_type}>{{unsafe{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}}{entry_result}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_configured(DESCRIPTORS,entry,{benchmark_fn},TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}),{initializer})}}\n").unwrap();
     if let Some((setup, run)) = benchmark {

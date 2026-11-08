@@ -1,6 +1,14 @@
 use super::*;
 
 impl Emitter<'_, '_> {
+    /// Entry ABI before captured parameters are moved into shared cells.
+    pub(super) fn argument_repr(&self, i: usize) -> Gen<Repr> {
+        if let Some(repr) = super::string_defaults::parameter(self.plan, self.object, i) {
+            return Ok(repr);
+        }
+        self.plan.local_repr(self.body, i, 0)
+    }
+
     pub(super) fn local(&self, i: usize) -> Gen<Repr> {
         if self
             .body
@@ -16,6 +24,9 @@ impl Emitter<'_, '_> {
         if self.iters.contains(&i) {
             return Ok(Repr::Iter);
         }
+        if let Some(repr) = super::string_defaults::parameter(self.plan, self.object, i) {
+            return Ok(repr);
+        }
         self.plan.local_repr(self.body, i, 0)
     }
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
@@ -28,6 +39,8 @@ impl Emitter<'_, '_> {
             Repr::Bigint => Ok(self.plan.bigint_descriptor() + 3),
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
+            Repr::Opaque => Ok(18),
+            Repr::Bytes => Ok(19),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::List(_)
             | Repr::ListInt
@@ -36,7 +49,8 @@ impl Emitter<'_, '_> {
             | Repr::ListClosure(_)
             | Repr::ListPtr(_)
             | Repr::MapStrInt
-            | Repr::Map(_)) => Ok(self.lists[&r] + 3),
+            | Repr::Map(_)
+            | Repr::MapStrPtr(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
     }
@@ -197,13 +211,7 @@ impl Emitter<'_, '_> {
             Operand::Constant(Constant::Bigint(value)) => Ok((self.fallible(&format!("rt::bigint::from_decimal(&mut rt::strings::Cx::current(),{}, {:?}).map(|s|s.as_raw())",self.plan.bigint_descriptor(),value.to_string())),Repr::Bigint)),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
-            Operand::Constant(Constant::String(text)) => Ok((
-                self.fallible(&format!(
-                    "rt::strings::Cx::current().string({:?}).map(|s|s.as_raw())",
-                    text.as_str()
-                )),
-                Repr::Str,
-            )),
+            Operand::Constant(Constant::String(text)) => self.string_literal(text.as_str()),
             Operand::Constant(Constant::EnumVariant { enum_ref, index }) => {
                 let head = baml_compiler2_hir_ty::layout::enum_head(self.db, *enum_ref);
                 Ok((

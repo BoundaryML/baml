@@ -198,6 +198,16 @@ impl<T: Slot> List<T> {
             ))
         }
     }
+    /// Independent snapshot; immutable elements may be shared.
+    pub fn copy(self, cx: &mut Cx) -> R<Self> {
+        let desc = unsafe { (*(self.pointer as *const Object)).header.desc };
+        let len = self.len(cx) as usize;
+        let result = unsafe { Self::with_capacity(cx, desc, len) }?;
+        for i in 0..len {
+            result.push(cx, self.get(cx, i as i64)?)?;
+        }
+        Ok(result)
+    }
     #[inline(always)]
     pub fn set(self, cx: &Cx, index: i64, value: T) -> R<()> {
         let len = self.len(cx);
@@ -811,8 +821,8 @@ pub fn builtin_eq(cx: &Cx, a: crate::Dyn, b: crate::Dyn) -> bool {
             if a.payload == 0 || b.payload == 0 {
                 a.payload == b.payload
             } else {
-                unsafe { Str::from_raw(a.payload as usize) }.as_str(cx)
-                    == unsafe { Str::from_raw(b.payload as usize) }.as_str(cx)
+                unsafe { Str::from_raw(a.payload as usize) }.text(cx)
+                    == unsafe { Str::from_raw(b.payload as usize) }.text(cx)
             }
         }
         tag if tag == (u32::MAX - 1) as u64 => {
@@ -880,9 +890,9 @@ pub unsafe fn structural_string(
                     let string = unsafe { Str::from_raw(value.payload as usize) };
                     if nested {
                         use std::fmt::Write;
-                        write!(text, "{:?}", string.as_str(cx)).unwrap();
+                        write!(text, "{:?}", string.try_as_str(cx)?).unwrap();
                     } else {
-                        text.push_str(string.as_str(cx));
+                        text.push_str(string.try_as_str(cx)?);
                     }
                 }
             }
@@ -974,10 +984,10 @@ pub fn join_with<T: Slot>(
     let mut text = String::new();
     for i in 0..snapshot.len(cx) {
         if i != 0 {
-            text.push_str(separator.as_str(cx));
+            text.push_str(separator.try_as_str(cx)?);
         }
         let value = render(snapshot.get(cx, i)?)?;
-        text.push_str(value.as_str(cx));
+        text.push_str(value.try_as_str(cx)?);
         if i & 15 == 15 {
             cx.poll()?;
         }
@@ -991,13 +1001,13 @@ pub fn join_pointers(cx: &mut Cx, list: List<Ptr>, separator: Str) -> R<Str> {
     let mut text = String::new();
     for i in 0..list.len(cx) {
         if i != 0 {
-            text.push_str(separator.as_str(cx));
+            text.push_str(separator.try_as_str(cx)?);
         }
         let value = list.get(cx, i)?.as_raw();
         if value == 0 {
             text.push_str("null");
         } else {
-            text.push_str(unsafe { Str::from_raw(value) }.as_str(cx));
+            text.push_str(unsafe { Str::from_raw(value) }.try_as_str(cx)?);
         }
         if i & 15 == 15 {
             cx.poll()?;
@@ -1010,13 +1020,13 @@ pub fn join(cx: &mut Cx, list: List<Str>, separator: Str) -> R<Str> {
     let mut text = String::new();
     for i in 0..list.len(cx) {
         if i != 0 {
-            text.push_str(separator.as_str(cx));
+            text.push_str(separator.try_as_str(cx)?);
         }
         let value = list.get(cx, i)?;
         text.push_str(if value.as_raw() == 0 {
             "null"
         } else {
-            value.as_str(cx)
+            value.try_as_str(cx)?
         });
         if i & 15 == 15 {
             cx.poll()?;

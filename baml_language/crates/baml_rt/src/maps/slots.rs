@@ -72,10 +72,10 @@ pub(super) fn hash_bytes(bytes: &[u8]) -> u64 {
 }
 impl Key for Str {
     fn hash(self, cx: &Cx) -> u64 {
-        hash_bytes(self.as_str(cx).as_bytes())
+        hash_bytes(self.text(cx).as_bytes())
     }
     fn equals(self, other: Self, cx: &Cx) -> bool {
-        self.as_str(cx) == other.as_str(cx)
+        self.text(cx) == other.text(cx)
     }
 }
 impl Key for i64 {

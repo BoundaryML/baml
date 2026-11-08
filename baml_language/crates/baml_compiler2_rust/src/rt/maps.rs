@@ -128,6 +128,12 @@ impl registry::Feature for Feature {
         _types: &[Repr],
         values: &[(String, Repr)],
     ) -> Option<Gen<(String, Repr)>> {
+        if values
+            .first()
+            .is_some_and(|v| matches!(v.1, Repr::MapStrPtr(_)))
+        {
+            return None;
+        }
         name.starts_with("baml.Map.")
             .then(|| emitter.map_call(name, values))
     }
@@ -138,6 +144,9 @@ impl registry::Feature for Feature {
         expected: Repr,
     ) -> Option<Gen<(String, Repr)>> {
         if let Rvalue::Map(_, _, entries) = value {
+            if matches!(expected, Repr::MapStrPtr(_)) {
+                return None;
+            }
             Some(emitter.map_literal(entries, expected))
         } else if let Rvalue::Len(place) = value {
             match emitter.place(place) {

@@ -223,7 +223,7 @@ impl Emitter<'_, '_> {
                     Repr::Int => "a.cmp(&b)",
                     Repr::Float => "rt::float_cmp(a,b)",
                     Repr::Str => {
-                        "rt::strings::Str::from_raw(a.as_raw()).as_str(&read_cx).cmp(rt::strings::Str::from_raw(b.as_raw()).as_str(&read_cx))"
+                        "rt::strings::Str::from_raw(a.as_raw()).text(&read_cx).cmp(&rt::strings::Str::from_raw(b.as_raw()).text(&read_cx))"
                     }
                     _ => return Err(no("list natural-sort comparator")),
                 };
@@ -280,7 +280,7 @@ impl Emitter<'_, '_> {
             ("includes" | "index_of" | "last_index_of", 2) => {
                 let item = element.to_slot(&self.coerce(values[1].clone(), element)?)?;
                 let equality=match element {
-                    Repr::Str=>"if a.as_raw()==0 || b.as_raw()==0 {a.as_raw()==b.as_raw()} else {rt::strings::Str::from_raw(a.as_raw()).as_str(&read_cx)==rt::strings::Str::from_raw(b.as_raw()).as_str(&read_cx)}".into(),
+                    Repr::Str=>"if a.as_raw()==0 || b.as_raw()==0 {a.as_raw()==b.as_raw()} else {rt::strings::Str::from_raw(a.as_raw()).text(&read_cx)==rt::strings::Str::from_raw(b.as_raw()).text(&read_cx)}".into(),
                     Repr::Float=>"rt::float_eq(a,b)".into(),
                     Repr::Tagged|Repr::Dyn(_)=>"rt::lists::builtin_eq(&read_cx,a,b)".into(),
                     r if r.pointer()=>"a.as_raw()==b.as_raw()".into(),

@@ -1,13 +1,13 @@
-BAML runtime coverage (normal AND GC stress): 17 pass, 118 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 34 pass, 117 unsupported, 0 fail
 Telemetry off: required
-Telemetry low/medium/high/default: not yet supported generally; standalone JSON semantics checked at off/low/medium/high
+String probes: off/low/medium/high/default required
+Telemetry low/medium/high/default: standalone JSON and closure probes checked; not enabled generally
 
 First unsupported constructs (fixtures blocked):
 103	function-valued global
 9	list element
 3	list field element
 2	growing list builtin receiver
-1	baml.String.split
 
 Per probe / KPI workload:
 Allocation	unsupported: function-valued global
@@ -92,12 +92,15 @@ InterfaceErrors	unsupported: function-valued global
 Interfaces	unsupported: function-valued global
 IteratorInterfaceIdentity	unsupported: function-valued global
 Iterators	unsupported: function-valued global
+JsonRuntime	pass
 Logs	unsupported: function-valued global
 LogsDeep	unsupported: function-valued global
 ManualSpan	unsupported: function-valued global
 NoLeaks	unsupported: function-valued global
 Overflow	unsupported: function-valued global
 RecursiveCancellation	unsupported: function-valued global
+RtClosures	pass
+RtEmptyClosures	pass
 RuntimeClass	unsupported: function-valued global
 Scalars	unsupported: function-valued global
 Shapes	unsupported: function-valued global
@@ -109,6 +112,7 @@ SpawnPanicUncaught	unsupported: function-valued global
 SpawnThrowUncaught	unsupported: function-valued global
 SpawnedClosures	unsupported: function-valued global
 Spawns	unsupported: function-valued global
+StackAllocation	pass
 TaskOverflow	unsupported: function-valued global
 ThreadLocalParallel	unsupported: function-valued global
 TimeoutCancellation	unsupported: function-valued global
@@ -143,12 +147,17 @@ process::startup	pass
 programs::agent loop 300	pass
 programs::json parser 15	unsupported: list field element
 programs::richards 50	pass
+rt_setup_state_benchmark	pass
+rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass
-string::split medium literal 10k	unsupported: baml.String.split
-
-Independent closure coverage (off, low, medium, high, default; normal and GC stress):
-RtClosures	pass
-RtEmptyClosures	pass
-
-Independent typed JSON coverage (off, low, medium, high; normal and GC stress):
-JsonRuntime	pass
+string::split medium literal 10k	pass
+strings::codepoint error	pass
+strings::float	pass
+strings::float error	pass
+strings::formatting	pass
+strings::parse error	pass
+strings::regex	pass
+strings::regex error	pass
+strings::semantics	pass
+strings::utf8	pass
+strings::utf8 error	pass

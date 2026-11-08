@@ -469,7 +469,7 @@ impl StringIntMap {
                 text.push_str(", ");
             }
             let (key, value) = self.0.entry(i).unwrap();
-            write!(&mut text, "{:?}: {}", key.as_str(cx), value).unwrap();
+            write!(&mut text, "{:?}: {}", key.text(cx), value).unwrap();
         }
         text.push('}');
         text
@@ -494,20 +494,9 @@ impl StringIntMap {
             }))
     }
     /// # Safety
-    /// desc describes the fixed integer-list layout (length at 8, data at 16).
-    pub unsafe fn values(self, _: &mut Cx, desc: u32) -> R<usize> {
-        let len = self.0.len();
-        let list = unsafe { crate::try_alloc(desc, 16 + len * 8) }?;
-        unsafe {
-            list.add(8).cast::<usize>().write(len);
-            for i in 0..len {
-                list.add(16)
-                    .cast::<i64>()
-                    .add(i)
-                    .write(self.0.entry(i).unwrap().1);
-            }
-        }
-        Ok(list as usize)
+    /// `desc` describes a growing integer list and its buffer.
+    pub unsafe fn values(self, cx: &mut Cx, desc: u32) -> R<usize> {
+        unsafe { self.growing_values(cx, desc) }
     }
 }
 
@@ -735,7 +724,7 @@ impl<V: Slot> Map<Str, V> {
                 return None;
             }
             let entry = unsafe { &*self.entry_ptr(raw - 1) };
-            if entry.hash == hash && entry.key.as_str(cx) == key {
+            if entry.hash == hash && entry.key.text(cx) == key {
                 return Some(entry.value);
             }
             bucket = (bucket + 1) & mask;

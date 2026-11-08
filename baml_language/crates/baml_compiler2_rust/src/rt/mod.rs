@@ -69,6 +69,9 @@ struct Plan<'a> {
     heads: BTreeMap<baml_type::typetag::TypeTag, baml_type::DeclName>,
     dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
     function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
+    structural_strings: bool,
+    structural_string_calls: BTreeSet<(usize, usize, Repr)>,
+    string_overrides: BTreeMap<Repr, usize>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
     list_stringify: bool,
     list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
@@ -106,6 +109,8 @@ struct Emitter<'a, 'db> {
     raise_kinds: Vec<&'static str>,
     telemetry_sites: &'a std::cell::RefCell<Vec<(Option<usize>, usize, usize)>>,
     site: usize,
+    string_cx: std::cell::Cell<bool>,
+    string_literals: std::cell::RefCell<BTreeMap<String, usize>>,
 }
 
 struct ProgramEmission<'a, 'db> {
@@ -149,10 +154,14 @@ use repr::Repr;
 pub use driver::{compile_rt, compile_rt_benchmark};
 
 mod calls;
+mod formatting;
 mod globals;
 mod map_json;
 mod maps;
+mod regex;
 mod registry;
+mod string_bytes;
+mod string_defaults;
 mod strings;
 mod tasks;
 

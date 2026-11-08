@@ -9,6 +9,7 @@ function selector_error(doc:json, selector:string) -> string {
     baml.json.PathError => e.message + "|" + e.selector
   }
 }
+function json_rope(left:string,right:string)->string { left+right }
 function main() -> int {
   let doc=baml.json.parse("{\"users\":[{\"name\":\"old\",\"name\":\"Ada\",\"age\":36,\"tags\":[\"a\",\"é\"],\"manager\":null}],\"é\":{\"x\":1},\"a.b\":\"line\\nend\",\"big\":4611686018427387904}");
   let user=baml.json.to<JsonUser>(baml.json.path<json[]>(doc,".users")[0]);
@@ -43,5 +44,15 @@ function main() -> int {
   check+=if "hello".is_ascii(){13}else{1000};
   let int_error=(1e30).itrunc() catch(e){baml.errors.InvalidArgument=>e.message.length()};
   check+=int_error;
+  let caught=baml.json.decode<JsonUser|JsonLink>("x") catch(e){baml.json.ParseError=>null};
+  check+=if caught==null {19}else{1000};
+  let long_label="é".repeat(80);
+  let encoded=json_rope("[{\"label\":\"",json_rope(long_label,"\",\"number\":3,\"active\":true}]"));
+  let from_rope=baml.json.decode<JsonFlat[]>(encoded);
+  check+=from_rope[0].label.length();
+  let key=json_rope("a".repeat(70),"z");
+  let keyed: map<string,int> = {};keyed[key]=17;
+  check+=keyed[json_rope("a".repeat(70),"z")];
+  check+=baml.json.stringify(keyed).length();
   check
 }

@@ -606,7 +606,7 @@ impl super::Emitter<'_, '_> {
                 } else {
                     format!("args[if rt::closures::is_bound(env){{{}}}else{{{}}}]", i - 2, i - 1)
                 };
-                self.closure_argument(value, self.plan.local_repr(self.body, i, 0)?)
+                self.closure_argument(value, self.argument_repr(i)?)
             })
             .collect::<Gen<Vec<_>>>()?
             .join(",");

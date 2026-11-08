@@ -618,7 +618,11 @@ fn rust_differential() {
     assert!(timeout > 0);
     let timeout = Duration::from_secs(timeout);
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
-    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok();
+    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok().or_else(|| {
+        std::env::var("BAML_RUST_DIFF_RT_ONLY")
+            .is_ok_and(|v| v == "1")
+            .then(|| "rt,rt-gc-stress".to_owned())
+    });
     if let Some(selected) = &selected {
         for name in selected.split(',') {
             assert!(
@@ -668,13 +672,30 @@ fn rust_differential() {
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
+    let oracle_only = if rt_only {
+        let rt_artifacts = rt::build(&build.join("rt"), workspace, manifest, only.as_deref());
+        let admitted = rt_artifacts
+            .iter()
+            .filter(|(_, result)| result.is_ok())
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        artifacts.insert("rt", rt_artifacts);
+        Some(admitted)
+    } else {
+        None
+    };
     for backend in &backends {
+        if rt_only && backend.artifact_key == "rust" && oracle_only.as_deref() == Some("") {
+            artifacts.insert("rust", Artifacts::new());
+            continue;
+        }
         artifacts.entry(backend.artifact_key).or_insert_with(|| {
             (backend.build)(
                 &build.join(backend.artifact_key),
                 workspace,
                 manifest,
-                only.as_deref(),
+                oracle_only.as_deref().or(only.as_deref()),
             )
         });
     }
@@ -698,17 +719,21 @@ fn rust_differential() {
         .as_ref()
         .map_or_else(Vec::new, rt::Coverage::build_failures);
     for probe in probes {
+        if rt_only && artifacts["rt"][&probe].is_err() {
+            continue;
+        }
         let failures_before = failures.len();
         for level in levels {
-            if rt_only && *level != "off" && standalone_closure_source(manifest, &probe).is_none() {
+            if rt_only && !rt::supports_level(&probe, level) {
                 continue;
             }
-            if (probe.contains("::") && matches!(*level, "default" | "low"))
-                || (*level == "default"
-                    && !matches!(
-                        probe.as_str(),
-                        "Scalars" | "Hooked" | "ManualSpan" | "RtClosures" | "RtEmptyClosures"
-                    ))
+            if !probe.starts_with("strings::")
+                && ((probe.contains("::") && matches!(*level, "default" | "low"))
+                    || (*level == "default"
+                        && !matches!(
+                            probe.as_str(),
+                            "Scalars" | "Hooked" | "ManualSpan" | "RtClosures" | "RtEmptyClosures"
+                        )))
             {
                 continue;
             }
@@ -820,7 +845,10 @@ fn rust_differential() {
                 if *level != "off" && trace.is_empty() {
                     failures.push(format!("{probe}/{mode}: no telemetry recording produced"));
                 }
-                if probe.contains("::") && output.as_ref().is_ok_and(|o| !o.status.success()) {
+                if probe.contains("::")
+                    && kpis::expects_success(&probe)
+                    && output.as_ref().is_ok_and(|o| !o.status.success())
+                {
                     failures.push(format!("{probe}/{mode}: KPI must succeed"));
                 }
                 std::fs::create_dir_all(build.join("telemetry")).unwrap();
@@ -836,6 +864,13 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
+            if let Some(expected) = kpis::string_probe_output(&probe) {
+                assert_eq!(
+                    outputs[reference].as_ref().unwrap().stdout,
+                    expected,
+                    "{probe}: oracle semantic assertions"
+                );
+            }
             for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;

@@ -82,7 +82,7 @@ impl Emitter<'_, '_> {
                     .map(|i| {
                         let field=format!("(*(p as *const C{c})).f{i}");
                         match self.plan.layouts[&c].fields[i] {
-                            Repr::Str=>format!("if {field}==0{{String::from(\"null\")}}else{{format!(\"{{:?}}\",rt::strings::Str::from_raw({field}).as_str(&rt::strings::Cx::current()))}}"),
+                            Repr::Str=>format!("if {field}==0{{String::from(\"null\")}}else{{format!(\"{{:?}}\",rt::strings::Str::from_raw({field}).text(&rt::strings::Cx::current()))}}"),
                             Repr::Float=>format!("rt::format_float({field})"),
                             Repr::Bool=>format!("({field}!=0)"),
                             _=>field,

@@ -820,10 +820,8 @@ fn rt_trees_and_fail_closed_admission() {
     assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
     assert!(emit("function main() -> string { \"hello\" }").is_ok());
-    for source in [
-        "function main(value:int) -> int { value }",
-        "function main() -> int { \"x\".trim().length() }",
-    ] {
+    assert!(emit("function main() -> int { \"x\".trim().length() }").is_ok());
+    for source in ["function main(value:int) -> int { value }"] {
         assert!(
             emit(source).unwrap_err().contains("unsupported in baml_rt"),
             "{source}"
@@ -863,7 +861,7 @@ fn rt_string_receiver_storage_and_function_values() {
             "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
             true,
         ),
-        ("function main() -> int { \"x\".trim().length() }", false),
+        ("function main() -> int { \"x\".trim().length() }", true),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
         let program = lower(&db, OptLevel::Two);
@@ -934,7 +932,7 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         ),
         (
             r#"class A { x: int } class B { y: int } function main() -> int { let a = baml.json.decode<A | B>("x") catch(e) { baml.json.ParseError => null }; 0 }"#,
-            false,
+            true,
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
@@ -1006,10 +1004,10 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "283c521d9ca57cdc17adf173b2183f0e72a466d188462dbfa74dedbe8c254cd3",
-            "richards" => "1794883b7f8adf8354b3a8ba0ffe18b1c856f69378092fef253a012dad9cdb7d",
-            "agent" => "f401da8edae6b45caf4fb3ff832291b180ee4d09ccba54d1f7cc55e31a06e96f",
-            "initializer" => "45e71ad69d38639afb80d984f48ea4e3768aa9b0c95dc2f0d5a2d94f0468c134",
+            "trees" => "caae2384aa426034ec0849c75a572edea0079070693fad03c7d74cddc28a0cdf",
+            "richards" => "9483fe1976e40f9f7fe2f42300adf7a3de2dafd2acd3d35aa15d931e9d44f475",
+            "agent" => "c8eed8bfe61519b94870f623ebdf6eafa17837ecad5dca326d7283d611df09f4",
+            "initializer" => "4b26e9226fdeae11c541dc7ad8f6a32ff1a9530b3326f2060e67113cb289b693",
             _ => "",
         };
         if expected.is_empty() {
@@ -1342,4 +1340,41 @@ fn rt_json_scalar_and_primitive_sort_kpis() {
         );
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
+}
+
+#[test]
+fn rt_public_string_surface_is_admitted() {
+    let mut rejected = Vec::new();
+    for (name, source) in [
+        (
+            "formatting",
+            include_str!("../rust_diff/strings/formatting.baml"),
+        ),
+        ("regex", include_str!("../rust_diff/strings/regex.baml")),
+        (
+            "regex error",
+            include_str!("../rust_diff/strings/regex_error.baml"),
+        ),
+        ("utf8", include_str!("../rust_diff/strings/utf8.baml")),
+        (
+            "utf8 error",
+            include_str!("../rust_diff/strings/utf8_error.baml"),
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        if let Err(error) = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        ) {
+            rejected.push(format!("{name}: {error}"));
+        }
+    }
+    assert!(rejected.is_empty(), "{}", rejected.join("\n"));
 }

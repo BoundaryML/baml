@@ -21,7 +21,9 @@ impl Plan<'_> {
                     .map(RuntimeTy::from)
                     .map_err(|_| no("map type argument"))?;
                 let repr = self.repr(&ty)?;
-                Ok(super::map_json::code(repr)?)
+                // Regex named-group maps carry native pointer-map storage;
+                // ordinary generic calls still need their declared type token.
+                super::map_json::code(repr).or_else(|_| fallback())
             }
             T::String => Ok(1),
             T::List(_) | T::Union(_) | T::TypeAlias(_) => {
@@ -236,7 +238,7 @@ pub(super) fn emit(
                                     .or_insert(next);
                             }
                         }
-                        writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.as_str(&read_cx);let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
+                        writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.try_as_str(&read_cx)?;let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
                         for (name, index) in &names {
                             writeln!(&mut out, "{name:?}=>Some({index}),").unwrap();
                         }

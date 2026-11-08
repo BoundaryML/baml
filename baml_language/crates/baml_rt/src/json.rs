@@ -232,7 +232,7 @@ pub(crate) fn decode_error(cx: &mut Cx, message: String, path: String) -> Box<Er
 /// Schemas describe actual class descriptors/offsets, including tagged optional
 /// ints and literal unions. All handles obey the active Cx rooting contract.
 pub unsafe fn decode(cx: &mut Cx, text: Str, schemas: &'static [Schema]) -> R<Dyn> {
-    let source = text.as_str(cx).to_owned();
+    let source = text.try_as_str(cx)?.to_owned();
     let mut reader = Reader::new(&source);
     if reader.skip_value().is_err() || reader.finish().is_err() {
         let message = match refusal(&source) {
