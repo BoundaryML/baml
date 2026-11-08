@@ -20,9 +20,13 @@ struct Object {
     header: Header,
     entries: usize,
     buckets: usize,
+    cache_key: usize,
     len: usize,
     capacity: usize,
     epoch: u64,
+    cache_hash: u64,
+    cache_epoch: u64,
+    cache_entry: usize,
 }
 #[repr(C)]
 struct Entry<K: Slot, V: Slot> {
@@ -71,7 +75,7 @@ pub const fn typed_descriptors<K: Slot, V: Slot>(desc: u32) -> [Descriptor; 4] {
         Descriptor {
             kind: Kind::Map,
             size: size_of::<Object>(),
-            ptr_slots: (8, 2),
+            ptr_slots: (8, 3),
             tagged_slots: (0, 0),
             elem: None,
             type_id: desc + 3,
@@ -137,9 +141,11 @@ impl<K: Slot, V: Slot> Map<K, V> {
     pub fn as_raw(self) -> usize {
         self.pointer
     }
+    #[inline]
     fn object(self) -> *mut Object {
         self.pointer as *mut Object
     }
+    #[inline]
     pub fn len(self) -> usize {
         unsafe { (*self.object()).len }
     }
@@ -149,6 +155,7 @@ impl<K: Slot, V: Slot> Map<K, V> {
     pub fn epoch(self) -> u64 {
         unsafe { (*self.object()).epoch }
     }
+    #[inline]
     unsafe fn entry_ptr(self, index: usize) -> *mut Entry<K, V> {
         unsafe { (((*self.object()).entries + 16) as *mut Entry<K, V>).add(index) }
     }
@@ -161,9 +168,11 @@ impl<K: Slot, V: Slot> Map<K, V> {
             Some(((*entry).key, (*entry).value))
         }
     }
+    #[inline]
     fn bucket_len(self) -> usize {
         unsafe { (*self.object()).capacity * 2 }
     }
+    #[inline]
     unsafe fn bucket(self, index: usize) -> *mut usize {
         unsafe { (((*self.object()).buckets + 16) as *mut usize).add(index) }
     }
@@ -404,24 +413,101 @@ impl<K: Slot, V: Slot> Map<K, V> {
     }
 }
 impl<K: Key, V: Slot> Map<K, V> {
+    // Builtin keys cannot call BAML, allocate or mutate the map during equality.
+    // Keep the callback/restart path in find() for structural and custom keys.
+    #[inline(always)]
+    fn find_builtin(self, cx: &Cx, key: K, hash: u64) -> Option<usize> {
+        if self.is_empty() {
+            return None;
+        }
+        unsafe {
+            let mask = self.bucket_len() - 1;
+            let mut bucket = hash as usize & mask;
+            loop {
+                let raw = *self.bucket(bucket);
+                if raw == 0 {
+                    return None;
+                }
+                let entry = self.entry_ptr(raw - 1);
+                if (*entry).hash == hash && (*entry).key.equals(key, cx) {
+                    return Some(raw - 1);
+                }
+                bucket = (bucket + 1) & mask;
+            }
+        }
+    }
+    #[inline(always)]
+    fn lookup(self, cx: &Cx, key: K) -> (u64, Option<usize>) {
+        let identity = key.cache_pointer().map_or(0, Str::as_raw);
+        unsafe {
+            let obj = self.object();
+            if identity != 0 && (*obj).cache_key == identity && (*obj).cache_epoch == (*obj).epoch {
+                return ((*obj).cache_hash, (*obj).cache_entry.checked_sub(1));
+            }
+            let hash = key.hash(cx);
+            let index = self.find_builtin(cx, key, hash);
+            if identity != 0 {
+                // This root prevents address reuse from making a later query
+                // look like the same immutable string after a collection.
+                write_ptr(obj.cast(), &raw mut (*obj).cache_key, identity);
+                (*obj).cache_hash = hash;
+                (*obj).cache_entry = index.map_or(0, |i| i + 1);
+                (*obj).cache_epoch = (*obj).epoch;
+            }
+            (hash, index)
+        }
+    }
+    #[inline(always)]
     pub fn get(self, cx: &mut Cx, key: K) -> R<Option<V>> {
-        let hash = key.hash(cx);
-        self.get_with(cx, key, hash, |cx, a, b| Ok(a.equals(b, cx)))
+        Ok(self
+            .lookup(cx, key)
+            .1
+            .map(|i| unsafe { (*self.entry_ptr(i)).value }))
     }
+    #[inline(always)]
     pub fn has(self, cx: &mut Cx, key: K) -> R<bool> {
-        Ok(self.get(cx, key)?.is_some())
+        Ok(self.lookup(cx, key).1.is_some())
     }
+    #[inline(always)]
     pub fn set(self, cx: &mut Cx, key: K, value: V) -> R<Option<V>> {
-        let hash = key.hash(cx);
-        self.set_with(cx, key, value, hash, |cx, a, b| Ok(a.equals(b, cx)))
+        let (hash, index) = self.lookup(cx, key);
+        if let Some(i) = index {
+            unsafe {
+                let obj = self.object();
+                let entry = self.entry_ptr(i);
+                let old = (*entry).value;
+                V::store((*obj).entries as *mut u8, &raw mut (*entry).value, value);
+                (*obj).epoch = (*obj).epoch.wrapping_add(1);
+                (*obj).cache_epoch = (*obj).epoch;
+                Ok(Some(old))
+            }
+        } else {
+            self.insert_new(key, value, hash)?;
+            unsafe {
+                let obj = self.object();
+                (*obj).cache_epoch = (*obj).epoch;
+                (*obj).cache_entry = (*obj).len;
+            }
+            Ok(None)
+        }
     }
     pub fn delete(self, cx: &mut Cx, key: K) -> R<Option<V>> {
         let hash = key.hash(cx);
         self.delete_with(cx, key, hash, |cx, a, b| Ok(a.equals(b, cx)))
     }
+    #[inline(always)]
     pub fn get_or_insert(self, cx: &mut Cx, key: K, value: V) -> R<V> {
-        let hash = key.hash(cx);
-        self.get_or_insert_with(cx, key, value, hash, |cx, a, b| Ok(a.equals(b, cx)))
+        let (hash, index) = self.lookup(cx, key);
+        if let Some(i) = index {
+            return Ok(unsafe { (*self.entry_ptr(i)).value });
+        }
+        self.insert_new(key, value, hash)?;
+        unsafe {
+            let obj = self.object();
+            (*obj).cache_epoch = (*obj).epoch;
+            (*obj).cache_entry = (*obj).len;
+        }
+        Ok(value)
     }
 }
 /// Immutable, managed snapshot: keeping it on the stack roots every entry,
@@ -431,6 +517,7 @@ pub struct Snapshot<K: Slot, V: Slot> {
     owner: PhantomData<(K, V, Rc<()>)>,
 }
 impl<K: Slot, V: Slot> Snapshot<K, V> {
+    #[inline]
     pub fn len(&self) -> usize {
         unsafe { *((self.pointer + 8) as *const usize) }
     }
@@ -547,6 +634,41 @@ mod tests {
         let mut instance = Instance::new(DESCRIPTORS, &POINTERS);
         instance.set_stress(true);
         instance
+    }
+    #[test]
+    fn string_lookup_cache_observes_mutation_growth_and_callback_restarts() {
+        fn run() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let map = unsafe { Map::<Str, Dyn>::new(&mut cx, 11) }?;
+            let key = cx.string("cached")?;
+            assert!(map.get(&mut cx, key)?.is_none());
+            map.set(&mut cx, key, Dyn { tag: 0, payload: 1 })?;
+            assert_eq!(map.get(&mut cx, key)?.unwrap().payload, 1);
+            for i in 0..64 {
+                let next = cx.string(&format!("grown-{i}"))?;
+                map.set(&mut cx, next, Dyn { tag: 0, payload: i })?;
+            }
+            assert_eq!(map.get(&mut cx, key)?.unwrap().payload, 1);
+            let hash = key.hash(&cx);
+            let mut changed = false;
+            map.set_with(&mut cx, key, Dyn { tag: 0, payload: 2 }, hash, |_, _, _| {
+                if !changed {
+                    changed = true;
+                    map.clear();
+                }
+                Ok(true)
+            })?;
+            assert_eq!(map.get(&mut cx, key)?.unwrap().payload, 2);
+            map.delete(&mut cx, key)?;
+            assert!(map.get(&mut cx, key)?.is_none());
+            map.get_or_insert(&mut cx, key, Dyn { tag: 0, payload: 3 })?;
+            assert_eq!(map.get(&mut cx, key)?.unwrap().payload, 3);
+            map.clear();
+            assert!(map.get(&mut cx, key)?.is_none());
+            Ok(0)
+        }
+        let mut instance = instance();
+        assert_eq!(unsafe { instance.run_baml(run) }.unwrap(), 0);
     }
     #[test]
     fn float_keys_use_reflexive_nan_equality_and_signed_zero() {
