@@ -356,7 +356,7 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
             }
         }
         if let Some(handle) = (*pointer).handle.take() {
-            let _ = handle.result();
+            handle.observe();
         }
         if !(*pointer).error.is_null() {
             let mut error = Box::new((*(*pointer).error).clone());

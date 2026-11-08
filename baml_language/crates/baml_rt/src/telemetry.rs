@@ -1018,10 +1018,25 @@ impl Session {
         if level.is_none() {
             return Ok(session);
         }
-        let pool = Pool::new(bex_chunkedringbuffer::Config::for_producers(
-            NonZeroUsize::new(1).unwrap(),
-        ))
-        .map_err(|e| Error::internal(format!("telemetry transport: {e:?}")))?;
+        // Logical tasks seal sparse chunks at every suspension and completion.
+        // Retain the standard transport's lane sizing even though there is only
+        // one OS producer, so two partial chunks do not force it to wait for
+        // the processor after almost every task.
+        let defaults = bex_chunkedringbuffer::Config::default();
+        let mut transport =
+            bex_chunkedringbuffer::Config::for_producers(NonZeroUsize::new(1).unwrap());
+        // Keep the standard lane record budget, spread across smaller chunks:
+        // task switches seal partial streams, so record capacity per chunk is
+        // rarely the limiting resource for this single producer.
+        transport.chunk_capacity = NonZeroUsize::new(32).unwrap();
+        let scale = defaults
+            .chunk_capacity
+            .get()
+            .div_ceil(transport.chunk_capacity.get());
+        transport.timing_chunks = NonZeroUsize::new(defaults.timing_chunks.get() * scale).unwrap();
+        transport.span_chunks = NonZeroUsize::new(defaults.span_chunks.get() * scale).unwrap();
+        let pool = Pool::new(transport)
+            .map_err(|e| Error::internal(format!("telemetry transport: {e:?}")))?;
         let consumer_pool = pool.clone();
         let allocator = btel_types::FunctionIdAllocator::default();
         let ids: Vec<_> = functions

@@ -124,13 +124,38 @@ pub struct TaskCancel {
     node: Rc<CancelNode>,
     deadline: Option<Instant>,
 }
+// All loop-local ancestry shares one cancellation domain. Before its first
+// request, an unlinked ancestry cannot be cancelled. The sticky bit never wraps,
+// unlike the generation used to service parked tasks.
+struct CancelEpoch {
+    value: Cell<usize>,
+    pristine: Cell<bool>,
+}
+impl Default for CancelEpoch {
+    fn default() -> Self {
+        Self {
+            value: Cell::new(0),
+            pristine: Cell::new(true),
+        }
+    }
+}
+impl CancelEpoch {
+    fn get(&self) -> usize {
+        self.value.get()
+    }
+    fn invalidate(&self) {
+        self.pristine.set(false);
+        self.value.set(self.value.get().wrapping_add(1));
+    }
+}
 struct CancelNode {
+    plain: bool,
     cancelled: Cell<bool>,
     parent: Option<Rc<CancelNode>>,
     linked: Vec<CancellationToken>,
     local_linked: Vec<TaskCancel>,
     external: bool,
-    epoch: Rc<Cell<usize>>,
+    epoch: Rc<CancelEpoch>,
     poll_word: Rc<Cell<u8>>,
 }
 impl Drop for CancelNode {
@@ -157,9 +182,10 @@ impl TaskCancel {
     pub fn detached(linked: Vec<CancellationToken>) -> Self {
         Self::root(linked, Rc::default())
     }
-    fn root(linked: Vec<CancellationToken>, epoch: Rc<Cell<usize>>) -> Self {
+    fn root(linked: Vec<CancellationToken>, epoch: Rc<CancelEpoch>) -> Self {
         Self {
             node: Rc::new(CancelNode {
+                plain: linked.is_empty(),
                 cancelled: Cell::new(false),
                 parent: None,
                 external: !linked.is_empty(),
@@ -174,6 +200,7 @@ impl TaskCancel {
     pub fn child(&self, linked: Vec<CancellationToken>) -> Self {
         Self {
             node: Rc::new(CancelNode {
+                plain: self.node.plain && linked.is_empty(),
                 cancelled: Cell::new(false),
                 parent: Some(self.node.clone()),
                 external: self.node.external || !linked.is_empty(),
@@ -197,11 +224,14 @@ impl TaskCancel {
     pub fn cancel(&self) {
         self.node.poll_word.set(self.node.poll_word.get() | 1);
         if !self.node.cancelled.replace(true) {
-            self.node.epoch.set(self.node.epoch.get().wrapping_add(1));
+            self.node.epoch.invalidate();
         }
     }
     #[inline]
     pub fn is_cancelled(&self) -> bool {
+        if self.deadline.is_none() && self.node.plain && self.node.epoch.pristine.get() {
+            return false;
+        }
         if self.deadline.is_none()
             && self.node.linked.is_empty()
             && self.node.local_linked.is_empty()
@@ -341,6 +371,13 @@ impl FutureHandle {
     pub fn is_observed(&self) -> bool {
         self.0.borrow().observed
     }
+    /// Mark a settled result as consumed without cloning its native payload.
+    pub fn observe(&self) {
+        let mut f = self.0.borrow_mut();
+        if !matches!(f.state, FutureState::Pending) {
+            f.observed = true;
+        }
+    }
     pub fn result(&self) -> Option<Outcome> {
         let mut f = self.0.borrow_mut();
         let result = f.state.result();
@@ -462,21 +499,35 @@ pub struct SwitchHook {
     pub enter: unsafe fn(*mut ()),
     pub leave: unsafe fn(*mut ()),
 }
-// None parks a live task; Some completes a logical task while keeping the
-// executor parked for reuse. No task-local state survives that completion.
-type Fiber = Coroutine<usize, Option<Outcome>, Outcome>;
+// Completed executors keep a stable mailbox beside their stack. Values never
+// travel through the context-switch ABI, and no task-local state survives reuse.
+type Fiber = Coroutine<(), bool, ()>;
+struct Job {
+    id: usize,
+    body: Body,
+    cancel: TaskCancel,
+}
+#[derive(Default)]
+struct Mailbox {
+    job: Option<Job>,
+    result: Option<Outcome>,
+}
+struct Executor {
+    // Forced unwind must run before dropping the mailbox its stack references.
+    fiber: Fiber,
+    mailbox: Box<Mailbox>,
+}
 enum PooledFiber {
     Idle {
-        fiber: Fiber,
+        executor: Executor,
         base: usize,
         limit: usize,
     },
-    Stack(DefaultStack),
+    Stack(DefaultStack, Box<Mailbox>),
 }
 struct Task {
     hook: Option<SwitchHook>,
-    fiber: Option<Fiber>,
-    body: Option<Body>,
+    fiber: Option<Executor>,
     base: usize,
     parked_sp: Option<usize>,
     stack_limit: usize,
@@ -517,7 +568,7 @@ struct Core {
     slow_tasks: usize,
     io_pending: usize,
     host_enabled: bool,
-    cancel_epoch: Rc<Cell<usize>>,
+    cancel_epoch: Rc<CancelEpoch>,
     last_cancel_epoch: usize,
     poll_word: Rc<Cell<u8>>,
     slice: slice_clock::Slice,
@@ -726,7 +777,7 @@ impl TaskLoop {
         for pooled in &c.pool {
             let (base, limit) = match pooled {
                 PooledFiber::Idle { base, limit, .. } => (*base, *limit),
-                PooledFiber::Stack(stack) => (stack.base().get(), stack.limit().get()),
+                PooledFiber::Stack(stack, _) => (stack.base().get(), stack.limit().get()),
             };
             visit(limit as *const u8, base - limit);
         }
@@ -912,7 +963,7 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
     if let Some(hook) = hook {
         unsafe { (hook.enter)(hook.data) };
     }
-    let mut fiber = {
+    let mut executor = {
         let mut c = core.borrow_mut();
         refresh_poll_word(&c, id);
         let t = c.tasks.get_mut(&id).unwrap();
@@ -923,10 +974,8 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
         fiber
     };
     // No Core borrow survives a context switch: TaskCx may freely access it.
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| fiber.resume(id)))
-        .unwrap_or_else(|_| {
-            CoroutineResult::Return(Err(Err::InternalError("task panicked".into())))
-        });
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| executor.fiber.resume(())));
     let current = core.borrow_mut().active_hook.take();
     if let Some(hook) = current {
         unsafe { (hook.leave)(hook.data) };
@@ -938,10 +987,16 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
     let mut c = core.borrow_mut();
     c.running_base = None;
     match result {
-        CoroutineResult::Yield(None) => {
-            c.tasks.get_mut(&id).unwrap().fiber = Some(fiber);
+        Ok(CoroutineResult::Yield(false)) => {
+            c.tasks.get_mut(&id).unwrap().fiber = Some(executor);
         }
-        CoroutineResult::Yield(Some(result)) | CoroutineResult::Return(result) => {
+        result => {
+            let result = match result {
+                Ok(CoroutineResult::Yield(true)) => {
+                    executor.mailbox.result.take().expect("task result")
+                }
+                _ => Err(Err::InternalError("task panicked".into())),
+            };
             let mut task = c.tasks.remove(&id).unwrap();
             task.state = TaskState::Done;
             if result.is_err() {
@@ -954,14 +1009,12 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
                 token.cancel();
             }
             c.slow_tasks -= usize::from(task.needs_service);
-            let state = match &result {
-                Ok(v) => FutureState::Ready(v.clone()),
+            let reply = task.host.take().map(|reply| (reply, result.clone()));
+            let state = match result {
+                Ok(v) => FutureState::Ready(v),
                 Err(Err::Cancelled) => FutureState::Cancelled,
-                Err(Err::Error { message, trace }) => FutureState::Error {
-                    message: message.clone(),
-                    trace: trace.clone(),
-                },
-                Err(Err::InternalError(e)) => FutureState::InternalError(e.clone()),
+                Err(Err::Error { message, trace }) => FutureState::Error { message, trace },
+                Err(Err::InternalError(e)) => FutureState::InternalError(e),
             };
             {
                 let mut f = task.future.0.borrow_mut();
@@ -970,16 +1023,16 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
                     wake(&mut c, waiter);
                 }
             }
-            if let Some(reply) = task.host.take() {
+            if let Some((reply, result)) = reply {
                 task.future.0.borrow_mut().observed = true;
                 let _ = reply.send(result.and_then(Value::owned));
             }
             if c.pool.len() < c.config.pool_capacity {
-                c.pool.push(if fiber.done() {
-                    PooledFiber::Stack(fiber.into_stack())
+                c.pool.push(if executor.fiber.done() {
+                    PooledFiber::Stack(executor.fiber.into_stack(), executor.mailbox)
                 } else {
                     PooledFiber::Idle {
-                        fiber,
+                        executor,
                         base: task.base,
                         limit: task.stack_limit,
                     }
@@ -1025,17 +1078,27 @@ fn spawn(
         (Some(a), Some(b)) => Some(a.min(b)),
         (a, b) => a.or(b),
     };
-    let node = CancelNode {
-        cancelled: Cell::new(false),
-        parent: inherited.as_ref().map(|p| p.node.clone()),
-        external: !options.linked.is_empty() || inherited.as_ref().is_some_and(|p| p.node.external),
-        linked: options.linked,
-        local_linked: options.local_linked,
-        epoch: c.cancel_epoch.clone(),
-        poll_word: c.poll_word.clone(),
-    };
+    let external =
+        !options.linked.is_empty() || inherited.as_ref().is_some_and(|p| p.node.external);
+    let plain = options.linked.is_empty()
+        && options.local_linked.is_empty()
+        && inherited.as_ref().is_none_or(|p| p.node.plain);
+    macro_rules! new_node {
+        () => {
+            CancelNode {
+                plain,
+                cancelled: Cell::new(false),
+                parent: inherited.as_ref().map(|p| p.node.clone()),
+                external,
+                linked: options.linked,
+                local_linked: options.local_linked,
+                epoch: c.cancel_epoch.clone(),
+                poll_word: c.poll_word.clone(),
+            }
+        };
+    }
     let needs_service =
-        node.external || deadline.is_some() || options.gate.is_some() || !options.gates.is_empty();
+        external || deadline.is_some() || options.gate.is_some() || !options.gates.is_empty();
     c.slow_tasks += usize::from(needs_service);
     let recycled = c.future_pool.borrow_mut().records.pop();
     let future = if let Some(f) = recycled {
@@ -1046,13 +1109,23 @@ fn spawn(
         {
             let mut data = f.borrow_mut();
             if let Some(old) = Rc::get_mut(&mut data.cancel.node) {
-                *old = node;
+                // Only uniquely-owned nodes can be reset. Descendants may have
+                // kept ancestry alive at retirement, then released it before
+                // reuse; replacing the parent still uses iterative node drop.
+                // Keep the existing domain allocation.
+                debug_assert!(Rc::ptr_eq(&old.epoch, &c.cancel_epoch));
+                old.plain = plain;
+                old.cancelled.set(false);
+                old.parent = inherited.as_ref().map(|p| p.node.clone());
+                old.external = external;
+                old.linked = options.linked;
+                old.local_linked = options.local_linked;
             } else {
                 #[cfg(feature = "instrument")]
                 {
                     c.metrics.cancel_allocations += 1;
                 }
-                data.cancel.node = Rc::new(node);
+                data.cancel.node = Rc::new(new_node!());
             }
             data.cancel.deadline = deadline;
             data.id = id;
@@ -1072,7 +1145,7 @@ fn spawn(
             owner: Rc::downgrade(core),
             state: FutureState::Pending,
             cancel: TaskCancel {
-                node: Rc::new(node),
+                node: Rc::new(new_node!()),
                 deadline,
             },
             waiters: vec![],
@@ -1111,28 +1184,33 @@ fn spawn(
                 .collect(),
         })
     };
-    let (fiber, base, stack_limit) = match c.pool.pop() {
-        Some(PooledFiber::Idle { fiber, base, limit }) => (fiber, base, limit),
+    let (mut executor, base, stack_limit) = match c.pool.pop() {
+        Some(PooledFiber::Idle {
+            executor,
+            base,
+            limit,
+        }) => (executor, base, limit),
         pooled => {
-            let stack = match pooled {
-                Some(PooledFiber::Stack(stack)) => stack,
-                None => {
-                    DefaultStack::new(c.config.stack_size).expect("fiber stack allocation failed")
-                }
+            let (stack, mut mailbox) = match pooled {
+                Some(PooledFiber::Stack(stack, mailbox)) => (stack, mailbox),
+                None => (
+                    DefaultStack::new(c.config.stack_size).expect("fiber stack allocation failed"),
+                    Box::<Mailbox>::default(),
+                ),
                 _ => unreachable!(),
             };
             let base = stack.base().get();
             let limit = stack.limit().get();
             let weak = Rc::downgrade(core);
-            let fiber = Coroutine::with_stack(stack, move |yielder, mut id| {
+            // Stable allocation, retained alongside the coroutine for its entire
+            // lifetime. Only the running executor accesses it during a resume.
+            let dispatch = (&raw mut *mailbox) as usize;
+            let fiber = Coroutine::with_stack(stack, move |yielder, ()| {
                 loop {
                     let result = {
+                        let Job { id, body, cancel } =
+                            unsafe { (&mut *(dispatch as *mut Mailbox)).job.take().unwrap() };
                         let core = weak.upgrade().expect("loop alive");
-                        let (body, cancel) = {
-                            let mut c = core.borrow_mut();
-                            let task = c.tasks.get_mut(&id).unwrap();
-                            (task.body.take().unwrap(), task.cancel.clone())
-                        };
                         let mut cx = TaskCx {
                             core,
                             id,
@@ -1141,28 +1219,33 @@ fn spawn(
                             shield: 0,
                             scheduled: slice_clock::now(),
                         };
-                        // Driver catches panics after corosensei unwinds the fiber.
-                        // Forced shutdown unwind must pass through this boundary.
                         #[cfg(feature = "instrument")]
                         {
                             cx.core.borrow_mut().metrics.slice_reads += 1;
                         }
                         body.run(&mut cx)
                     };
-                    // All bindings, captures and strong Core references have dropped.
-                    // The driver retires the task before this executor can be reused.
-                    id = yielder.suspend(Some(result));
+                    // Task locals and strong Core references have dropped first.
+                    unsafe {
+                        (&mut *(dispatch as *mut Mailbox)).result = Some(result);
+                    }
+                    yielder.suspend(true);
                 }
             });
-            (fiber, base, limit)
+            (Executor { fiber, mailbox }, base, limit)
         }
     };
+    debug_assert!(executor.mailbox.job.is_none() && executor.mailbox.result.is_none());
+    executor.mailbox.job = Some(Job {
+        id,
+        body,
+        cancel: cancel.clone(),
+    });
     c.tasks.insert(
         id,
         Task {
             hook: None,
-            fiber: Some(fiber),
-            body: Some(body),
+            fiber: Some(executor),
             base,
             parked_sp: None,
             stack_limit,
@@ -1190,7 +1273,7 @@ fn spawn(
 pub struct TaskCx<'a> {
     core: Rc<RefCell<Core>>,
     id: usize,
-    yielder: &'a Yielder<usize, Option<Outcome>>,
+    yielder: &'a Yielder<(), bool>,
     cancel: TaskCancel,
     shield: usize,
     scheduled: slice_clock::Stamp,
@@ -1223,6 +1306,7 @@ impl TaskCx<'_> {
         let core = self.core.borrow();
         TaskCancel {
             node: Rc::new(CancelNode {
+                plain: linked.is_empty(),
                 cancelled: Cell::new(false),
                 parent: None,
                 linked: Vec::new(),
@@ -1287,24 +1371,28 @@ impl TaskCx<'_> {
             c.slow_tasks += 1;
         }
     }
-    #[inline]
+    #[inline(always)]
     fn checkpoint(&mut self) -> Result<(), Err> {
         #[cfg(feature = "instrument")]
         {
             self.core.borrow_mut().metrics.checkpoints += 1;
         }
         if self.shield == 0 && self.cancel.is_cancelled() {
-            let mut c = self.core.borrow_mut();
-            let t = c.tasks.get_mut(&self.id).unwrap();
-            if let Some(token) = t.io_cancel.take() {
-                token.cancel();
-            }
-            t.io_epoch += 1;
-            t.completion = None;
-            t.timer = None;
-            return Err(Err::Cancelled);
+            return self.cancelled_checkpoint();
         }
         Ok(())
+    }
+    #[cold]
+    fn cancelled_checkpoint(&mut self) -> Result<(), Err> {
+        let mut c = self.core.borrow_mut();
+        let t = c.tasks.get_mut(&self.id).unwrap();
+        if let Some(token) = t.io_cancel.take() {
+            token.cancel();
+        }
+        t.io_epoch += 1;
+        t.completion = None;
+        t.timer = None;
+        Err(Err::Cancelled)
     }
     // Keep the spill frame alive until resume. No Core borrow crosses the switch.
     #[inline(never)]
@@ -1316,7 +1404,7 @@ impl TaskCx<'_> {
                 .get_mut(&self.id)
                 .unwrap()
                 .parked_sp = Some(sp);
-            self.yielder.suspend(None);
+            self.yielder.suspend(false);
             self.core
                 .borrow_mut()
                 .tasks
@@ -1726,4 +1814,37 @@ fn refresh_poll_word(c: &Core, running: usize) {
         || c.tasks[&running].cancel.is_cancelled();
     c.poll_word
         .set((c.poll_word.get() & !1) | u8::from(required));
+}
+
+#[cfg(test)]
+mod cancel_tests {
+    use super::*;
+
+    #[test]
+    fn pristine_domain_fast_path_survives_generation_wrap() {
+        let parent = TaskCancel::default();
+        let child = parent.child(vec![]);
+        assert!(!child.is_cancelled());
+        parent.node.epoch.value.set(usize::MAX);
+        parent.cancel();
+        assert_eq!(parent.node.epoch.get(), 0);
+        assert!(child.is_cancelled());
+        let unrelated = TaskCancel::root(vec![], parent.node.epoch.clone());
+        assert!(!unrelated.is_cancelled());
+        unrelated.cancel();
+        assert!(unrelated.is_cancelled());
+    }
+
+    #[test]
+    fn pristine_domain_does_not_hide_external_tokens_or_deadlines() {
+        let external = CancellationToken::new();
+        let parent = TaskCancel::detached(vec![external.clone()]);
+        let child = parent.child(vec![]);
+        assert!(!child.is_cancelled());
+        external.cancel();
+        assert!(child.is_cancelled());
+        let expired = TaskCancel::default().with_deadline(Instant::now());
+        assert!(expired.is_cancelled());
+        assert!(expired.child(vec![]).is_cancelled());
+    }
 }
