@@ -1,6 +1,6 @@
 use super::{
     BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, RuntimeTy,
-    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions, file_lets,
+    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions,
     is_required_interface_method, lower_function, no, registry, world_files,
 };
 
@@ -19,11 +19,8 @@ pub(super) fn collect<'db>(
     plan: &mut Plan<'_>,
 ) -> Gen<Admitted<'db>> {
     let mut all = BTreeMap::new();
+    let initializer_roots = super::globals::prepare(db, root, opt, plan, &mut all)?;
     for &file in world_files(db, root) {
-        registry::admit(registry::Admission::Initializers(
-            file.source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib
-                && !file_lets(db, file).is_empty(),
-        ))?;
         for &f in file_functions(db, file) {
             if is_required_interface_method(db, f) {
                 continue;
@@ -32,13 +29,22 @@ pub(super) fn collect<'db>(
                 .as_ref()
                 .map_err(|e| no(format!("MIR: {e:?}")))?;
             if let Some(object) = plan.index.declared(db, f) {
-                all.insert(object, mir.clone());
+                all.insert(object, MirFunction::from(mir));
             }
         }
     }
     let mut queue = VecDeque::from([entry]);
+    queue.extend(initializer_roots);
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
+    // Expansion can move owned MIR records inside the map. Bind capture
+    // inference to final body addresses after registering every specialization.
+    plan.lambda_bodies.clear();
+    for (&object, mir) in &all {
+        if let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() {
+            plan.lambda_bodies.insert(body as *const _ as usize, object);
+        }
+    }
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -50,7 +56,7 @@ pub(super) fn collect<'db>(
         let mir = all
             .get(&object)
             .ok_or_else(|| no(format!("missing MIR for {}", plan.index.display(object))))?;
-        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
             return Err(no(plan.index.display(object)));
         };
         registry::admit(registry::Admission::Function(mir))?;
@@ -105,6 +111,12 @@ pub(super) fn collect<'db>(
                     .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
                 {
                     let ty = super::generics::type_operand(body, &args[0])?;
+                    if matches!(&ty, RuntimeTy::Map { .. }) {
+                        let repr = plan.repr(&ty)?;
+                        plan.record_ty(&ty)?;
+                        plan.json_maps.insert(repr, ty);
+                        continue;
+                    }
                     let template = baml_compiler2_mir::TyTemplate::from(
                         baml_compiler2_mir::RealizedTy::try_from(ty)
                             .map_err(|_| no("non-concrete JSON argument"))?,
@@ -119,6 +131,7 @@ pub(super) fn collect<'db>(
                 }
             }
         }
+        super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
             registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;
@@ -190,7 +203,7 @@ pub(super) fn collect<'db>(
     // Dynamic call cycles need real native frames and the stack guard too.
     // Every materialized callable has already been reached by discover().
     for &object in &reached {
-        if let MirFunctionKind::Bytecode(body) = &all[&object].kind
+        if let MirFunctionKind::Bytecode(body) = all[&object].kind.as_ref()
             && body.blocks.iter().any(|b| {
                 matches!(
                     b.terminator,
@@ -205,7 +218,7 @@ pub(super) fn collect<'db>(
             calls.entry(object).or_default().extend(&plan.callables);
         }
     }
-    let mir = all[&entry];
+    let mir = &all[&entry];
     super::host::admit(plan, mir)?;
     Ok(Admitted {
         all,

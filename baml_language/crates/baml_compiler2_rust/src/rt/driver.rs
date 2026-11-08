@@ -20,6 +20,7 @@ pub fn compile_rt(
         program,
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
+        map_types: Default::default(),
         json_types: Vec::new(),
         enums: BTreeSet::new(),
         specialized_calls: BTreeMap::new(),
@@ -36,6 +37,10 @@ pub fn compile_rt(
         lambda_bodies: BTreeMap::new(),
         callables: BTreeSet::new(),
         closure_lists: BTreeMap::new(),
+        json_maps: BTreeMap::new(),
+        map_stringify: false,
+        globals: BTreeMap::new(),
+        init_chains: Vec::new(),
     };
     let admission::Admitted {
         all,
@@ -69,11 +74,12 @@ pub fn compile_rt(
         descriptors: &descriptors,
     };
     json::emit(&mut out, &cx, json_decode, alias_function)?;
+    super::map_json::emit(&mut out, &cx, &lists, json_decode, alias_function)?;
     // Bound forced inlining by the same total-local budget as a single body.
     // Recursive SCCs retain real frames and the normal per-entry stack guard.
     let small_program = reached
         .iter()
-        .map(|id| match &all[id].kind {
+        .map(|id| match all[id].kind.as_ref() {
             MirFunctionKind::Bytecode(body) => body.locals.len(),
             MirFunctionKind::Builtin(_) => 0,
         })
@@ -83,8 +89,8 @@ pub fn compile_rt(
     let mut placements = reached
         .iter()
         .map(|&object| {
-            let mir = all[&object];
-            let MirFunctionKind::Bytecode(body) = &mir.kind else {
+            let mir = &all[&object];
+            let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
                 unreachable!()
             };
             (
@@ -103,7 +109,7 @@ pub fn compile_rt(
         small_program && placements.values().map(|p| p.bytes(&plan)).sum::<usize>() <= 16 * 1024;
     for &object in &reached {
         let mir = &all[&object];
-        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
             unreachable!()
         };
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
@@ -170,7 +176,7 @@ pub fn compile_rt(
             let emitter = Emitter {
                 db,
                 plan: &plan,
-                body: match &all[&entry].kind {
+                body: match all[&entry].kind.as_ref() {
                     MirFunctionKind::Bytecode(b) => b,
                     _ => unreachable!(),
                 },
@@ -189,6 +195,8 @@ pub fn compile_rt(
                 telemetry_sites: &telemetry_sites,
                 site: 0,
                 stack: Default::default(),
+                statement: 0,
+                proven_arithmetic: BTreeSet::new(),
             };
             let expression =
                 emitter.membership(("value".into(), super::Repr::Tagged), &template)?;
@@ -199,6 +207,7 @@ pub fn compile_rt(
             emitted.insert(head);
         }
     }
+    super::globals::emit(&mut out, &plan, &descriptors, &lists, &telemetry_sites)?;
     let format_site = telemetry::emit(
         &mut out,
         &cx,
@@ -210,7 +219,7 @@ pub fn compile_rt(
     host::emit(
         &mut out,
         &plan,
-        all[&entry],
+        &all[&entry],
         &lists,
         &descriptors,
         entry,

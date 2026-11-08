@@ -15,6 +15,7 @@ pub(super) enum Repr {
     Dyn(usize),
     Tagged,
     MapStrInt,
+    Map(usize),
     Iter,
     Naming,
     Enum(usize),
@@ -35,7 +36,9 @@ impl Repr {
     }
     // Shared by ordinary dynamic boundaries and erased callable adapters.
     pub(super) fn decode_payload(self, bits: &str) -> String {
-        if self == Self::Bool {
+        if self == Self::Float {
+            format!("f64::from_bits({bits})")
+        } else if self == Self::Bool {
             format!("({bits}!=0)")
         } else {
             format!("({bits} as {})", self.rust())
@@ -76,6 +79,7 @@ impl Repr {
                 | Self::Closure
                 | Self::Cell
                 | Self::ListClosure(_)
+                | Self::Map(_)
         )
     }
 }

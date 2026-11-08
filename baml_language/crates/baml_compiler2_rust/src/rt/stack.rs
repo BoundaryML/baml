@@ -79,7 +79,7 @@ impl Placement {
         arity: usize,
         opt: OptLevel,
         plan: &Plan<'_>,
-        all: &BTreeMap<usize, &MirFunction<'db>>,
+        all: &BTreeMap<usize, MirFunction<'db>>,
     ) -> Self {
         if !body.blocks.iter().flat_map(|b| &b.statements).any(|s| {
             matches!(
@@ -248,7 +248,7 @@ impl Placement {
 }
 
 fn small_leaf(mir: &MirFunction<'_>) -> bool {
-    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+    let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
         return false;
     };
     mir.arity > 0

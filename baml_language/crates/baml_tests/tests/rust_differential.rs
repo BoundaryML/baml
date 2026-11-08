@@ -557,7 +557,11 @@ fn rust_differential() {
     assert!(timeout > 0);
     let timeout = Duration::from_secs(timeout);
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
-    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok();
+    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok().or_else(|| {
+        std::env::var("BAML_RUST_DIFF_RT_ONLY")
+            .is_ok_and(|v| v == "1")
+            .then(|| "rt,rt-gc-stress".into())
+    });
     if let Some(selected) = &selected {
         for name in selected.split(',') {
             assert!(
@@ -579,7 +583,7 @@ fn rust_differential() {
     let rt_only = backends
         .iter()
         .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
-    let levels = if rt_only { &["off"][..] } else { LEVELS };
+    let levels = LEVELS;
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -599,15 +603,6 @@ fn rust_differential() {
             );
         }
     }
-    // Focused runtime jobs retain the bytecode oracle and both GC modes, while
-    // avoiding unrelated compiled-VM variants and unsupported telemetry levels.
-    // The default merged-branch gate still runs the complete matrix.
-    let rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
-    let backends: Vec<_> = BACKENDS
-        .iter()
-        .filter(|b| !rt_only || matches!(b.name, "bytecode" | "rt" | "rt-gc-stress"))
-        .collect();
-    let levels = LEVELS;
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();

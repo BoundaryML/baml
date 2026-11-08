@@ -241,7 +241,7 @@ impl registry::Feature for Feature {
                 if !tags.insert(tag.clone()) {
                     return Err(no("overlapping dispatch storage tags"));
                 }
-                let MirFunctionKind::Bytecode(body) = &e.all[&callee].kind else {
+                let MirFunctionKind::Bytecode(body) = e.all[&callee].kind.as_ref() else {
                     return Err(no("interface builtin implementation"));
                 };
                 let mut call_values = values
@@ -282,7 +282,7 @@ impl registry::Feature for Feature {
                     .collect::<Gen<Vec<_>>>()?
                     .join(",");
                 let value = e.fallible(&format!(
-                    "f{callee}({},{arguments})",
+                    "f{callee}::<OBSERVE>(cx,{},{arguments})",
                     e.telemetry_site(callee)
                 ));
                 let result = e.coerce((value, e.plan.repr(&body.locals[0].ty)?), returned)?;
@@ -318,7 +318,7 @@ impl Emitter<'_, '_> {
             return None;
         };
         let first = targets[0].1;
-        let MirFunctionKind::Bytecode(body) = &self.all[&first].kind else {
+        let MirFunctionKind::Bytecode(body) = self.all[&first].kind.as_ref() else {
             return None;
         };
         let signature = (1..=self.all[&first].arity)
@@ -331,7 +331,7 @@ impl Emitter<'_, '_> {
             return None;
         };
         for &(_, callee) in targets {
-            let MirFunctionKind::Bytecode(b) = &self.all[&callee].kind else {
+            let MirFunctionKind::Bytecode(b) = self.all[&callee].kind.as_ref() else {
                 return None;
             };
             if self.all[&callee].arity != signature.len()
@@ -366,7 +366,7 @@ impl Emitter<'_, '_> {
                 self.coerce((format!("a{self_arg}"), values[*self_arg].1), Repr::Tagged)?;
             write!(code, "let receiver={receiver};").unwrap();
             let fn_ty = format!(
-                "unsafe fn(usize,{})->R<{}>",
+                "unsafe fn(rt::calls::Context,usize,{})->R<{}>",
                 signature
                     .iter()
                     .map(|r| r.rust())
@@ -378,16 +378,21 @@ impl Emitter<'_, '_> {
             for &(repr, callee) in targets {
                 table.insert(self.tag(repr)?, (callee, self.telemetry_site(callee)));
             }
-            write!(code, "static VTABLE:&[Option<({fn_ty},usize)>]=&[").unwrap();
-            for tag in 0..=*table.keys().last().unwrap() {
-                if let Some((callee, site)) = table.get(&tag) {
-                    write!(code, "Some((f{callee} as {fn_ty},{site})),").unwrap();
-                } else {
-                    code.push_str("None,");
+            for (observed, table_name) in [(true, "VTABLE_TRUE"), (false, "VTABLE_FALSE")] {
+                write!(code, "static {table_name}:&[Option<({fn_ty},usize)>]=&[").unwrap();
+                for tag in 0..=*table.keys().last().unwrap() {
+                    if let Some((callee, site)) = table.get(&tag) {
+                        write!(code, "Some((f{callee}::<{observed}> as {fn_ty},{site})),").unwrap();
+                    } else {
+                        code.push_str("None,");
+                    }
                 }
+                code.push_str("];");
             }
-            code.push_str("];let (callee,site)=");
-            code.push_str(&self.fallible("VTABLE.get(receiver.tag as usize).copied().flatten().ok_or_else(||rt::Error::internal(\"invalid closed-world interface receiver\".into()))"));
+            code.push_str(
+                "let vtable=if OBSERVE{VTABLE_TRUE}else{VTABLE_FALSE};let (callee,site)=",
+            );
+            code.push_str(&self.fallible("vtable.get(receiver.tag as usize).copied().flatten().ok_or_else(||rt::Error::internal(\"invalid closed-world interface receiver\".into()))"));
             code.push(';');
             let mut values = values
                 .iter()
@@ -418,7 +423,7 @@ impl Emitter<'_, '_> {
                 .map(|(v, r)| self.coerce(v, *r))
                 .collect::<Gen<Vec<_>>>()?
                 .join(",");
-            code.push_str(&self.fallible(&format!("callee(site,{arguments})")));
+            code.push_str(&self.fallible(&format!("callee(cx,site,{arguments})")));
             code.push('}');
             self.assign(destination, (code, returned))
         })())

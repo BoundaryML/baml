@@ -93,7 +93,7 @@ fn repr_type(plan: &Plan<'_>, lists: &BTreeMap<Repr, usize>, repr: Repr) -> Gen<
 }
 
 pub(super) fn admit(plan: &Plan<'_>, mir: &MirFunction<'_>) -> Gen<()> {
-    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+    let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
         return Err(no("host entry"));
     };
     for local in &body.locals[..=mir.arity] {
@@ -112,7 +112,7 @@ pub(super) fn emit(
     builtins: &BTreeSet<String>,
     format_site: usize,
 ) -> Gen<()> {
-    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+    let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
         unreachable!()
     };
     let builtin_init = if builtins.is_empty() {
@@ -120,8 +120,24 @@ pub(super) fn emit(
     } else {
         "init_builtin_observation();"
     };
+    let has_globals = !plan.init_chains.is_empty();
+    let int_driver = if has_globals {
+        "rt::driver_observed_initialized"
+    } else {
+        "rt::driver_observed"
+    };
+    let initialize = if has_globals {
+        ",initialize_program"
+    } else {
+        ""
+    };
+    let host_initialize = if has_globals {
+        "Some(initialize_program)"
+    } else {
+        "None"
+    };
     if mir.arity == 0 && plan.repr(&body.locals[0].ty)? == Repr::Int {
-        writeln!(&mut out,"fn entry()->R<i64>{{unsafe{{if rt::telemetry::active(){{f{entry}::<true>(rt::calls::Context::current(),0)}}else{{f{entry}::<false>(rt::calls::Context::current(),0)}}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::driver_observed(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}").unwrap();
+        writeln!(&mut out,"fn entry()->R<i64>{{unsafe{{if rt::telemetry::active(){{f{entry}::<true>(rt::calls::Context::current(),0)}}else{{f{entry}::<false>(rt::calls::Context::current(),0)}}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}{int_driver}(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}){initialize})}}").unwrap();
         return Ok(());
     }
     let mut classes = BTreeSet::new();
@@ -138,10 +154,7 @@ pub(super) fn emit(
         visit(plan, plan.repr(&local.ty)?, &mut classes);
     }
     for c in classes {
-        let Object::Class(class) = &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-        else {
-            unreachable!()
-        };
+        let class = plan.class(c);
         for package in &plan.program.packages {
             for rule in package.impl_rules.values().flatten() {
                 if matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if head.tag()==class.type_tag)
@@ -228,6 +241,6 @@ pub(super) fn emit(
         format!("rt::Dyn{{tag:{tag},payload:{payload}}}")
     };
     let returned = host_type(plan, lists, &body.locals[0].ty)?;
-    writeln!(&mut out,"({returned}).copy_out({value},0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::host::driver(DESCRIPTORS,&HOST_FUNCTION,TELEMETRY_FUNCTIONS,TELEMETRY_SITES)}}").unwrap();
+    writeln!(&mut out,"({returned}).copy_out({value},0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::host::driver_initialized(DESCRIPTORS,&HOST_FUNCTION,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,{host_initialize})}}").unwrap();
     Ok(())
 }

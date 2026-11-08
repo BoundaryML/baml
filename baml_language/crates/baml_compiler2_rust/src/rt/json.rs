@@ -6,6 +6,16 @@ impl Plan<'_> {
         match ty {
             T::Function { .. } => Ok(usize::MAX - 1),
             T::Int => Ok(0),
+            T::Bool => Ok(90000),
+            T::Float => Ok(89998),
+            T::Null => Ok(89999),
+            T::Map { .. } => {
+                let ty = baml_compiler2_mir::RealizedTy::try_from(ty)
+                    .map(RuntimeTy::from)
+                    .map_err(|_| no("map type argument"))?;
+                let repr = self.repr(&ty)?;
+                Ok(super::map_json::code(repr)?)
+            }
             T::String => Ok(1),
             T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),
             T::Class(_, _) | T::Union(_) => {
@@ -72,7 +82,7 @@ pub(super) fn emit(
     } = *cx;
     let program = plan.program;
     if let Some(callee) = json_decode {
-        if plan.json_types.is_empty() {
+        if plan.json_types.is_empty() && plan.json_maps.is_empty() {
             return Err(no("missing JSON specialization"));
         }
         for (specialization, json_classes) in plan.json_types.iter().enumerate() {
@@ -264,7 +274,7 @@ pub(super) fn emit(
                     .unwrap();
                 }
                 let mir = &all[&callee];
-                let MirFunctionKind::Bytecode(body) = &mir.kind else {
+                let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
                     return Err(no("JSON wrapper body"));
                 };
                 let mut line = None;
@@ -315,5 +325,83 @@ pub(super) fn emit(
         }
     }
 
+    Ok(())
+}
+
+/// Register only types actually passed to JSON decode, rather than treating
+/// container builtin type arguments (such as `int?`) as class JSON schemas.
+pub(super) fn register_decoders(
+    db: &dyn Db,
+    plan: &mut Plan<'_>,
+    body: &MirFunctionBody<'_>,
+) -> Gen<()> {
+    fn template<'a, 'db>(
+        body: &'a MirFunctionBody<'db>,
+        operand: &Operand<'db>,
+        depth: usize,
+    ) -> Gen<&'a baml_compiler2_mir::TyTemplate> {
+        if depth >= body.locals.len() {
+            return Err(no("dynamic JSON type argument"));
+        }
+        let (Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))) = operand
+        else {
+            return Err(no("dynamic JSON type argument"));
+        };
+        let mut found = None;
+        for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+            if let StatementKind::Assign {
+                destination: Place::Local(dst),
+                value,
+            } = &statement.kind
+                && dst == local
+            {
+                let next = match value {
+                    Rvalue::LoadType(ty) => ty,
+                    Rvalue::Use(operand) => template(body, operand, depth + 1)?,
+                    _ => return Err(no("dynamic JSON type argument")),
+                };
+                if found.is_some_and(|old| old != next) {
+                    return Err(no("dynamic JSON type argument"));
+                }
+                found = Some(next);
+            }
+        }
+        found.ok_or_else(|| no("missing JSON type argument"))
+    }
+    for block in &body.blocks {
+        let Some(Terminator::Call {
+            callee: Operand::Constant(Constant::Function(f)),
+            args,
+            ntypeargs: 1,
+            ..
+        }) = &block.terminator
+        else {
+            continue;
+        };
+        if !plan
+            .index
+            .function(db, *f)
+            .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
+        {
+            continue;
+        }
+        let ty = template(body, &args[0], 0)?;
+        if matches!(ty, baml_compiler2_mir::TyTemplate::Map { .. }) {
+            let runtime = baml_compiler2_mir::RealizedTy::try_from(ty)
+                .map(RuntimeTy::from)
+                .map_err(|_| no("map JSON type"))?;
+            let repr = plan.repr(&runtime)?;
+            plan.record(repr)?;
+            plan.json_maps.insert(repr, runtime);
+        } else {
+            let classes = plan.json_class_types(ty)?;
+            for &class in &classes {
+                plan.add(class)?;
+            }
+            if !plan.json_types.contains(&classes) {
+                plan.json_types.push(classes);
+            }
+        }
+    }
     Ok(())
 }

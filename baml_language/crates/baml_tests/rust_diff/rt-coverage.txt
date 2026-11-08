@@ -1,11 +1,13 @@
-BAML runtime coverage (normal AND GC stress): 12 pass, 123 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 15 pass, 123 unsupported, 0 fail
 Telemetry off: required
-Telemetry low/medium/high/default: not yet supported
+Telemetry low/medium/high/default: required for standalone closure probes
+Unselected rows retain results from the earlier full run.
 
 First unsupported constructs (fixtures blocked):
-103	top-level initializers
+101	top-level initializers
 6	growing list builtin receiver
 4	list element
+2	function-valued global
 2	generic user call
 2	list field element
 1	JSON field union
@@ -98,12 +100,14 @@ InterfaceErrors	unsupported: top-level initializers
 Interfaces	unsupported: top-level initializers
 IteratorInterfaceIdentity	unsupported: top-level initializers
 Iterators	unsupported: top-level initializers
-Logs	unsupported: top-level initializers
-LogsDeep	unsupported: top-level initializers
+Logs	unsupported: function-valued global
+LogsDeep	unsupported: function-valued global
 ManualSpan	unsupported: top-level initializers
 NoLeaks	unsupported: top-level initializers
 Overflow	unsupported: top-level initializers
 RecursiveCancellation	unsupported: top-level initializers
+RtClosures	pass
+RtEmptyClosures	pass
 RuntimeClass	unsupported: top-level initializers
 Scalars	unsupported: top-level initializers
 Shapes	unsupported: top-level initializers
@@ -115,6 +119,7 @@ SpawnPanicUncaught	unsupported: top-level initializers
 SpawnThrowUncaught	unsupported: top-level initializers
 SpawnedClosures	unsupported: top-level initializers
 Spawns	unsupported: top-level initializers
+StackAllocation	pass
 TaskOverflow	unsupported: top-level initializers
 ThreadLocalParallel	unsupported: top-level initializers
 TimeoutCancellation	unsupported: top-level initializers

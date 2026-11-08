@@ -365,6 +365,15 @@ pub fn driver(
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
 ) -> std::process::ExitCode {
+    driver_initialized(descriptors, function, functions, sites, None)
+}
+pub fn driver_initialized(
+    descriptors: &'static [baml_rt_gc::Descriptor],
+    function: &'static Function,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    initialize: Option<fn(&mut crate::Instance, &mut crate::telemetry::Session) -> R<()>>,
+) -> std::process::ExitCode {
     let result = (|| -> R<()> {
         let mut args = std::env::args().skip(1);
         let mut value = Owned::Object(Default::default());
@@ -407,6 +416,9 @@ pub fn driver(
             session.run(|| unsafe { instance.run_owned(move || (function.invoke)(&args)) })
         };
         let result = (|| -> R<()> {
+            if let Some(initialize) = initialize {
+                initialize(&mut instance, &mut session)?;
+            }
             let value = call(&mut instance, &mut session)?;
             let Some(jobs) = jobs else {
                 println!("{value}");
@@ -434,7 +446,11 @@ pub fn driver(
             );
             Ok(())
         })();
-        session.finish(&result);
+        if result.as_ref().is_err_and(|e| e.class == "InitFailed") {
+            session.finish_initialization_failure();
+        } else {
+            session.finish(&result);
+        }
         result
     })();
     match result {

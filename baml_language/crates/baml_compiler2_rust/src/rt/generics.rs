@@ -22,7 +22,7 @@ pub(super) fn expand<'db>(
             let Some(mir) = all.get(&object).cloned() else {
                 continue;
             };
-            let MirFunctionKind::Bytecode(body) = &mir.kind else {
+            let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
                 continue;
             };
             let iters = crate::analysis::array_iterators(db, body, mir.arity);
@@ -125,7 +125,10 @@ pub(super) fn expand<'db>(
                         let Some((callee, _)) = plan.index.function(db, *f) else {
                             continue;
                         };
-                        if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
+                        if matches!(
+                            all.get(&callee).map(|m| m.kind.as_ref()),
+                            Some(MirFunctionKind::Builtin(_))
+                        ) || baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || plan.index.display(callee) == "baml.json.decode"
                         {
                             continue;
@@ -259,7 +262,7 @@ pub(super) fn specialize<'db>(
         Ok(())
     };
     let (erased_head, owner) = match &mir.identity {
-        baml_compiler2_mir::MirFunctionId::Declared(f) => {
+        Some(baml_compiler2_mir::MirFunctionId::Declared(f)) => {
             let callable = baml_compiler2_hir::loc::DeclRef::Source(*f);
             let declared = baml_compiler2_hir_ty::lower::owner_self_ty(runtime.db, *f);
             let head = match &declared {
@@ -283,7 +286,7 @@ pub(super) fn specialize<'db>(
         }
         _ => (None, None),
     };
-    if let MirFunctionKind::Bytecode(body) = &mut mir.kind {
+    if let MirFunctionKind::Bytecode(body) = mir.kind.to_mut() {
         for l in &mut body.locals {
             // MIR erases impl self arguments and represents a default body's
             // self by its interface head. The VM restores Self from the frame;
@@ -387,7 +390,7 @@ impl registry::Feature for Feature {
                     else {
                         return Err(no("generic call shape"));
                     };
-                    let MirFunctionKind::Bytecode(body) = &e.all[&target].kind else {
+                    let MirFunctionKind::Bytecode(body) = e.all[&target].kind.as_ref() else {
                         return Err(no("generic builtin body"));
                     };
                     let mut values = args[*ntypeargs..]
@@ -416,7 +419,7 @@ impl registry::Feature for Feature {
                         destination,
                         (
                             e.fallible(&format!(
-                                "f{target}({},{arguments})",
+                                "f{target}::<OBSERVE>(cx,{},{arguments})",
                                 e.telemetry_site(target)
                             )),
                             e.plan.repr(&body.locals[0].ty)?,
@@ -528,7 +531,7 @@ fn instance<'db>(
     let source = all
         .get(&callee)
         .ok_or_else(|| no("interface method MIR missing"))?;
-    let baml_compiler2_mir::MirFunctionId::Declared(f) = source.identity else {
+    let Some(baml_compiler2_mir::MirFunctionId::Declared(f)) = source.identity else {
         return Err(no("synthetic generic interface body"));
     };
     let params = callable_generic_frame(db, baml_compiler2_hir::loc::DeclRef::Source(f)).params;

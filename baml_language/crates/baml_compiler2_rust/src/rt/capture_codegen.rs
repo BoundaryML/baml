@@ -37,6 +37,7 @@ pub(super) fn emit(
         "baml.errors.ParseError",
         "baml.panics.HostUnavailable",
         "baml.errors.Io",
+        "baml.panics.MapKeyNotFound",
     ]
     .map(named)
     .into_iter()
@@ -119,7 +120,12 @@ pub(super) fn emit(
                 .iter()
                 .find_map(|(&object, &index)| (index == desc).then_some(object))
         };
-        let shape = if plan.closure_descriptors().is_some_and(|(_, closure)| desc == closure) { "Closure".to_owned() } else if let Some(class) = class {
+        let shape = if plan
+            .closure_descriptors()
+            .is_some_and(|(_, closure)| desc == closure)
+        {
+            "Closure".to_owned()
+        } else if let Some(class) = class {
             if let Some((_, args, _)) = plan.class_instances.iter().find(|(_, _, id)| *id == class)
             {
                 let args = args
@@ -136,6 +142,17 @@ pub(super) fn emit(
         } else if let Some((&repr, _)) = lists.iter().find(|(_, index)| **index == desc) {
             if repr == Repr::MapStrInt {
                 "MapStringInt".to_owned()
+            } else if matches!(repr, Repr::Map(_)) {
+                let (key, value) = plan.map_parts(repr)?;
+                let key_slot = maps::slot_type(key, descriptors, lists)?;
+                let value_slot = maps::slot_type(value, descriptors, lists)?;
+                let map = format!("rt::maps::Map::<{key_slot},{value_slot}>");
+                let (key_ty, value_ty) = map_types(plan, repr)?;
+                let key_dyn = capture_dyn(key, "key", descriptors, lists)?;
+                let value_dyn = capture_dyn(value, "value", descriptors, lists)?;
+                format!(
+                    "Map{{key:&{key_ty},value:&{value_ty},len:|p|unsafe{{{map}::from_raw(p).len()}},entry:|p,i|unsafe{{let (key,value)={map}::from_raw(p).entry(i).unwrap();({key_dyn},{value_dyn})}}}}"
+                )
             } else {
                 let element = Emitter::element(repr)?;
                 let (tag, ty) = match element {
@@ -363,4 +380,68 @@ fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<Strin
         _ => return Err(no(format!("capture type {ty:?}"))),
     };
     Ok(format!("rt::telemetry::capture::Type::{member}"))
+}
+pub(super) fn capture_repr_type(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
+    let prefix = "rt::telemetry::capture::Type::";
+    Ok(match repr {
+        Repr::Int => format!("{prefix}Int"),
+        Repr::Float => format!("{prefix}Float"),
+        Repr::Bool => format!("{prefix}Bool"),
+        Repr::Str => format!("{prefix}String"),
+        Repr::Null => format!("{prefix}Null"),
+        Repr::Tagged | Repr::Dyn(_) => format!("{prefix}Unknown"),
+        Repr::Ptr(c) => format!("{prefix}Class(CAPTURE_D{c})"),
+        Repr::Map(_) | Repr::MapStrInt => {
+            let (key, value) = map_types(plan, repr)?;
+            format!("{prefix}Map(&{key},&{value})")
+        }
+        other => format!(
+            "{prefix}List(&{})",
+            capture_repr_type(plan, Emitter::element(other)?)?
+        ),
+    })
+}
+pub(super) fn capture_dyn(
+    repr: Repr,
+    value: &str,
+    descriptors: &BTreeMap<usize, usize>,
+    lists: &BTreeMap<Repr, usize>,
+) -> Gen<String> {
+    if matches!(repr, Repr::Tagged | Repr::Dyn(_)) {
+        return Ok(value.to_owned());
+    }
+    let (tag, raw) = match repr {
+        Repr::Float => {
+            return Ok(format!(
+                "rt::Dyn{{tag:rt::FLOAT_TAG,payload:({value}).to_bits()}}"
+            ));
+        }
+        Repr::Int => (0, value.to_owned()),
+        Repr::Bool => (1, value.to_owned()),
+        Repr::Null => (2, "0usize".into()),
+        Repr::Str => (3, format!("{value}.as_raw()")),
+        Repr::Ptr(c) => (descriptors[&c] + 3, format!("{value}.as_raw()")),
+        r if r.pointer() => (lists[&r] + 3, format!("{value}.as_raw()")),
+        _ => return Err(no("map capture slot")),
+    };
+    Ok(format!("rt::Dyn{{tag:{tag},payload:({raw}) as u64}}"))
+}
+
+fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
+    if let Repr::Map(id) = repr {
+        let types = plan.map_types.borrow();
+        Ok((types[id].key_type.clone(), types[id].value_type.clone()))
+    } else {
+        let (key, value) = plan.map_parts(repr)?;
+        Ok((
+            capture_repr_type(plan, key)?,
+            capture_repr_type(plan, value)?,
+        ))
+    }
+}
+pub(super) fn declared_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
+    capture_type(plan, ty)
+}
+pub(super) fn declared_field_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
+    capture_wire_type(plan, ty)
 }

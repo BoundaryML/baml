@@ -156,7 +156,7 @@ impl Emitter<'_, '_> {
                     }
                 } else {
                     let mir = &self.all[&c];
-                    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+                    let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
                         return Err(no("builtin"));
                     };
                     if values.len() != mir.arity {
