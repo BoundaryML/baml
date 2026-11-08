@@ -368,7 +368,9 @@ fn stress_slow_paths_and_safepoints() {
 #[test]
 fn budget_headroom_large_payload_and_saturation() {
     unsafe {
-        assert_eq!(Heap::budget_for(0), MIN_BUDGET);
+        assert_eq!(Heap::budget_for(0), SMALL_HEAP_BUDGET);
+        assert_eq!(Heap::budget_for(BLOCK_BYTES), SMALL_HEAP_BUDGET);
+        assert_eq!(Heap::budget_for(BLOCK_BYTES + 16), MIN_BUDGET);
         assert_eq!(Heap::budget_for(MIN_BUDGET), 4 * MIN_BUDGET);
         assert_eq!(Heap::budget_for(usize::MAX), usize::MAX);
         let mut h = heap();
@@ -382,7 +384,7 @@ fn budget_headroom_large_payload_and_saturation() {
         assert_eq!(h.stats().budget, 4 * MIN_BUDGET);
         r.precise.borrow_mut().clear();
         h.collect(&r);
-        assert_eq!(h.stats().budget, MIN_BUDGET);
+        assert_eq!(h.stats().budget, SMALL_HEAP_BUDGET);
     }
 }
 #[test]

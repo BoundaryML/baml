@@ -78,6 +78,23 @@ pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
     result.map_err(|failure| language::allocation_failure(failure.bytes))
 }
 
+/// Allocate a header-initialized class with uninitialized fields.
+/// # Safety
+/// Same rooting contract as `try_alloc`. The descriptor must be a class without
+/// cleanup or variable elements, of exactly `bytes` bytes. Initialize every field
+/// before reading it or performing another collecting operation.
+#[inline(always)]
+pub unsafe fn try_alloc_class(desc: u32, bytes: usize) -> R<*mut u8> {
+    let heap = HEAP.get();
+    let roots = ROOTS.get();
+    assert!(
+        !heap.is_null() && !roots.is_null(),
+        "rt allocation outside a root task"
+    );
+    let result = unsafe { (&mut *heap).try_alloc_class(desc, bytes, &Roots(&*roots)) };
+    result.map_err(|failure| language::allocation_failure(failure.bytes))
+}
+
 /// # Safety
 /// Only error constructors may consume the reserved block. No collection occurs.
 unsafe fn emergency_alloc(desc: u32, bytes: usize) -> *mut u8 {

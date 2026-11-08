@@ -25,6 +25,7 @@ pub const BLOCK_BYTES: usize = 32768;
 pub const LINE_BYTES: usize = 128;
 pub const LARGE_THRESHOLD: usize = 8192;
 pub const MIN_BUDGET: usize = 32 * 1024 * 1024;
+pub const SMALL_HEAP_BUDGET: usize = 1024 * 1024;
 const SLOTS: usize = BLOCK_BYTES / 16;
 
 #[repr(C)]
@@ -150,7 +151,7 @@ impl Memory {
     fn try_slab(size: usize) -> Option<Self> {
         let layout = Layout::from_size_align(size, size).ok()?;
         // Do not fault in small pages before giving Linux its huge-page hint.
-        // The allocator zeroes each free run before publishing any object.
+        // Ordinary allocations zero free runs; class literals initialize every field.
         let ptr = unsafe { std::alloc::alloc(layout) };
         if ptr.is_null() {
             return None;
@@ -242,7 +243,7 @@ impl Block {
         }
         (offset < i * 16 + self.sizes[i] as usize).then_some(i)
     }
-    fn run(&mut self, bytes: usize) -> Option<(usize, usize)> {
+    fn run(&mut self, bytes: usize, zero: bool) -> Option<(usize, usize)> {
         self.sweep();
         let mut low = self.next_line;
         while low < 256 {
@@ -257,11 +258,14 @@ impl Block {
             if (high - low) * LINE_BYTES >= bytes {
                 self.next_line = high;
                 self.lines[low..high].fill(1);
-                // Only free lines are touched; live objects mark every line they span.
-                unsafe {
-                    self.base
-                        .add(low * LINE_BYTES)
-                        .write_bytes(0, (high - low) * LINE_BYTES);
+                // Checked allocations need zeroed runs. Generated classes write
+                // every field before another collecting operation.
+                if zero {
+                    unsafe {
+                        self.base
+                            .add(low * LINE_BYTES)
+                            .write_bytes(0, (high - low) * LINE_BYTES);
+                    }
                 }
                 return Some((low * LINE_BYTES, high * LINE_BYTES));
             }
@@ -321,6 +325,8 @@ pub struct Heap {
     cursor: usize,
     accounted_cursor: usize,
     budget_end: usize,
+    fast_limit: usize,
+    run_zeroed: bool,
     limit: usize,
     search: usize,
     finalizable: Vec<Finalizable>,
@@ -384,6 +390,8 @@ impl Heap {
             cursor: 0,
             accounted_cursor: 0,
             budget_end: 0,
+            fast_limit: 0,
+            run_zeroed: false,
             limit: 0,
             search: 0,
             finalizable: vec![],
@@ -480,12 +488,42 @@ impl Heap {
         let aligned = bytes.checked_add(15).ok_or(AllocFailure { bytes })? & !15;
         if bytes > LARGE_THRESHOLD
             || self.validated_bytes[desc as usize] != bytes
-            || self.limit - self.cursor < aligned
-            || self.cursor + aligned >= self.budget_end
+            || !self.run_zeroed
+            || self.fast_limit - self.cursor < aligned
         {
-            return unsafe { self.alloc_slow(desc, bytes, aligned, roots) };
+            return unsafe { self.alloc_slow(desc, bytes, aligned, roots, true) };
         }
-        Ok(unsafe { self.bump(desc, bytes, aligned) })
+        Ok(unsafe { self.bump::<true>(desc, bytes, aligned) })
+    }
+    /// Header-initialized allocation for a compiler-known class without cleanup.
+    /// Fields and padding are uninitialized.
+    ///
+    /// # Safety
+    /// `desc` must describe a fixed-size class of exactly `bytes` bytes, with
+    /// no finalizer. Initialize EVERY field before reading it or performing a
+    /// collecting operation. Generated class literals bind all inputs before
+    /// allocation and then store every field without calls. The root contract
+    /// is the same as `try_alloc`; ordinary allocations still return zeroed data.
+    #[inline(always)]
+    pub unsafe fn try_alloc_class(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        roots: &dyn RootSource,
+    ) -> Result<*mut u8, AllocFailure> {
+        debug_assert!({
+            let d = &self.descriptors[desc as usize];
+            matches!(d.kind, Kind::Class)
+                && bytes >= 8
+                && d.elem.is_none()
+                && d.size == bytes
+                && d.finalizer.is_none()
+        });
+        let aligned = bytes.checked_add(15).ok_or(AllocFailure { bytes })? & !15;
+        if bytes > LARGE_THRESHOLD || self.fast_limit - self.cursor < aligned {
+            return unsafe { self.alloc_slow(desc, bytes, aligned, roots, false) };
+        }
+        Ok(unsafe { self.bump::<false>(desc, bytes, aligned) })
     }
     /// Limit usable ordinary block capacity plus live large-object backing.
     /// Existing blocks are retained; set before ordinary allocations for a hard
@@ -547,7 +585,7 @@ impl Heap {
         let index = self.emergency_block.ok_or(failure)?;
         let block = &mut self.blocks[index];
         if self.emergency_limit - self.emergency_cursor < aligned {
-            let (low, high) = block.run(aligned).ok_or(failure)?;
+            let (low, high) = block.run(aligned, true).ok_or(failure)?;
             self.emergency_cursor = block.base as usize + low;
             self.emergency_limit = block.base as usize + high;
         }
@@ -560,12 +598,24 @@ impl Heap {
         unsafe {
             p.cast::<Header>().write(Header { desc, aux: 0 });
         }
+        self.settle_run();
         self.stats.allocated_since_gc = self.stats.allocated_since_gc.saturating_add(aligned);
+        self.budget_end = self.cursor.saturating_add(
+            self.stats
+                .budget
+                .saturating_sub(self.stats.allocated_since_gc),
+        );
+        self.refresh_alloc_limit();
         self.refresh_poll_word();
         Ok(p)
     }
     #[inline(always)]
-    unsafe fn bump(&mut self, desc: DescId, bytes: usize, aligned: usize) -> *mut u8 {
+    unsafe fn bump<const FINALIZE: bool>(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        aligned: usize,
+    ) -> *mut u8 {
         // Boxed metadata stays put when the block directory grows. Collection
         // invalidates the run before touching metadata; acquiring a run installs
         // a fresh pointer before the next bump.
@@ -576,14 +626,19 @@ impl Heap {
         // Run bounds establish both indices, avoiding repeated bounds branches.
         debug_assert!(slot < SLOTS);
         unsafe {
-            *b.starts.get_unchecked_mut(slot / 64) |= 1 << (slot % 64);
-            b.start_words |= 1 << (slot / 64);
+            let starts = b.starts.get_unchecked_mut(slot / 64);
+            if *starts == 0 {
+                b.start_words |= 1 << (slot / 64);
+            }
+            *starts |= 1 << (slot % 64);
             *b.sizes.get_unchecked_mut(slot) = bytes as u16;
         }
         unsafe {
             p.cast::<Header>().write(Header { desc, aux: 0 });
         }
-        self.register_finalizer(desc, p as usize);
+        if FINALIZE {
+            self.register_finalizer(desc, p as usize);
+        }
         p
     }
     // Only used by the cold allocator. The fast allocation guard routes the
@@ -594,11 +649,20 @@ impl Heap {
         bytes: usize,
         aligned: usize,
     ) -> *mut u8 {
-        let pointer = unsafe { self.bump(desc, bytes, aligned) };
+        let pointer = unsafe { self.bump::<true>(desc, bytes, aligned) };
+        self.refresh_alloc_limit();
         if self.cursor >= self.budget_end {
             self.request_poll();
         }
         pointer
+    }
+    fn refresh_alloc_limit(&mut self) {
+        // One remaining-capacity check covers both the run and byte budget.
+        // A slow allocation may cross the budget; clamp to cursor so subtraction
+        // stays valid and the next allocation necessarily takes the cold path.
+        self.fast_limit = self
+            .cursor
+            .max(self.limit.min(self.budget_end.saturating_sub(1)));
     }
     #[inline(always)]
     fn register_finalizer(&mut self, desc: DescId, object: usize) {
@@ -620,6 +684,7 @@ impl Heap {
         bytes: usize,
         aligned: usize,
         roots: &dyn RootSource,
+        zero: bool,
     ) -> Result<*mut u8, AllocFailure> {
         self.settle_run();
         let d = &self.descriptors[desc as usize];
@@ -677,10 +742,17 @@ impl Heap {
                     .saturating_sub(self.stats.allocated_since_gc),
             );
             self.register_finalizer(desc, p as usize);
+            self.refresh_alloc_limit();
             self.refresh_poll_word();
             return Ok(p);
         }
         if self.limit - self.cursor >= aligned {
+            if zero && !self.run_zeroed {
+                unsafe {
+                    (self.cursor as *mut u8).write_bytes(0, self.limit - self.cursor);
+                }
+                self.run_zeroed = true;
+            }
             return Ok(unsafe { self.bump_and_request_poll(desc, bytes, aligned) });
         }
         loop {
@@ -690,10 +762,11 @@ impl Heap {
                     self.search += 1;
                     continue;
                 }
-                if let Some((low, high)) = self.blocks[i].run(aligned) {
+                if let Some((low, high)) = self.blocks[i].run(aligned, zero) {
                     self.active_metadata = &mut *self.blocks[i];
                     self.cursor = self.blocks[i].base as usize + low;
                     self.limit = self.blocks[i].base as usize + high;
+                    self.run_zeroed = zero;
                     self.accounted_cursor = self.cursor;
                     self.budget_end = self.cursor.saturating_add(
                         self.stats
@@ -715,11 +788,12 @@ impl Heap {
                         if self.emergency_block == Some(i) {
                             continue;
                         }
-                        if let Some((low, high)) = block.run(aligned) {
+                        if let Some((low, high)) = block.run(aligned, zero) {
                             self.active_metadata = &mut *self.blocks[i];
                             self.search = i;
                             self.cursor = self.blocks[i].base as usize + low;
                             self.limit = self.blocks[i].base as usize + high;
+                            self.run_zeroed = zero;
                             self.accounted_cursor = self.cursor;
                             self.budget_end = self.cursor.saturating_add(
                                 self.stats
@@ -909,6 +983,8 @@ impl Heap {
         self.cursor = 0;
         self.accounted_cursor = 0;
         self.budget_end = 0;
+        self.fast_limit = 0;
+        self.run_zeroed = false;
         self.limit = 0;
         self.search = 0;
         self.emergency_cursor = 0;
@@ -916,6 +992,12 @@ impl Heap {
         self.stats.live_bytes = 0;
         for b in &mut self.blocks {
             b.sweep();
+            // Dormant empty blocks already have zero marks/lines and a reset
+            // line cursor. Avoid touching their bitmap/line cache lines on every
+            // small-heap collection while retaining the backing for later reuse.
+            if b.start_words == 0 {
+                continue;
+            }
             if self.collection_observer.is_some() {
                 before += b
                     .starts
@@ -998,7 +1080,7 @@ impl Heap {
             .filter(|f| self.marked(f.object))
             .collect();
         for b in &mut self.blocks {
-            b.needs_sweep = true;
+            b.needs_sweep = b.start_words != 0;
         }
         self.large.retain(|_, l| {
             if !l.marked {
@@ -1019,6 +1101,9 @@ impl Heap {
             let mut live_slots = self.large.len();
             let mut live_payload_bytes = self.large.values().map(|l| l.bytes - 8).sum::<usize>();
             for b in &self.blocks {
+                if b.start_words == 0 {
+                    continue;
+                }
                 for (word, &bits) in b.marks.iter().enumerate() {
                     live_slots += bits.count_ones() as usize;
                     let mut bits = bits;
@@ -1037,7 +1122,15 @@ impl Heap {
         }
     }
     pub fn budget_for(live_bytes: usize) -> usize {
-        live_bytes.saturating_mul(4).max(MIN_BUDGET)
+        // Low-retention allocation loops should recycle a cache-sized region,
+        // not stream through 32 MiB before revisiting dead lines. Keep initial
+        // headroom and the existing large-live-heap policy for trees and graphs.
+        let floor = if live_bytes <= BLOCK_BYTES {
+            SMALL_HEAP_BUDGET
+        } else {
+            MIN_BUDGET
+        };
+        live_bytes.saturating_mul(4).max(floor)
     }
     // Tiny fixtures still collect on every cold allocation and checkpoint.
     // Rewalking a growing live graph after each of its O(n) allocations makes
@@ -1320,6 +1413,89 @@ mod allocation_tests {
             h.alloc(0, 32, &NoRoots);
             assert_eq!(h.stats().collections, 1);
             assert_eq!(h.stats().allocated_since_gc, 32);
+        }
+    }
+    #[test]
+    fn compiler_fixed_layouts_share_checked_allocation_budget_and_refusal() {
+        unsafe {
+            let mut h = heap(20000);
+            let a = h.try_alloc_class(0, 32, &NoRoots).unwrap();
+            a.add(8).write_bytes(0xab, 24);
+            h.alloc(1, 8200, &NoRoots);
+            let b = h.try_alloc_class(0, 32, &NoRoots).unwrap();
+            assert_eq!(b as usize, a as usize + 32);
+            assert_eq!(*a.add(8), 0xab);
+            b.add(8).write_bytes(0x67, 24);
+            assert_eq!(h.stats().allocated_since_gc, 8272);
+            h.alloc(1, 12008, &NoRoots);
+            h.try_alloc_class(0, 32, &NoRoots).unwrap();
+            assert_eq!(h.stats().collections, 1);
+            assert_eq!(h.stats().allocated_since_gc, 32);
+            let mut h = heap(MIN_BUDGET);
+            h.set_capacity_limit(0);
+            assert_eq!(
+                h.try_alloc_class(0, 32, &NoRoots),
+                Err(AllocFailure { bytes: 32 })
+            );
+            assert!(h.stats().collections > 0);
+            h.set_capacity_limit(BLOCK_BYTES);
+            let p = h.try_alloc_class(0, 32, &NoRoots).unwrap();
+            assert_eq!(h.object_start(p as usize), Some(p as usize));
+        }
+    }
+    #[test]
+    fn emergency_spending_updates_the_inlined_class_limit() {
+        unsafe {
+            let mut h = heap(80);
+            h.reserve_emergency().unwrap();
+            h.try_alloc_class(0, 32, &NoRoots)
+                .unwrap()
+                .add(8)
+                .write_bytes(0, 24);
+            h.alloc_emergency(0, 32).unwrap();
+            assert_eq!(h.stats().allocated_since_gc, 64);
+            h.try_alloc_class(0, 32, &NoRoots)
+                .unwrap()
+                .add(8)
+                .write_bytes(0, 24);
+            assert_eq!(h.stats().allocated_since_gc, 96);
+            h.try_alloc_class(0, 32, &NoRoots)
+                .unwrap()
+                .add(8)
+                .write_bytes(0, 24);
+            assert_eq!(h.stats().collections, 1);
+            assert_eq!(h.stats().allocated_since_gc, 32);
+        }
+    }
+    #[test]
+    fn class_runs_preserve_zeroing_for_builtins_and_emergency_objects() {
+        unsafe {
+            let mut h = heap(MIN_BUDGET);
+            for _ in 0..1024 {
+                let p = h.alloc(0, 32, &NoRoots);
+                p.add(8).write_bytes(0xab, 24);
+            }
+            h.collect(&NoRoots);
+            let class = h.try_alloc_class(0, 32, &NoRoots).unwrap();
+            class.add(8).write_bytes(0x67, 24);
+            let builtin = h.alloc(1, 40, &NoRoots);
+            assert!(
+                std::slice::from_raw_parts(builtin.add(8), 32)
+                    .iter()
+                    .all(|&v| v == 0)
+            );
+            assert!(
+                std::slice::from_raw_parts(class.add(8), 24)
+                    .iter()
+                    .all(|&v| v == 0x67)
+            );
+            h.reserve_emergency().unwrap();
+            let error = h.alloc_emergency(0, 32).unwrap();
+            assert!(
+                std::slice::from_raw_parts(error.add(8), 24)
+                    .iter()
+                    .all(|&v| v == 0)
+            );
         }
     }
     #[test]

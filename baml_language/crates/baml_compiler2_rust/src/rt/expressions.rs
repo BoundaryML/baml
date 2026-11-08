@@ -194,7 +194,7 @@ impl Emitter<'_, '_> {
                     &mut init,
                     "let p={} as *mut C{c};",
                     self.fallible(&format!(
-                        "rt::try_alloc({}, {})",
+                        "rt::try_alloc_class({}, {})",
                         self.descriptors[&c], layout.bytes
                     ))
                 )

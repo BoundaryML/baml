@@ -1075,9 +1075,9 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "90e124f246d50406fed8944a576b747fd1997745d3abb5c578a705113b0cdb9b",
-            "richards" => "bd1dbe42fb7f3dd7f31630e6e7128ab47ea5037cfa680a63dd7f15dbe23c178f",
-            "agent" => "b35618f3249b9b661b05ab62fbff79be4dd43812d0e15d8c2e3240b24b9dec29",
+            "trees" => "b595b5d8131c107148c0a0675cdc398037a86d077d7add02ba9c650271f7b6db",
+            "richards" => "b688273bd75c1fac87e6209edb4ecabb92eb30d93495e311f90c9cf23b8c4bf8",
+            "agent" => "c39aab7904a391c369839badb8347ac444012080698897058da55c75caeeee5f",
             _ => "",
         };
         if expected.is_empty() {
