@@ -1010,9 +1010,9 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "8e454ff27beebede04824c7259b943f7c6c9ade3cf87c9c690e1e24c4268385e",
-            "richards" => "f469bf3036af9d7251399a3fee7edb57cfedf05c51cc5c5ee72e94c2df838817",
-            "agent" => "b9fcb2efc8730021c760cd7b6ac0e27083d5d1cf66583d871802c360120276a7",
+            "trees" => "bf2717f60b03353fda6186125f689db635c4caa61a726e5d73fc145a027f412e",
+            "richards" => "8620e40942cf422fc276b7d49ef78c7103042ddee5acc5077f45cac3d06e3654",
+            "agent" => "b5d63e42968d30eb0397a54d2518fe9269895ad724a34f215268b8c34cc5cacb",
             _ => "",
         };
         if expected.is_empty() {
@@ -1064,4 +1064,149 @@ fn rt_generics_switch_aliases() {
         source,
     )
     .unwrap();
+}
+
+#[test]
+fn rt_stack_placement_preserves_lifetimes_and_bytecode() {
+    for (source, sites) in [
+        (
+            include_str!("../../../tools/speedtest/workloads/classes/method-call-100k/main.baml"),
+            1,
+        ),
+        (
+            "class C { x: int } function make() -> C { C { x: 1 } } function main() -> int { make().x }",
+            0,
+        ),
+        (
+            "class C { x: int } function alias(c: C) -> C { c } function main() -> int { let c = C { x: 1 }; alias(c).x }",
+            1,
+        ),
+        (
+            "class C { x: int } function main() -> int { let p = C { x: 0 }; let sum = 0; for (let i = 1; i < 9; i += 1) { let c = C { x: i }; sum += p.x; p = c; }; sum + p.x }",
+            0,
+        ),
+        (
+            include_str!("../rust_diff/baml_src/stack_allocation.baml"),
+            4,
+        ),
+    ] {
+        let entry_name = if source.contains("function StackAllocation()") {
+            "StackAllocation"
+        } else {
+            "main"
+        };
+        let db = baml_test_support::setup_multi_file_db(&[("stack.baml", source)]);
+        for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+            let program = lower(&db, opt);
+            let before = fingerprint(&program);
+            let (entry, _) = user_functions(&program)
+                .find(|(_, f)| f.name() == entry_name)
+                .unwrap();
+            let generated = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap();
+            syn::parse_file(&generated).expect("stack layouts parse");
+            let actual = generated.matches("(&raw mut stack").count();
+            assert!(
+                actual <= sites,
+                "unexpected stack site: {entry_name} at {opt:?}"
+            );
+            // Unoptimized trace hooks can conservatively retain arguments.
+            if opt == OptLevel::Two {
+                assert_eq!(actual, sites, "{entry_name} at {opt:?}");
+                if source.contains("function norm2(self)") {
+                    assert!(generated.contains("let stack_mode"));
+                    assert!(generated.contains("=if OBSERVE {rt::telemetry::mode("));
+                    assert!(generated.contains("==0 {f"));
+                    assert!(generated.contains("_body::<OBSERVE>(cx,"));
+                }
+            }
+            assert_eq!(before, fingerprint(&program));
+            assert_eq!(
+                before,
+                fingerprint(&lower(&db, opt)),
+                "escape queries must not change emitted bytecode"
+            );
+        }
+    }
+}
+
+#[test]
+fn rt_loop_range_proofs_cover_every_update_and_preserve_bytecode() {
+    for (name, source, checked) in [
+        (
+            "nested",
+            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { for (let j = 0; j < 7; j += 1) { s += i * j; }; }; s }",
+            false,
+        ),
+        (
+            "identity",
+            "function leaf(n: int) -> int { n } function main() -> int { let s = 0; for (let i = 0; i < 20; i += 1) { s += leaf(i); }; s }",
+            false,
+        ),
+        (
+            "stride",
+            "function main() -> int { let s = 0; for (let i = 1; i < 8; i += 3) { s += i; }; s }",
+            false,
+        ),
+        (
+            "overflow",
+            "function main() -> int { let s = 4611686018427387902; for (let i = 0; i < 3; i += 1) { s += 1; }; s }",
+            true,
+        ),
+        (
+            "indirect_recurrence",
+            "function main() -> int { let s = 1; for (let i = 0; i < 80; i += 1) { let delta = s; s += delta; }; s }",
+            true,
+        ),
+        (
+            "extra_back_edge",
+            "function main() -> int { let i = 0; let s = 0; while i < 4 { if i == 2 { continue; }; s += i; i += 1; }; s }",
+            true,
+        ),
+        (
+            "counter_mutation",
+            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { if i == 2 { i = 4611686018427387903; }; s += i; }; s }",
+            true,
+        ),
+        (
+            "counter_reset",
+            "function main() -> int { let s = 0; for (let i = 0; i < 5; i += 1) { if i == 2 { i = 0; }; s += 1; }; s }",
+            true,
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("bounds.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let original = fingerprint(&program);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let generated = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        if generated.contains("rt::add(") != checked {
+            let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                .join(format!("rt-bounds-{name}.rs"));
+            std::fs::write(&path, &generated).unwrap();
+            panic!(
+                "{name}: checked={checked}, generated source: {}",
+                path.display()
+            );
+        }
+        assert_eq!(
+            fingerprint(&program),
+            original,
+            "{name}: rt changed bytecode"
+        );
+    }
 }

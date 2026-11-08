@@ -100,6 +100,73 @@ unsafe fn link(p: *mut u8, index: usize, value: usize) {
     }
 }
 #[test]
+fn stack_object_fields_root_heap_children_and_allow_heap_borrows() {
+    static DESCRIPTORS: [Descriptor; 2] = [
+        DESCS[0],
+        Descriptor {
+            ptr_slots: (8, 1),
+            tagged_slots: (16, 1),
+            ..DESCS[0]
+        },
+    ];
+    #[repr(C)]
+    struct StackObject {
+        header: Header,
+        child: usize,
+        tagged: TaggedSlot,
+    }
+    struct StackRoots<'a>(&'a StackObject, RefCell<usize>);
+    impl RootSource for StackRoots<'_> {
+        fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize)) {
+            let low = std::ptr::from_ref(self.0).cast::<usize>();
+            visit(low, unsafe {
+                low.add(std::mem::size_of::<StackObject>() / 8)
+            });
+        }
+        fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+            visit(&mut *self.1.borrow_mut());
+        }
+    }
+    unsafe {
+        let mut heap = Heap::new(&DESCRIPTORS, &TYPES);
+        heap.set_stress(false);
+        let child = heap.alloc(0, 32, &Roots::default()) as usize;
+        let tagged = heap.alloc(0, 32, &Roots::default()) as usize;
+        (child as *mut u8).add(24).cast::<u64>().write(71);
+        (tagged as *mut u8).add(24).cast::<u64>().write(93);
+        let stack = StackObject {
+            header: Header { desc: 1, aux: 0 },
+            child,
+            tagged: TaggedSlot {
+                tag: 1,
+                payload: tagged as u64,
+            },
+        };
+        let parent = heap.alloc(0, 32, &Roots::default());
+        link(parent, 1, std::ptr::from_ref(&stack) as usize);
+        let roots = StackRoots(&stack, RefCell::new(parent as usize));
+        heap.set_stress(true);
+        for _ in 0..16 {
+            heap.alloc(0, 32, &roots);
+            heap.safepoint(&roots);
+            heap.verify(&roots);
+            assert_eq!(heap.object_start(stack.child), Some(child));
+            assert_eq!((stack.child as *const u8).add(24).cast::<u64>().read(), 71);
+            assert_eq!(
+                (stack.tagged.payload as *const u8)
+                    .add(24)
+                    .cast::<u64>()
+                    .read(),
+                93
+            );
+            assert_eq!(
+                heap.object_start(stack.tagged.payload as usize),
+                Some(tagged)
+            );
+        }
+    }
+}
+#[test]
 fn allocation_zeroing_alias_cycles_and_reuse() {
     unsafe {
         let mut h = heap();
@@ -125,6 +192,43 @@ fn allocation_zeroing_alias_cycles_and_reuse() {
         let c = h.alloc(0, 32, &r);
         assert_eq!(c, a);
         assert_eq!(*c.cast::<usize>().add(1), 0);
+    }
+}
+
+#[test]
+fn conservative_false_retention_can_outlive_a_stack_borrow() {
+    unsafe {
+        let mut heap = heap();
+        let parent = heap.alloc(0, 32, &NoRoots);
+        {
+            // Same 32-byte layout as descriptor 0. No collection happens in
+            // this frame, so the collector has never seen its stack range.
+            let stack = [0usize; 4];
+            link(parent, 1, stack.as_ptr() as usize);
+            std::hint::black_box(&stack);
+        }
+        // This word only looks like a live reference. Its dead container's
+        // non-managed slot must not be followed or rejected by verification.
+        let false_root = Roots {
+            words: vec![parent as usize],
+            ..Roots::default()
+        };
+        heap.collect(&false_root);
+        heap.verify(&false_root);
+        assert_eq!(heap.stats().live_bytes, 32);
+    }
+}
+
+#[test]
+#[should_panic(expected = "dangling precise GC pointer")]
+fn stack_borrow_support_still_rejects_dead_managed_pointers() {
+    unsafe {
+        let mut heap = heap();
+        let dead = heap.alloc(0, 32, &NoRoots) as usize;
+        heap.collect(&NoRoots);
+        let roots = Roots::default();
+        roots.precise.borrow_mut().push(dead);
+        heap.verify(&roots);
     }
 }
 #[test]

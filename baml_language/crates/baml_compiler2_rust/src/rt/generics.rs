@@ -415,9 +415,13 @@ impl registry::Feature for Feature {
                     e.assign(
                         destination,
                         (
-                            e.fallible(&format!(
-                                "f{target}({},{arguments})",
-                                e.telemetry_site(target)
+                            e.fallible(&e.stack_leaf_call(
+                                target,
+                                &arguments,
+                                &format!(
+                                    "f{target}::<OBSERVE>(cx,{},{arguments})",
+                                    e.telemetry_site(target)
+                                ),
                             )),
                             e.plan.repr(&body.locals[0].ty)?,
                         ),
