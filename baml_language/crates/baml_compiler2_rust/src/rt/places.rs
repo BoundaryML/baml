@@ -13,20 +13,27 @@ impl Emitter<'_, '_> {
         if self.iters.contains(&i) {
             return Ok(Repr::Iter);
         }
+        if let Some(repr) = super::string_defaults::parameter(self.plan, self.object, i) {
+            return Ok(repr);
+        }
         self.plan.local_repr(self.body, i, 0)
     }
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
         match repr {
             Repr::Int => Ok(0),
+            Repr::Float => Ok(u32::MAX as usize - 1),
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
+            Repr::Opaque => Ok(15),
+            Repr::Bytes => Ok(16),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::ListInt
             | Repr::ListStr
             | Repr::ListListStr
             | Repr::ListPtr(_)
-            | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
+            | Repr::MapStrInt
+            | Repr::MapStrPtr(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
     }
@@ -44,38 +51,48 @@ impl Emitter<'_, '_> {
         if source == target || (source == Repr::Null && target.pointer()) {
             return Ok(value);
         }
+        if matches!(source, Repr::Dyn(_)) && matches!(target, Repr::Tagged | Repr::Dyn(_))
+            || source == Repr::Tagged && matches!(target, Repr::Dyn(_))
+        {
+            return Ok(value);
+        }
         if target == Repr::Tagged {
-            let tag = self.tag(source)?;
+            let tag = match source {
+                Repr::Naming => "CAPTURE_NAMING_TAG".into(),
+                Repr::Enum(e) => format!("CAPTURE_ENUM_{e}_TAG"),
+                _ => self.tag(source)?.to_string(),
+            };
             let test = if source.pointer() {
-                "if v==0 {2} else {TAG}".replace("TAG", &tag.to_string())
+                "if v==0 {2} else {TAG}".replace("TAG", &tag)
             } else {
-                tag.to_string()
+                tag
+            };
+            let bits = if source == Repr::Float {
+                "v.to_bits()"
+            } else {
+                "v as u64"
             };
             return Ok(format!(
-                "{{let v={value};rt::Dyn{{tag:{test},payload:v as u64}}}}"
+                "{{let v={value};rt::Dyn{{tag:{test},payload:{bits}}}}}"
             ));
         }
-        if source == Repr::Tagged {
-            let tag = self.tag(target)?;
+        if matches!(source, Repr::Tagged | Repr::Dyn(_)) {
+            let tag = match target {
+                Repr::Naming => "CAPTURE_NAMING_TAG".into(),
+                Repr::Enum(e) => format!("CAPTURE_ENUM_{e}_TAG"),
+                _ => self.tag(target)?.to_string(),
+            };
             let bits = self.fallible(&format!("rt::untag({value},{tag},{})", target.pointer()));
-            return Ok(if target == Repr::Bool {
+            return Ok(if target == Repr::Float {
+                format!("f64::from_bits({bits})")
+            } else if target == Repr::Bool {
                 format!("({bits}!=0)")
             } else {
                 format!("({bits} as {})", target.rust())
             });
         }
-        if let (Repr::Ptr(c), Repr::Dyn(i)) = (source, target) {
-            if self
-                .plan
-                .implementors(i)?
-                .iter()
-                .any(|(class, _)| *class == c)
-            {
-                return Ok(format!(
-                    "rt::Dyn{{tag:{},payload:({value}) as u64}}",
-                    self.descriptors[&c] + 3
-                ));
-            }
+        if matches!(target, Repr::Dyn(_)) {
+            return self.coerce((value, source), Repr::Tagged);
         }
         Err(no(format!("conversion {source:?} to {target:?}")))
     }
@@ -147,21 +164,23 @@ impl Emitter<'_, '_> {
     pub(super) fn operand(&self, o: &Operand<'_>) -> Gen<(String, Repr)> {
         match o {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
+            Operand::Constant(Constant::Float(f)) => {
+                Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
+            }
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
-            Operand::Constant(Constant::String(text)) => Ok((
-                self.fallible(&format!(
-                    "rt::strings::Cx::current().string({:?}).map(|s|s.as_raw())",
-                    text.as_str()
-                )),
-                Repr::Str,
-            )),
+            Operand::Constant(Constant::String(text)) => self.string_literal(text.as_str()),
             Operand::Constant(Constant::EnumVariant { enum_ref, index }) => {
                 let head = baml_compiler2_hir_ty::layout::enum_head(self.db, *enum_ref);
-                if self.plan.repr(&RuntimeTy::Enum(head))? != Repr::Naming || *index > 1 {
-                    return Err(no("enum constant"));
-                }
-                Ok((format!("{index}usize"), Repr::Naming))
+                Ok((
+                    format!("{index}usize"),
+                    self.plan.repr(&RuntimeTy::Enum(head))?,
+                ))
+            }
+            Operand::Constant(Constant::OmittedArg)
+                if super::string_defaults::allows_omission(self) =>
+            {
+                Ok(("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged))
             }
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),
             Operand::Constant(_) => Err(no(format!("operand {o:?}"))),

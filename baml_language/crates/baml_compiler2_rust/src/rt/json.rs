@@ -5,17 +5,37 @@ impl Plan<'_> {
         use baml_compiler2_mir::TyTemplate as T;
         match ty {
             T::Int => Ok(0),
+            T::Bool => Ok(usize::MAX),
+            T::Null => Ok(usize::MAX - 1),
             T::String => Ok(1),
             T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),
             T::Class(_, _) | T::Union(_) => {
-                let classes = self.json_class_types(ty)?;
+                let Ok(classes) = self.json_class_types(ty) else {
+                    return self
+                        .type_codes
+                        .iter()
+                        .position(|t| t == ty)
+                        .map(|i| i + 100000)
+                        .ok_or_else(|| no("unregistered type argument"));
+                };
                 self.json_types
                     .iter()
                     .position(|c| *c == classes)
                     .map(|i| i + 3)
+                    .or_else(|| {
+                        self.type_codes
+                            .iter()
+                            .position(|t| t == ty)
+                            .map(|i| i + 100000)
+                    })
                     .ok_or_else(|| no("unregistered JSON specialization"))
             }
-            _ => Err(no(format!("type argument {ty:?}"))),
+            _ => self
+                .type_codes
+                .iter()
+                .position(|t| t == ty)
+                .map(|i| i + 100000)
+                .ok_or_else(|| no(format!("type argument {ty:?}"))),
         }
     }
     pub(super) fn json_class_types(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<Vec<usize>> {
@@ -99,6 +119,13 @@ pub(super) fn emit(
                             T::Union(m)
                                 if m.len() == 2
                                     && m.iter().any(|t| matches!(t, T::Null))
+                                    && m.iter().any(|t| matches!(t, T::String)) =>
+                            {
+                                "rt::json::Ty::OptionalString".into()
+                            }
+                            T::Union(m)
+                                if m.len() == 2
+                                    && m.iter().any(|t| matches!(t, T::Null))
                                     && m.iter().any(|t| matches!(t, T::Int)) =>
                             {
                                 "rt::json::Ty::OptionalInt".into()
@@ -166,7 +193,7 @@ pub(super) fn emit(
                                 .or_insert(next);
                         }
                     }
-                    writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.as_str(&read_cx);let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
+                    writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.try_as_str(&read_cx)?;let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
                     for (name, index) in &names {
                         writeln!(&mut out, "{name:?}=>Some({index}),").unwrap();
                     }
@@ -237,7 +264,7 @@ pub(super) fn emit(
                     )
                     .unwrap();
                 }
-                let mir = all[&callee];
+                let mir = &all[&callee];
                 let MirFunctionKind::Bytecode(body) = &mir.kind else {
                     return Err(no("JSON wrapper body"));
                 };

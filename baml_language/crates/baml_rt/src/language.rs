@@ -9,10 +9,10 @@ pub type R<T> = Result<T, Box<Error>>;
 pub const STRING_DESC: Descriptor = Descriptor {
     kind: Kind::String,
     size: 8,
-    ptr_slots: (0, 0),
+    ptr_slots: (8, 3),
     tagged_slots: (0, 0),
     elem: Some(Elements {
-        offset: 16,
+        offset: 48,
         layout: ElementLayout::Scalar,
     }),
     type_id: 3,
@@ -53,14 +53,34 @@ pub const STACK_DESC: Descriptor = Descriptor {
 };
 
 /// Leave room for error allocation and fiber unwinding below each BAML frame.
+pub(crate) const STACK_RESERVE: usize = 64 * 1024;
+
 #[inline(always)]
 pub fn check_stack() -> R<()> {
     let marker = 0u8;
-    if (&raw const marker as usize).saturating_sub(crate::STACK_LIMIT.get()) < 64 * 1024 {
-        Err(from_panic(bex_vm_types::errors::VmPanic::StackOverflow))
+    if (&raw const marker as usize).saturating_sub(crate::STACK_LIMIT.get()) < STACK_RESERVE {
+        Err(stack_overflow())
     } else {
         Ok(())
     }
+}
+
+#[inline(always)]
+pub(crate) fn check_stack_before(threshold: usize) -> R<()> {
+    let marker = 0u8;
+    if (&raw const marker as usize) < threshold {
+        Err(stack_overflow())
+    } else {
+        Ok(())
+    }
+}
+
+// VmPanic is a large enum passed indirectly. Keep its argument storage on
+// this cold frame rather than reserving it in every generated BAML frame.
+#[cold]
+#[inline(never)]
+fn stack_overflow() -> Box<Error> {
+    from_panic(bex_vm_types::errors::VmPanic::StackOverflow)
 }
 
 #[repr(C)]
@@ -118,16 +138,15 @@ impl Error {
     }
 }
 #[cold]
-fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
+pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
     // SAFETY: called only from a running generated root. The string is rooted
     // in this stack frame across the class allocation; initialization cannot GC.
     unsafe {
-        let string = match crate::try_alloc(0, 16 + message.len().next_multiple_of(8)) {
+        let string = match crate::try_alloc(0, 80 + message.len().next_multiple_of(8)) {
             Ok(p) => p,
             Err(e) => return e,
         };
-        string.add(8).cast::<usize>().write(message.len());
-        std::ptr::copy_nonoverlapping(message.as_ptr(), string.add(16), message.len());
+        crate::strings::init_flat(string, &message);
         let object = match crate::try_alloc(desc, std::mem::size_of::<MessagePanic>()) {
             Ok(p) => p.cast::<MessagePanic>(),
             Err(e) => return e,
@@ -248,6 +267,38 @@ pub fn driver_observed(
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
 ) -> std::process::ExitCode {
+    driver_configured(descriptors, entry, None, functions, sites, format_site)
+}
+
+/// Native benchmark entry. Setup state stays on the root fiber's scanned stack.
+pub type Benchmark = fn(usize, usize, &std::cell::Cell<u128>) -> R<i64>;
+
+pub fn driver_observed_benchmark(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    benchmark: Benchmark,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+) -> std::process::ExitCode {
+    driver_configured(
+        descriptors,
+        entry,
+        Some(benchmark),
+        functions,
+        sites,
+        format_site,
+    )
+}
+
+fn driver_configured(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    benchmark: Option<Benchmark>,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+) -> std::process::ExitCode {
     let mut session = match crate::telemetry::Session::new(functions, sites) {
         Ok(s) => s,
         Err(e) => {
@@ -255,8 +306,8 @@ pub fn driver_observed(
             return std::process::ExitCode::FAILURE;
         }
     };
-    let result = driver_inner(descriptors, entry, &mut session, format_site);
-    session.finish(result.is_ok());
+    let result = driver_inner(descriptors, entry, benchmark, &mut session, format_site);
+    session.finish(&result);
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
@@ -265,6 +316,7 @@ pub fn driver_observed(
                     .frames
                     .iter()
                     .rev()
+                    .filter(|f| error.value == 0 || !f.file.starts_with("<builtin>/"))
                     .map(|f| (f.file, f.line, f.function)),
             );
             if error.value == 0 {
@@ -282,6 +334,7 @@ pub fn driver_observed(
 fn driver_inner(
     descriptors: &'static [Descriptor],
     entry: fn() -> R<i64>,
+    benchmark: Option<Benchmark>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
 ) -> R<()> {
@@ -312,8 +365,16 @@ fn driver_inner(
     pointers.extend(vec![true; descriptors.len()]);
     let pointers = Box::leak(pointers.into_boxed_slice());
     let mut instance = Instance::new(descriptors, pointers);
-    // SAFETY: compiler admission and descriptor construction enforce this ABI.
-    let result = session.run(|| unsafe { instance.run_baml(entry) })?;
+    let elapsed = std::rc::Rc::new(std::cell::Cell::new(0u128));
+    // Setup and all jobs share one fiber. Its stack retains the state across
+    // collecting calls; no managed pointer is kept in untraced host storage.
+    let result = if let (Some(benchmark), Some(jobs)) = (benchmark, jobs) {
+        let elapsed = elapsed.clone();
+        session.run(|| unsafe { instance.run_baml(move || benchmark(jobs, warmup, &elapsed)) })?
+    } else {
+        // SAFETY: compiler admission and descriptor construction enforce this ABI.
+        session.run(|| unsafe { instance.run_baml(entry) })?
+    };
     let Some(jobs) = jobs else {
         let text = match format_site {
             Some(site) => session.format_int(result, site)?,
@@ -322,6 +383,10 @@ fn driver_inner(
         println!("{text}");
         return Ok(());
     };
+    if benchmark.is_some() {
+        print_benchmark_result(result, jobs, elapsed.get());
+        return Ok(());
+    }
     for _ in 1..warmup {
         if session.run(|| unsafe { instance.run_baml(entry) })? != result {
             return Err(Error::internal("warmup result mismatch".into()));
@@ -334,11 +399,39 @@ fn driver_inner(
         }
     }
     let elapsed = start.elapsed().as_nanos();
+    print_benchmark_result(result, jobs, elapsed);
+    Ok(())
+}
+
+fn print_benchmark_result(result: i64, jobs: usize, elapsed: u128) {
     println!(
         "{}",
         serde_json::json!({"result":result.to_string(),"jobs":jobs,"elapsed_ns":elapsed})
     );
-    Ok(())
+}
+
+/// Verify once, warm up, then time only repeated jobs. Called on the fiber
+/// after setup has returned; the closure retains its typed state on that stack.
+pub fn benchmark_loop(
+    mut job: impl FnMut() -> R<i64>,
+    jobs: usize,
+    warmup: usize,
+    elapsed: &std::cell::Cell<u128>,
+) -> R<i64> {
+    let result = std::hint::black_box(&mut job)()?;
+    for _ in 1..warmup {
+        if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("warmup result mismatch".into()));
+        }
+    }
+    let start = std::time::Instant::now();
+    for _ in 0..jobs {
+        if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("timed result mismatch".into()));
+        }
+    }
+    elapsed.set(start.elapsed().as_nanos());
+    Ok(result)
 }
 
 #[cold]
@@ -388,8 +481,8 @@ mod tests {
                     let object = error.value as *const MessagePanic;
                     assert!(!object.is_null());
                     let string = (*object).message as *const u8;
-                    let len = string.add(8).cast::<usize>().read();
-                    let bytes = std::slice::from_raw_parts(string.add(16), len);
+                    let len = string.add(32).cast::<usize>().read();
+                    let bytes = std::slice::from_raw_parts(string.add(80), len);
                     assert_eq!(bytes, error.message.as_bytes());
                 }
             }
@@ -413,9 +506,8 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
         unreachable!()
     };
     unsafe {
-        let string = crate::emergency_alloc(0, 16 + message.len().next_multiple_of(8));
-        string.add(8).cast::<usize>().write(message.len());
-        std::ptr::copy_nonoverlapping(message.as_ptr(), string.add(16), message.len());
+        let string = crate::emergency_alloc(0, 80 + message.len().next_multiple_of(8));
+        crate::strings::init_flat(string, &message);
         let object =
             crate::emergency_alloc(5, std::mem::size_of::<MessagePanic>()).cast::<MessagePanic>();
         baml_rt_gc::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
@@ -456,9 +548,9 @@ mod allocation_tests {
                 let object = value as *const MessagePanic;
                 assert_eq!((*object).header.desc, 5);
                 let message = (*object).message as *const u8;
-                let len = message.add(8).cast::<usize>().read();
+                let len = message.add(32).cast::<usize>().read();
                 assert_eq!(
-                    std::slice::from_raw_parts(message.add(16), len),
+                    std::slice::from_raw_parts(message.add(80), len),
                     b"Allocation of 16 bytes failed"
                 );
             }
@@ -714,16 +806,16 @@ mod caught_tests {
             let error = add(Int63::MAX.get(), 1).unwrap_err().at(&SOURCE, 0);
             let caught = unsafe { CaughtError::new(error) };
             for _ in 0..100 {
-                unsafe { crate::try_alloc(0, 32) }?;
+                unsafe { crate::try_alloc(0, 80) }?;
                 unsafe { crate::safepoint() }.unwrap();
             }
             unsafe {
                 let object = caught.value() as *const MessagePanic;
                 assert_eq!((*object).header.desc, 1);
                 let string = (*object).message as *const u8;
-                let len = string.add(8).cast::<usize>().read();
+                let len = string.add(32).cast::<usize>().read();
                 assert_eq!(
-                    std::slice::from_raw_parts(string.add(16), len),
+                    std::slice::from_raw_parts(string.add(80), len),
                     caught.error().message.as_bytes()
                 );
             }
@@ -780,6 +872,43 @@ mod stack_guard_tests {
             Ok(1)
         }
         assert_eq!(unsafe { instance.run_baml(recover) }.unwrap(), 1);
+    }
+
+    #[inline(never)]
+    unsafe fn recurse_cached(cx: crate::calls::Context, depth: usize) -> R<i64> {
+        let pad = [0u8; 16 * 1024];
+        std::hint::black_box(&pad);
+        cx.check_stack()?;
+        if depth & 15 == 0 {
+            unsafe { cx.poll()? };
+        }
+        let value = unsafe { recurse_cached(cx, depth + 1) };
+        std::hint::black_box(&pad);
+        value
+    }
+
+    #[test]
+    fn cached_call_context_overflows_and_recovers_under_gc_stress() {
+        fn entry() -> R<i64> {
+            unsafe { recurse_cached(crate::calls::Context::current(), 0) }
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[false, false, false, true, true, true, true, true, true],
+        );
+        instance.set_stress(true);
+        for _ in 0..2 {
+            let error = unsafe { instance.run_baml(entry) }.unwrap_err();
+            assert_eq!(error.class, "baml.panics.StackOverflow");
+            assert_eq!(error.message, "stack overflow");
+            fn recover() -> R<i64> {
+                let cx = unsafe { crate::calls::Context::current() };
+                cx.check_stack()?;
+                unsafe { cx.poll()? };
+                Ok(7)
+            }
+            assert_eq!(unsafe { instance.run_baml(recover) }.unwrap(), 7);
+        }
     }
 }
 

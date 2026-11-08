@@ -8,9 +8,11 @@ license.workspace = true
 baml_env.workspace = true
 baml_type.workspace = true
 bex_str.workspace = true
+xxhash-rust.workspace = true
 bex_vm_types.workspace = true
 borsh.workspace = true
 serde_json.workspace = true
+sys_regex.workspace = true
 baml_rt_gc = { path = "../baml_rt_gc" }
 baml_rt_tasks = { path = "../baml_rt_tasks" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }

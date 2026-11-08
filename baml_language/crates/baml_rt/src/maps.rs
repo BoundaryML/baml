@@ -86,7 +86,7 @@ impl StringIntMap {
         for i in 0..len {
             unsafe {
                 let entry = (((*object).entries + 16) as *mut Entry).add(i);
-                if Str::from_raw((*entry).key).as_str(cx) == key.as_str(cx) {
+                if Str::from_raw((*entry).key).try_as_str(cx)? == key.try_as_str(cx)? {
                     let old = (*entry).value;
                     (*entry).value = value;
                     return Ok(Dyn {

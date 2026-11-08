@@ -2,10 +2,16 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod bytes;
+pub mod calls;
+pub mod format;
 pub mod json;
 pub mod language;
 pub mod lists;
 pub mod maps;
+pub mod native;
+pub mod regex;
+pub mod regex_map;
 pub mod strings;
 pub mod telemetry;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
@@ -63,13 +69,15 @@ pub unsafe fn alloc(desc: u32, bytes: usize) -> *mut u8 {
 /// Same contract as `alloc`.
 #[inline(always)]
 pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
-    let result = HEAP.with(|heap| {
-        assert!(
-            !heap.get().is_null() && !ROOTS.get().is_null(),
-            "rt allocation outside a root task"
-        );
-        unsafe { (&mut *heap.get()).try_alloc(desc, bytes, &Roots(&*ROOTS.get())) }
-    });
+    // Keep the TLS getters small: a closure containing the whole allocation
+    // path prevents LLVM from inlining LocalKey::with into string concat loops.
+    let heap = HEAP.get();
+    let roots = ROOTS.get();
+    assert!(
+        !heap.is_null() && !roots.is_null(),
+        "rt allocation outside a root task"
+    );
+    let result = unsafe { (&mut *heap).try_alloc(desc, bytes, &Roots(&*roots)) };
     result.map_err(|failure| language::allocation_failure(failure.bytes))
 }
 
@@ -119,6 +127,7 @@ pub struct Instance {
     heap: Heap,
     tasks: TaskLoop,
     _io: tokio::runtime::Runtime,
+    compact_strings: bool,
 }
 impl Instance {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
@@ -155,6 +164,7 @@ impl Instance {
             heap,
             tasks,
             _io: io,
+            compact_strings: strings::compact_descriptor(descriptors),
         }
     }
 
@@ -172,20 +182,22 @@ impl Instance {
     /// Execute generated BAML and preserve its language error.
     ///
     /// # Safety
-    /// The entry must uphold the same rooting contract as `run`. A returned
-    /// error's managed `value` is unrooted: inspect it only while this instance
-    /// remains alive and before any further managed allocation.
-    pub unsafe fn run_baml(&mut self, entry: fn() -> R<i64>) -> R<i64> {
+    /// The entry must uphold the same rooting contract as `run`. Captures must
+    /// not hold unrooted managed pointers; construct retained state on the fiber.
+    /// A returned error's managed `value` is unrooted: inspect it only while
+    /// this instance remains alive and before any further managed allocation.
+    pub unsafe fn run_baml(&mut self, entry: impl FnOnce() -> R<i64> + 'static) -> R<i64> {
         unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
     }
     unsafe fn execute<E: 'static>(
         &mut self,
-        entry: fn() -> Result<i64, E>,
+        entry: impl FnOnce() -> Result<i64, E> + 'static,
     ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;
         let roots = self.tasks.integration_roots();
+        let compact_strings = self.compact_strings;
         let future = self.tasks.spawn(move |cx| {
             struct Binding(
                 *mut Heap,
@@ -193,6 +205,7 @@ impl Instance {
                 *const baml_rt_tasks::IntegrationRoots,
                 usize,
                 *const Cell<u8>,
+                bool,
             );
             impl Drop for Binding {
                 fn drop(&mut self) {
@@ -201,6 +214,7 @@ impl Instance {
                     ROOTS.set(self.2);
                     STACK_LIMIT.set(self.3);
                     POLL_WORD.set(self.4);
+                    strings::COMPACT_STRINGS.set(self.5);
                 }
             }
             let previous_heap = HEAP.replace(heap);
@@ -211,12 +225,14 @@ impl Instance {
             let previous_limit = STACK_LIMIT.replace(roots.stack_limit(cx.id()));
             let poll_word = roots.poll_word();
             let previous_poll = POLL_WORD.replace(Rc::as_ptr(&poll_word));
+            let previous_strings = strings::COMPACT_STRINGS.replace(compact_strings);
             let _binding = Binding(
                 previous_heap,
                 previous_task,
                 previous_roots,
                 previous_limit,
                 previous_poll,
+                previous_strings,
             );
             *output.borrow_mut() = Some(entry());
             Ok(Value::int(0))

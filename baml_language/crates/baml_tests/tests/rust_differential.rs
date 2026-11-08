@@ -13,6 +13,7 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "StackAllocation",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -370,6 +371,18 @@ fn pack_result<'a>(
     functions: impl IntoIterator<Item = &'a str>,
     rt: bool,
 ) -> Result<(), String> {
+    pack_result_options(build, workspace, source, executable, functions, rt, false)
+}
+
+fn pack_result_options<'a>(
+    build: &Path,
+    workspace: &Path,
+    source: &Path,
+    executable: &Path,
+    functions: impl IntoIterator<Item = &'a str>,
+    rt: bool,
+    benchmark: bool,
+) -> Result<(), String> {
     // Never accept an executable left over from a previous successful pack.
     if executable.exists() {
         std::fs::remove_file(executable).map_err(|e| e.to_string())?;
@@ -410,6 +423,9 @@ fn pack_result<'a>(
     if rt {
         argv.push("--rt".into());
     }
+    if benchmark {
+        argv.push("--rt-benchmark".into());
+    }
     let result = baml_cli::run_cli(argv).map_err(|error| format!("{error:#}"))?;
     if !matches!(result, baml_cli::ExitCode::Success) {
         return Err(format!("pack exited {result:?}"));
@@ -422,14 +438,139 @@ fn pack_result<'a>(
 
 #[test]
 #[ignore = "builds generated Rust crates with cargo"]
+fn rt_call_cost_semantics_at_every_telemetry_level() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest.parent().unwrap().parent().unwrap();
+    let build = Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-call-cost-parity");
+    std::fs::create_dir_all(&build).unwrap();
+    let source = manifest.join("rust_diff/call_cost");
+    let bytecode = build.join("bytecode");
+    pack_result(
+        &build.join("vm-build"),
+        workspace,
+        &source,
+        &bytecode,
+        ["main", "uncaught", "stack_calls"],
+        false,
+    )
+    .unwrap();
+    let run = |program: &Path, entry: &str, is_rt: bool, stress: bool, level: &str| {
+        let home = tempfile::tempdir_in(&build).unwrap();
+        let mut command = Command::new(program);
+        if !is_rt {
+            command.arg(entry);
+        }
+        command
+            .env("BAML_HOME", home.path())
+            .env("BAML_TELEMETRY", level)
+            .env("BAML_COMPILED_BODIES", "0")
+            .env("BAML_COMPILED_FRAMES", "0")
+            .env("BAML_GC_STRESS", if stress { "1" } else { "0" })
+            .env_remove("BOUNDARY_PROJECT")
+            .env_remove("BOUNDARY_API_URL")
+            .env("NO_COLOR", "1");
+        if level == "default" {
+            command.env_remove("BAML_TELEMETRY");
+        }
+        let output = run_probe(&mut command, Duration::from_secs(120)).unwrap();
+        assert!(
+            output.status.success() == (entry != "uncaught"),
+            "{level}/{is_rt}/{stress}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let trace = telemetry::read(home.path());
+        assert_eq!(
+            trace.is_empty(),
+            level == "off",
+            "{level}: telemetry presence"
+        );
+        (
+            output,
+            known_telemetry_divergences::without_gc(&trace, "rt"),
+        )
+    };
+    for entry in ["main", "uncaught", "stack_calls"] {
+        let compiled = build.join(format!("rt-{entry}"));
+        pack_result(
+            &build.join("rt-build"),
+            workspace,
+            &source,
+            &compiled,
+            [entry],
+            true,
+        )
+        .unwrap();
+        for level in ["off", "low", "medium", "high", "default"] {
+            let (expected, trace) = run(&bytecode, entry, false, false, level);
+            if entry == "main" {
+                assert_eq!(expected.stdout, b"511\n");
+            } else if entry == "stack_calls" {
+                assert_eq!(expected.stdout, b"28\n");
+            }
+            for stress in [false, true] {
+                let (actual, observed) = run(&compiled, entry, true, stress, level);
+                assert_eq!(
+                    actual.status.code(),
+                    expected.status.code(),
+                    "{entry}/{level}/{stress}: status"
+                );
+                assert_eq!(
+                    actual.stdout, expected.stdout,
+                    "{entry}/{level}/{stress}: stdout"
+                );
+                assert_eq!(
+                    actual.stderr, expected.stderr,
+                    "{entry}/{level}/{stress}: stderr"
+                );
+                assert_eq!(
+                    observed, trace,
+                    "{entry}/{level}/{stress}: semantic telemetry"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
 #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
 fn rust_differential() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let timeout = std::env::var("BAML_RUST_DIFF_TIMEOUT_SECS")
         .map(|v| v.parse::<u64>().expect("timeout must be seconds"))
         .unwrap_or(120);
     assert!(timeout > 0);
     let timeout = Duration::from_secs(timeout);
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
+    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok().or_else(|| {
+        std::env::var("BAML_RUST_DIFF_RT_ONLY")
+            .is_ok_and(|v| v == "1")
+            .then(|| "rt,rt-gc-stress".to_owned())
+    });
+    if let Some(selected) = &selected {
+        for name in selected.split(',') {
+            assert!(
+                BACKENDS.iter().any(|b| b.name == name),
+                "unknown backend: {name}"
+            );
+        }
+    }
+    // The bytecode oracle is mandatory even for a scoped backend run.
+    let backends: Vec<_> = BACKENDS
+        .iter()
+        .filter(|backend| {
+            backend.name == "bytecode"
+                || selected
+                    .as_ref()
+                    .is_none_or(|names| names.split(',').any(|name| name == backend.name))
+        })
+        .collect();
+    let rt_only = backends
+        .iter()
+        .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
+    let levels = LEVELS;
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -452,17 +593,34 @@ fn rust_differential() {
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
-    for backend in BACKENDS {
+    let oracle_only = if rt_only {
+        let rt_artifacts = rt::build(&build.join("rt"), workspace, manifest, only.as_deref());
+        let admitted = rt_artifacts
+            .iter()
+            .filter(|(_, result)| result.is_ok())
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        artifacts.insert("rt", rt_artifacts);
+        Some(admitted)
+    } else {
+        None
+    };
+    for backend in &backends {
+        if rt_only && backend.artifact_key == "rust" && oracle_only.as_deref() == Some("") {
+            artifacts.insert("rust", Artifacts::new());
+            continue;
+        }
         artifacts.entry(backend.artifact_key).or_insert_with(|| {
             (backend.build)(
                 &build.join(backend.artifact_key),
                 workspace,
                 manifest,
-                only.as_deref(),
+                oracle_only.as_deref().or(only.as_deref()),
             )
         });
     }
-    let reference = BACKENDS
+    let reference = backends
         .iter()
         .position(|b| b.name == "bytecode")
         .expect("bytecode reference");
@@ -477,22 +635,31 @@ fn rust_differential() {
             .is_none_or(|s| s.split(',').any(|p| p == probe))
     });
     assert!(!probes.is_empty(), "no probes selected");
-    let mut coverage = rt::Coverage::new(&artifacts["rt"]);
-    let mut failures = coverage.build_failures();
+    let mut coverage = artifacts.get("rt").map(rt::Coverage::new);
+    let mut failures = coverage
+        .as_ref()
+        .map_or_else(Vec::new, rt::Coverage::build_failures);
     for probe in probes {
+        if rt_only && artifacts["rt"][&probe].is_err() {
+            continue;
+        }
         let failures_before = failures.len();
-        for level in LEVELS {
-            if (probe.contains("::") && matches!(*level, "default" | "low"))
-                || (*level == "default"
-                    && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan"))
+        for level in levels {
+            if rt_only && !rt::supports_level(&probe, level) {
+                continue;
+            }
+            if !probe.starts_with("strings::")
+                && ((probe.contains("::") && matches!(*level, "default" | "low"))
+                    || (*level == "default"
+                        && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan")))
             {
                 continue;
             }
             let mut outputs = Vec::new();
             let mut traces = Vec::new();
-            for backend in BACKENDS {
+            for backend in &backends {
                 if backend.artifact_key == "rt"
-                    && (!rt::supports_level(level) || artifacts["rt"][&probe].is_err())
+                    && (!rt::supports_level(&probe, level) || artifacts["rt"][&probe].is_err())
                 {
                     outputs.push(None);
                     traces.push(String::new());
@@ -596,7 +763,10 @@ fn rust_differential() {
                 if *level != "off" && trace.is_empty() {
                     failures.push(format!("{probe}/{mode}: no telemetry recording produced"));
                 }
-                if probe.contains("::") && output.as_ref().is_ok_and(|o| !o.status.success()) {
+                if probe.contains("::")
+                    && kpis::expects_success(&probe)
+                    && output.as_ref().is_ok_and(|o| !o.status.success())
+                {
                     failures.push(format!("{probe}/{mode}: KPI must succeed"));
                 }
                 std::fs::create_dir_all(build.join("telemetry")).unwrap();
@@ -612,7 +782,14 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
-            for (index, backend) in BACKENDS.iter().enumerate() {
+            if let Some(expected) = kpis::string_probe_output(&probe) {
+                assert_eq!(
+                    outputs[reference].as_ref().unwrap().stdout,
+                    expected,
+                    "{probe}: oracle semantic assertions"
+                );
+            }
+            for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;
                 }
@@ -640,10 +817,26 @@ fn rust_differential() {
                 }
                 if traces[reference] != traces[index] {
                     if backend.artifact_key == "rt" {
-                        failures.push(format!(
-                            "{probe}/{mode}: telemetry mismatch\n{}",
-                            diff(&traces[reference], &traces[index], &mode)
-                        ));
+                        // C5 is the runtime's sole telemetry exception. Both
+                        // modes share the rt artifact and its normalizer; the
+                        // old backend's other exceptions never apply here.
+                        let expected =
+                            known_telemetry_divergences::without_gc(&traces[reference], "rt");
+                        let actual = known_telemetry_divergences::without_gc(&traces[index], "rt");
+                        if expected == actual {
+                            report_known(
+                                &build,
+                                &probe,
+                                &mode,
+                                known_telemetry_divergences::GC_REASON,
+                                &diff(&traces[reference], &traces[index], &mode),
+                            );
+                        } else {
+                            failures.push(format!(
+                                "{probe}/{mode}: telemetry mismatch\n{}",
+                                diff(&expected, &actual, &mode)
+                            ));
+                        }
                         continue;
                     }
                     if let Some(reason) =
@@ -728,9 +921,13 @@ fn rust_differential() {
                 }
             }
         }
-        coverage.record(&probe, &failures[failures_before..]);
+        if let Some(coverage) = &mut coverage {
+            coverage.record(&probe, &failures[failures_before..]);
+        }
     }
-    coverage.write(&build);
+    if let Some(coverage) = coverage {
+        coverage.write(&build);
+    }
     for failure in &failures {
         eprintln!("{failure}");
     }
@@ -797,4 +994,29 @@ fn diff(expected: &str, actual: &str, mode: &str) -> String {
         .map(|line| line.chars().take(800).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[path = "../rust_diff/type_dispatch.rs"]
+mod type_dispatch;
+static PACK_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
+fn rt_type_dispatch_semantics() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    type_dispatch::run();
+}
+
+#[path = "../rust_diff/setup_state.rs"]
+mod setup_state;
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
+fn rt_setup_state_benchmark() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    setup_state::run();
 }

@@ -318,6 +318,7 @@ pub struct Heap {
     finalizable: Vec<Finalizable>,
     ready: Vec<Finalizer>,
     weak: Vec<BTreeMap<usize, usize>>,
+    native: HashMap<usize, Rc<dyn std::any::Any>>,
     stats: Stats,
     collection_observer: Option<fn(CollectionEvent)>,
     stress: bool,
@@ -379,6 +380,7 @@ impl Heap {
             finalizable: vec![],
             ready: vec![],
             weak: vec![],
+            native: HashMap::new(),
             stats: Stats {
                 budget: MIN_BUDGET,
                 ..Stats::default()
@@ -465,6 +467,29 @@ impl Heap {
         bytes: usize,
         roots: &dyn RootSource,
     ) -> Result<*mut u8, AllocFailure> {
+        unsafe { self.try_alloc_impl::<true>(desc, bytes, roots) }
+    }
+    /// Allocate a builtin value whose descriptor has no cleanup method.
+    ///
+    /// # Safety
+    /// Same contract as `try_alloc`, and `desc` must have no finalizer.
+    #[inline(always)]
+    pub unsafe fn try_alloc_unfinalized(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        roots: &dyn RootSource,
+    ) -> Result<*mut u8, AllocFailure> {
+        debug_assert!(self.descriptors[desc as usize].finalizer.is_none());
+        unsafe { self.try_alloc_impl::<false>(desc, bytes, roots) }
+    }
+    #[inline(always)]
+    unsafe fn try_alloc_impl<const FINALIZERS: bool>(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        roots: &dyn RootSource,
+    ) -> Result<*mut u8, AllocFailure> {
         let aligned = bytes.checked_add(15).ok_or(AllocFailure { bytes })? & !15;
         if bytes > LARGE_THRESHOLD
             || self.layout_key != ((u64::from(desc) << 32) | bytes as u64)
@@ -473,7 +498,7 @@ impl Heap {
         {
             return unsafe { self.alloc_slow(desc, bytes, aligned, roots) };
         }
-        Ok(unsafe { self.bump(desc, bytes, aligned) })
+        Ok(unsafe { self.bump::<FINALIZERS>(desc, bytes, aligned) })
     }
     /// Limit usable ordinary block capacity plus live large-object backing.
     /// Existing blocks are retained; set before ordinary allocations for a hard
@@ -552,7 +577,12 @@ impl Heap {
         Ok(p)
     }
     #[inline(always)]
-    unsafe fn bump(&mut self, desc: DescId, bytes: usize, aligned: usize) -> *mut u8 {
+    unsafe fn bump<const FINALIZERS: bool>(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        aligned: usize,
+    ) -> *mut u8 {
         // Boxed metadata stays put when the block directory grows. Collection
         // invalidates the run before touching metadata; acquiring a run installs
         // a fresh pointer before the next bump.
@@ -569,7 +599,9 @@ impl Heap {
         unsafe {
             p.cast::<Header>().write(Header { desc, aux: 0 });
         }
-        self.register_finalizer(p as usize);
+        if FINALIZERS {
+            self.register_finalizer(p as usize);
+        }
         p
     }
     // Only used by the cold allocator. The fast allocation guard routes the
@@ -581,7 +613,7 @@ impl Heap {
         aligned: usize,
     ) -> *mut u8 {
         self.budget_guard = self.budget_end.saturating_sub(aligned);
-        let pointer = unsafe { self.bump(desc, bytes, aligned) };
+        let pointer = unsafe { self.bump::<true>(desc, bytes, aligned) };
         if self.cursor >= self.budget_end {
             self.request_poll();
         }
@@ -953,6 +985,12 @@ impl Heap {
             table.retain(|&key, _| self.marked(key));
         }
         self.weak = weak;
+        // Native payloads never own managed pointers. Their handle object is
+        // traced normally; an unreachable handle releases its owner-thread
+        // Rust payload synchronously before its slot can be reused.
+        let mut native = std::mem::take(&mut self.native);
+        native.retain(|&object, _| self.marked(object));
+        self.native = native;
         let finals = std::mem::take(&mut self.finalizable);
         self.finalizable = finals
             .into_iter()
@@ -1010,9 +1048,21 @@ impl Heap {
     /// # Safety
     /// Root slots and traced fields must be readable, as for `collect`.
     pub unsafe fn verify(&self, roots: &dyn RootSource) {
+        // Verify managed candidates, just as marking classifies them. A local
+        // heap container may borrow a stack object; conservative false roots
+        // can retain that container even after the borrowed frame has returned.
+        // Such non-managed addresses must never be dereferenced here. Their
+        // lifetime is the compiler's proof, not an object-start bitmap entry.
         let check = |p| {
             assert!(
-                p == 0 || self.object_start(p).is_some_and(|base| self.marked(base)),
+                p == 0
+                    || match self.object_start(p) {
+                        Some(base) => self.marked(base),
+                        None => {
+                            !self.block_index.contains_key(&(p & !(BLOCK_BYTES - 1)))
+                                && p % std::mem::align_of::<Header>() == 0
+                        }
+                    },
                 "dangling precise GC pointer: {p:#x}"
             );
         };
@@ -1055,6 +1105,25 @@ impl Heap {
             f.state = 2;
         }
     }
+    /// Attach owner-thread native state to a managed opaque handle.
+    ///
+    /// # Safety
+    /// The handle is live in this heap. The payload must not contain managed
+    /// pointers: only descriptor slots participate in precise tracing.
+    pub unsafe fn attach_native<T: std::any::Any>(&mut self, object: usize, payload: Rc<T>) {
+        assert_eq!(self.object_start(object), Some(object));
+        assert!(self.native.insert(object, payload).is_none());
+    }
+    /// Clone the owner-thread lease so a builtin can allocate while borrowing
+    /// its heap-neutral native payload. This lease does not root the handle.
+    pub fn native<T: std::any::Any>(&self, object: usize) -> Rc<T> {
+        self.native[&object]
+            .clone()
+            .downcast::<T>()
+            .ok()
+            .expect("native handle type")
+    }
+
     /// Weak keys with opaque non-owning scalar values (not ephemerons).
     pub fn new_weak_table(&mut self) -> usize {
         self.weak.push(BTreeMap::new());
@@ -1071,7 +1140,9 @@ impl Heap {
 /// write barrier. `obj` is reserved for future sticky marks.
 /// # Safety
 /// `slot` must be a writable, aligned pointer field of live `obj`; `value` must
-/// be null or a valid managed pointer, with no conflicting Rust references.
+/// be null or a valid object pointer, with no conflicting Rust references. A
+/// stack object's storage must outlive the borrow and remain in a conservative
+/// root range for as long as a heap object can reach it.
 #[inline(always)]
 pub unsafe fn write_ptr(_obj: *mut u8, slot: *mut usize, value: usize) {
     unsafe {
@@ -1283,5 +1354,62 @@ mod allocation_tests {
                     .all(|v| *v == 0xa5)
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod native_owner_tests {
+    use super::*;
+    struct Root(Cell<usize>);
+    impl RootSource for Root {
+        fn conservative_ranges(&self, _: &mut dyn FnMut(*const usize, *const usize)) {}
+        fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+            visit(self.0.as_ptr());
+        }
+    }
+    struct Payload(Rc<Cell<usize>>);
+    impl Drop for Payload {
+        fn drop(&mut self) {
+            self.0.set(self.0.get() + 1);
+        }
+    }
+    static DESCRIPTORS: &[Descriptor] = &[Descriptor {
+        kind: Kind::Opaque,
+        size: 8,
+        ptr_slots: (0, 0),
+        tagged_slots: (0, 0),
+        elem: None,
+        type_id: 3,
+        fields: &[],
+        finalizer: None,
+    }];
+    #[test]
+    fn native_state_follows_handle_liveness_and_builtin_leases() {
+        let roots = Root(Cell::new(0));
+        let drops = Rc::new(Cell::new(0));
+        let mut heap = Heap::new(DESCRIPTORS, &[false, false, false, true]);
+        let object = unsafe { heap.alloc(0, 8, &roots) } as usize;
+        roots.0.set(object);
+        unsafe {
+            heap.attach_native(object, Rc::new(Payload(drops.clone())));
+            heap.collect(&roots)
+        };
+        assert_eq!(drops.get(), 0);
+        let lease = heap.native::<Payload>(object);
+        roots.0.set(0);
+        unsafe { heap.collect(&roots) };
+        assert_eq!(drops.get(), 0, "the active native builtin owns its payload");
+        drop(lease);
+        assert_eq!(drops.get(), 1);
+        let object = unsafe { heap.alloc(0, 8, &roots) } as usize;
+        unsafe {
+            heap.attach_native(object, Rc::new(Payload(drops.clone())));
+            heap.collect(&roots)
+        };
+        assert_eq!(
+            drops.get(),
+            2,
+            "native bookkeeping must not root dead handles"
+        );
     }
 }

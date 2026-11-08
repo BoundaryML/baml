@@ -21,7 +21,7 @@ pub fn run(
     let mut instance = Instance::new(descriptors, Box::leak(pointers.into_boxed_slice()));
     // SAFETY: same admitted entry ABI as driver_observed; the instance owns the heap.
     let result = session.run(|| unsafe { instance.run_baml(entry) });
-    session.finish(result.is_ok());
+    session.finish(&result);
     let (outcome, message) = match result {
         Ok(_) => ("pass", None),
         Err(e) if e.value == 0 => {

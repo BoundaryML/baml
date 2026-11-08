@@ -7,8 +7,8 @@ use super::{Artifacts, PROBES, kpis, pack_result};
 // recordings and exact normalized equality.
 const TELEMETRY_SUPPORTED: bool = false;
 
-pub fn supports_level(level: &str) -> bool {
-    level == "off" || TELEMETRY_SUPPORTED
+pub fn supports_level(probe: &str, level: &str) -> bool {
+    level == "off" || TELEMETRY_SUPPORTED || probe.starts_with("strings::")
 }
 
 #[derive(Debug, Clone)]
@@ -31,15 +31,42 @@ fn classify(error: String) -> Rejection {
 pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
     std::fs::create_dir_all(build).unwrap();
     let mut artifacts = Artifacts::new();
+    let mut initializer_rejection: Option<Rejection> = None;
     for probe in PROBES {
         if only.is_some_and(|only| !only.split(',').any(|name| name == *probe)) {
             continue;
         }
+        // Initializer admission is checked for the whole source project before
+        // entry reachability. Rechecking every entry cannot change this result.
+        // Standalone fixtures use a different project and must still be packed.
+        if *probe != "StackAllocation"
+            && let Some(rejection) = &initializer_rejection
+        {
+            artifacts.insert((*probe).into(), Err(rejection.clone()));
+            continue;
+        }
         let executable = build.join(probe);
+        let standalone = build.join("stack-allocation-source");
+        let source = if *probe == "StackAllocation" {
+            std::fs::create_dir_all(standalone.join("baml_src")).unwrap();
+            std::fs::copy(
+                manifest.join("rust_diff/baml.toml"),
+                standalone.join("baml.toml"),
+            )
+            .unwrap();
+            std::fs::copy(
+                manifest.join("rust_diff/baml_src/stack_allocation.baml"),
+                standalone.join("baml_src/stack_allocation.baml"),
+            )
+            .unwrap();
+            standalone
+        } else {
+            manifest.join("rust_diff")
+        };
         let result = pack_result(
             build,
             workspace,
-            &manifest.join("rust_diff"),
+            &source,
             &executable,
             [if super::initializer_probes::collects_tests(probe) {
                 "InitializerTestSummary"
@@ -68,6 +95,11 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
                 Ok(executable)
             }
         });
+        if *probe != "StackAllocation"
+            && matches!(&result, Err(Rejection::Unsupported(reason)) if reason == "top-level initializers")
+        {
+            initializer_rejection = result.as_ref().err().cloned();
+        }
         artifacts.insert((*probe).into(), result);
     }
     for fixture in kpis::fixtures(workspace, only) {
@@ -136,6 +168,13 @@ impl Coverage {
             .iter()
             .filter_map(|(name, result)| match result {
                 Err(Rejection::Fail(reason)) => Some(format!("{name}/rt: {reason}")),
+                Err(Rejection::Unsupported(reason))
+                    if name.starts_with("strings::") || name.starts_with("string::") =>
+                {
+                    Some(format!(
+                        "{name}/rt: required string fixture unsupported: {reason}"
+                    ))
+                }
                 _ => None,
             })
             .collect()
@@ -166,7 +205,7 @@ impl Coverage {
         let mut blockers: Vec<_> = blockers.into_iter().collect();
         blockers.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
         let mut report = format!(
-            "BAML runtime coverage (normal AND GC stress): {} pass, {} unsupported, {} fail\nTelemetry off: required\nTelemetry low/medium/high/default: {}\n\nFirst unsupported constructs (fixtures blocked):\n",
+            "BAML runtime coverage (normal AND GC stress): {} pass, {} unsupported, {} fail\nTelemetry off: required\nString probes: off/low/medium/high/default required\nTelemetry low/medium/high/default for other probes: {}\n\nFirst unsupported constructs (fixtures blocked):\n",
             counts[0],
             counts[1],
             counts[2],
@@ -222,4 +261,23 @@ fn coverage_counts_each_fixture_once_and_preserves_failures() {
     assert!(report.contains("1 pass, 1 unsupported, 2 fail"));
     assert!(report.contains("1\tfloat"));
     assert_eq!(coverage.build_failures().len(), 2);
+}
+
+#[test]
+fn string_admission_regressions_fail_the_gate() {
+    let artifacts = BTreeMap::from([
+        (
+            "strings::semantics".into(),
+            Err(Rejection::Unsupported("builtin".into())),
+        ),
+        (
+            "string::concat loop 10k".into(),
+            Err(Rejection::Unsupported("loop".into())),
+        ),
+        (
+            "other".into(),
+            Err(Rejection::Unsupported("other job".into())),
+        ),
+    ]);
+    assert_eq!(Coverage::new(&artifacts).build_failures().len(), 2);
 }
