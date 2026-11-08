@@ -565,6 +565,41 @@ fn rt_call_cost_semantics_at_every_telemetry_level() {
     }
 }
 
+// Preserve both selectors after merging the list and shared runtime harnesses.
+// The bytecode oracle is mandatory even for a scoped backend run.
+fn select_backends(selected: Option<&str>, only_rt: bool) -> Vec<&'static Backend> {
+    BACKENDS
+        .iter()
+        .filter(|backend| {
+            backend.name == "bytecode"
+                || (!only_rt || backend.artifact_key == "rt")
+                    && selected
+                        .is_none_or(|names| names.split(',').any(|name| name == backend.name))
+        })
+        .collect()
+}
+
+#[test]
+fn backend_selection_preserves_both_scoping_controls_and_the_oracle() {
+    let names = |selected, rt_only| {
+        select_backends(selected, rt_only)
+            .into_iter()
+            .map(|b| b.name)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        names(Some("rt,rt-gc-stress"), false),
+        ["bytecode", "rt", "rt-gc-stress"]
+    );
+    assert_eq!(names(None, true), ["bytecode", "rt", "rt-gc-stress"]);
+    assert_eq!(
+        names(Some("rt-gc-stress"), true),
+        ["bytecode", "rt-gc-stress"]
+    );
+    assert_eq!(names(Some("compiled"), true), ["bytecode"]);
+    assert_eq!(names(None, false).len(), BACKENDS.len());
+}
+
 #[test]
 #[ignore = "builds generated Rust crates with cargo"]
 #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
@@ -584,16 +619,8 @@ fn rust_differential() {
             );
         }
     }
-    // The bytecode oracle is mandatory even for a scoped backend run.
-    let backends: Vec<_> = BACKENDS
-        .iter()
-        .filter(|backend| {
-            backend.name == "bytecode"
-                || selected
-                    .as_ref()
-                    .is_none_or(|names| names.split(',').any(|name| name == backend.name))
-        })
-        .collect();
+    let only_rt = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
+    let backends = select_backends(selected.as_deref(), only_rt);
     let rt_only = backends
         .iter()
         .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
@@ -617,15 +644,6 @@ fn rust_differential() {
             );
         }
     }
-    // Focused runtime jobs retain the bytecode oracle and both GC modes, while
-    // avoiding unrelated compiled-VM variants and unsupported telemetry levels.
-    // The default merged-branch gate still runs the complete matrix.
-    let rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
-    let backends: Vec<_> = BACKENDS
-        .iter()
-        .filter(|b| !rt_only || matches!(b.name, "bytecode" | "rt" | "rt-gc-stress"))
-        .collect();
-    let levels: &[&str] = if rt_only { &["off"] } else { LEVELS };
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
