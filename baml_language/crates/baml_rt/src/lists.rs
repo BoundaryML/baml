@@ -144,17 +144,18 @@ impl<T: Slot> List<T> {
     }
     /// Independent snapshot of the mutable container; immutable element values
     /// may be shared. Used by memoized string segmentation.
-    pub fn copy(self, _cx: &mut Cx) -> R<Self> {
+    #[inline(always)]
+    pub fn copy(self, cx: &mut Cx) -> R<Self> {
         let old = self.pointer as *const Object;
         let (len, desc) = unsafe { ((*old).len, (*old).header.desc) };
         if len == 0 {
-            return unsafe { Self::new(_cx, desc) };
+            return unsafe { Self::new(cx, desc) };
         }
         let bytes = len
             .checked_mul(8)
             .and_then(|n| n.checked_add(16))
             .ok_or_else(|| allocation_failure(usize::MAX))?;
-        let buffer = unsafe { crate::try_alloc(desc + 1, bytes) }?;
+        let buffer = cx.alloc(desc + 1, bytes)?;
         unsafe {
             let source = (*old).buffer as *const u8;
             for i in 0..len {
@@ -167,7 +168,7 @@ impl<T: Slot> List<T> {
                 }
             }
         }
-        let result = unsafe { crate::try_alloc(desc, 32) }?;
+        let result = cx.alloc(desc, 32)?;
         unsafe {
             let object = &mut *result.cast::<Object>();
             write_ptr(result, &raw mut object.buffer, buffer as usize);

@@ -113,7 +113,7 @@ impl Cx {
         }
     }
     #[inline(always)]
-    fn alloc(&self, desc: u32, bytes: usize) -> R<*mut u8> {
+    pub(crate) fn alloc(&self, desc: u32, bytes: usize) -> R<*mut u8> {
         // The invocation owns both pointers for this context's entire lifetime.
         // Construct mutable heap access only for the synchronous allocation.
         unsafe { (&mut *self.heap).try_alloc(desc, bytes, &crate::Roots(&*self.roots)) }
@@ -817,7 +817,8 @@ pub unsafe fn segments(
     lines: bool,
     desc: u32,
 ) -> R<usize> {
-    let read_cx = unsafe { Cx::current() };
+    // Copy the bound context to separate the source borrow from output allocation.
+    let read_cx = Cx { ..*cx };
     let source = value.try_as_str(&read_cx)?;
     let owner = unsafe { Str::from_raw(value.flat_cache().unwrap_or(value.0)) };
     let cacheable =
