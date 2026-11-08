@@ -11,6 +11,7 @@ contexts:
   main:
     - include: comments
     - include: client
+    - include: client-value
     - include: retry-policy
     - include: generator
     - include: template-string
@@ -83,7 +84,7 @@ contexts:
       push: associated-type--body
   associated-type-extends:
     - match: '\bextends\b'
-      scope: keyword.operator.extends.baml
+      scope: keyword.operator.expression.extends.baml
   associated-type-projection--body:
     - meta_scope: meta.type.associated-projection.baml
     - match: '(\))\s*(\.)\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b'
@@ -144,7 +145,7 @@ contexts:
       scope: string.unquoted.baml
   await-expression:
     - match: '\bawait\b'
-      scope: keyword.operator.await.baml
+      scope: keyword.operator.expression.await.baml
   backtick-else:
     - match: '(\$\{)\s*(else)\s*(\})'
       scope: meta.interpolation.control.else.baml
@@ -683,6 +684,19 @@ contexts:
         4: punctuation.definition.type-parameters.end.baml
         5: entity.name.client.baml
       push: client--body
+  client-value--body:
+    - meta_scope: meta.client.baml
+    - match: '(?=;|^\s*(?:client|retry_policy|generator|template_string|class|enum|interface|implements|implement|function|testset|test|type)\b|^\s*(?:let|const)\b)'
+      pop: true
+    - include: comments
+    - include: expression
+  client-value:
+    - match: '^\s*(client)\s+(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(=)(?!=)'
+      captures:
+        1: keyword.declaration.client.baml
+        2: entity.name.client.baml
+        3: keyword.operator.assignment.baml
+      push: client-value--body
   code-block--body:
     - meta_scope: meta.block.code.baml
     - match: '\}'
@@ -736,7 +750,7 @@ contexts:
   condition-is-pattern-expression:
     - match: '\b(is)\b'
       captures:
-        1: keyword.operator.is.baml
+        1: keyword.operator.expression.is.baml
       push: condition-is-pattern-expression--body
   condition-pattern:
     - include: comments
@@ -877,7 +891,7 @@ contexts:
       push: declaration-type-parameter--body
   declaration-type-parameter-extends:
     - match: '\bextends\b'
-      scope: keyword.operator.extends.baml
+      scope: keyword.operator.expression.extends.baml
   declaration-type-parameter-intersection:
     - match: '&'
       scope: keyword.operator.type.baml
@@ -1070,7 +1084,7 @@ contexts:
       push: for-c-style-let-initializer--body
   for-in-keyword:
     - match: '\bin\b'
-      scope: keyword.operator.in.baml
+      scope: keyword.operator.expression.in.baml
   for-in-pattern--body:
     - meta_scope: meta.pattern.for-in.baml
     - match: '(?=\s+in\b)'
@@ -1383,7 +1397,7 @@ contexts:
     - match: '(?:^\s*|(?<=\{)\s*)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s+(as)\s+(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b'
       captures:
         1: variable.other.property.interface.baml
-        2: keyword.operator.as.baml
+        2: keyword.operator.expression.as.baml
         3: variable.other.property.baml
       push: interface-field-link--body
   interface-method-return-type--body:
@@ -1433,7 +1447,7 @@ contexts:
   is-pattern-expression:
     - match: '\b(is)\b'
       captures:
-        1: keyword.operator.is.baml
+        1: keyword.operator.expression.is.baml
       push: is-pattern-expression--body
   lambda-arrow:
     - match: '->|=>'
@@ -1469,7 +1483,7 @@ contexts:
   lambda-throws-clause:
     - match: '\b(throws)\b'
       captures:
-        1: keyword.operator.throws.baml
+        1: keyword.operator.expression.throws.baml
       push: lambda-throws-clause--body
   let-else-clause--body:
     - meta_scope: meta.statement.let.else.baml
@@ -1516,7 +1530,7 @@ contexts:
   let-type-bounds:
     - match: '\b(extends)\b'
       captures:
-        1: keyword.operator.extends.baml
+        1: keyword.operator.expression.extends.baml
       push: let-type-bounds--body
   let-type-statement--body:
     - meta_scope: meta.statement.let-type.baml
@@ -2012,7 +2026,7 @@ contexts:
   spawn-expression:
     - match: '\b(spawn)\b'
       captures:
-        1: keyword.operator.spawn.baml
+        1: keyword.operator.expression.spawn.baml
       push: spawn-expression--body
   spawn-header--body:
     - meta_scope: meta.spawn.header.baml
@@ -2043,7 +2057,7 @@ contexts:
   spawn-with-clause:
     - match: '\b(with)\b'
       captures:
-        1: keyword.operator.with.baml
+        1: keyword.operator.expression.with.baml
       push: spawn-with-clause--body
   string-escape:
     - include: string-escape-control
@@ -2304,7 +2318,7 @@ contexts:
       push: test-header--body
   test-with-keyword:
     - match: '\bwith\b'
-      scope: keyword.operator.with.baml
+      scope: keyword.operator.expression.with.baml
   testset--body:
     - meta_scope: meta.testset.baml
     - match: '(?<=\})'
@@ -2350,7 +2364,7 @@ contexts:
       scope: keyword.operator.arrow.baml
   type-as-operator:
     - match: '\bas\b'
-      scope: keyword.operator.as.baml
+      scope: keyword.operator.expression.as.baml
   type-expression:
     - include: comments
     - include: primitive-type
@@ -2396,7 +2410,7 @@ contexts:
         4: entity.name.type.baml
   type-throws-operator:
     - match: '\bthrows\b'
-      scope: keyword.operator.throws.baml
+      scope: keyword.operator.expression.throws.baml
   typed-binding-pattern:
     - match: '\b((?:let|const))\s+(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b\s*(:)'
       scope: meta.pattern.binding.baml
@@ -2417,7 +2431,7 @@ contexts:
     - match: '(\.)\s*(as)\b(?=\s*<)'
       captures:
         1: punctuation.accessor.baml
-        2: keyword.operator.as.baml
+        2: keyword.operator.expression.as.baml
       push: upcast-expression--body
   upcast-type-arguments--body:
     - meta_scope: meta.type-arguments.baml

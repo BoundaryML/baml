@@ -405,7 +405,7 @@
 102:9-10     "("                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 102:10-13    "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 102:14-15    "c"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-102:16-18    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+102:16-18    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 102:19-29    "load_cases"       source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.function-call.baml entity.name.function.baml
 102:29-30    "("                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
 102:30-40    "cases_path"       source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.function-call.baml meta.function-call.arguments.baml meta.function-call.baml entity.name.function.baml
@@ -454,7 +454,7 @@
 111:9-10     "("                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 111:10-13    "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 111:14-15    "c"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-111:16-18    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+111:16-18    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 111:19-29    "load_cases"       source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.function-call.baml entity.name.function.baml
 111:29-30    "("                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
 111:30-40    "cases_path"       source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.function-call.baml meta.function-call.arguments.baml meta.function-call.baml entity.name.function.baml
