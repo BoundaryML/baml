@@ -7553,5 +7553,591 @@
    "spans": 56,
    "billed": 347756
   }
- ]
+ ],
+ "chat_variants": {
+  "rows": [
+   {
+    "variant": "photo",
+    "stack": "baml",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 409976,
+    "bytes": 709789,
+    "upload": 706160,
+    "billed": 724368
+   },
+   {
+    "variant": "photo",
+    "stack": "baml",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 3161917,
+    "bytes": 3748547,
+    "upload": 3731854,
+    "billed": 5601803
+   },
+   {
+    "variant": "photo",
+    "stack": "baml",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 1661374,
+    "bytes": 2070241,
+    "upload": 2060564,
+    "billed": 2938734
+   },
+   {
+    "variant": "photo",
+    "stack": "baml",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 6526078,
+    "bytes": 7640656,
+    "upload": 7608732,
+    "billed": 11598416
+   },
+   {
+    "variant": "photo",
+    "stack": "logfire",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 409929,
+    "bytes": 1548318,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "logfire",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 3158274,
+    "bytes": 9700256,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "logfire",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 1660380,
+    "bytes": 5291503,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "logfire",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 6511386,
+    "bytes": 19278376,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "datadog",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 409929,
+    "bytes": 1031817,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "datadog",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 3158274,
+    "bytes": 6581725,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "datadog",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 1660380,
+    "bytes": 3555615,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "datadog",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 6511386,
+    "bytes": 13369992,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "otel",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 409929,
+    "bytes": 463610,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "otel",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 3158274,
+    "bytes": 2504882,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "otel",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 1660380,
+    "bytes": 1399503,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "otel",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 6511386,
+    "bytes": 4915906,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "photo",
+    "stack": "baml-nocache",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 6524827,
+    "bytes": 7627956,
+    "upload": 7606690,
+    "billed": 11594965
+   },
+   {
+    "variant": "photo",
+    "stack": "baml-nocache",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 409978,
+    "bytes": 696743,
+    "upload": 693910,
+    "billed": 724188
+   },
+   {
+    "variant": "photo",
+    "stack": "baml-nocache",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 1661330,
+    "bytes": 2060914,
+    "upload": 2054268,
+    "billed": 2938021
+   },
+   {
+    "variant": "photo",
+    "stack": "baml-nocache",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 3161929,
+    "bytes": 3735157,
+    "upload": 3723583,
+    "billed": 5600729
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "baml",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 43288,
+    "bytes": 150747,
+    "upload": 147264,
+    "billed": 90616
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "baml",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 411757,
+    "bytes": 750553,
+    "upload": 734006,
+    "billed": 848663
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "baml",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 194622,
+    "bytes": 385589,
+    "upload": 376058,
+    "billed": 403726
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "baml",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 1025758,
+    "bytes": 1828095,
+    "upload": 1796398,
+    "billed": 2091795
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "logfire",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 43185,
+    "bytes": 40371,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "logfire",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 407694,
+    "bytes": 284534,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "logfire",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 193404,
+    "bytes": 119715,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "logfire",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 1010226,
+    "bytes": 1050554,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "datadog",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 43185,
+    "bytes": 116384,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "datadog",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 407694,
+    "bytes": 904993,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "datadog",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 193404,
+    "bytes": 442653,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "datadog",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 1010226,
+    "bytes": 2199366,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "otel",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 43185,
+    "bytes": 9513,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "otel",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 407694,
+    "bytes": 55425,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "otel",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 193404,
+    "bytes": 22349,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "otel",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 1010226,
+    "bytes": 243643,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "baml-nocache",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 411908,
+    "bytes": 748561,
+    "upload": 738000,
+    "billed": 847801
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "baml-nocache",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 43290,
+    "bytes": 137716,
+    "upload": 135093,
+    "billed": 90436
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "baml-nocache",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 194551,
+    "bytes": 375997,
+    "upload": 369799,
+    "billed": 402984
+   },
+   {
+    "variant": "bigsystem",
+    "stack": "baml-nocache",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 1024580,
+    "bytes": 1798245,
+    "upload": 1778406,
+    "billed": 2088399
+   },
+   {
+    "variant": "base",
+    "stack": "baml",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 60201,
+    "bytes": 259599,
+    "upload": 250990,
+    "billed": 137137
+   },
+   {
+    "variant": "base",
+    "stack": "baml",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 520396,
+    "bytes": 1418013,
+    "upload": 1387724,
+    "billed": 1090875
+   },
+   {
+    "variant": "base",
+    "stack": "baml",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 9696,
+    "bytes": 103665,
+    "upload": 100554,
+    "billed": 23990
+   },
+   {
+    "variant": "base",
+    "stack": "baml",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 159601,
+    "bytes": 533684,
+    "upload": 518545,
+    "billed": 348746
+   },
+   {
+    "variant": "base",
+    "stack": "logfire",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 58986,
+    "bytes": 48071,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "logfire",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 504833,
+    "bytes": 276187,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "logfire",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 9593,
+    "bytes": 12765,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "logfire",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 155517,
+    "bytes": 106523,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "datadog",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 58986,
+    "bytes": 154147,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "datadog",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 504833,
+    "bytes": 1159653,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "datadog",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 9593,
+    "bytes": 31502,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "datadog",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 155517,
+    "bytes": 378638,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "otel",
+    "turns": 5,
+    "model_calls": 8,
+    "prompt_bytes": 58986,
+    "bytes": 9923,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "otel",
+    "turns": 20,
+    "model_calls": 30,
+    "prompt_bytes": 504833,
+    "bytes": 60061,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "otel",
+    "turns": 1,
+    "model_calls": 2,
+    "prompt_bytes": 9593,
+    "bytes": 3619,
+    "upload": null,
+    "billed": null
+   },
+   {
+    "variant": "base",
+    "stack": "otel",
+    "turns": 10,
+    "model_calls": 15,
+    "prompt_bytes": 155517,
+    "bytes": 25467,
+    "upload": null,
+    "billed": null
+   }
+  ],
+  "crossprocess": [
+   {
+    "process": 1,
+    "upload": 706176,
+    "dispositions": {
+     "inline_with_recording": 23,
+     "member_of_batch": 3
+    },
+    "already_available": 0,
+    "billed": 724370
+   },
+   {
+    "process": 2,
+    "upload": 706169,
+    "dispositions": {
+     "inline_with_recording": 23,
+     "member_of_batch": 3
+    },
+    "already_available": 0,
+    "billed": 724372
+   }
+  ]
+ }
 }

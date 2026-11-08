@@ -1,0 +1,22 @@
+[
+ {
+  "process": 1,
+  "upload": 706176,
+  "dispositions": {
+   "inline_with_recording": 23,
+   "member_of_batch": 3
+  },
+  "already_available": 0,
+  "billed": 724370
+ },
+ {
+  "process": 2,
+  "upload": 706169,
+  "dispositions": {
+   "inline_with_recording": 23,
+   "member_of_batch": 3
+  },
+  "already_available": 0,
+  "billed": 724372
+ }
+]

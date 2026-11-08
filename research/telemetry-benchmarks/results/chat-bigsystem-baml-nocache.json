@@ -1,0 +1,336 @@
+[
+ {
+  "stack": "baml",
+  "turns": 10,
+  "hosted": false,
+  "utc": "2026-11-08T23:35:43.875403+00:00",
+  "model_delay": 0.0,
+  "variant": "bigsystem",
+  "telemetry": {
+   "requests": 13,
+   "telemetry_bytes": 748561,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 10447,
+    "upload": 738000
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "dispositions": {
+    "inline_with_recording": 64,
+    "member_of_batch": 41
+   },
+   "planned_uploads": 8,
+   "puts": 8,
+   "billing": {
+    "spans": 56,
+    "logical_bytes": 847801,
+    "capture_references": 90,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1bd8490247a71ac086b6cf4320615"
+    ],
+    "events": {
+     "thread_announcement": 6,
+     "thread_completion": 6,
+     "function_announcement": 35,
+     "network_announcement": 15,
+     "network_event": 45,
+     "network_completion": 15,
+     "function_completion": 35
+    }
+   },
+   "spans": 56
+  },
+  "model_http": {
+   "requests": 15,
+   "sent": 411908,
+   "per_call_sent": [
+    21296,
+    21990,
+    22980,
+    23976,
+    24670,
+    25660,
+    26662,
+    27356,
+    28357,
+    29358,
+    30052,
+    31042,
+    32043,
+    32737,
+    33729
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": 15
+ },
+ {
+  "stack": "baml",
+  "turns": 1,
+  "hosted": false,
+  "utc": "2026-11-08T23:35:44.495278+00:00",
+  "model_delay": 0.0,
+  "variant": "bigsystem",
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 137716,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 2509,
+    "upload": 135093
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "dispositions": {
+    "inline_with_recording": 22,
+    "member_of_batch": 3
+   },
+   "planned_uploads": 2,
+   "puts": 2,
+   "billing": {
+    "spans": 13,
+    "logical_bytes": 90436,
+    "capture_references": 14,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1bd8492937c3fb88f27aa8185cca1"
+    ],
+    "events": {
+     "thread_announcement": 6,
+     "thread_completion": 6,
+     "function_announcement": 5,
+     "network_announcement": 2,
+     "network_event": 6,
+     "network_completion": 2,
+     "function_completion": 5
+    }
+   },
+   "spans": 13
+  },
+  "model_http": {
+   "requests": 2,
+   "sent": 43290,
+   "per_call_sent": [
+    21298,
+    21992
+   ],
+   "statuses": [
+    200,
+    200
+   ]
+  },
+  "baml_calls": 2
+ },
+ {
+  "stack": "baml",
+  "turns": 5,
+  "hosted": false,
+  "utc": "2026-11-08T23:35:45.120125+00:00",
+  "model_delay": 0.0,
+  "variant": "bigsystem",
+  "telemetry": {
+   "requests": 7,
+   "telemetry_bytes": 375997,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 6084,
+    "upload": 369799
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "dispositions": {
+    "inline_with_recording": 42,
+    "member_of_batch": 21
+   },
+   "planned_uploads": 4,
+   "puts": 4,
+   "billing": {
+    "spans": 33,
+    "logical_bytes": 402984,
+    "capture_references": 49,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1bd849509702683a448a37b311dc5"
+    ],
+    "events": {
+     "thread_announcement": 6,
+     "thread_completion": 6,
+     "function_announcement": 19,
+     "network_announcement": 8,
+     "network_event": 24,
+     "network_completion": 8,
+     "function_completion": 19
+    }
+   },
+   "spans": 33
+  },
+  "model_http": {
+   "requests": 8,
+   "sent": 194551,
+   "per_call_sent": [
+    21297,
+    21991,
+    22983,
+    23972,
+    24666,
+    25654,
+    26647,
+    27341
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": 8
+ },
+ {
+  "stack": "baml",
+  "turns": 20,
+  "hosted": false,
+  "utc": "2026-11-08T23:35:45.752418+00:00",
+  "model_delay": 0.0,
+  "variant": "bigsystem",
+  "telemetry": {
+   "requests": 25,
+   "telemetry_bytes": 1798245,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 19725,
+    "upload": 1778406
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "dispositions": {
+    "inline_with_recording": 117,
+    "member_of_batch": 82
+   },
+   "planned_uploads": 17,
+   "puts": 17,
+   "billing": {
+    "spans": 106,
+    "logical_bytes": 2088399,
+    "capture_references": 178,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1bd849781763f8b5bc468232149be"
+    ],
+    "events": {
+     "thread_announcement": 6,
+     "thread_completion": 6,
+     "function_announcement": 70,
+     "network_announcement": 30,
+     "network_event": 90,
+     "network_completion": 30,
+     "function_completion": 70
+    }
+   },
+   "spans": 106
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 1024580,
+   "per_call_sent": [
+    21296,
+    21990,
+    22984,
+    23974,
+    24668,
+    25657,
+    26647,
+    27341,
+    28345,
+    29338,
+    30032,
+    31022,
+    32012,
+    32706,
+    33699,
+    34695,
+    35389,
+    36384,
+    37383,
+    38077,
+    39069,
+    40067,
+    40761,
+    41755,
+    42748,
+    43442,
+    44435,
+    45428,
+    46122,
+    47114
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": 30
+ }
+]

@@ -120,11 +120,30 @@ def chat():
     return rows
 
 
+def chat_variants():
+    """Chat with a photo or a 20 KB system prompt (1 s model; BAML on the real BCS), plus the base runs."""
+    rows = []
+    for v in ("photo", "bigsystem"):
+        for st in ("baml", "logfire", "datadog", "otel", "baml-nocache"):
+            for r in load(f"chat-{v}-{st}.json"):
+                if r.get("error"):
+                    continue
+                t = r["telemetry"]
+                rows.append({"variant": v, "stack": st, "turns": r["turns"], "model_calls": r["model_http"]["requests"],
+                             "prompt_bytes": r["model_http"]["sent"], "bytes": t["telemetry_bytes"],
+                             "upload": (t.get("by_operation") or {}).get("upload"),
+                             "billed": (t.get("billing") or {}).get("logical_bytes")})
+    for r in chat():
+        if r["stack"] in ("baml", "logfire", "datadog", "otel") and r["turns"] in (1, 5, 10, 20):
+            rows.append({"variant": "base", **{k: r[k] for k in ("stack", "turns", "model_calls", "prompt_bytes", "bytes", "upload", "billed")}})
+    return {"rows": rows, "crossprocess": load("chat-photo-crossprocess.json")}
+
+
 def main():
     data = {
         "wire": wire(), "overhead": overhead(), "crash": crash(), "searchable": searchable(),
         "loc": load("loc.json"), "scrub": load("scrub.json"), "pipeline": load("pipeline.json"),
-        "anatomy": anatomy(), "wire_english": wire_english(), "chat": chat(),
+        "anatomy": anatomy(), "wire_english": wire_english(), "chat": chat(), "chat_variants": chat_variants(),
     }
     out = ROOT / "site" / "data.json"
     out.parent.mkdir(exist_ok=True)

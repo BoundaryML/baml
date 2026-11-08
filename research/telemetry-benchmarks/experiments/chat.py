@@ -22,19 +22,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "lab"))
 sys.path.insert(0, str(ROOT / "env" / "proto"))
 sys.path.insert(0, str(ROOT / "experiments"))
-from chat_script import SYSTEM, reply_rule, users  # noqa: E402
+from chat_script import SYSTEM, SYSTEM_BIG, photo_b64, reply_rule, users  # noqa: E402
 from logical_usage import Meter  # noqa: E402
 from servers import bcs_relay, mock_llm, relay  # noqa: E402
 from wire import BAML, SECRETS, run_python, summarize_bcs, summarize_otlp  # noqa: E402
 
 
-def run_baml(args_json, model, bcs):
+def run_baml(args_json, model, bcs, function="Converse"):
     env = {"PATH": "/usr/bin:/bin", "HOME": str(Path.home()), "MODEL_BASE_URL": model.url + "/v1",
            "MODEL_API_KEY": "fixture", "BAML_TELEMETRY": "medium",
            "BOUNDARY_API_KEY": bcs.handle, "BOUNDARY_API_URL": bcs.url}
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         f.write(args_json)
-    cmd = [BAML, "--agent-skill-check", "off", "run", "Converse", "--output-format", "json", "--log", "off",
+    cmd = [BAML, "--agent-skill-check", "off", "run", function, "--output-format", "json", "--log", "off",
            "--", "--json-args", "@" + f.name]
     proc = subprocess.run(cmd, env=env, cwd=ROOT / "apps" / "baml_chat", capture_output=True, text=True, timeout=600)
     Path(f.name).unlink()
@@ -48,6 +48,8 @@ def main():
     p.add_argument("--stacks", nargs="+", default=["baml", "logfire", "datadog", "otel"])
     p.add_argument("--turns", nargs="+", type=int, default=[1, 2, 3, 5, 8, 10, 15, 20, 30, 40, 50])
     p.add_argument("--local", action="store_true", help="answer BCS uploads locally instead of forwarding")
+    p.add_argument("--variant", default="base", choices=["base", "photo", "bigsystem"],
+                   help="photo: a 150 KB image attached before turn 1; bigsystem: a 20 KB system prompt")
     p.add_argument("--model-delay", type=float, default=0.0,
                    help="seconds the mock model waits per call; a real model takes about a second")
     p.add_argument("--seed", type=int, default=int(time.time()))
@@ -60,14 +62,21 @@ def main():
     print(f"{len(plan)} runs", flush=True)
     for i, (stack, turns) in enumerate(plan):
         # A fresh user script per run, so hosted BCS can't reuse an earlier run's uploads.
-        script = {"system": SYSTEM, "users": users(turns, seed=args.seed * 100 + i)}
+        script = {"system": SYSTEM_BIG if args.variant == "bigsystem" else SYSTEM,
+                  "users": users(turns, seed=args.seed * 100 + i)}
+        if args.variant == "photo":
+            script["photo"] = photo_b64(args.seed * 100 + i)
         model, tele, bcs, meter = mock_llm(rule=reply_rule, delay_s=args.model_delay), None, None, None
         started = datetime.now(timezone.utc).isoformat()
         try:
             if stack == "baml":
                 meter = Meter()
                 bcs = bcs_relay(None if args.local else SECRETS["BOUNDARY_API_KEY"], meter=meter)
-                calls = run_baml(json.dumps(script), model, bcs)
+                if args.variant == "photo":
+                    baml_args = {"system": script["system"], "photo_b64": script["photo"], "users": script["users"]}
+                    calls = run_baml(json.dumps(baml_args), model, bcs, "ConversePhoto")
+                else:
+                    calls = run_baml(json.dumps(script), model, bcs)
                 time.sleep(0.2)
                 telemetry = summarize_bcs(bcs.events, meter)
             else:
@@ -86,7 +95,7 @@ def main():
                 if server:
                     server.shutdown()
         reqs = model.requests
-        row = dict(stack=stack, turns=turns, hosted=not args.local and stack == "baml", utc=started, model_delay=args.model_delay, telemetry=telemetry,
+        row = dict(stack=stack, turns=turns, hosted=not args.local and stack == "baml", utc=started, model_delay=args.model_delay, variant=args.variant, telemetry=telemetry,
                    model_http={"requests": len(reqs), "sent": sum(r["sent"] for r in reqs),
                                "per_call_sent": [r["sent"] for r in reqs], "statuses": [r["status"] for r in reqs]},
                    baml_calls=calls)

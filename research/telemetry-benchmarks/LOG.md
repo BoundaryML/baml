@@ -332,3 +332,26 @@ Per million conversations, list prices:
 Logfire records: one per conversation, two per model call, one per lookup (the OTel span count, 176 at 50 turns, matches). BCS overtakes Datadog's per-call price only past about 50 turns; Logfire stays 20–65× cheaper. `http_bodies = false` would remove the second copy and roughly halve the BCS figures (E11 measured 38–50% on single calls); not measured for chat.
 
 Billed bytes sent to BCS by this experiment (test project): 14.3 MB for the 1 s sweep, plus the instant-model sweep (11 runs, two of them partly lost) and three probe runs of 40–50 turns.
+
+## 2026-11-08: E16 when BCS's cache helps: a photo or a big system prompt in the chat (`chat.py --variant`, `results/chat-{photo,bigsystem}-*.json`)
+
+Question (from the user): isn't BCS supposed to cache, and what about images? Two variants of the E15 chatbot, 1/5/10/20 turns, 1 s model delay, BAML on the real BCS:
+
+- `photo`: a 150 KB incompressible stand-in for a JPEG (200 KB as base64) attached before the first message (`RespondWithPhoto`, `image.from_base64`; Python sends an `image_url` data URI). It stays in the conversation, so every call resends it.
+- `bigsystem`: the system prompt plus a 16.5 KB policy manual (20 KB total), over BCS's 16 KiB string threshold.
+
+BAML merges consecutive user messages, so the photo and the first question arrive as one message; the mock rule now searches the whole last message for the order question.
+
+One 20-turn conversation (30 model calls):
+
+| variant | prompts | BCS billed | BCS uploaded | uploaded / billed | Datadog | Logfire | OTel |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| plain chat | 520 KB | 1.09 MB | 1.39 MB | 127% | 1.16 MB | 276 KB | 60 KB |
+| 20 KB system prompt | 1.03 MB | 2.09 MB | 1.80 MB | 86% | 2.20 MB | 1.05 MB | 244 KB |
+| photo | 6.53 MB | 11.60 MB | 7.61 MB | 66% | 13.37 MB | 19.28 MB | 4.92 MB |
+
+- **The cache works for large pieces, inside one process.** A captured value is cut into its own content-addressed blob when a string reaches 16 KiB (`SPLIT_LEAF_BYTES`) or a unit reaches 64 KiB (`SPLIT_UNIT_BYTES`). Each call's `Respond` input is a new root blob (the history changed), but the photo and the big system prompt are child blobs that the client uploads once and then only references. A local run with nothing cached on the server uploaded the same bytes (7.61 MB vs 7.61 MB at 20 turns), so the dedup is done by the client within the process, not by the server.
+- **It saves upload bandwidth, not money.** Billed bytes are each root's logical size including its children, so the photo is billed in all 30 inputs. The raw HTTP request body also embeds the photo as base64 text and is a different string every call, so it is uploaded and billed every call. Net: about 2 billed copies and 1 uploaded copy of the photo per call.
+- **No reuse across processes.** Two separate processes sent the identical photo (`results/chat-photo-crossprocess.json`): both uploaded 706 KB, and BCS reported 0 objects already stored. All blobs went as `inline_with_recording` or `member_of_batch`; none were offered for server-side reuse.
+- **Other platforms with the photo:** Datadog sends it uncompressed on the workflow and LLM spans (2.0× prompts). Logfire sends it about 3 times (function argument, model span, pending placeholders) and base64 of compressed data barely gzips: 19.3 MB for one conversation, far past its 5 KB-per-span guideline. These went to the local relay, so we don't know whether Logfire or Datadog would store, truncate or reject spans this large. OTel sends one gzipped copy (0.75×).
+- Per million 20-turn conversations with a photo, list prices: BCS 11,600 GB = $46,394; Logfire 71M records = $142; Datadog 30M LLM spans = $10,500.

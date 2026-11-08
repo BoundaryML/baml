@@ -1,0 +1,220 @@
+[
+ {
+  "stack": "logfire",
+  "turns": 1,
+  "hosted": false,
+  "utc": "2026-11-08T23:34:14.836105+00:00",
+  "model_delay": 1.0,
+  "variant": "bigsystem",
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 40371,
+   "decoded_bytes": 223900,
+   "spans": 11,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 2,
+   "sent": 43185,
+   "per_call_sent": [
+    21247,
+    21938
+   ],
+   "statuses": [
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "logfire",
+  "turns": 10,
+  "hosted": false,
+  "utc": "2026-11-08T23:34:18.775180+00:00",
+  "model_delay": 1.0,
+  "variant": "bigsystem",
+  "telemetry": {
+   "requests": 16,
+   "telemetry_bytes": 284534,
+   "decoded_bytes": 1745320,
+   "spans": 67,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 15,
+   "sent": 407694,
+   "per_call_sent": [
+    21248,
+    21939,
+    22884,
+    23829,
+    24520,
+    25463,
+    26406,
+    27097,
+    28038,
+    28980,
+    29671,
+    30615,
+    31558,
+    32249,
+    33197
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "logfire",
+  "turns": 5,
+  "hosted": false,
+  "utc": "2026-11-08T23:34:35.718980+00:00",
+  "model_delay": 1.0,
+  "variant": "bigsystem",
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 119715,
+   "decoded_bytes": 852042,
+   "spans": 37,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 8,
+   "sent": 193404,
+   "per_call_sent": [
+    21248,
+    21939,
+    22884,
+    23830,
+    24521,
+    25463,
+    26414,
+    27105
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "logfire",
+  "turns": 20,
+  "hosted": false,
+  "utc": "2026-11-08T23:34:45.651576+00:00",
+  "model_delay": 1.0,
+  "variant": "bigsystem",
+  "telemetry": {
+   "requests": 31,
+   "telemetry_bytes": 1050554,
+   "decoded_bytes": 4251130,
+   "spans": 132,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 1010226,
+   "per_call_sent": [
+    21249,
+    21940,
+    22883,
+    23840,
+    24531,
+    25486,
+    26431,
+    27122,
+    28064,
+    29012,
+    29703,
+    30646,
+    31603,
+    32294,
+    33240,
+    34192,
+    34883,
+    35830,
+    36787,
+    37478,
+    38429,
+    39373,
+    40064,
+    41009,
+    41957,
+    42648,
+    43592,
+    44538,
+    45229,
+    46173
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ }
+]

@@ -98,3 +98,40 @@ function Converse(system: string, users: string[]) -> int {
     }
     calls
 }
+
+// The same bot when the customer attaches a photo before the first message.
+// The photo stays in the conversation, so every call resends it.
+function RespondWithPhoto(system: string, photo: image, history: Msg[]) -> Action {
+    client: Model
+    prompt: `
+        ${role("system")}
+        ${system}
+        ${ctx.output_format()}
+        ${role("user")}
+        Here is a photo of the damaged item from my order: ${photo}
+        ${for (let m in history)}
+            ${role(m.role)}
+            ${m.content}
+        ${endfor}
+    `
+}
+
+function ConversePhoto(system: string, photo_b64: string, users: string[]) -> int {
+    let photo = image.from_base64(photo_b64, "image/jpeg");
+    let history: Msg[] = [];
+    let calls = 0;
+    for (let u in users) {
+        history.push(Msg { role: "user", content: u });
+        let action = RespondWithPhoto(system, photo, history);
+        calls += 1;
+        if (action.kind == "tool") {
+            history.push(Msg { role: "assistant", content: `Looking up order ${action.text}.` });
+            let order = LookupOrder(action.text, $trace = trace.span(inputs = true, output = true));
+            history.push(Msg { role: "user", content: `Tool lookup_order returned: ${order}` });
+            action = RespondWithPhoto(system, photo, history);
+            calls += 1;
+        }
+        history.push(Msg { role: "assistant", content: action.text });
+    }
+    calls
+}

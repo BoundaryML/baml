@@ -53,7 +53,7 @@ p { margin: 0; }
 .lede { font-size: 1.15rem; color: var(--ink-2); max-width: 40rem; }
 .eyebrow { font: 600 0.72rem/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
 section { display: grid; gap: 1.1rem; padding-block: 3rem; border-top: 1px solid var(--rule); }
-header { display: grid; gap: 1.2rem; padding-bottom: 2rem; }
+header { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; padding-bottom: 2rem; }
 .muted { color: var(--ink-3); font-size: 0.9rem; }
 code, pre { font-family: var(--f-mono); font-size: 0.82rem; }
 p code, li code, td code { background: var(--code-bg); padding: 0.05em 0.35em; border-radius: 4px; }
@@ -275,6 +275,13 @@ logfire.instrument_openai()
       <p class="muted" id="chatBatchNote"></p>
     </div>
   </div>
+
+  <h3>When BCS's cache does help: images and big prompts</h3>
+  <p class="col">BCS's cache works on large pieces. A string of 16 KiB or more, such as an image's data or a long document, becomes its own stored piece, and the BAML client uploads each piece only once per process. We reran the 20-turn chat twice more: once with a 150 KB photo attached before the first message, which stays in the conversation, and once with a 20 KB system prompt.</p>
+  <div class="chart" id="chatPieces"></div>
+  <div class="tabs" role="group" aria-label="Chat variant" id="chatVarTabs"></div>
+  <div class="chart" id="chatVar"></div>
+  <p class="muted col" id="chatVarNote"></p>
   <div class="callout col">
     <h3>A fast process can exit before its traces are uploaded</h3>
     <p>Our first run used a model that answered instantly, so a 50-turn conversation finished in about a second with megabytes still queued. The BAML CLI waits only 5 seconds for uploads at exit (<code>btel_bcs</code>'s delivery <code>shutdown_timeout</code>, not changed by <code>--shutdown-timeout</code>). It printed <code>ShutdownTimeout</code>, and 15 of 44 uploads never reached BCS. With a realistic 1-second model, uploads kept pace and nothing was lost. Batch jobs, replays and tests that make many fast calls are the ones at risk.</p>
@@ -623,7 +630,7 @@ const BCS_CHAT = "baml";
 
 (function chatCache() {
   const h = chatAt(BCS_CHAT, 50);
-  let html = `<p>BCS stores captured values by content hash and skips uploading a value it already has. But it only splits a capture into separately stored pieces when a piece reaches 64 KiB, or 16 KiB for a single string. A chat message is under 1 KB, so each call's history is one new piece. It never matches anything stored before.</p>`;
+  let html = `<p>BCS stores captured values by content hash and skips uploading a value it already has. But it only splits a capture into separately stored pieces when a piece reaches 64 KiB, or 16 KiB for a single string. A chat message is under 1 KB, so each call's history is one new piece and nothing is reused. Large pieces are another story: see images below.</p>`;
   const rows = [["Prompts to the model", h.prompt_bytes, "--ink-3"], ["Billed by BCS", h.billed, "--s-baml"], ["Uploaded to BCS", h.upload, "--s-baml"]];
   const max = Math.max(...rows.map(r => r[1]));
   html += `<div class="bars">` + rows.map(([l, v, c]) => `<div class="bar"><span>${l}</span><div class="track"><div class="fill" style="width:${(v / max * 100).toFixed(1)}%;background:${css(c)}"></div></div><span class="amt">${fmtB(v)}</span></div>`).join("") + `</div>`;
@@ -651,6 +658,52 @@ const BCS_CHAT = "baml";
   tabs.addEventListener("click", e => { const x = e.target.closest("button"); if (!x) return;
     tabs.querySelectorAll("button").forEach(y => y.setAttribute("aria-pressed", y === x)); draw(+x.dataset.t); });
   draw(50);
+})();
+
+(function chatVariants() {
+  const V = D.chat_variants, row = (v, st, t = 20) => V.rows.find(r => r.variant === v && r.stack === st && r.turns === t);
+  // Mechanism: three calls of the photo chat.
+  const W = 720, H = 262;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="How BCS stores the photo chat: one shared photo piece, new inputs and new HTTP bodies each call">`;
+  s += `<text x="90" y="16" class="val">Function input</text><text x="90" y="30">new every call</text>`;
+  s += `<text x="250" y="16" class="val">Shared piece</text><text x="250" y="30">uploaded once</text>`;
+  s += `<text x="420" y="16" class="val">Raw HTTP request</text><text x="420" y="30">new every call, photo inside as base64</text>`;
+  const ys = [56, 116, 176];
+  ys.forEach((y, i) => {
+    const w = 56 + i * 12;
+    s += `<text x="80" y="${y + 17}" text-anchor="end">call ${i + 1}</text>`;
+    s += `<rect x="90" y="${y}" width="${w}" height="26" rx="3" fill="${css("--s-baml")}"/><text x="${90 + w / 2}" y="${y + 17}" text-anchor="middle" style="fill:var(--bg);font-size:10px">history</text>`;
+    s += `<path d="M${90 + w} ${y + 13} C ${200} ${y + 13}, ${210} 129, 250 129" fill="none" stroke="${css("--s-baml")}" stroke-width="1.5"/>`;
+    const bw = 236 + i * 12;
+    s += `<rect x="420" y="${y}" width="${bw}" height="26" rx="3" fill="${css("--s-baml")}" opacity="0.55"/>`;
+    s += `<rect x="${420 + bw - 200}" y="${y + 4}" width="190" height="18" rx="2" fill="none" stroke="${css("--bg")}" stroke-dasharray="3 2"/><text x="${420 + bw - 105}" y="${y + 17}" text-anchor="middle" style="fill:var(--bg);font-size:10px">photo, 200 KB again</text>`;
+  });
+  s += `<rect x="250" y="112" width="140" height="34" rx="4" fill="${css("--s-baml")}"/><text x="320" y="133" text-anchor="middle" style="fill:var(--bg);font-weight:600">photo · 200 KB</text>`;
+  s += `<text x="90" y="${H - 26}">Billed: the photo counts in every input and every request, 2 copies per call.</text><text x="90" y="${H - 10}">Uploaded: 1 copy per call inside the request, plus the shared piece once.</text>`;
+  document.getElementById("chatPieces").innerHTML = s + "</svg>";
+
+  const tabs = document.getElementById("chatVarTabs");
+  const vs = [["base", "Plain chat"], ["bigsystem", "20 KB system prompt"], ["photo", "Photo in the chat"]];
+  tabs.innerHTML = vs.map(([v, l], i) => `<button type="button" aria-pressed="${i === 2}" data-v="${v}">${l}</button>`).join("");
+  function draw(v) {
+    const b = row(v, "baml"), lf = row(v, "logfire"), dd = row(v, "datadog"), ot = row(v, "otel");
+    const rows = [
+      {label: "Prompts sent to the model", value: b.prompt_bytes, color: "--rule", text: fmtB(b.prompt_bytes)},
+      {label: "BCS, billed", value: b.billed, color: "--s-baml", text: fmtB(b.billed)},
+      {label: "BCS, uploaded", value: b.upload, color: "--s-baml", text: fmtB(b.upload), tip: `BCS upload bodies: ${fmtB(b.upload)}, ${Math.round(b.upload / b.billed * 100)}% of billed bytes`},
+      {label: "Datadog, network", value: dd.bytes, color: "--s-datadog", text: fmtB(dd.bytes)},
+      {label: "Logfire, network", value: lf.bytes, color: "--s-logfire", text: fmtB(lf.bytes)},
+      {label: "OpenTelemetry, network", value: ot.bytes, color: "--s-otel", text: fmtB(ot.bytes)},
+    ];
+    hbars(document.getElementById("chatVar"), rows, {labelW: 220, valW: 90, rowH: 28});
+    const cp = V.crossprocess;
+    document.getElementById("chatVarNote").textContent = `One 20-turn conversation (30 model calls). BCS uploaded ${Math.round(b.upload / b.billed * 100)}% of what it billed here. ` +
+      (v === "photo" ? `The cache saves upload bandwidth, not money: billing counts the photo in every call. Logfire sent the most, because the photo is in the function's arguments, the model span and pending placeholders. ` : v === "bigsystem" ? `The 20 KB system prompt is one shared piece, uploaded once and billed 30 times. ` : `Without large pieces nothing is shared, and the upload exceeds the bill by its encoding overhead. `) +
+      (cp.length === 2 ? `The cache does not reach across processes: a second process with the identical photo uploaded ${fmtB(cp[1].upload)} again, and BCS reported ${cp[1].already_available} objects already stored.` : "");
+  }
+  tabs.addEventListener("click", e => { const x = e.target.closest("button"); if (!x) return;
+    tabs.querySelectorAll("button").forEach(y => y.setAttribute("aria-pressed", y === x)); draw(x.dataset.v); });
+  draw("photo");
 })();
 
 // ---- Logfire deep dive

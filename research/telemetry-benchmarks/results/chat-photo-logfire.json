@@ -1,0 +1,220 @@
+[
+ {
+  "stack": "logfire",
+  "turns": 1,
+  "hosted": false,
+  "utc": "2026-11-08T23:34:14.836069+00:00",
+  "model_delay": 1.0,
+  "variant": "photo",
+  "telemetry": {
+   "requests": 4,
+   "telemetry_bytes": 1548318,
+   "decoded_bytes": 2058230,
+   "spans": 11,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 2,
+   "sent": 409929,
+   "per_call_sent": [
+    204619,
+    205310
+   ],
+   "statuses": [
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "logfire",
+  "turns": 10,
+  "hosted": false,
+  "utc": "2026-11-08T23:34:19.296268+00:00",
+  "model_delay": 1.0,
+  "variant": "photo",
+  "telemetry": {
+   "requests": 21,
+   "telemetry_bytes": 9700256,
+   "decoded_bytes": 13120900,
+   "spans": 67,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 15,
+   "sent": 3158274,
+   "per_call_sent": [
+    204620,
+    205311,
+    206256,
+    207201,
+    207892,
+    208835,
+    209778,
+    210469,
+    211410,
+    212352,
+    213043,
+    213987,
+    214930,
+    215621,
+    216569
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "logfire",
+  "turns": 5,
+  "hosted": false,
+  "utc": "2026-11-08T23:34:37.193356+00:00",
+  "model_delay": 1.0,
+  "variant": "photo",
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 5291503,
+   "decoded_bytes": 7088460,
+   "spans": 37,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 8,
+   "sent": 1660380,
+   "per_call_sent": [
+    204620,
+    205311,
+    206256,
+    207202,
+    207893,
+    208835,
+    209786,
+    210477
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "logfire",
+  "turns": 20,
+  "hosted": false,
+  "utc": "2026-11-08T23:34:47.622877+00:00",
+  "model_delay": 1.0,
+  "variant": "photo",
+  "telemetry": {
+   "requests": 42,
+   "telemetry_bytes": 19278376,
+   "decoded_bytes": 26636060,
+   "spans": 132,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 30,
+   "sent": 6511386,
+   "per_call_sent": [
+    204621,
+    205312,
+    206255,
+    207212,
+    207903,
+    208858,
+    209803,
+    210494,
+    211436,
+    212384,
+    213075,
+    214018,
+    214975,
+    215666,
+    216612,
+    217564,
+    218255,
+    219202,
+    220159,
+    220850,
+    221801,
+    222745,
+    223436,
+    224381,
+    225329,
+    226020,
+    226964,
+    227910,
+    228601,
+    229545
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ }
+]

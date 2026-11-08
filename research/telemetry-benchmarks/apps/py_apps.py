@@ -144,23 +144,28 @@ def lookup_order(order_id):
 
 
 @trace_app
-def respond(system, history):
-    messages = [{"role": "system", "content": f"{system}\n{ORDER_FORMAT}"}] + history
+def respond(system, history, photo=None):
+    messages = [{"role": "system", "content": f"{system}\n{ORDER_FORMAT}"}]
+    if photo:
+        messages.append({"role": "user", "content": [
+            {"type": "text", "text": "Here is a photo of the damaged item from my order:"},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{photo}"}}]})
+    messages += history
     reply = model.chat.completions.create(model=MODEL, messages=messages)
     return json.loads(reply.choices[0].message.content)
 
 
 @trace_app
-def converse(system, users):
+def converse(system, users, photo=None):
     history, calls = [], 0
     for u in users:
         history.append({"role": "user", "content": u})
-        action = respond(system, list(history))
+        action = respond(system, list(history), photo)
         calls += 1
         if action["kind"] == "tool":
             history.append({"role": "assistant", "content": f"Looking up order {action['text']}."})
             history.append({"role": "user", "content": f"Tool lookup_order returned: {json.dumps(lookup_order(action['text']))}"})
-            action = respond(system, list(history))
+            action = respond(system, list(history), photo)
             calls += 1
         history.append({"role": "assistant", "content": action["text"]})
     return calls
