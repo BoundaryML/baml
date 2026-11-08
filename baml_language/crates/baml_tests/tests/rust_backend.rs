@@ -1010,7 +1010,7 @@ fn rt_source_bytes_and_diagnostics() {
         let expected = match name {
             "trees" => "dec2f2e2325469feaa8916000c6a7d9b8bdca1d03cf7adcd764d1ffa06041c60",
             "richards" => "e80f92b0fc86e03c9bed01cee05d7116afd9940604ebdd5ec5a7ad6b32505981",
-            "agent" => "91373999fbb3a9e8bbd5153f584e531580f709ccafcb99ea12f15339c2ebbec2",
+            "agent" => "4d14ff5a419430b37231d4daeab83932ac339e1933e249e7861a93916aa03442",
             _ => "",
         };
         if expected.is_empty() {

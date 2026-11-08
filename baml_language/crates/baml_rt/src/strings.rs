@@ -293,7 +293,35 @@ impl Str {
     }
     /// Flatten once, caching only a precisely traced managed pointer. Byte
     /// borrows remain valid across later allocations: this heap never moves.
+    #[inline(always)]
     pub fn try_as_str<'a>(self, cx: &'a Cx) -> R<&'a str> {
+        unsafe {
+            let object = self.object();
+            if (*object).header.desc == 0 {
+                let data = match (*object).header.aux {
+                    FLAT => Some(self.0 + BASE),
+                    VIEW => Some((*object).left + BASE + self.offset()),
+                    _ => None,
+                };
+                if let Some(data) = data {
+                    return Ok(std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+                        data as *const u8,
+                        (*object).bytes,
+                    )));
+                }
+            }
+            if let Some(flat) = self.flat_cache() {
+                return Ok(std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+                    (flat as *const u8).add(BASE),
+                    self.byte_len(),
+                )));
+            }
+        }
+        self.flattened_str(cx)
+    }
+    #[cold]
+    #[inline(never)]
+    fn flattened_str<'a>(self, cx: &'a Cx) -> R<&'a str> {
         unsafe {
             let flat = if self.append() {
                 match self.flat_cache() {
@@ -502,6 +530,26 @@ pub fn concat(cx: &mut Cx, values: &[Str]) -> R<Str> {
         result = unsafe { Str::from_raw(pointer as usize) };
     }
     Ok(result)
+}
+
+/// A literal ASCII suffix needs no right-hand string lookup in an append
+/// chain. Construct its ordinary string lazily for the general concat path.
+#[inline(always)]
+pub fn append_ascii(
+    cx: &mut Cx,
+    left: Str,
+    suffix: u8,
+    literal: impl FnOnce(&mut Cx) -> R<Str>,
+) -> R<Str> {
+    assert!(suffix.is_ascii(), "compiler-checked ASCII suffix");
+    if cx.compact && left.append() {
+        let bytes = left.byte_len();
+        if bytes < APPEND_MAX {
+            return ascii_append(cx, left, bytes + 1, suffix);
+        }
+    }
+    let right = literal(cx)?;
+    concat(cx, &[left, right])
 }
 
 #[inline(always)]
@@ -1010,13 +1058,18 @@ mod tests {
             let leaf = cx.string("x")?;
             let mut text = cx.string(&"a".repeat(80))?;
             let mut alias = text;
+            let mut literal_reads = 0;
             for i in 0..160 {
-                text = concat(&mut cx, &[text, leaf])?;
+                text = append_ascii(&mut cx, text, b'x', |_| {
+                    literal_reads += 1;
+                    Ok(leaf)
+                })?;
                 if i == 79 {
                     alias = text;
                 }
                 cx.poll()?;
             }
+            assert_eq!(literal_reads, 1);
             assert!(text.append());
             assert_eq!(text.char_len(), 240);
             let expected = format!("{}{}", "a".repeat(80), "x".repeat(160));

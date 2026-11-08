@@ -124,6 +124,14 @@ impl registry::Feature for Feature {
         else {
             return None;
         };
+        let ascii_literal = match right {
+            Operand::Constant(Constant::String(text))
+                if *op == BinOp::Add && text.len() == 1 =>
+            {
+                Some(text.as_str().to_owned())
+            }
+            _ => None,
+        };
         let left = emitter.operand(left).ok()?;
         let right = emitter.operand(right).ok()?;
         if left.1 != Repr::Str && right.1 != Repr::Str {
@@ -135,6 +143,14 @@ impl registry::Feature for Feature {
             }
             emitter.string_cx.set(true);
             let (left, right) = (left.0, right.0);
+            if let Some(text) = ascii_literal {
+                let suffix = text.as_bytes()[0];
+                let index = emitter.string_literals.borrow()[&text];
+                let call = format!(
+                    "rt::strings::append_ascii(&mut string_cx,rt::strings::Str::from_raw({left}),{suffix},|cx|{{if string_literal{index}==0{{string_literal{index}=cx.string({text:?})?.as_raw();}}Ok(rt::strings::Str::from_raw(string_literal{index}))}}).map(|s|s.as_raw())"
+                );
+                return Some(Ok((emitter.fallible(&call), Repr::Str)));
+            }
             return Some(Ok((emitter.fallible(&format!("rt::strings::concat(&mut string_cx,&[rt::strings::Str::from_raw({left}),rt::strings::Str::from_raw({right})]).map(|s|s.as_raw())")), Repr::Str)));
         }
         Some((|| {
