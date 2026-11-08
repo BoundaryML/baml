@@ -157,3 +157,63 @@ pub fn null(cx: &mut Cx, reader: &mut Reader<'_>, path: &str) -> R<super::Null> 
         .map(|_| super::Null)
         .map_err(|_| crate::json::error(cx, "expected null".into(), Some(path.into())))
 }
+
+/// Reformat verified compact JSON produced by the typed map encoder. Keeping
+/// the original token bytes preserves insertion order and numeric spelling.
+pub fn pretty(cx: &mut Cx, text: Str, indent: &str) -> R<Str> {
+    if indent.is_empty() {
+        return Ok(text);
+    }
+    let read = unsafe { Cx::current() };
+    let source = text.as_str(&read).as_bytes();
+    let mut output = Vec::with_capacity(source.len());
+    let mut level = 0;
+    let mut quoted = false;
+    let mut escaped = false;
+    fn newline(output: &mut Vec<u8>, level: usize, indent: &str) {
+        output.push(b'\n');
+        for _ in 0..level {
+            output.extend_from_slice(indent.as_bytes());
+        }
+    }
+    for (i, &byte) in source.iter().enumerate() {
+        if quoted {
+            output.push(byte);
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                quoted = false;
+            }
+            continue;
+        }
+        match byte {
+            b'"' => {
+                quoted = true;
+                output.push(byte);
+            }
+            b'{' | b'[' => {
+                output.push(byte);
+                level += 1;
+                if !matches!(source.get(i + 1), Some(b'}' | b']')) {
+                    newline(&mut output, level, indent);
+                }
+            }
+            b'}' | b']' => {
+                level -= 1;
+                if i != 0 && !matches!(source[i - 1], b'{' | b'[') {
+                    newline(&mut output, level, indent);
+                }
+                output.push(byte);
+            }
+            b',' => {
+                output.push(byte);
+                newline(&mut output, level, indent);
+            }
+            b':' => output.extend_from_slice(b": "),
+            _ => output.push(byte),
+        }
+    }
+    cx.string(std::str::from_utf8(&output).expect("JSON and indent are UTF-8"))
+}

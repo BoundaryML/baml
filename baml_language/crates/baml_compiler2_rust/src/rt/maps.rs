@@ -212,11 +212,25 @@ impl Emitter<'_, '_> {
         match method {
             "length" => Ok((format!("{map}.len() as i64"), Repr::Int)),
             "clear" => Ok((format!("{{{map}.clear();0usize}}"), Repr::Null)),
-            "keys" | "values" => self.map_snapshot(
-                &map,
-                if method == "keys" { key } else { value },
-                method == "keys",
-            ),
+            "keys" | "values" => {
+                let element = if method == "keys" { key } else { value };
+                // Until the list feature carries union element metadata, do
+                // not publish a nullable-class snapshot as a non-null list.
+                if let Repr::Map(id) = repr {
+                    let declared = {
+                        let types = self.plan.map_types.borrow();
+                        if method == "keys" {
+                            types[*id].2.clone()
+                        } else {
+                            types[*id].3.clone()
+                        }
+                    };
+                    if declared != capture_codegen::capture_type(self.plan, element)? {
+                        return Err(no("map snapshot declared list element type"));
+                    }
+                }
+                self.map_snapshot(&map, element, method == "keys")
+            }
             _ => {
                 self.check_map_key(key)?;
                 let k = values.get(1).ok_or_else(|| no("map key argument"))?;

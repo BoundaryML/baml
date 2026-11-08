@@ -152,18 +152,49 @@ pub(super) fn terminator(emitter: &Emitter<'_, '_>, term: &Terminator<'_>) -> Op
         if args.len() != 4 {
             return Err(no("JSON stringify arguments"));
         }
-        if !matches!(args[1], Operand::Constant(Constant::OmittedArg))
-            || !matches!(
-                args[2],
-                Operand::Constant(Constant::OmittedArg | Constant::Int(0))
+        let omitted = |i| matches!(args[i], Operand::Constant(Constant::OmittedArg));
+        let naming = if omitted(1) {
+            "0usize".into()
+        } else {
+            emitter.coerce(emitter.operand(&args[1])?, Repr::Naming)?
+        };
+        let naming_capture: String = if omitted(1) {
+            "rt::Dyn{tag:u64::MAX,payload:0}".into()
+        } else {
+            "rt::Dyn{tag:CAPTURE_NAMING_TAG,payload:naming as u64}".into()
+        };
+        let indent = if omitted(2) {
+            String::new()
+        } else {
+            match constant(emitter.body, &args[2], 0)? {
+                Constant::Int(width) if (0..=10).contains(width) => " ".repeat(*width as usize),
+                Constant::String(value)
+                    if value.chars().count() <= 10
+                        && value.chars().all(|c| matches!(c, ' ' | '\t' | '\r' | '\n')) =>
+                {
+                    value.to_string()
+                }
+                _ => return Err(no("JSON map stringify dynamic or invalid indent")),
+            }
+        };
+        let (indent_binding, indent_capture) = if omitted(2) {
+            (String::new(), "rt::Dyn{tag:u64::MAX,payload:0}".into())
+        } else {
+            let (value, repr) = emitter.operand(&args[2])?;
+            (
+                format!("let indent_value={value};"),
+                emitter.capture_value("indent_value".into(), repr)?,
             )
-            || !matches!(
-                args[3],
-                Operand::Constant(Constant::OmittedArg | Constant::Bool(false))
+        };
+        let (omit_binding, omit_capture): (String, String) = if omitted(3) {
+            (String::new(), "rt::Dyn{tag:u64::MAX,payload:0}".into())
+        } else {
+            let value = emitter.coerce(emitter.operand(&args[3])?, Repr::Bool)?;
+            (
+                format!("let omit_value={value};"),
+                "rt::Dyn{tag:1,payload:omit_value as u64}".into(),
             )
-        {
-            return Err(no("JSON map stringify options"));
-        }
+        };
         let repr = map_argument(emitter, &args[0], 0)?;
         if !encodable(emitter.plan, repr) {
             return Err(no("JSON map value encoding"));
@@ -202,18 +233,17 @@ pub(super) fn terminator(emitter: &Emitter<'_, '_>, term: &Terminator<'_>) -> Op
             .telemetry_sites
             .borrow_mut()
             .push((Some(callee), pc, alias));
-        let indent_tag = if matches!(args[2], Operand::Constant(Constant::OmittedArg)) {
-            "u64::MAX"
+        let encoded = if indent.is_empty() {
+            format!(
+                "rt_map_json_encode_{code}(&mut rt::strings::Cx::current(),p).map(|s|s.as_raw())"
+            )
         } else {
-            "0"
-        };
-        let omit_tag = if matches!(args[3], Operand::Constant(Constant::OmittedArg)) {
-            "u64::MAX"
-        } else {
-            "1"
+            format!(
+                "rt_map_json_encode_{code}(&mut rt::strings::Cx::current(),p).and_then(|s|rt::maps::json::pretty(&mut rt::strings::Cx::current(),s,{indent:?})).map(|s|s.as_raw())"
+            )
         };
         let call = format!(
-            "{{let p={pointer};rt::telemetry::observed_captured(&O{callee},{site},||rt::telemetry::capture_arguments(&[{value},rt::Dyn{{tag:u64::MAX,payload:0}},rt::Dyn{{tag:{indent_tag},payload:0}},rt::Dyn{{tag:{omit_tag},payload:0}}]),|r:&R<usize>|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::telemetry::observed_captured(&O{alias},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:0}}]),|r:&R<bool>|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(false))?;rt_map_json_encode_{code}(&mut rt::strings::Cx::current(),p).map(|s|s.as_raw())}})}}"
+            "{{let p={pointer};let naming={naming};{indent_binding}{omit_binding}rt::telemetry::observed_captured(&O{callee},{site},||rt::telemetry::capture_arguments(&[{value},{naming_capture},{indent_capture},{omit_capture}]),|r:&R<usize>|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::telemetry::observed_captured(&O{alias},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r:&R<bool>|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;{encoded}}})}}"
         );
         emitter.assign(destination, (emitter.fallible(&call), Repr::Str))
     })())
@@ -264,4 +294,39 @@ fn decode_value(
         }
         _ => return Err(no("JSON map value specialization")),
     })
+}
+
+fn constant<'a, 'db>(
+    body: &'a MirFunctionBody<'db>,
+    operand: &'a Operand<'db>,
+    depth: usize,
+) -> Gen<&'a Constant<'db>> {
+    if depth > body.locals.len() {
+        return Err(no("JSON map stringify dynamic indent"));
+    }
+    match operand {
+        Operand::Constant(value) => Ok(value),
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+            let mut found: Option<&'a Constant<'db>> = None;
+            for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+                if let StatementKind::Assign {
+                    destination: Place::Local(dst),
+                    value,
+                } = &statement.kind
+                    && dst == local
+                {
+                    let Rvalue::Use(operand) = value else {
+                        return Err(no("JSON map stringify dynamic indent"));
+                    };
+                    let value = constant(body, operand, depth + 1)?;
+                    if found.is_some_and(|old| !matches!((old,value),(Constant::Int(a),Constant::Int(b)) if a==b) && !matches!((old,value),(Constant::String(a),Constant::String(b)) if a==b)) {
+                        return Err(no("JSON map stringify dynamic indent"));
+                    }
+                    found = Some(value);
+                }
+            }
+            found.ok_or_else(|| no("JSON map stringify dynamic indent"))
+        }
+        _ => Err(no("JSON map stringify dynamic indent")),
+    }
 }

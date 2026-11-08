@@ -1069,10 +1069,16 @@ fn rt_initializer_dependency_order_and_generic_maps() {
 
 #[test]
 fn rt_structural_union_map_keys_fail_closed() {
-    for (source, expected) in [(
-        "class Key { x: int } function main()->int { let m:map<Key?,int> = {}; m[null]=1; m.length() }",
-        "map key callbacks",
-    )] {
+    for (source, expected) in [
+        (
+            "class Key { x: int } function main()->int { let m:map<Key?,int> = {}; m[null]=1; m.length() }",
+            "map key callbacks",
+        ),
+        (
+            "class Box { x:int } function main()->int {let m:map<string,Box?> = {\"a\":Box{x:1},\"b\":null}; m.values().length()}",
+            "map snapshot declared list element type",
+        ),
+    ] {
         let db = baml_test_support::setup_multi_file_db(&[("admission.baml", source)]);
         let program = lower(&db, OptLevel::Two);
         let entry = program.rendered_callables()["user.main"].object.raw();
