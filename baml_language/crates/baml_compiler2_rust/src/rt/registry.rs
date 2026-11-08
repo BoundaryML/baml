@@ -89,6 +89,7 @@ const FEATURES: &[&dyn Feature] = &[
     &telemetry::Feature,
     &super::logging::Feature,
     &super::scalars::Feature,
+    &super::provider::Feature,
     &super::io_clock::Feature,
     &super::io::Feature,
     &loop_ranges::Feature,

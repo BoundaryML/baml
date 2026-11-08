@@ -3015,3 +3015,73 @@ mod tests {
         }
     }
 }
+
+/// Generate direct, typed calls to the native provider's heap-free methods.
+/// The compiler supplies owned arguments, never interpreter Values/Handles.
+pub fn generate_rt_provider(
+    io_builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+    requested: &std::collections::BTreeSet<String>,
+) -> Result<String, String> {
+    let classes = filter_io_class_defs(io_builtins, class_defs);
+    let names = build_class_ns_map(&classes);
+    let paths = CodegenPaths::external("rt::provider");
+    let mut functions = Vec::new();
+    for name in requested {
+        let b = io_builtins
+            .iter()
+            .find(|b| &b.path == name)
+            .ok_or_else(|| format!("native IO declaration missing: {name}"))?;
+        if !b.generics.is_empty() {
+            return Err(format!("unsupported in baml_rt: generic native IO {name}"));
+        }
+        let namespace = io_ns_key(io_package_name(b), io_namespace_name(b));
+        let trait_name = if let Some(receiver) = &b.receiver {
+            class_trait_ident(&namespace, &receiver.class_name)
+        } else {
+            ns_trait_ident(&namespace)
+        };
+        let method = format_ident!(
+            "rt_{}_{}",
+            trait_name.to_string().to_lowercase(),
+            io_method_name(b).trim_start_matches('_')
+        );
+        let stub = format_ident!("rt_provider_{}", b.sys_op_variant_name());
+        let op = format_ident!("{}", b.sys_op_variant_name());
+        let mut params = Vec::new();
+        let mut convert = Vec::new();
+        let mut arguments = Vec::new();
+        if let Some(receiver) = &b.receiver
+            && consumes_self_slot(receiver)
+        {
+            params.push(quote! {a0:rt::provider::BexExternalValue});
+            if receiver_is_extracted(receiver) {
+                let ty = BamlType::Named(receiver.class_name.clone());
+                let expression = external_to_typed_expr(&quote! {a0}, &ty, &names, &paths);
+                convert.push(quote!{let a0=(||->Result<_,AccessError>{#expression})().map_err(|e:AccessError|rt::Error::internal(e.to_string()))?;});
+                arguments.push(quote! {a0});
+            }
+        }
+        let start = params.len();
+        for (i, param) in b.params.iter().enumerate() {
+            let arg = format_ident!("a{}", start + i);
+            params.push(quote! {#arg:rt::provider::BexExternalValue});
+            let expression = external_to_typed_expr(&quote! {#arg}, &param.ty, &names, &paths);
+            convert.push(quote!{let #arg=(||->Result<_,AccessError>{#expression})().map_err(|e:AccessError|rt::Error::internal(e.to_string()))?;});
+            arguments.push(quote! {#arg});
+        }
+        let call = quote! {provider.#method(rt::provider::CallId(0),#(#arguments,)* &context)};
+        let output = emit_into_result_call(&b.return_type, &op, &call, &names, &paths);
+        functions.push(quote!{
+            #[allow(non_snake_case)]
+            fn #stub(#(#params,)*on_error:fn(rt::provider::OpError,bool)->Box<rt::Error>)->rt::R<rt::provider::BexExternalValue> {
+                use rt::provider::{BexExternalValue,AccessError,indexmap,baml_type,AsBexExternalValue,SysOp};
+                #(#convert)*
+                let provider=rt::provider::native();
+                let context=rt::provider::context();
+                rt::provider::perform(||{#output},on_error)
+            }
+        });
+    }
+    Ok(crate::format_tokens(&quote! {#(#functions)*}))
+}

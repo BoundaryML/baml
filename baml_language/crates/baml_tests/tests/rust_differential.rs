@@ -22,6 +22,8 @@ const PROBES: &[&str] = &[
     "RtNativeBytes",
     "RtNativeClock",
     "RtNativeRandom",
+    "RtNativeFiles",
+    "RtNativeProcess",
     "RtEmptyClosures",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
@@ -286,9 +288,8 @@ fn probe_timeout_kills_and_reaps() {
 fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
         "RtClosures" | "RtEmptyClosures" => Some(manifest.join("rt_fixtures/closures")),
-        "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" => {
-            Some(manifest.join("rt_fixtures/native"))
-        }
+        "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" | "RtNativeFiles"
+        | "RtNativeProcess" => Some(manifest.join("rt_fixtures/native")),
         _ => None,
     }
 }
@@ -365,6 +366,8 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         "RtNativeBytes",
         "RtNativeClock",
         "RtNativeRandom",
+        "RtNativeFiles",
+        "RtNativeProcess",
     ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
@@ -681,6 +684,8 @@ fn rust_differential() {
                             | "RtNativeBytes"
                             | "RtNativeClock"
                             | "RtNativeRandom"
+                            | "RtNativeFiles"
+                            | "RtNativeProcess"
                     ))
             {
                 continue;
@@ -809,6 +814,15 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
+            if probe.starts_with("RtNative") {
+                let output = outputs[reference].as_ref().expect("native oracle ran");
+                assert!(output.status.success(), "{probe}: native oracle failed");
+                assert!(
+                    output.stdout.ends_with(b"7\n"),
+                    "{probe}: native oracle did not satisfy its checks: {}",
+                    String::from_utf8_lossy(&output.stdout)
+                );
+            }
             for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;

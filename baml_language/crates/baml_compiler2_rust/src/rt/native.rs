@@ -18,6 +18,10 @@ impl registry::Feature for Feature {
             return Some((|| {
                 let l = &values[0];
                 let r = &values[1];
+                if l.1 == Repr::Null || r.1 == Repr::Null {
+                    let other = if l.1 == Repr::Null { r } else { l };
+                    return Ok((Emitter::null_test(other), Repr::Bool));
+                }
                 if matches!(l.1, Repr::Int | Repr::Bigint)
                     && matches!(r.1, Repr::Int | Repr::Bigint)
                 {

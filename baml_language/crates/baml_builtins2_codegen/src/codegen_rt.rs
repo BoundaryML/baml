@@ -4,7 +4,8 @@
 use crate::{BamlType, BuiltinPipeline, NativeBuiltin, ReceiverType};
 
 pub fn supports_rt(path: &str) -> bool {
-    crate::codegen_rt_random::supports(path)
+    crate::codegen_rt_provider::supports(path)
+        || crate::codegen_rt_random::supports(path)
         || crate::codegen_rt_clock::supports(path)
         || crate::codegen_rt_bytes::supports(path)
         || crate::codegen_rt_bigint::supports(path)
@@ -40,6 +41,10 @@ pub fn generate_rt(
             .iter()
             .find(|d| d.path == *path)
             .ok_or_else(|| format!("baml_rt builtin declaration missing: {path}"))?;
+        if crate::codegen_rt_provider::supports(path) {
+            crate::codegen_rt_provider::validate(declaration)?;
+            continue;
+        }
         if crate::codegen_rt_random::supports(path) {
             output.push_str(&crate::codegen_rt_random::generate(declaration)?);
             continue;
@@ -237,6 +242,22 @@ pub fn generate_rt(
             // declaration throws never. Allocation panics remain Result errors.
             output.push_str("#[inline(always)] fn rt_string_slice(cx: &mut rt::strings::Cx, value: rt::strings::Str, start:i64, end:i64) -> rt::R<rt::strings::Str> { rt::strings::slice(cx,value,start,end) }\n");
         }
+    }
+    let providers: std::collections::BTreeSet<String> = requested
+        .iter()
+        .filter(|p| crate::codegen_rt_provider::supports(p))
+        .cloned()
+        .collect();
+    let io = declarations
+        .iter()
+        .filter(|d| d.pipeline == BuiltinPipeline::Io)
+        .cloned()
+        .collect::<Vec<_>>();
+    if !providers.is_empty() {
+        let (_, _, classes) = crate::extract_native_builtins().map_err(|e| e.to_string())?;
+        output.push_str(&crate::codegen_io::generate_rt_provider(
+            &io, &classes, &providers,
+        )?);
     }
     // Native adapters are hidden. They have no observation state or atomic
     // loads on the owner thread; observed BAML wrappers own their telemetry.

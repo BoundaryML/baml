@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+bex_external_types.workspace = true
+indexmap.workspace = true
+sys_types.workspace = true
+sys_native = { path = "../sys_native", default-features = false, features = ["bundle-http", "aws-crypto"] }
 rand_core.workspace = true
 rand_chacha.workspace = true
 rand_xoshiro.workspace = true
@@ -18,7 +22,7 @@ borsh.workspace = true
 serde_json.workspace = true
 baml_rt_gc = { path = "../baml_rt_gc" }
 baml_rt_tasks = { path = "../baml_rt_tasks" }
-tokio = { workspace = true, features = ["rt-multi-thread", "io-util", "io-std", "time", "fs"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "io-util", "io-std", "time", "fs", "sync"] }
 
 bex_chunkedringbuffer.workspace = true
 btel_clock.workspace = true

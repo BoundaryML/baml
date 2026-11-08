@@ -37,7 +37,7 @@ fn failure(error: Failure) -> Box<Error> {
         _ => Error::internal(error.message),
     }
 }
-fn host_unavailable(resource: String, message: String) -> Box<Error> {
+pub(crate) fn host_unavailable(resource: String, message: String) -> Box<Error> {
     let mut cx = unsafe { crate::strings::Cx::current() };
     let result = (|| -> R<usize> {
         let resource = cx.string(&resource)?;

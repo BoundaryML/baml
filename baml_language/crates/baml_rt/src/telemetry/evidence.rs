@@ -84,6 +84,18 @@ pub unsafe fn observe_captured<T>(
 /// Called before the first frame completion; all unwound frames share its clock.
 #[cold]
 pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Option<usize>) {
+    raised_with_kind(error, source, site, native, None);
+}
+
+/// Async providers resume at a host boundary even when entered through a virtual call.
+#[cold]
+pub fn raised_with_kind(
+    error: &mut Error,
+    source: &crate::Source,
+    site: usize,
+    native: Option<usize>,
+    kind: Option<RaiseKind>,
+) {
     let ptr = CURRENT.get();
     if ptr.is_null() || error.telemetry_raise.is_some() || error.class == "InternalError" {
         return;
@@ -94,18 +106,18 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
         return;
     }
     if frame.is_null() {
-        raised_on_path(state, error, source, site);
+        raised_on_path(state, error, source, site, kind);
         return;
     }
     let pc = source.pcs.get(site).copied().unwrap_or(0);
     unsafe {
         (*frame).pc = pc;
     }
-    let kind = source
+    let kind = kind.unwrap_or_else(|| source
         .kinds
         .get(site)
         .copied()
-        .unwrap_or(RaiseKind::Runtime);
+        .unwrap_or(RaiseKind::Runtime));
     let mut frames = Vec::new();
     if let Some(function) = native {
         frames.push(ErrorFrame {
@@ -197,7 +209,7 @@ pub(super) fn end(error: &mut Error, result: UnwindResult, handler_pc: Option<u3
 // On fully observed stacks no extra per-call frame or cold helper is needed:
 // the active path carries caller PCs, and one depth counter preserves recursion.
 #[cold]
-fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, site: usize) {
+fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, site: usize, kind: Option<RaiseKind>) {
     let Some(function) = state.active_function else {
         return;
     };
@@ -207,11 +219,11 @@ fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, 
     state.span(SpanRecord::ErrorRaised {
         raise_id,
         raised_at,
-        kind: source
+        kind: kind.unwrap_or_else(|| source
             .kinds
             .get(site)
             .copied()
-            .unwrap_or(RaiseKind::Runtime),
+            .unwrap_or(RaiseKind::Runtime)),
         function: Some(state.functions[function]),
         pc: source.pcs.get(site).copied(),
         raise_call: if mode == 2 { state.active_span } else { None },

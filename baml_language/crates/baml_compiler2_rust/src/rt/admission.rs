@@ -156,15 +156,16 @@ pub(super) fn collect<'db>(
             if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
                 for (repr, target) in targets {
                     plan.record(repr)?;
-                    let name = plan.index.builtin_path(target);
+                    let name = plan.index.builtin_path(target).to_owned();
                     if matches!(
                         all.get(&target).map(|m| m.kind.as_ref()),
                         Some(MirFunctionKind::Builtin(_))
                     ) {
-                        if !baml_builtins2_codegen::supports_rt(name) {
+                        if !baml_builtins2_codegen::supports_rt(&name) {
                             return Err(no(format!("interface builtin {name}")));
                         }
-                        builtins.insert(name.into());
+                        super::provider::prepare_types(plan, &name)?;
+                        builtins.insert(name);
                         continue;
                     }
                     calls.entry(object).or_default().insert(target);

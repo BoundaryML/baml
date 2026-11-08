@@ -14,6 +14,26 @@ fn rt_host_boundary() {
     let mut exercised = std::collections::BTreeSet::new();
     for (name, source, json) in [
         (
+            "fs_chmod_invalid",
+            r#"function main()->int { baml.fs.chmod("missing",-1);1 }"#,
+            None,
+        ),
+        (
+            "fs_seek_negative",
+            r#"function main()->int { let f=baml.fs.open("seek","w+");f.seek_from("start",-1) }"#,
+            None,
+        ),
+        (
+            "fs_closed_handle",
+            r#"function main()->int { let f=baml.fs.open("closed","w+");f.close();f.as<baml.io.Read>.read(1);1 }"#,
+            None,
+        ),
+        (
+            "process_timeout",
+            r#"function main()->int { baml.sys._shell("sleep 1",baml.sys._ProcessOptions {cwd:null,env:null,inherit_env:true,timeout:baml.time.Duration.from_milliseconds(1),input:null,stdin:"ignore",stdout:"ignore",stderr:"ignore",detached:false}).exit_code }"#,
+            None,
+        ),
+        (
             "random_seed",
             r#"function main()->string { baml.random.ChaCha20._new(b"small"); "unexpected" }"#,
             None,
@@ -230,6 +250,10 @@ function main()->int { 7 }"#,
                 | "fs"
                 | "fs_error"
                 | "fs_utf8"
+                | "fs_chmod_invalid"
+                | "fs_seek_negative"
+                | "fs_closed_handle"
+                | "process_timeout"
         ) {
             &["off", "low", "medium", "high"]
         } else {
@@ -290,6 +314,10 @@ function main()->int { 7 }"#,
                         | "bigint_cap"
                         | "random_seed"
                         | "random_alloc"
+                        | "fs_chmod_invalid"
+                        | "fs_seek_negative"
+                        | "fs_closed_handle"
+                        | "process_timeout"
                 );
                 assert_eq!(
                     expected.status.success(),

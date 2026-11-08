@@ -4,6 +4,7 @@
 //! No managed pointer may escape that call's owned result boundary.
 pub mod calls;
 pub mod closures;
+pub mod external;
 pub mod globals;
 pub mod host;
 pub mod io;
@@ -13,6 +14,7 @@ pub mod lists;
 pub mod maps;
 pub mod native;
 pub mod opaque;
+pub mod provider;
 pub mod random;
 pub mod scalars;
 pub mod strings;

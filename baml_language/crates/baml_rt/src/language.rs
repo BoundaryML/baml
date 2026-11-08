@@ -457,6 +457,9 @@ pub(crate) fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
         VmPanic::NegativeBitShift { message } => {
             panic_value(2, "baml.panics.NegativeBitShift", message)
         }
+        VmPanic::HostUnavailable { resource, message } => {
+            crate::io::host_unavailable(resource, message)
+        }
         VmPanic::UserPanic { message } => panic_value(19, "baml.panics.UserPanic", message),
         VmPanic::AllocFailure { message } => panic_value(5, "baml.panics.AllocFailure", message),
         VmPanic::StackOverflow => {

@@ -62,3 +62,52 @@ function RtNativeRandom()->int {
     baml.io.println(`${xi}:${ci}`);
     if (SameNativeBytes(stream,other) && xi==ti && SameNativeBytes(cs,ts) && ci==cti && a+b+s==3 && default_seed.random(0).length()==0) {7}else{9}
 }
+
+function RtNativeFiles()->int {
+    let home=baml.env.get("BAML_HOME") ?? ".";
+    let dir=baml.path.join([home,"native-files"]);
+    let path=baml.path.join([dir,"data.bin"]);
+    baml.fs.mkdir(dir,baml.fs.MkdirOptions {recursive:true});
+    baml.fs.write_bytes(path,b"old");
+    baml.fs.write_atomic(path,b"new");
+    let f=baml.fs.open(path,"w+");
+    let alias=f;
+    let writer=f.as<baml.io.Write>;
+    let reader=f.as<baml.io.Read>;
+    let written=writer.write_some(b"hello");
+    writer.flush();
+    let pos=f.seek_from("start",0);
+    let prefix=reader.read(2) ?? b"";
+    let rest=reader.bytes();
+    let end=reader.read(2);
+    let zero=reader.read(0) ?? b"x";
+    f.close(); alias.close();
+    let closed={reader.read(1);false} catch(e) {baml.errors.Io {message}=>message.char_count()>0};
+    baml.fs.chmod(path,384);
+    let link=baml.path.join([dir,"link.bin"]);
+    baml.fs.symlink("data.bin",link);
+    let meta=baml.fs.metadata(link);
+    let entries=baml.fs.read_dir(dir);
+    let parent=baml.path.parent(path) ?? "";
+    let absolute=baml.path._absolute(path,null);
+    let lock=baml.fs.lock(baml.path.join([dir,"guard"]),1000);
+    lock.close();lock.close();
+    baml.io.println(prefix.to_hex());baml.io.println(rest.to_hex());
+    if(written==5 && pos==0 && prefix.length()==2 && rest.length()==3 && end==null && zero.length()==0 && closed && meta.is_file && !meta.is_dir && entries[0].name.char_count()>0 && parent.char_count()>0 && baml.path.is_absolute(absolute)) {7}else{9}
+}
+
+function RtNativeProcess()->int {
+    let options=baml.sys._ProcessOptions {
+        cwd:null,env:{"RT_NATIVE_ONLY":"owned","RT_NATIVE_REMOVED":null},inherit_env:false,
+        timeout:baml.time.Duration.from_seconds(10),input:b"input\n",
+        stdin:"pipe",stdout:"pipe",stderr:"pipe",detached:false,
+    };
+    let out=baml.sys._run("/bin/sh",["-c",`read line; printf '%s:%s' "$line" "$RT_NATIVE_ONLY"; printf err >&2; exit 7`],options);
+    let shell=baml.sys._shell("printf shell",baml.sys._ProcessOptions {
+        cwd:null,env:null,inherit_env:true,timeout:null,input:null,
+        stdin:"ignore",stdout:"pipe",stderr:"ignore",detached:false,
+    });
+    baml.io.println(out.stdout.to_hex());baml.io.println(out.stderr.to_hex());
+    baml.io.println(shell.stdout.to_hex());
+    if(out.exit_code==7 && out.signal==null && out.stdout.length()==11 && out.stderr.length()==3 && shell.ok() && shell.stdout.length()==5) {7}else{9}
+}

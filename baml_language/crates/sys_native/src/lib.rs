@@ -17,10 +17,15 @@
 use std::path::{Path, PathBuf};
 
 pub mod host_dispatch;
+#[cfg(feature = "host-bridge")]
 mod host_impls;
+#[cfg(not(feature = "host-bridge"))]
+mod host_unavailable;
 #[cfg(feature = "bundle-http")]
 mod http_server;
-mod installation;
+mod installation {
+    include!(concat!(env!("OUT_DIR"), "/installation.rs"));
+}
 mod io_impls {
     include!(concat!(env!("OUT_DIR"), "/io_impls.rs"));
 }

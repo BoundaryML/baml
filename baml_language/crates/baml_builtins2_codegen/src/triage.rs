@@ -184,6 +184,9 @@ mod tests {
                     | RtDisposition::CompilerIntrinsic
                     | RtDisposition::RuntimeService
             ));
+            if crate::codegen_rt_provider::supports(&d.path) {
+                crate::codegen_rt_provider::validate(d).unwrap_or_else(|e| panic!("{e}"));
+            }
             if crate::codegen_rt_random::supports(&d.path) {
                 crate::codegen_rt_random::generate(d).unwrap_or_else(|e| panic!("{e}"));
             }

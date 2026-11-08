@@ -218,6 +218,16 @@ impl<K: Slot, V: Slot> Map<K, V> {
         }
         Ok(())
     }
+    /// Copy slots for owned boundary conversion. The map remains rooted by
+    /// the caller, and conversion invokes no BAML callback or suspension.
+    pub fn copied_entries(self) -> Vec<(K, V)> {
+        (0..self.len())
+            .map(|i| unsafe {
+                let e = self.entry_ptr(i);
+                ((*e).key, (*e).value)
+            })
+            .collect()
+    }
     // A callback can mutate the map, grow its buffer, collect, or yield. Keep
     // only copied keys across it; restart the bucket walk if its epoch changes.
     fn find(
