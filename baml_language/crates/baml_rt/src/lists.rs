@@ -142,6 +142,40 @@ impl<T: Slot> List<T> {
             ))
         }
     }
+    /// Independent snapshot of the mutable container; immutable element values
+    /// may be shared. Used by memoized string segmentation.
+    pub fn copy(self, _cx: &mut Cx) -> R<Self> {
+        let old = self.pointer as *const Object;
+        let (len, desc) = unsafe { ((*old).len, (*old).header.desc) };
+        if len == 0 {
+            return unsafe { Self::new(_cx, desc) };
+        }
+        let bytes = len
+            .checked_mul(8)
+            .and_then(|n| n.checked_add(16))
+            .ok_or_else(|| allocation_failure(usize::MAX))?;
+        let buffer = unsafe { crate::try_alloc(desc + 1, bytes) }?;
+        unsafe {
+            let source = (*old).buffer as *const u8;
+            for i in 0..len {
+                let word = source.add(16).cast::<usize>().add(i).read();
+                let slot = buffer.add(16).cast::<usize>().add(i);
+                if T::POINTER {
+                    write_ptr(buffer, slot, word)
+                } else {
+                    slot.write(word)
+                }
+            }
+        }
+        let result = unsafe { crate::try_alloc(desc, 32) }?;
+        unsafe {
+            let object = &mut *result.cast::<Object>();
+            write_ptr(result, &raw mut object.buffer, buffer as usize);
+            object.len = len;
+            object.capacity = len;
+        }
+        Ok(unsafe { Self::from_raw(result as usize) })
+    }
     pub fn push(self, _cx: &mut Cx, value: T) -> R<i64> {
         // Never retain a Rust borrow of the list across a collecting allocation.
         let object = self.pointer as *mut Object;
@@ -191,9 +225,9 @@ pub fn join(cx: &mut Cx, list: List<Str>, separator: Str) -> R<Str> {
     let mut text = String::new();
     for i in 0..list.len(cx) {
         if i != 0 {
-            text.push_str(separator.as_str(cx));
+            text.push_str(separator.try_as_str(cx)?);
         }
-        text.push_str(list.get(cx, i)?.as_str(cx));
+        text.push_str(list.get(cx, i)?.try_as_str(cx)?);
         if i & 15 == 15 {
             cx.poll()?;
         }

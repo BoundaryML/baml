@@ -208,10 +208,14 @@ impl Scratch {
             return SnapshotValue::Null;
         }
         let result = if matches!(shape, Shape::String) {
-            let ptr = value.payload as *const u8;
-            let len = unsafe { ptr.add(8).cast::<usize>().read() };
-            let bytes = unsafe { std::slice::from_raw_parts(ptr.add(16), len) };
-            leaves.string_value(&unsafe { std::str::from_utf8_unchecked(bytes) }.into())
+            let text = unsafe { crate::strings::Str::from_raw(value.payload as usize) };
+            // Match the shared capture builder's leaf gate before copying a
+            // potentially enormous lazy rope into host memory.
+            if text.byte_len() > leaves.limits().max_leaf_bytes {
+                SnapshotValue::Truncated(Limit::Bytes)
+            } else {
+                leaves.string_value(&text.to_owned().into())
+            }
         } else {
             let Some(slot) = leaves.reserve() else {
                 return SnapshotValue::Truncated(Limit::Objects);

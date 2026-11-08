@@ -10,6 +10,12 @@ pub struct Fixture {
     pub source: PathBuf,
 }
 
+// Error probes must match the oracle's failed exit and exact diagnostic. Real
+// scorecard workloads and successful semantic probes must still exit cleanly.
+pub fn expects_success(name: &str) -> bool {
+    !matches!(name, "strings::parse error" | "strings::codepoint error")
+}
+
 pub fn fixtures(workspace: &Path, only: Option<&str>) -> Vec<Fixture> {
     let root = workspace.join("tools/speedtest");
     let scorecard: toml::Value = std::fs::read_to_string(root.join("kpis.toml"))
@@ -56,6 +62,21 @@ pub fn fixtures(workspace: &Path, only: Option<&str>) -> Vec<Fixture> {
         });
     }
     assert!(wanted.is_empty(), "unknown KPI workloads: {wanted:?}");
+    // Isolated semantic probes share the same pack/run/telemetry matrix as the
+    // scorecard, without depending on unrelated project-wide initializers.
+    for (name, file) in [
+        ("strings::semantics", "semantics"),
+        ("strings::parse error", "parse_error"),
+        ("strings::codepoint error", "codepoint_error"),
+    ] {
+        if only.is_none_or(|only| only.split(',').any(|selected| selected == name)) {
+            fixtures.push(Fixture {
+                name: name.into(),
+                slug: format!("strings-{file}"),
+                source: workspace.join(format!("crates/baml_tests/rust_diff/strings/{file}.baml")),
+            });
+        }
+    }
     fixtures.sort_by(|a, b| a.name.cmp(&b.name));
     fixtures
 }

@@ -5,6 +5,8 @@ impl Plan<'_> {
         use baml_compiler2_mir::TyTemplate as T;
         match ty {
             T::Int => Ok(0),
+            T::Bool => Ok(usize::MAX),
+            T::Null => Ok(usize::MAX - 1),
             T::String => Ok(1),
             T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),
             T::Class(_, _) | T::Union(_) => {
@@ -166,7 +168,7 @@ pub(super) fn emit(
                                 .or_insert(next);
                         }
                     }
-                    writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.as_str(&read_cx);let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
+                    writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.try_as_str(&read_cx)?;let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
                     for (name, index) in &names {
                         writeln!(&mut out, "{name:?}=>Some({index}),").unwrap();
                     }

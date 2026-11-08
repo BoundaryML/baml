@@ -1014,6 +1014,7 @@ dependencies = [
  "libc",
  "serde_json",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]

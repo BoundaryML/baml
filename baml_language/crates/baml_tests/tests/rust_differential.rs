@@ -431,6 +431,14 @@ fn rust_differential() {
     let timeout = Duration::from_secs(timeout);
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
+    // Exercise the complete rt admission matrix and both GC modes without
+    // rebuilding/running unrelated legacy backends for rejected rt fixtures.
+    // Every admitted fixture still uses the unchanged bytecode oracle.
+    let rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
+    let backends: Vec<_> = BACKENDS
+        .iter()
+        .filter(|b| !rt_only || b.name == "bytecode" || b.artifact_key == "rt")
+        .collect();
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
     let build = std::env::var_os("BAML_RUST_DIFF_BUILD_DIR")
@@ -452,17 +460,34 @@ fn rust_differential() {
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
-    for backend in BACKENDS {
+    let oracle_only = if rt_only {
+        let rt_artifacts = rt::build(&build.join("rt"), workspace, manifest, only.as_deref());
+        let admitted = rt_artifacts
+            .iter()
+            .filter(|(_, result)| result.is_ok())
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        artifacts.insert("rt", rt_artifacts);
+        Some(admitted)
+    } else {
+        None
+    };
+    for backend in &backends {
+        if rt_only && backend.artifact_key == "rust" && oracle_only.as_deref() == Some("") {
+            artifacts.insert("rust", Artifacts::new());
+            continue;
+        }
         artifacts.entry(backend.artifact_key).or_insert_with(|| {
             (backend.build)(
                 &build.join(backend.artifact_key),
                 workspace,
                 manifest,
-                only.as_deref(),
+                oracle_only.as_deref().or(only.as_deref()),
             )
         });
     }
-    let reference = BACKENDS
+    let reference = backends
         .iter()
         .position(|b| b.name == "bytecode")
         .expect("bytecode reference");
@@ -480,8 +505,14 @@ fn rust_differential() {
     let mut coverage = rt::Coverage::new(&artifacts["rt"]);
     let mut failures = coverage.build_failures();
     for probe in probes {
+        if rt_only && artifacts["rt"][&probe].is_err() {
+            continue;
+        }
         let failures_before = failures.len();
         for level in LEVELS {
+            if rt_only && !rt::supports_level(level) {
+                continue;
+            }
             if (probe.contains("::") && matches!(*level, "default" | "low"))
                 || (*level == "default"
                     && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan"))
@@ -490,7 +521,7 @@ fn rust_differential() {
             }
             let mut outputs = Vec::new();
             let mut traces = Vec::new();
-            for backend in BACKENDS {
+            for backend in &backends {
                 if backend.artifact_key == "rt"
                     && (!rt::supports_level(level) || artifacts["rt"][&probe].is_err())
                 {
@@ -596,7 +627,10 @@ fn rust_differential() {
                 if *level != "off" && trace.is_empty() {
                     failures.push(format!("{probe}/{mode}: no telemetry recording produced"));
                 }
-                if probe.contains("::") && output.as_ref().is_ok_and(|o| !o.status.success()) {
+                if probe.contains("::")
+                    && kpis::expects_success(&probe)
+                    && output.as_ref().is_ok_and(|o| !o.status.success())
+                {
                     failures.push(format!("{probe}/{mode}: KPI must succeed"));
                 }
                 std::fs::create_dir_all(build.join("telemetry")).unwrap();
@@ -612,7 +646,7 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
-            for (index, backend) in BACKENDS.iter().enumerate() {
+            for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;
                 }

@@ -97,6 +97,8 @@ pub fn compile_rt(
             raise_kinds: Vec::new(),
             telemetry_sites: &telemetry_sites,
             site: 0,
+            string_cx: std::cell::Cell::new(false),
+            string_literals: std::cell::RefCell::new(BTreeMap::new()),
         };
         out.push_str(&emitter.function(mir.arity, small_program && !recursive(&calls, object))?);
     }

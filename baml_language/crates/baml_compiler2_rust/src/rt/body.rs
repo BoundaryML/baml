@@ -111,7 +111,9 @@ impl Emitter<'_, '_> {
         for h in cfg.loop_headers() {
             writeln!(&mut code, "let mut poll{h}=0u32;").unwrap();
         }
-        code.push_str(&self.stmts(&structured.stmts, &cfg.loop_headers())?);
+        let body = self.stmts(&structured.stmts, &cfg.loop_headers())?;
+        code.push_str(&self.string_literal_locals());
+        code.push_str(&body);
         code.push_str("}}\n");
         let lines = self
             .sites

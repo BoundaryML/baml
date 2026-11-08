@@ -31,8 +31,17 @@ fn classify(error: String) -> Rejection {
 pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
     std::fs::create_dir_all(build).unwrap();
     let mut artifacts = Artifacts::new();
+    let mut initializer_rejection: Option<Rejection> = None;
     for probe in PROBES {
         if only.is_some_and(|only| !only.split(',').any(|name| name == *probe)) {
+            continue;
+        }
+        // These entries share one complete source project. Initializers are a
+        // project-level admission check, independent of the selected entry.
+        // Reuse only that exact rejection; entry-dependent diagnostics and all
+        // admitted programs still pack individually.
+        if let Some(rejection) = &initializer_rejection {
+            artifacts.insert((*probe).into(), Err(rejection.clone()));
             continue;
         }
         let executable = build.join(probe);
@@ -68,6 +77,10 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
                 Ok(executable)
             }
         });
+        if matches!(&result, Err(Rejection::Unsupported(reason)) if reason == "top-level initializers")
+        {
+            initializer_rejection = result.as_ref().err().cloned();
+        }
         artifacts.insert((*probe).into(), result);
     }
     for fixture in kpis::fixtures(workspace, only) {

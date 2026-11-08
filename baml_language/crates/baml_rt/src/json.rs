@@ -219,7 +219,7 @@ fn owned(reader: &mut Reader<'_>) -> Result<Value, bex_vm_types::json_text::Stop
 /// Schemas describe actual class descriptors/offsets, including tagged optional
 /// ints and literal unions. All handles obey the active Cx rooting contract.
 pub unsafe fn decode(cx: &mut Cx, text: Str, schemas: &'static [Schema]) -> R<Dyn> {
-    let source = text.as_str(cx).to_owned();
+    let source = text.try_as_str(cx)?.to_owned();
     let mut reader = Reader::new(&source);
     if reader.skip_value().is_err() || reader.finish().is_err() {
         let message = match refusal(&source) {

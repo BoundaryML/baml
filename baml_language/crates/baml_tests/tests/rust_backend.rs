@@ -863,7 +863,6 @@ fn rt_string_receiver_storage_and_function_value_rejection() {
             "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
             false,
         ),
-        ("function main() -> int { \"x\".trim().length() }", false),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
         let program = lower(&db, OptLevel::Two);
@@ -1009,9 +1008,9 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "8e454ff27beebede04824c7259b943f7c6c9ade3cf87c9c690e1e24c4268385e",
-            "richards" => "51ded3f4ec2fd0b0dfe1566149179f7dca4d888bf9bfbb0f2e3d38cfde57f56d",
-            "agent" => "b9fcb2efc8730021c760cd7b6ac0e27083d5d1cf66583d871802c360120276a7",
+            "trees" => "dec2f2e2325469feaa8916000c6a7d9b8bdca1d03cf7adcd764d1ffa06041c60",
+            "richards" => "e80f92b0fc86e03c9bed01cee05d7116afd9940604ebdd5ec5a7ad6b32505981",
+            "agent" => "91373999fbb3a9e8bbd5153f584e531580f709ccafcb99ea12f15339c2ebbec2",
             _ => "",
         };
         if expected.is_empty() {
@@ -1032,4 +1031,33 @@ fn rt_source_bytes_and_diagnostics() {
             );
         }
     }
+}
+
+#[test]
+fn rt_string_builtins_and_unicode_views_compile_without_changing_bytecode() {
+    let source = include_str!("../rust_diff/strings/semantics.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let generated = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    for helper in [
+        "rt_string_split",
+        "rt_string_slice",
+        "rt_string_at",
+        "rt_int_parse",
+        "rt_from_code_points",
+    ] {
+        assert!(generated.contains(helper), "missing {helper}");
+    }
+    assert_eq!(before, fingerprint(&program));
 }

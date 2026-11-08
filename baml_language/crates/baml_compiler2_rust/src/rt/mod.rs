@@ -50,6 +50,8 @@ struct Emitter<'a, 'db> {
     raise_kinds: Vec<&'static str>,
     telemetry_sites: &'a std::cell::RefCell<Vec<(Option<usize>, usize, usize)>>,
     site: usize,
+    string_cx: std::cell::Cell<bool>,
+    string_literals: std::cell::RefCell<BTreeMap<String, usize>>,
 }
 
 struct ProgramEmission<'a, 'db> {

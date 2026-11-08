@@ -56,6 +56,10 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
+        if matches!(desc, 10 | 11) {
+            out.push_str("rt::telemetry::capture::Shape::String,\n");
+            continue;
+        }
         let class = if desc < rt_descriptors() {
             Some(runtime[desc - 1])
         } else {

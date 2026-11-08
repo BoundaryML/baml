@@ -149,13 +149,7 @@ impl Emitter<'_, '_> {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
-            Operand::Constant(Constant::String(text)) => Ok((
-                self.fallible(&format!(
-                    "rt::strings::Cx::current().string({:?}).map(|s|s.as_raw())",
-                    text.as_str()
-                )),
-                Repr::Str,
-            )),
+            Operand::Constant(Constant::String(text)) => self.string_literal(text.as_str()),
             Operand::Constant(Constant::EnumVariant { enum_ref, index }) => {
                 let head = baml_compiler2_hir_ty::layout::enum_head(self.db, *enum_ref);
                 if self.plan.repr(&RuntimeTy::Enum(head))? != Repr::Naming || *index > 1 {
