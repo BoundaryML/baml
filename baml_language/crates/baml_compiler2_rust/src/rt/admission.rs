@@ -5,7 +5,7 @@ use super::{
 };
 
 pub(super) struct Admitted<'db> {
-    pub all: BTreeMap<usize, MirFunction<'db>>,
+    pub all: BTreeMap<usize, super::TestMir<'db>>,
     pub reached: BTreeSet<usize>,
     pub calls: BTreeMap<usize, BTreeSet<usize>>,
     pub builtins: BTreeSet<String>,
@@ -16,21 +16,29 @@ pub(super) fn collect<'db>(
     root: SourceRoot,
     opt: OptLevel,
     entry: usize,
+    test_entry: bool,
     benchmark: Option<(usize, usize)>,
     plan: &mut Plan<'_>,
+    prepared: Option<&BTreeMap<usize, super::TestMir<'db>>>,
 ) -> Gen<Admitted<'db>> {
-    let mut all = BTreeMap::new();
-    let initializer_roots = super::globals::prepare(db, root, opt, plan, &mut all)?;
-    for &file in world_files(db, root) {
-        for &f in file_functions(db, file) {
-            if is_required_interface_method(db, f) {
-                continue;
-            }
-            let mir = lower_function(db, f, opt)
-                .as_ref()
-                .map_err(|e| no(format!("MIR: {e:?}")))?;
-            if let Some(object) = plan.index.declared(db, f) {
-                all.insert(object, MirFunction::from(mir));
+    let mut all = prepared.cloned().unwrap_or_default();
+    let initializer_roots = if test_entry {
+        Vec::new()
+    } else {
+        super::globals::prepare(db, root, opt, plan, &mut all)?
+    };
+    if prepared.is_none() {
+        for &file in world_files(db, root) {
+            for &f in file_functions(db, file) {
+                if is_required_interface_method(db, f) {
+                    continue;
+                }
+                let mir = lower_function(db, f, opt)
+                    .as_ref()
+                    .map_err(|e| no(format!("MIR: {e:?}")))?;
+                if let Some(object) = plan.index.declared(db, f) {
+                    all.insert(object, std::rc::Rc::new(MirFunction::from(mir)));
+                }
             }
         }
     }
@@ -297,8 +305,19 @@ pub(super) fn collect<'db>(
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         unreachable!()
     };
-    if mir.arity != 0 || !matches!(plan.repr(&body.locals[0].ty)?, Repr::Int | Repr::Str) {
-        return Err(no("entry must have no parameters and return int or string"));
+    let result = plan.repr(&body.locals[0].ty)?;
+    if mir.arity != 0
+        || if test_entry {
+            result != Repr::Null
+        } else {
+            !matches!(result, Repr::Int | Repr::Str)
+        }
+    {
+        return Err(no(if test_entry {
+            "test entry must have no parameters and return null"
+        } else {
+            "entry must have no parameters and return int or string"
+        }));
     }
     Ok(Admitted {
         all,
@@ -307,4 +326,44 @@ pub(super) fn collect<'db>(
         builtins,
         json_decode,
     })
+}
+
+fn insert_lambdas<'db>(
+    db: &'db dyn Db,
+    index: &crate::index::ProgramIndex<'_>,
+    mir: &MirFunction<'db>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
+) {
+    for lambda in &mir.lambdas {
+        if let Some(object) = index.lambda(db, &lambda.identity.clone().unwrap()) {
+            all.insert(object, std::rc::Rc::new(lambda.clone()));
+        }
+        insert_lambdas(db, index, lambda, all);
+    }
+}
+
+pub(super) type Prepared<'db> = Gen<BTreeMap<usize, super::TestMir<'db>>>;
+
+pub(super) fn prepare_tests<'db>(
+    db: &'db dyn Db,
+    root: SourceRoot,
+    opt: OptLevel,
+    index: &crate::index::ProgramIndex<'_>,
+) -> Prepared<'db> {
+    let mut all = BTreeMap::new();
+    for &file in world_files(db, root) {
+        for &function in file_functions(db, file) {
+            if is_required_interface_method(db, function) {
+                continue;
+            }
+            let mir = lower_function(db, function, opt)
+                .as_ref()
+                .map_err(|e| no(format!("MIR: {e:?}")))?;
+            if let Some(object) = index.declared(db, function) {
+                all.insert(object, std::rc::Rc::new(MirFunction::from(mir)));
+                insert_lambdas(db, index, &MirFunction::from(mir), &mut all);
+            }
+        }
+    }
+    Ok(all)
 }

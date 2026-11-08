@@ -59,6 +59,7 @@ pub(super) fn resolve(
                 plan.heads
                     .get(&h.tag())
                     .cloned()
+                    .or_else(|| plan.index.declaration(h.tag()))
                     .ok_or_else(|| no("unmapped implementation frame head"))
             })
         })
@@ -90,6 +91,12 @@ fn witness<'p>(
     iface: &TyTemplateInterface,
 ) -> Gen<Option<Witness<'p>>> {
     let requested = iface.to_template().substitute_symbolic(&[]);
+    // The checker resolver requires deeply realized types, including interface
+    // arguments and associated bindings. Dynamic requests remain unsupported.
+    baml_compiler2_mir::RealizedTy::try_from(concrete.clone())
+        .map_err(|_| no("non-concrete dispatch receiver"))?;
+    baml_compiler2_mir::RealizedTy::try_from(requested.clone())
+        .map_err(|_| no("non-concrete dispatch interface"))?;
     let RuntimeTy::Interface(name, args, assoc) = requested else {
         unreachable!()
     };
@@ -114,25 +121,21 @@ fn witness<'p>(
     ) else {
         return Ok(None);
     };
-    let data = baml_compiler2_hir_ty::interfaces::impl_data(db, resolved.impl_loc)
-        .as_ref()
-        .map_err(|_| no("checked implementation data missing"))?;
-    let params = data
-        .generic_params
-        .iter()
-        .map(|(p, _)| p.clone())
-        .collect::<Vec<_>>();
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
-    let anchor = |t: &baml_type::Ty| -> Gen<bex_vm_types::TyTemplate> {
-        plan.index
-            .anchor(&baml_compiler2_mir::tir2_to_template(t, &runtime, &params))
-            .ok_or_else(|| no("implementation template head"))
-    };
-    let pattern = anchor(&data.for_ty_pattern)?;
-    let iface_args = data
-        .interface_args
+    let (params, pattern, iface_args) =
+        baml_compiler2_emit::impl_runtime_pattern(db, resolved.impl_loc, &runtime)
+            .ok_or_else(|| no("checked implementation target"))?;
+    let pattern = plan
+        .index
+        .anchor(&pattern)
+        .ok_or_else(|| no("implementation template head"))?;
+    let iface_args = iface_args
         .iter()
-        .map(anchor)
+        .map(|arg| {
+            plan.index
+                .anchor(arg)
+                .ok_or_else(|| no("implementation template head"))
+        })
         .collect::<Gen<Vec<_>>>()?;
     let bindings = params
         .iter()
@@ -514,7 +517,7 @@ pub(super) fn implements(
 // 64 KiB runtime reserve cover their bounded locals, including observed entry.
 pub(super) fn inline_leaves(
     plan: &Plan<'_>,
-    all: &BTreeMap<usize, MirFunction<'_>>,
+    all: &BTreeMap<usize, super::TestMir<'_>>,
 ) -> BTreeSet<usize> {
     let mut leaves = plan
         .dispatches
@@ -544,7 +547,8 @@ pub(super) fn inline_leaves(
                 plan.dispatches.get(&(id, b.id.0)).is_some_and(|targets| {
                     !targets.is_empty()
                         && targets.iter().all(|(_, target)| {
-                            all.get(target).is_some_and(super::stack::small_leaf)
+                            all.get(target)
+                                .is_some_and(|mir| super::stack::small_leaf(mir))
                         })
                 })
             }

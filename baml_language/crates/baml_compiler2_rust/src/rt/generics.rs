@@ -4,10 +4,39 @@ use super::*;
 use baml_compiler2_hir_ty::callable::callable_generic_frame;
 use baml_compiler2_mir::{TyTemplate, TypeTest};
 
+// Cache keys must identify types, not the number of times an associated error
+// union has been substituted. In particular (never | never) | never is never.
+pub(super) fn canonical_type<N: Clone + PartialEq>(
+    ty: &baml_type::RuntimeTy<N>,
+) -> baml_type::RuntimeTy<N> {
+    ty.map_children(&mut canonical_type).flatten_union()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::canonical_type;
+    use baml_type::{Name, RuntimeTy as T, TypeName};
+
+    #[test]
+    fn specialization_keys_flatten_unions_inside_type_arguments() {
+        let head = TypeName::local(Name::new("Iterator"));
+        let ty = T::List(Box::new(T::Class(
+            head.clone(),
+            vec![T::Union(
+                vec![T::Never, T::Union(vec![T::Never].into())].into(),
+            )]
+            .into(),
+        )));
+        let expected = T::List(Box::new(T::Class(head, vec![T::Never].into())));
+        assert_eq!(canonical_type(&ty), expected);
+        assert_eq!(canonical_type(&expected), expected);
+    }
+}
+
 pub(super) fn expand<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
     roots: Vec<usize>,
 ) -> Gen<()> {
     let mut queue = VecDeque::from(roots);
@@ -22,7 +51,7 @@ pub(super) fn expand<'db>(
             let Some(mut mir) = all.get(&object).cloned() else {
                 continue;
             };
-            specialize_bound_values(plan, object, &mut mir)?;
+            specialize_bound_values(plan, object, std::rc::Rc::make_mut(&mut mir))?;
             all.insert(object, mir.clone());
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
@@ -48,10 +77,10 @@ pub(super) fn expand<'db>(
                     let target = if plan.function_frames.contains_key(&object) {
                         let target = plan.next_object;
                         plan.next_object += 1;
-                        plan.index.rt_alias(target, origin);
+                        std::rc::Rc::make_mut(&mut plan.index).rt_alias(target, origin);
                         plan.function_frames
                             .insert(target, plan.function_frames[&object].clone());
-                        all.insert(target, lambda.clone());
+                        all.insert(target, std::rc::Rc::new(lambda.clone()));
                         target
                     } else {
                         origin
@@ -655,8 +684,9 @@ pub(super) fn specialize<'db>(
             &baml_type::Ty::from(substituted),
             64,
         );
-        let realized = baml_compiler2_mir::RealizedTy::try_from(runtime.convert(&reduced))
-            .map_err(|_| no("unresolved generic projection"))?;
+        let realized =
+            baml_compiler2_mir::RealizedTy::try_from(canonical_type(&runtime.convert(&reduced)))
+                .map_err(|_| no("unresolved generic projection"))?;
         Ok(TyTemplate::from(realized))
     };
     let test = |t: &mut TypeTest<'db>| -> Gen<()> {
@@ -715,13 +745,13 @@ pub(super) fn specialize<'db>(
                 params,
             )
             .substitute_symbolic(args);
-            l.ty = runtime.convert(
+            l.ty = canonical_type(&runtime.convert(
                 &baml_compiler2_hir_ty::package_interface::reduce_ground_projections(
                     runtime.db,
                     &baml_type::Ty::from(substituted),
                     64,
                 ),
-            );
+            ));
         }
         for b in &mut body.blocks {
             for s in &mut b.statements {
@@ -936,40 +966,79 @@ impl Plan<'_> {
     }
     fn register_field_class_type(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
         use bex_vm_types::RuntimeTy as T;
-        match ty {
-            T::Class(head, args) if !args.is_empty() => {
-                let origin = self.class_tag(head.tag())?;
-                if self
-                    .class_instances
-                    .iter()
-                    .any(|(c, a, _)| *c == origin && a.as_slice() == args.as_ref())
-                {
-                    return Ok(());
+        type Origins = baml_type::template::TyTemplateOrigins<bex_vm_types::TypeHead>;
+        enum Work {
+            Visit(T, Origins),
+            Leave,
+        }
+        // Explicit DFS keeps recursive layouts off the compiler's Rust stack.
+        let mut pending = vec![Work::Visit(ty.clone(), Origins::root())];
+        let mut ancestry: Vec<(bex_vm_types::TypeHead, usize)> = Vec::new();
+        while let Some(work) = pending.pop() {
+            let Work::Visit(ty, origins) = work else {
+                ancestry.pop();
+                continue;
+            };
+            match ty {
+                T::Class(head, args) if !args.is_empty() => {
+                    let origin = self.class_tag(head.tag())?;
+                    // Union-only transforms close: (T | null) | null = T | null.
+                    let args = args
+                        .into_vec()
+                        .into_iter()
+                        .map(|ty| canonical_type(&ty))
+                        .collect::<Vec<_>>();
+                    if self
+                        .class_instances
+                        .iter()
+                        .any(|(c, a, _)| *c == origin && *a == args)
+                    {
+                        continue;
+                    }
+                    for (index, (ancestor, arity)) in ancestry.iter().enumerate() {
+                        if *ancestor == head
+                            && origins.class_transform_expands(index, &head, *arity)
+                        {
+                            return Err(no("non-regular recursive generic class layouts"));
+                        }
+                    }
+                    if self.class_instances.len() >= 4096 {
+                        return Err(no("generic class layout limit (4096)"));
+                    }
+                    let id = self.next_object;
+                    self.next_object += 1;
+                    self.class_instances.push((origin, args.clone(), id));
+                    ancestry.push((head, args.len()));
+                    pending.push(Work::Leave);
+                    for field in self.class(origin).fields.iter().rev() {
+                        pending.push(Work::Visit(
+                            field.field_template.substitute_symbolic(&args),
+                            origins.through_field(&head, args.len(), &field.field_template),
+                        ));
+                    }
+                    for (index, arg) in args.into_iter().enumerate().rev() {
+                        pending.push(Work::Visit(
+                            arg,
+                            origins.through_field(
+                                &head,
+                                self.class(origin).generic_param_count,
+                                &bex_vm_types::TyTemplate::TypeArgRef(index as u32),
+                            ),
+                        ));
+                    }
                 }
-                if self.class_instances.len() > 4096 {
-                    return Err(no("unbounded generic class layouts"));
+                T::Union(members) => {
+                    for (index, member) in members.into_vec().into_iter().enumerate().rev() {
+                        pending.push(Work::Visit(member, origins.union_member(index)));
+                    }
                 }
-                let id = self.next_object;
-                self.next_object += 1;
-                self.class_instances.push((origin, args.to_vec(), id));
-                for arg in args {
-                    self.register_field_class_type(arg)?;
+                T::List(element) => pending.push(Work::Visit(*element, origins.list_element())),
+                T::Map { key, value } => {
+                    pending.push(Work::Visit(*value, origins.map_value()));
+                    pending.push(Work::Visit(*key, origins.map_key()));
                 }
-                for field in self.class_field_types(id) {
-                    self.register_field_class_type(&field)?;
-                }
+                _ => {}
             }
-            T::Union(members) => {
-                for t in members {
-                    self.register_field_class_type(t)?;
-                }
-            }
-            T::List(t) => self.register_field_class_type(t)?,
-            T::Map { key, value } => {
-                self.register_field_class_type(key)?;
-                self.register_field_class_type(value)?;
-            }
-            _ => {}
         }
         Ok(())
     }
@@ -978,13 +1047,44 @@ impl Plan<'_> {
 pub(super) fn instance<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
     instances: &mut Vec<(usize, Vec<RuntimeTy>, usize)>,
     callee: usize,
     frame: Vec<RuntimeTy>,
 ) -> Gen<usize> {
+    let source = all
+        .get(&callee)
+        .ok_or_else(|| no("interface method MIR missing"))?;
+    let params = match source.identity {
+        Some(baml_compiler2_mir::MirFunctionId::Declared(f)) => {
+            callable_generic_frame(db, baml_compiler2_hir::loc::DeclRef::Source(f))
+                .params
+                .into_owned()
+        }
+        _ if frame.is_empty() => return Ok(callee),
+        _ => return Err(no("synthetic generic interface body")),
+    };
+    let runtime_params = baml_type::RuntimeGenericLayout::new(&params);
+    // MIR calls may retain compiler-only callback effect arguments. They have
+    // no slot in a native frame, just as in the VM function metadata.
+    let frame = if frame.len() == params.len() && params.len() != runtime_params.params().len() {
+        params
+            .iter()
+            .zip(frame)
+            .filter_map(|(p, t)| runtime_params.slot(p).map(|_| t))
+            .collect()
+    } else {
+        frame
+    };
+    let frame = frame.iter().map(canonical_type).collect::<Vec<_>>();
     if frame.is_empty() {
         return Ok(callee);
+    }
+    if frame
+        .iter()
+        .any(|ty| baml_compiler2_mir::RealizedTy::try_from(ty.clone()).is_err())
+    {
+        return Err(no("non-concrete specialization argument"));
     }
     if let Some((_, _, id)) = instances
         .iter()
@@ -995,19 +1095,17 @@ pub(super) fn instance<'db>(
     if instances.len() > 4096 {
         return Err(no("unbounded interface specialization"));
     }
-    let source = all
-        .get(&callee)
-        .ok_or_else(|| no("interface method MIR missing"))?;
-    let Some(baml_compiler2_mir::MirFunctionId::Declared(f)) = source.identity else {
-        return Err(no("synthetic generic interface body"));
-    };
-    let params = callable_generic_frame(db, baml_compiler2_hir::loc::DeclRef::Source(f)).params;
-    let runtime = baml_compiler2_mir::RuntimeLowering::of(db, f.file(db).source_root(db));
+    let source = &all[&callee];
+    // Include aliases declared in the user pack when specializing stdlib MIR.
+    let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
     let mut specialized = specialize(source, &params, &frame, &runtime)?;
     fold_primitive_sort_guards(db, plan, &mut specialized);
-    let runtime_params = baml_type::RuntimeGenericLayout::new(&params);
     if runtime_params.params().len() != frame.len() {
-        return Err(no("specialization frame arity"));
+        return Err(no(format!(
+            "specialization frame arity: {} expects {:?}, got {frame:?}",
+            plan.index.display(callee),
+            runtime_params.params()
+        )));
     }
     let captures = runtime_params
         .params()
@@ -1018,8 +1116,8 @@ pub(super) fn instance<'db>(
     let id = plan.next_object;
     plan.next_object += 1;
     plan.function_frames.insert(id, captures);
-    all.insert(id, specialized);
-    plan.index.rt_alias(id, callee);
+    all.insert(id, std::rc::Rc::new(specialized));
+    std::rc::Rc::make_mut(&mut plan.index).rt_alias(id, callee);
     instances.push((callee, frame, id));
     Ok(id)
 }
@@ -1090,6 +1188,8 @@ impl Plan<'_> {
         });
     }
     fn candidate(&mut self, ty: &RuntimeTy) {
+        let normalized = canonical_type(ty);
+        let ty = &normalized;
         if matches!(ty,RuntimeTy::Class(head,args) if args.is_empty() && head.builtin_primitive(self.lang)==Some(baml_type::PrimitiveType::String))
         {
             self.candidate(&RuntimeTy::String);
@@ -1101,6 +1201,10 @@ impl Plan<'_> {
             return;
         }
         self.remember_heads(ty);
+        // Dynamic/local type bindings are not closed-world witness candidates.
+        if baml_compiler2_mir::RealizedTy::try_from(ty.clone()).is_err() {
+            return;
+        }
         match ty {
             RuntimeTy::Union(m) => {
                 for t in m {

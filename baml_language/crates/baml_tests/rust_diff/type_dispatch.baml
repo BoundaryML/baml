@@ -64,6 +64,29 @@ class AliasField { value Scalar }
 function scalar(value: Scalar) -> int {
   match(value) { int => 59, string => 61, null => 67 }
 }
+interface AliasDispatch { function amount(self) -> int throws never }
+class AliasOwner<T> { left: int, right: T }
+type PinnedOwner = AliasOwner<string>
+implement AliasDispatch for PinnedOwner {
+  function amount(self) -> int throws never { self.left }
+}
+function alias_dispatch(value: AliasDispatch) -> int { value.amount() }
+class EffectCalculator {
+  base: int
+  function add(self, n: int) -> int { self.base + n }
+}
+class EffectHolder { callback: (int) -> int throws never }
+function apply_effect(f: (int) -> int, n: int) -> int { f(n) }
+function apply_generic_effect<T>(f: (T) -> T, n: T) -> T { f(n) }
+function fail_bottom() -> never { baml.sys.panic("bottom") }
+function bottom_result() -> int {
+  { fail_bottom(); 0 } catch (e) { baml.panics.UserPanic => 97 }
+}
+function effect_result() -> int {
+  let calc = EffectCalculator { base: 89 };
+  let holder = EffectHolder { callback: calc.add };
+  apply_effect(holder.callback, 1) + apply_generic_effect<int>(holder.callback, 2)
+}
 function main() -> int {
   let a = Box<int> { value: 29 };
   let b = Box<string> { value: "hello" };
@@ -85,5 +108,7 @@ function main() -> int {
   total += scalar(AliasField { value: null }.value) + scalar(1) + scalar("x");
   total += phantom(Phantom<MetadataOnly> { number: 79 });
   total += phantom_enum(Phantom<MetadataEnum> { number: 83 });
+  total += effect_result() + bottom_result();
+  total += alias_dispatch(AliasOwner<string> { left: 101, right: "alias" });
   total
 }

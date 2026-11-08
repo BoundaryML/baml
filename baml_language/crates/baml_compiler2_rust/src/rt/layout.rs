@@ -142,6 +142,7 @@ impl Plan<'_> {
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
+            RuntimeTy::Never => Repr::Null,
             RuntimeTy::Future(..) => Repr::Future,
             RuntimeTy::Uint8Array => Repr::Bytes,
             RuntimeTy::RustType => Repr::Opaque,
@@ -264,7 +265,7 @@ impl Plan<'_> {
     pub(super) fn field_repr(&self, ty: &bex_vm_types::RuntimeTy) -> Gen<Repr> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
-            T::Null => Repr::Null,
+            T::Null | T::Never => Repr::Null,
             T::Function { .. } => Repr::Closure,
             T::Future(..) => Repr::Future,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
@@ -347,15 +348,16 @@ impl Plan<'_> {
                     })
                     .ok_or_else(|| no("interface field"))?,
             ),
-            T::Class(head, args) if !args.is_empty() => Repr::Ptr(
-                self.class_instances
+            T::Class(head, args) if !args.is_empty() => {
+                let args = args.iter().map(super::generics::canonical_type).collect::<Vec<_>>();
+                Repr::Ptr(self.class_instances
                     .iter()
                     .find(|(c, a, _)| {
-                        self.class(*c).type_tag == head.tag() && a.as_slice() == args.as_ref()
+                        self.class(*c).type_tag == head.tag() && *a == args
                     })
                     .map(|(_, _, c)| *c)
-                    .ok_or_else(|| no("unregistered generic class"))?,
-            ),
+                    .ok_or_else(|| no("unregistered generic class"))?)
+            },
             T::Class(head, args) if args.is_empty() => {
                 let object = self
                     .program
@@ -399,7 +401,10 @@ impl Plan<'_> {
                     .contains(&u32::try_from(object).expect("object index"))
         }) && self.list_error_descriptor(object).is_none()
             && ((class.path.to_string().starts_with("panics.")
-                && class.path.to_string() != "panics.UserPanic")
+                && !matches!(
+                    class.path.to_string().as_str(),
+                    "panics.UserPanic" | "panics.AssertionFailed"
+                ))
                 || matches!(
                     class.path.to_string().as_str(),
                     "json.ParseError" | "json.DecodeError"

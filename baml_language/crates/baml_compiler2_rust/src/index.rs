@@ -22,6 +22,7 @@ use crate::coords::{
     enum_head_coords, function_coords, interface_head_coords, item_path, let_coords,
 };
 
+#[derive(Clone)]
 pub(crate) struct ProgramIndex<'p> {
     program: &'p Program,
     rt_origins: HashMap<usize, usize>,
@@ -331,6 +332,30 @@ impl<'p> ProgramIndex<'p> {
         ]
         .into_iter()
         .find_map(|path| self.lookup((head.root(), path(item_path(head)))))
+    }
+
+    /// Recover a declaration that occurs only in a linked implementation frame.
+    /// Such a head need not appear in the caller's local types or constructors.
+    pub(crate) fn declaration(&self, tag: TypeTag) -> Option<DeclName> {
+        for (&root, &ordinal) in &self.packages {
+            let package = &self.program.packages[ordinal as usize];
+            for (path, object) in package
+                .classes
+                .iter()
+                .chain(package.enums.iter())
+                .chain(package.interfaces.iter())
+                .chain(package.type_aliases.iter())
+            {
+                if TypeTag::of_static_index(object.raw()) == tag {
+                    return Some(DeclName::qualified(
+                        root,
+                        path.namespace.clone(),
+                        path.name.clone(),
+                    ));
+                }
+            }
+        }
+        None
     }
 
     pub(crate) fn pooled_constant(&self, function: usize, wanted: &ConstValue) -> Option<usize> {
