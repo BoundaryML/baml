@@ -9,6 +9,9 @@ BAML_RUST_DIFF_PROBES='process::startup,programs::richards 50' cargo test -p bam
 ```
 
 `BAML_RUST_DIFF_TIMEOUT_SECS` bounds each executable (default 120 seconds).
+`BAML_RUST_DIFF_BACKENDS=rt,rt-gc-stress` selects just those backends plus the
+mandatory bytecode reference. RT-only selections run telemetry off, its current
+supported comparison level. Combine with `BAML_RUST_DIFF_PROBES` for scoped checks.
 `BAML_RUST_DIFF_DUMP=1` prints process output. Unknown/empty selections fail.
 Normalized recordings are saved under Cargo's test scratch directory,
 `rust-differential/telemetry/<fixture>-<backend>-telemetry-<level>.jsonl`.

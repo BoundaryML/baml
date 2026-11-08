@@ -72,19 +72,45 @@ fn classify(error: String) -> Rejection {
 pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
     std::fs::create_dir_all(build).unwrap();
     let mut artifacts = Artifacts::new();
+    let mut initializer_rejection: Option<Rejection> = None;
     for probe in PROBES {
         if only.is_some_and(|only| !only.split(',').any(|name| name == *probe)) {
             continue;
         }
+        // Initializer admission is checked for the whole source project before
+        // entry reachability. Rechecking every entry cannot change this result.
+        // Standalone fixtures use a different project and must still be packed.
+        if *probe != "StackAllocation"
+            && !super::is_list_probe(probe)
+            && let Some(rejection) = &initializer_rejection
+        {
+            artifacts.insert((*probe).into(), Err(rejection.clone()));
+            continue;
+        }
         let executable = build.join(probe);
+        let standalone = build.join("stack-allocation-source");
+        let source = if *probe == "StackAllocation" {
+            std::fs::create_dir_all(standalone.join("baml_src")).unwrap();
+            std::fs::copy(
+                manifest.join("rust_diff/baml.toml"),
+                standalone.join("baml.toml"),
+            )
+            .unwrap();
+            std::fs::copy(
+                manifest.join("rust_diff/baml_src/stack_allocation.baml"),
+                standalone.join("baml_src/stack_allocation.baml"),
+            )
+            .unwrap();
+            standalone
+        } else if super::is_list_probe(probe) {
+            manifest.join("rust_diff/list_probes")
+        } else {
+            manifest.join("rust_diff")
+        };
         let result = pack_result(
             build,
             workspace,
-            &manifest.join(if super::is_list_probe(probe) {
-                "rust_diff/list_probes"
-            } else {
-                "rust_diff"
-            }),
+            &source,
             &executable,
             [if super::initializer_probes::collects_tests(probe) {
                 "InitializerTestSummary"
@@ -113,6 +139,12 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
                 Ok(executable)
             }
         });
+        if *probe != "StackAllocation"
+            && !super::is_list_probe(probe)
+            && matches!(&result, Err(Rejection::Unsupported(reason)) if reason == "top-level initializers")
+        {
+            initializer_rejection = result.as_ref().err().cloned();
+        }
         artifacts.insert((*probe).into(), require_list_coverage(probe, result));
     }
     for fixture in kpis::fixtures(workspace, only) {

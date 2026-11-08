@@ -53,14 +53,34 @@ pub const STACK_DESC: Descriptor = Descriptor {
 };
 
 /// Leave room for error allocation and fiber unwinding below each BAML frame.
+pub(crate) const STACK_RESERVE: usize = 64 * 1024;
+
 #[inline(always)]
 pub fn check_stack() -> R<()> {
     let marker = 0u8;
-    if (&raw const marker as usize).saturating_sub(crate::STACK_LIMIT.get()) < 64 * 1024 {
-        Err(from_panic(bex_vm_types::errors::VmPanic::StackOverflow))
+    if (&raw const marker as usize).saturating_sub(crate::STACK_LIMIT.get()) < STACK_RESERVE {
+        Err(stack_overflow())
     } else {
         Ok(())
     }
+}
+
+#[inline(always)]
+pub(crate) fn check_stack_before(threshold: usize) -> R<()> {
+    let marker = 0u8;
+    if (&raw const marker as usize) < threshold {
+        Err(stack_overflow())
+    } else {
+        Ok(())
+    }
+}
+
+// VmPanic is a large enum passed indirectly. Keep its argument storage on
+// this cold frame rather than reserving it in every generated BAML frame.
+#[cold]
+#[inline(never)]
+fn stack_overflow() -> Box<Error> {
+    from_panic(bex_vm_types::errors::VmPanic::StackOverflow)
 }
 
 #[repr(C)]
@@ -256,7 +276,7 @@ pub fn driver_observed(
         }
     };
     let result = driver_inner(descriptors, entry, &mut session, format_site);
-    session.finish(result.is_ok());
+    session.finish(&result);
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
@@ -786,6 +806,43 @@ mod stack_guard_tests {
             Ok(1)
         }
         assert_eq!(unsafe { instance.run_baml(recover) }.unwrap(), 1);
+    }
+
+    #[inline(never)]
+    unsafe fn recurse_cached(cx: crate::calls::Context, depth: usize) -> R<i64> {
+        let pad = [0u8; 16 * 1024];
+        std::hint::black_box(&pad);
+        cx.check_stack()?;
+        if depth & 15 == 0 {
+            unsafe { cx.poll()? };
+        }
+        let value = unsafe { recurse_cached(cx, depth + 1) };
+        std::hint::black_box(&pad);
+        value
+    }
+
+    #[test]
+    fn cached_call_context_overflows_and_recovers_under_gc_stress() {
+        fn entry() -> R<i64> {
+            unsafe { recurse_cached(crate::calls::Context::current(), 0) }
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[false, false, false, true, true, true, true, true, true],
+        );
+        instance.set_stress(true);
+        for _ in 0..2 {
+            let error = unsafe { instance.run_baml(entry) }.unwrap_err();
+            assert_eq!(error.class, "baml.panics.StackOverflow");
+            assert_eq!(error.message, "stack overflow");
+            fn recover() -> R<i64> {
+                let cx = unsafe { crate::calls::Context::current() };
+                cx.check_stack()?;
+                unsafe { cx.poll()? };
+                Ok(7)
+            }
+            assert_eq!(unsafe { instance.run_baml(recover) }.unwrap(), 7);
+        }
     }
 }
 
