@@ -6,6 +6,7 @@ use crate::{
 };
 use baml_rt_gc::{SlotKind, write_ptr};
 use serde_json::Value;
+use std::fmt::Write as _;
 
 #[derive(Clone, Copy)]
 pub enum Ty {
@@ -481,7 +482,7 @@ impl Encoder<'_> {
             value
         };
         match value.tag {
-            0 => self.out.push_str(&(value.payload as i64).to_string()),
+            0 => write!(&mut self.out, "{}", value.payload as i64).expect("String write"),
             1 => self
                 .out
                 .push_str(if value.payload == 0 { "false" } else { "true" }),
@@ -540,7 +541,17 @@ impl Encoder<'_> {
                                     }
                                 }
                             };
-                            unsafe { self.value(value, &format!("{path}[{i}]"), depth + 1) }?;
+                            // Scalar leaves cannot fail except for a non-finite
+                            // float. Build an indexed error path only when the
+                            // value can actually need it.
+                            let scalar = matches!(value.tag, 0..=3)
+                                || (value.tag == crate::FLOAT_TAG
+                                    && f64::from_bits(value.payload).is_finite());
+                            if scalar {
+                                unsafe { self.value(value, "", depth + 1) }?;
+                            } else {
+                                unsafe { self.value(value, &format!("{path}[{i}]"), depth + 1) }?;
+                            }
                             if i & 255 == 255 {
                                 self.cx.poll()?;
                             }
