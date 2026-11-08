@@ -6,7 +6,11 @@ impl Emitter<'_, '_> {
         let block = &self.body.blocks[b];
         let pcs = &self.plan.index.positions(self.object).block_pcs[b];
         self.mark(pcs.start);
-        let mut out = String::new();
+        let mut out = if block.shielded {
+            "{let _shield=rt::tasks::shield();".to_owned()
+        } else {
+            String::new()
+        };
         if headers.contains(&b) {
             writeln!(
                 &mut out,
@@ -44,54 +48,22 @@ impl Emitter<'_, '_> {
         let term = block.terminator.as_ref().unwrap();
         if let Some(result) = registry::terminator(self, term) {
             out.push_str(&result?);
+            if block.shielded {
+                out.push('}');
+            }
             return Ok(out);
         }
         match term {
             Terminator::Throw { value } => {
-                let (value, Repr::Ptr(c)) = self.operand(value)? else {
-                    return Err(no("non-class throw"));
+                let (value, repr) = self.operand(value)?;
+                let name = match repr {
+                    Repr::Ptr(class) => super::errors::thrown_class(self, class)?,
+                    Repr::Str => "string".into(),
+                    _ => return Err(no("non-pointer throw")),
                 };
-                let Object::Class(class) =
-                    &self.plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-                else {
-                    unreachable!()
-                };
-                if self.plan.layouts[&c]
-                    .fields
-                    .iter()
-                    .any(|r| !matches!(r, Repr::Int | Repr::Str | Repr::Float | Repr::Bool))
-                {
-                    return Err(no("throw class with unsupported fields"));
-                }
-                let package = self
-                    .plan
-                    .program
-                    .packages
-                    .iter()
-                    .find(|p| p.objects.contains(&u32::try_from(c).expect("object index")))
-                    .ok_or_else(|| no("throw class package"))?;
-                let name = format!("{}.{}", package.name, class.path);
-                let fields = class
-                    .fields
-                    .iter()
-                    .map(|f| format!("{}: {{}}", f.name))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let display = format!("{name} {{{{{fields}}}}}");
-                let values = (0..class.fields.len())
-                    .map(|i| {
-                        let field=format!("(*(p as *const C{c})).f{i}");
-                        match self.plan.layouts[&c].fields[i] {
-                            Repr::Str=>format!("if {field}==0{{String::from(\"null\")}}else{{format!(\"{{:?}}\",rt::strings::Str::from_raw({field}).text(&rt::strings::Cx::current()))}}"),
-                            Repr::Float=>format!("rt::format_float({field})"),
-                            Repr::Bool=>format!("({field}!=0)"),
-                            _=>field,
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
+                let display = super::errors::thrown_display(self, repr, "p", &mut BTreeSet::new())?;
                 let error = format!(
-                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
+                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,telemetry_caught:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some({display})}}).at(&S{},{})",
                     self.object, self.site
                 );
                 writeln!(&mut out, "{{let p={value};{}}}", self.raise(&error)).unwrap();
@@ -109,7 +81,7 @@ impl Emitter<'_, '_> {
                     .id
                     .0;
                 out.push_str(&self.raise(&format!(
-                    "caught{handler}.take().expect(\"missing caught error\").rethrow()"
+                    "rt::telemetry::evidence::rethrow(caught{handler}.take().expect(\"missing caught error\").rethrow(),&S{}, {})",self.object,self.site
                 )));
             }
 
@@ -124,6 +96,9 @@ impl Emitter<'_, '_> {
                     let short = format!("!({})", Self::null_test(&(v.clone(), t)));
                     let store = self.assign(destination, (v, t))?;
                     writeln!(&mut out, "c{b}={short};if c{b}{{{store}}}").unwrap();
+                    if block.shielded {
+                        out.push('}');
+                    }
                     return Ok(out);
                 }
                 if t != Repr::Bool {
@@ -146,6 +121,9 @@ impl Emitter<'_, '_> {
             }
             Terminator::Return | Terminator::Goto { .. } => {}
             _ => return Err(no("terminator")),
+        }
+        if block.shielded {
+            out.push('}');
         }
         Ok(out)
     }

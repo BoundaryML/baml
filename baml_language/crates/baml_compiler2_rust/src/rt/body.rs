@@ -1,7 +1,13 @@
 use super::*;
 
 impl Emitter<'_, '_> {
-    pub(super) fn function(&mut self, arity: usize, inline: bool, stack_leaf: bool) -> Gen<String> {
+    pub(super) fn function(
+        &mut self,
+        arity: usize,
+        inline: bool,
+        stack_leaf: bool,
+        recursive: bool,
+    ) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
             unwinds: self
@@ -17,7 +23,10 @@ impl Emitter<'_, '_> {
                 .map(|b| match b.terminator.as_ref().unwrap() {
                     Terminator::Goto { target }
                     | Terminator::Call { target, .. }
-                    | Terminator::VirtualCall { target, .. } => Ok(Flow::Goto(target.0)),
+                    | Terminator::VirtualCall { target, .. }
+                    | Terminator::Await { target, .. }
+                    | Terminator::AwaitAny { target, .. }
+                    | Terminator::SysOp { target, .. } => Ok(Flow::Goto(target.0)),
                     Terminator::Switch {
                         arms, otherwise, ..
                     } => Ok(Flow::Switch {
@@ -33,6 +42,7 @@ impl Emitter<'_, '_> {
                         else_block: else_block.0,
                     }),
                     Terminator::Unreachable => Ok(Flow::Exit),
+                    Terminator::Spawn { resume, .. } => Ok(Flow::Goto(resume.0)),
                     Terminator::Branch {
                         then_block,
                         else_block,
@@ -133,6 +143,9 @@ impl Emitter<'_, '_> {
         let mut code = call_cost::prologue(
             object, &params, &arguments, returned, &captures, attribute, &guard,
         );
+        if recursive {
+            code.push_str(&format!("{};\n", self.fallible("cx.poll()")));
+        }
         for i in 1..=arity {
             if self.body.locals[i].is_captured {
                 let value = self.coerce((format!("l{i}"), self.argument_repr(i)?), Repr::Tagged)?;
@@ -150,6 +163,17 @@ impl Emitter<'_, '_> {
             }
             let t = self.local(i)?;
             writeln!(&mut code, "let mut l{i}:{}={};", t.rust(), t.zero()).unwrap();
+        }
+        for block in &self.body.blocks {
+            if let Some(term) = &block.terminator
+                && let Some(local) = super::tasks::ephemeral_plan(self, term)
+            {
+                writeln!(
+                    &mut code,
+                    "let mut fast_plan_body{local}=0usize;let mut fast_plan_name{local}=0usize;"
+                )
+                .unwrap();
+            }
         }
         for iter in &self.iters {
             writeln!(&mut code, "let mut iter_index{iter}=0i64;").unwrap();

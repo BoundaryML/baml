@@ -167,6 +167,7 @@ pub(crate) fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<E
         Ok(value) => Box::new(Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value,
             class: if path.is_some() {
                 "baml.json.DecodeError"

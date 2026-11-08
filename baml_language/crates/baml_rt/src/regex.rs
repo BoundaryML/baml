@@ -109,6 +109,7 @@ fn build_error(cx: &mut Cx, pattern: Str, error: &BuildError, schema: &Schema) -
     }
     let offset = |n: Option<i64>| n.map_or_else(|| "null".to_owned(), |n| n.to_string());
     Ok(Box::new(Error {
+        telemetry_caught: None,
         telemetry_at: None,
         telemetry_raise: None,
         value,
@@ -230,8 +231,9 @@ fn materialize(
         }
         if let Some(name) = names.get(index).and_then(Option::as_deref) {
             let key = cx.string(name)?;
-            let group = unsafe {crate::lists::List::<crate::lists::Ptr>::from_raw(groups)}
-                .get(cx,index as i64)?.as_raw();
+            let group = unsafe { crate::lists::List::<crate::lists::Ptr>::from_raw(groups) }
+                .get(cx, index as i64)?
+                .as_raw();
             named.set(cx, key, group)?;
         }
     }
@@ -299,7 +301,9 @@ pub unsafe fn matches(
     } else if found.is_empty() {
         0
     } else {
-        unsafe {crate::lists::List::<crate::lists::Ptr>::from_raw(list)}.get(cx,0)?.as_raw()
+        unsafe { crate::lists::List::<crate::lists::Ptr>::from_raw(list) }
+            .get(cx, 0)?
+            .as_raw()
     })
 }
 pub fn index_from(cx: &Cx, haystack: Str, search: Str, start: i64) -> R<Dyn> {

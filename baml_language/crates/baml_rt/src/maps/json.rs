@@ -253,6 +253,7 @@ pub unsafe fn serialization_error(
     match value {
         Err(error) => error,
         Ok(value) => Box::new(crate::Error {
+            telemetry_caught: None,
             telemetry_raise: None,
             telemetry_at: None,
             value,

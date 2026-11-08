@@ -80,6 +80,7 @@ const FEATURES: &[&dyn Feature] = &[
     &tasks::Feature,
     &lists::Feature,
     &maps::Feature,
+    &super::callbacks::Feature,
     &super::string_defaults::Feature,
     &super::string_bytes::Feature,
     &super::regex::Feature,

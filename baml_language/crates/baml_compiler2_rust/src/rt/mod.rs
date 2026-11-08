@@ -22,7 +22,7 @@ struct MirFunction<'db> {
     identity: Option<baml_compiler2_mir::MirFunctionId<'db>>,
     arity: usize,
     kind: MirFunctionKind<'db>,
-    lambdas: Vec<baml_compiler2_mir::MirFunction<'db>>,
+    lambdas: Vec<MirFunction<'db>>,
 }
 impl<'db> From<&baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
     fn from(mir: &baml_compiler2_mir::MirFunction<'db>) -> Self {
@@ -30,7 +30,7 @@ impl<'db> From<&baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
             identity: Some(mir.identity.clone()),
             arity: mir.arity,
             kind: mir.kind.clone(),
-            lambdas: mir.lambdas.clone(),
+            lambdas: mir.lambdas.iter().map(Self::from).collect(),
         }
     }
 }
@@ -60,6 +60,18 @@ struct Plan<'a> {
     lists: BTreeSet<Repr>,
     list_elements: std::cell::RefCell<Vec<ListElement>>,
     json_types: Vec<Vec<usize>>,
+    environments: bool,
+    task_support: bool,
+    cleanup_methods: BTreeMap<usize, usize>,
+    captures: BTreeMap<usize, Vec<Repr>>,
+    capture_types: BTreeMap<usize, Vec<RuntimeTy>>,
+    lambda_bodies: BTreeMap<usize, usize>,
+    lambda_targets: BTreeMap<(usize, usize), usize>,
+    generic_functions: Vec<(usize, Vec<RuntimeTy>, usize)>,
+    generic_values: BTreeMap<(usize, usize, usize), usize>,
+    virtual_values: BTreeMap<(usize, usize, usize), Vec<(Repr, usize)>>,
+    callables: BTreeSet<usize>,
+    closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
     enums: BTreeSet<usize>,
     specialized_calls: BTreeMap<(usize, usize), usize>,
     type_codes: Vec<baml_compiler2_mir::TyTemplate>,
@@ -77,11 +89,6 @@ struct Plan<'a> {
     list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
     json_decode_codes: BTreeSet<usize>,
     json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
-    environments: bool,
-    captures: BTreeMap<usize, Vec<Repr>>,
-    lambda_bodies: BTreeMap<usize, usize>,
-    callables: BTreeSet<usize>,
-    closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
     map_types: std::cell::RefCell<Vec<maps::MapType>>,
     json_maps: BTreeMap<Repr, RuntimeTy>,
     map_stringify: bool,
@@ -172,3 +179,5 @@ mod switches;
 mod generics;
 
 mod interface_fields;
+
+mod callbacks;

@@ -1014,6 +1014,8 @@ dependencies = [
  "btel_types",
  "itoa",
  "libc",
+ "num-bigint",
+ "num-traits",
  "serde_json",
  "smallvec",
  "sys_regex",

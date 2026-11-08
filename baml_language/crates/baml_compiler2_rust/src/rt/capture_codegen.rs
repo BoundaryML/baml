@@ -132,13 +132,18 @@ pub(super) fn emit(
         };
         let shape = if plan.bigints && desc == plan.bigint_descriptor() {
             "Bigint".to_owned()
+        } else if plan.future_descriptor() == Some(desc) {
+            "Future".to_owned()
         } else if plan
             .closure_descriptors()
             .is_some_and(|(_, closure)| desc == closure)
         {
             "Closure".to_owned()
         } else if let Some(class) = class {
-            if let Some((_, args, _)) = plan.class_instances.iter().find(|(_, _, id)| *id == class)
+            if super::tasks::class_is(plan, class, "future.Future") {
+                "Future".to_owned()
+            } else if let Some((_, args, _)) =
+                plan.class_instances.iter().find(|(_, _, id)| *id == class)
             {
                 let args = args
                     .iter()
@@ -252,8 +257,8 @@ pub(super) fn capture_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
 pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     use bex_vm_types::RuntimeTy as T;
     let member = match ty {
-        T::Int => "Int".into(),
         T::Bigint => "Bigint".into(),
+        T::Int => "Int".into(),
         T::Literal(lit, f) => match lit {
             baml_type::Literal::Int(v) => {
                 format!("LiteralInt({v},rt::telemetry::capture::Freshness::{f:?})")
@@ -413,10 +418,14 @@ fn capture_list_element(
     lists: &BTreeMap<Repr, usize>,
     repr: Repr,
 ) -> Gen<(usize, String)> {
-    if let Repr::ListClosure(id) = repr {
+    if let Repr::ListClosure(id) | Repr::ListFuture(id) = repr {
         let full = super::closures::capture_type(&plan.closure_lists[&id])?;
         return Ok((
-            plan.closure_descriptors().unwrap().1 + 3,
+            (if matches!(repr, Repr::ListFuture(_)) {
+                plan.future_descriptor().unwrap()
+            } else {
+                plan.closure_descriptors().unwrap().1
+            }) + 3,
             full.strip_prefix("rt::telemetry::capture::Type::")
                 .unwrap()
                 .to_owned(),

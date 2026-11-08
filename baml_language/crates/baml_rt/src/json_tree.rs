@@ -217,6 +217,7 @@ impl Config {
         }
         Box::new(Error {
             telemetry_at: None,
+            telemetry_caught: None,
             telemetry_raise: None,
             value: pointer as usize,
             class: "baml.json.PathError",
@@ -487,8 +488,8 @@ impl Config {
             _ => {
                 if value.tag == self.bigint as u64 + 3 {
                     Value::Number(
-                        unsafe { Str::from_raw(value.payload as usize) }
-                            .text(cx)
+                        unsafe { crate::tasks::bigint_value(value.payload as usize) }
+                            .to_string()
                             .parse()
                             .expect("normalized bigint"),
                     )
@@ -573,8 +574,8 @@ unsafe fn fast(
                 0 => Some(value.payload as i64 as f64),
                 crate::FLOAT_TAG => Some(f64::from_bits(value.payload)),
                 tag if tag == config.bigint as u64 + 3 => {
-                    unsafe { Str::from_raw(value.payload as usize) }
-                        .try_as_str(cx)?
+                    unsafe { crate::tasks::bigint_value(value.payload as usize) }
+                        .to_string()
                         .parse::<f64>()
                         .ok()
                         .filter(|f| f.is_finite())

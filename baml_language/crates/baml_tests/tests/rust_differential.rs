@@ -38,6 +38,29 @@ const PROBES: &[&str] = &[
     "RuntimeListJsonError",
     "RtClosures",
     "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
+    "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -302,8 +325,28 @@ fn is_list_probe(probe: &str) -> bool {
     probe.starts_with("RuntimeList")
 }
 
-fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
-    matches!(probe, "RtClosures" | "RtEmptyClosures").then(|| manifest.join("rt_fixtures/closures"))
+fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
+    match probe {
+        "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
+            Some(manifest.join("rt_fixtures/task_terminal"))
+        }
+        "RtTaskLimits" | "RtTaskTimeout" | "RtAutomaticCleanup" => {
+            Some(manifest.join("rt_fixtures/task_timeouts"))
+        }
+        "RtVirtualGenericClosures"
+        | "RtBoundGenericClosures"
+        | "RtVirtualOwnGenericClosure"
+        | "RtNativeHigherOrderValue"
+        | "RtDefaultCallbacks" => Some(manifest.join("rt_fixtures/closure_edges")),
+        "RtTaskErrors" | "RtBackgroundTask" | "RtBackgroundError" | "RtTokenComposition" => {
+            Some(manifest.join("rt_fixtures/task_edges"))
+        }
+        "RtClosures" | "RtEmptyClosures" | "RtGenericClosures" | "RtGenericMethods"
+        | "RtNativeCallback" | "RtBuiltinCallbacks" => Some(manifest.join("rt_fixtures/closures")),
+        "RtSpawnAwait" | "RtTaskControls" | "RtTaskSleep" | "RtTaskModifiers"
+        | "RtScalarTaskOrder" => Some(manifest.join("rt_fixtures/tasks")),
+        _ => None,
+    }
 }
 
 fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
@@ -311,7 +354,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
     let mut artifacts = std::collections::BTreeMap::new();
     if PROBES
         .iter()
-        .filter(|p| standalone_closure_source(manifest, p).is_none())
+        .filter(|p| standalone_source(manifest, p).is_none())
         .any(|p| !is_list_probe(p) && only.is_none_or(|o| o.split(',').any(|name| name == *p)))
     {
         let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
@@ -325,7 +368,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .copied()
                 .filter(|p| !is_list_probe(p))
                 .filter(|p| !initializer_probes::collects_tests(p))
-                .filter(|p| standalone_closure_source(manifest, p).is_none())
+                .filter(|p| standalone_source(manifest, p).is_none())
                 .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
                 .chain(["GlobalCalls", "GlobalCallPending", "InitializerTestSummary"]),
         );
@@ -365,7 +408,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         );
         for probe in PROBES
             .iter()
-            .filter(|p| standalone_closure_source(manifest, p).is_none())
+            .filter(|p| standalone_source(manifest, p).is_none())
         {
             if is_list_probe(probe) {
                 continue;
@@ -394,7 +437,33 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
             artifacts.insert(probe.into(), executable.clone());
         }
     }
-    for probe in ["RtClosures", "RtEmptyClosures"] {
+    for probe in [
+        "RtClosures",
+        "RtEmptyClosures",
+        "RtGenericClosures",
+        "RtGenericMethods",
+        "RtNativeCallback",
+        "RtBuiltinCallbacks",
+        "RtSpawnAwait",
+        "RtTaskControls",
+        "RtTaskSleep",
+        "RtTaskModifiers",
+        "RtScalarTaskOrder",
+        "RtTaskErrors",
+        "RtBackgroundTask",
+        "RtBackgroundError",
+        "RtTokenComposition",
+        "RtVirtualGenericClosures",
+        "RtBoundGenericClosures",
+        "RtVirtualOwnGenericClosure",
+        "RtNativeHigherOrderValue",
+        "RtDefaultCallbacks",
+        "RtTaskLimits",
+        "RtTaskTimeout",
+        "RtAutomaticCleanup",
+        "RtCancelledFailure",
+        "RtLinkedCancelledFailure",
+    ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
         }
@@ -402,7 +471,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         pack(
             build,
             workspace,
-            &standalone_closure_source(manifest, probe).unwrap(),
+            &standalone_source(manifest, probe).unwrap(),
             &executable,
             [probe],
         );
@@ -732,7 +801,34 @@ fn rust_differential() {
                     || (*level == "default"
                         && !matches!(
                             probe.as_str(),
-                            "Scalars" | "Hooked" | "ManualSpan" | "RtClosures" | "RtEmptyClosures"
+                            "Scalars"
+                                | "Hooked"
+                                | "ManualSpan"
+                                | "RtClosures"
+                                | "RtEmptyClosures"
+                                | "RtGenericClosures"
+                                | "RtGenericMethods"
+                                | "RtNativeCallback"
+                                | "RtBuiltinCallbacks"
+                                | "RtSpawnAwait"
+                                | "RtTaskControls"
+                                | "RtTaskSleep"
+                                | "RtTaskModifiers"
+                                | "RtScalarTaskOrder"
+                                | "RtTaskErrors"
+                                | "RtBackgroundTask"
+                                | "RtBackgroundError"
+                                | "RtTokenComposition"
+                                | "RtVirtualGenericClosures"
+                                | "RtBoundGenericClosures"
+                                | "RtVirtualOwnGenericClosure"
+                                | "RtNativeHigherOrderValue"
+                                | "RtDefaultCallbacks"
+                                | "RtTaskLimits"
+                                | "RtTaskTimeout"
+                                | "RtAutomaticCleanup"
+                                | "RtCancelledFailure"
+                                | "RtLinkedCancelledFailure"
                         )))
             {
                 continue;

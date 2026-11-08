@@ -3,10 +3,10 @@ use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Repr {
     Int,
+    Bigint,
     Float,
     Bool,
     Str,
-    Bigint,
     Bytes,
     Opaque,
     Ptr(usize),
@@ -25,6 +25,8 @@ pub(super) enum Repr {
     Naming,
     Enum(usize),
     Null,
+    Future,
+    ListFuture(u64),
     Closure,
     Cell,
     ListClosure(u64),
@@ -60,7 +62,8 @@ impl Repr {
     pub(super) fn growing(self) -> bool {
         matches!(
             self,
-            Self::ListClosure(_)
+            Self::ListFuture(_)
+                | Self::ListClosure(_)
                 | Self::ListInt
                 | Self::ListPtr(_)
                 | Self::ListStr
@@ -75,6 +78,7 @@ impl Repr {
             Self::Bool => "bool",
             Self::Str => "rt::lists::Ptr",
             Self::Closure => "rt::closures::Closure",
+            Self::Future => "rt::tasks::FutureSlot",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn",
             r if r.pointer() => "rt::lists::Ptr",
             _ => return Err(no("list element slot")),
@@ -113,6 +117,8 @@ impl Repr {
                 | Self::Cell
                 | Self::ListClosure(_)
                 | Self::Map(_)
+                | Self::Future
+                | Self::ListFuture(_)
                 | Self::MapStrPtr(_)
         )
     }

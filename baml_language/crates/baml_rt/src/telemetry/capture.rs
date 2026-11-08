@@ -71,6 +71,7 @@ pub enum Shape {
         len: unsafe fn(usize) -> usize,
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
+    Future,
     MapStringPtr {
         tag: u64,
         value: &'static Type,
@@ -79,16 +80,17 @@ pub enum Shape {
 }
 pub use baml_type::Freshness;
 pub enum Type {
+    Null,
+    Never,
+    Unknown,
+    Bigint,
+    Future(&'static Type, &'static Type),
     Function {
         params: &'static [Parameter],
         ret: &'static Type,
         throws: &'static Type,
     },
-    Null,
-    Never,
-    Unknown,
     Int,
-    Bigint,
     LiteralInt(i64, Freshness),
     LiteralBool(bool, Freshness),
     LiteralString(&'static str, Freshness),
@@ -124,6 +126,10 @@ impl Type {
             Self::Null => OwnedType::Null,
             Self::Never => OwnedType::Never,
             Self::Unknown => OwnedType::Unknown,
+            Self::Future(value, error) => OwnedType::Future(
+                Box::new(value.owned(leaves, carried)),
+                Box::new(error.owned(leaves, carried)),
+            ),
             Self::Function {
                 params,
                 ret,
@@ -144,6 +150,7 @@ impl Type {
                 ret: Box::new(ret.owned(leaves, carried)),
                 throws: Box::new(throws.owned(leaves, carried)),
             },
+            Self::Bigint => OwnedType::Bigint,
             Self::Int => OwnedType::Int,
             Self::LiteralInt(v, f) => OwnedType::Literal(baml_type::Literal::Int(*v), *f),
             Self::LiteralBool(v, f) => OwnedType::Literal(baml_type::Literal::Bool(*v), *f),
@@ -154,7 +161,6 @@ impl Type {
                 OwnedType::Literal(baml_type::Literal::String((*v).into()), *f)
             }
             Self::Float => OwnedType::Float,
-            Self::Bigint => OwnedType::Bigint,
             Self::Alias(tag, name) => OwnedType::TypeAlias(named_identity(*tag, name)),
             Self::Interface(tag, name, args, assoc) => OwnedType::Interface(
                 named_identity(*tag, name),
@@ -358,11 +364,9 @@ impl Scratch {
             return SnapshotValue::Null;
         }
         let result = if matches!(shape, Shape::Bigint) {
-            let cx = unsafe { crate::strings::Cx::current() };
-            let text = unsafe { crate::strings::Str::from_raw(value.payload as usize) };
-            let integer = bex_vm_types::json_text::parse_decimal_bigint(&text.text(&cx))
-                .expect("normalized bigint");
-            leaves.bigint(&std::sync::Arc::new(integer))
+            leaves.bigint(&std::sync::Arc::new(unsafe {
+                crate::tasks::bigint_value(value.payload as usize)
+            }))
         } else if matches!(shape, Shape::String) {
             let text = unsafe { crate::strings::Str::from_raw(value.payload as usize) };
             // Match the shared capture builder's leaf gate before copying a
@@ -473,9 +477,24 @@ impl Scratch {
                                 } else {
                                     value
                                 };
-                            (field.name.into(), unsafe {
-                                self.add(shapes, leaves, value, depth + 1)
-                            })
+                            let captured = if field.type_id == u32::MAX - 2 {
+                                let key = Key::Value(ptr as usize);
+                                if let Some(value) = self.seen.get(&key) {
+                                    *value
+                                } else {
+                                    let value = leaves
+                                        .object(SnapshotObject::NonSnapshotableValue {})
+                                        .map_or(
+                                            SnapshotValue::Truncated(Limit::Objects),
+                                            SnapshotValue::Object,
+                                        );
+                                    self.seen.insert(key, value);
+                                    value
+                                }
+                            } else {
+                                unsafe { self.add(shapes, leaves, value, depth + 1) }
+                            };
+                            (field.name.into(), captured)
                         })
                     }
                     SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
@@ -611,10 +630,16 @@ impl Scratch {
                         )
                     })
                 }
+                (Key::Value(_), Shape::Future) => SnapshotObject::Descriptive {
+                    kind: btel_snapshot::Description::Future,
+                    name: None,
+                },
                 (Key::Value(pointer), Shape::Closure) => {
                     let name = unsafe { crate::closures::name(pointer) };
                     SnapshotObject::Descriptive {
-                        kind: if name.is_some() {
+                        kind: if unsafe { crate::closures::is_generic(pointer) } {
+                            btel_snapshot::Description::GenericFunction
+                        } else if name.is_some() {
                             btel_snapshot::Description::Function
                         } else if unsafe { crate::closures::is_bound(pointer) } {
                             btel_snapshot::Description::BoundMethod

@@ -8,13 +8,68 @@ use super::{Artifacts, PROBES, kpis, pack_result};
 const TELEMETRY_SUPPORTED: bool = false;
 // The standalone probes exercise closures without the shared project's global
 // initializer dependency. Their admission is a required coverage baseline.
-const REQUIRED_PROBES: &[&str] = &["RtClosures", "RtEmptyClosures"];
+const REQUIRED_PROBES: &[&str] = &[
+    "RtClosures",
+    "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
+    "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
+    "concurrency::spawn await x10k",
+];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {
     level == "off"
         || TELEMETRY_SUPPORTED
-        || REQUIRED_PROBES.contains(&probe)
         || probe.starts_with("strings::")
+        || matches!(
+            probe,
+            "RtClosures"
+                | "RtEmptyClosures"
+                | "RtGenericClosures"
+                | "RtGenericMethods"
+                | "RtNativeCallback"
+                | "RtBuiltinCallbacks"
+                | "RtSpawnAwait"
+                | "RtTaskControls"
+                | "RtTaskSleep"
+                | "RtTaskModifiers"
+                | "RtScalarTaskOrder"
+                | "RtTaskErrors"
+                | "RtBackgroundTask"
+                | "RtBackgroundError"
+                | "RtTokenComposition"
+                | "RtVirtualGenericClosures"
+                | "RtBoundGenericClosures"
+                | "RtVirtualOwnGenericClosure"
+                | "RtNativeHigherOrderValue"
+                | "RtDefaultCallbacks"
+                | "RtTaskLimits"
+                | "RtTaskTimeout"
+                | "RtAutomaticCleanup"
+                | "RtCancelledFailure"
+                | "RtLinkedCancelledFailure"
+                | "concurrency::spawn await x10k"
+        )
 }
 
 // List coverage baseline: each admitted fixture must keep passing both runtime
@@ -98,7 +153,8 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         // Initializer admission is checked for the whole source project before
         // entry reachability. Rechecking every entry cannot change this result.
         // Standalone fixtures use a different project and must still be packed.
-        if *probe != "StackAllocation"
+        if super::standalone_source(manifest, probe).is_none()
+            && *probe != "StackAllocation"
             && !super::is_list_probe(probe)
             && let Some(rejection) = &initializer_rejection
         {
@@ -123,13 +179,12 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         } else if super::is_list_probe(probe) {
             manifest.join("rust_diff/list_probes")
         } else {
-            super::standalone_closure_source(manifest, probe)
-                .unwrap_or_else(|| manifest.join("rust_diff"))
+            super::standalone_source(manifest, probe).unwrap_or_else(|| manifest.join("rust_diff"))
         };
         let result = pack_result(
             build,
             workspace,
-            &source,
+            &super::standalone_source(manifest, probe).unwrap_or(source),
             &executable,
             [if super::initializer_probes::collects_tests(probe) {
                 "InitializerTestSummary"
@@ -286,7 +341,7 @@ impl Coverage {
             if TELEMETRY_SUPPORTED {
                 "required"
             } else {
-                "not yet supported generally; required for standalone closure probes"
+                "not yet supported generally; required for standalone closure/task probes and spawn KPI"
             }
         );
         for (construct, count) in blockers {

@@ -82,8 +82,9 @@ pub(super) fn telemetry_metadata_source(m: &btel_types::FunctionMetadata) -> Str
             )
         },
     );
+    let kind = &m.kind;
     format!(
-        "FunctionMetadata{{function_id,fqn:{},display_name:{},source_file:{},source_span:{span},kind:RuntimeFunctionKind::Bytecode,origin:RuntimeFunctionOrigin::{:?},owner_type:{},parent_function:{},lambda_path:{},definition_key:{},package_name:{},namespace:vec![{}],argument_layout:{args},source_map:{map},model_invoke:{}}}",
+        "FunctionMetadata{{function_id,fqn:{},display_name:{},source_file:{},source_span:{span},kind:RuntimeFunctionKind::{kind:?},origin:RuntimeFunctionOrigin::{:?},owner_type:{},parent_function:{},lambda_path:{},definition_key:{},package_name:{},namespace:vec![{}],argument_layout:{args},source_map:{map},model_invoke:{}}}",
         string(&m.fqn),
         string(&m.display_name),
         optional(m.source_file.as_deref()),
@@ -241,8 +242,9 @@ pub(super) fn emit(
             .map(|p| baml_base::Name::new(&p.name));
         let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
         let metadata = telemetry_metadata_source(&metadata);
-        let hidden = info.trace_passthrough
-            || matches!(all.get(&id).map(|m| &m.kind),
+        let hidden = matches!(all.get(&id).map(|m|&m.kind), Some(MirFunctionKind::Builtin(_)))
+            || info.trace_passthrough
+            || matches!(all.get(&id).map(|m|&m.kind),
             Some(MirFunctionKind::Bytecode(body)) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
                 StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
 

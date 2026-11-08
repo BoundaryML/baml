@@ -658,8 +658,8 @@ impl Encoder<'_> {
                 match shape {
                     Shape::ClassEncoded(encode) => unsafe { encode(self, pointer, depth) }?,
                     Shape::Bigint => {
-                        let text = unsafe { Str::from_raw(pointer) };
-                        self.out.push_str(text.try_as_str(self.cx)?);
+                        self.out
+                            .push_str(&unsafe { crate::tasks::bigint_value(pointer) }.to_string());
                     }
                     Shape::List { tag, tagged } => {
                         let ptr = pointer as *const usize;

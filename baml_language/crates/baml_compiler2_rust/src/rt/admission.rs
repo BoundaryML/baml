@@ -41,11 +41,10 @@ pub(super) fn collect<'db>(
     queue.extend(initializer_roots);
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
-    // Specialization owns and inserts MIR. Record body addresses only after that
-    // map is complete, including the clones of closure bodies.
-    for (&object, mir) in &all {
+    plan.lambda_bodies.clear();
+    for (&id, mir) in &all {
         if let MirFunctionKind::Bytecode(body) = &mir.kind {
-            plan.lambda_bodies.insert(body as *const _ as usize, object);
+            plan.lambda_bodies.insert(body as *const _ as usize, id);
         }
     }
     queue.extend(plan.string_overrides.values().copied());
@@ -61,7 +60,26 @@ pub(super) fn collect<'db>(
             .get(&object)
             .ok_or_else(|| no(format!("missing MIR for {}", plan.index.display(object))))?;
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
-            return Err(no(plan.index.display(object)));
+            let name = plan.index.display(object);
+            if !baml_builtins2_codegen::supports_rt(name) && !super::callbacks::native(name) {
+                return Err(no(name));
+            }
+            if !super::callbacks::native(name) {
+                builtins.insert(name.to_owned());
+            }
+            let frame = plan.linked_function_frame(object)?;
+            let info = plan.index.info(object);
+            let types = info
+                .param_types
+                .iter()
+                .chain([&info.return_type])
+                .map(|t| t.substitute_symbolic(&frame))
+                .collect::<Vec<_>>();
+            for ty in types {
+                let repr = plan.field_repr(&ty)?;
+                plan.record(repr)?;
+            }
+            continue;
         };
         registry::admit(registry::Admission::Function(mir))?;
         for target in super::closures::discover(db, plan, object, mir)? {
@@ -192,6 +210,11 @@ pub(super) fn collect<'db>(
             if let Some(&target) = plan.specialized_calls.get(&(object, block.id.0)) {
                 calls.entry(object).or_default().insert(target);
                 queue.push_back(target);
+                continue;
+            }
+            if let Some(term) = &block.terminator
+                && super::tasks::resource_concat(db, plan, body, term)
+            {
                 continue;
             }
             if let Some(term) = &block.terminator

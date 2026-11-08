@@ -31,7 +31,7 @@ pub(super) fn prepare<'db>(
                     identity: None,
                     arity: 0,
                     kind: MirFunctionKind::Bytecode(body),
-                    lambdas: lambdas,
+                    lambdas: lambdas.iter().map(MirFunction::from).collect(),
                 },
             );
         }
