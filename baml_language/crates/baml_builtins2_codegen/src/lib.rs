@@ -44,3 +44,39 @@ pub use triage::{
     BuiltinGroup, RtDisposition, RtStrategy, classify_builtin, implementation_strategy,
     native_inventory,
 };
+
+/// Calendar natives implemented through shared heap-neutral algorithms.
+pub fn supports_rt_calendar(path: &str) -> bool {
+    matches!(
+        path,
+        "baml.time.Instant.parse"
+            | "baml.time.Instant._to_string_impl"
+            | "baml.time.PlainDate.from_components"
+            | "baml.time.PlainDate.parse"
+            | "baml.time.PlainDate._to_string_impl"
+            | "baml.time.PlainDate._to_plain_datetime"
+            | "baml.time.PlainDate.year"
+            | "baml.time.PlainDate.month"
+            | "baml.time.PlainDate.day"
+            | "baml.time.PlainDateTime._from_components"
+            | "baml.time.PlainDateTime.parse"
+            | "baml.time.PlainDateTime._to_string_impl"
+            | "baml.time.PlainDateTime.to_plain_date"
+            | "baml.time.PlainDateTime.to_plain_time"
+            | "baml.time.PlainDateTime.year"
+            | "baml.time.PlainDateTime.month"
+            | "baml.time.PlainDateTime.day"
+            | "baml.time.PlainDateTime.hour"
+            | "baml.time.PlainDateTime.minute"
+            | "baml.time.PlainDateTime.second"
+            | "baml.time.PlainDateTime.millisecond"
+            | "baml.time.PlainTime._from_components"
+            | "baml.time.PlainTime.parse"
+            | "baml.time.PlainTime._to_string_impl"
+            | "baml.time.TimeZoneOffset.from_duration"
+            | "baml.time.ZonedDateTime.parse"
+            | "baml.time._format_zoned"
+    )
+}
+
+mod codegen_rt_calendar;

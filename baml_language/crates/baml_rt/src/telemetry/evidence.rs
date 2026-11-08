@@ -113,11 +113,13 @@ pub fn raised_with_kind(
     unsafe {
         (*frame).pc = pc;
     }
-    let kind = kind.unwrap_or_else(|| source
-        .kinds
-        .get(site)
-        .copied()
-        .unwrap_or(RaiseKind::Runtime));
+    let kind = kind.unwrap_or_else(|| {
+        source
+            .kinds
+            .get(site)
+            .copied()
+            .unwrap_or(RaiseKind::Runtime)
+    });
     let mut frames = Vec::new();
     if let Some(function) = native {
         frames.push(ErrorFrame {
@@ -209,7 +211,13 @@ pub(super) fn end(error: &mut Error, result: UnwindResult, handler_pc: Option<u3
 // On fully observed stacks no extra per-call frame or cold helper is needed:
 // the active path carries caller PCs, and one depth counter preserves recursion.
 #[cold]
-fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, site: usize, kind: Option<RaiseKind>) {
+fn raised_on_path(
+    state: &mut State,
+    error: &mut Error,
+    source: &crate::Source,
+    site: usize,
+    kind: Option<RaiseKind>,
+) {
     let Some(function) = state.active_function else {
         return;
     };
@@ -219,11 +227,13 @@ fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, 
     state.span(SpanRecord::ErrorRaised {
         raise_id,
         raised_at,
-        kind: kind.unwrap_or_else(|| source
-            .kinds
-            .get(site)
-            .copied()
-            .unwrap_or(RaiseKind::Runtime)),
+        kind: kind.unwrap_or_else(|| {
+            source
+                .kinds
+                .get(site)
+                .copied()
+                .unwrap_or(RaiseKind::Runtime)
+        }),
         function: Some(state.functions[function]),
         pc: source.pcs.get(site).copied(),
         raise_call: if mode == 2 { state.active_span } else { None },

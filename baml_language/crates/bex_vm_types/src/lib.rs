@@ -421,6 +421,7 @@ mod tests {
 }
 
 pub mod bigint;
+pub mod calendar;
 
 pub mod bytes;
 

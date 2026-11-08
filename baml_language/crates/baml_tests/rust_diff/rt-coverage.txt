@@ -1,4 +1,4 @@
-BAML runtime coverage (normal AND GC stress): 21 pass, 123 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 22 pass, 123 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: required for standalone closure and native probes
 Unselected rows retain results from the earlier full run.
@@ -109,6 +109,7 @@ RecursiveCancellation	unsupported: top-level initializers
 RtClosures	pass
 RtEmptyClosures	pass
 RtNativeBytes	pass
+RtNativeCalendar	pass
 RtNativeClock	pass
 RtNativeFiles	pass
 RtNativeMath	pass

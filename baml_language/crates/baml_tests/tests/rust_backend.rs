@@ -1171,6 +1171,30 @@ fn rt_host_scalars_io_and_statement_log_sites() {
 }
 
 #[test]
+fn rt_owned_native_admission_preserves_bytecode() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "native.baml",
+        include_str!("../rt_fixtures/native/baml_src/main.baml"),
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    for name in ["RtNativeFiles", "RtNativeProcess", "RtNativeCalendar"] {
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == name)
+            .unwrap();
+        baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
+    }
+    assert_eq!(fingerprint(&program), before);
+}
+
+#[test]
 fn rt_generics_switch_aliases() {
     let source = include_str!("../rust_diff/type_dispatch.baml");
     let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);

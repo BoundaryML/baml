@@ -17,6 +17,7 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtNativeRandom",
     "RtNativeFiles",
     "RtNativeProcess",
+    "RtNativeCalendar",
 ];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {

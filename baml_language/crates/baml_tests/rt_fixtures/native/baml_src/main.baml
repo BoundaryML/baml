@@ -111,3 +111,29 @@ function RtNativeProcess()->int {
     baml.io.println(shell.stdout.to_hex());
     if(out.exit_code==7 && out.signal==null && out.stdout.length()==11 && out.stderr.length()==3 && shell.ok() && shell.stdout.length()==5) {7}else{9}
 }
+
+function RtNativeCalendar()->int {
+    let instant=baml.time.Instant.parse("1970-01-01T01:00:00+01:00");
+    let rfc=baml.time.Instant.parse("Thu, 01 Jan 1970 00:00:00 +0000");
+    let date=baml.time.PlainDate.from_components(2024,2,29);
+    let parsed_date=baml.time.PlainDate.parse("2024-02-29");
+    let clock=baml.time.PlainTime._from_components(23,59,58,123,456,789);
+    let parsed_clock=baml.time.PlainTime.parse("23:59:58.123456789");
+    let datetime=baml.time.PlainDateTime._from_components(2024,2,29,23,59,58,123,456,789);
+    let parsed_datetime=baml.time.PlainDateTime.parse("2024-02-29T23:59:58.123456789");
+    let combined=date._to_plain_datetime(clock._nanoseconds);
+    let offset=baml.time.TimeZoneOffset.from_duration(baml.time.Duration.from_hours(-7));
+    let zoned=baml.time.ZonedDateTime.parse("1970-01-01T01:00:00+01:00[!Etc/UTC]");
+    let fixed=baml.time.ZonedDateTime.parse("1970-01-01T01:00:00+01:00");
+    let before=baml.time.PlainDateTime {_nanoseconds:-1n};
+    baml.io.println(instant._to_string_impl());
+    baml.io.println(date._to_string_impl());
+    baml.io.println(clock._to_string_impl());
+    baml.io.println(datetime._to_string_impl());
+    baml.io.println(baml.time._format_zoned(0n,3600000000000,null));
+    baml.io.println(baml.time._format_zoned(0n,0,"Etc/UTC"));
+    let bad_date={baml.time.PlainDate.from_components(2023,2,29);false} catch(e) {baml.errors.InvalidArgument {message}=>{baml.io.println(message);true}};
+    let bad_time={baml.time.PlainTime.parse("25:00:00");false} catch(e) {baml.errors.ParseError {message}=>{baml.io.println(message);true}};
+    let bad_offset={baml.time.TimeZoneOffset.from_duration(baml.time.Duration.from_hours(25));false} catch(e) {baml.errors.InvalidArgument {message}=>{baml.io.println(message);true}};
+    if (instant._nanoseconds==0n && rfc._nanoseconds==0n && date._days==parsed_date._days && date.year()==2024 && date.month()==2 && date.day()==29 && clock._nanoseconds==parsed_clock._nanoseconds && combined._nanoseconds==datetime._nanoseconds && datetime._nanoseconds==parsed_datetime._nanoseconds && datetime.year()==2024 && datetime.month()==2 && datetime.day()==29 && datetime.hour()==23 && datetime.minute()==59 && datetime.second()==58 && datetime.millisecond()==123 && datetime.to_plain_date()._days==date._days && datetime.to_plain_time()._nanoseconds==clock._nanoseconds && before.to_plain_date()._days == -1 && before.to_plain_time()._nanoseconds==86399999999999 && offset._nanoseconds == -25200000000000 && zoned._nanoseconds==0n && zoned._offset_ns==null && zoned._iana=="Etc/UTC" && (fixed._offset_ns ?? -1)==3600000000000 && fixed._iana==null && bad_date && bad_time && bad_offset) {7}else{9}
+}

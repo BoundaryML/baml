@@ -24,6 +24,7 @@ const PROBES: &[&str] = &[
     "RtNativeRandom",
     "RtNativeFiles",
     "RtNativeProcess",
+    "RtNativeCalendar",
     "RtEmptyClosures",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
@@ -289,7 +290,7 @@ fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::
     match probe {
         "RtClosures" | "RtEmptyClosures" => Some(manifest.join("rt_fixtures/closures")),
         "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" | "RtNativeFiles"
-        | "RtNativeProcess" => Some(manifest.join("rt_fixtures/native")),
+        | "RtNativeProcess" | "RtNativeCalendar" => Some(manifest.join("rt_fixtures/native")),
         _ => None,
     }
 }
@@ -368,6 +369,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         "RtNativeRandom",
         "RtNativeFiles",
         "RtNativeProcess",
+        "RtNativeCalendar",
     ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
@@ -685,6 +687,7 @@ fn rust_differential() {
                             | "RtNativeClock"
                             | "RtNativeRandom"
                             | "RtNativeFiles"
+                            | "RtNativeCalendar"
                             | "RtNativeProcess"
                     ))
             {

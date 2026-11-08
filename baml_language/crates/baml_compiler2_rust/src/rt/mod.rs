@@ -147,6 +147,7 @@ use repr::Repr;
 
 pub use driver::compile_rt;
 
+mod calendar;
 mod calls;
 mod globals;
 mod map_json;
