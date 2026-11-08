@@ -2,7 +2,9 @@ BAML runtime differential coverage (normal AND GC stress): 62 pass, 108 unsuppor
 Telemetry off: required
 Scoped verification: 48 list probes and both standalone closure probes pass.
 KPI admission and execution: 16/16 verified on rt-off, rt-medium, vm-off and Node (3 trials, 0 failures).
-KPI rows marked verified record normal execution; full-size GC stress is not rerun for the retained memory graphs.
+KPI rows marked verified record normal execution.
+Full-size GC stress also matches for both arrays, merge sort, quicksort, nbody, JSON aggregate and JSON request body.
+Full-size JSON parser GC stress reached the 60-second limit; retained memory graphs are left to the GC job.
 The independent type-dispatch project passes in both GC modes.
 Retained setup benchmarks pass for integer and owned string results, including GC stress and medium telemetry.
 Unselected rows retain prior verification; the full merged differential gate is deferred.
