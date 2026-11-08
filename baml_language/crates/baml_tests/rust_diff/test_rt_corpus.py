@@ -4,6 +4,11 @@ from rt_corpus import regressions, rt_leaf, vm_leaf
 
 
 class CorpusGateTests(unittest.TestCase):
+    def test_compiler_panics_cannot_masquerade_as_unsupported(self):
+        from rt_corpus import admission_category
+        self.assertEqual(admission_category("unsupported in baml_rt: closure"), "unsupported")
+        self.assertEqual(admission_category("RT compiler panic: unsupported in baml_rt: closure"), "crash/timeout")
+
     def test_same_counts_cannot_hide_a_match_regression(self):
         before = {"tests": {"a": {"category": "match"}, "b": {"category": "unsupported"}}}
         after = {"tests": {"a": {"category": "unsupported"}, "b": {"category": "match"}}}

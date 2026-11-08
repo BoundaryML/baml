@@ -51,7 +51,10 @@ def marker(result, prefix):
 def vm_leaf(result, name):
     if result["timeout"] or result["code"] not in (0, 2):
         return None
-    report = marker(result, "BAML_CORPUS_REPORT\t")
+    try:
+        report = marker(result, "BAML_CORPUS_REPORT\t")
+    except RuntimeError:
+        return None
     if result["code"] == 2 and report.get("outcome") == "pass":
         return None  # An unhandled spawned task failed after the leaf report.
     selected = report["passed"] + report["failed"] + report["tolerated"]
@@ -74,6 +77,11 @@ def rt_leaf(result, name):
         raise RuntimeError(f"wrong RT test identity: {report}")
     output = "".join(line for line in result["stdout"].splitlines(keepends=True) if not line.startswith("BAML_CORPUS_RESULT\t"))
     return {"outcome": report["outcome"], "messages": [] if report["message"] is None else [report["message"]], "output": output}
+
+
+def admission_category(error):
+    # A compiler panic mentioning an unsupported construct remains a crash.
+    return "unsupported" if error.startswith("unsupported in baml_rt:") else "crash/timeout"
 
 
 def regressions(before, after):
@@ -243,7 +251,7 @@ def main():
         admission = inventory[name]
         vm_outcome = "pass" if name in vm["passed"] else "tolerated" if name in vm["tolerated"] else "fail"
         if admission is not None:
-            category = "unsupported" if "unsupported in baml_rt:" in admission else "crash/timeout"
+            category = admission_category(admission)
             report["tests"][name] = {"category": category, "signature": admission, "vm": {"outcome":vm_outcome}}
             if category == "crash/timeout":
                 report["tests"][name].update({mode: {"outcome":"crash", "message": admission} for mode in ("rt", "rt-gc-stress")})

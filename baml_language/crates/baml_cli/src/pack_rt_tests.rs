@@ -108,7 +108,7 @@ pub(super) fn compile(
                 writeln!(dispatch, "{name:?} => test_{entry}::run({name:?}),")?;
                 rows.push(serde_json::json!({"name":name,"entry":entry,"admission":null}));
             }
-            Err(error) if error.contains("unsupported in baml_rt:") => {
+            Err(error) if error.starts_with("unsupported in baml_rt:") => {
                 rows.push(serde_json::json!({"name":name,"admission":error}));
                 let result =
                     serde_json::json!({"name":name,"outcome":"unsupported","message":error})
