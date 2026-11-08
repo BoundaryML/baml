@@ -4200,3 +4200,36 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod heap_free_provider_tests {
+    use super::*;
+    async fn ready<T: std::fmt::Debug>(output: SysOpOutput<T>) -> T {
+        match output {
+            SysOpOutput::Ready(result) => result.expect("native provider ready result"),
+            SysOpOutput::Async(future) => future.await.expect("native provider async result"),
+        }
+    }
+    #[tokio::test]
+    async fn heap_free_provider_uses_owned_values_without_vm_heap() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = NativeSysOps::new(WorkingDir::Fixed(dir.path().to_owned()));
+        let context = SysOpContext::empty();
+        let count = ready(provider.rt_ionamespacefs_write(
+            CallId(0),
+            "probe.txt".into(),
+            "owned".into(),
+            &context,
+        ))
+        .await;
+        assert_eq!(count, 5);
+        assert_eq!(
+            ready(provider.rt_ionamespacefs_read(CallId(0), "probe.txt".into(), &context)).await,
+            "owned"
+        );
+        ready(provider.rt_ionamespacefs_remove(CallId(0), "probe.txt".into(), &context)).await;
+        assert!(
+            !ready(provider.rt_ionamespacefs_exists(CallId(0), "probe.txt".into(), &context)).await
+        );
+    }
+}

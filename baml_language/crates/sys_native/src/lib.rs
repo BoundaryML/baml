@@ -21,7 +21,9 @@ mod host_impls;
 #[cfg(feature = "bundle-http")]
 mod http_server;
 mod installation;
-mod io_impls;
+mod io_impls {
+    include!(concat!(env!("OUT_DIR"), "/io_impls.rs"));
+}
 pub mod registry;
 pub mod shell;
 
