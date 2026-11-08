@@ -165,6 +165,9 @@ uv run --no-project crates/baml_tests/rust_diff/rt_corpus.py
 
 The reference is the existing `baml-cli test --from crates/baml_tests/baml_src`
 registry, including the manifest's offline profile and testset runners.
+Profile exclusions are printed by canonical test/subtree name. Live subtrees
+remain unexpanded because constructing them can require provider credentials;
+they are listed separately from the 6,054 selected leaves and category counts.
 `pack --tests --rust --rt` discovers the same canonical leaves at pack time,
 admits each body's reachable closure separately, and packs native entries
 without an interpreter. Captured test environments and custom runners are
@@ -185,6 +188,8 @@ gate. After reviewing a complete run, use the direct entry's
 `--update-baseline` to record the accepted state. `--select TEXT` is diagnostic
 only and cannot update the full baseline. `--workspace PATH --report-only`
 audits a source snapshot without altering or accepting its baseline.
+The built CLI is retained in the evidence directory; `--cli PATH` can reuse it
+to resume an interrupted audit without rebuilding that branch.
 
 The runner uses the workspace's pinned Rust toolchain, six Cargo jobs and no dev
 debug information. A source hash lets audits reuse an existing VM observation
@@ -200,3 +205,9 @@ failures. The corpus gate compares outcomes/messages/output at that same setting
 it does not replace the differential suite's recording comparison. Admission
 is currently the limiting factor, including unknown/type arguments, closures,
 container representations and builtin exception classes.
+
+Each admission also has the per-leaf process deadline. If the compiler stalls or aborts,
+the gate records that leaf as a crash/timeout and restarts the pack, reusing
+completed admission results. The private cache is keyed by the CLI executable
+hash and packed-program digest. A stuck specialization cannot hide the other
+leaves. Ordinary pack/compiler/build errors still fail the gate.

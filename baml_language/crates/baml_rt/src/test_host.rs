@@ -28,23 +28,7 @@ pub fn run(
             eprintln!("VM internal error: {}", e.message);
             return std::process::ExitCode::FAILURE;
         }
-        Err(e) => {
-            let message = if e.class.ends_with("UserPanic") || e.class.ends_with("AssertionFailed")
-            {
-                e.message.clone()
-            } else {
-                let traceback = bex_vm_types::errors::format_traceback(
-                    e.frames.iter().rev().map(|f| (f.file, f.line, f.function)),
-                );
-                format!(
-                    "{traceback}uncaught throw: {}",
-                    e.display_value
-                        .clone()
-                        .unwrap_or_else(|| format!("{} {{message: {:?}}}", e.class, e.message))
-                )
-            };
-            ("fail", Some(message))
-        }
+        Err(e) => ("fail", Some(failure_message(&e))),
     };
     println!(
         "BAML_CORPUS_RESULT\t{}",
@@ -54,5 +38,63 @@ pub fn run(
         std::process::ExitCode::SUCCESS
     } else {
         std::process::ExitCode::from(2)
+    }
+}
+
+fn failure_message(error: &crate::Error) -> String {
+    if matches!(
+        error.class,
+        "baml.panics.UserPanic" | "baml.panics.AssertionFailed"
+    ) {
+        return error.message.clone();
+    }
+    // Match testing._run_test's errors.Context.to_string, whose stack renderer
+    // trims the traceback before adding a newline and the structural value.
+    let traceback = bex_vm_types::errors::format_traceback(
+        error
+            .frames
+            .iter()
+            .rev()
+            .map(|f| (f.file, f.line, f.function)),
+    );
+    let value = error
+        .display_value
+        .clone()
+        .unwrap_or_else(|| format!("{} {{ message: {:?} }}", error.class, error.message));
+    format!("{}\n{value}", traceback.trim_end())
+        .trim_end()
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn error(class: &'static str) -> crate::Error {
+        crate::Error {
+            telemetry_raise: None,
+            telemetry_at: None,
+            value: 1,
+            class,
+            message: "boom".into(),
+            frames: vec![crate::Frame {
+                file: "main.baml",
+                function: "user.test",
+                line: 2,
+            }],
+            display_value: Some(format!("{class} {{ code: 1 }}")),
+        }
+    }
+    #[test]
+    fn test_failure_uses_context_rendering_not_cli_uncaught_error_rendering() {
+        assert_eq!(
+            failure_message(&error("user.Error")),
+            "Traceback (most recent call last):\n  File \"main.baml\", line 2, in user.test\nuser.Error { code: 1 }"
+        );
+        assert_eq!(
+            failure_message(&error("baml.panics.AssertionFailed")),
+            "boom"
+        );
+        assert_eq!(failure_message(&error("baml.panics.UserPanic")), "boom");
+        assert!(failure_message(&error("user.UserPanic")).contains("Traceback"));
     }
 }

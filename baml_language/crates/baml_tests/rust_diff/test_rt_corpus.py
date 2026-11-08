@@ -62,5 +62,36 @@ class OracleCacheTests(unittest.TestCase):
                 self.assertNotEqual(original, oracle_fingerprint(workspace, {}))
 
 
+class AdmissionWatchdogTests(unittest.TestCase):
+    def test_aborted_compiler_is_attributed_to_its_active_entry(self):
+        import json, os, sys, tempfile
+        from pathlib import Path
+        from rt_corpus import invoke
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            event = {"phase":"start", "name":"root::aborted", "entry":10, "cache_file":str(root / "10.json")}
+            code = "import sys; print(" + repr("BAML_CORPUS_ADMISSION\t" + json.dumps(event)) + ",file=sys.stderr,flush=True); sys.exit(7)"
+            env = dict(os.environ, BAML_RT_CORPUS_ADMISSION_CACHE=directory)
+            result = invoke([sys.executable,"-c",code,"pack"], env=env, cwd=root, timeout=10, evidence=root/"attempt")
+            self.assertEqual(result["code"],7)
+            self.assertIsNone(result["admission_timeout"])
+            self.assertEqual(result["admission_crash"]["entry"],10)
+
+    def test_stuck_entry_is_identified_for_restart_without_losing_other_entries(self):
+        import json, os, sys, tempfile
+        from pathlib import Path
+        from rt_corpus import invoke
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            event = {"phase":"start", "name":"root::stuck", "entry":9, "cache_file":str(root / "9.json")}
+            code = "import sys,time; print(" + repr("BAML_CORPUS_ADMISSION\t" + json.dumps(event)) + ",file=sys.stderr,flush=True); time.sleep(30)"
+            env = dict(os.environ, BAML_RT_CORPUS_ADMISSION_CACHE=directory, BAML_RT_CORPUS_TIMEOUT_SECS="1")
+            result = invoke([sys.executable,"-c",code,"pack"], env=env, cwd=root, timeout=10, evidence=root/"attempt")
+            self.assertFalse(result["timeout"])
+            self.assertEqual(result["admission_timeout"]["entry"],9)
+            self.assertEqual(result["admission_timeout"]["name"],"root::stuck")
+            self.assertNotEqual(result["code"],0)
+
+
 if __name__ == "__main__":
     unittest.main()

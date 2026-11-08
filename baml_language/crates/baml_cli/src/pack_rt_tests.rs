@@ -7,7 +7,11 @@ use bex_engine::{
 };
 use bex_heap::HeapPermit;
 use bex_vm_types::{HeapPtr, Object, Program, Value};
-use std::{collections::BTreeMap, fmt::Write as _, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Write as _,
+    sync::Arc,
+};
 
 pub(super) fn compile(
     db: &baml_db::ProjectDatabase,
@@ -47,6 +51,7 @@ pub(super) fn compile(
             .resolve_handle(permit.proof(), handle)
             .ok_or_else(|| anyhow!("stale test registry"))?;
         let mut leaves = BTreeMap::new();
+        let mut unexpanded = BTreeSet::new();
         let package = &program.packages[program.root as usize];
         let functions: std::collections::HashMap<_, _> = program
             .objects
@@ -61,16 +66,48 @@ pub(super) fn compile(
             .collect();
         // SAFETY: the active permit prevents moving GC for the entire traversal.
         unsafe {
-            collect(&engine, ptr, false, &functions, &mut leaves)?;
+            collect(
+                &engine,
+                ptr,
+                false,
+                &functions,
+                &mut leaves,
+                &mut unexpanded,
+            )?;
         }
-        Ok::<_, anyhow::Error>((names, leaves))
+        Ok::<_, anyhow::Error>((names, leaves, unexpanded))
     });
     rt.block_on(engine.shutdown());
-    let (names, mut leaves) = discovered?;
+    let (names, mut leaves, unexpanded) = discovered?;
+    if baml_env::os_var("BAML_RT_CORPUS_ADMISSION_CACHE").is_some() {
+        let selected: BTreeSet<_> = names.iter().collect();
+        for (name, kind) in leaves
+            .keys()
+            .filter(|name| !selected.contains(name))
+            .map(|name| (name, "test"))
+            .chain(unexpanded.iter().map(|name| (name, "subtree")))
+        {
+            eprintln!(
+                "BAML_CORPUS_PROFILE_EXCLUDED\t{}",
+                serde_json::json!({"name":name,"kind":kind})
+            );
+        }
+    }
     let mut source = String::new();
     let mut rows = Vec::new();
     let mut dispatch = String::new();
     let mut entries: BTreeMap<usize, Result<usize, String>> = BTreeMap::new();
+    let admission_cache = baml_env::os_var("BAML_RT_CORPUS_ADMISSION_CACHE")
+        .map(|path| {
+            let (_, digest) =
+                baml_artifact::encode_with_digest(baml_artifact::ArtifactKind::Program, program)
+                    .map_err(|e| anyhow!("test admission fingerprint: {e}"))?;
+            let key: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+            let path = std::path::PathBuf::from(path).join(key);
+            std::fs::create_dir_all(&path)?;
+            Ok::<_, anyhow::Error>(path)
+        })
+        .transpose()?;
     let compiler = baml_db::rust_backend::RtTestCompiler::new(
         db,
         root,
@@ -85,18 +122,35 @@ pub(super) fn compile(
                 if let Some(result) = entries.get(&entry) {
                     return result.clone();
                 }
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    compiler.compile(entry)
-                }))
-                .unwrap_or_else(|panic| {
-                    let message = panic
-                        .downcast_ref::<String>()
-                        .map(String::as_str)
-                        .or_else(|| panic.downcast_ref::<&str>().copied())
-                        .unwrap_or("non-string panic");
-                    Err(format!("RT compiler panic: {message}"))
-                })
-                .map(|body| {
+                let cache_file = admission_cache.as_ref().map(|p| p.join(format!("{entry}.json")));
+                let admitted: Result<String, String> = if let Some(path) = &cache_file
+                    && path.exists()
+                {
+                    let data = std::fs::read(path).expect("read admission cache");
+                    serde_json::from_slice(&data).expect("decode admission cache")
+                } else {
+                    if let Some(path) = &cache_file {
+                        eprintln!("BAML_CORPUS_ADMISSION\t{}", serde_json::json!({"phase":"start","name":name,"entry":entry,"cache_file":path}));
+                    }
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        compiler.compile(entry)
+                    }))
+                    .unwrap_or_else(|panic| {
+                        let message = panic
+                            .downcast_ref::<String>()
+                            .map(String::as_str)
+                            .or_else(|| panic.downcast_ref::<&str>().copied())
+                            .unwrap_or("non-string panic");
+                        Err(format!("RT compiler panic: {message}"))
+                    });
+                    if let Some(path) = &cache_file {
+                        let data = serde_json::to_vec(&result).expect("encode admission cache");
+                        std::fs::write(path, data).expect("write admission cache");
+                        eprintln!("BAML_CORPUS_ADMISSION\t{}", serde_json::json!({"phase":"done","name":name,"entry":entry}));
+                    }
+                    result
+                };
+                let result = admitted.map(|body| {
                     writeln!(source, "mod test_{entry} {{\n{body}\n}}").unwrap();
                     entry
                 });
@@ -196,6 +250,7 @@ unsafe fn collect(
     inherited_runner: bool,
     functions: &std::collections::HashMap<bex_vm_types::types::FunctionIdentity, usize>,
     out: &mut BTreeMap<String, Result<usize, String>>,
+    unexpanded: &mut BTreeSet<String>,
 ) -> Result<()> {
     unsafe {
         let heap = engine.heap();
@@ -269,16 +324,25 @@ unsafe fn collect(
         else {
             return Err(anyhow!("registry expansions expected"));
         };
+        let mut expanded = BTreeSet::new();
         for (name, child) in expansions.snapshot_entries() {
             let name = text(name)?;
+            expanded.insert(name.clone());
             collect(
                 engine,
                 pointer(child)?,
                 inherited_runner || runners.get(&name).copied().unwrap_or(false),
                 functions,
                 out,
+                unexpanded,
             )?;
         }
+        unexpanded.extend(
+            runners
+                .keys()
+                .filter(|name| !expanded.contains(*name))
+                .cloned(),
+        );
         Ok(())
     }
 }

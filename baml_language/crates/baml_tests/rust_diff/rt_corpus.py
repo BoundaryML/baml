@@ -13,8 +13,10 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
+import time
 
 HERE = Path(__file__).resolve().parent
 CATEGORIES = ("match", "mismatch", "unsupported", "crash/timeout", "excluded")
@@ -30,13 +32,54 @@ def invoke(argv, *, env, cwd, timeout, evidence):
     with evidence.with_suffix(".stdout").open("w") as out, evidence.with_suffix(".stderr").open("w") as err:
         child = subprocess.Popen([str(x) for x in argv], cwd=cwd, env=env, stdout=out, stderr=err, start_new_session=True)
         timed_out = False
-        try:
-            code = child.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            os.killpg(child.pid, signal.SIGKILL)
+        admission_timeout = None
+        admission_crash = None
+        watched = "pack" in [str(x) for x in argv] and "BAML_RT_CORPUS_ADMISSION_CACHE" in env
+        if watched:
+            start = time.monotonic()
+            active, active_start = None, None
+            position = 0
+            limit = int(env.get("BAML_RT_CORPUS_TIMEOUT_SECS", "120"))
+            with evidence.with_suffix(".stderr").open() as progress:
+                while True:
+                    progress.seek(position)
+                    while True:
+                        line_start = progress.tell()
+                        line = progress.readline()
+                        if not line.endswith("\n"):
+                            progress.seek(line_start)
+                            break
+                        if line.startswith("BAML_CORPUS_ADMISSION\t"):
+                            item = json.loads(line.split("\t", 1)[1])
+                            if item["phase"] == "start":
+                                active, active_start = item, time.monotonic()
+                            elif active is not None and item["entry"] == active["entry"]:
+                                active, active_start = None, None
+                    position = progress.tell()
+                    if child.poll() is not None:
+                        break
+                    now = time.monotonic()
+                    if active is not None and now - active_start > limit:
+                        admission_timeout = active
+                        os.killpg(child.pid, signal.SIGKILL)
+                        break
+                    if now - start > timeout:
+                        timed_out = True
+                        os.killpg(child.pid, signal.SIGKILL)
+                        break
+                    time.sleep(0.1)
             code = child.wait()
-    return {"code": code, "timeout": timed_out,
+            if code and active is not None and admission_timeout is None and not timed_out:
+                admission_crash = active
+        else:
+            try:
+                code = child.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                os.killpg(child.pid, signal.SIGKILL)
+                code = child.wait()
+    return {"code": code, "timeout": timed_out, "admission_timeout": admission_timeout,
+            "admission_crash": admission_crash,
             "stdout": evidence.with_suffix(".stdout").read_text(errors="replace"),
             "stderr": evidence.with_suffix(".stderr").read_text(errors="replace")}
 
@@ -177,6 +220,7 @@ def main():
     parser.add_argument("--baseline", type=Path, default=HERE / "rt-corpus-baseline.json")
     parser.add_argument("--update-baseline", action="store_true")
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--cli", type=Path, help="reuse this built CLI instead of building it")
     parser.add_argument("--report-only", action="store_true", help="audit a different worktree; still rejects infrastructure failures")
     parser.add_argument("--select", help="diagnostic subset; cannot update or check the baseline")
     args = parser.parse_args()
@@ -193,13 +237,16 @@ def main():
                BAML_HOME=str(home), BAML_TELEMETRY="medium", NO_COLOR="1", RUST_BACKTRACE="0")
     env.pop("BAML_GC_STRESS", None)
     env.setdefault("CARGO_PROFILE_DEV_DEBUG", "0")
-    cli = target / "debug" / "baml-cli"
+    source_cli = args.cli.resolve() if args.cli else target / "debug" / "baml-cli"
     timeout = int(env.get("BAML_RT_CORPUS_TIMEOUT_SECS", "120"))
-    if not args.skip_build:
+    if not args.skip_build and args.cli is None:
         print(f"Building CLI once: {workspace}", flush=True)
         build = invoke(["cargo", "build", "-p", "baml_cli"], env=env, cwd=workspace, timeout=7200, evidence=scratch / "build")
         if build["code"] or build["timeout"]:
             raise RuntimeError(f"CLI build failed: {build['stderr'][-6000:]}")
+    cli = scratch / "baml-cli"
+    if source_cli != cli:
+        shutil.copy2(source_cli, cli)
     corpus = workspace / "crates/baml_tests/baml_src"
     command = [cli, "--agent-skill-check", "off", "test", "--from", corpus, "--corpus-report", "--max-concurrency", "1", "--log", "trace", "--color", "never", "--no-progress"]
     selectors = [] if args.select is None else ["-i", args.select]
@@ -234,10 +281,26 @@ def main():
     if not (pack_dir / "target").exists():
         (pack_dir / "target").symlink_to(shared_native_target, target_is_directory=True)
     print(f"Packing {len(vm_names)} VM tests with per-leaf RT admission", flush=True)
-    pack = invoke([cli, "--agent-skill-check", "off", "pack", "--tests", "--rust", "--rt", "--from", corpus, "--rust-profile", "fast", "--rust-workspace", workspace, "--rust-build-dir", scratch / "pack", "-o", binary],
-                  env=env, cwd=workspace, timeout=7200, evidence=scratch / "pack")
+    env["BAML_RT_CORPUS_ADMISSION_CACHE"] = str(scratch / "admission" / hashlib.sha256(cli.read_bytes()).hexdigest())
+    pack_command = [cli, "--agent-skill-check", "off", "pack", "--tests", "--rust", "--rt", "--from", corpus, "--rust-profile", "fast", "--rust-workspace", workspace, "--rust-build-dir", scratch / "pack", "-o", binary]
+    for attempt in range(len(vm_names) + 1):
+        pack = invoke(pack_command, env=env, cwd=workspace, timeout=7200, evidence=scratch / f"pack-{attempt}")
+        expired = pack.get("admission_timeout") or pack.get("admission_crash")
+        if expired is None:
+            break
+        cache_file = Path(expired["cache_file"]).resolve()
+        cache_file.relative_to(Path(env["BAML_RT_CORPUS_ADMISSION_CACHE"]).resolve())
+        reason = (f"RT admission timed out after {timeout}s" if pack.get("admission_timeout")
+                  else f"RT admission process crashed (exit {pack['code']})")
+        cache_file.write_text(json.dumps({"Err":reason}) + "\n")
+        print(f"ADMISSION CRASH {expired['name']}: {reason}; restarting with completed admissions cached", flush=True)
+
     if pack["code"] or pack["timeout"]:
         raise RuntimeError(f"RT corpus pack failed: {pack['stderr'][-7000:]}")
+    profile_exclusions = [json.loads(line.split("\t", 1)[1]) for line in pack["stderr"].splitlines()
+                          if line.startswith("BAML_CORPUS_PROFILE_EXCLUDED\t")]
+    for item in profile_exclusions:
+        print(f"EXCLUDED PROFILE {item['kind']}: {item['name']}")
     listing = invoke([binary, "--list"], env=env, cwd=workspace, timeout=timeout, evidence=scratch / "rt-inventory")
     if listing["code"] or listing["timeout"]:
         raise RuntimeError(f"RT inventory failed: {listing}")
@@ -246,7 +309,8 @@ def main():
     missing = set(vm_names) - inventory.keys()
     if missing:
         raise RuntimeError(f"RT inventory lost VM tests: {sorted(missing)}")
-    report = {"schema": 1, "workspace": str(workspace), "vm_source_fingerprint": fingerprint, "tests": {}, "vm_total": len(vm_names)}
+    report = {"schema": 1, "workspace": str(workspace), "vm_source_fingerprint": fingerprint,
+              "profile_exclusions": profile_exclusions, "tests": {}, "vm_total": len(vm_names)}
     for index, name in enumerate(sorted(vm_names)):
         admission = inventory[name]
         vm_outcome = "pass" if name in vm["passed"] else "tolerated" if name in vm["tolerated"] else "fail"
