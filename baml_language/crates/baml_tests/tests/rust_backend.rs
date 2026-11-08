@@ -819,10 +819,7 @@ fn rt_trees_and_fail_closed_admission() {
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
-    for source in [
-        "function main() -> string { \"hello\" }",
-        "const X = 1; function main() -> int { X }",
-    ] {
+    for source in ["function main() -> string { \"hello\" }"] {
         assert!(
             emit(source).unwrap_err().contains("unsupported in baml_rt"),
             "{source}"
@@ -937,11 +934,11 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
-            false,
+            true,
         ),
         (
             "function main() -> int { let m: map<string,string> = {}; m[\"a\"] = \"b\"; 0 }",
-            false,
+            true,
         ),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("agent.baml", source)]);
@@ -1074,10 +1071,15 @@ fn rt_source_bytes_and_diagnostics() {
             OptLevel::Two,
             entry,
         );
+        if name == "initializer" {
+            let source = result.unwrap();
+            assert!(source.contains("rt::globals::begin("));
+            continue;
+        }
         let expected = match name {
-            "trees" => "be9ffa97f353090cae64e71014f04c5d67eee2ef5514afbb473a3a7b1ef4eab3",
-            "richards" => "cd8055ca84dc160d81b417ffbf11deb769b60f2de212912827355619a1349d40",
-            "agent" => "37ed0b18083633bcc5f49b3c77312a33ff9b7a718d53bdefef16a1a3b68eba21",
+            "trees" => "4959dbe9d359c0cc795fbc119d87ac23db70c5958457877710d4301b0d088bff",
+            "richards" => "018447bdb05c1db51321d9d8bff4c4e4cf6b3aaa862999212e9be8b99f72236b",
+            "agent" => "2b666cbf0ad653ed09fb2aab1798ff724682a7244d410ee54a966e873fd55742",
             _ => "",
         };
         if expected.is_empty() {

@@ -633,7 +633,7 @@ fn complete_unusual(
 fn outcome(error: &Error) -> InvocationOutcome {
     if error.class == "baml.panics.Cancelled" {
         InvocationOutcome::Cancelled
-    } else if error.class.starts_with("baml.panics.") || error.value == 0 {
+    } else if error.class.starts_with("baml.panics.") {
         InvocationOutcome::Panicked
     } else {
         InvocationOutcome::Errored
@@ -757,6 +757,7 @@ pub fn collection(event: baml_rt_gc::CollectionEvent) {
 }
 
 pub struct Session {
+    root_panicked: bool,
     state: Option<Box<State>>,
     pool: Option<Pool>,
     worker: Option<std::thread::JoinHandle<()>>,
@@ -786,6 +787,7 @@ impl Session {
         let clocks = ClockRuntime::new(btel_settings::clock::DEFAULT_MODE);
         let exit = Arc::new(btel_types::ProcessExitSlot::default());
         let mut session = Self {
+            root_panicked: false,
             state: None,
             pool: None,
             worker: None,
@@ -970,7 +972,20 @@ impl Session {
             }
         })
     }
-    fn run_at<T>(&mut self, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
+    pub fn run_at<T>(&mut self, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
+        self.run_root(site, call, false)
+    }
+    /// VM construction classifies every failed initializer task as Errored,
+    /// while retaining the original per-function panic/error observations.
+    pub fn run_initializer_at<T>(&mut self, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
+        self.run_root(site, call, true)
+    }
+    fn run_root<T>(
+        &mut self,
+        site: usize,
+        call: impl FnOnce() -> R<T>,
+        initializing: bool,
+    ) -> R<T> {
         let Some(state) = &mut self.state else {
             return call();
         };
@@ -1014,15 +1029,24 @@ impl Session {
         }
         drop(binding);
         state.flush();
+        let outcome = result.as_ref().map_or_else(
+            |e| {
+                if initializing {
+                    InvocationOutcome::Errored
+                } else {
+                    outcome(e)
+                }
+            },
+            |_| InvocationOutcome::Ok,
+        );
+        self.root_panicked |= outcome == InvocationOutcome::Panicked;
         state.span(SpanRecord::ThreadSpanCompletion {
             id: state.thread,
             parent_id: None,
             spawn_call_path: CallPathId::ROOT,
             started_at: state.started,
             completed_at: state.read(),
-            outcome: result
-                .as_ref()
-                .map_or_else(|e| outcome(e), |_| InvocationOutcome::Ok),
+            outcome,
             clock: state.clock.clone(),
             name: state.name.clone(),
         });
@@ -1042,6 +1066,10 @@ impl Session {
             },
             at_unix_ns: 0,
         });
+        self.shutdown();
+    }
+    /// No host process-exit status exists when engine construction fails.
+    pub fn finish_initialization_failure(mut self) {
         self.shutdown();
     }
     fn shutdown(&mut self) {
@@ -1122,6 +1150,11 @@ mod tests {
         },
     ];
 
+    fn test_panic(message: String) -> Box<Error> {
+        let mut error = Error::internal(message);
+        error.class = "baml.panics.UserPanic";
+        error
+    }
     #[test]
     fn successful_slot_add_is_atomic_on_overflow() {
         use btel_types::ClockDuration;
@@ -1190,7 +1223,7 @@ mod tests {
         let root = unsafe { enter(&WORD, 0) }.unwrap();
         let child = unsafe { enter(&WORD, 1) }.unwrap();
         let recursive = unsafe { enter(&WORD, 2) }.unwrap();
-        let mut error: R<()> = Err(Error::internal("test panic".into()));
+        let mut error: R<()> = Err(test_panic("test panic".into()));
         recursive.finish(&mut error);
         let at = error.as_ref().unwrap_err().telemetry_at;
         child.finish(&mut error);
@@ -1330,7 +1363,7 @@ mod tests {
                 observe(1, 2, || observe(2, 2, || Ok(())))?;
                 assert_eq!((*CURRENT.get()).active_span, parent);
                 // No announcement or aggregate duplication for a late completion.
-                let failed: R<()> = observe(1, 3, || Err(Error::internal("test".into())));
+                let failed: R<()> = observe(1, 3, || Err(test_panic("test".into())));
                 assert!(failed.is_err());
                 assert_eq!((*CURRENT.get()).active_span, parent);
                 observe(1, 3, || Ok(()))?;
@@ -1405,7 +1438,7 @@ mod tests {
         assert_eq!(calls.get(), 2);
         let failed = unsafe {
             observe_captured(0, 3, inputs, outputs, || {
-                Err(Error::internal("promotion".into()))
+                Err(test_panic("promotion".into()))
             })
         };
         assert!(failed.is_err());
@@ -1488,9 +1521,8 @@ mod tests {
             CURRENT.set(&mut *state);
             let result = unsafe {
                 observed_call(word, 0, || {
-                    let child: R<()> = observed_call(word, 1, || {
-                        Err(Error::internal("test".into()).at(&SOURCE, 0))
-                    });
+                    let child: R<()> =
+                        observed_call(word, 1, || Err(test_panic("test".into()).at(&SOURCE, 0)));
                     let mut error = child.unwrap_err();
                     assert!(error.telemetry_at.is_some());
                     evidence::caught(&mut error, 42);

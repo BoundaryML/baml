@@ -645,15 +645,6 @@ fn rust_differential() {
             );
         }
     }
-    // Focused runtime jobs retain the bytecode oracle and both GC modes, while
-    // avoiding unrelated compiled-VM variants and unsupported telemetry levels.
-    // The default merged-branch gate still runs the complete matrix.
-    let rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
-    let backends: Vec<_> = BACKENDS
-        .iter()
-        .filter(|b| !rt_only || matches!(b.name, "bytecode" | "rt" | "rt-gc-stress"))
-        .collect();
-    let levels: &[&str] = if rt_only { &["off"] } else { LEVELS };
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();

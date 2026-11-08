@@ -1,7 +1,8 @@
-BAML runtime coverage (normal AND GC stress): 12 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 36 pass, 124 unsupported, 0 fail
 Telemetry off: required
-Telemetry low/medium/high/default: not yet supported
-Includes the independent rt_type_dispatch_semantics project, compared with bytecode in both GC modes.
+Scoped merge verification: all 22 list probes and both standalone closure probes pass.
+Unselected rows retain prior verification; the full merged differential gate is deferred.
+Includes the previously verified independent rt_type_dispatch_semantics project.
 
 First unsupported constructs (fixtures blocked):
 103	top-level initializers
@@ -109,7 +110,31 @@ ManualSpan	unsupported: top-level initializers
 NoLeaks	unsupported: top-level initializers
 Overflow	unsupported: top-level initializers
 RecursiveCancellation	unsupported: top-level initializers
+RtClosures	pass
+RtEmptyClosures	pass
 RuntimeClass	unsupported: top-level initializers
+RuntimeListBounds	pass
+RuntimeListBuiltins	pass
+RuntimeListFloatConstants	pass
+RuntimeListFloatSpecials	pass
+RuntimeListInsertError	pass
+RuntimeListJson	pass
+RuntimeListJsonError	pass
+RuntimeListJsonField	pass
+RuntimeListJsonFieldError	pass
+RuntimeListJsonNonFinite	pass
+RuntimeListJsonOptional	pass
+RuntimeListJsonOptionalError	pass
+RuntimeListLiteralJson	pass
+RuntimeListLiteralJsonError	pass
+RuntimeListMaps	pass
+RuntimeListMedianError	pass
+RuntimeListRecursiveJson	pass
+RuntimeListReductionOverflow	pass
+RuntimeListReductions	pass
+RuntimeListStoreBounds	pass
+RuntimeListStructuralJoin	pass
+RuntimeLists	pass
 Scalars	unsupported: top-level initializers
 Shapes	unsupported: top-level initializers
 Shielded	unsupported: top-level initializers
@@ -154,6 +179,6 @@ process::startup	pass
 programs::agent loop 300	pass
 programs::json parser 15	unsupported: list field element (layout JArray, object 4180, types [List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4279) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4280) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])]))]) (user.main local 8: Union([Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JArray" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JLiteral" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JNumber" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JObject" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JString" }, [])]))
 programs::richards 50	pass
+rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass
 string::split medium literal 10k	unsupported: baml.String.split
-rt_type_dispatch_semantics	pass

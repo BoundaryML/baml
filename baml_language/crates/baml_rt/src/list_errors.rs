@@ -7,7 +7,7 @@ pub const SERIALIZATION_DESC: Descriptor = Descriptor {
     ptr_slots: (8, 3),
     tagged_slots: (0, 0),
     elem: None,
-    type_id: 13,
+    type_id: 14,
     fields: &[
         Field {
             name: "message",
@@ -31,7 +31,7 @@ pub const SERIALIZATION_DESC: Descriptor = Descriptor {
     finalizer: None,
 };
 pub const INVALID_ARGUMENT_DESC: Descriptor = Descriptor {
-    type_id: 14,
+    type_id: 15,
     ..crate::OVERFLOW_DESC
 };
 fn build(cx: &mut Cx, desc: u32, fields: &[&str]) -> R<usize> {
@@ -45,7 +45,7 @@ fn build(cx: &mut Cx, desc: u32, fields: &[&str]) -> R<usize> {
     Ok(pointer as usize)
 }
 pub(crate) fn invalid_argument(cx: &mut Cx, message: String) -> Box<Error> {
-    match build(cx, 11, &[&message]) {
+    match build(cx, 12, &[&message]) {
         Err(e) => e,
         Ok(value) => Box::new(Error {
             telemetry_raise: None,
@@ -59,7 +59,7 @@ pub(crate) fn invalid_argument(cx: &mut Cx, message: String) -> Box<Error> {
     }
 }
 pub(crate) fn serialization(cx: &mut Cx, message: String, path: &str, reason: &str) -> Box<Error> {
-    match build(cx, 10, &[&message, path, reason]) {
+    match build(cx, 11, &[&message, path, reason]) {
         Err(e) => e,
         Ok(value) => Box::new(Error {
             telemetry_raise: None,

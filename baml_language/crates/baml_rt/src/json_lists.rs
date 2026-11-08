@@ -649,39 +649,40 @@ mod tests {
         crate::json::PARSE_DESC,
         crate::json::DECODE_DESC,
         DIV_DESC,
+        crate::MAP_KEY_DESC,
         crate::list_errors::SERIALIZATION_DESC,
         crate::list_errors::INVALID_ARGUMENT_DESC,
-        lists::descriptor::<i64>(15),
-        lists::buffer_descriptor::<i64>(16),
-        lists::descriptor::<Ptr>(17),
-        lists::buffer_descriptor::<Ptr>(18),
+        lists::descriptor::<i64>(16),
+        lists::buffer_descriptor::<i64>(17),
+        lists::descriptor::<Ptr>(18),
+        lists::buffer_descriptor::<Ptr>(19),
         Descriptor {
             kind: Kind::Class,
             size: 16,
             ptr_slots: (8, 1),
             tagged_slots: (0, 0),
             elem: None,
-            type_id: 19,
+            type_id: 20,
             fields: &[GcField {
                 name: "values",
                 offset: 8,
                 slot: SlotKind::Pointer,
-                type_id: 15,
+                type_id: 16,
             }],
             finalizer: None,
         },
-        lists::descriptor::<Dyn>(20),
-        lists::buffer_descriptor::<Dyn>(21),
+        lists::descriptor::<Dyn>(21),
+        lists::buffer_descriptor::<Dyn>(22),
     ];
     static INTS: Ty = Ty::List {
-        desc: 12,
+        desc: 13,
         element: &Ty::Int,
         slot: SlotKind::Scalar,
     };
     static ITEMS: Ty = Ty::List {
-        desc: 14,
+        desc: 15,
         element: &Ty::Class {
-            desc: 16,
+            desc: 17,
             bytes: 16,
             name: "Item",
             fields: &[Field {
@@ -707,13 +708,14 @@ mod tests {
         Shape::Unsupported,
         Shape::Unsupported,
         Shape::Unsupported,
+        Shape::Unsupported,
         Shape::List {
             tag: 0,
             tagged: false,
         },
         Shape::Unsupported,
         Shape::List {
-            tag: 19,
+            tag: 20,
             tagged: false,
         },
         Shape::Unsupported,
@@ -722,7 +724,7 @@ mod tests {
             alias: "items",
             skip: false,
             offset: 8,
-            tag: 15,
+            tag: 16,
             tagged: false,
         }]),
         Shape::List {
@@ -768,9 +770,9 @@ mod tests {
             assert_eq!(error.class, "baml.json.DecodeError");
             assert_eq!(error.message, "expected integer");
             assert!(error.display_value.unwrap().contains("[0].values[1]"));
-            let cycle = unsafe { List::<Dyn>::new(&mut cx, 17) }?;
+            let cycle = unsafe { List::<Dyn>::new(&mut cx, 18) }?;
             let cyclic = Dyn {
-                tag: 20,
+                tag: 21,
                 payload: cycle.as_raw() as u64,
             };
             cycle.push(&mut cx, cyclic)?;
@@ -793,7 +795,7 @@ mod tests {
                     .unwrap()
                     .contains("path: \"[0]\", reason: \"cycle\"")
             );
-            let ints = unsafe { List::<i64>::filled(&mut cx, 12, 3, 7) }?;
+            let ints = unsafe { List::<i64>::filled(&mut cx, 13, 3, 7) }?;
             ints.splice(&mut cx, 1, 1, ints)?;
             assert_eq!(ints.len(&cx), 5);
             let error = ints.insert(&mut cx, 0, -6).unwrap_err();
@@ -809,7 +811,7 @@ mod tests {
             DESCRIPTORS,
             &[
                 false, false, false, true, true, true, true, true, true, true, true, true, true,
-                true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true, true,
             ],
         );
         instance.set_stress(true);

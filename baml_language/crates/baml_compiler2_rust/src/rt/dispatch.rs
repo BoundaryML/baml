@@ -3,6 +3,68 @@
 use super::*;
 use baml_compiler2_mir::TyTemplateInterface;
 
+impl Plan<'_> {
+    pub(super) fn implementors(
+        &self,
+        interface: usize,
+    ) -> Gen<Vec<(usize, &bex_vm_types::types::ProgramImplRule)>> {
+        let Object::Interface(def) =
+            &self.program.objects[bex_vm_types::ObjectIndex::from_raw(interface)]
+        else {
+            return Err(no("non-interface dispatch"));
+        };
+        if def.structural_default.is_some()
+            || !def.args.is_empty()
+            || !def.assoc.is_empty()
+            || !def.requires.is_empty()
+        {
+            return Err(no("generic or structural interface"));
+        }
+        let mut result = Vec::new();
+        for package in &self.program.packages {
+            if let Some(rules) = package
+                .impl_rules
+                .get(&bex_vm_types::ObjectIndex::from_raw(interface))
+            {
+                for rule in rules {
+                    if !rule.generic_param_bounds.is_empty()
+                        || !rule.interface_args.is_empty()
+                        || !rule.interface_assoc.is_empty()
+                    {
+                        return Err(no("generic interface implementation"));
+                    }
+                    let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
+                        return Err(no("non-class implementation"));
+                    };
+                    if !args.is_empty() {
+                        return Err(no("generic implementor"));
+                    }
+                    result.push((self.class_tag(head.tag())?, rule));
+                }
+            }
+        }
+        if result.is_empty() {
+            return Err(no("interface without concrete implementations"));
+        }
+        Ok(result)
+    }
+    pub(super) fn targets(&self, interface: usize, method: &str) -> Gen<Vec<(usize, usize)>> {
+        self.implementors(interface)?
+            .into_iter()
+            .map(|(c, rule)| {
+                let body = rule
+                    .methods
+                    .get(method)
+                    .ok_or_else(|| no("adopted interface default"))?;
+                if !body.frame.is_empty() {
+                    return Err(no("generic dispatch frame"));
+                }
+                Ok((c, body.fqn.raw()))
+            })
+            .collect()
+    }
+}
+
 pub(super) fn resolve(
     db: &dyn Db,
     plan: &Plan<'_>,
@@ -366,7 +428,7 @@ impl Emitter<'_, '_> {
                 self.coerce((format!("a{self_arg}"), values[*self_arg].1), Repr::Tagged)?;
             write!(code, "let receiver={receiver};").unwrap();
             let fn_ty = format!(
-                "unsafe fn(usize,{})->R<{}>",
+                "unsafe fn(rt::calls::Context,usize,{})->R<{}>",
                 signature
                     .iter()
                     .map(|r| r.rust())
@@ -378,16 +440,25 @@ impl Emitter<'_, '_> {
             for &(repr, callee) in targets {
                 table.insert(self.tag(repr)?, (callee, self.telemetry_site(callee)));
             }
-            write!(code, "static VTABLE:&[Option<({fn_ty},usize)>]=&[").unwrap();
-            for tag in 0..=*table.keys().last().unwrap() {
-                if let Some((callee, site)) = table.get(&tag) {
-                    write!(code, "Some((f{callee} as {fn_ty},{site})),").unwrap();
-                } else {
-                    code.push_str("None,");
+            for observe in [false, true] {
+                write!(
+                    code,
+                    "static VTABLE_{observe}:&[Option<({fn_ty},usize)>]=&["
+                )
+                .unwrap();
+                for tag in 0..=*table.keys().last().unwrap() {
+                    if let Some((callee, site)) = table.get(&tag) {
+                        write!(code, "Some((f{callee}::<{observe}> as {fn_ty},{site})),").unwrap();
+                    } else {
+                        code.push_str("None,");
+                    }
                 }
+                code.push_str("];");
             }
-            code.push_str("];let (callee,site)=");
-            code.push_str(&self.fallible("VTABLE.get(receiver.tag as usize).copied().flatten().ok_or_else(||rt::Error::internal(\"invalid closed-world interface receiver\".into()))"));
+            code.push_str(
+                "let vtable=if OBSERVE{VTABLE_true}else{VTABLE_false};let (callee,site)=",
+            );
+            code.push_str(&self.fallible("vtable.get(receiver.tag as usize).copied().flatten().ok_or_else(||rt::Error::internal(\"invalid closed-world interface receiver\".into()))"));
             code.push(';');
             let mut values = values
                 .iter()
@@ -418,7 +489,7 @@ impl Emitter<'_, '_> {
                 .map(|(v, r)| self.coerce(v, *r))
                 .collect::<Gen<Vec<_>>>()?
                 .join(",");
-            code.push_str(&self.fallible(&format!("callee(site,{arguments})")));
+            code.push_str(&self.fallible(&format!("callee(cx,site,{arguments})")));
             code.push('}');
             self.assign(destination, (code, returned))
         })())

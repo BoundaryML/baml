@@ -21,8 +21,8 @@ impl Emitter<'_, '_> {
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
         match repr {
             Repr::Int => Ok(0),
-            Repr::Bool => Ok(1),
             Repr::Float => Ok(u32::MAX as usize),
+            Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
@@ -34,7 +34,8 @@ impl Emitter<'_, '_> {
             | Repr::ListListStr
             | Repr::ListClosure(_)
             | Repr::ListPtr(_)
-            | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
+            | Repr::MapStrInt
+            | Repr::Map(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
     }
@@ -96,6 +97,9 @@ impl Emitter<'_, '_> {
         Err(no(format!("conversion {source:?} to {target:?}")))
     }
     pub(super) fn place(&self, p: &Place) -> Gen<(String, Repr)> {
+        if let Some(result) = self.map_place(p) {
+            return result;
+        }
         match p {
             Place::Local(l) => Ok((format!("l{}", l.0), self.local(l.0)?)),
             Place::Capture(i) => Ok((format!("rt::closures::capture(env,{i})"), Repr::Cell)),
@@ -171,6 +175,21 @@ impl Emitter<'_, '_> {
     pub(super) fn operand(&self, o: &Operand<'_>) -> Gen<(String, Repr)> {
         match o {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
+            Operand::Constant(Constant::GlobalItem(binding)) => {
+                let slot = self
+                    .plan
+                    .index
+                    .let_slot(self.db, *binding)
+                    .ok_or_else(|| no("unlinked global"))?;
+                let repr = *self
+                    .plan
+                    .globals
+                    .get(&slot)
+                    .ok_or_else(|| no("unplanned global"))?;
+                let name = baml_compiler2_mir::global_display_name(self.db, *binding);
+                let value = self.fallible(&format!("rt::globals::load_named({slot},{name:?})"));
+                Ok((self.coerce((value, Repr::Tagged), repr)?, repr))
+            }
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Float(f)) => {
                 // Bytecode pools constants by floating-point equality, so the
@@ -236,6 +255,9 @@ impl Emitter<'_, '_> {
             let (cell, _) = self.closure_cell(cell)?;
             let value = self.coerce(value, Repr::Tagged)?;
             return Ok(format!("rt::closures::store({cell},{value});\n"));
+        }
+        if let Some(result) = self.map_assign(p, value.clone()) {
+            return result;
         }
         let (dst, repr) = self.place(p)?;
         let src = self.coerce(value, repr)?;

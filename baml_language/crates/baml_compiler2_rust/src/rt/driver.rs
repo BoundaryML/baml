@@ -41,6 +41,11 @@ pub fn compile_rt(
         lambda_bodies: BTreeMap::new(),
         callables: BTreeSet::new(),
         closure_lists: BTreeMap::new(),
+        map_types: Default::default(),
+        json_maps: BTreeMap::new(),
+        map_stringify: false,
+        globals: BTreeMap::new(),
+        init_chains: Vec::new(),
     };
     let admission::Admitted {
         all,
@@ -77,6 +82,7 @@ pub fn compile_rt(
     if plan.list_stringify {
         json_lists::emit_shapes(&mut out, &plan, &descriptors, &lists)?;
     }
+    super::map_json::emit(&mut out, &cx, &lists, json_decode, alias_function)?;
     // Bound forced inlining by the same total-local budget as a single body.
     // Recursive SCCs retain real frames and the normal per-entry stack guard.
     let small_program = reached
@@ -192,6 +198,7 @@ pub fn compile_rt(
                 iter_arrays: BTreeMap::new(),
                 arity: 0,
                 block: 0,
+                statement: 0,
                 unwind_jumps: Vec::new(),
                 sites: Vec::new(),
                 compact_sites: Vec::new(),
@@ -209,6 +216,7 @@ pub fn compile_rt(
         }
     }
     super::lists::emit_render_shapes(&mut out, &plan, &descriptors, &lists)?;
+    super::globals::emit(&mut out, &plan, &descriptors, &lists, &telemetry_sites)?;
     let format_site = telemetry::emit(
         &mut out,
         &cx,
@@ -217,6 +225,12 @@ pub fn compile_rt(
         (stringify, aliased),
         &telemetry_sites,
     )?;
-    host::emit(&mut out, entry, &builtins, format_site);
+    host::emit(
+        &mut out,
+        entry,
+        &builtins,
+        format_site,
+        !plan.init_chains.is_empty(),
+    );
     Ok(out)
 }

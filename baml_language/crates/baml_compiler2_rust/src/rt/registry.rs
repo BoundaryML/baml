@@ -1,13 +1,12 @@
 //! Ordered extension points. First matching lowering wins; errors never fall through.
 use super::{
     BTreeMap, Db, Emitter, Gen, MirFunction, Plan, Repr, Rvalue, SourceRoot, StatementKind,
-    Terminator, calls, closures, containers, dispatch, globals, lists, loop_ranges, stack, strings,
-    tasks, telemetry,
+    Terminator, calls, closures, containers, dispatch, globals, lists, loop_ranges, maps, stack,
+    strings, tasks, telemetry,
 };
 
 #[derive(Clone, Copy)]
 pub(super) enum Admission<'a, 'db> {
-    Initializers(bool),
     Function(&'a MirFunction<'db>),
     CapturedLocal(bool),
     ShieldedBlock(bool),
@@ -80,6 +79,7 @@ const FEATURES: &[&dyn Feature] = &[
     &closures::Feature,
     &tasks::Feature,
     &lists::Feature,
+    &maps::Feature,
     &containers::Feature,
     &dispatch::Feature,
     &super::interface_fields::Feature,

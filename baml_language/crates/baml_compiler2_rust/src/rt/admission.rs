@@ -1,6 +1,6 @@
 use super::{
     BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, RuntimeTy,
-    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions, file_lets,
+    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions,
     is_required_interface_method, lower_function, no, registry, world_files,
 };
 
@@ -19,11 +19,8 @@ pub(super) fn collect<'db>(
     plan: &mut Plan<'_>,
 ) -> Gen<Admitted<'db>> {
     let mut all = BTreeMap::new();
+    let initializer_roots = super::globals::prepare(db, root, opt, plan, &mut all)?;
     for &file in world_files(db, root) {
-        registry::admit(registry::Admission::Initializers(
-            file.source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib
-                && !file_lets(db, file).is_empty(),
-        ))?;
         for &f in file_functions(db, file) {
             if is_required_interface_method(db, f) {
                 continue;
@@ -32,13 +29,20 @@ pub(super) fn collect<'db>(
                 .as_ref()
                 .map_err(|e| no(format!("MIR: {e:?}")))?;
             if let Some(object) = plan.index.declared(db, f) {
-                all.insert(object, mir.clone());
+                all.insert(object, MirFunction::from(mir));
             }
         }
     }
     let mut queue = VecDeque::from([entry]);
+    queue.extend(initializer_roots);
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
+    plan.lambda_bodies.clear();
+    for (&object, mir) in &all {
+        if let MirFunctionKind::Bytecode(body) = &mir.kind {
+            plan.lambda_bodies.insert(body as *const _ as usize, object);
+        }
+    }
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -87,43 +91,7 @@ pub(super) fn collect<'db>(
                     .map_err(|e| format!("{e} (constructor in {})", plan.index.display(object)))?;
             }
         }
-        // A generic type argument is not a JSON schema request. In particular
-        // generic class heads may occur as type values without field bindings.
-        // Plan schemas only for the concrete argument to decode itself.
-        for block in &body.blocks {
-            if let Some(Terminator::Call {
-                callee: super::Operand::Constant(super::Constant::Function(f)),
-                args,
-                ..
-            }) = &block.terminator
-            {
-                if plan
-                    .index
-                    .function(db, *f)
-                    .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
-                {
-                    let ty = super::generics::type_operand(body, &args[0])?;
-                    let template = baml_compiler2_mir::TyTemplate::from(
-                        baml_compiler2_mir::RealizedTy::try_from(ty)
-                            .map_err(|_| no("non-concrete JSON argument"))?,
-                    );
-                    if let Ok(classes) = plan.json_class_types(&template) {
-                        for &c in &classes {
-                            plan.add(c)?;
-                        }
-                        if !plan.json_types.contains(&classes) {
-                            plan.json_types.push(classes);
-                        }
-                    } else {
-                        let repr = plan.template_repr(&template)?;
-                        plan.record(repr)?;
-                        if !plan.json_list_types.contains(&template) {
-                            plan.json_list_types.push(template);
-                        }
-                    }
-                }
-            }
-        }
+        super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
             registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;

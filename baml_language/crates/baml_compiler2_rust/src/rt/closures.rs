@@ -158,20 +158,20 @@ impl registry::Feature for Feature {
         db: &'db dyn super::Db,
         _root: super::SourceRoot,
         plan: &mut Plan<'_>,
-        all: &mut super::BTreeMap<usize, &'db super::MirFunction<'db>>,
+        all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
     ) -> Gen<Vec<usize>> {
         fn register<'db>(
             db: &'db dyn super::Db,
             plan: &mut Plan<'_>,
-            all: &mut super::BTreeMap<usize, &'db super::MirFunction<'db>>,
-            mir: &'db super::MirFunction<'db>,
+            all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
+            mir: &baml_compiler2_mir::MirFunction<'db>,
         ) -> Gen<()> {
             for lambda in &mir.lambdas {
                 let object = plan
                     .index
                     .lambda(db, &lambda.identity)
                     .ok_or_else(|| no("unlinked lambda"))?;
-                all.insert(object, lambda);
+                all.insert(object, super::MirFunction::from(lambda));
                 if let super::MirFunctionKind::Bytecode(body) = &lambda.kind {
                     plan.lambda_bodies.insert(body as *const _ as usize, object);
                 }
@@ -179,14 +179,20 @@ impl registry::Feature for Feature {
             }
             Ok(())
         }
-        for mir in all.values().copied().collect::<Vec<_>>() {
-            register(db, plan, all, mir)?;
+        for mir in all.values().cloned().collect::<Vec<_>>() {
+            for lambda in &mir.lambdas {
+                let object = plan
+                    .index
+                    .lambda(db, &lambda.identity)
+                    .ok_or_else(|| no("unlinked lambda"))?;
+                all.insert(object, super::MirFunction::from(lambda));
+                register(db, plan, all, lambda)?;
+            }
         }
         Ok(Vec::new())
     }
     fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
         match event {
-            registry::Admission::Class { generic: true, .. } => Err(no("generic class or cleanup")),
             _ => Ok(()),
         }
     }
@@ -610,7 +616,7 @@ impl super::Emitter<'_, '_> {
             Repr::Tagged,
         )?;
         Ok(format!(
-            "unsafe fn closure{object}(env:usize,site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let value=f{object}(site,{env}{arguments})?;Ok({value})}}}}\n"
+            "unsafe fn closure{object}(env:usize,site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let cx=rt::calls::Context::current();let value=if rt::telemetry::active(){{f{object}::<true>(cx,site,{env}{arguments})}}else{{f{object}::<false>(cx,site,{env}{arguments})}}?;Ok({value})}}}}\n"
         ))
     }
 }

@@ -68,17 +68,14 @@ impl Closure {
         self.pointer
     }
 }
-impl crate::lists::sealed::Sealed for Closure {}
-impl crate::lists::Slot for Closure {
-    const POINTER: bool = true;
-    fn word(self) -> usize {
-        self.pointer
+unsafe impl crate::lists::Slot for Closure {
+    const SIZE: usize = 8;
+    const LAYOUT: ElementLayout = ElementLayout::Pointer;
+    unsafe fn read(slot: *const u8) -> Self {
+        unsafe { Self::from_raw(slot.cast::<usize>().read()) }
     }
-    unsafe fn from_word(word: usize) -> Self {
-        Self {
-            pointer: word,
-            owner: std::marker::PhantomData,
-        }
+    unsafe fn write(self, object: *mut u8, slot: *mut u8) {
+        unsafe { baml_rt_gc::write_ptr(object, slot.cast(), self.as_raw()) }
     }
 }
 /// # Safety

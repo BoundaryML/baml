@@ -3,44 +3,31 @@ use super::*;
 impl Plan<'_> {
     pub(super) fn type_code(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<usize> {
         use baml_compiler2_mir::TyTemplate as T;
+        if let Some(i) = self.json_list_types.iter().position(|t| t == ty) {
+            return Ok(i + json_lists::TYPE_BASE);
+        }
+        if let Ok(classes) = self.json_class_types(ty)
+            && let Some(i) = self.json_types.iter().position(|c| *c == classes)
+        {
+            return Ok(i + 3);
+        }
         match ty {
-            T::Function { .. } => Ok(usize::MAX - 1),
             T::Int => Ok(0),
-            T::Float | T::Bool | T::Null | T::Map { .. } | T::Literal(..) => Ok(usize::MAX),
             T::String => Ok(1),
-            T::List(_) => self
-                .json_list_types
-                .iter()
-                .position(|t| t == ty)
-                .map(|i| i + json_lists::TYPE_BASE)
-                .map_or(Ok(usize::MAX), Ok),
-            T::Class(_, _) | T::Union(_) => {
-                let Ok(classes) = self.json_class_types(ty) else {
-                    return self
-                        .json_list_types
-                        .iter()
-                        .position(|t| t == ty)
-                        .map(|i| i + json_lists::TYPE_BASE)
-                        .map_or(Ok(usize::MAX), Ok);
-                };
-                self.json_types
-                    .iter()
-                    .position(|c| *c == classes)
-                    .map(|i| i + 3)
-                    .or_else(|| {
-                        self.type_codes
-                            .iter()
-                            .position(|t| t == ty)
-                            .map(|i| i + 100000)
-                    })
-                    .ok_or_else(|| no("unregistered JSON specialization"))
+            T::Bool => Ok(90000),
+            T::Float => Ok(89998),
+            T::Null => Ok(89999),
+            T::Map { .. } => {
+                let runtime = baml_compiler2_mir::RealizedTy::try_from(ty)
+                    .map(RuntimeTy::from)
+                    .map_err(|_| no("map type argument"))?;
+                super::map_json::code(self.repr(&runtime)?)
             }
-            _ => self
+            _ => Ok(self
                 .type_codes
                 .iter()
                 .position(|t| t == ty)
-                .map(|i| i + 100000)
-                .ok_or_else(|| no(format!("type argument {ty:?}"))),
+                .map_or(usize::MAX, |i| i + 100000)),
         }
     }
     pub(super) fn json_class_types(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<Vec<usize>> {
@@ -79,7 +66,10 @@ pub(super) fn emit(
     } = *cx;
     let program = plan.program;
     if let Some(callee) = json_decode {
-        if plan.json_types.is_empty() && plan.json_list_types.is_empty() {
+        if plan.json_types.is_empty()
+            && plan.json_list_types.is_empty()
+            && plan.json_maps.is_empty()
+        {
             return Err(no("missing JSON specialization"));
         }
         let specs = plan
@@ -351,5 +341,89 @@ pub(super) fn emit(
         }
     }
 
+    Ok(())
+}
+
+/// Register only types actually passed to JSON decode, rather than treating
+/// container builtin type arguments (such as `int?`) as class JSON schemas.
+pub(super) fn register_decoders(
+    db: &dyn Db,
+    plan: &mut Plan<'_>,
+    body: &MirFunctionBody<'_>,
+) -> Gen<()> {
+    fn template<'a, 'db>(
+        body: &'a MirFunctionBody<'db>,
+        operand: &Operand<'db>,
+        depth: usize,
+    ) -> Gen<&'a baml_compiler2_mir::TyTemplate> {
+        if depth >= body.locals.len() {
+            return Err(no("dynamic JSON type argument"));
+        }
+        let (Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))) = operand
+        else {
+            return Err(no("dynamic JSON type argument"));
+        };
+        let mut found = None;
+        for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+            if let StatementKind::Assign {
+                destination: Place::Local(dst),
+                value,
+            } = &statement.kind
+                && dst == local
+            {
+                let next = match value {
+                    Rvalue::LoadType(ty) => ty,
+                    Rvalue::Use(operand) => template(body, operand, depth + 1)?,
+                    _ => return Err(no("dynamic JSON type argument")),
+                };
+                if found.is_some_and(|old| old != next) {
+                    return Err(no("dynamic JSON type argument"));
+                }
+                found = Some(next);
+            }
+        }
+        found.ok_or_else(|| no("missing JSON type argument"))
+    }
+    for block in &body.blocks {
+        let Some(Terminator::Call {
+            callee: Operand::Constant(Constant::Function(f)),
+            args,
+            ntypeargs: 1,
+            ..
+        }) = &block.terminator
+        else {
+            continue;
+        };
+        if !plan
+            .index
+            .function(db, *f)
+            .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
+        {
+            continue;
+        }
+        let ty = template(body, &args[0], 0)?;
+        if matches!(ty, baml_compiler2_mir::TyTemplate::Map { .. }) {
+            let runtime = baml_compiler2_mir::RealizedTy::try_from(ty)
+                .map(RuntimeTy::from)
+                .map_err(|_| no("map JSON type"))?;
+            let repr = plan.repr(&runtime)?;
+            plan.record(repr)?;
+            plan.json_maps.insert(repr, runtime);
+        } else if let Ok(classes) = plan.json_class_types(ty) {
+            for &class in &classes {
+                plan.add(class)?;
+            }
+            if !plan.json_types.contains(&classes) {
+                plan.json_types.push(classes);
+            }
+        } else {
+            let repr = plan.template_repr(ty)?;
+            plan.record(repr)?;
+            if !plan.json_list_types.contains(ty) {
+                plan.json_list_types.push(ty.clone());
+            }
+        }
+        plan.json_decode_codes.insert(plan.type_code(ty)?);
+    }
     Ok(())
 }

@@ -17,14 +17,14 @@ impl Plan<'_> {
             return None;
         };
         match class.path.to_string().as_str() {
-            "json.SerializationError" => Some(10),
-            "errors.InvalidArgument" => Some(11),
+            "json.SerializationError" => Some(11),
+            "errors.InvalidArgument" => Some(12),
             _ => None,
         }
     }
 }
 
-fn handles(name: &str) -> bool {
+pub(super) fn handles(name: &str) -> bool {
     matches!(
         name,
         "baml._sum_int"
@@ -332,11 +332,7 @@ pub(super) fn emit_render_shapes(
         }
         match repr {
             Repr::Ptr(c) => {
-                let Object::Class(class) =
-                    &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-                else {
-                    unreachable!()
-                };
+                let class = plan.class(c);
                 for package in &plan.program.packages {
                     for rules in package.impl_rules.values() {
                         for rule in rules {
@@ -378,11 +374,7 @@ pub(super) fn emit_render_shapes(
     out.push_str("static LIST_RENDER_SHAPES:&[rt::lists::RenderShape]=&[\n");
     for desc in 0..last {
         if let Some((&c, _)) = descriptors.iter().find(|(_, id)| **id == desc) {
-            let Object::Class(class) =
-                &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-            else {
-                unreachable!()
-            };
+            let class = plan.class(c);
             writeln!(
                 out,
                 "rt::lists::RenderShape::Class({:?}),",

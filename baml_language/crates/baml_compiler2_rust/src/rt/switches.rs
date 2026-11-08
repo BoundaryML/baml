@@ -142,7 +142,7 @@ impl Emitter<'_, '_> {
         if !matches!(r, Repr::Tagged | Repr::Dyn(_)) {
             return Err(no("type tag"));
         }
-        let mut out = format!("{{let v={v};match v.tag{{0=>0i64,1=>2,2=>3,3=>1,4294967294=>4,");
+        let mut out = format!("{{let v={v};match v.tag{{0=>0i64,1=>2,2=>3,3=>1,4294967295=>4,");
         for (&c, &desc) in self.descriptors {
             let class = self.plan.class(c);
             write!(out, "{}=>{},", desc + 3, class.type_tag.as_i64()).unwrap();
@@ -182,7 +182,7 @@ impl Emitter<'_, '_> {
         }
         let tag = match ty {
             TyTemplate::Int => "0".into(),
-            TyTemplate::Float => "4294967294".into(),
+            TyTemplate::Float => "4294967295".into(),
             TyTemplate::Bool => "1".into(),
             TyTemplate::Null => "2".into(),
             TyTemplate::String => "3".into(),
@@ -199,7 +199,7 @@ impl Emitter<'_, '_> {
                     baml_type::Literal::Float(f) => {
                         let bits = f.parse::<f64>().map_err(|_| no("float literal"))?.to_bits();
                         format!(
-                            "{{let v={tagged};v.tag==4294967294 && f64::from_bits(v.payload)==f64::from_bits({bits}u64)}}"
+                            "{{let v={tagged};v.tag==4294967295 && f64::from_bits(v.payload)==f64::from_bits({bits}u64)}}"
                         )
                     }
                     baml_type::Literal::Bigint(_) => {

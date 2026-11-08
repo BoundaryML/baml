@@ -3,45 +3,7 @@ use super::*;
 pub(super) const TYPE_BASE: usize = 1_000_000;
 impl Plan<'_> {
     pub(super) fn template_repr(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<Repr> {
-        use baml_compiler2_mir::TyTemplate as T;
-        Ok(match ty {
-            T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
-            T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
-            T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
-            T::Null => Repr::Null,
-            T::String => Repr::Str,
-            T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
-            T::List(t) => {
-                if let T::Union(members) = t.as_ref() {
-                    self.list_union_repr(
-                        self.template_repr(t)?,
-                        members
-                            .iter()
-                            .map(|m| self.template_repr(m))
-                            .collect::<Gen<Vec<_>>>()?,
-                    )
-                } else {
-                    if matches!(t.as_ref(), T::Null) {
-                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
-                    } else {
-                        self.list_repr(self.template_repr(t)?)
-                    }
-                }
-            }
-            T::Class(head, args) if args.is_empty() => {
-                Repr::Ptr(self.index.class_at(head).ok_or_else(|| no("JSON class"))?.0)
-            }
-            T::Union(m) => {
-                if m.len() == 2 && m.iter().any(|m| matches!(m, T::Null)) {
-                    let other =
-                        self.template_repr(m.iter().find(|m| !matches!(m, T::Null)).unwrap())?;
-                    if other.pointer() { other } else { Repr::Tagged }
-                } else {
-                    Repr::Tagged
-                }
-            }
-            _ => return Err(no("JSON list element type")),
-        })
+        self.repr(&ty.substitute_symbolic(&[]))
     }
 }
 fn slot(repr: Repr) -> &'static str {
@@ -68,11 +30,7 @@ impl SchemaEmitter<'_, '_> {
         if !self.classes.insert(c) {
             return Ok(symbol);
         }
-        let Object::Class(class) =
-            &self.plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-        else {
-            unreachable!()
-        };
+        let class = self.plan.class(c);
         // Preserve the existing closed-world decoder's admission for custom overrides.
         for package in &self.plan.program.packages {
             for rules in package.impl_rules.values() {
@@ -87,8 +45,9 @@ impl SchemaEmitter<'_, '_> {
         }
         let layout = &self.plan.layouts[&c];
         let mut fields = String::new();
+        let field_types = self.plan.class_field_types(c);
         for (i, f) in class.fields.iter().enumerate() {
-            let ty = self.field(&f.field_type)?;
+            let ty = self.field(&field_types[i])?;
             write!(
                 &mut fields,
                 "rt::json_lists::Field{{name:{:?},offset:{},ty:&{ty},slot:SlotKind::{},skip:{}}},",
@@ -190,8 +149,11 @@ impl SchemaEmitter<'_, '_> {
                 let element = self.field(t)?;
                 self.list(self.plan.field_repr(ty)?, element)?
             }
-            T::Class(head, args) if args.is_empty() => {
-                self.class(self.plan.class_tag(head.tag())?)?
+            T::Class(_, _) => {
+                let Repr::Ptr(c) = self.plan.field_repr(ty)? else {
+                    unreachable!()
+                };
+                self.class(c)?
             }
             T::Union(m) => {
                 let members = m

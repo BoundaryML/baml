@@ -131,7 +131,16 @@ function RuntimeListMaps() -> int {
             total += v;
         }
     }
-    total
+    let float_map: map<int, float> = {1: 2.5, 2: 3.5};
+    let generic = [float_map];
+    generic.push(float_map);
+    let floats = generic[1].values();
+    floats.push(4.5);
+    let bool_map: map<string, bool> = {"yes": true, "no": false};
+    let bools = bool_map.values();
+    let deep: map<string, map<int, float>> = {"nested": float_map};
+    let inner = deep.values();
+    if (floats[0] == 2.5 && bools[0] && inner[0][2] == 3.5) { total } else { -1 }
 }
 
 class RuntimeListNode {

@@ -9,14 +9,31 @@ use baml_compiler2_hir::{
     package::world_files,
 };
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, Constant, Db, MirFunction, MirFunctionBody, MirFunctionKind, Operand,
-    OptLevel, Place, RuntimeTy, Rvalue, StatementKind, Terminator, UnaryOp, lower_function,
+    AggregateKind, BinOp, Constant, Db, MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place,
+    RuntimeTy, Rvalue, StatementKind, Terminator, UnaryOp, lower_function,
 };
 use bex_vm_types::{Object, Program};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
 
 type Gen<T> = Result<T, String>;
+#[derive(Clone)]
+struct MirFunction<'db> {
+    arity: usize,
+    identity: Option<baml_compiler2_mir::MirFunctionId<'db>>,
+    kind: MirFunctionKind<'db>,
+    lambdas: Vec<baml_compiler2_mir::MirFunction<'db>>,
+}
+impl<'db> From<&baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
+    fn from(mir: &baml_compiler2_mir::MirFunction<'db>) -> Self {
+        Self {
+            arity: mir.arity,
+            identity: Some(mir.identity.clone()),
+            kind: mir.kind.clone(),
+            lambdas: mir.lambdas.clone(),
+        }
+    }
+}
 struct Layout {
     fields: Vec<Repr>,
     offsets: Vec<usize>,
@@ -57,6 +74,11 @@ struct Plan<'a> {
     lambda_bodies: BTreeMap<usize, usize>,
     callables: BTreeSet<usize>,
     closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
+    map_types: std::cell::RefCell<Vec<maps::MapType>>,
+    json_maps: BTreeMap<Repr, RuntimeTy>,
+    map_stringify: bool,
+    globals: BTreeMap<usize, Repr>,
+    init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -120,6 +142,8 @@ pub use driver::compile_rt;
 
 mod calls;
 mod globals;
+mod map_json;
+mod maps;
 mod registry;
 mod strings;
 mod tasks;
