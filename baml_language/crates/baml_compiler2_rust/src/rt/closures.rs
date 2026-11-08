@@ -182,8 +182,8 @@ impl registry::Feature for Feature {
                     .index
                     .lambda(db, &lambda.identity)
                     .ok_or_else(|| no("unlinked lambda"))?;
-                all.insert(object, lambda.clone());
-                register(db, plan, all, lambda)?;
+                all.insert(object, super::MirFunction::from(lambda));
+                register(db, plan, all, &super::MirFunction::from(lambda))?;
             }
             Ok(())
         }

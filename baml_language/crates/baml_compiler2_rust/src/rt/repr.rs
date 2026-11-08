@@ -16,6 +16,7 @@ pub(super) enum Repr {
     Dyn(usize),
     Tagged,
     MapStrInt,
+    Map(usize),
     Iter,
     Naming,
     Enum(usize),
@@ -104,6 +105,7 @@ impl Repr {
                 | Self::Closure
                 | Self::Cell
                 | Self::ListClosure(_)
+                | Self::Map(_)
         )
     }
 }

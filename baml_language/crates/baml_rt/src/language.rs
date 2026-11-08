@@ -3,6 +3,7 @@
 use crate::Instance;
 use baml_rt_gc::{Descriptor, ElementLayout, Elements, Field, Header, Kind, SlotKind};
 use baml_type::Int63;
+pub const FLOAT_TAG: u64 = u32::MAX as u64 - 1;
 pub type Dyn = baml_rt_gc::TaggedSlot;
 pub type R<T> = Result<T, Box<Error>>;
 
@@ -19,6 +20,21 @@ pub const STRING_DESC: Descriptor = Descriptor {
     fields: &[],
     finalizer: None,
 };
+pub const MAP_KEY_DESC: Descriptor = Descriptor {
+    fields: &[Field {
+        name: "key",
+        offset: 8,
+        slot: SlotKind::Pointer,
+        type_id: 3,
+    }],
+    type_id: 15,
+    ..OVERFLOW_DESC
+};
+pub fn map_key_not_found() -> Box<Error> {
+    let mut error = panic_value(12, "baml.panics.MapKeyNotFound", "(unknown)".into());
+    error.display_value = Some(r#"baml.panics.MapKeyNotFound {key: "(unknown)"}"#.into());
+    error
+}
 const MESSAGE_FIELDS: &[Field] = &[Field {
     name: "message",
     offset: 8,
@@ -268,7 +284,15 @@ pub fn driver_observed(
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
 ) -> std::process::ExitCode {
-    driver_configured(descriptors, entry, None, functions, sites, format_site)
+    driver_configured(
+        descriptors,
+        entry,
+        None,
+        functions,
+        sites,
+        format_site,
+        None,
+    )
 }
 
 /// Native benchmark entry. Setup state stays on the root fiber's scanned stack.
@@ -289,16 +313,38 @@ pub fn driver_observed_benchmark(
         functions,
         sites,
         format_site,
+        None,
     )
 }
 
-fn driver_configured(
+/// Run package startup as separate observed roots before invoking user code.
+pub fn driver_observed_initialized(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+    initialize: fn(&mut Instance, &mut crate::telemetry::Session) -> R<()>,
+) -> std::process::ExitCode {
+    driver_configured(
+        descriptors,
+        entry,
+        None,
+        functions,
+        sites,
+        format_site,
+        Some(initialize),
+    )
+}
+type Initializer = fn(&mut Instance, &mut crate::telemetry::Session) -> R<()>;
+pub fn driver_configured(
     descriptors: &'static [Descriptor],
     entry: fn() -> R<i64>,
     benchmark: Option<Benchmark>,
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
+    initialize: Option<Initializer>,
 ) -> std::process::ExitCode {
     let mut session = match crate::telemetry::Session::new(functions, sites) {
         Ok(s) => s,
@@ -307,8 +353,22 @@ fn driver_configured(
             return std::process::ExitCode::FAILURE;
         }
     };
-    let result = driver_inner(descriptors, entry, benchmark, &mut session, format_site);
-    session.finish(&result);
+    let result = driver_inner(
+        descriptors,
+        entry,
+        benchmark,
+        &mut session,
+        format_site,
+        initialize,
+    );
+    if result
+        .as_ref()
+        .is_err_and(|error| error.class == "InitFailed")
+    {
+        session.finish_initialization_failure();
+    } else {
+        session.finish(&result);
+    }
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
@@ -325,7 +385,9 @@ fn driver_configured(
                     })
                     .map(|f| (f.file, f.line, f.function)),
             );
-            if error.value == 0 {
+            if error.class == "InitFailed" {
+                eprintln!("error: {}", error.message);
+            } else if error.value == 0 {
                 eprintln!("error: {traceback}VM internal error: {}", error.message);
             } else {
                 let value = error
@@ -343,6 +405,7 @@ fn driver_inner(
     benchmark: Option<Benchmark>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
+    initialize: Option<Initializer>,
 ) -> R<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let mut jobs = None;
@@ -371,6 +434,9 @@ fn driver_inner(
     pointers.extend(vec![true; descriptors.len()]);
     let pointers = Box::leak(pointers.into_boxed_slice());
     let mut instance = Instance::new(descriptors, pointers);
+    if let Some(initialize) = initialize {
+        initialize(&mut instance, session)?;
+    }
     let elapsed = std::rc::Rc::new(std::cell::Cell::new(0u128));
     // Setup and all jobs share one fiber. Its stack retains the state across
     // collecting calls; no managed pointer is kept in untraced host storage.

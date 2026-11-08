@@ -45,6 +45,12 @@ pub enum Shape {
     },
     MapStringInt,
     Closure,
+    Map {
+        key: &'static Type,
+        value: &'static Type,
+        len: unsafe fn(usize) -> usize,
+        entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
+    },
     Unsupported,
 }
 pub use baml_type::Freshness;
@@ -258,6 +264,7 @@ impl Scratch {
         }
         let key = if value.tag >= 3
             && value.tag != u64::MAX
+            && value.tag != crate::FLOAT_TAG
             && matches!(
                 shapes[usize::try_from(value.tag - 3).expect("descriptor index")],
                 Shape::Enum { .. }
@@ -267,6 +274,7 @@ impl Scratch {
             Key::Value(usize::try_from(value.payload).expect("pointer or variant index"))
         };
         if value.tag >= 3
+            && value.tag != crate::FLOAT_TAG
             && let Some(value) = self.seen.get(&key)
         {
             return *value;
@@ -275,6 +283,7 @@ impl Scratch {
             return SnapshotValue::Truncated(Limit::Depth);
         }
         match value.tag {
+            crate::FLOAT_TAG => return SnapshotValue::Float(f64::from_bits(value.payload)),
             0 => return SnapshotValue::Int(value.payload.cast_signed()),
             1 => return SnapshotValue::Bool(value.payload != 0),
             2 => return SnapshotValue::Null,
@@ -461,10 +470,34 @@ impl Scratch {
                         )
                     })
                 }
+                (
+                    Key::Value(pointer),
+                    Shape::Map {
+                        key,
+                        value,
+                        len,
+                        entry,
+                    },
+                ) => {
+                    let key_type = key.owned(&mut b.leaves(), &mut self.carried);
+                    let key_type = b.leaves().ty(key_type);
+                    let value_type = value.owned(&mut b.leaves(), &mut self.carried);
+                    let value_type = b.leaves().ty(value_type);
+                    let len = unsafe { len(pointer) };
+                    b.map(key_type, value_type, 0..len, |leaves, i| {
+                        let (key, value) = unsafe { entry(pointer, i) };
+                        unsafe {
+                            (
+                                self.add(shapes, leaves, key, depth + 1),
+                                self.add(shapes, leaves, value, depth + 1),
+                            )
+                        }
+                    })
+                }
                 (Key::Value(pointer), Shape::MapStringInt) => {
-                    let ptr = pointer as *const usize;
-                    let data = unsafe { ptr.add(1).read() as *const usize }.wrapping_add(2);
-                    let len = unsafe { ptr.add(2).read() };
+                    let map =
+                        unsafe { crate::maps::Map::<crate::strings::Str, i64>::from_raw(pointer) };
+                    let len = map.len();
                     let key_type = b.leaves().ty(OwnedType::String);
                     let value_type = b.leaves().ty(OwnedType::Int);
                     b.map(key_type, value_type, 0..len, |leaves, i| unsafe {
@@ -474,11 +507,11 @@ impl Scratch {
                                 leaves,
                                 Dyn {
                                     tag: 3,
-                                    payload: data.add(i * 2).read() as u64,
+                                    payload: map.entry(i).unwrap().0.as_raw() as u64,
                                 },
                                 depth + 1,
                             ),
-                            SnapshotValue::Int((data.add(i * 2 + 1).read() as u64).cast_signed()),
+                            SnapshotValue::Int(map.entry(i).unwrap().1),
                         )
                     })
                 }

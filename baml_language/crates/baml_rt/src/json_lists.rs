@@ -399,8 +399,15 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
 
 pub enum Shape {
     Unsupported,
-    List { tag: u64, tagged: bool },
+    List {
+        tag: u64,
+        tagged: bool,
+    },
     Class(&'static [EncodeField]),
+    Map {
+        len: unsafe fn(usize) -> usize,
+        entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
+    },
 }
 pub struct EncodeField {
     pub name: &'static str,
@@ -552,6 +559,39 @@ impl Encoder<'_> {
                             unsafe { self.value(value, &format!("{path}.{name}"), depth + 1) }?;
                         }
                         if !first && !self.indent.is_empty() {
+                            self.newline(depth);
+                        }
+                        self.out.push('}');
+                    }
+                    Shape::Map { len, entry } => {
+                        let len = unsafe { len(pointer) };
+                        self.out.push('{');
+                        for i in 0..len {
+                            let (key, value) = unsafe { entry(pointer, i) };
+                            if key.tag != 3 || key.payload == 0 {
+                                return Err(crate::list_errors::serialization(
+                                    self.cx,
+                                    "JSON requires maps with string keys".into(),
+                                    path,
+                                    "map_key",
+                                ));
+                            }
+                            let key = unsafe { Str::from_raw(key.payload as usize) }
+                                .as_str(self.cx)
+                                .to_owned();
+                            self.separator(i == 0, depth + 1);
+                            self.out
+                                .push_str(&serde_json::to_string(&key).expect("key JSON"));
+                            self.out.push(':');
+                            if !self.indent.is_empty() {
+                                self.out.push(' ');
+                            }
+                            unsafe { self.value(value, &format!("{path}[{:?}]", key), depth + 1) }?;
+                            if i & 255 == 255 {
+                                self.cx.poll()?;
+                            }
+                        }
+                        if len > 0 && !self.indent.is_empty() {
                             self.newline(depth);
                         }
                         self.out.push('}');

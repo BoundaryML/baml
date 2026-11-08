@@ -127,6 +127,7 @@ pub(super) fn expand<'db>(
                         };
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || lists::handles(plan.index.display(callee))
+                            || plan.index.display(callee).starts_with("baml.Map.")
                             || matches!(
                                 plan.index.display(callee),
                                 "baml.json.decode" | "baml.json.stringify" | "baml.Array.filled"
@@ -263,7 +264,7 @@ pub(super) fn specialize<'db>(
         Ok(())
     };
     let (erased_head, owner) = match &mir.identity {
-        baml_compiler2_mir::MirFunctionId::Declared(f) => {
+        Some(baml_compiler2_mir::MirFunctionId::Declared(f)) => {
             let callable = baml_compiler2_hir::loc::DeclRef::Source(*f);
             let declared = baml_compiler2_hir_ty::lower::owner_self_ty(runtime.db, *f);
             let head = match &declared {
@@ -536,7 +537,7 @@ fn instance<'db>(
     let source = all
         .get(&callee)
         .ok_or_else(|| no("interface method MIR missing"))?;
-    let baml_compiler2_mir::MirFunctionId::Declared(f) = source.identity else {
+    let Some(baml_compiler2_mir::MirFunctionId::Declared(f)) = source.identity else {
         return Err(no("synthetic generic interface body"));
     };
     let params = callable_generic_frame(db, baml_compiler2_hir::loc::DeclRef::Source(f)).params;

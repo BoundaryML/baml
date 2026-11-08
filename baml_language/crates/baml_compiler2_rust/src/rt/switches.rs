@@ -129,7 +129,7 @@ impl Emitter<'_, '_> {
             | Repr::ListStr
             | Repr::ListListStr
             | Repr::ListPtr(_) => Some(6),
-            Repr::MapStrInt => Some(7),
+            Repr::MapStrInt | Repr::Map(_) => Some(7),
             Repr::Ptr(c) => {
                 let c = self.plan.class(c);
                 Some(c.type_tag.as_i64())
@@ -156,7 +156,11 @@ impl Emitter<'_, '_> {
                 out,
                 "{}=>{},",
                 desc + 3,
-                if *repr == Repr::MapStrInt { 7 } else { 6 }
+                if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
+                    7
+                } else {
+                    6
+                }
             )
             .unwrap();
         }

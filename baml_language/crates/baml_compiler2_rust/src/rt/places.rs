@@ -34,7 +34,8 @@ impl Emitter<'_, '_> {
             | Repr::ListListStr
             | Repr::ListClosure(_)
             | Repr::ListPtr(_)
-            | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
+            | Repr::MapStrInt
+            | Repr::Map(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
     }
@@ -72,13 +73,13 @@ impl Emitter<'_, '_> {
             } else {
                 tag
             };
-            let bits = if source == Repr::Float {
+            let payload = if source == Repr::Float {
                 "v.to_bits()"
             } else {
                 "v as u64"
             };
             return Ok(format!(
-                "{{let v={value};rt::Dyn{{tag:{test},payload:{bits}}}}}"
+                "{{let v={value};rt::Dyn{{tag:{test},payload:{payload}}}}}"
             ));
         }
         if matches!(source, Repr::Tagged | Repr::Dyn(_)) {
@@ -96,6 +97,9 @@ impl Emitter<'_, '_> {
         Err(no(format!("conversion {source:?} to {target:?}")))
     }
     pub(super) fn place(&self, p: &Place) -> Gen<(String, Repr)> {
+        if let Some(result) = self.map_place(p) {
+            return result;
+        }
         match p {
             Place::Local(l) => Ok((format!("l{}", l.0), self.local(l.0)?)),
             Place::Capture(i) => Ok((format!("rt::closures::capture(env,{i})"), Repr::Cell)),
@@ -171,29 +175,25 @@ impl Emitter<'_, '_> {
     pub(super) fn operand(&self, o: &Operand<'_>) -> Gen<(String, Repr)> {
         match o {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
-            Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
-            Operand::Constant(Constant::Float(f)) => {
-                // Bytecode pools constants by floating-point equality, so the
-                // first signed zero in this function supplies both zero signs.
-                // Use that exact constant's bits, matching the VM's loads.
-                let bits = self
+            Operand::Constant(Constant::GlobalItem(binding)) => {
+                let slot = self
                     .plan
                     .index
-                    .positions(self.object)
-                    .constants
-                    .iter()
-                    .find_map(|value| {
-                        if let bex_vm_types::ConstValue::Float(value) = value
-                            && value == f
-                        {
-                            Some(value.to_bits())
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| f.to_bits());
-                Ok((format!("f64::from_bits({bits})"), Repr::Float))
+                    .let_slot(self.db, *binding)
+                    .ok_or_else(|| no("unlinked global"))?;
+                let repr = *self
+                    .plan
+                    .globals
+                    .get(&slot)
+                    .ok_or_else(|| no("unplanned global"))?;
+                let name = baml_compiler2_mir::global_display_name(self.db, *binding);
+                let value = self.fallible(&format!("rt::globals::load_named({slot},{name:?})"));
+                Ok((self.coerce((value, Repr::Tagged), repr)?, repr))
             }
+            Operand::Constant(Constant::Float(f)) => {
+                Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
+            }
+            Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => Ok((
                 self.fallible(&format!(
@@ -236,6 +236,9 @@ impl Emitter<'_, '_> {
             let (cell, _) = self.closure_cell(cell)?;
             let value = self.coerce(value, Repr::Tagged)?;
             return Ok(format!("rt::closures::store({cell},{value});\n"));
+        }
+        if let Some(result) = self.map_assign(p, value.clone()) {
+            return result;
         }
         let (dst, repr) = self.place(p)?;
         let src = self.coerce(value, repr)?;

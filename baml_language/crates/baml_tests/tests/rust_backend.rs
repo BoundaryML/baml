@@ -821,7 +821,7 @@ fn rt_trees_and_fail_closed_admission() {
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
     for source in [
         "function main() -> string { \"hello\" }",
-        "const X = 1; function main() -> int { X }",
+        "function main() -> int { \"x\".trim().length() }",
     ] {
         assert!(
             emit(source).unwrap_err().contains("unsupported in baml_rt"),
@@ -937,11 +937,11 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
-            false,
+            true,
         ),
         (
             "function main() -> int { let m: map<string,string> = {}; m[\"a\"] = \"b\"; 0 }",
-            false,
+            true,
         ),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("agent.baml", source)]);
@@ -1005,14 +1005,14 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "90e124f246d50406fed8944a576b747fd1997745d3abb5c578a705113b0cdb9b",
-            "richards" => "23e2a639daea95631843ce00f994ee2b46ec0acc07dea7e49dc9b0600b791c1b",
-            "agent" => "b35618f3249b9b661b05ab62fbff79be4dd43812d0e15d8c2e3240b24b9dec29",
+            "trees" => "283c521d9ca57cdc17adf173b2183f0e72a466d188462dbfa74dedbe8c254cd3",
+            "richards" => "1794883b7f8adf8354b3a8ba0ffe18b1c856f69378092fef253a012dad9cdb7d",
+            "agent" => "f401da8edae6b45caf4fb3ff832291b180ee4d09ccba54d1f7cc55e31a06e96f",
+            "initializer" => "45e71ad69d38639afb80d984f48ea4e3768aa9b0c95dc2f0d5a2d94f0468c134",
             _ => "",
         };
         if expected.is_empty() {
             let expected = match name {
-                "initializer" => "unsupported in baml_rt: top-level initializers",
                 "entry" => "unsupported in baml_rt: entry must have no parameters and return int",
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
@@ -1023,6 +1023,10 @@ fn rt_source_bytes_and_diagnostics() {
             }
         } else {
             let source = result.unwrap();
+            if name == "initializer" {
+                assert!(source.contains("rt::globals::begin("));
+                assert!(source.contains("rt::globals::load_named("));
+            }
             std::fs::write(
                 std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rt-{name}.rs")),
                 &source,
@@ -1251,6 +1255,64 @@ fn rt_shared_recursive_forwarded_and_stored_closures() {
                 .block_on(baml_tests::engine::try_call_by_name(program, "user.main"))
                 .unwrap(),
             bex_engine::BexExternalValue::Int(38),
+        );
+    }
+}
+
+#[test]
+fn rt_initializer_dependency_order_and_generic_maps() {
+    for source in [
+        "function main()->int { let m:map<string?,int> = {}; m[null]=1; m[\"key\"]=2; m[null]+m[\"key\"] }",
+        "const SECOND = FIRST + 1; const FIRST = 41; function main() -> int { SECOND }",
+        "const M: map<string,int> = {\"a\":1,\"b\":2}; function main() -> int { M.set(\"a\",3); M[\"a\"] + M.length() }",
+        "class Box { m: map<int,string> } function main() -> int { let b=Box{m:{1:\"a\",2:\"b\"}}; b.m[1]=\"c\"; b.m.delete(2); b.m.length() }",
+        "function main() -> int { let m: map<string,int?> = {\"null\":null,\"some\":7}; if(m.has(\"null\")){m.get(\"some\") ?? 0}else{99} }",
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("maps_globals.baml", source)]);
+        for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+            let program = lower(&db, opt);
+            let (entry, _) = user_functions(&program)
+                .find(|(_, f)| f.name() == "main")
+                .unwrap();
+            let emitted = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap_or_else(|e| panic!("{source} at {opt:?}: {e}"));
+            assert!(!emitted.contains("BexVm"));
+            syn::parse_file(&emitted).unwrap_or_else(|e| panic!("{source}: {e}"));
+        }
+    }
+}
+
+#[test]
+fn rt_structural_union_map_keys_fail_closed() {
+    for (source, expected) in [
+        (
+            "class Key { x: int } function main()->int { let m:map<Key?,int> = {}; m[null]=1; m.length() }",
+            "map key callbacks",
+        ),
+        (
+            "class Box { x:int } function main()->int {let m:map<string,Box?> = {\"a\":Box{x:1},\"b\":null}; m.values().length()}",
+            "map snapshot declared list element type (emitting user.main)",
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("admission.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let result = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        assert_eq!(
+            result.unwrap_err(),
+            format!("unsupported in baml_rt: {expected}")
         );
     }
 }

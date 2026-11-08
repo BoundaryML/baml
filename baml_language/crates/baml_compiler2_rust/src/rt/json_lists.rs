@@ -331,7 +331,7 @@ pub(super) fn emit_shapes(
             Repr::Str => 3,
             Repr::Float => (u32::MAX - 1) as usize,
             Repr::Ptr(c) => descriptors[&c] + 3,
-            r if r.growing() || r == Repr::MapStrInt => lists[&r] + 3,
+            r if r.growing() || matches!(r, Repr::MapStrInt | Repr::Map(_)) => lists[&r] + 3,
             Repr::Tagged | Repr::Dyn(_) => 0,
             _ => return Err(no("list JSON scalar tag")),
         })
@@ -347,12 +347,15 @@ pub(super) fn emit_shapes(
             }
         }
     }
-    if plan.lists.contains(&Repr::MapStrInt) {
-        return Err(no("list JSON map serialization"));
-    }
     let last = lists
         .iter()
-        .map(|(r, id)| id + if *r == Repr::MapStrInt { 3 } else { 2 })
+        .map(|(r, id)| {
+            id + if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
+                4
+            } else {
+                2
+            }
+        })
         .max()
         .unwrap_or_else(|| {
             descriptors
@@ -373,8 +376,13 @@ pub(super) fn emit_shapes(
             }
             out.push_str("]),\n");
         } else if let Some((&repr, _)) = lists.iter().find(|(_, id)| **id == desc) {
-            if repr == Repr::MapStrInt {
-                out.push_str("rt::json_lists::Shape::Unsupported,\n");
+            if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
+                let (key, value) = plan.map_parts(repr)?;
+                let k = maps::slot_type(key, descriptors, lists)?;
+                let v = maps::slot_type(value, descriptors, lists)?;
+                let kd = capture_codegen::capture_dyn(key, "key", descriptors, lists)?;
+                let vd = capture_codegen::capture_dyn(value, "value", descriptors, lists)?;
+                writeln!(out,"rt::json_lists::Shape::Map{{len:|p|unsafe{{rt::maps::Map::<{k},{v}>::from_raw(p).len()}},entry:|p,i|unsafe{{let(key,value)=rt::maps::Map::<{k},{v}>::from_raw(p).entry(i).unwrap();({kd},{vd})}}}},").unwrap();
                 continue;
             }
             let element = plan.element(repr)?;

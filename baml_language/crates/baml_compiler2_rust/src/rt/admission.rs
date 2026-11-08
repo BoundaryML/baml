@@ -1,6 +1,6 @@
 use super::{
     BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, RuntimeTy,
-    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions, file_lets,
+    Rvalue, SourceRoot, StatementKind, Terminator, VecDeque, file_functions,
     is_required_interface_method, lower_function, no, registry, world_files,
 };
 
@@ -20,11 +20,8 @@ pub(super) fn collect<'db>(
     plan: &mut Plan<'_>,
 ) -> Gen<Admitted<'db>> {
     let mut all = BTreeMap::new();
+    let initializer_roots = super::globals::prepare(db, root, opt, plan, &mut all)?;
     for &file in world_files(db, root) {
-        registry::admit(registry::Admission::Initializers(
-            file.source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib
-                && !file_lets(db, file).is_empty(),
-        ))?;
         for &f in file_functions(db, file) {
             if is_required_interface_method(db, f) {
                 continue;
@@ -33,7 +30,7 @@ pub(super) fn collect<'db>(
                 .as_ref()
                 .map_err(|e| no(format!("MIR: {e:?}")))?;
             if let Some(object) = plan.index.declared(db, f) {
-                all.insert(object, mir.clone());
+                all.insert(object, MirFunction::from(mir));
             }
         }
     }
@@ -41,6 +38,7 @@ pub(super) fn collect<'db>(
     if let Some((setup, run)) = benchmark {
         queue.extend([setup, run]);
     }
+    queue.extend(initializer_roots);
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
     // Specialization owns and inserts MIR. Record body addresses only after that
@@ -118,6 +116,9 @@ pub(super) fn collect<'db>(
                         baml_compiler2_mir::RealizedTy::try_from(ty)
                             .map_err(|_| no("non-concrete JSON argument"))?,
                     );
+                    if matches!(template, baml_compiler2_mir::TyTemplate::Map { .. }) {
+                        continue;
+                    }
                     if let Ok(classes) = plan.json_class_types(&template) {
                         for &c in &classes {
                             plan.add(c)?;
@@ -135,6 +136,7 @@ pub(super) fn collect<'db>(
                 }
             }
         }
+        super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
             registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;

@@ -149,6 +149,14 @@ pub(super) fn emit(
         writeln!(out,"unsafe fn f{stringify}_list_json(site:usize,value:rt::Dyn,naming:usize,indent:rt::Dyn,omit:bool,on:bool,oi:bool,oo:bool)->R<usize>{{unsafe{{rt::telemetry::observed_captured(&O{stringify},site,||rt::telemetry::capture_arguments(&[value,rt::Dyn{{tag:if on{{u64::MAX}}else{{CAPTURE_NAMING_TAG}},payload:naming as u64}},if oi{{rt::Dyn{{tag:u64::MAX,payload:0}}}}else{{indent}},rt::Dyn{{tag:if oo{{u64::MAX}}else{{1}},payload:omit as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::check_stack().map_err(|e|e.at(&S_LIST_STRINGIFY,0))?;let aliased=rt::telemetry::observed_captured(&O{aliased},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;rt::json_lists::stringify(&mut rt::strings::Cx::current(),value,JSON_LIST_SHAPES,aliased,indent,omit).map(|s|s.as_raw()).map_err(|e|e.at(&S_LIST_STRINGIFY,0))}})}}}}").unwrap();
     }
     let mut observed = reached.clone();
+    for (chain, _) in &plan.init_chains {
+        observed.insert(*chain);
+        writeln!(
+            out,
+            "static O{chain}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);"
+        )
+        .unwrap();
+    }
     if let Some(decode) = json_decode {
         observed.insert(decode);
         let MirFunctionKind::Bytecode(body) = &all[&decode].kind else {
@@ -208,8 +216,8 @@ pub(super) fn emit(
         let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
         let metadata = telemetry_metadata_source(&metadata);
         let hidden = info.trace_passthrough
-            || matches!(&all[&id].kind,
-            MirFunctionKind::Bytecode(body) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
+            || matches!(all.get(&id).map(|m| &m.kind),
+            Some(MirFunctionKind::Bytecode(body)) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
                 StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
 
         writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();
