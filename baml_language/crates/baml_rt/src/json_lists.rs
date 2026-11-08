@@ -29,6 +29,12 @@ pub enum Ty {
         name: &'static str,
         fields: &'static [Field],
     },
+    Map {
+        desc: u32,
+        value: &'static Ty,
+        new: unsafe fn(&mut Cx) -> R<usize>,
+        insert: unsafe fn(&mut Cx, usize, &str, Dyn) -> R<()>,
+    },
     Union(&'static [Member]),
 }
 pub struct Field {
@@ -213,6 +219,15 @@ impl Ty {
                 }
                 None
             }
+            Self::Map { value: element, .. } => {
+                let Some(values) = value.as_object() else {
+                    return Err(fail("expected object", path));
+                };
+                for (key, value) in values {
+                    element.check(value, &format!("{path}[{key:?}]"))?;
+                }
+                None
+            }
             Self::Class { name, fields, .. } => {
                 let Some(object) = value.as_object() else {
                     return Err(fail(
@@ -256,6 +271,7 @@ impl Ty {
             Self::LiteralFloat(n) => Value::from(*n),
             Self::LiteralBool(b) => Value::from(*b),
             Self::List { .. } => Value::Array(vec![]),
+            Self::Map { .. } => Value::Object(serde_json::Map::new()),
             Self::Class { fields, .. } => Value::Object(
                 fields
                     .iter()
@@ -295,6 +311,22 @@ impl Ty {
                     .expect("validated union")
                     .build(cx, value)
             }?,
+            Self::Map {
+                desc,
+                value: element,
+                new,
+                insert,
+            } => {
+                let pointer = unsafe { new(cx) }?;
+                for (key, value) in value.as_object().unwrap() {
+                    let value = unsafe { element.build(cx, value) }?;
+                    unsafe { insert(cx, pointer, key, value) }?;
+                }
+                Dyn {
+                    tag: *desc as u64 + 3,
+                    payload: pointer as u64,
+                }
+            }
             Self::Class {
                 desc,
                 bytes,
@@ -399,8 +431,16 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
 
 pub enum Shape {
     Unsupported,
-    List { tag: u64, tagged: bool },
+    List {
+        tag: u64,
+        tagged: bool,
+    },
     Class(&'static [EncodeField]),
+    Map {
+        string_keys: bool,
+        len: unsafe fn(usize) -> usize,
+        entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
+    },
 }
 pub struct EncodeField {
     pub name: &'static str,
@@ -509,6 +549,43 @@ impl Encoder<'_> {
                             self.newline(depth);
                         }
                         self.out.push(']');
+                    }
+                    Shape::Map {
+                        string_keys,
+                        len,
+                        entry,
+                    } => {
+                        if !string_keys {
+                            return Err(crate::list_errors::serialization(
+                                self.cx,
+                                "JSON requires maps with string keys".into(),
+                                path,
+                                "map_key",
+                            ));
+                        }
+                        let len = unsafe { len(pointer) };
+                        self.out.push('{');
+                        for i in 0..len {
+                            let (key, value) = unsafe { entry(pointer, i) };
+                            let key = unsafe { Str::from_raw(key.payload as usize) }
+                                .as_str(self.cx)
+                                .to_owned();
+                            self.separator(i == 0, depth + 1);
+                            self.out
+                                .push_str(&serde_json::to_string(&key).expect("key JSON"));
+                            self.out.push(':');
+                            if !self.indent.is_empty() {
+                                self.out.push(' ');
+                            }
+                            unsafe { self.value(value, &format!("{path}[{key:?}]"), depth + 1) }?;
+                            if i & 255 == 255 {
+                                self.cx.poll()?;
+                            }
+                        }
+                        if len > 0 && !self.indent.is_empty() {
+                            self.newline(depth);
+                        }
+                        self.out.push('}');
                     }
                     Shape::Class(fields) => {
                         self.out.push('{');

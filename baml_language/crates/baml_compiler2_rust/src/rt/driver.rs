@@ -44,6 +44,7 @@ fn compile(
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
         list_elements: std::cell::RefCell::new(Vec::new()),
+        list_narrowing_facts: BTreeMap::new(),
         json_types: Vec::new(),
         list_stringify: false,
         list_render_roots: std::cell::RefCell::new(BTreeSet::new()),
@@ -198,6 +199,7 @@ fn compile(
             statement: 0,
             stack: placements.remove(&object).unwrap(),
             proven_arithmetic: BTreeSet::new(),
+            list_narrowings: plan.list_narrowing_facts[&(body as *const _ as usize)].clone(),
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
             compact_sites: Vec::new(),
@@ -242,6 +244,7 @@ fn compile(
                 db,
                 plan: &plan,
                 proven_arithmetic: BTreeSet::new(),
+                list_narrowings: BTreeMap::new(),
                 stack: super::stack::Placement::default(),
                 body: match &all[&entry].kind {
                     MirFunctionKind::Bytecode(b) => b,

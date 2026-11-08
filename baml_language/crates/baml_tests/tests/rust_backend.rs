@@ -1083,7 +1083,7 @@ fn rt_source_bytes_and_diagnostics() {
         let expected = match name {
             "trees" => "75abc10d2f6a77e4aa69c28de3081c9a020645731d9943791958294cd806b3ed",
             "richards" => "3dfe652a80574cee5f829df03b8634707cb08ebce792cbfdec453ee6eac0a051",
-            "agent" => "dbdd2ac81c377d103646c70e3d86b20c101cdaafc8b2250a13c4b1207e97c515",
+            "agent" => "2695a859b11039012e8cf7b079775e2167a9e2b20c5bd080513055307496b48f",
             _ => "",
         };
         if expected.is_empty() {
@@ -1262,7 +1262,6 @@ fn rt_shared_recursive_forwarded_and_stored_closures() {
 }
 
 #[test]
-#[ignore = "scoped list KPI admission gate, paired with executable verification"]
 fn rt_list_kpi_admission() {
     let inputs = [
         (
@@ -1402,6 +1401,9 @@ fn rt_list_callbacks_are_typed_and_closed() {
         "RuntimeListSortClasses",
         "RuntimeListCallbackThrow",
         "RuntimeListSortThrow",
+        "RuntimeListJsonMaps",
+        "RuntimeListGenericJson",
+        "RuntimeListNarrowedFields",
     ] {
         let entry = program.rendered_callables()[&format!("user.{name}")]
             .object

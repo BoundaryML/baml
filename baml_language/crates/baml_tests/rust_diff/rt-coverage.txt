@@ -1,25 +1,17 @@
-BAML runtime coverage (normal AND GC stress): 51 pass, 124 unsupported, 0 fail
+BAML runtime differential coverage (normal AND GC stress): 61 pass, 108 unsupported, 0 fail
 Telemetry off: required
-Scoped verification: 37 list probes and both standalone closure probes pass.
+Scoped verification: 47 list probes and both standalone closure probes pass.
+KPI admission: 16/16; full-size benchmark verification follows separately.
 The independent type-dispatch project passes in both GC modes.
 Retained setup benchmarks pass for integer and owned string results, including GC stress and medium telemetry.
 Unselected rows retain prior verification; the full merged differential gate is deferred.
 
-First unsupported constructs (fixtures blocked):
+First unsupported constructs (historical unselected fixtures):
 103	top-level initializers
-4	entry must have no parameters and return int
-4	list element
-2	growing list builtin receiver (emitting user.setup)
-1	JSON union member
-1	baml.Array.pop
-1	baml.Float.itrunc
 1	baml.Map.get
 1	baml.String.split
 1	baml.json._stringify
 1	closures
-1	growing list builtin receiver (emitting user.main)
-1	list field element (layout JArray, object 4180, types [List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4279) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4280) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])]))]) (user.main local 8: Union([Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JArray" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JLiteral" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JNumber" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JObject" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JString" }, [])]))
-1	list field element (layout Request, object 4186, types [String, Union([String, Null]), List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])])), List(Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4284) }, [])), Union([String, Null]), Union([Float, Null]), Union([Float, Null]), Int, Bool, Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4285) }, []), Null]), Map { key: String, value: String }, Bool, Union([String, Null]), Bool]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Request" }, []))
 1	list field element (layout Tree, object 4182, types [TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }), List(TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }))]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Tree" }, []))
 
 Per probe / KPI workload:
@@ -114,27 +106,26 @@ RecursiveCancellation	unsupported: top-level initializers
 RtClosures	pass
 RtEmptyClosures	pass
 RuntimeClass	unsupported: top-level initializers
-RuntimeListCallbacks	pass
-RuntimeListPublicSort	pass
-RuntimeListSortClasses	pass
-RuntimeListCallbackThrow	pass
-RuntimeListSortThrow	pass
-RuntimeListTaggedSort	pass
-RuntimeListSortMixedError	pass
-RuntimeListSortNullError	pass
-RuntimeListSortBoolError	pass
-RuntimeListPointerCallbacks	pass
 RuntimeListBounds	pass
 RuntimeListBuiltins	pass
+RuntimeListCallbackThrow	pass
+RuntimeListCallbacks	pass
+RuntimeListEmptyCallbacks	pass
 RuntimeListFloatConstants	pass
 RuntimeListFloatSpecials	pass
 RuntimeListFloatTruncationError	pass
+RuntimeListGenericJson	pass
 RuntimeListInsertError	pass
 RuntimeListInvalidCodePoint	pass
 RuntimeListJson	pass
+RuntimeListJsonAliases	pass
 RuntimeListJsonError	pass
 RuntimeListJsonField	pass
 RuntimeListJsonFieldError	pass
+RuntimeListJsonMapCycle	pass
+RuntimeListJsonMapError	pass
+RuntimeListJsonMapKeyError	pass
+RuntimeListJsonMaps	pass
 RuntimeListJsonNonFinite	pass
 RuntimeListJsonOptional	pass
 RuntimeListJsonOptionalError	pass
@@ -142,13 +133,24 @@ RuntimeListLiteralJson	pass
 RuntimeListLiteralJsonError	pass
 RuntimeListMaps	pass
 RuntimeListMedianError	pass
+RuntimeListNarrowedFields	pass
+RuntimeListPointerCallbacks	pass
+RuntimeListPublicSort	pass
 RuntimeListRecursiveJson	pass
 RuntimeListReductionOverflow	pass
 RuntimeListReductions	pass
 RuntimeListScalarBoundaries	pass
+RuntimeListSortBoolError	pass
+RuntimeListSortClasses	pass
+RuntimeListSortMixedError	pass
+RuntimeListSortMutation	pass
+RuntimeListSortNullError	pass
+RuntimeListSortSingletons	pass
+RuntimeListSortThrow	pass
 RuntimeListStoreBounds	pass
 RuntimeListStringEntry	pass
 RuntimeListStructuralJoin	pass
+RuntimeListTaggedSort	pass
 RuntimeListValidationThrow	pass
 RuntimeLists	pass
 Scalars	unsupported: top-level initializers
@@ -166,34 +168,34 @@ ThreadLocalParallel	unsupported: top-level initializers
 TimeoutCancellation	unsupported: top-level initializers
 Uncaught	unsupported: top-level initializers
 classes::method call 100k	pass
-compute::array build sum 100k	unsupported: growing list builtin receiver (emitting user.main)
-compute::array traversal 8k	unsupported: growing list builtin receiver (emitting user.setup)
+compute::array build sum 100k	admitted
+compute::array traversal 8k	admitted
 compute::fib32 recursive	pass
 compute::generate sort 8k	unsupported: closures
-compute::json aggregate 2k	unsupported: JSON union member
+compute::json aggregate 2k	admitted
 compute::json hello	unsupported: baml.json._stringify
 compute::json ndjson events	pass
-compute::json request body	unsupported: list field element (layout Request, object 4186, types [String, Union([String, Null]), List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])])), List(Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4284) }, [])), Union([String, Null]), Union([Float, Null]), Union([Float, Null]), Int, Bool, Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4285) }, []), Null]), Map { key: String, value: String }, Bool, Union([String, Null]), Bool]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Request" }, []))
+compute::json request body	admitted
 compute::json tree path	unsupported: list field element (layout Tree, object 4182, types [TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }), List(TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }))]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Tree" }, []))
 compute::k-nucleotide 25k	unsupported: baml.Map.get
-compute::merge sort 20k	unsupported: list element
-compute::nbody 20k	unsupported: baml.Float.itrunc
+compute::merge sort 20k	admitted
+compute::nbody 20k	admitted
 compute::nested loops 500x500	pass
 compute::pure call 1m	pass
-compute::quick sort 3-way 1k	unsupported: list element
+compute::quick sort 3-way 1k	admitted
 interfaces::polymorphic dispatch 100k	pass
-memory::allocation high retention	unsupported: list element
-memory::allocation low retention	unsupported: list element
+memory::allocation high retention	admitted
+memory::allocation low retention	admitted
 memory::binary trees 14	pass
-memory::cycles into live	unsupported: entry must have no parameters and return int
-memory::cyclic churn	unsupported: entry must have no parameters and return int
-memory::heap calls	unsupported: entry must have no parameters and return int
-memory::live heap	unsupported: entry must have no parameters and return int
-memory::live walk	unsupported: growing list builtin receiver (emitting user.setup)
-memory::splay 2k	unsupported: baml.Array.pop
+memory::cycles into live	admitted
+memory::cyclic churn	admitted
+memory::heap calls	admitted
+memory::live heap	admitted
+memory::live walk	admitted
+memory::splay 2k	admitted
 process::startup	pass
 programs::agent loop 300	pass
-programs::json parser 15	unsupported: list field element (layout JArray, object 4180, types [List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4279) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4280) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])]))]) (user.main local 8: Union([Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JArray" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JLiteral" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JNumber" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JObject" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JString" }, [])]))
+programs::json parser 15	admitted
 programs::richards 50	pass
 rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass

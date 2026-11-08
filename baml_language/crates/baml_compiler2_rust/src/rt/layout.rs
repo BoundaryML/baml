@@ -24,7 +24,7 @@ impl Plan<'_> {
             self.record(self.repr(ty)?)?;
         } else if let RuntimeTy::Union(members) = ty {
             for member in members {
-                if !recursive_container(member) {
+                if !recursive_container(member) && !matches!(member, baml_type::RuntimeTy::Bigint) {
                     self.record_ty(member)?;
                 }
             }
@@ -49,7 +49,7 @@ impl Plan<'_> {
             self.record(self.field_repr(ty)?)?;
         } else if let bex_vm_types::RuntimeTy::Union(members) = ty {
             for member in members {
-                if !recursive_container(member) {
+                if !recursive_container(member) && !matches!(member, baml_type::RuntimeTy::Bigint) {
                     self.record_field_ty(member)?;
                 }
             }
@@ -146,12 +146,25 @@ impl Plan<'_> {
                         self.repr(element)?,
                         members
                             .iter()
+                            .filter(|m| !recursive_container(m) && !matches!(m, RuntimeTy::Bigint))
                             .map(|m| self.repr(m))
                             .collect::<Gen<Vec<_>>>()?,
+                        Some(
+                            members
+                                .iter()
+                                .map(|m| capture_codegen::capture_type(self, m))
+                                .collect::<Gen<Vec<_>>>()?,
+                        ),
+                    )
+                } else if matches!(element.as_ref(), RuntimeTy::TypeAlias(_)) {
+                    self.list_union_repr(
+                        Repr::Tagged,
+                        Vec::new(),
+                        Some(vec![capture_codegen::capture_type(self, element)?]),
                     )
                 } else {
                     if matches!(element.as_ref(), RuntimeTy::Null) {
-                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+                        self.list_union_repr(Repr::Tagged, vec![Repr::Null], None)
                     } else {
                         self.list_repr(self.repr(element)?)
                     }
@@ -210,7 +223,9 @@ impl Plan<'_> {
             }
             RuntimeTy::Union(members) => {
                 for member in members {
-                    if !recursive_container(member) {
+                    if !recursive_container(member)
+                        && !matches!(member, baml_type::RuntimeTy::Bigint)
+                    {
                         self.repr(member)?;
                     }
                 }
@@ -272,12 +287,16 @@ impl Plan<'_> {
                         self.field_repr(element)?,
                         members
                             .iter()
+                            .filter(|m| !recursive_container(m) && !matches!(m, T::Bigint))
                             .map(|m| self.field_repr(m))
                             .collect::<Gen<Vec<_>>>()?,
+                        Some(members.iter().map(|m|capture_codegen::declared_field_type(self,m)).collect::<Gen<Vec<_>>>()?),
                     )
+                } else if matches!(element.as_ref(), T::TypeAlias(_)) {
+                    self.list_union_repr(Repr::Tagged, Vec::new(), Some(vec![capture_codegen::declared_field_type(self, element)?]))
                 } else {
                     if matches!(element.as_ref(), T::Null) {
-                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+                        self.list_union_repr(Repr::Tagged, vec![Repr::Null], None)
                     } else {
                         self.list_repr(self.field_repr(element)?)
                     }
@@ -322,7 +341,7 @@ impl Plan<'_> {
             }
             T::Union(members) => {
                 for member in members {
-                    if !recursive_container(member) {
+                    if !recursive_container(member) && !matches!(member, baml_type::RuntimeTy::Bigint) {
                         self.field_repr(member)?;
                     }
                 }

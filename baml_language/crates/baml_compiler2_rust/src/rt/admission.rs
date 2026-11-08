@@ -62,6 +62,9 @@ pub(super) fn collect<'db>(
             return Err(no(plan.index.display(object)));
         };
         registry::admit(registry::Admission::Function(mir))?;
+        let facts = super::list_narrowing::analyze(db, plan, body);
+        plan.list_narrowing_facts
+            .insert(body as *const _ as usize, facts);
         for target in super::closures::discover(db, plan, object, mir)? {
             calls.entry(object).or_default().insert(target);
             queue.push_back(target);

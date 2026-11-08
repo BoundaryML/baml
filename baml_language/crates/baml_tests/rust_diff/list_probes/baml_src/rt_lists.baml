@@ -340,3 +340,88 @@ function RuntimeListPointerCallbacks() -> int {
     let nested=xs.flat_map((x:int)->string[][]{[[x.to_string()]]});
     if(maps[1]["k"]==2 && objects[0].value==1 && maybe[0]==null && (maybe[1] ?? 0)==2 && nested[1][0]=="2"){1}else{-1}
 }
+
+class RuntimeListJsonMapBox { values:map<string,(int|float)>[] }
+function RuntimeListJsonMaps() -> int {
+    let rows=baml.json.decode<RuntimeListJsonMapBox>("{\"values\":[{\"z\":2,\"a\":1.5},{\"tail\":-3}]}");
+    let flags=baml.json.decode<map<string,bool>[]>("[{\"ok\":true}]");
+    let nested=baml.json.decode<map<string,float[]>[]>("[{\"xs\":[1.5,2.5]}]");
+    if(baml.json.stringify(rows)=="{\"values\":[{\"z\":2,\"a\":1.5},{\"tail\":-3}]}" && flags[0]["ok"] && nested[0]["xs"][1]==2.5){1}else{-1}
+}
+function RuntimeListJsonMapError() -> int {
+    baml.json.decode<map<string,int>[]>("[{\"quote\\\"\":[1]}]").length()
+}
+function RuntimeListJsonMapKeyError() -> int {
+    let rows:map<int,string>[]=[{1:"a"}];
+    baml.json.stringify(rows).length()
+}
+class RuntimeListJsonAliasBox { values:json[] }
+function RuntimeListJsonAliases() -> int {
+    let map:map<string,json> = {"nested":[1,true,"λ"],"nil":null};
+    let box=RuntimeListJsonAliasBox{values:[map,2.5,null]};
+    if(baml.json.stringify(box,omit_nulls=true)=="{\"values\":[{\"nested\":[1,true,\"λ\"],\"nil\":null},2.5,null]}"){1}else{-1}
+}
+function RuntimeListJsonMapCycle() -> int {
+    let xs:unknown[]=[];
+    let map:map<string,unknown> = {"items":xs};
+    xs.push(map);
+    baml.json.stringify(xs).length()
+}
+
+class RuntimeListGenericBox<T> { values:T[] }
+function RuntimeListGenericJson() -> int {
+    let xs=baml.json.decode<RuntimeListGenericBox<float>[]>("[{\"values\":[1.5,2.5]}]");
+    if(baml.json.stringify(xs)=="[{\"values\":[1.5,2.5]}]"){1}else{-1}
+}
+
+class RuntimeListNarrowInts { values:int[] }
+class RuntimeListNarrowFloats { values:float[] }
+function RuntimeListNarrowWalk(v:RuntimeListNarrowInts|RuntimeListNarrowFloats) -> int {
+    match(v) {
+        RuntimeListNarrowInts=>{
+            v.values.push(3);
+            v.values[0]=7;
+            let total=0;
+            for(let x in v.values){total+=x;}
+            total
+        },
+        RuntimeListNarrowFloats=>{
+            v.values=[1.5,2.5];
+            v.values[1].itrunc()
+        },
+    }
+}
+function RuntimeListNarrowedFields() -> int {
+    let a=RuntimeListNarrowWalk(RuntimeListNarrowInts{values:[1,2]});
+    let b=RuntimeListNarrowWalk(RuntimeListNarrowFloats{values:[9.0]});
+    if(a==12 && b==2){1}else{-1}
+}
+
+function RuntimeListSortSingletons() -> int {
+    let strings:string?[]=[null];
+    let ints:int?[]=[null];
+    let bools=[true];
+    if(baml._rust_sort(strings).length()==1 && baml._rust_sort(ints).length()==1 && baml._rust_sort(bools)[0]){1}else{-1}
+}
+function RuntimeListSortMutation() -> int {
+    let xs=[3,1,2];
+    let calls:string[]=[];
+    xs.sort_by((a:int,b:int)->baml.ops.Ordering {
+        calls.push(a.to_string()+":"+b.to_string());
+        xs.push(9);
+        a.cmp(b)
+    });
+    if(xs.join(",")=="1,2,3" && calls.join("|")=="3:1|1:2|3:2"){1}else{-1}
+}
+function RuntimeListEmptyCallbacks() -> int {
+    let xs:int[]=[];
+    let calls:int[]=[];
+    let f=(x:int)->bool{calls.push(x);true};
+    let some=xs.some(f);
+    let every=xs.every(f);
+    let found=xs.find(f) ?? -1;
+    let last=xs.find_last(f) ?? -1;
+    let total=xs.reduce((a:int,x:int)->int{calls.push(x);a+x},7);
+    let generated=baml.Array.generate(-1,(i:int)->int{calls.push(i);i});
+    if(!some && every && found== -1 && last== -1 && total==7 && generated.length()==0 && calls.length()==0){1}else{-1}
+}

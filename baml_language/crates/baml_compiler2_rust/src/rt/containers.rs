@@ -11,12 +11,13 @@ impl Plan<'_> {
                 let mut elements = self.list_elements.borrow_mut();
                 let id = elements
                     .iter()
-                    .position(|r| r.repr == element && r.members.is_empty())
+                    .position(|r| r.repr == element && r.members.is_empty() && r.declared.is_none())
                     .unwrap_or_else(|| {
                         let id = elements.len();
                         elements.push(ListElement {
                             repr: element,
                             members: Vec::new(),
+                            declared: None,
                         });
                         id
                     });
@@ -24,13 +25,29 @@ impl Plan<'_> {
             }
         }
     }
-    pub(super) fn list_union_repr(&self, repr: Repr, members: Vec<Repr>) -> Repr {
-        let key = ListElement { repr, members };
+    pub(super) fn list_union_repr(
+        &self,
+        repr: Repr,
+        members: Vec<Repr>,
+        declared: Option<Vec<String>>,
+    ) -> Repr {
+        let key = ListElement {
+            repr,
+            members,
+            declared,
+        };
         let mut elements = self.list_elements.borrow_mut();
         let id = elements
             .iter()
             .position(|r| {
                 r.repr == key.repr
+                    && r.declared
+                        .as_ref()
+                        .map(|m| m.iter().collect::<BTreeSet<_>>())
+                        == key
+                            .declared
+                            .as_ref()
+                            .map(|m| m.iter().collect::<BTreeSet<_>>())
                     && r.members.len() == key.members.len()
                     && r.members.iter().all(|m| key.members.contains(m))
             })

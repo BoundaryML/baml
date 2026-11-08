@@ -40,6 +40,7 @@ impl Emitter<'_, '_> {
                 _ => return Err(no(format!("statement {:?}", s.kind))),
             }
         }
+        self.statement = block.statements.len();
         self.mark(pcs.terminator);
         let term = block.terminator.as_ref().unwrap();
         if let Some(result) = registry::terminator(self, term) {

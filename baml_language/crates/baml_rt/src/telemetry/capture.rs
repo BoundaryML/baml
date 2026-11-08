@@ -66,6 +66,7 @@ pub enum Type {
     LiteralString(&'static str, Freshness),
     LiteralFloat(&'static str, Freshness),
     Float,
+    Bigint,
     Null,
     Unknown,
     Never,
@@ -124,6 +125,7 @@ impl Type {
                 OwnedType::Literal(baml_type::Literal::String((*v).into()), *f)
             }
             Self::Float => OwnedType::Float,
+            Self::Bigint => OwnedType::Bigint,
             Self::Null => OwnedType::Null,
             Self::Unknown => OwnedType::Unknown,
             Self::Never => OwnedType::Never,

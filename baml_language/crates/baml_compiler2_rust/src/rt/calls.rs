@@ -81,15 +81,23 @@ impl Emitter<'_, '_> {
                     let text = self.coerce(self.operand(&args[1])?, Repr::Str)?;
                     let telemetry_site = self.telemetry_site(c);
                     let (destination, _) = crate::analysis::continuation(term).unwrap();
-                    out.push_str(&self.assign(
-                        destination,
-                        (
-                            self.fallible(&format!(
-                                "f{c}_json{code}({telemetry_site},{text},{naming},{omitted})"
-                            )),
-                            Repr::Tagged,
-                        ),
-                    )?);
+                    let decoded = self.fallible(&format!(
+                        "f{c}_json{code}({telemetry_site},{text},{naming},{omitted})"
+                    ));
+                    let mut value = (decoded, Repr::Tagged);
+                    if let Some(ty) = code
+                        .checked_sub(super::json_lists::TYPE_BASE)
+                        .and_then(|i| self.plan.json_list_types.get(i))
+                    {
+                        let repr = self.plan.template_repr(ty)?;
+                        // Decode validates the explicit type argument. MIR may
+                        // widen literal unions in the destination; first unpack
+                        // the actual schema layout, then apply that static coercion.
+                        if repr.growing() {
+                            value = (self.coerce(value, repr)?, repr);
+                        }
+                    }
+                    out.push_str(&self.assign(destination, value)?);
                     return Ok(out);
                 }
                 let types = args[..*ntypeargs]

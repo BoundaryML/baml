@@ -72,6 +72,27 @@ impl SchemaEmitter<'_, '_> {
             slot(self.plan.element(repr)?)
         ))
     }
+    fn map(&mut self, repr: Repr, value: String) -> Gen<String> {
+        let (key, element) = self.plan.map_parts(repr)?;
+        if key != Repr::Str {
+            return Err(no("JSON list map key type"));
+        }
+        let desc = self.lists[&repr];
+        let element_slot = maps::slot_type(element, self.descriptors, self.lists)?;
+        let convert = match element {
+            Repr::Tagged | Repr::Dyn(_) => "value".into(),
+            Repr::Int => "value.payload as i64".into(),
+            Repr::Float => "f64::from_bits(value.payload)".into(),
+            Repr::Bool => "value.payload!=0".into(),
+            Repr::Null => "rt::maps::Null".into(),
+            r if r.pointer() => format!("<{element_slot}>::from_raw(value.payload as usize)"),
+            _ => return Err(no("JSON list map value type")),
+        };
+        let map = format!("rt::maps::Map::<rt::strings::Str,{element_slot}>");
+        Ok(format!(
+            "rt::json_lists::Ty::Map{{desc:{desc},value:&{value},new:|cx|unsafe{{{map}::new(cx,{desc}).map(|m|m.as_raw())}},insert:|cx,p,key,value|unsafe{{let key=cx.string(key)?;{map}::from_raw(p).set(cx,key,{convert}).map(|_|())}}}}"
+        ))
+    }
     fn template(&mut self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
         use baml_compiler2_mir::TyTemplate as T;
         Ok(match ty {
@@ -99,13 +120,16 @@ impl SchemaEmitter<'_, '_> {
                 let element = self.template(t)?;
                 self.list(self.plan.template_repr(ty)?, element)?
             }
-            T::Class(head, args) if args.is_empty() => self.class(
-                self.plan
-                    .index
-                    .class_at(head)
-                    .ok_or_else(|| no("JSON class"))?
-                    .0,
-            )?,
+            T::Map { value, .. } => {
+                let value = self.template(value)?;
+                self.map(self.plan.template_repr(ty)?, value)?
+            }
+            T::Class(_, _) => {
+                let Repr::Ptr(class) = self.plan.template_repr(ty)? else {
+                    return Err(no("JSON list class layout"));
+                };
+                self.class(class)?
+            }
             T::Union(m) => {
                 let members = m
                     .iter()
@@ -148,6 +172,10 @@ impl SchemaEmitter<'_, '_> {
             T::List(t) => {
                 let element = self.field(t)?;
                 self.list(self.plan.field_repr(ty)?, element)?
+            }
+            T::Map { value, .. } => {
+                let value = self.field(value)?;
+                self.map(self.plan.field_repr(ty)?, value)?
             }
             T::Class(_, _) => {
                 let Repr::Ptr(c) = self.plan.field_repr(ty)? else {
@@ -199,11 +227,7 @@ pub(super) fn emit(
         let members = classes
             .iter()
             .map(|c| {
-                let Object::Class(class) =
-                    &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(*c)]
-                else {
-                    unreachable!()
-                };
+                let class = plan.class(*c);
                 Ok(format!(
                     "rt::json_lists::Member{{name:{:?},ty:&{}}}",
                     class.path.to_string(),
@@ -233,6 +257,11 @@ pub(super) fn capture_template(
             T::Null => "Null".into(),
             T::String | T::Literal(baml_type::Literal::String(_), _) => "String".into(),
             T::List(t) => format!("List(&{})", capture_template(plan, t)?),
+            T::Map { key, value } => format!(
+                "Map(&{},&{})",
+                capture_template(plan, key)?,
+                capture_template(plan, value)?
+            ),
             T::Union(m) => format!(
                 "Union(&[{}])",
                 m.iter()
@@ -240,13 +269,10 @@ pub(super) fn capture_template(
                     .collect::<Gen<Vec<_>>>()?
                     .join(",")
             ),
-            T::Class(h, _) => format!(
-                "Class(CAPTURE_D{})",
-                plan.index
-                    .class_at(h)
-                    .ok_or_else(|| no("JSON capture class"))?
-                    .0
-            ),
+            T::Class(_, _) => capture_codegen::capture_repr(plan, plan.template_repr(ty)?)?
+                .strip_prefix("rt::telemetry::capture::Type::")
+                .unwrap()
+                .to_owned(),
             _ => return Err(no("JSON list capture type")),
         }
     ))
@@ -262,6 +288,11 @@ fn template_name(plan: &Plan<'_>, ty: &baml_compiler2_mir::TyTemplate) -> Gen<St
         T::String => "string".into(),
         T::Literal(v, _) => v.to_string(),
         T::List(t) => format!("{}[]", template_name(plan, t)?),
+        T::Map { key, value } => format!(
+            "map<{}, {}>",
+            template_name(plan, key)?,
+            template_name(plan, value)?
+        ),
         T::Class(h, _) => {
             let c = plan.index.class_at(h).ok_or_else(|| no("JSON class"))?.0;
             let Object::Class(c) = &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
@@ -297,7 +328,7 @@ pub(super) fn emit_shapes(
             Repr::Str => 3,
             Repr::Float => u32::MAX as usize,
             Repr::Ptr(c) => descriptors[&c] + 3,
-            r if r.growing() || r == Repr::MapStrInt => lists[&r] + 3,
+            r if r.growing() || matches!(r, Repr::MapStrInt | Repr::Map(_)) => lists[&r] + 3,
             Repr::Tagged | Repr::Dyn(_) => 0,
             _ => return Err(no("list JSON scalar tag")),
         })
@@ -306,19 +337,22 @@ pub(super) fn emit_shapes(
         for rules in package.impl_rules.values() {
             for rule in rules {
                 if rule.methods.contains_key("to_json")
-                    && matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if plan.layouts.keys().any(|c|matches!(&plan.program.objects[bex_vm_types::ObjectIndex::from_raw(*c)],Object::Class(class) if class.type_tag==head.tag())))
+                    && matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if plan.layouts.keys().any(|c|plan.class(*c).type_tag==head.tag()))
                 {
                     return Err(no("list JSON ToJson override"));
                 }
             }
         }
     }
-    if plan.lists.contains(&Repr::MapStrInt) {
-        return Err(no("list JSON map serialization"));
-    }
     let last = lists
         .iter()
-        .map(|(r, id)| id + if *r == Repr::MapStrInt { 3 } else { 2 })
+        .map(|(r, id)| {
+            id + if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
+                4
+            } else {
+                2
+            }
+        })
         .max()
         .unwrap_or_else(|| {
             descriptors
@@ -330,11 +364,7 @@ pub(super) fn emit_shapes(
     out.push_str("static JSON_LIST_SHAPES:&[rt::json_lists::Shape]=&[\n");
     for desc in 0..last {
         if let Some((&class, _)) = descriptors.iter().find(|(_, id)| **id == desc) {
-            let Object::Class(c) =
-                &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(class)]
-            else {
-                unreachable!()
-            };
+            let c = plan.class(class);
             let layout = &plan.layouts[&class];
             out.push_str("rt::json_lists::Shape::Class(&[");
             for (i, field) in c.fields.iter().enumerate() {
@@ -343,8 +373,13 @@ pub(super) fn emit_shapes(
             }
             out.push_str("]),\n");
         } else if let Some((&repr, _)) = lists.iter().find(|(_, id)| **id == desc) {
-            if repr == Repr::MapStrInt {
-                out.push_str("rt::json_lists::Shape::Unsupported,\n");
+            if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
+                let (key, value) = plan.map_parts(repr)?;
+                let key_slot = maps::slot_type(key, descriptors, lists)?;
+                let value_slot = maps::slot_type(value, descriptors, lists)?;
+                let key_dyn = capture_codegen::capture_dyn(key, "key", descriptors, lists)?;
+                let value_dyn = capture_codegen::capture_dyn(value, "value", descriptors, lists)?;
+                writeln!(out,"rt::json_lists::Shape::Map{{string_keys:{},len:|p|unsafe{{rt::maps::Map::<{key_slot},{value_slot}>::from_raw(p).len()}},entry:|p,i|unsafe{{let (key,value)=rt::maps::Map::<{key_slot},{value_slot}>::from_raw(p).entry(i).unwrap();({key_dyn},{value_dyn})}}}},",key==Repr::Str).unwrap();
                 continue;
             }
             let element = plan.element(repr)?;

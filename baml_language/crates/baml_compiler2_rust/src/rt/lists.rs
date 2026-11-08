@@ -243,7 +243,7 @@ impl Emitter<'_, '_> {
                 };
                 let validate = if element == Repr::Str {
                     format!(
-                        "for i in 0..{list}.len(&read_cx){{if {list}.get(&read_cx,i)?.as_raw()==0{{return Err(rt::Error::internal(\"bridge failure: sort: natural ordering does not support null\".into()));}}}}"
+                        "if {list}.len(&read_cx)>1{{for i in 0..{list}.len(&read_cx){{if {list}.get(&read_cx,i)?.as_raw()==0{{return Err(rt::Error::internal(\"bridge failure: sort: natural ordering does not support null\".into()));}}}}}}"
                     )
                 } else {
                     String::new()

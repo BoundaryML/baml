@@ -45,6 +45,7 @@ struct Layout {
 struct ListElement {
     repr: Repr,
     members: Vec<Repr>,
+    declared: Option<Vec<String>>,
 }
 struct Plan<'a> {
     root: SourceRoot,
@@ -54,6 +55,7 @@ struct Plan<'a> {
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
     list_elements: std::cell::RefCell<Vec<ListElement>>,
+    list_narrowing_facts: BTreeMap<usize, BTreeMap<(usize, usize, usize), usize>>,
     json_types: Vec<Vec<usize>>,
     list_stringify: bool,
     list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
@@ -96,6 +98,7 @@ struct Emitter<'a, 'db> {
     statement: usize,
     stack: stack::Placement,
     proven_arithmetic: BTreeSet<(usize, usize)>,
+    list_narrowings: BTreeMap<(usize, usize, usize), usize>,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
     compact_sites: Vec<u32>,
@@ -129,6 +132,7 @@ mod json_lists;
 mod layout;
 mod list_callbacks;
 mod list_errors;
+mod list_narrowing;
 mod list_scalars;
 mod lists;
 mod loop_ranges;
