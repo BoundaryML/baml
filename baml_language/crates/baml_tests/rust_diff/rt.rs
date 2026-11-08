@@ -13,6 +13,7 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtEmptyClosures",
     "RtNativeMath",
     "RtNativeBytes",
+    "RtNativeClock",
 ];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {

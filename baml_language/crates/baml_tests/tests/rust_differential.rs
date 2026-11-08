@@ -20,6 +20,7 @@ const PROBES: &[&str] = &[
     "RtClosures",
     "RtNativeMath",
     "RtNativeBytes",
+    "RtNativeClock",
     "RtEmptyClosures",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
@@ -284,7 +285,9 @@ fn probe_timeout_kills_and_reaps() {
 fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
         "RtClosures" | "RtEmptyClosures" => Some(manifest.join("rt_fixtures/closures")),
-        "RtNativeMath" | "RtNativeBytes" => Some(manifest.join("rt_fixtures/native")),
+        "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" => {
+            Some(manifest.join("rt_fixtures/native"))
+        }
         _ => None,
     }
 }
@@ -359,6 +362,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         "RtEmptyClosures",
         "RtNativeMath",
         "RtNativeBytes",
+        "RtNativeClock",
     ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
@@ -403,13 +407,23 @@ fn pack<'a>(
 }
 
 fn pack_result<'a>(
-    build: &Path,
+    _build: &Path,
     workspace: &Path,
     source: &Path,
     executable: &Path,
     functions: impl IntoIterator<Item = &'a str>,
     rt: bool,
 ) -> Result<(), String> {
+    // One cache per runtime flavor keeps the large common dependency graph
+    // warm across scoped fixtures. Serialize rewrites of the generated crate;
+    // completed executables are copied to each caller's distinct output path.
+    static COMPILATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _compilation = COMPILATION
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let build = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("rust-differential")
+        .join(if rt { "rt" } else { "rust" });
     // Never accept an executable left over from a previous successful pack.
     if executable.exists() {
         std::fs::remove_file(executable).map_err(|e| e.to_string())?;
@@ -663,6 +677,7 @@ fn rust_differential() {
                             | "RtEmptyClosures"
                             | "RtNativeMath"
                             | "RtNativeBytes"
+                            | "RtNativeClock"
                     ))
             {
                 continue;

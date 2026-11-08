@@ -4,6 +4,7 @@ use baml_rt_tasks::{OwnedValue, Value};
 use serde_json::Value as Owned;
 use std::{future::Future, pin::Pin};
 
+pub mod clock;
 pub mod fs;
 
 pub struct Failure {
@@ -195,4 +196,8 @@ fn write(mut text: String, stderr: bool, newline: bool) -> Output {
         }
         Ok(Owned::Null)
     }))
+}
+
+pub fn host_target() -> Output {
+    Output::Ready(Ok(Owned::from(env!("BAML_HOST_TARGET"))))
 }

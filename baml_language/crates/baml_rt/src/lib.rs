@@ -404,3 +404,15 @@ mod tests {
         }
     }
 }
+
+/// An explicit collector sysop runs on the owning BAML thread.
+pub fn collect_garbage() -> R<()> {
+    let started = telemetry::sysop_started();
+    unsafe {
+        assert!(!HEAP.get().is_null() && !ROOTS.get().is_null());
+        (&mut *HEAP.get()).collect(&Roots(&*ROOTS.get()));
+        opaque::drain();
+    }
+    telemetry::sysop_finished(started);
+    Ok(())
+}

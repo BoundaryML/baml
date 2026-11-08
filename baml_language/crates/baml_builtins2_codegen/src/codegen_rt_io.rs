@@ -7,6 +7,7 @@ pub(crate) fn supports(path: &str) -> bool {
             | "baml.io.eprint"
             | "baml.io.eprintln"
             | "baml.env.get"
+            | "baml.sys.host_target"
             | "baml.sys.pid"
             | "baml.sys.platform"
             | "baml.sys.current_dir"

@@ -14,6 +14,11 @@ fn rt_host_boundary() {
     let mut exercised = std::collections::BTreeSet::new();
     for (name, source, json) in [
         (
+            "clock_error",
+            r#"function main()->string { { baml.time._tz_to_instant("UTC",1n << 200n,"compatible"); "unexpected" } catch(e) { baml.errors.Io {message} => message } }"#,
+            None,
+        ),
+        (
             "bytes",
             r#"function main()->int {
                 let a=uint8array.from_hex("ff00017f"); let alias=a;
