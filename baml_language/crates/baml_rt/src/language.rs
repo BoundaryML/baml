@@ -268,6 +268,38 @@ pub fn driver_observed(
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
 ) -> std::process::ExitCode {
+    driver_configured(descriptors, entry, None, functions, sites, format_site)
+}
+
+/// Native benchmark entry. Setup state stays on the root fiber's scanned stack.
+pub type Benchmark = fn(usize, usize, &std::cell::Cell<u128>) -> R<i64>;
+
+pub fn driver_observed_benchmark(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    benchmark: Benchmark,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+) -> std::process::ExitCode {
+    driver_configured(
+        descriptors,
+        entry,
+        Some(benchmark),
+        functions,
+        sites,
+        format_site,
+    )
+}
+
+fn driver_configured(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    benchmark: Option<Benchmark>,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+) -> std::process::ExitCode {
     let mut session = match crate::telemetry::Session::new(functions, sites) {
         Ok(s) => s,
         Err(e) => {
@@ -275,7 +307,7 @@ pub fn driver_observed(
             return std::process::ExitCode::FAILURE;
         }
     };
-    let result = driver_inner(descriptors, entry, &mut session, format_site);
+    let result = driver_inner(descriptors, entry, benchmark, &mut session, format_site);
     session.finish(&result);
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
@@ -302,6 +334,7 @@ pub fn driver_observed(
 fn driver_inner(
     descriptors: &'static [Descriptor],
     entry: fn() -> R<i64>,
+    benchmark: Option<Benchmark>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
 ) -> R<()> {
@@ -332,8 +365,16 @@ fn driver_inner(
     pointers.extend(vec![true; descriptors.len()]);
     let pointers = Box::leak(pointers.into_boxed_slice());
     let mut instance = Instance::new(descriptors, pointers);
-    // SAFETY: compiler admission and descriptor construction enforce this ABI.
-    let result = session.run(|| unsafe { instance.run_baml(entry) })?;
+    let elapsed = std::rc::Rc::new(std::cell::Cell::new(0u128));
+    // Setup and all jobs share one fiber. Its stack retains the state across
+    // collecting calls; no managed pointer is kept in untraced host storage.
+    let result = if let (Some(benchmark), Some(jobs)) = (benchmark, jobs) {
+        let elapsed = elapsed.clone();
+        session.run(|| unsafe { instance.run_baml(move || benchmark(jobs, warmup, &elapsed)) })?
+    } else {
+        // SAFETY: compiler admission and descriptor construction enforce this ABI.
+        session.run(|| unsafe { instance.run_baml(entry) })?
+    };
     let Some(jobs) = jobs else {
         let text = match format_site {
             Some(site) => session.format_int(result, site)?,
@@ -342,6 +383,10 @@ fn driver_inner(
         println!("{text}");
         return Ok(());
     };
+    if benchmark.is_some() {
+        print_benchmark_result(result, jobs, elapsed.get());
+        return Ok(());
+    }
     for _ in 1..warmup {
         if session.run(|| unsafe { instance.run_baml(entry) })? != result {
             return Err(Error::internal("warmup result mismatch".into()));
@@ -354,11 +399,39 @@ fn driver_inner(
         }
     }
     let elapsed = start.elapsed().as_nanos();
+    print_benchmark_result(result, jobs, elapsed);
+    Ok(())
+}
+
+fn print_benchmark_result(result: i64, jobs: usize, elapsed: u128) {
     println!(
         "{}",
         serde_json::json!({"result":result.to_string(),"jobs":jobs,"elapsed_ns":elapsed})
     );
-    Ok(())
+}
+
+/// Verify once, warm up, then time only repeated jobs. Called on the fiber
+/// after setup has returned; the closure retains its typed state on that stack.
+pub fn benchmark_loop(
+    mut job: impl FnMut() -> R<i64>,
+    jobs: usize,
+    warmup: usize,
+    elapsed: &std::cell::Cell<u128>,
+) -> R<i64> {
+    let result = std::hint::black_box(&mut job)()?;
+    for _ in 1..warmup {
+        if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("warmup result mismatch".into()));
+        }
+    }
+    let start = std::time::Instant::now();
+    for _ in 0..jobs {
+        if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("timed result mismatch".into()));
+        }
+    }
+    elapsed.set(start.elapsed().as_nanos());
+    Ok(result)
 }
 
 #[cold]

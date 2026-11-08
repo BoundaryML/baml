@@ -99,7 +99,7 @@ use body::recursive;
 use diagnostics::no;
 use repr::Repr;
 
-pub use driver::compile_rt;
+pub use driver::{compile_rt, compile_rt_benchmark};
 
 mod calls;
 mod globals;

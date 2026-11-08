@@ -16,6 +16,7 @@ pub(super) fn collect<'db>(
     root: SourceRoot,
     opt: OptLevel,
     entry: usize,
+    benchmark: Option<(usize, usize)>,
     plan: &mut Plan<'_>,
 ) -> Gen<Admitted<'db>> {
     let mut all = BTreeMap::new();
@@ -37,6 +38,9 @@ pub(super) fn collect<'db>(
         }
     }
     let mut queue = VecDeque::from([entry]);
+    if let Some((setup, run)) = benchmark {
+        queue.extend([setup, run]);
+    }
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
     let mut reached = BTreeSet::new();

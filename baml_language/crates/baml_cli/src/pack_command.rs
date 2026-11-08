@@ -109,6 +109,10 @@ pub struct PackArgs {
     #[arg(long, requires = "rust", help_heading = "Build options")]
     pub rt: bool,
 
+    /// Native speedtest setup()/run(state) protocol, retaining state on one fiber.
+    #[arg(long, hide = true, requires = "rt")]
+    pub rt_benchmark: bool,
+
     /// The `baml_language` workspace checkout the generated host is built from.
     #[arg(
         long,
@@ -280,13 +284,35 @@ impl PackArgs {
                     .as_ref()
                     .and_then(|e| e.first())
                     .ok_or_else(|| anyhow!("rt entry not linked"))?;
-                let source = baml_db::rust_backend::compile_rt(
-                    &db,
-                    root,
-                    &envelope.program,
-                    crate::bytecode_cache::CLI_OPT_LEVEL,
-                    *entry,
-                )
+                let source = if self.rt_benchmark {
+                    let namespace = targets[0]
+                        .qualified_name
+                        .rsplit_once('.')
+                        .map(|(prefix, _)| prefix)
+                        .ok_or_else(|| anyhow!("rt benchmark namespace missing"))?;
+                    let linked = |name: &str| {
+                        callables
+                            .get(&format!("{namespace}.{name}"))
+                            .map(|callable| callable.object.raw())
+                            .ok_or_else(|| anyhow!("rt benchmark needs {name}()"))
+                    };
+                    baml_db::rust_backend::compile_rt_benchmark(
+                        &db,
+                        root,
+                        &envelope.program,
+                        crate::bytecode_cache::CLI_OPT_LEVEL,
+                        *entry,
+                        (linked("setup")?, linked("run")?),
+                    )
+                } else {
+                    baml_db::rust_backend::compile_rt(
+                        &db,
+                        root,
+                        &envelope.program,
+                        crate::bytecode_cache::CLI_OPT_LEVEL,
+                        *entry,
+                    )
+                }
                 .map_err(|e| anyhow!(e))?;
                 Some(baml_db::rust_backend::RustModule {
                     source,
@@ -1072,6 +1098,7 @@ mod tests {
             output: None,
             rust: false,
             rt: false,
+            rt_benchmark: false,
             rust_workspace: None,
             rust_build_dir: None,
             rust_profile: RustProfile::Release,

@@ -1,7 +1,7 @@
-BAML runtime coverage (normal AND GC stress): 13 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 14 pass, 124 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: not yet supported
-Includes the independent rt_type_dispatch_semantics project and isolated StackAllocation fixture.
+Includes the independent type-dispatch and native setup-state benchmark projects and isolated StackAllocation fixture.
 The separate call-cost gate passes off/low/medium/high/default with normal and stressed GC.
 
 First unsupported constructs (fixtures blocked):
@@ -159,3 +159,4 @@ string::concat loop 10k	pass
 string::split medium literal 10k	unsupported: baml.String.split
 rt_type_dispatch_semantics	pass
 StackAllocation	pass
+rt_setup_state_benchmark	pass

@@ -13,6 +13,29 @@ pub fn compile_rt(
     opt: OptLevel,
     entry: usize,
 ) -> Gen<String> {
+    compile(db, root, program, opt, entry, None)
+}
+
+/// Compile the normal entry plus an explicit setup/run native benchmark host.
+pub fn compile_rt_benchmark(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    setup_run: (usize, usize),
+) -> Gen<String> {
+    compile(db, root, program, opt, entry, Some(setup_run))
+}
+
+fn compile(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    benchmark: Option<(usize, usize)>,
+) -> Gen<String> {
     let mut plan = Plan {
         root,
         lang: baml_compiler2_hir::package::lang_roots(db),
@@ -38,7 +61,7 @@ pub fn compile_rt(
         calls,
         builtins,
         json_decode,
-    } = admission::collect(db, root, opt, entry, &mut plan)?;
+    } = admission::collect(db, root, opt, entry, benchmark, &mut plan)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
@@ -74,7 +97,24 @@ pub fn compile_rt(
         })
         .sum::<usize>()
         <= 1024;
-    let telemetry_sites = std::cell::RefCell::new(vec![(None, 0usize, entry)]);
+    let mut host_sites = vec![(None, 0usize, entry)];
+    if let Some((setup, run)) = benchmark {
+        let MirFunctionKind::Bytecode(setup_body) = &all[&setup].kind else {
+            return Err(no("benchmark setup must be a user function"));
+        };
+        let MirFunctionKind::Bytecode(run_body) = &all[&run].kind else {
+            return Err(no("benchmark run must be a user function"));
+        };
+        if all[&setup].arity != 0
+            || all[&run].arity != 1
+            || setup_body.locals[0].ty != run_body.locals[1].ty
+            || plan.repr(&run_body.locals[0].ty)? != super::Repr::Int
+        {
+            return Err(no("benchmark requires setup() -> S and run(S) -> int"));
+        }
+        host_sites.extend([(None, 0usize, setup), (None, 0usize, run)]);
+    }
+    let telemetry_sites = std::cell::RefCell::new(host_sites);
     let mut placements = reached
         .iter()
         .map(|&object| {
@@ -208,6 +248,10 @@ pub fn compile_rt(
         (stringify, aliased),
         &telemetry_sites,
     )?;
-    host::emit(&mut out, entry, &builtins, format_site);
+    if let Some((setup, run)) = benchmark {
+        host::emit_benchmark(&mut out, entry, setup, run, &builtins, format_site);
+    } else {
+        host::emit(&mut out, entry, &builtins, format_site);
+    }
     Ok(out)
 }
