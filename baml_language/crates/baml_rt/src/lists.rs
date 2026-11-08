@@ -1081,6 +1081,26 @@ mod tests {
         true, true, true, true, true, true, true, true,
     ];
     #[test]
+    fn code_point_lists_fill_raw_slots_under_gc_stress() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            for text in [String::new(), "ASCII".repeat(128), "aé🙂\0".repeat(1024)] {
+                let source = cx.string(&text)?;
+                let raw = unsafe { crate::strings::to_code_points(&mut cx, source, 11) }?;
+                let list = unsafe { List::<i64>::from_raw(raw) };
+                cx.poll()?;
+                assert_eq!(list.len(&cx) as usize, text.chars().count());
+                for (i, character) in text.chars().enumerate() {
+                    assert_eq!(list.get(&cx, i as i64)?, character as i64);
+                }
+            }
+            Ok(1)
+        }
+        let mut instance = Instance::new(DESCRIPTORS, POINTER_TYPES);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+    #[test]
     fn scalar_and_tagged_mutation_slice_and_gc() {
         fn entry() -> R<i64> {
             let mut cx = unsafe { Cx::current() };
