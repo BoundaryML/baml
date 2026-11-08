@@ -1997,6 +1997,7 @@ mod outbound_selection_tests {
                     docstring: None,
                     other: indexmap::IndexMap::new(),
                     skip: false,
+                    json_rename: None,
                 },
                 EnumVariant {
                     name: "SAD".to_string(),
@@ -2005,6 +2006,7 @@ mod outbound_selection_tests {
                     docstring: None,
                     other: indexmap::IndexMap::new(),
                     skip: false,
+                    json_rename: None,
                 },
             ],
             description: None,
@@ -2056,6 +2058,7 @@ mod outbound_selection_tests {
                 generic_param_count: 0,
                 owner,
                 telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                redact: false,
             })))
         }
 

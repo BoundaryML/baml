@@ -872,10 +872,14 @@ mod tests {
                 name: BaseName::new("a"),
                 docstring: None,
                 ty: Ty::Int,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(file, span),
+            json_omit_nulls: false,
         })
     }
 
@@ -887,6 +891,7 @@ mod tests {
                 name: BaseName::new("A"),
                 docstring: None,
                 value: "A".to_string(),
+                json_rename: None,
             }],
             origin: origin(file, span),
         })
@@ -1185,11 +1190,15 @@ mod tests {
                         name: BaseName::new(format!("{source}_type")),
                         docstring: None,
                         ty: class_ty(cg_name("reflect", &[source], helper), vec![]),
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     })
                     .collect(),
                 static_methods: vec![],
                 instance_methods: vec![],
                 origin: origin("x.baml", 0),
+                json_omit_nulls: false,
             }),
         );
 
@@ -1354,6 +1363,7 @@ mod tests {
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin("x.baml", 0),
+            json_omit_nulls: false,
         })
     }
 
@@ -1370,6 +1380,9 @@ mod tests {
                     name: BaseName::new("a"),
                     docstring: None,
                     ty: Ty::Int,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
             ),
         );
@@ -1397,6 +1410,9 @@ mod tests {
                     name: BaseName::new("a"),
                     docstring: Some("Identifier".to_string()),
                     ty: Ty::Int,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
             ),
         );
@@ -1431,11 +1447,17 @@ mod tests {
                         name: BaseName::new("title"),
                         docstring: Some("Title shown in lists.".to_string()),
                         ty: Ty::String,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     },
                     ClassProperty {
                         name: BaseName::new("body"),
                         docstring: Some("Free-form body text.".to_string()),
                         ty: union(vec![Ty::String, Ty::Null]),
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     },
                 ],
             ),
@@ -1464,6 +1486,9 @@ mod tests {
                     name: BaseName::new("a"),
                     docstring: None,
                     ty: Ty::Int,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
             ),
         );
@@ -1490,11 +1515,13 @@ mod tests {
                         name: BaseName::new("HAPPY"),
                         docstring: Some("Smiling".to_string()),
                         value: "HAPPY".to_string(),
+                        json_rename: None,
                     },
                     EnumVariant {
                         name: BaseName::new("SAD"),
                         docstring: None,
                         value: "SAD".to_string(),
+                        json_rename: None,
                     },
                 ],
                 origin: origin("x.baml", 0),
@@ -1531,11 +1558,13 @@ mod tests {
                         name: BaseName::new("HAPPY"),
                         docstring: None,
                         value: "HAPPY".to_string(),
+                        json_rename: None,
                     },
                     EnumVariant {
                         name: BaseName::new("SAD"),
                         docstring: None,
                         value: "SAD".to_string(),
+                        json_rename: None,
                     },
                 ],
                 origin: origin("x.baml", 0),
@@ -1572,11 +1601,17 @@ mod tests {
                         name: BaseName::new("a"),
                         docstring: None,
                         ty: Ty::Int,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     },
                     ClassProperty {
                         name: BaseName::new("b"),
                         docstring: None,
                         ty: Ty::Int,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     },
                 ],
             ),
@@ -1607,11 +1642,17 @@ mod tests {
                         name: BaseName::new("a"),
                         docstring: Some("First.".to_string()),
                         ty: Ty::Int,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     },
                     ClassProperty {
                         name: BaseName::new("b"),
                         docstring: None,
                         ty: Ty::Int,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     },
                 ],
             ),
@@ -1702,10 +1743,14 @@ mod tests {
                     name: BaseName::new("a"),
                     docstring: None,
                     ty: Ty::Int,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
                 static_methods: vec![],
                 instance_methods: vec![method],
                 origin: origin("x.baml", 0),
+                json_omit_nulls: false,
             }),
         );
 
@@ -2050,11 +2095,15 @@ mod tests {
                     name: BaseName::new(n),
                     docstring: None,
                     ty,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 })
                 .collect(),
             static_methods: vec![],
             instance_methods: vec![],
             origin: origin(file, span),
+            json_omit_nulls: false,
         })
     }
 
@@ -2190,16 +2239,19 @@ mod tests {
                         name: BaseName::new("POSITIVE"),
                         docstring: None,
                         value: "POSITIVE".to_string(),
+                        json_rename: None,
                     },
                     EnumVariant {
                         name: BaseName::new("NEGATIVE"),
                         docstring: None,
                         value: "NEGATIVE".to_string(),
+                        json_rename: None,
                     },
                     EnumVariant {
                         name: BaseName::new("NEUTRAL"),
                         docstring: None,
                         value: "NEUTRAL".to_string(),
+                        json_rename: None,
                     },
                 ],
                 origin: origin("x.baml", 0),
@@ -2334,6 +2386,7 @@ mod tests {
                     name: BaseName::new("POSITIVE"),
                     docstring: None,
                     value: "POSITIVE".to_string(),
+                    json_rename: None,
                 }],
                 origin: origin("ipsum.baml", 0),
             }),
@@ -2652,6 +2705,7 @@ mod tests {
             static_methods,
             instance_methods,
             origin: origin(file, span),
+            json_omit_nulls: false,
         })
     }
 
@@ -3003,11 +3057,13 @@ mod tests {
                         name: BaseName::new("POSITIVE"),
                         docstring: None,
                         value: "POSITIVE".to_string(),
+                        json_rename: None,
                     },
                     EnumVariant {
                         name: BaseName::new("NEGATIVE"),
                         docstring: None,
                         value: "NEGATIVE".to_string(),
+                        json_rename: None,
                     },
                 ],
                 origin: origin("x.baml", 0),
@@ -3259,6 +3315,7 @@ mod tests {
                     name: BaseName::new("POSITIVE"),
                     docstring: None,
                     value: "POSITIVE".to_string(),
+                    json_rename: None,
                 }],
                 origin: origin("ipsum.baml", 0),
             }),
@@ -3474,6 +3531,7 @@ mod tests {
                     name: BaseName::new("X"),
                     docstring: None,
                     value: "X".to_string(),
+                    json_rename: None,
                 }],
                 origin: origin("x.baml", 0),
             }),
@@ -3591,6 +3649,7 @@ mod tests {
                     name: BaseName::new("X"),
                     docstring: None,
                     value: "X".to_string(),
+                    json_rename: None,
                 }],
                 origin: origin("x.baml", 0),
             }),
@@ -3648,10 +3707,14 @@ mod tests {
                     name: BaseName::new("item"),
                     docstring: None,
                     ty: type_var(BaseName::new("T")),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
                 static_methods: vec![],
                 instance_methods: vec![],
                 origin: origin("box.baml", 0),
+                json_omit_nulls: false,
             }),
         );
         pool.insert(
@@ -3668,10 +3731,14 @@ mod tests {
                         cg_name("user", &["lorem"], "Box"),
                         vec![type_var(BaseName::new("T"))],
                     ))),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
                 static_methods: vec![],
                 instance_methods: vec![],
                 origin: origin("box.baml", 100),
+                json_omit_nulls: false,
             }),
         );
 
@@ -4112,10 +4179,14 @@ mod tests {
                     name: BaseName::new("item"),
                     docstring: None,
                     ty: type_var(BaseName::new("T")),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
                 static_methods: vec![static_type_name, static_with_default],
                 instance_methods: vec![pair_method, pair_with_default],
                 origin: origin("box.baml", 0),
+                json_omit_nulls: false,
             }),
         );
 
@@ -4221,11 +4292,15 @@ mod tests {
                         name: BaseName::new(name),
                         docstring: None,
                         ty: Ty::Int,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
                     })
                     .collect(),
                 static_methods: Vec::new(),
                 instance_methods: Vec::new(),
                 origin: origin("naming.baml", 0),
+                json_omit_nulls: false,
             }),
         );
         let status = cg_name("user", &["deploymentGroups"], "Status");
@@ -4238,6 +4313,7 @@ mod tests {
                     name: BaseName::new("NotFound"),
                     docstring: None,
                     value: "NotFound".to_string(),
+                    json_rename: None,
                 }],
                 origin: origin("naming.baml", 1),
             }),
@@ -4348,11 +4424,15 @@ mod tests {
                     name: BaseName::new(name),
                     docstring: None,
                     ty: Ty::Int,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 })
                 .collect(),
                 static_methods: Vec::new(),
                 instance_methods: Vec::new(),
                 origin: origin("keywords.baml", 0),
+                json_omit_nulls: false,
             }),
         );
         pool.insert(
@@ -4366,6 +4446,7 @@ mod tests {
                 static_methods: Vec::new(),
                 instance_methods: Vec::new(),
                 origin: origin("keywords.baml", 1),
+                json_omit_nulls: false,
             }),
         );
 
@@ -4380,11 +4461,13 @@ mod tests {
                         name: BaseName::new("None"),
                         docstring: None,
                         value: "None".to_string(),
+                        json_rename: None,
                     },
                     EnumVariant {
                         name: BaseName::new("None_"),
                         docstring: None,
                         value: "None_".to_string(),
+                        json_rename: None,
                     },
                 ],
                 origin: origin("keywords.baml", 2),

@@ -155,7 +155,7 @@
 46:7-8       "("                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 46:8-11      "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 46:12-13     "x"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-46:14-16     "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+46:14-16     "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 46:17-18     "["                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.expression.array.baml punctuation.definition.array.begin.baml
 46:18-19     "2"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.expression.array.baml constant.numeric.integer.baml
 46:19-20     ","                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.expression.array.baml punctuation.separator.comma.baml

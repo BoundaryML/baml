@@ -349,6 +349,13 @@ can call BAML directly. Run \`baml bridge add <target>\` once, then
 the host package to install. Targets:
 ${BRIDGE_TARGETS}
 
+If the repo is on GitHub, add the BAML code quality action so every pull
+request is checked, format-checked, and tested, with a comment comparing its
+code quality to the base branch. Add \`.github/workflows/baml.yml\` with a job
+that runs \`actions/checkout@v5\` and then \`BoundaryML/baml-action@v1\` on
+\`pull_request\`, with \`pull-requests: write\` permission for the comment.
+Details: https://github.com/BoundaryML/baml-action
+
 After that, use the BAML skill and \`baml describe\` to write and edit .baml files.`;
 
 function copyNow(text: string, done: () => void) {

@@ -5067,6 +5067,9 @@ mod tests {
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: primitive_string(),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![],
             instance_methods: vec![],
@@ -5074,6 +5077,7 @@ mod tests {
                 source_file_path: "review.baml".to_string(),
                 span_start: 0,
             },
+            json_omit_nulls: false,
         };
         let function_spec_name =
             Name::new(BaseName::new("ai"), vec![], BaseName::new("FunctionSpec"));
@@ -5279,6 +5283,9 @@ mod tests {
             name: BaseName::new(name),
             docstring: None,
             ty,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
         };
         let class = |name: Name, generic_params: Vec<BaseName>, properties: Vec<ClassProperty>| {
             Symbol::Class(Class {
@@ -5290,6 +5297,7 @@ mod tests {
                 static_methods: vec![],
                 instance_methods: vec![],
                 origin: origin(),
+                json_omit_nulls: false,
             })
         };
         let type_parameter = BaseName::new("T");
@@ -5324,6 +5332,7 @@ mod tests {
                         name: BaseName::new(name),
                         docstring: None,
                         value: name.to_string(),
+                        json_rename: None,
                     })
                     .collect(),
                 origin: origin(),
@@ -5513,6 +5522,7 @@ mod tests {
                 source_file_path: "builtin.baml".to_string(),
                 span_start: 0,
             },
+            json_omit_nulls: false,
         })
     }
 
@@ -5538,6 +5548,9 @@ mod tests {
             name: BaseName::new(name),
             docstring: None,
             ty,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
         };
         let class = |name: Name, properties: Vec<ClassProperty>| {
             Symbol::Class(Class {
@@ -5552,6 +5565,7 @@ mod tests {
                     source_file_path: "builtin.baml".to_string(),
                     span_start: 0,
                 },
+                json_omit_nulls: false,
             })
         };
 
@@ -5654,6 +5668,7 @@ mod tests {
                         name: BaseName::new(name),
                         docstring: None,
                         value: name.to_string(),
+                        json_rename: None,
                     })
                     .collect(),
                 origin: baml_sdkgen_types::Origin {
@@ -6714,6 +6729,9 @@ mod tests {
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: primitive_int(),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![method, stream_method],
             instance_methods: vec![],
@@ -6721,6 +6739,7 @@ mod tests {
                 source_file_path: "only_methods.baml".to_string(),
                 span_start: 0,
             },
+            json_omit_nulls: false,
         };
         let mut symbols = HashMap::new();
         symbols.insert(owner.clone(), Symbol::Class(class));
@@ -6816,6 +6835,9 @@ mod tests {
                 name: BaseName::new("_inner"),
                 docstring: None,
                 ty: Ty::Unknown,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![
                 method(
@@ -6835,6 +6857,7 @@ mod tests {
                 ),
             ],
             origin: origin(0),
+            json_omit_nulls: false,
         };
         let echo_name = Name::new(
             BaseName::new("user"),

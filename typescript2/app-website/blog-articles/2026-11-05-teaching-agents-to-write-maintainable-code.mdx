@@ -4,6 +4,7 @@ description: "We rewrote our agent skill and built code quality metrics into the
 slug: teaching-agents-to-write-maintainable-code
 date: November 5, 2026
 isPublished: true
+quickstart: true
 tags: ['Engineering']
 author:
   name: Avery Townsend
@@ -419,3 +420,14 @@ Unfortunately, we can't put a number on our taste, or our feelings about the cod
 ## Try it
 
 If you'd like to try it out, the new skill, including the `baml codequality` hint, has shipped in the [latest version of BAML](/quickstart)!
+
+To track these numbers in your own project, add [`BoundaryML/baml-action`](https://github.com/BoundaryML/baml-action) to CI. It runs `baml check`, `baml fmt --check`, `baml test`, and `baml codequality`, and comments on each pull request with how its functions compare to the base branch:
+
+![A baml-action comment on a pull request. One function, shipping_cost, got better: cognitive complexity went from 12 to 0, cyclomatic from 8 to 1, NPath from 36 to 1, and nesting from 3 to 0.](/blog/teaching-agents-to-write-maintainable-code/baml-action-comment.png)
+
+```yaml
+- uses: actions/checkout@v5
+- uses: BoundaryML/baml-action@v1
+```
+
+The comment needs `pull-requests: write`. The [README](https://github.com/BoundaryML/baml-action#usage) has the full workflow.

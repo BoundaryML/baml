@@ -1587,6 +1587,63 @@ naming_convention = "preserve-case"
         }
     }
 
+    /// `baml describe python` and `baml describe typescript` show the call
+    /// forms the generators emit: the plain name is async and must be
+    /// awaited, and the blocking twin ends in `_sync`.
+    #[test]
+    fn describe_topics_match_the_generated_call_forms() {
+        let project = python_project("unused");
+        fs::write(
+            project.path().join("baml_src/main.baml"),
+            "class Ticket {\n  title string\n}\n\nfunction ClassifyTicket(text: string) -> Ticket {\n  Ticket { title: text }\n}\n",
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n\
+             [generator.py]\noutput_type = \"python/pydantic\"\nnaming_convention = \"language\"\noutput_dir = \"py\"\n\n\
+             [generator.ts]\noutput_type = \"typescript/node\"\nnaming_convention = \"preserve-case\"\noutput_dir = \"ts\"\n",
+        )
+        .unwrap();
+
+        let result = generate_project(project.path()).unwrap();
+
+        assert!(matches!(result, crate::ExitCode::Success));
+        for (topic, sdk_file, async_decl, sync_decl, name) in [
+            (
+                "python",
+                "py/baml_sdk/__init__.pyi",
+                "\nasync def classify_ticket(",
+                "\ndef classify_ticket_sync(",
+                "classify_ticket",
+            ),
+            (
+                "typescript",
+                "ts/baml_sdk/index.ts",
+                "\nexport const ClassifyTicket = defineFunction(\"user.ClassifyTicket\", \"async\"",
+                "\nexport const ClassifyTicket_sync = defineFunction(\"user.ClassifyTicket\", \"sync\"",
+                "ClassifyTicket",
+            ),
+        ] {
+            let sdk = fs::read_to_string(project.path().join(sdk_file)).unwrap();
+            assert!(sdk.contains(async_decl), "{sdk_file}: {sdk}");
+            assert!(sdk.contains(sync_decl), "{sdk_file}: {sdk}");
+            let mut text = Vec::new();
+            crate::describe_command::write_keyword(&mut text, topic).unwrap();
+            let text = String::from_utf8(text).unwrap();
+            let calls = text.matches(&format!("{name}(")).count();
+            assert!(calls > 0, "{topic}: {text}");
+            assert_eq!(
+                text.matches(&format!("await {name}(")).count(),
+                calls,
+                "`baml describe {topic}` calls the async `{name}` without `await`:\n{text}"
+            );
+            if topic == "python" {
+                assert!(text.contains(&format!("{name}_sync(")), "{topic}: {text}");
+            }
+        }
+    }
+
     #[test]
     fn named_rust_go_and_typescript_sdks_carry_their_name() {
         let project = python_project("unused");
