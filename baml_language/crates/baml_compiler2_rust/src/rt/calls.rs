@@ -168,7 +168,7 @@ impl Emitter<'_, '_> {
                     }
                     (
                         self.fallible(&format!(
-                            "f{c}({}, {})",
+                            "f{c}::<OBSERVE>(cx,{}, {})",
                             self.telemetry_site(c),
                             values
                                 .iter()

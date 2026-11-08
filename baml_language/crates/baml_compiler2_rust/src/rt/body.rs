@@ -38,6 +38,7 @@ impl Emitter<'_, '_> {
                 .collect::<Gen<_>>()?,
         };
         let structured = structurize(&cfg).map_err(no)?;
+        self.proven_arithmetic = loop_ranges::analyze(self, &structured.stmts);
         self.unwind_jumps = structured
             .unwind_jumps
             .iter()
@@ -94,9 +95,8 @@ impl Emitter<'_, '_> {
         let captures = format!(
             "||rt::telemetry::capture_arguments(&[{captured_args}]),|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
         );
-        let mut code = format!(
-            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{let mode=rt::telemetry::mode(&O{object});if mode==0{{return f{object}_body({arguments});}}if mode!=1{{return f{object}_observed(telemetry_site,mode,{arguments});}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n#[inline(never)] unsafe fn f{object}_observed(telemetry_site:usize,mode:u8,{params})->R<{returned}>{{unsafe{{if mode>3{{rt::telemetry::evidence::observe_captured(telemetry_site,mode&3,{captures},||f{object}_body({arguments}))}}else{{rt::telemetry::observe_captured(telemetry_site,mode,{captures},||f{object}_body({arguments}))}}}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
-        );
+        let mut code =
+            call_cost::prologue(object, &params, &arguments, returned, &captures, attribute);
         for i in 1..=arity {
             if self.body.locals[i].is_captured {
                 let value = self.coerce(

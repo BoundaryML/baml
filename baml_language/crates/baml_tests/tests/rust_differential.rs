@@ -447,6 +447,99 @@ fn pack_result<'a>(
 
 #[test]
 #[ignore = "builds generated Rust crates with cargo"]
+fn rt_call_cost_semantics_at_every_telemetry_level() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest.parent().unwrap().parent().unwrap();
+    let build = Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-call-cost-parity");
+    std::fs::create_dir_all(&build).unwrap();
+    let source = manifest.join("rust_diff/call_cost");
+    let bytecode = build.join("bytecode");
+    pack_result(
+        &build.join("vm-build"),
+        workspace,
+        &source,
+        &bytecode,
+        ["main", "uncaught"],
+        false,
+    )
+    .unwrap();
+    let run = |program: &Path, entry: &str, is_rt: bool, stress: bool, level: &str| {
+        let home = tempfile::tempdir_in(&build).unwrap();
+        let mut command = Command::new(program);
+        if !is_rt {
+            command.arg(entry);
+        }
+        command
+            .env("BAML_HOME", home.path())
+            .env("BAML_TELEMETRY", level)
+            .env("BAML_COMPILED_BODIES", "0")
+            .env("BAML_COMPILED_FRAMES", "0")
+            .env("BAML_GC_STRESS", if stress { "1" } else { "0" })
+            .env_remove("BOUNDARY_PROJECT")
+            .env_remove("BOUNDARY_API_URL")
+            .env("NO_COLOR", "1");
+        if level == "default" {
+            command.env_remove("BAML_TELEMETRY");
+        }
+        let output = run_probe(&mut command, Duration::from_secs(120)).unwrap();
+        assert!(
+            output.status.success() == (entry == "main"),
+            "{level}/{is_rt}/{stress}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let trace = telemetry::read(home.path());
+        assert_eq!(
+            trace.is_empty(),
+            level == "off",
+            "{level}: telemetry presence"
+        );
+        (
+            output,
+            known_telemetry_divergences::without_gc(&trace, "rt"),
+        )
+    };
+    for entry in ["main", "uncaught"] {
+        let compiled = build.join(format!("rt-{entry}"));
+        pack_result(
+            &build.join("rt-build"),
+            workspace,
+            &source,
+            &compiled,
+            [entry],
+            true,
+        )
+        .unwrap();
+        for level in ["off", "low", "medium", "high", "default"] {
+            let (expected, trace) = run(&bytecode, entry, false, false, level);
+            if entry == "main" {
+                assert_eq!(expected.stdout, b"511\n");
+            }
+            for stress in [false, true] {
+                let (actual, observed) = run(&compiled, entry, true, stress, level);
+                assert_eq!(
+                    actual.status.code(),
+                    expected.status.code(),
+                    "{entry}/{level}/{stress}: status"
+                );
+                assert_eq!(
+                    actual.stdout, expected.stdout,
+                    "{entry}/{level}/{stress}: stdout"
+                );
+                assert_eq!(
+                    actual.stderr, expected.stderr,
+                    "{entry}/{level}/{stress}: stderr"
+                );
+                assert_eq!(
+                    observed, trace,
+                    "{entry}/{level}/{stress}: semantic telemetry"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
 #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
 fn rust_differential() {
     let timeout = std::env::var("BAML_RUST_DIFF_TIMEOUT_SECS")
