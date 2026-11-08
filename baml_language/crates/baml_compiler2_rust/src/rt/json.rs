@@ -4,6 +4,7 @@ impl Plan<'_> {
     pub(super) fn type_code(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<usize> {
         use baml_compiler2_mir::TyTemplate as T;
         match ty {
+            T::Function { .. } => Ok(usize::MAX - 1),
             T::Int => Ok(0),
             T::String => Ok(1),
             T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),

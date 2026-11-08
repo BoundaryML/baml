@@ -5,6 +5,7 @@
 pub mod host;
 pub mod io;
 pub mod calls;
+pub mod closures;
 pub mod json;
 pub mod language;
 pub mod lists;
@@ -19,6 +20,8 @@ use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
+
+type FunctionValues = std::collections::BTreeMap<usize, baml_rt_tasks::IntegrationRoot>;
 
 struct Roots<'a>(&'a baml_rt_tasks::IntegrationRoots);
 impl RootSource for Roots<'_> {
@@ -35,6 +38,7 @@ thread_local! {
     static STACK_LIMIT: Cell<usize> = const { Cell::new(0) };
     static ROOTS: Cell<*const baml_rt_tasks::IntegrationRoots> = const { Cell::new(std::ptr::null()) };
     static HEAP: Cell<*mut Heap> = const { Cell::new(std::ptr::null_mut()) };
+    static FUNCTIONS: Cell<*mut FunctionValues> = const { Cell::new(std::ptr::null_mut()) };
     static TASK: Cell<*mut TaskCx<'static>> = const { Cell::new(std::ptr::null_mut()) };
 }
 
@@ -118,11 +122,28 @@ unsafe fn safepoint_slow() -> Result<(), baml_rt_tasks::Err> {
     })
 }
 
+// Top-level function values are pooled by the VM. Preserve their identity
+// (including aliases in telemetry captures) and trace the pool between jobs.
+unsafe fn function_value(object: usize, create: impl FnOnce() -> R<usize>) -> R<usize> {
+    let functions = FUNCTIONS.get();
+    assert!(!functions.is_null(), "function value outside an instance");
+    unsafe {
+        if let Some(value) = (&*functions).get(&object) {
+            return Ok(value.get());
+        }
+        let value = create()?;
+        let root = (&*ROOTS.get()).root(value);
+        (&mut *functions).insert(object, root);
+        Ok(value)
+    }
+}
+
 /// A reusable, single-owner program instance. Heap capacity survives jobs.
 pub struct Instance {
     heap: Heap,
     tasks: TaskLoop,
     _io: tokio::runtime::Runtime,
+    functions: FunctionValues,
 }
 impl Instance {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
@@ -160,6 +181,7 @@ impl Instance {
             heap,
             tasks,
             _io: io,
+            functions: FunctionValues::new(),
         }
     }
 
@@ -198,6 +220,7 @@ impl Instance {
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;
         let roots = self.tasks.integration_roots();
+        let functions = &mut self.functions as *mut FunctionValues;
         let future = self.tasks.spawn(move |cx| {
             struct Binding(
                 *mut Heap,
@@ -205,6 +228,7 @@ impl Instance {
                 *const baml_rt_tasks::IntegrationRoots,
                 usize,
                 *const Cell<u8>,
+                *mut FunctionValues,
             );
             impl Drop for Binding {
                 fn drop(&mut self) {
@@ -213,8 +237,10 @@ impl Instance {
                     ROOTS.set(self.2);
                     STACK_LIMIT.set(self.3);
                     POLL_WORD.set(self.4);
+                    FUNCTIONS.set(self.5);
                 }
             }
+            let previous_functions = FUNCTIONS.replace(functions);
             let previous_heap = HEAP.replace(heap);
             // Erase the borrowed task lifetime only inside this scoped binding.
             let current: *mut TaskCx<'_> = cx;
@@ -229,6 +255,7 @@ impl Instance {
                 previous_roots,
                 previous_limit,
                 previous_poll,
+                previous_functions,
             );
             *output.borrow_mut() = Some(entry());
             Ok(Value::int(0))

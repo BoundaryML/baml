@@ -10,6 +10,9 @@ impl Emitter<'_, '_> {
         {
             return Ok(Repr::Tagged);
         }
+        if self.body.locals[i].is_captured {
+            return Ok(Repr::Cell);
+        }
         if self.iters.contains(&i) {
             return Ok(Repr::Iter);
         }
@@ -22,10 +25,13 @@ impl Emitter<'_, '_> {
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
+            Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
+            Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::ListInt
             | Repr::ListStr
             | Repr::ListListStr
+            | Repr::ListClosure(_)
             | Repr::ListPtr(_)
             | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
@@ -42,7 +48,11 @@ impl Emitter<'_, '_> {
     }
     pub(super) fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
         let (value, source) = value;
-        if source == target || (source == Repr::Null && target.pointer()) {
+        if source == target
+            || (source == Repr::Null && target.pointer())
+            || (matches!(source, Repr::Dyn(_)) && target == Repr::Tagged)
+            || (source == Repr::Tagged && matches!(target, Repr::Dyn(_)))
+        {
             return Ok(value);
         }
         if source == Repr::Int && target == Repr::Float {
@@ -80,13 +90,7 @@ impl Emitter<'_, '_> {
                 _ => self.tag(target)?.to_string(),
             };
             let bits = self.fallible(&format!("rt::untag({value},{tag},{})", target.pointer()));
-            return Ok(if target == Repr::Float {
-                format!("f64::from_bits({bits})")
-            } else if target == Repr::Bool {
-                format!("({bits}!=0)")
-            } else {
-                format!("({bits} as {})", target.rust())
-            });
+            return Ok(target.decode_payload(&bits));
         }
         if matches!(target, Repr::Dyn(_)) {
             return self.coerce((value, source), Repr::Tagged);
@@ -96,6 +100,14 @@ impl Emitter<'_, '_> {
     pub(super) fn place(&self, p: &Place) -> Gen<(String, Repr)> {
         match p {
             Place::Local(l) => Ok((format!("l{}", l.0), self.local(l.0)?)),
+            Place::Capture(i) => Ok((format!("rt::closures::capture(env,{i})"), Repr::Cell)),
+            Place::Deref(cell) => {
+                let (cell, repr) = self.closure_cell(cell)?;
+                Ok((
+                    self.coerce((format!("rt::closures::load({cell})"), Repr::Tagged), repr)?,
+                    repr,
+                ))
+            }
             Place::Field { base, field } => {
                 let (base, repr) = self.place(base)?;
                 if repr == Repr::Tagged {
@@ -183,11 +195,34 @@ impl Emitter<'_, '_> {
                     self.plan.repr(&RuntimeTy::Enum(head))?,
                 ))
             }
+            Operand::Constant(Constant::Function(f)) => {
+                let (object, _) = self
+                    .plan
+                    .index
+                    .function(self.db, *f)
+                    .ok_or_else(|| no("unlinked function value"))?;
+                Ok((
+                    self.fallible(&format!(
+                        "rt::closures::function({}, {object},closure{object},{:?})",
+                        self.plan.closure_descriptors().unwrap().1,
+                        self.plan.index.info(object).name().as_str()
+                    )),
+                    Repr::Closure,
+                ))
+            }
+            Operand::Constant(Constant::OmittedArg) => {
+                Ok(("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged))
+            }
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),
             Operand::Constant(_) => Err(no(format!("operand {o:?}"))),
         }
     }
     pub(super) fn assign(&self, p: &Place, value: (String, Repr)) -> Gen<String> {
+        if let Place::Deref(cell) = p {
+            let (cell, _) = self.closure_cell(cell)?;
+            let value = self.coerce(value, Repr::Tagged)?;
+            return Ok(format!("rt::closures::store({cell},{value});\n"));
+        }
         let (dst, repr) = self.place(p)?;
         let src = self.coerce(value, repr)?;
         match p {

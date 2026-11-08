@@ -42,6 +42,11 @@ struct Plan<'a> {
     dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
     function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
+    environments: bool,
+    captures: BTreeMap<usize, Vec<Repr>>,
+    lambda_bodies: BTreeMap<usize, usize>,
+    callables: BTreeSet<usize>,
+    closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
