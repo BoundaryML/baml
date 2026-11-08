@@ -210,10 +210,20 @@ fn owned(reader: &mut Reader<'_>) -> Result<Value, bex_vm_types::json_text::Stop
             let number = reader.number()?;
             match number.as_i64() {
                 Some(n) => Value::from(n),
-                None => Value::from(number.as_f64().unwrap_or(1e100)),
+                None => Value::Number(number.text.parse().expect("validated JSON number")),
             }
         }
     })
+}
+pub(crate) fn parse_owned(cx: &mut Cx, source: &str) -> R<Value> {
+    let mut reader = Reader::new(source);
+    if reader.skip_value().is_err() || reader.finish().is_err() {
+        return Err(syntax_error(cx, source));
+    }
+    Ok(owned(&mut Reader::new(source)).expect("shared scanner accepted JSON"))
+}
+pub(crate) fn decode_error(cx: &mut Cx, message: String, path: String) -> Box<Error> {
+    error(cx, message, Some(path))
 }
 /// # Safety
 /// Schemas describe actual class descriptors/offsets, including tagged optional

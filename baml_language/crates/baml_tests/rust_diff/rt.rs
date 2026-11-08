@@ -14,6 +14,47 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
     level == "off" || TELEMETRY_SUPPORTED || REQUIRED_PROBES.contains(&probe)
 }
 
+// List coverage baseline: each admitted fixture must keep passing both runtime
+// variants. An admission regression is a failure, never an unsupported skip.
+const REQUIRED_LIST_COVERAGE: &[&str] = &[
+    "RuntimeListFloatConstants",
+    "RuntimeLists",
+    "RuntimeListBounds",
+    "RuntimeListStoreBounds",
+    "RuntimeListJson",
+    "RuntimeListJsonField",
+    "RuntimeListJsonError",
+    "RuntimeListJsonOptional",
+    "RuntimeListJsonOptionalError",
+    "RuntimeListBuiltins",
+    "RuntimeListInsertError",
+    "RuntimeListMaps",
+    "RuntimeListRecursiveJson",
+    "RuntimeListLiteralJson",
+    "RuntimeListLiteralJsonError",
+    "RuntimeListJsonFieldError",
+    "RuntimeListReductions",
+    "RuntimeListReductionOverflow",
+    "RuntimeListMedianError",
+    "RuntimeListStructuralJoin",
+    "RuntimeListFloatSpecials",
+    "RuntimeListJsonNonFinite",
+    "compute::array build sum 100k",
+    "compute::array traversal 8k",
+    "compute::merge sort 20k",
+    "compute::quick sort 3-way 1k",
+    "memory::live walk",
+    "memory::splay 2k",
+];
+fn require_list_coverage<T>(name: &str, result: Result<T, Rejection>) -> Result<T, Rejection> {
+    match result {
+        Err(Rejection::Unsupported(reason)) if REQUIRED_LIST_COVERAGE.contains(&name) => Err(
+            Rejection::Fail(format!("list coverage regression: {reason}")),
+        ),
+        other => other,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Rejection {
     Unsupported(String),
@@ -43,6 +84,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         // entry reachability. Rechecking every entry cannot change this result.
         // Standalone fixtures use a different project and must still be packed.
         if *probe != "StackAllocation"
+            && !super::is_list_probe(probe)
             && super::standalone_closure_source(manifest, probe).is_none()
             && let Some(rejection) = &initializer_rejection
         {
@@ -64,6 +106,8 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
             )
             .unwrap();
             standalone
+        } else if super::is_list_probe(probe) {
+            manifest.join("rust_diff/list_probes")
         } else {
             super::standalone_closure_source(manifest, probe)
                 .unwrap_or_else(|| manifest.join("rust_diff"))
@@ -105,7 +149,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         {
             initializer_rejection = result.as_ref().err().cloned();
         }
-        artifacts.insert((*probe).into(), result);
+        artifacts.insert((*probe).into(), require_list_coverage(probe, result));
     }
     for fixture in kpis::fixtures(workspace, only) {
         let dir = build.join("kpis").join(&fixture.slug);
@@ -124,6 +168,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         )
         .map(|()| executable)
         .map_err(classify);
+        let result = require_list_coverage(&fixture.name, result);
         artifacts.insert(fixture.name, result);
     }
     artifacts
@@ -283,4 +328,19 @@ fn standalone_closure_coverage_cannot_silently_become_unsupported() {
         assert!(supports_level("RtClosures", level));
         assert!(supports_level("RtEmptyClosures", level));
     }
+}
+
+#[test]
+fn list_coverage_baseline_rejects_admission_regressions() {
+    assert!(matches!(
+        require_list_coverage::<()>(
+            "RuntimeLists",
+            Err(Rejection::Unsupported("list element".into()))
+        ),
+        Err(Rejection::Fail(_))
+    ));
+    assert!(matches!(
+        require_list_coverage::<()>("Closures", Err(Rejection::Unsupported("closures".into()))),
+        Err(Rejection::Unsupported(_))
+    ));
 }

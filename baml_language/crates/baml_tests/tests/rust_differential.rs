@@ -16,6 +16,28 @@ const PROBES: &[&str] = &[
     "StackAllocation",
     "RtClosures",
     "RtEmptyClosures",
+    "RuntimeListFloatConstants",
+    "RuntimeListStructuralJoin",
+    "RuntimeListFloatSpecials",
+    "RuntimeListJsonNonFinite",
+    "RuntimeListReductions",
+    "RuntimeListReductionOverflow",
+    "RuntimeListMedianError",
+    "RuntimeListMaps",
+    "RuntimeListRecursiveJson",
+    "RuntimeListLiteralJson",
+    "RuntimeListLiteralJsonError",
+    "RuntimeListJsonFieldError",
+    "RuntimeListJsonOptional",
+    "RuntimeListJsonOptionalError",
+    "RuntimeListBuiltins",
+    "RuntimeListInsertError",
+    "RuntimeLists",
+    "RuntimeListBounds",
+    "RuntimeListStoreBounds",
+    "RuntimeListJson",
+    "RuntimeListJsonField",
+    "RuntimeListJsonError",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -280,12 +302,16 @@ fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::
     matches!(probe, "RtClosures" | "RtEmptyClosures").then(|| manifest.join("rt_fixtures/closures"))
 }
 
+fn is_list_probe(probe: &str) -> bool {
+    probe.starts_with("RuntimeList")
+}
+
 fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
     std::fs::create_dir_all(build).unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
     if PROBES
         .iter()
-        .filter(|p| standalone_closure_source(manifest, p).is_none())
+        .filter(|p| standalone_closure_source(manifest, p).is_none() && !is_list_probe(p))
         .any(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
     {
         let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
@@ -297,6 +323,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
             PROBES
                 .iter()
                 .copied()
+                .filter(|p| !is_list_probe(p))
                 .filter(|p| !initializer_probes::collects_tests(p))
                 .filter(|p| standalone_closure_source(manifest, p).is_none())
                 .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
@@ -338,7 +365,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         );
         for probe in PROBES
             .iter()
-            .filter(|p| standalone_closure_source(manifest, p).is_none())
+            .filter(|p| standalone_closure_source(manifest, p).is_none() && !is_list_probe(p))
         {
             artifacts
                 .entry((*probe).into())
@@ -358,6 +385,25 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
             [probe],
         );
         artifacts.insert(probe.into(), executable);
+    }
+    let list_probes: Vec<_> = PROBES
+        .iter()
+        .copied()
+        .filter(|p| is_list_probe(p))
+        .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
+        .collect();
+    if !list_probes.is_empty() {
+        let executable = build.join("list-probes");
+        pack(
+            build,
+            workspace,
+            &manifest.join("rust_diff/list_probes"),
+            &executable,
+            list_probes.iter().copied(),
+        );
+        for probe in list_probes {
+            artifacts.insert(probe.into(), executable.clone());
+        }
     }
     for fixture in kpis::fixtures(workspace, only) {
         let dir = build.join("kpis").join(&fixture.slug);

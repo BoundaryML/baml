@@ -1,7 +1,7 @@
 use super::{
-    BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, SourceRoot,
-    Terminator, VecDeque, file_functions, is_required_interface_method, lower_function, no,
-    registry, world_files,
+    BTreeMap, BTreeSet, Db, Gen, MirFunction, MirFunctionKind, OptLevel, Plan, Repr, Rvalue,
+    SourceRoot, StatementKind, Terminator, VecDeque, file_functions, is_required_interface_method,
+    lower_function, no, registry, world_files,
 };
 
 pub(super) struct Admitted<'db> {
@@ -60,6 +60,42 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
+
+            if let StatementKind::Assign {
+                value:
+                    Rvalue::LoadType(
+                        ty @ (baml_compiler2_mir::TyTemplate::List(_)
+                        | baml_compiler2_mir::TyTemplate::Union(_)),
+                    ),
+                ..
+            } = &statement.kind
+            {
+                if !plan.json_list_types.contains(ty)
+                    && let Ok(repr) = plan.template_repr(ty)
+                {
+                    plan.record(repr)?;
+                    plan.json_list_types.push(ty.clone());
+                }
+            }
+            if let StatementKind::Assign {
+                value:
+                    Rvalue::LoadType(
+                        ty @ (baml_compiler2_mir::TyTemplate::Union(_)
+                        | baml_compiler2_mir::TyTemplate::Class(..)),
+                    ),
+                ..
+            } = &statement.kind
+            {
+                let Ok(classes) = plan.json_class_types(ty) else {
+                    continue;
+                };
+                for &c in &classes {
+                    plan.add(c)?;
+                }
+                if !plan.json_types.contains(&classes) {
+                    plan.json_types.push(classes);
+                }
+            }
         }
         super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
@@ -102,6 +138,24 @@ pub(super) fn collect<'db>(
                     }
                     if let Some(callee) = reach.json_decode {
                         json_decode = Some(callee);
+                        let Some(Terminator::Call { args, .. }) = &block.terminator else {
+                            unreachable!()
+                        };
+                        let code = match &args[0] {
+                            baml_compiler2_mir::Operand::Copy(
+                                baml_compiler2_mir::Place::Local(l),
+                            )
+                            | baml_compiler2_mir::Operand::Move(
+                                baml_compiler2_mir::Place::Local(l),
+                            ) => {
+                                let Repr::Type(code) = plan.local_repr(body, l.0, 0)? else {
+                                    return Err(no("JSON type argument"));
+                                };
+                                code
+                            }
+                            _ => return Err(no("JSON type argument storage")),
+                        };
+                        plan.json_decode_codes.insert(code);
                     }
                     for target in reach.targets {
                         calls.entry(object).or_default().insert(target);
@@ -121,7 +175,9 @@ pub(super) fn collect<'db>(
                     Some(Terminator::Call {
                         callee: baml_compiler2_mir::Operand::Copy(_)
                             | baml_compiler2_mir::Operand::Move(_)
-                            | baml_compiler2_mir::Operand::Constant(baml_compiler2_mir::Constant::GlobalItem(_)),
+                            | baml_compiler2_mir::Operand::Constant(
+                                baml_compiler2_mir::Constant::GlobalItem(_)
+                            ),
                         ..
                     })
                 )

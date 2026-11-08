@@ -41,7 +41,7 @@ pub unsafe fn decode_at<V: Slot>(
     if reader.open_object().is_err() {
         return Err(crate::json::error(
             cx,
-            "expected object".into(),
+            "expected JSON object".into(),
             Some(path.into()),
         ));
     }
@@ -348,15 +348,17 @@ pub unsafe fn write_scalar(
     Ok(())
 }
 /// # Safety
-/// `list` is a live fixed integer list in the active instance.
+/// `list` is a live growing integer list in the active instance.
 pub unsafe fn write_int_list(list: usize, out: &mut String) -> R<()> {
-    let len = unsafe { *((list + 8) as *const usize) };
+    let cx = unsafe { Cx::current() };
+    let list = unsafe { crate::lists::List::<i64>::from_raw(list) };
+    let len = list.len(&cx);
     out.push('[');
     for i in 0..len {
         if i != 0 {
             out.push(',');
         }
-        let value = unsafe { *(crate::list_slot(list, i as i64)?.cast::<i64>()) };
+        let value = list.get(&cx, i)?;
         out.push_str(&value.to_string());
     }
     out.push(']');
@@ -443,5 +445,32 @@ mod tests {
         let mut instance = crate::Instance::new(DESCRIPTORS, &[false, false, false, true, true]);
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 0);
+    }
+}
+
+/// Typed map construction for recursive JSON schemas. Managed values never
+/// live in the serde tree: each decoded value is stored in the traced map.
+pub struct Adapter {
+    pub tag: u64,
+    pub new: unsafe fn(&mut Cx) -> R<usize>,
+    pub insert: unsafe fn(&mut Cx, usize, Str, crate::Dyn) -> R<()>,
+}
+pub fn string_key_type(ty: &crate::telemetry::capture::Type) -> bool {
+    use crate::telemetry::capture::Type;
+    match ty {
+        Type::String | Type::StringLiteral(..) => true,
+        Type::Union(m) => m.iter().all(string_key_type),
+        _ => false,
+    }
+}
+
+/// Whether a JSON property belongs to the declared string-key type.
+pub fn key_fits(ty: &crate::telemetry::capture::Type, key: &str) -> bool {
+    use crate::telemetry::capture::Type;
+    match ty {
+        Type::String => true,
+        Type::StringLiteral(value, _) => *value == key,
+        Type::Union(m) => m.iter().any(|ty| key_fits(ty, key)),
+        _ => false,
     }
 }

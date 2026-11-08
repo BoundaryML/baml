@@ -143,6 +143,30 @@ function main()->int { GATE }"#,
         r#"class Node {next:Node?} function main()->int {let n=Node{next:null};n.next=n;let m:map<Node,int> = {};m[n]=1;m.length()}"#,
         r#"function ints()->int[] {[]} function strings()->string[] {[]} function main()->int {let m:map<int[]|string[],int> = {};m[ints()]=1;m[strings()]=2;m.length()}"#,
         r#"function main()->int {let a:map<string,int> = {"a":1};let b:map<string,int?> = {"a":1};let m:map<map<string,int>|map<string,int?>,int> = {};m[a]=1;m[b]=2;m.length()}"#,
+        r#"function main()->int {let m:map<string,bool> = {"a":true,"b":false};let values=m.values();let n=0;for(let v in values){if(v){n+=7;}}n+values.length()}"#,
+        r#"function inspect(v:float[])->int {if(v[0]==1.25){v.length()}else{0}} function main()->int {let m:map<string,float> = {"a":1.25,"b":2.5};inspect(m.values())}"#,
+        r#"function main()->int {let m:map<string,map<string,int>> = {"a":{"x":7}};let values=m.values();m.clear();values[0]["x"]}"#,
+        r#"function inspect(v:null[])->int {v.length()} function main()->int {let m:map<string,null> = {"a":null};inspect(m.values())}"#,
+        r#"class Box{x:int} function inspect(v:Box?[])->int {let b=v[0];if(b==null){0}else{b.x}} function main()->int {let m:map<string,Box?> = {"a":Box{x:7},"b":null};inspect(m.values())}"#,
+        r#"function main()->int {let m:map<string,(int)->int throws never> = {"a":(x:int)->int{x+1}};let values=m.values();m.clear();let f=values[0];f(41)}"#,
+        r#"class Box{x:int} function inspect(v:(int|string|Box)[])->int {v.length()} function main()->int {let m:map<string,int|string|Box> = {"a":1,"b":"kept","c":Box{x:7}};let values=m.values();m.clear();inspect(values)}"#,
+        r#"class Box{x:string} function inspect(v:unknown[])->int {v.length()} function main()->int {let m:map<string,unknown> = {"a":1,"b":"kept","c":Box{x:"held"},"d":["nested"]};let values=m.values();m.clear();let i=0;while(i<64){let churn=["collect"];i+=churn.length();}inspect(values)}"#,
+        r#"class Box{x:int m:map<string,int>} function main()->int {let m=baml.json.decode<map<string,Box>>(`{"a":{"x":7,"m":{"z":3}}}`);let n=0;for(let c in baml.json.stringify(m,indent=2).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"class A{kind:"a" x:int} class B{kind:"b" x:string} function main()->int {let m=baml.json.decode<map<string,A|B>>(`{"first":{"kind":"a","x":7},"last":{"kind":"b","x":"text"}}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"class Box{x:int @alias("v") secret:string @skip optional:int?} function main()->int {let m=baml.json.decode<map<string,Box>>(`{"a":{"v":7,"optional":null}}`,naming=baml.json.Naming.Aliased);let n=0;for(let c in baml.json.stringify(m,naming=baml.json.Naming.Aliased,omit_nulls=true).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"class Box{x:int} function main()->int {let m=baml.json.decode<map<string,Box>>(`{"a":{"x":false}}`);m.length()}"#,
+        r#"class Node{value:int next:Node?} function main()->int {let node=Node{value:7,next:null};node.next=node;let m:map<string,Node> = {"a":node};baml.json.stringify(m).char_count()}"#,
+        r#"function main()->int {let m:map<string,(int)->int throws never> = {"f":(x:int)->int {x+1}};baml.json.stringify(m).char_count()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,int|string|float|bool|null>>(`{"a":1,"b":"text","c":1.25,"d":true,"e":null}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"class Box{x:int} function main()->int {let m=baml.json.decode<map<string,Box>>(`{"a":{"x":false},"b":{"x":2},"a":{"x":7}}`);let n=0;for(let v in m.values()){n=n*10+v.x;}n}"#,
+        r#"class Box{m:map<string,int>} function main()->int {let b=baml.json.decode<Box>(`{"m":{"a":7}}`);b.m["a"]}"#,
+        r#"function main()->int {let m=baml.json.decode<map<"a"|"b",int>>(`{"a":7,"b":2}`);m["a"]+m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<"a"|"b",int>>(`{"bad":7}`);m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,"yes"|"no">>(`{"a":"yes"}`);baml.json.stringify(m).char_count()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,int|string>>(`{"a":1,"b":"two"}`);m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<int,int>>(`{"a":7}`);m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,int>>(`[]`);m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,1|2>>(`{"a":3}`);m.length()}"#,
     ];
     let selected = std::env::var("BAML_RT_GLOBALS_MAPS_CASES")
         .ok()
@@ -308,6 +332,14 @@ function main()->int { GATE }"#,
                         "case {i}, stress {stress}"
                     );
                     continue;
+                }
+                if !output.status.success() {
+                    std::fs::copy(
+                        &src,
+                        Path::new(env!("CARGO_TARGET_TMPDIR"))
+                            .join(format!("rt-globals-maps-case{i}.rs")),
+                    )
+                    .unwrap();
                 }
                 assert!(
                     output.status.success(),

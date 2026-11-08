@@ -1,124 +1,160 @@
-BAML runtime coverage (normal AND GC stress): 14 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 15 pass, 124 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: not yet supported generally; required for standalone closure probes
 
 First unsupported constructs (fixtures blocked):
-113	list element
+31	type Future(Int, Never)
+15	generic user call
+10	list element
+5	type Future(Int, String)
+4	generic interface implementation
 4	list field element
+4	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+4	type Never
+3	type Future(List(Int), Never)
+3	type Future(Null, Never)
+3	type Interface(QualifiedTypeName { pkg: SourceRoot(Id(203)), namespace: ["iter"], name: "Iterator" }, [], [("Error", Never), ("Item", Int)])
+2	field type Bigint
+2	field type RustType
 2	growing list builtin receiver
+2	terminator Some(NarrowBind { source: Copy(Local(Local(6))), test: Class { class: Source(ClassLoc(..)), args: [] }, destination: Local(6), then_block: BlockId(4), else_block: BlockId(3) })
+2	terminator Some(Switch { discriminant: Copy(Local(Local(6))), arms: [(Class(Source(ClassLoc(..))), BlockId(13)), (Class(Source(ClassLoc(..))), BlockId(12)), (Class(Source(ClassLoc(..))), BlockId(11)), (Class(Source(ClassLoc(..))), BlockId(10))], otherwise: BlockId(7), exhaustive: false, arm_names: [(Class(Source(ClassLoc(..))), "CatchErrorA"), (Class(Source(ClassLoc(..))), "CatchErrorB"), (Class(Source(ClassLoc(..))), "CatchErrorC"), (Class(Source(ClassLoc(..))), "CatchErrorD")] })
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(9), unwind: None })
 1	JSON field union
 1	baml.String.split
+1	defer/shielding
 1	entry must have no parameters and return int
 1	field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
-1	generic interface implementation
+1	non-class implementation
+1	terminator Some(NarrowBind { source: Copy(Local(Local(10))), test: Template(String), destination: Local(10), then_block: BlockId(8), else_block: BlockId(7) })
+1	terminator Some(NarrowBind { source: Copy(Local(Local(7))), test: Template(String), destination: Local(7), then_block: BlockId(5), else_block: BlockId(4) })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("Timeout"))], destination: Local(Local(4)), target: BlockId(4), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("logged"))], destination: Local(Local(1)), target: BlockId(3), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("unreachable: global callback was not initialized"))], destination: Local(Local(1)), target: BlockId(1), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(10)))], destination: Local(Local(9)), target: BlockId(11), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(4), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(10), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(12), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(3), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(5), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(7), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(23)))], destination: Local(Local(22)), target: BlockId(5), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(5), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(7), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(10), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(8), unwind: None })
+1	type EnumVariant(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Color" }, "Blue")
+1	type Future(Int, Literal(String("leaf-error"), Regular))
 
 Per probe / KPI workload:
-Allocation	unsupported: list element
-AnyWithFailure	unsupported: list element
-ArrayWalk	unsupported: list element
-Async	unsupported: list element
-AwaitChain	unsupported: list element
-AwaitErrors	unsupported: list element
-BoundTypes	unsupported: list element
-CallbackDepth	unsupported: list element
-CancelDeep	unsupported: list element
-CancelDuringUnwind	unsupported: list element
-Cancellation	unsupported: list element
-CatchAllThrownPanic	unsupported: list element
-CatchAllocation	unsupported: list element
-CatchBindChain	unsupported: list element
-CatchBindJumpTable	unsupported: list element
-CatchMixedUnion	unsupported: list element
-CatchNonstreamCancellation	unsupported: list element
-CatchOrPanics	unsupported: list element
-CatchStreamingCancellation	unsupported: list element
-CatchUnmatchedChain	unsupported: list element
-CatchWildcardDivision	unsupported: list element
-CatchWildcardIndex	unsupported: list element
-CatchWildcardReassigned	unsupported: list element
-CatchWildcardThenBoundary	unsupported: list element
-CatchWildcardThrownPanic	unsupported: list element
-CauseChains	unsupported: list element
-Closures	unsupported: list element
-Containers	unsupported: list element
-Contexts	unsupported: list element
-DeepErrors	unsupported: list element
-DeepUncaught	unsupported: list element
-DeferUnwind	unsupported: list element
-DeferUnwindUncaught	unsupported: list element
-Depth	unsupported: list element
-Equality	unsupported: list element
-EscapeAwaitResult	unsupported: list element
-EscapeAwaitShared	unsupported: list element
-EscapeCaptureAlias	unsupported: list element
-EscapeClosure	unsupported: list element
-EscapeField	unsupported: list element
-EscapeFinalizer	unsupported: list element
-EscapeGlobal	unsupported: list element
-EscapeInsert	unsupported: list element
-EscapeInsertContents	unsupported: list element
-EscapeIterator	unsupported: list element
-EscapeMap	unsupported: list element
-EscapeMapSetContents	unsupported: list element
-EscapeMapValue	unsupported: list element
-EscapeMaskClosure	unsupported: list element
-EscapeMaskMixed	unsupported: list element
-EscapeOrderedReturn	unsupported: list element
-EscapeOrderedSpawn	unsupported: list element
-EscapePublishedField	unsupported: list element
-EscapePushContents	unsupported: list element
-EscapeRecursive	unsupported: list element
-EscapeReturnedAlias	unsupported: list element
-EscapeSessionHandoff	unsupported: list element
-EscapeSpawn	unsupported: list element
-EscapeSpawnInCallee	unsupported: list element
-EscapeStoredDeep	unsupported: list element
-EscapeThrowCaught	unsupported: list element
-EscapeUnshiftContents	unsupported: list element
-FrameLimit	unsupported: list element
-GenericChains	unsupported: list element
-GenericClosures	unsupported: list element
-GlobalCallPending	unsupported: list element
-GlobalCalls	unsupported: list element
-Hidden	unsupported: list element
-Hooked	unsupported: list element
-HookedDeep	unsupported: list element
-InitializerClosures	unsupported: list element
-InitializerErrors	unsupported: list element
-InitializerPanic	unsupported: list element
-InitializerPending	unsupported: list element
-InitializerTestErrors	unsupported: list element
-InitializerTests	unsupported: list element
-InitializerUncaught	unsupported: list element
-Initializers	unsupported: list element
-InterfaceErrors	unsupported: list element
-Interfaces	unsupported: list element
-IteratorInterfaceIdentity	unsupported: list element
-Iterators	unsupported: list element
-Logs	unsupported: list element
-LogsDeep	unsupported: list element
-ManualSpan	unsupported: list element
-NoLeaks	unsupported: list element
-Overflow	unsupported: list element
-RecursiveCancellation	unsupported: list element
+Allocation	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(23)))], destination: Local(Local(22)), target: BlockId(5), unwind: None })
+AnyWithFailure	unsupported: type Future(Int, String)
+ArrayWalk	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+Async	unsupported: type Future(Int, Never)
+AwaitChain	unsupported: type Future(Int, Never)
+AwaitErrors	unsupported: type Future(Int, String)
+BoundTypes	unsupported: generic interface implementation
+CallbackDepth	unsupported: terminator Some(NarrowBind { source: Copy(Local(Local(6))), test: Class { class: Source(ClassLoc(..)), args: [] }, destination: Local(6), then_block: BlockId(4), else_block: BlockId(3) })
+CancelDeep	unsupported: type Future(Int, Never)
+CancelDuringUnwind	unsupported: type Future(Int, Literal(String("leaf-error"), Regular))
+Cancellation	unsupported: type Future(Null, Never)
+CatchAllThrownPanic	unsupported: generic user call
+CatchAllocation	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(10), unwind: None })
+CatchBindChain	unsupported: terminator Some(Switch { discriminant: Copy(Local(Local(6))), arms: [(Class(Source(ClassLoc(..))), BlockId(13)), (Class(Source(ClassLoc(..))), BlockId(12)), (Class(Source(ClassLoc(..))), BlockId(11)), (Class(Source(ClassLoc(..))), BlockId(10))], otherwise: BlockId(7), exhaustive: false, arm_names: [(Class(Source(ClassLoc(..))), "CatchErrorA"), (Class(Source(ClassLoc(..))), "CatchErrorB"), (Class(Source(ClassLoc(..))), "CatchErrorC"), (Class(Source(ClassLoc(..))), "CatchErrorD")] })
+CatchBindJumpTable	unsupported: terminator Some(Switch { discriminant: Copy(Local(Local(6))), arms: [(Class(Source(ClassLoc(..))), BlockId(13)), (Class(Source(ClassLoc(..))), BlockId(12)), (Class(Source(ClassLoc(..))), BlockId(11)), (Class(Source(ClassLoc(..))), BlockId(10))], otherwise: BlockId(7), exhaustive: false, arm_names: [(Class(Source(ClassLoc(..))), "CatchErrorA"), (Class(Source(ClassLoc(..))), "CatchErrorB"), (Class(Source(ClassLoc(..))), "CatchErrorC"), (Class(Source(ClassLoc(..))), "CatchErrorD")] })
+CatchMixedUnion	unsupported: generic user call
+CatchNonstreamCancellation	unsupported: field type Bigint
+CatchOrPanics	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(9), unwind: None })
+CatchStreamingCancellation	unsupported: field type Bigint
+CatchUnmatchedChain	unsupported: generic user call
+CatchWildcardDivision	unsupported: generic user call
+CatchWildcardIndex	unsupported: generic user call
+CatchWildcardReassigned	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(9), unwind: None })
+CatchWildcardThenBoundary	unsupported: generic user call
+CatchWildcardThrownPanic	unsupported: generic user call
+CauseChains	unsupported: terminator Some(NarrowBind { source: Copy(Local(Local(7))), test: Template(String), destination: Local(7), then_block: BlockId(5), else_block: BlockId(4) })
+Closures	unsupported: type Never
+Containers	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(12), unwind: None })
+Contexts	unsupported: terminator Some(NarrowBind { source: Copy(Local(Local(10))), test: Template(String), destination: Local(10), then_block: BlockId(8), else_block: BlockId(7) })
+DeepErrors	unsupported: generic user call
+DeepUncaught	unsupported: type Never
+DeferUnwind	unsupported: generic user call
+DeferUnwindUncaught	unsupported: defer/shielding
+Depth	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(7), unwind: None })
+Equality	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(10)))], destination: Local(Local(9)), target: BlockId(11), unwind: None })
+EscapeAwaitResult	unsupported: type Future(List(Int), Never)
+EscapeAwaitShared	unsupported: type Future(List(Int), Never)
+EscapeCaptureAlias	unsupported: type Future(Int, Never)
+EscapeClosure	unsupported: type Future(Int, Never)
+EscapeField	unsupported: type Future(Int, Never)
+EscapeFinalizer	unsupported: type Future(Null, Never)
+EscapeGlobal	unsupported: type Future(Int, Never)
+EscapeInsert	unsupported: type Future(Int, Never)
+EscapeInsertContents	unsupported: type Future(Int, Never)
+EscapeIterator	unsupported: type Interface(QualifiedTypeName { pkg: SourceRoot(Id(203)), namespace: ["iter"], name: "Iterator" }, [], [("Error", Never), ("Item", Int)])
+EscapeMap	unsupported: type Future(Int, Never)
+EscapeMapSetContents	unsupported: type Future(Int, Never)
+EscapeMapValue	unsupported: type Future(Int, Never)
+EscapeMaskClosure	unsupported: type Future(Int, Never)
+EscapeMaskMixed	unsupported: type Future(Int, Never)
+EscapeOrderedReturn	unsupported: type Future(List(Int), Never)
+EscapeOrderedSpawn	unsupported: type Future(Int, Never)
+EscapePublishedField	unsupported: type Future(Int, Never)
+EscapePushContents	unsupported: type Future(Int, Never)
+EscapeRecursive	unsupported: type Future(Int, Never)
+EscapeReturnedAlias	unsupported: type Future(Int, Never)
+EscapeSessionHandoff	unsupported: generic user call
+EscapeSpawn	unsupported: type Future(Int, Never)
+EscapeSpawnInCallee	unsupported: type Future(Int, Never)
+EscapeStoredDeep	unsupported: type Future(Int, Never)
+EscapeThrowCaught	unsupported: type Future(Int, Never)
+EscapeUnshiftContents	unsupported: type Future(Int, Never)
+FrameLimit	unsupported: terminator Some(NarrowBind { source: Copy(Local(Local(6))), test: Class { class: Source(ClassLoc(..)), args: [] }, destination: Local(6), then_block: BlockId(4), else_block: BlockId(3) })
+GenericChains	unsupported: generic interface implementation
+GenericClosures	unsupported: type Never
+GlobalCallPending	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("unreachable: global callback was not initialized"))], destination: Local(Local(1)), target: BlockId(1), unwind: None })
+GlobalCalls	unsupported: field type RustType
+Hidden	unsupported: type Interface(QualifiedTypeName { pkg: SourceRoot(Id(203)), namespace: ["iter"], name: "Iterator" }, [], [("Error", Never), ("Item", Int)])
+Hooked	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(8), unwind: None })
+HookedDeep	unsupported: generic user call
+InitializerClosures	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(5), unwind: None })
+InitializerErrors	unsupported: generic user call
+InitializerPanic	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+InitializerPending	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+InitializerTestErrors	unsupported: generic user call
+InitializerTests	unsupported: generic user call
+InitializerUncaught	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+Initializers	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(5), unwind: None })
+InterfaceErrors	unsupported: generic user call
+Interfaces	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(3), unwind: None })
+IteratorInterfaceIdentity	unsupported: non-class implementation
+Iterators	unsupported: type Interface(QualifiedTypeName { pkg: SourceRoot(Id(203)), namespace: ["iter"], name: "Iterator" }, [], [("Error", Never), ("Item", Int)])
+Logs	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("logged"))], destination: Local(Local(1)), target: BlockId(3), unwind: None })
+LogsDeep	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(10), unwind: None })
+ManualSpan	unsupported: field type RustType
+NoLeaks	unsupported: type Future(Int, String)
+Overflow	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+RecursiveCancellation	unsupported: type Future(Int, Never)
 RtClosures	pass
 RtEmptyClosures	pass
-RuntimeClass	unsupported: list element
-Scalars	unsupported: list element
-Shapes	unsupported: list element
-Shielded	unsupported: list element
-SpawnChains	unsupported: list element
-SpawnPanicCaught	unsupported: list element
-SpawnPanicDetached	unsupported: list element
-SpawnPanicUncaught	unsupported: list element
-SpawnThrowUncaught	unsupported: list element
-SpawnedClosures	unsupported: list element
-Spawns	unsupported: list element
+RuntimeClass	unsupported: generic interface implementation
+RuntimeListMaps	pass
+Scalars	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(4), unwind: None })
+Shapes	unsupported: type EnumVariant(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Color" }, "Blue")
+Shielded	unsupported: type Future(Null, Never)
+SpawnChains	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(7), unwind: None })
+SpawnPanicCaught	unsupported: type Future(Int, Never)
+SpawnPanicDetached	unsupported: type Future(Int, Never)
+SpawnPanicUncaught	unsupported: type Future(Int, Never)
+SpawnThrowUncaught	unsupported: type Future(Int, String)
+SpawnedClosures	unsupported: type Future(Int, String)
+Spawns	unsupported: type Future(Int, Never)
 StackAllocation	pass
-TaskOverflow	unsupported: list element
-ThreadLocalParallel	unsupported: list element
-TimeoutCancellation	unsupported: list element
-Uncaught	unsupported: list element
+TaskOverflow	unsupported: type Future(Int, Never)
+ThreadLocalParallel	unsupported: type Future(Int, Never)
+TimeoutCancellation	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("Timeout"))], destination: Local(Local(4)), target: BlockId(4), unwind: None })
+Uncaught	unsupported: type Never
 classes::method call 100k	pass
 compute::array build sum 100k	unsupported: growing list builtin receiver
 compute::array traversal 8k	unsupported: growing list builtin receiver

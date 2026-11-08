@@ -136,6 +136,18 @@ pub(super) fn emit(
     telemetry_sites
         .borrow_mut()
         .extend([(None, 0, stringify), (Some(stringify), alias_pc, aliased)]);
+    if plan.list_stringify {
+        let native=host_body.blocks.iter().find(|b|matches!(&b.terminator,Some(Terminator::Call{callee:Operand::Constant(Constant::Function(f)),..}) if plan.index.function(db,*f).is_some_and(|(id,_)|plan.index.display(id)=="baml.json._stringify"))).ok_or_else(||no("stringify native boundary"))?;
+        let instruction = bytecode.block_pcs[native.id.0].terminator.unwrap();
+        let pc = bytecode
+            .lower_to_compact_with_offsets()
+            .offset_of(instruction)
+            .unwrap();
+        let line = bytecode.source_line_for_pc(instruction);
+        writeln!(out,"static S_LIST_STRINGIFY:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}],pcs:&[{pc}],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};",plan.index.info(stringify).source_file,plan.index.display(stringify)).unwrap();
+        let alias_site = format_site + 1;
+        writeln!(out,"unsafe fn f{stringify}_list_json(site:usize,value:rt::Dyn,naming:usize,indent:rt::Dyn,omit:bool,on:bool,oi:bool,oo:bool)->R<usize>{{unsafe{{rt::telemetry::observed_captured(&O{stringify},site,||rt::telemetry::capture_arguments(&[value,rt::Dyn{{tag:if on{{u64::MAX}}else{{CAPTURE_NAMING_TAG}},payload:naming as u64}},if oi{{rt::Dyn{{tag:u64::MAX,payload:0}}}}else{{indent}},rt::Dyn{{tag:if oo{{u64::MAX}}else{{1}},payload:omit as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::check_stack().map_err(|e|e.at(&S_LIST_STRINGIFY,0))?;let aliased=rt::telemetry::observed_captured(&O{aliased},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;rt::json_lists::stringify(&mut rt::strings::Cx::current(),value,JSON_LIST_SHAPES,aliased,indent,omit).map(|s|s.as_raw()).map_err(|mut e|{{rt::telemetry::evidence::raised(&mut e,&S_LIST_STRINGIFY,0,None);e}})}})}}}}").unwrap();
+    }
     let mut observed = reached.clone();
     for (chain, _) in &plan.init_chains {
         observed.insert(*chain);

@@ -817,12 +817,9 @@ fn rt_trees_and_fail_closed_admission() {
     .unwrap();
     assert!(richards.contains("match a0.tag"));
     assert!(richards.contains("rt::write_dyn("));
-    assert!(richards.contains("rt::list_slot("));
-    assert!(richards.contains("ElementLayout::Pointer"));
-    for source in [
-        "function main() -> string { \"hello\" }",
-        "function main() -> int { let a = [[1], [2]]; a[0][0] }",
-    ] {
+    assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
+    assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
+    for source in ["function main() -> string { \"hello\" }"] {
         assert!(
             emit(source).unwrap_err().contains("unsupported in baml_rt"),
             "{source}"
@@ -889,7 +886,7 @@ fn rt_string_receiver_storage_and_function_values() {
 }
 
 #[test]
-fn rt_growing_lists_and_fail_closed_mutation() {
+fn rt_growing_lists_and_indexed_mutation() {
     for (source, accepted) in [
         (
             include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
@@ -897,7 +894,7 @@ fn rt_growing_lists_and_fail_closed_mutation() {
         ),
         (
             "function main() -> int { let xs: string[] = [\"a\"]; xs[0] = \"b\"; xs.length() }",
-            false,
+            true,
         ),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("lists.baml", source)]);
@@ -915,8 +912,8 @@ fn rt_growing_lists_and_fail_closed_mutation() {
         );
         if accepted {
             let source = result.unwrap();
-            assert!(source.contains("rt::lists::buffer_descriptor::<rt::strings::Str>"));
-            assert!(source.contains("fn rt_array_push"));
+            assert!(source.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
+            assert!(source.contains("rt::lists::List::<rt::lists::Ptr>"));
         } else {
             assert!(result.unwrap_err().contains("unsupported in baml_rt"));
         }
@@ -1058,10 +1055,6 @@ fn rt_source_bytes_and_diagnostics() {
         ("initializer", "const X = 1; function main() -> int { X }"),
         ("entry", "function main() -> string { \"hello\" }"),
         (
-            "nested_list",
-            "function main() -> int { let a = [[1], [2]]; a[0][0] }",
-        ),
-        (
             "hook",
             "/// baml:$trace=trace.span\nfunction main() -> int { 1 }",
         ),
@@ -1085,15 +1078,14 @@ fn rt_source_bytes_and_diagnostics() {
             continue;
         }
         let expected = match name {
-            "trees" => "59175ad625ae684bf4b01791b5c23491510cc7e3d47c082b306053d7f75c1705",
-            "richards" => "a52747ba07ae8dc1657524aabf6b86d8ceaf29137ffc5de97842eeec932dfd3f",
-            "agent" => "21bc415f0eb13d4933851aa599478ef24e32df92b46bca0b4c2d8fd81b466b2b",
+            "trees" => "013dee9afa27098b1d31d7166052ed9b348f14c211c00bd8244717e499e71c3c",
+            "richards" => "94b162f01d2b7611be270c9bbbdda75d6c8deadb15ae4b06b7691f421240ab48",
+            "agent" => "bac1236bc04f5e21e6c9c7f5afbf2d8fe0c34d9eb7df44e9db3ce4ba671fb5b1",
             _ => "",
         };
         if expected.is_empty() {
             let expected = match name {
                 "entry" => "unsupported in baml_rt: entry must have no parameters and return int",
-                "nested_list" => "unsupported in baml_rt: list element",
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };
@@ -1225,11 +1217,11 @@ fn rt_structural_union_map_keys_and_snapshot_admission() {
     for (source, expected) in [
         (
             "class Key { x: int } function main()->int { let m:map<Key?,int> = {}; m[null]=1; m.length() }",
-            None,
+            None::<&str>,
         ),
         (
             "class Box { x:int } function main()->int {let m:map<string,Box?> = {\"a\":Box{x:1},\"b\":null}; m.values().length()}",
-            Some("map snapshot declared list element type"),
+            None,
         ),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("admission.baml", source)]);

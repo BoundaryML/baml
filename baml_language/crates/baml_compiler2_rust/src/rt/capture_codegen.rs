@@ -33,6 +33,8 @@ pub(super) fn emit(
         "baml.json.ParseError",
         "baml.json.DecodeError",
         "baml.panics.DivisionByZero",
+        "baml.json.SerializationError",
+        "baml.errors.InvalidArgument",
         "baml.panics.MapKeyNotFound",
     ]
     .map(named)
@@ -95,34 +97,9 @@ pub(super) fn emit(
                     "Map{{key:&{key_ty},value:&{value_ty},len:|p|unsafe{{{map}::from_raw(p).len()}},entry:|p,i|unsafe{{let (key,value)={map}::from_raw(p).entry(i).unwrap();({key_dyn},{value_dyn})}}}}"
                 )
             } else {
-                let element = Emitter::element(repr)?;
-                let (tag, ty) = match element {
-                    Repr::Int => (0, "Int".to_owned()),
-                    Repr::Str => (3, "String".to_owned()),
-                    Repr::Ptr(class) => {
-                        (descriptors[&class] + 3, format!("Class(CAPTURE_D{class})"))
-                    }
-                    Repr::ListStr => (
-                        lists[&Repr::ListStr] + 3,
-                        "List(&rt::telemetry::capture::Type::String)".to_owned(),
-                    ),
-                    Repr::Closure => {
-                        let Repr::ListClosure(id) = repr else {
-                            unreachable!()
-                        };
-                        let full = super::closures::capture_type(&plan.closure_lists[&id])?;
-                        (
-                            plan.closure_descriptors().unwrap().1 + 3,
-                            full.strip_prefix("rt::telemetry::capture::Type::")
-                                .unwrap()
-                                .to_owned(),
-                        )
-                    }
-                    _ => return Err(no("capture list type")),
-                };
+                let (tag, ty) = capture_list_element(plan, descriptors, lists, repr)?;
                 format!(
-                    "List{{growing:{},tag:{tag},element:&rt::telemetry::capture::Type::{ty}}}",
-                    repr.growing()
+                    "List{{growing:true,tag:{tag},element:&rt::telemetry::capture::Type::{ty}}}"
                 )
             }
         } else {
@@ -172,9 +149,34 @@ pub(super) fn capture_type(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
             let (key, value) = map_types(plan, repr)?;
             format!("{prefix}Map(&{key},&{value})")
         }
+        Repr::ListClosure(id) => format!(
+            "{prefix}List(&{})",
+            super::closures::capture_type(&plan.closure_lists[&id])?
+        ),
+        Repr::List(id) => {
+            let types = plan.list_elements.borrow();
+            let element = &types[id];
+            let ty = if let Some(declared) = &element.declared {
+                declared.clone()
+            } else if element.members.is_empty() {
+                capture_type(plan, element.repr)?
+            } else {
+                let members = element
+                    .members
+                    .iter()
+                    .map(|m| capture_type(plan, *m))
+                    .collect::<Gen<Vec<_>>>()?;
+                if members.len() == 1 {
+                    members[0].clone()
+                } else {
+                    format!("{prefix}Union(&[{}])", members.join(","))
+                }
+            };
+            format!("{prefix}List(&{ty})")
+        }
         other => format!(
             "{prefix}List(&{})",
-            capture_type(plan, Emitter::element(other)?)?
+            capture_type(plan, plan.element(other)?)?
         ),
     })
 }
@@ -198,13 +200,22 @@ pub(super) fn capture_dyn(
         Repr::Bool => (1, value.to_owned()),
         Repr::Null => (2, "0usize".into()),
         Repr::Str => (3, format!("{value}.as_raw()")),
-        Repr::Closure => (plan.closure_descriptors().unwrap().1 + 3, format!("{value}.as_raw()")),
+        Repr::Closure => (
+            plan.closure_descriptors().unwrap().1 + 3,
+            format!("{value}.as_raw()"),
+        ),
         Repr::Ptr(c) => (descriptors[&c] + 3, format!("{value}.as_raw()")),
         r if r.pointer() => (lists[&r] + 3, format!("{value}.as_raw()")),
         _ => return Err(no("map capture slot")),
     };
-    let tag = if repr.pointer() { format!("if raw==0{{2}}else{{{tag}}}") } else {tag.to_string()};
-    Ok(format!("{{let raw={raw};rt::Dyn{{tag:{tag},payload:raw as u64}}}}"))
+    let tag = if repr.pointer() {
+        format!("if raw==0{{2}}else{{{tag}}}")
+    } else {
+        tag.to_string()
+    };
+    Ok(format!(
+        "{{let raw={raw};rt::Dyn{{tag:{tag},payload:raw as u64}}}}"
+    ))
 }
 
 fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
@@ -239,7 +250,9 @@ pub(super) fn declared_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
 }
 pub(super) fn declared_field_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     match ty {
-        bex_vm_types::RuntimeTy::Function { .. } => super::closures::capture_type(&plan.closure_field_type(ty)?.1),
+        bex_vm_types::RuntimeTy::Function { .. } => {
+            super::closures::capture_type(&plan.closure_field_type(ty)?.1)
+        }
         bex_vm_types::RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
         bex_vm_types::RuntimeTy::Union(members) => {
             let members = members
@@ -270,5 +283,136 @@ fn literal_type(literal: &baml_type::Literal, freshness: baml_type::Freshness) -
             format!("rt::telemetry::capture::Type::StringLiteral({value:?},{fresh})")
         }
         _ => return Err(no("map literal type")),
+    })
+}
+fn capture_element(
+    plan: &Plan<'_>,
+    descriptors: &BTreeMap<usize, usize>,
+    lists: &BTreeMap<Repr, usize>,
+    repr: Repr,
+) -> Gen<(usize, String)> {
+    Ok(match repr {
+        Repr::Int => (0, "Int".into()),
+        Repr::Bool => (1, "Bool".into()),
+        Repr::Float => (u32::MAX as usize - 1, "Float".into()),
+        Repr::Str => (3, "String".into()),
+        Repr::Ptr(c) => (descriptors[&c] + 3, format!("Class(CAPTURE_D{c})")),
+        Repr::Closure => (plan.closure_descriptors().unwrap().1 + 3, "Unknown".into()),
+        r if r.growing() => {
+            let (_, element) = capture_list_element(plan, descriptors, lists, r)?;
+            (
+                lists[&r] + 3,
+                format!("List(&rt::telemetry::capture::Type::{element})"),
+            )
+        }
+        r @ Repr::Map(_) => (
+            lists[&r] + 3,
+            capture_type(plan, r)?
+                .strip_prefix("rt::telemetry::capture::Type::")
+                .unwrap()
+                .to_owned(),
+        ),
+        Repr::MapStrInt => (
+            lists[&Repr::MapStrInt] + 3,
+            "Map(&rt::telemetry::capture::Type::String,&rt::telemetry::capture::Type::Int)".into(),
+        ),
+        Repr::Tagged => (usize::MAX - 1, "Unknown".into()),
+        Repr::Null => (2, "Null".into()),
+        _ => return Err(no("capture list element")),
+    })
+}
+
+fn capture_list_element(
+    plan: &Plan<'_>,
+    descriptors: &BTreeMap<usize, usize>,
+    lists: &BTreeMap<Repr, usize>,
+    repr: Repr,
+) -> Gen<(usize, String)> {
+    if let Repr::ListClosure(id) = repr {
+        let ty = super::closures::capture_type(&plan.closure_lists[&id])?;
+        return Ok((
+            plan.closure_descriptors().unwrap().1 + 3,
+            ty.strip_prefix("rt::telemetry::capture::Type::")
+                .unwrap()
+                .into(),
+        ));
+    }
+    if let Repr::List(id) = repr
+        && let Some(declared) = &plan.list_elements.borrow()[id].declared
+    {
+        let (tag, _) = capture_element(plan, descriptors, lists, plan.element(repr)?)?;
+        return Ok((
+            tag,
+            declared
+                .strip_prefix("rt::telemetry::capture::Type::")
+                .unwrap()
+                .into(),
+        ));
+    }
+    let (tag, mut ty) = capture_element(plan, descriptors, lists, plan.element(repr)?)?;
+    if let Repr::List(id) = repr {
+        let members = plan.list_elements.borrow()[id].members.clone();
+        if !members.is_empty() {
+            let types = members
+                .into_iter()
+                .map(|m| {
+                    capture_element(plan, descriptors, lists, m)
+                        .map(|(_, ty)| format!("rt::telemetry::capture::Type::{ty}"))
+                })
+                .collect::<Gen<Vec<_>>>()?;
+            ty = if types.len() == 1 {
+                types[0]
+                    .strip_prefix("rt::telemetry::capture::Type::")
+                    .unwrap()
+                    .to_owned()
+            } else {
+                format!("Union(&[{}])", types.join(","))
+            };
+        }
+    }
+    Ok((tag, ty))
+}
+
+// Unions are sets for storage identity. Keep the first declaration's order
+// separately for canonical type/value captures.
+pub(super) fn type_identity(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
+    Ok(match ty {
+        RuntimeTy::Union(members) => {
+            let mut members = members
+                .iter()
+                .map(|m| type_identity(plan, m))
+                .collect::<Gen<Vec<_>>>()?;
+            members.sort();
+            members.dedup();
+            format!("Union({})", members.join(","))
+        }
+        RuntimeTy::List(t) => format!("List({})", type_identity(plan, t)?),
+        RuntimeTy::Map { key, value } => format!(
+            "Map({},{})",
+            type_identity(plan, key)?,
+            type_identity(plan, value)?
+        ),
+        _ => declared_type(plan, ty)?,
+    })
+}
+pub(super) fn field_type_identity(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
+    use bex_vm_types::RuntimeTy as T;
+    Ok(match ty {
+        T::Union(members) => {
+            let mut members = members
+                .iter()
+                .map(|m| field_type_identity(plan, m))
+                .collect::<Gen<Vec<_>>>()?;
+            members.sort();
+            members.dedup();
+            format!("Union({})", members.join(","))
+        }
+        T::List(t) => format!("List({})", field_type_identity(plan, t)?),
+        T::Map { key, value } => format!(
+            "Map({},{})",
+            field_type_identity(plan, key)?,
+            field_type_identity(plan, value)?
+        ),
+        _ => declared_field_type(plan, ty)?,
     })
 }

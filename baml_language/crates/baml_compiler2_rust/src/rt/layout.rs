@@ -19,7 +19,10 @@ impl Plan<'_> {
             let (id, ty) = self.closure_type(element)?;
             self.closure_lists.insert(id, ty);
         }
-        if let RuntimeTy::Union(members) = ty {
+        if let RuntimeTy::List(element) = ty {
+            self.record_ty(element)?;
+            self.record(self.repr(ty)?)?;
+        } else if let RuntimeTy::Union(members) = ty {
             for member in members {
                 self.record_ty(member)?;
             }
@@ -39,7 +42,10 @@ impl Plan<'_> {
             let (id, ty) = self.closure_field_type(element)?;
             self.closure_lists.insert(id, ty);
         }
-        if let bex_vm_types::RuntimeTy::Union(members) = ty {
+        if let bex_vm_types::RuntimeTy::List(element) = ty {
+            self.record_field_ty(element)?;
+            self.record(self.field_repr(ty)?)?;
+        } else if let bex_vm_types::RuntimeTy::Union(members) = ty {
             for member in members {
                 self.record_field_ty(member)?;
             }
@@ -56,6 +62,14 @@ impl Plan<'_> {
         match repr {
             Repr::Closure | Repr::Cell => self.environments = true,
             Repr::Ptr(c) => self.add(c)?,
+            Repr::List(id) => {
+                self.lists.insert(repr);
+                let element = self.list_elements.borrow()[id].clone();
+                self.record(element.repr)?;
+                for member in element.members {
+                    self.record(member)?;
+                }
+            }
             Repr::ListPtr(c) => {
                 self.lists.insert(repr);
                 self.add(c)?;
@@ -68,6 +82,10 @@ impl Plan<'_> {
                 }
                 self.record(key)?;
                 self.record(value)?;
+                for keys in [false, true] {
+                    let snapshot = self.map_snapshot_repr(repr, keys)?;
+                    self.record(snapshot)?;
+                }
                 for element in [key, value] {
                     if let Repr::Ptr(c) = element {
                         self.record(Repr::ListPtr(c))?;
@@ -105,8 +123,8 @@ impl Plan<'_> {
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
-            RuntimeTy::Float => Repr::Float,
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
+            RuntimeTy::Float | RuntimeTy::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown => Repr::Tagged,
@@ -120,20 +138,29 @@ impl Plan<'_> {
                 self.repr(value)?,
                 capture_codegen::declared_type(self, key)?,
                 capture_codegen::declared_type(self, value)?,
-                scalar_json_value(value),
+                capture_codegen::type_identity(self, key)?,
+                capture_codegen::type_identity(self, value)?,
             ),
             RuntimeTy::Null => Repr::Null,
-            RuntimeTy::List(element) => match element.as_ref() {
-                RuntimeTy::Int => Repr::ListInt,
-                RuntimeTy::String => Repr::ListStr,
-                RuntimeTy::Function { .. } => Repr::ListClosure(self.closure_type(element)?.0),
-                RuntimeTy::List(t) if matches!(t.as_ref(), RuntimeTy::String) => Repr::ListListStr,
-                RuntimeTy::Union(_) => match self.repr(element)? {
-                    Repr::Ptr(c) => Repr::ListPtr(c),
-                    _ => return Err(no("list element")),
-                },
-                _ => return Err(no("list element")),
-            },
+            RuntimeTy::List(element) => {
+                if matches!(element.as_ref(), RuntimeTy::Function { .. }) {
+                    Repr::ListClosure(self.closure_type(element)?.0)
+                } else if let RuntimeTy::Union(members) = element.as_ref() {
+                    self.list_union_repr(
+                        self.repr(element)?,
+                        members
+                            .iter()
+                            .map(|m| self.repr(m))
+                            .collect::<Gen<Vec<_>>>()?,
+                    )
+                } else {
+                    if matches!(element.as_ref(), RuntimeTy::Null) {
+                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+                    } else {
+                        self.list_repr(self.repr(element)?)
+                    }
+                }
+            }
             RuntimeTy::Interface(head, args, assoc) if args.is_empty() && assoc.is_empty() => {
                 Repr::Dyn(
                     self.index
@@ -185,9 +212,9 @@ impl Plan<'_> {
         Ok(match ty {
             T::Null => Repr::Null,
             T::Unknown => Repr::Tagged,
-            T::Float => Repr::Float,
             T::Function { .. } => Repr::Closure,
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
+            T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             T::Map { key, value } => self.map_repr(
@@ -199,19 +226,28 @@ impl Plan<'_> {
                 self.field_repr(value)?,
                 capture_codegen::declared_field_type(self, key)?,
                 capture_codegen::declared_field_type(self, value)?,
-                scalar_json_field_value(value),
+                capture_codegen::field_type_identity(self, key)?,
+                capture_codegen::field_type_identity(self, value)?,
             ),
-            T::List(element) => match element.as_ref() {
-                T::Int => Repr::ListInt,
-                T::String => Repr::ListStr,
-                T::Function { .. } => Repr::ListClosure(self.closure_field_type(element)?.0),
-                T::List(t) if matches!(t.as_ref(), T::String) => Repr::ListListStr,
-                T::Union(_) => match self.field_repr(element)? {
-                    Repr::Ptr(c) => Repr::ListPtr(c),
-                    _ => return Err(no("list field element")),
-                },
-                _ => return Err(no("list field element")),
-            },
+            T::List(element) => {
+                if matches!(element.as_ref(), T::Function { .. }) {
+                    Repr::ListClosure(self.closure_field_type(element)?.0)
+                } else if let T::Union(members) = element.as_ref() {
+                    self.list_union_repr(
+                        self.field_repr(element)?,
+                        members
+                            .iter()
+                            .map(|m| self.field_repr(m))
+                            .collect::<Gen<Vec<_>>>()?,
+                    )
+                } else {
+                    if matches!(element.as_ref(), T::Null) {
+                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+                    } else {
+                        self.list_repr(self.field_repr(element)?)
+                    }
+                }
+            }
             T::Interface(head, args, assoc) if args.is_empty() && assoc.is_empty() => Repr::Dyn(
                 self.program
                     .objects
@@ -331,16 +367,23 @@ impl Plan<'_> {
 
 pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     let program = plan.program;
+    let mut next_class = rt_descriptors();
     let descriptors: BTreeMap<_, _> = plan
         .layouts
         .keys()
-        .enumerate()
-        .map(|(i, c)| (*c, i + rt_descriptors()))
+        .map(|c| {
+            let id = plan.list_error_descriptor(*c).unwrap_or_else(|| {
+                let id = next_class;
+                next_class += 1;
+                id
+            });
+            (*c, id)
+        })
         .collect();
     let lists: BTreeMap<_, _> = plan
         .lists
         .iter()
-        .scan(descriptors.len() + rt_descriptors(), |next, r| {
+        .scan(next_class, |next, r| {
             let id = *next;
             *next += if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
                 4
@@ -364,15 +407,18 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             }
         })
         .max()
-        .unwrap_or(rt_descriptors() + descriptors.len());
+        .unwrap_or(next_class);
     let after_descriptors = after_lists
         + if plan.closure_descriptors().is_some() {
             2
         } else {
             0
         };
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::MAP_KEY_DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::MAP_KEY_DESC,\n");
     for (&object, layout) in &plan.layouts {
+        if plan.list_error_descriptor(object).is_some() {
+            continue;
+        }
         let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
         else {
             unreachable!()
@@ -395,7 +441,8 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                     },
                     match layout.fields[i] {
                         Repr::Ptr(c) => descriptors[&c] + 3,
-                        r @ (Repr::ListInt
+                        r @ (Repr::List(_)
+                        | Repr::ListInt
                         | Repr::ListPtr(_)
                         | Repr::ListStr
                         | Repr::ListListStr
@@ -440,10 +487,10 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             continue;
         }
         if repr.growing() {
-            let slot = Emitter::element(*repr)?.slot()?;
+            let slot = plan.element(*repr)?.slot()?;
             writeln!(
                 &mut out,
-                "rt::lists::descriptor({}),rt::lists::buffer_descriptor::<{slot}>({}),",
+                "rt::lists::descriptor::<{slot}>({}),rt::lists::buffer_descriptor::<{slot}>({}),",
                 desc + 3,
                 desc + 4
             )
@@ -504,41 +551,7 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    11
-}
-
-fn scalar_key(ty: &RuntimeTy) -> bool {
-    matches!(
-        ty,
-        RuntimeTy::Int
-            | RuntimeTy::Bool
-            | RuntimeTy::Float
-            | RuntimeTy::Null
-            | RuntimeTy::String
-            | RuntimeTy::Literal(_, _)
-    )
-}
-fn scalar_field_key(ty: &bex_vm_types::RuntimeTy) -> bool {
-    use bex_vm_types::RuntimeTy as T;
-    matches!(
-        ty,
-        T::Int | T::Bool | T::Float | T::Null | T::String | T::Literal(_, _)
-    )
-}
-
-fn scalar_json_value(ty: &RuntimeTy) -> bool {
-    if let RuntimeTy::Union(members) = ty {
-        members.iter().all(scalar_json_value)
-    } else {
-        scalar_key(ty)
-    }
-}
-fn scalar_json_field_value(ty: &bex_vm_types::RuntimeTy) -> bool {
-    if let bex_vm_types::RuntimeTy::Union(members) = ty {
-        members.iter().all(scalar_json_field_value)
-    } else {
-        scalar_field_key(ty)
-    }
+    13
 }
 
 impl Plan<'_> {
@@ -561,7 +574,13 @@ impl Plan<'_> {
                 }
             })
             .sum::<usize>();
-        let cell = rt_descriptors() + self.layouts.len() + lists;
+        let cell = rt_descriptors()
+            + self
+                .layouts
+                .keys()
+                .filter(|c| self.list_error_descriptor(**c).is_none())
+                .count()
+            + lists;
         Some((cell, cell + 1))
     }
 }

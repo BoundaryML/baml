@@ -449,6 +449,20 @@ impl<K: Slot, V: Slot> Snapshot<K, V> {
 #[derive(Clone, Copy)]
 pub struct StringIntMap(Map<Str, i64>);
 impl StringIntMap {
+    pub(crate) fn structural_string(self, cx: &Cx) -> String {
+        use std::fmt::Write;
+        let mut text = String::from("{");
+        for i in 0..self.0.len() {
+            if i != 0 {
+                text.push_str(", ");
+            }
+            let (key, value) = self.0.entry(i).unwrap();
+            write!(&mut text, "{:?}: {}", key.as_str(cx), value).unwrap();
+        }
+        text.push('}');
+        text
+    }
+
     /// # Safety
     /// Same contract as Map::new.
     pub unsafe fn new(cx: &mut Cx, desc: u32) -> R<Self> {

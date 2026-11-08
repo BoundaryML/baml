@@ -1,13 +1,22 @@
 //! Map storage, literals, indexing and builtin lowering. Lists stay in containers.
 use super::*;
-#[derive(PartialEq, Eq)]
 pub(super) struct MapType {
     pub key: Repr,
     pub value: Repr,
     pub key_type: String,
     pub value_type: String,
-    pub scalar_json_value: bool,
+    key_identity: String,
+    value_identity: String,
 }
+impl PartialEq for MapType {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+            && self.value == other.value
+            && self.key_identity == other.key_identity
+            && self.value_identity == other.value_identity
+    }
+}
+impl Eq for MapType {}
 pub(super) fn callback_key(key: Repr) -> bool {
     !matches!(
         key,
@@ -34,7 +43,8 @@ impl Plan<'_> {
         value: Repr,
         key_ty: String,
         value_ty: String,
-        scalar_json_value: bool,
+        key_identity: String,
+        value_identity: String,
     ) -> Repr {
         if key == Repr::Str
             && value == Repr::Int
@@ -48,7 +58,8 @@ impl Plan<'_> {
             value,
             key_type: key_ty,
             value_type: value_ty,
-            scalar_json_value,
+            key_identity,
+            value_identity,
         };
         let mut types = self.map_types.borrow_mut();
         let id = types.iter().position(|old| old == &ty).unwrap_or_else(|| {
@@ -56,6 +67,48 @@ impl Plan<'_> {
             types.len() - 1
         });
         Repr::Map(id)
+    }
+    pub(super) fn map_snapshot_repr(&self, map: Repr, keys: bool) -> Gen<Repr> {
+        let (key, value) = self.map_parts(map)?;
+        let element = if keys { key } else { value };
+        let (key_type, value_type) = if let Repr::Map(id) = map {
+            let types = self.map_types.borrow();
+            (types[id].key_type.clone(), types[id].value_type.clone())
+        } else {
+            (
+                capture_codegen::capture_type(self, key)?,
+                capture_codegen::capture_type(self, value)?,
+            )
+        };
+        let declared = if keys { key_type } else { value_type };
+        let default = if element == Repr::Null {
+            self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+        } else {
+            self.list_repr(element)
+        };
+        let expected = format!("rt::telemetry::capture::Type::List(&{declared})");
+        if capture_codegen::capture_type(self, default).ok().as_ref() == Some(&expected) {
+            return Ok(default);
+        }
+        let storage = if element == Repr::Null {
+            Repr::Tagged
+        } else {
+            element
+        };
+        let list = ListElement {
+            repr: storage,
+            members: Vec::new(),
+            declared: Some(declared),
+        };
+        let mut types = self.list_elements.borrow_mut();
+        let id = types
+            .iter()
+            .position(|old| *old == list)
+            .unwrap_or_else(|| {
+                types.push(list);
+                types.len() - 1
+            });
+        Ok(Repr::List(id))
     }
     pub(super) fn map_parts(&self, repr: Repr) -> Gen<(Repr, Repr)> {
         match repr {
@@ -105,7 +158,7 @@ impl registry::Feature for Feature {
         let (callee, _) = plan.index.function(db, *f)?;
         let name = plan.index.display(callee).to_owned();
         if name == "baml.json.stringify" {
-            plan.map_stringify = true;
+            plan.list_stringify = true;
             return Some((|| {
                 let error = map_json::serialization_error_class(plan)?;
                 plan.add(error)?;
@@ -132,13 +185,6 @@ impl registry::Feature for Feature {
             plan.record(Repr::ListStr)?;
             Ok(registry::Reach::default())
         })
-    }
-    fn terminator(
-        &self,
-        emitter: &mut Emitter<'_, '_>,
-        term: &Terminator<'_>,
-    ) -> Option<Gen<String>> {
-        super::map_json::terminator(emitter, term)
     }
     fn call(
         &self,
@@ -253,7 +299,7 @@ impl Emitter<'_, '_> {
                 repr,
                 Repr::ListInt | Repr::ListStr | Repr::ListListStr | Repr::ListPtr(_)
             ) {
-                check(plan, Emitter::element(repr)?, seen)?;
+                check(plan, plan.element(repr)?, seen)?;
             } else if matches!(repr, Repr::Closure | Repr::Cell | Repr::ListClosure(_)) {
                 return Err(no("unhashable map key"));
             }
@@ -324,22 +370,8 @@ impl Emitter<'_, '_> {
             "clear" => Ok((format!("{{{map}.clear();0usize}}"), Repr::Null)),
             "keys" | "values" => {
                 let element = if method == "keys" { key } else { value };
-                // Until the list feature carries union element metadata, do
-                // not publish a nullable-class snapshot as a non-null list.
-                if let Repr::Map(id) = repr {
-                    let declared = {
-                        let types = self.plan.map_types.borrow();
-                        if method == "keys" {
-                            types[*id].key_type.clone()
-                        } else {
-                            types[*id].value_type.clone()
-                        }
-                    };
-                    if declared != capture_codegen::capture_type(self.plan, element)? {
-                        return Err(no("map snapshot declared list element type"));
-                    }
-                }
-                self.map_snapshot(&map, element, method == "keys")
+                let snapshot = self.plan.map_snapshot_repr(*repr, method == "keys")?;
+                self.map_snapshot(&map, element, method == "keys", snapshot)
             }
             _ => {
                 self.check_map_key(key)?;
@@ -381,14 +413,13 @@ impl Emitter<'_, '_> {
             }
         }
     }
-    fn map_snapshot(&self, map: &str, element: Repr, keys: bool) -> Gen<(String, Repr)> {
-        let repr = match element {
-            Repr::Int => Repr::ListInt,
-            Repr::Str => Repr::ListStr,
-            Repr::ListStr => Repr::ListListStr,
-            Repr::Ptr(c) => Repr::ListPtr(c),
-            _ => return Err(no("map snapshot list representation")),
-        };
+    fn map_snapshot(
+        &self,
+        map: &str,
+        element: Repr,
+        keys: bool,
+        repr: Repr,
+    ) -> Gen<(String, Repr)> {
         let desc = *self
             .lists
             .get(&repr)
@@ -396,18 +427,13 @@ impl Emitter<'_, '_> {
         let select = if keys { 0 } else { 1 };
         let mut out = format!("{{let map={map};let len=map.len();");
         if repr.growing() {
-            let slot = element.slot()?;
+            let list_element = self.plan.element(repr)?;
+            let slot = list_element.slot()?;
             let new = self.fallible(&format!(
                 "rt::lists::List::<{slot}>::new(&mut rt::strings::Cx::current(),{desc})"
             ));
-            let item = if element == Repr::Str {
-                format!("map.entry(i).unwrap().{select}")
-            } else {
-                format!(
-                    "<{slot}>::from_raw({})",
-                    self.map_out(&format!("map.entry(i).unwrap().{select}"), element)
-                )
-            };
+            let raw = self.map_out(&format!("map.entry(i).unwrap().{select}"), element);
+            let item = list_element.to_slot(&self.coerce((raw, element), list_element)?)?;
             let push = self.fallible(&format!(
                 "list.push(&mut rt::strings::Cx::current(),{item})"
             ));

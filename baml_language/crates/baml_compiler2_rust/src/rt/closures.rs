@@ -148,6 +148,11 @@ impl Plan<'_> {
                         .field_type,
                 )
             }
+            Place::Index {
+                base,
+                kind: baml_compiler2_mir::IndexKind::Array,
+                ..
+            } => self.element(self.storage_repr(body, base, depth)?),
             _ => Err(no("receiver storage place")),
         }
     }
@@ -232,7 +237,9 @@ impl registry::Feature for Feature {
         matches!(
             term,
             Some(Terminator::Call {
-                callee: Operand::Copy(_) | Operand::Move(_) | Operand::Constant(super::Constant::GlobalItem(_)),
+                callee: Operand::Copy(_)
+                    | Operand::Move(_)
+                    | Operand::Constant(super::Constant::GlobalItem(_)),
                 ntypeargs: 0,
                 has_trace: false,
                 ..
@@ -389,7 +396,10 @@ impl registry::Feature for Feature {
         term: &Terminator<'_>,
     ) -> Option<Gen<String>> {
         let Terminator::Call {
-            callee: callee @ (Operand::Copy(_) | Operand::Move(_) | Operand::Constant(super::Constant::GlobalItem(_))),
+            callee:
+                callee @ (Operand::Copy(_)
+                | Operand::Move(_)
+                | Operand::Constant(super::Constant::GlobalItem(_))),
             args,
             ntypeargs: 0,
             destination,

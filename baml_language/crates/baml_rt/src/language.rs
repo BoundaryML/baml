@@ -27,11 +27,11 @@ pub const MAP_KEY_DESC: Descriptor = Descriptor {
         slot: SlotKind::Pointer,
         type_id: 3,
     }],
-    type_id: 13,
+    type_id: 15,
     ..OVERFLOW_DESC
 };
 pub fn map_key_not_found() -> Box<Error> {
-    let mut error = panic_value(10, "baml.panics.MapKeyNotFound", "(unknown)".into());
+    let mut error = panic_value(12, "baml.panics.MapKeyNotFound", "(unknown)".into());
     error.display_value = Some(r#"baml.panics.MapKeyNotFound {key: "(unknown)"}"#.into());
     error
 }
@@ -337,6 +337,12 @@ fn driver_with_initializer(
                     .frames
                     .iter()
                     .rev()
+                    .filter(|f| {
+                        error.value == 0
+                            || !f
+                                .file
+                                .starts_with(bex_vm_types::errors::BUILTIN_SOURCE_PREFIX)
+                    })
                     .map(|f| (f.file, f.line, f.function)),
             );
             if error.class == "InitFailed" {

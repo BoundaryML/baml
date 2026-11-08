@@ -195,6 +195,9 @@ unsafe fn list_value(value: Dyn, shape: &Shape, i: usize) -> Dyn {
     } else {
         object
     };
+    if *tag == u64::MAX - 1 {
+        return unsafe { data.add(2).cast::<Dyn>().add(i).read() };
+    }
     let payload = unsafe { data.add(2 + i).read() as u64 };
     Dyn {
         tag: if *tag >= 3 && *tag != crate::FLOAT_TAG && payload == 0 {
