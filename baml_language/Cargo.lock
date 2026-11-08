@@ -1012,6 +1012,7 @@ dependencies = [
  "btel_snapshot",
  "btel_types",
  "libc",
+ "num-bigint",
  "serde_json",
  "tokio",
 ]
@@ -1508,6 +1509,7 @@ dependencies = [
  "baml_builtins2_codegen",
  "baml_type",
  "baml_version",
+ "base64",
  "bex_resource_types",
  "bex_str",
  "borsh",

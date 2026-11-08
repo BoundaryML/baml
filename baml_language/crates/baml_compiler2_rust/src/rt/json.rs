@@ -5,6 +5,9 @@ impl Plan<'_> {
         use baml_compiler2_mir::TyTemplate as T;
         match ty {
             T::Function { .. } => Ok(usize::MAX - 1),
+            T::Bigint => Ok(89997),
+            T::Uint8Array => Ok(89995),
+            T::RustType => Ok(89994),
             T::Int => Ok(0),
             T::Bool => Ok(90000),
             T::Float => Ok(89998),

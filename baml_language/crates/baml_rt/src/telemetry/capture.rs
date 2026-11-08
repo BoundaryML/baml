@@ -24,6 +24,9 @@ pub struct Declaration {
     pub is_enum: bool,
 }
 pub enum Shape {
+    Bigint,
+    Bytes,
+    Opaque,
     String,
     Enum {
         declaration: fn() -> &'static Declaration,
@@ -55,6 +58,9 @@ pub enum Shape {
 }
 pub use baml_type::Freshness;
 pub enum Type {
+    Bigint,
+    Bytes,
+    Opaque,
     Function {
         params: &'static [Parameter],
         ret: &'static Type,
@@ -94,6 +100,9 @@ pub struct Parameter {
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
+            Self::Bigint => OwnedType::Bigint,
+            Self::Bytes => OwnedType::Uint8Array,
+            Self::Opaque => OwnedType::RustType,
             Self::Null => OwnedType::Null,
             Self::Never => OwnedType::Never,
             Self::Unknown => OwnedType::Unknown,
@@ -314,6 +323,10 @@ impl Scratch {
         if value.payload == 0 {
             return SnapshotValue::Null;
         }
+        if matches!(shape, Shape::Bigint) {
+            let owned = unsafe { crate::native::bigint_owned(value.payload as usize) };
+            return leaves.bigint(&std::sync::Arc::new(owned));
+        }
         let result = if matches!(shape, Shape::String) {
             let ptr = value.payload as *const u8;
             let len = unsafe { ptr.add(8).cast::<usize>().read() };
@@ -496,6 +509,10 @@ impl Scratch {
                         )
                     })
                 }
+                (Key::Value(pointer), Shape::Bytes) => {
+                    b.bytes(&unsafe { crate::native::bytes_owned(pointer) })
+                }
+                (Key::Value(_), Shape::Opaque) => SnapshotObject::NonSnapshotableValue {},
                 (Key::Value(pointer), Shape::Closure) => {
                     let name = unsafe { crate::closures::name(pointer) };
                     SnapshotObject::Descriptive {

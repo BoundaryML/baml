@@ -2,6 +2,9 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Repr {
+    Bigint,
+    Bytes,
+    Opaque,
     Int,
     Float,
     Bool,
@@ -70,6 +73,9 @@ impl Repr {
         matches!(
             self,
             Self::Str
+                | Self::Bigint
+                | Self::Bytes
+                | Self::Opaque
                 | Self::Ptr(_)
                 | Self::ListInt
                 | Self::ListPtr(_)

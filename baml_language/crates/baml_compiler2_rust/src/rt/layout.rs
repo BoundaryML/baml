@@ -103,6 +103,11 @@ impl Plan<'_> {
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
+            RuntimeTy::Bigint | RuntimeTy::Literal(baml_type::Literal::Bigint(_), _) => {
+                Repr::Bigint
+            }
+            RuntimeTy::Uint8Array => Repr::Bytes,
+            RuntimeTy::RustType => Repr::Opaque,
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
@@ -207,6 +212,9 @@ impl Plan<'_> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
             T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
+            T::Bigint | T::Literal(baml_type::Literal::Bigint(_),_) => Repr::Bigint,
+            T::Uint8Array => Repr::Bytes,
+            T::RustType => Repr::Opaque,
             T::Null => Repr::Null,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
             T::Enum(head) | T::EnumVariant(head, _)
@@ -437,7 +445,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         } else {
             0
         };
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::ARGUMENT_DESC,rt::SCALAR_PARSE_DESC,rt::HOST_UNAVAILABLE_DESC,rt::IO_DESC,rt::MAP_KEY_DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::ARGUMENT_DESC,rt::SCALAR_PARSE_DESC,rt::HOST_UNAVAILABLE_DESC,rt::IO_DESC,rt::MAP_KEY_DESC,rt::native::BIGINT_LAYOUT,rt::native::BYTES_LAYOUT,rt::opaque::descriptor(20),rt::native::BYTES_BUFFER_LAYOUT,\n");
     for (&object, layout) in &plan.layouts {
         if super::builtin_classes::reserved(plan, object).is_some() {
             continue;
@@ -471,6 +479,9 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                             | Repr::Map(_)) => lists[&r] + 3,
                             Repr::Tagged => after_descriptors + 3,
                             Repr::Dyn(i) => after_descriptors + i + 4,
+                            Repr::Bigint => 18,
+                            Repr::Bytes => 19,
+                            Repr::Opaque => 20,
                             Repr::Str => 3,
                             Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
                             Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
@@ -577,7 +588,7 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    15
+    19
 }
 
 // A recursive alias's unfolded union can name containers whose concrete

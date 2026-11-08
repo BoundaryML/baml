@@ -8,7 +8,12 @@ use super::{Artifacts, PROBES, kpis, pack_result};
 const TELEMETRY_SUPPORTED: bool = false;
 // The standalone probes exercise closures without the shared project's global
 // initializer dependency. Their admission is a required coverage baseline.
-const REQUIRED_PROBES: &[&str] = &["RtClosures", "RtEmptyClosures"];
+const REQUIRED_PROBES: &[&str] = &[
+    "RtClosures",
+    "RtEmptyClosures",
+    "RtNativeMath",
+    "RtNativeBytes",
+];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {
     level == "off" || TELEMETRY_SUPPORTED || REQUIRED_PROBES.contains(&probe)

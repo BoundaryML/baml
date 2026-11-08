@@ -4,7 +4,9 @@
 use crate::{BamlType, BuiltinPipeline, NativeBuiltin, ReceiverType};
 
 pub fn supports_rt(path: &str) -> bool {
-    crate::codegen_rt_io::supports(path)
+    crate::codegen_rt_bytes::supports(path)
+        || crate::codegen_rt_bigint::supports(path)
+        || crate::codegen_rt_io::supports(path)
         || crate::codegen_rt_scalar::supports(path)
         || matches!(
             path,
@@ -36,6 +38,14 @@ pub fn generate_rt(
             .iter()
             .find(|d| d.path == *path)
             .ok_or_else(|| format!("baml_rt builtin declaration missing: {path}"))?;
+        if crate::codegen_rt_bytes::supports(path) {
+            output.push_str(&crate::codegen_rt_bytes::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_bigint::supports(path) {
+            output.push_str(&crate::codegen_rt_bigint::generate(declaration)?);
+            continue;
+        }
         if path == "baml._to_string_primitive" {
             if declaration.pipeline != BuiltinPipeline::Vm
                 || declaration.params.len() != 1

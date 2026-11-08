@@ -25,6 +25,9 @@ pub fn primitive_string(value: crate::Dyn) -> R<crate::strings::Str> {
         0 => value.payload.cast_signed().to_string(),
         1 => (value.payload != 0).to_string(),
         2 => "null".into(),
+        crate::native::BIGINT_TAG => {
+            unsafe { crate::native::bigint_owned(value.payload as usize) }.to_string()
+        }
         FLOAT_TAG => bex_vm_types::format_float(f64::from_bits(value.payload)),
         _ => return Err(Error::internal("expected a primitive value".into())),
     };

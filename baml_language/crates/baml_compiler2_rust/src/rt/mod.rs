@@ -129,6 +129,7 @@ mod json;
 mod layout;
 mod logging;
 mod loop_ranges;
+mod native;
 mod places;
 mod repr;
 mod scalars;

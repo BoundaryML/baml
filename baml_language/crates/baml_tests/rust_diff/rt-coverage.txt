@@ -1,6 +1,6 @@
-BAML runtime coverage (normal AND GC stress): 15 pass, 123 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 17 pass, 123 unsupported, 0 fail
 Telemetry off: required
-Telemetry low/medium/high/default: required for standalone closure probes
+Telemetry low/medium/high/default: required for standalone closure and native probes
 Unselected rows retain results from the earlier full run.
 
 First unsupported constructs (fixtures blocked):
@@ -108,6 +108,8 @@ Overflow	unsupported: top-level initializers
 RecursiveCancellation	unsupported: top-level initializers
 RtClosures	pass
 RtEmptyClosures	pass
+RtNativeBytes	pass
+RtNativeMath	pass
 RuntimeClass	unsupported: top-level initializers
 Scalars	unsupported: top-level initializers
 Shapes	unsupported: top-level initializers

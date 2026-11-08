@@ -118,6 +118,8 @@ impl Emitter<'_, '_> {
     pub(super) fn vm_tag(&self, value: (String, Repr)) -> Gen<String> {
         let (v, r) = value;
         let scalar = match r {
+            Repr::Bigint => Some(13),
+            Repr::Bytes => Some(12),
             Repr::Int => Some(0),
             Repr::Float => Some(4),
             Repr::Str => Some(1),
@@ -142,7 +144,8 @@ impl Emitter<'_, '_> {
         if !matches!(r, Repr::Tagged | Repr::Dyn(_)) {
             return Err(no("type tag"));
         }
-        let mut out = format!("{{let v={v};match v.tag{{0=>0i64,1=>2,2=>3,3=>1,4294967294=>4,");
+        let mut out =
+            format!("{{let v={v};match v.tag{{0=>0i64,1=>2,2=>3,3=>1,4294967294=>4,18=>13,19=>12,");
         for (&c, &desc) in self.descriptors {
             let class = self.plan.class(c);
             write!(out, "{}=>{},", desc + 3, class.type_tag.as_i64()).unwrap();
@@ -181,6 +184,8 @@ impl Emitter<'_, '_> {
             return Ok("false".into());
         }
         let tag = match ty {
+            TyTemplate::Bigint => "18".into(),
+            TyTemplate::Uint8Array => "19".into(),
             TyTemplate::Int => "0".into(),
             TyTemplate::Float => "4294967294".into(),
             TyTemplate::Bool => "1".into(),

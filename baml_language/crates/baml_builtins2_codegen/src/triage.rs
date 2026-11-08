@@ -113,13 +113,23 @@ pub fn classify_builtin(d: &NativeBuiltin) -> (BuiltinGroup, RtDisposition) {
             | "baml.Array.join"
             | "baml.Array.length"
             | "baml.Map.set"
+            | "baml.Map.get"
+            | "baml.Map.index"
+            | "baml.Map.has"
+            | "baml.Map.delete"
+            | "baml.Map.get_or_insert"
+            | "baml.Map.clear"
+            | "baml.Map.length"
+            | "baml.Map.keys"
             | "baml.Map.values"
             | "baml.ops.equals_equals"
     ) {
         Partial(match path {
-            "baml._to_string_default" => "int specialization",
-            "baml.Map.set" | "baml.Map.values" => "map<string,int> specialization",
-            "baml.ops.equals_equals" => "primitive string equality and null tests",
+            "baml._to_string_default" => "int and bigint specializations",
+            name if name.starts_with("baml.Map.") => {
+                "typed primitive-key maps; class hash/equality callbacks are not lowered"
+            }
+            "baml.ops.equals_equals" => "primitive string/null tests and bigint/byte equality",
             _ => "string and nested-string list specializations",
         })
     } else if crate::supports_rt(path) {
@@ -174,6 +184,12 @@ mod tests {
                     | RtDisposition::CompilerIntrinsic
                     | RtDisposition::RuntimeService
             ));
+            if crate::codegen_rt_bytes::supports(&d.path) {
+                crate::codegen_rt_bytes::generate(d).unwrap_or_else(|e| panic!("{e}"));
+            }
+            if crate::codegen_rt_bigint::supports(&d.path) {
+                crate::codegen_rt_bigint::generate(d).unwrap_or_else(|e| panic!("{e}"));
+            }
             if crate::codegen_rt_scalar::supports(&d.path) {
                 crate::codegen_rt_scalar::generate(d).unwrap_or_else(|e| panic!("{e}"));
             }

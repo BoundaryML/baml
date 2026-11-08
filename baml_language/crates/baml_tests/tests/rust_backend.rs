@@ -1082,9 +1082,9 @@ fn rt_source_bytes_and_diagnostics() {
             "{name}: rt changed bytecode"
         );
         let expected = match name {
-            "trees" => "d831e5d2d9b04ddfc8dfe9d5169e76e1da4c22e5805922d550d74ecc4ef7081a",
-            "richards" => "33fb195623f8586f81ebbd8608d15dc1981d17107e0906731476e77085132202",
-            "agent" => "c340396c3a741503691734997c5594559f1c8678e64c89200f5cf339e0260fb5",
+            "trees" => "bef9b52f84c0b05d20e0eb73c98c1875ba7a20b36e55b32c445cc1bac5d91ba6",
+            "richards" => "7f8f52396360d3421dfc0216d8a57021791651235c2d81d34b6e2a3f744ee316",
+            "agent" => "ce8c103e750428ce63834e0b81cd669e95d85d6fbe2bfd368a0cb27e0e6d7517",
             _ => "",
         };
         if name == "initializer" {

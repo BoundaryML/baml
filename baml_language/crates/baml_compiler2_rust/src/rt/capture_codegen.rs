@@ -113,14 +113,20 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
-        let class = if desc < layout::rt_descriptors() {
+        let class = if desc <= runtime.len() {
             Some(runtime[desc - 1])
         } else {
             descriptors
                 .iter()
                 .find_map(|(&object, &index)| (index == desc).then_some(object))
         };
-        let shape = if plan
+        let shape = if desc == 15 {
+            "Bigint".to_owned()
+        } else if desc == 16 {
+            "Bytes".to_owned()
+        } else if desc == 17 {
+            "Opaque".to_owned()
+        } else if plan
             .closure_descriptors()
             .is_some_and(|(_, closure)| desc == closure)
         {
@@ -277,6 +283,9 @@ fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<Strin
             }
             _ => return Err(no("bigint literal capture type")),
         },
+        T::Bigint => "Bigint".into(),
+        T::Uint8Array => "Bytes".into(),
+        T::RustType => "Opaque".into(),
         T::Float => "Float".into(),
         T::Bool => "Bool".into(),
         T::Null => "Null".into(),
@@ -384,6 +393,9 @@ fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<Strin
 pub(super) fn capture_repr_type(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
     let prefix = "rt::telemetry::capture::Type::";
     Ok(match repr {
+        Repr::Bigint => format!("{prefix}Bigint"),
+        Repr::Bytes => format!("{prefix}Bytes"),
+        Repr::Opaque => format!("{prefix}Opaque"),
         Repr::Int => format!("{prefix}Int"),
         Repr::Float => format!("{prefix}Float"),
         Repr::Bool => format!("{prefix}Bool"),

@@ -419,3 +419,7 @@ mod tests {
         let _: fn(&mut EarlyYieldCheck) = EarlyYieldCheck::reset;
     }
 }
+
+pub mod bigint;
+
+pub mod bytes;

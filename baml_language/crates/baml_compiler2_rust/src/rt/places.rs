@@ -25,6 +25,9 @@ impl Emitter<'_, '_> {
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
+            Repr::Bigint => Ok(18),
+            Repr::Bytes => Ok(19),
+            Repr::Opaque => Ok(20),
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
@@ -160,6 +163,12 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (base, repr) = self.place(base)?;
+                if repr == Repr::Bytes {
+                    return Ok((
+                        self.fallible(&format!("rt::native::byte_index({base},l{})", index.0)),
+                        Repr::Int,
+                    ));
+                }
                 let element = Self::element(repr)?;
                 if self.local(index.0)? != Repr::Int {
                     return Err(no("non-int list index"));
@@ -195,6 +204,13 @@ impl Emitter<'_, '_> {
             Operand::Constant(Constant::Float(f)) => {
                 Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
             }
+            Operand::Constant(Constant::Bigint(value)) => Ok((
+                self.fallible(&format!(
+                    "rt::native::bigint_literal({:?})",
+                    value.to_string()
+                )),
+                Repr::Bigint,
+            )),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => Ok((
@@ -267,6 +283,12 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (obj, container) = self.place(base)?;
+                if container == Repr::Bytes {
+                    return Ok(format!(
+                        "{};\n",
+                        self.fallible(&format!("rt::native::byte_set({obj},l{},{src})", index.0))
+                    ));
+                }
                 if container.growing() {
                     return Err(no("growing list indexed assignment"));
                 }
