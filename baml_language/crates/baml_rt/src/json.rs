@@ -5,7 +5,8 @@ use crate::{
     strings::{Cx, Str},
 };
 use baml_rt_gc::{Descriptor, Field, Kind, SlotKind, write_ptr};
-use bex_vm_types::json_text::{Reader, Refusal, bigint_limit_message, refusal};
+pub use bex_vm_types::json_text::Reader;
+use bex_vm_types::json_text::{Refusal, bigint_limit_message, refusal};
 use serde_json::Value;
 #[derive(Clone, Copy)]
 pub enum Ty {

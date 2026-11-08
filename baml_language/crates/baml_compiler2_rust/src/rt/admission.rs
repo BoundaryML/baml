@@ -137,6 +137,7 @@ pub(super) fn collect<'db>(
                         baml_compiler2_mir::RealizedTy::try_from(ty)
                             .map_err(|_| no("non-concrete JSON argument"))?,
                     );
+                    super::json_lists::record_schema(plan, &template)?;
                     if matches!(template, baml_compiler2_mir::TyTemplate::Map { .. }) {
                         continue;
                     }

@@ -646,6 +646,7 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "btel_types",
+ "serde_json",
 ]
 
 [[package]]

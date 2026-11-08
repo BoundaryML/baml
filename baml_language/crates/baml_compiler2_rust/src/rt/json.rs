@@ -24,7 +24,7 @@ impl Plan<'_> {
                 Ok(super::map_json::code(repr)?)
             }
             T::String => Ok(1),
-            T::List(_) | T::Union(_) => {
+            T::List(_) | T::Union(_) | T::TypeAlias(_) => {
                 if let Some(i) = self.json_list_types.iter().position(|t| t == ty) {
                     return Ok(i + json_lists::TYPE_BASE);
                 }

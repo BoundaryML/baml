@@ -129,6 +129,7 @@ mod errors;
 mod expressions;
 mod host;
 mod json;
+mod json_flat_lists;
 mod json_lists;
 mod json_scalars;
 mod json_tree;

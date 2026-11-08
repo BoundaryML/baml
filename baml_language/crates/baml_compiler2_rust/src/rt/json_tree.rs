@@ -65,13 +65,8 @@ impl registry::Feature for Feature {
         let (id, _) = plan.index.function(db, *f)?;
         let name = plan.index.display(id).to_owned();
         handles(&name).then(|| {
-            plan.json_tree = true;
+            prepare(plan)?;
             plan.json_public_to |= name == "baml.json.to";
-            plan.list_stringify = true;
-            plan.bigints = true;
-            let (list, map) = plan.tree_reprs()?;
-            plan.record(list)?;
-            plan.record(map)?;
             if name == "baml.json._path" {
                 plan.add(plan.path_error()?)?;
             }
@@ -164,6 +159,7 @@ pub(super) fn register_to(
     let template = TyTemplate::from(
         baml_compiler2_mir::RealizedTy::try_from(ty).map_err(|_| no("non-concrete JSON to"))?,
     );
+    super::json_lists::record_schema(plan, &template)?;
     if !plan.json_to_types.contains(&template) {
         plan.json_to_types.push(template);
     }
@@ -233,4 +229,13 @@ pub(super) fn emit(
         }
     }
     Ok(())
+}
+
+pub(super) fn prepare(plan: &mut Plan<'_>) -> Gen<()> {
+    plan.json_tree = true;
+    plan.list_stringify = true;
+    plan.bigints = true;
+    let (list, map) = plan.tree_reprs()?;
+    plan.record(list)?;
+    plan.record(map)
 }

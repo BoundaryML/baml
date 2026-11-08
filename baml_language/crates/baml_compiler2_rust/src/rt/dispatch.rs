@@ -463,3 +463,59 @@ pub(super) fn implements(
 ) -> Gen<bool> {
     Ok(witness(db, plan, concrete, iface)?.is_some())
 }
+
+// In a bounded program these leaves and their one-level dispatch adapters are
+// forced inline. They introduce no BAML frame; the caller's ordinary guard and
+// 64 KiB runtime reserve cover their bounded locals, including observed entry.
+pub(super) fn inline_leaves(
+    plan: &Plan<'_>,
+    all: &BTreeMap<usize, MirFunction<'_>>,
+) -> BTreeSet<usize> {
+    let mut leaves = plan
+        .dispatches
+        .values()
+        .flatten()
+        .filter_map(|(_, id)| {
+            all.get(id)
+                .filter(|m| super::stack::small_leaf(m))
+                .map(|_| *id)
+        })
+        .collect::<BTreeSet<_>>();
+    for (&id, mir) in all {
+        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+            continue;
+        };
+        if matches!(body.locals[0].ty, RuntimeTy::Interface(..)) && super::stack::small_leaf(mir) {
+            leaves.insert(id);
+            continue;
+        }
+        if mir.arity == 0 || body.locals.len() > 32 || body.blocks.len() > 16 {
+            continue;
+        }
+        let mut dispatch = false;
+        let bounded = body.blocks.iter().all(|b| match &b.terminator {
+            Some(Terminator::VirtualCall { .. }) => {
+                dispatch = true;
+                plan.dispatches.get(&(id, b.id.0)).is_some_and(|targets| {
+                    !targets.is_empty()
+                        && targets.iter().all(|(_, target)| {
+                            all.get(target).is_some_and(super::stack::small_leaf)
+                        })
+                })
+            }
+            Some(
+                Terminator::Goto { .. }
+                | Terminator::Return
+                | Terminator::Branch { .. }
+                | Terminator::ShortCircuit { .. }
+                | Terminator::Throw { .. }
+                | Terminator::Rethrow { .. },
+            ) => true,
+            _ => false,
+        });
+        if bounded && dispatch {
+            leaves.insert(id);
+        }
+    }
+    leaves
+}

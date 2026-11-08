@@ -1,4 +1,4 @@
-BAML runtime coverage (normal AND GC stress): 16 pass, 118 unsupported, 1 fail
+BAML runtime coverage (normal AND GC stress): 17 pass, 118 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: not yet supported generally; standalone JSON semantics checked at off/low/medium/high
 
@@ -122,7 +122,7 @@ compute::json aggregate 2k	pass
 compute::json hello	pass
 compute::json ndjson events	pass
 compute::json request body	pass
-compute::json tree path	fail: GC stress timed out after 600s; normal execution passes
+compute::json tree path	pass
 compute::k-nucleotide 25k	pass
 compute::merge sort 20k	unsupported: list element
 compute::nbody 20k	unsupported: list element
@@ -149,3 +149,6 @@ string::split medium literal 10k	unsupported: baml.String.split
 Independent closure coverage (off, low, medium, high, default; normal and GC stress):
 RtClosures	pass
 RtEmptyClosures	pass
+
+Independent typed JSON coverage (off, low, medium, high; normal and GC stress):
+JsonRuntime	pass

@@ -159,7 +159,7 @@ fn compile(
             )
         })
         .collect::<BTreeMap<_, _>>();
-    let stack_leaves = placements
+    let mut stack_leaves = placements
         .values()
         .flat_map(|p| p.leaf_calls.iter().copied())
         .collect::<BTreeSet<_>>();
@@ -167,6 +167,9 @@ fn compile(
     // storage below the stack guard's 64 KiB reserve, including ordinary locals.
     let small_program =
         small_program && placements.values().map(|p| p.bytes(&plan)).sum::<usize>() <= 16 * 1024;
+    if small_program {
+        stack_leaves.extend(super::dispatch::inline_leaves(&plan, &all));
+    }
     for &object in &reached {
         let mir = &all[&object];
         let MirFunctionKind::Bytecode(body) = &mir.kind else {

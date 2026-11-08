@@ -7,6 +7,7 @@ use crate::{
 use baml_rt_gc::{SlotKind, write_ptr};
 use serde_json::Value;
 use smallvec::SmallVec;
+pub mod flat;
 mod stream;
 
 #[derive(Clone, Copy)]
@@ -451,6 +452,7 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
 
 pub enum Shape {
     Unsupported,
+    ClassEncoded(unsafe fn(&mut Encoder<'_>, usize, usize) -> R<()>),
     Bigint,
     List {
         tag: u64,
@@ -475,7 +477,7 @@ enum PathStep {
     Index(usize),
     Key(Str),
 }
-struct Encoder<'a> {
+pub struct Encoder<'a> {
     shapes: &'static [Shape],
     cx: &'a mut Cx,
     aliased: bool,
@@ -527,6 +529,69 @@ impl Encoder<'_> {
             start = end + 1;
         }
         self.out.push('"');
+    }
+    pub fn begin_class(&mut self) {
+        self.out.push('{');
+    }
+    pub fn finish_class(&mut self, first: bool, depth: usize) {
+        if !first && !self.indent.is_empty() {
+            self.newline(depth);
+        }
+        self.out.push('}');
+    }
+    /// # Safety
+    /// The generated tagged field and pre-escaped names use this encoder's ABI.
+    #[inline(always)]
+    pub unsafe fn class_field(
+        &mut self,
+        name: &'static str,
+        alias: &'static str,
+        json_name: &'static str,
+        json_alias: &'static str,
+        skip: bool,
+        value: Dyn,
+        first: &mut bool,
+        depth: usize,
+    ) -> R<()> {
+        if self.aliased && skip {
+            return Ok(());
+        }
+        let null = value.tag == 2
+            || (value.tag >= 3 && value.tag != crate::FLOAT_TAG && value.payload == 0);
+        if self.omit_nulls && null {
+            return Ok(());
+        }
+        self.separator(*first, depth + 1);
+        *first = false;
+        self.out
+            .push_str(if self.aliased { json_alias } else { json_name });
+        self.out.push(':');
+        if !self.indent.is_empty() {
+            self.out.push(' ');
+        }
+        if null {
+            self.out.push_str("null");
+            return Ok(());
+        }
+        match value.tag {
+            0 => self
+                .out
+                .push_str(itoa::Buffer::new().format(value.payload as i64)),
+            1 => self
+                .out
+                .push_str(if value.payload == 0 { "false" } else { "true" }),
+            3 => {
+                let cx = unsafe { Cx::current() };
+                self.quoted(unsafe { Str::from_raw(value.payload as usize) }.as_str(&cx));
+            }
+            _ => {
+                self.path
+                    .push(PathStep::Field(if self.aliased { alias } else { name }));
+                unsafe { self.value(value, depth + 1) }?;
+                self.path.pop();
+            }
+        }
+        Ok(())
     }
     fn separator(&mut self, first: bool, depth: usize) {
         if !first {
@@ -591,6 +656,7 @@ impl Encoder<'_> {
                     .get((tag - 3) as usize)
                     .unwrap_or(&Shape::Unsupported);
                 match shape {
+                    Shape::ClassEncoded(encode) => unsafe { encode(self, pointer, depth) }?,
                     Shape::Bigint => {
                         let text = unsafe { Str::from_raw(pointer) };
                         self.out.push_str(text.as_str(self.cx));
@@ -709,6 +775,9 @@ impl Encoder<'_> {
                         return Err(self.error("value has no JSON form".into(), "unserializable"));
                     }
                 }
+                // Ancestors may outgrow the inline path/ancestor buffers.
+                // Keep each owner in its native frame through recursive polls.
+                std::hint::black_box(pointer);
                 self.ancestors.pop();
             }
         }

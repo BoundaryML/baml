@@ -254,7 +254,7 @@ impl Placement {
     }
 }
 
-fn small_leaf(mir: &MirFunction<'_>) -> bool {
+pub(super) fn small_leaf(mir: &MirFunction<'_>) -> bool {
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         return false;
     };
