@@ -650,6 +650,21 @@ pub unsafe fn to_code_points(cx: &mut Cx, value: Str, desc: u32) -> R<usize> {
     Ok(ptr as usize)
 }
 
+/// The VM's float spelling, including signed zero, infinities and NaN.
+pub fn float_to_string(cx: &mut Cx, value: f64) -> R<Str> {
+    cx.string(&bex_vm_types::format_float(value))
+}
+pub fn parse_float(cx: &Cx, value: Str, error_desc: u32) -> R<f64> {
+    let text = value.try_as_str(cx)?;
+    text.parse::<f64>().map_err(|error| {
+        crate::language::panic_value(
+            error_desc,
+            "baml.errors.ParseError",
+            format!("float.parse: cannot parse {text:?} as float: {error}"),
+        )
+    })
+}
+
 /// Shared Rust parsing rules and exactly the VM's diagnostic text.
 pub fn parse_int(cx: &Cx, value: Str, error_desc: u32) -> R<i64> {
     let text = value.try_as_str(cx)?;

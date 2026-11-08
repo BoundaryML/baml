@@ -1,3 +1,8 @@
+function string_capture(text: string, pieces: string[]) -> string {
+    if (pieces.length() < 2) { return "wrong pieces"; };
+    text
+}
+
 class StringEnvelope { text: string }
 
 function main() -> int {
@@ -6,7 +11,7 @@ function main() -> int {
     if (text.length() != 288) { return -1; };
     if (text.byte_length() != 672) { return -2; };
     let suffix = text.slice(-6, -1);
-    if (suffix != "é🦀|é🦀") { return -3; };
+    if (string_capture(suffix, text.split("|")) != "é🦀|é🦀") { return -3; };
     if ((suffix.at(-1) ?? "") != "🦀") { return -4; };
     if ((suffix.code_point_at(-1) ?? -1) != 129408) { return -5; };
     if ((suffix.index_of("🦀") ?? -1) != 1) { return -6; };

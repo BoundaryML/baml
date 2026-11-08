@@ -41,7 +41,10 @@ fn signature(method: &str) -> Option<(Vec<T>, T)> {
 pub(super) fn supports(path: &str) -> bool {
     if matches!(
         path,
-        "baml.Int.parse" | "baml.String.from_code_points" | "baml._to_string_primitive"
+        "baml.Int.parse"
+            | "baml.Float.parse"
+            | "baml.String.from_code_points"
+            | "baml._to_string_primitive"
     ) {
         return true;
     }
@@ -68,30 +71,44 @@ pub(super) fn generate(d: &NativeBuiltin) -> Result<String, String> {
                 d.path
             ));
         }
-        return Ok("#[inline(always)] fn rt_primitive_to_string(cx:&mut rt::strings::Cx,value:rt::Dyn)->rt::R<rt::strings::Str>{match value.tag{0=>rt::strings::integer_to_string(cx,value.payload as i64),1=>cx.string(if value.payload!=0{\"true\"}else{\"false\"}),2=>cx.string(\"null\"),_=>unreachable!(\"compiler-checked scalar string conversion\")}}\n".into());
+        return Ok("#[inline(always)] fn rt_primitive_to_string(cx:&mut rt::strings::Cx,value:rt::Dyn)->rt::R<rt::strings::Str>{match value.tag{0=>rt::strings::integer_to_string(cx,value.payload as i64),1=>cx.string(if value.payload!=0{\"true\"}else{\"false\"}),2=>cx.string(\"null\"),4294967294=>rt::strings::float_to_string(cx,f64::from_bits(value.payload)),_=>unreachable!(\"compiler-checked scalar string conversion\")}}\n".into());
     }
 
     if matches!(
         d.path.as_str(),
-        "baml.Int.parse" | "baml.String.from_code_points"
+        "baml.Int.parse" | "baml.Float.parse" | "baml.String.from_code_points"
     ) {
         let integer = d.path == "baml.Int.parse";
-        let params = if integer {
+        let float = d.path == "baml.Float.parse";
+        let params = if integer || float {
             vec![T::String]
         } else {
             vec![T::List(Box::new(T::Int))]
         };
-        let ret = if integer { T::Int } else { T::String };
+        let ret = if integer {
+            T::Int
+        } else if float {
+            T::Float
+        } else {
+            T::String
+        };
         if d.pipeline != BuiltinPipeline::Vm
             || !d.generics.is_empty()
             || d.receiver.as_ref().is_none_or(|r| {
                 r.receiver_type != ReceiverType::Static
-                    || r.builtin_name() != if integer { "Int" } else { "String" }
+                    || r.builtin_name()
+                        != if integer {
+                            "Int"
+                        } else if float {
+                            "Float"
+                        } else {
+                            "String"
+                        }
             })
             || d.may_yield
             || d.fallible
             || d.throws.as_deref()
-                != Some(&[if integer {
+                != Some(&[if integer || float {
                     "ParseError".to_owned()
                 } else {
                     "InvalidArgument".to_owned()
@@ -106,6 +123,8 @@ pub(super) fn generate(d: &NativeBuiltin) -> Result<String, String> {
         }
         return Ok(if integer{
             "#[inline(always)] fn rt_int_parse(cx:&mut rt::strings::Cx,value:rt::strings::Str,error_desc:u32)->rt::R<i64>{rt::strings::parse_int(cx,value,error_desc)}\n"
+        }else if float{
+            "#[inline(always)] fn rt_float_parse(cx:&mut rt::strings::Cx,value:rt::strings::Str,error_desc:u32)->rt::R<f64>{rt::strings::parse_float(cx,value,error_desc)}\n"
         }else{
             "#[inline(always)] unsafe fn rt_from_code_points(cx:&mut rt::strings::Cx,values:usize,error_desc:u32)->rt::R<rt::strings::Str>{unsafe{rt::strings::from_code_points(cx,values,error_desc)}}\n"
         }.into());

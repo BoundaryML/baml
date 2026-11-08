@@ -1,6 +1,7 @@
-BAML runtime coverage (normal AND GC stress): 18 pass, 123 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 20 pass, 123 unsupported, 0 fail
 Telemetry off: required
-Telemetry low/medium/high/default: not yet supported
+String probes: off/low/medium/high/default required
+Telemetry low/medium/high/default for other probes: not yet supported
 
 First unsupported constructs (fixtures blocked):
 103	top-level initializers
@@ -158,5 +159,7 @@ rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass
 string::split medium literal 10k	pass
 strings::codepoint error	pass
+strings::float	pass
+strings::float error	pass
 strings::parse error	pass
 strings::semantics	pass

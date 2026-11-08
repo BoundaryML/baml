@@ -13,7 +13,10 @@ pub struct Fixture {
 // Error probes must match the oracle's failed exit and exact diagnostic. Real
 // scorecard workloads and successful semantic probes must still exit cleanly.
 pub fn expects_success(name: &str) -> bool {
-    !matches!(name, "strings::parse error" | "strings::codepoint error")
+    !matches!(
+        name,
+        "strings::parse error" | "strings::codepoint error" | "strings::float error"
+    )
 }
 
 pub fn fixtures(workspace: &Path, only: Option<&str>) -> Vec<Fixture> {
@@ -66,6 +69,8 @@ pub fn fixtures(workspace: &Path, only: Option<&str>) -> Vec<Fixture> {
     // scorecard, without depending on unrelated project-wide initializers.
     for (name, file) in [
         ("strings::semantics", "semantics"),
+        ("strings::float", "float"),
+        ("strings::float error", "float_error"),
         ("strings::parse error", "parse_error"),
         ("strings::codepoint error", "codepoint_error"),
     ] {

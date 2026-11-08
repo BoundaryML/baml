@@ -20,11 +20,11 @@ impl registry::Feature for Feature {
         let name = plan.index.display(callee).to_owned();
         if !matches!(
             name.as_str(),
-            "baml.Int.parse" | "baml.String.from_code_points"
+            "baml.Int.parse" | "baml.Float.parse" | "baml.String.from_code_points"
         ) {
             return None;
         }
-        let error_class = if name == "baml.Int.parse" {
+        let error_class = if matches!(name.as_str(), "baml.Int.parse" | "baml.Float.parse") {
             "baml.errors.ParseError"
         } else {
             "baml.errors.InvalidArgument"
@@ -50,7 +50,10 @@ impl registry::Feature for Feature {
             return Some((|| {
                 if !types.is_empty()
                     || values.len() != 1
-                    || !matches!(values[0].1, Repr::Int | Repr::Bool | Repr::Null)
+                    || !matches!(
+                        values[0].1,
+                        Repr::Int | Repr::Float | Repr::Bool | Repr::Null
+                    )
                 {
                     return Err(super::no(
                         "primitive string conversion of dynamic or unsupported scalar",
@@ -60,28 +63,42 @@ impl registry::Feature for Feature {
                 Ok((emitter.fallible(&format!("rt_primitive_to_string(&mut rt::strings::Cx::current(),{value}).map(|s|s.as_raw())")),Repr::Str))
             })());
         }
-        if matches!(name, "baml.Int.parse" | "baml.String.from_code_points") {
+        if matches!(
+            name,
+            "baml.Int.parse" | "baml.Float.parse" | "baml.String.from_code_points"
+        ) {
             return Some((|| {
                 let integer = name == "baml.Int.parse";
-                let error_class = if integer {
+                let float = name == "baml.Float.parse";
+                let error_class = if integer || float {
                     "baml.errors.ParseError"
                 } else {
                     "baml.errors.InvalidArgument"
                 };
                 let error = builtin_class(emitter.plan, error_class)?;
                 if values.len() != 1
-                    || values[0].1 != if integer { Repr::Str } else { Repr::ListInt }
+                    || values[0].1
+                        != if integer || float {
+                            Repr::Str
+                        } else {
+                            Repr::ListInt
+                        }
                 {
                     return Err(super::no("string conversion arguments"));
                 }
                 let desc = emitter.descriptors[&error];
                 let value = &values[0].0;
-                let (call, repr) = if integer {
+                let (call, repr) = if integer || float {
                     (
                         format!(
-                            "rt_int_parse(&mut rt::strings::Cx::current(),rt::strings::Str::from_raw({value}),{desc})"
+                            "{}(&mut rt::strings::Cx::current(),rt::strings::Str::from_raw({value}),{desc})",
+                            if float {
+                                "rt_float_parse"
+                            } else {
+                                "rt_int_parse"
+                            }
                         ),
-                        Repr::Int,
+                        if float { Repr::Float } else { Repr::Int },
                     )
                 } else {
                     (
@@ -97,6 +114,7 @@ impl registry::Feature for Feature {
         if name == "baml._to_string_default" && values.len() == 1 {
             match values[0].1 {
                 Repr::Str=>return Some(Ok(values[0].clone())),
+                Repr::Float=>return Some(Ok((emitter.fallible(&format!("rt::strings::float_to_string(&mut rt::strings::Cx::current(),{}).map(|s|s.as_raw())",values[0].0)),Repr::Str))),
                 Repr::Bool=>return Some(Ok((emitter.fallible(&format!("rt::strings::Cx::current().string(if {}{{\"true\"}}else{{\"false\"}}).map(|s|s.as_raw())",values[0].0)),Repr::Str))),
                 Repr::Null=>return Some(Ok((emitter.fallible("rt::strings::Cx::current().string(\"null\").map(|s|s.as_raw())"),Repr::Str))),
                 _=>{},
@@ -125,9 +143,7 @@ impl registry::Feature for Feature {
             return None;
         };
         let ascii_literal = match right {
-            Operand::Constant(Constant::String(text))
-                if *op == BinOp::Add && text.len() == 1 =>
-            {
+            Operand::Constant(Constant::String(text)) if *op == BinOp::Add && text.len() == 1 => {
                 Some(text.as_str().to_owned())
             }
             _ => None,

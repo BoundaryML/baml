@@ -570,7 +570,7 @@ fn rust_differential() {
     let rt_only = backends
         .iter()
         .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
-    let levels = if rt_only { &["off"][..] } else { LEVELS };
+    let levels = LEVELS;
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -645,9 +645,13 @@ fn rust_differential() {
         }
         let failures_before = failures.len();
         for level in levels {
-            if (probe.contains("::") && matches!(*level, "default" | "low"))
-                || (*level == "default"
-                    && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan"))
+            if rt_only && !rt::supports_level(&probe, level) {
+                continue;
+            }
+            if !probe.starts_with("strings::")
+                && ((probe.contains("::") && matches!(*level, "default" | "low"))
+                    || (*level == "default"
+                        && !matches!(probe.as_str(), "Scalars" | "Hooked" | "ManualSpan")))
             {
                 continue;
             }
@@ -655,7 +659,7 @@ fn rust_differential() {
             let mut traces = Vec::new();
             for backend in &backends {
                 if backend.artifact_key == "rt"
-                    && (!rt::supports_level(level) || artifacts["rt"][&probe].is_err())
+                    && (!rt::supports_level(&probe, level) || artifacts["rt"][&probe].is_err())
                 {
                     outputs.push(None);
                     traces.push(String::new());
@@ -806,10 +810,26 @@ fn rust_differential() {
                 }
                 if traces[reference] != traces[index] {
                     if backend.artifact_key == "rt" {
-                        failures.push(format!(
-                            "{probe}/{mode}: telemetry mismatch\n{}",
-                            diff(&traces[reference], &traces[index], &mode)
-                        ));
+                        // C5 is the runtime's sole telemetry exception. Both
+                        // modes share the rt artifact and its normalizer; the
+                        // old backend's other exceptions never apply here.
+                        let expected =
+                            known_telemetry_divergences::without_gc(&traces[reference], "rt");
+                        let actual = known_telemetry_divergences::without_gc(&traces[index], "rt");
+                        if expected == actual {
+                            report_known(
+                                &build,
+                                &probe,
+                                &mode,
+                                known_telemetry_divergences::GC_REASON,
+                                &diff(&traces[reference], &traces[index], &mode),
+                            );
+                        } else {
+                            failures.push(format!(
+                                "{probe}/{mode}: telemetry mismatch\n{}",
+                                diff(&expected, &actual, &mode)
+                            ));
+                        }
                         continue;
                     }
                     if let Some(reason) =
