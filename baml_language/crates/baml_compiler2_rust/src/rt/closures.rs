@@ -1,6 +1,6 @@
 use super::{
-    Gen, MirFunctionBody, Object, Operand, Place, Plan, Repr, RuntimeTy, Rvalue, StatementKind,
-    Terminator, no, registry,
+    Gen, MirFunctionBody, Operand, Place, Plan, Repr, RuntimeTy, Rvalue, StatementKind, Terminator,
+    no, registry,
 };
 
 impl Plan<'_> {
@@ -96,17 +96,10 @@ impl Plan<'_> {
                 let Repr::Ptr(class) = self.storage_repr(body, base, depth)? else {
                     return Err(no("receiver field on non-class"));
                 };
-                let Object::Class(class) =
-                    &self.program.objects[bex_vm_types::ObjectIndex::from_raw(class)]
-                else {
-                    return Err(no("receiver class"));
-                };
                 self.field_repr(
-                    &class
-                        .fields
+                    self.class_field_types(class)
                         .get(*field)
-                        .ok_or_else(|| no("receiver field"))?
-                        .field_type,
+                        .ok_or_else(|| no("receiver field"))?,
                 )
             }
             _ => Err(no("receiver storage place")),

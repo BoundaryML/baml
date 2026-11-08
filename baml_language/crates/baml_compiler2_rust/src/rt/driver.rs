@@ -13,13 +13,47 @@ pub fn compile_rt(
     opt: OptLevel,
     entry: usize,
 ) -> Gen<String> {
+    compile(db, root, program, opt, entry, None)
+}
+
+/// Compile the normal entry plus an explicit setup/run native benchmark host.
+pub fn compile_rt_benchmark(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    setup_run: (usize, usize),
+) -> Gen<String> {
+    compile(db, root, program, opt, entry, Some(setup_run))
+}
+
+fn compile(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    benchmark: Option<(usize, usize)>,
+) -> Gen<String> {
     let mut plan = Plan {
+        root,
         lang: baml_compiler2_hir::package::lang_roots(db),
         index: ProgramIndex::new(db, root, program),
         program,
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
         json_types: Vec::new(),
+        enums: BTreeSet::new(),
+        specialized_calls: BTreeMap::new(),
+        type_codes: Vec::new(),
+        next_object: program.objects.len(),
+        class_instances: Vec::new(),
+        concrete_types: Vec::new(),
+        heads: BTreeMap::new(),
+        dispatches: BTreeMap::new(),
+        function_frames: BTreeMap::new(),
+        alias_tests: std::cell::RefCell::new(BTreeSet::new()),
     };
     let admission::Admitted {
         all,
@@ -27,7 +61,7 @@ pub fn compile_rt(
         calls,
         builtins,
         json_decode,
-    } = admission::collect(db, root, opt, entry, &mut plan)?;
+    } = admission::collect(db, root, opt, entry, benchmark, &mut plan)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
@@ -63,9 +97,47 @@ pub fn compile_rt(
         })
         .sum::<usize>()
         <= 1024;
-    let telemetry_sites = std::cell::RefCell::new(vec![(None, 0usize, entry)]);
+    let mut host_sites = vec![(None, 0usize, entry)];
+    if let Some((setup, run)) = benchmark {
+        let MirFunctionKind::Bytecode(setup_body) = &all[&setup].kind else {
+            return Err(no("benchmark setup must be a user function"));
+        };
+        let MirFunctionKind::Bytecode(run_body) = &all[&run].kind else {
+            return Err(no("benchmark run must be a user function"));
+        };
+        if all[&setup].arity != 0
+            || all[&run].arity != 1
+            || setup_body.locals[0].ty != run_body.locals[1].ty
+            || plan.repr(&run_body.locals[0].ty)? != super::Repr::Int
+        {
+            return Err(no("benchmark requires setup() -> S and run(S) -> int"));
+        }
+        host_sites.extend([(None, 0usize, setup), (None, 0usize, run)]);
+    }
+    let telemetry_sites = std::cell::RefCell::new(host_sites);
+    let mut placements = reached
+        .iter()
+        .map(|&object| {
+            let mir = &all[&object];
+            let MirFunctionKind::Bytecode(body) = &mir.kind else {
+                unreachable!()
+            };
+            (
+                object,
+                super::stack::Placement::new(db, root, object, body, opt, &plan, &all),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let stack_leaves = placements
+        .values()
+        .flat_map(|p| p.leaf_calls.iter().copied())
+        .collect::<BTreeSet<_>>();
+    // Inlined bodies share one physical frame. Keep their combined object
+    // storage below the stack guard's 64 KiB reserve, including ordinary locals.
+    let small_program =
+        small_program && placements.values().map(|p| p.bytes(&plan)).sum::<usize>() <= 16 * 1024;
     for &object in &reached {
-        let mir = all[&object];
+        let mir = &all[&object];
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
             unreachable!()
         };
@@ -91,6 +163,9 @@ pub fn compile_rt(
             iter_arrays,
             arity: mir.arity,
             block: 0,
+            statement: 0,
+            stack: placements.remove(&object).unwrap(),
+            proven_arithmetic: BTreeSet::new(),
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
             compact_sites: Vec::new(),
@@ -100,7 +175,74 @@ pub fn compile_rt(
             string_cx: std::cell::Cell::new(false),
             string_literals: std::cell::RefCell::new(BTreeMap::new()),
         };
-        out.push_str(&emitter.function(mir.arity, small_program && !recursive(&calls, object))?);
+        let stack_leaf = stack_leaves.contains(&object);
+        out.push_str(
+            &emitter
+                .function(
+                    mir.arity,
+                    (small_program || stack_leaf) && !recursive(&calls, object),
+                    stack_leaf,
+                )
+                .map_err(|e| format!("{e} (emitting {})", plan.index.display(object)))?,
+        );
+    }
+    // Membership helpers are mutually recursive for recursive alias groups.
+    let mut emitted = BTreeSet::new();
+    loop {
+        let pending = plan
+            .alias_tests
+            .borrow()
+            .iter()
+            .filter(|h| !emitted.contains(*h))
+            .cloned()
+            .collect::<Vec<_>>();
+        if pending.is_empty() {
+            break;
+        }
+        for head in pending {
+            let alias = baml_compiler2_hir_ty::interfaces::package_resolved_aliases(db, plan.root)
+                .get(&head)
+                .ok_or_else(|| no("alias definition missing"))?;
+            let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root).convert(alias);
+            let template = baml_compiler2_mir::TyTemplate::from(
+                baml_compiler2_mir::RealizedTy::try_from(runtime)
+                    .map_err(|_| no("alias definition is not concrete"))?,
+            );
+            let emitter = Emitter {
+                db,
+                plan: &plan,
+                body: match &all[&entry].kind {
+                    MirFunctionKind::Bytecode(b) => b,
+                    _ => unreachable!(),
+                },
+                object: entry,
+                descriptors: &descriptors,
+                lists: &lists,
+                all: &all,
+                iters: BTreeSet::new(),
+                iter_arrays: BTreeMap::new(),
+                arity: 0,
+                block: 0,
+                statement: 0,
+                stack: super::stack::Placement::default(),
+                proven_arithmetic: BTreeSet::new(),
+                unwind_jumps: Vec::new(),
+                sites: Vec::new(),
+                compact_sites: Vec::new(),
+                raise_kinds: Vec::new(),
+                telemetry_sites: &telemetry_sites,
+                site: 0,
+                string_cx: std::cell::Cell::new(false),
+                string_literals: std::cell::RefCell::new(BTreeMap::new()),
+            };
+            let expression =
+                emitter.membership(("value".into(), super::Repr::Tagged), &template)?;
+            let id = emitter.alias_test_id(&head)?;
+            out.push_str(&format!(
+                "unsafe fn rt_alias{id}(value:rt::Dyn)->bool{{unsafe{{{expression}}}}}\n"
+            ));
+            emitted.insert(head);
+        }
     }
     let format_site = telemetry::emit(
         &mut out,
@@ -110,6 +252,10 @@ pub fn compile_rt(
         (stringify, aliased),
         &telemetry_sites,
     )?;
-    host::emit(&mut out, entry, &builtins, format_site);
+    if let Some((setup, run)) = benchmark {
+        host::emit_benchmark(&mut out, entry, setup, run, &builtins, format_site);
+    } else {
+        host::emit(&mut out, entry, &builtins, format_site);
+    }
     Ok(out)
 }

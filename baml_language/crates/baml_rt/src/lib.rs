@@ -2,6 +2,7 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod calls;
 pub mod json;
 pub mod language;
 pub mod lists;
@@ -176,15 +177,16 @@ impl Instance {
     /// Execute generated BAML and preserve its language error.
     ///
     /// # Safety
-    /// The entry must uphold the same rooting contract as `run`. A returned
-    /// error's managed `value` is unrooted: inspect it only while this instance
-    /// remains alive and before any further managed allocation.
-    pub unsafe fn run_baml(&mut self, entry: fn() -> R<i64>) -> R<i64> {
+    /// The entry must uphold the same rooting contract as `run`. Captures must
+    /// not hold unrooted managed pointers; construct retained state on the fiber.
+    /// A returned error's managed `value` is unrooted: inspect it only while
+    /// this instance remains alive and before any further managed allocation.
+    pub unsafe fn run_baml(&mut self, entry: impl FnOnce() -> R<i64> + 'static) -> R<i64> {
         unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
     }
     unsafe fn execute<E: 'static>(
         &mut self,
-        entry: fn() -> Result<i64, E>,
+        entry: impl FnOnce() -> Result<i64, E> + 'static,
     ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();

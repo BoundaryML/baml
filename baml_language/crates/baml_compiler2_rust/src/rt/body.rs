@@ -1,7 +1,7 @@
 use super::*;
 
 impl Emitter<'_, '_> {
-    pub(super) fn function(&mut self, arity: usize, inline: bool) -> Gen<String> {
+    pub(super) fn function(&mut self, arity: usize, inline: bool, stack_leaf: bool) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
             unwinds: self
@@ -18,6 +18,21 @@ impl Emitter<'_, '_> {
                     Terminator::Goto { target }
                     | Terminator::Call { target, .. }
                     | Terminator::VirtualCall { target, .. } => Ok(Flow::Goto(target.0)),
+                    Terminator::Switch {
+                        arms, otherwise, ..
+                    } => Ok(Flow::Switch {
+                        arms: arms.iter().map(|(_, b)| b.0).collect(),
+                        otherwise: otherwise.0,
+                    }),
+                    Terminator::NarrowBind {
+                        then_block,
+                        else_block,
+                        ..
+                    } => Ok(Flow::Branch {
+                        then_block: then_block.0,
+                        else_block: else_block.0,
+                    }),
+                    Terminator::Unreachable => Ok(Flow::Exit),
                     Terminator::Branch {
                         then_block,
                         else_block,
@@ -38,6 +53,7 @@ impl Emitter<'_, '_> {
                 .collect::<Gen<_>>()?,
         };
         let structured = structurize(&cfg).map_err(no)?;
+        self.proven_arithmetic = loop_ranges::analyze(self, &structured.stmts);
         self.unwind_jumps = structured
             .unwind_jumps
             .iter()
@@ -65,6 +81,14 @@ impl Emitter<'_, '_> {
             .join(",");
         let attribute = if inline { "#[inline(always)]\n" } else { "" };
         let object = self.object;
+        // These bounded leaf bodies are forced inline at every call site, so
+        // they add no frame. Their caller retains the ordinary stack guard.
+        let guard = if stack_leaf {
+            assert!(inline);
+            String::new()
+        } else {
+            format!("cx.check_stack().map_err(|e|e.at(&S{object},0))?;")
+        };
         let returned = self.local(0)?.rust();
         let arguments = (1..=arity)
             .map(|i| format!("l{i}"))
@@ -75,11 +99,28 @@ impl Emitter<'_, '_> {
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
+        let capture_arguments = if let Some(frame) = self.plan.function_frames.get(&self.object) {
+            let types = frame
+                .iter()
+                .map(|(n, t)| {
+                    Ok(format!(
+                        "({n:?},&{})",
+                        capture_codegen::capture_type(self.plan, t)?
+                    ))
+                })
+                .collect::<Gen<Vec<_>>>()?
+                .join(",");
+            format!(
+                "{{let mut c=rt::telemetry::capture_arguments(&[{captured_args}]);c.types=rt::telemetry::capture_type_args(&[{types}]);c}}"
+            )
+        } else {
+            format!("rt::telemetry::capture_arguments(&[{captured_args}])")
+        };
         let captures = format!(
-            "||rt::telemetry::capture_arguments(&[{captured_args}]),|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
+            "||{capture_arguments},|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
         );
-        let mut code = format!(
-            "#[inline(always)] unsafe fn f{object}(telemetry_site:usize,{params})->R<{returned}>{{unsafe{{let mode=rt::telemetry::mode(&O{object});if mode==0{{return f{object}_body({arguments});}}if mode!=1{{return f{object}_observed(telemetry_site,mode,{arguments});}}let frame=rt::telemetry::enter_observed(telemetry_site);let mut result=f{object}_body({arguments});frame.finish(&mut result);result}}}}\n#[inline(never)] unsafe fn f{object}_observed(telemetry_site:usize,mode:u8,{params})->R<{returned}>{{unsafe{{if mode>3{{rt::telemetry::evidence::observe_captured(telemetry_site,mode&3,{captures},||f{object}_body({arguments}))}}else{{rt::telemetry::observe_captured(telemetry_site,mode,{captures},||f{object}_body({arguments}))}}}}}}\n{attribute}unsafe fn f{object}_body({params})->R<{returned}>{{unsafe{{rt::check_stack().map_err(|e|e.at(&S{object},0))?;\n"
+        let mut code = call_cost::prologue(
+            object, &params, &arguments, returned, &captures, attribute, &guard,
         );
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {
@@ -91,6 +132,7 @@ impl Emitter<'_, '_> {
         for iter in &self.iters {
             writeln!(&mut code, "let mut iter_index{iter}=0i64;").unwrap();
         }
+        code.push_str(&self.stack.declarations(self));
         for b in &self.body.blocks {
             if b.landing.is_some() {
                 writeln!(
@@ -103,9 +145,16 @@ impl Emitter<'_, '_> {
 
             if matches!(
                 b.terminator,
-                Some(Terminator::Branch { .. } | Terminator::ShortCircuit { .. })
+                Some(
+                    Terminator::Branch { .. }
+                        | Terminator::ShortCircuit { .. }
+                        | Terminator::NarrowBind { .. }
+                )
             ) {
                 writeln!(&mut code, "let mut c{}=false;", b.id.0).unwrap();
+            }
+            if matches!(b.terminator, Some(Terminator::Switch { .. })) {
+                writeln!(&mut code, "let mut switch{}=0i64;", b.id.0).unwrap();
             }
         }
         for h in cfg.loop_headers() {
@@ -165,7 +214,27 @@ impl Emitter<'_, '_> {
                 Stmt::BreakLoop(l) => writeln!(&mut out, "break 'l{l};").unwrap(),
                 Stmt::Continue(l) => writeln!(&mut out, "continue 'l{l};").unwrap(),
                 Stmt::Exit(_) => out.push_str("return Ok(l0);\n"),
-                Stmt::Switch { .. } => return Err(no("structured switch")),
+                Stmt::Switch {
+                    block,
+                    arms,
+                    otherwise,
+                } => {
+                    let Terminator::Switch { arms: keys, .. } =
+                        self.body.blocks[*block].terminator.as_ref().unwrap()
+                    else {
+                        unreachable!()
+                    };
+                    writeln!(&mut out, "match switch{block}{{").unwrap();
+                    for (indices, body) in arms {
+                        let keys = indices
+                            .iter()
+                            .map(|i| self.switch_key(keys[*i].0))
+                            .collect::<Gen<Vec<_>>>()?
+                            .join("|");
+                        writeln!(&mut out, "{keys}=>{{{}}},", self.stmts(body, headers)?).unwrap();
+                    }
+                    writeln!(&mut out, "_=>{{{}}}}}", self.stmts(otherwise, headers)?).unwrap();
+                }
             }
         }
         Ok(out)

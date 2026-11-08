@@ -1,17 +1,22 @@
-BAML runtime coverage (normal AND GC stress): 14 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 18 pass, 123 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: not yet supported
 
 First unsupported constructs (fixtures blocked):
 103	top-level initializers
-10	list element
-4	list field element
-2	growing list builtin receiver
-1	JSON field union
-1	field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
-1	generic interface implementation
-1	generic user call
-1	terminator Some(Switch { discriminant: Copy(Local(Local(2))), arms: [(Int(1), BlockId(3)), (Int(0), BlockId(2))], otherwise: BlockId(1), exhaustive: true, arm_names: [(Int(1), "Naming.Aliased"), (Int(0), "Naming.Declared")] })
+4	entry must have no parameters and return int
+4	list element
+2	growing list builtin receiver (emitting user.setup)
+1	JSON union member
+1	baml.Array.pop
+1	baml.Float.itrunc
+1	baml.Map.get
+1	baml.json._stringify
+1	closures
+1	growing list builtin receiver (emitting user.main)
+1	list field element (layout JArray, object 4180, types [List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4279) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4280) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])]))]) (user.main local 8: Union([Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JArray" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JLiteral" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JNumber" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JObject" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JString" }, [])]))
+1	list field element (layout Request, object 4186, types [String, Union([String, Null]), List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])])), List(Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4284) }, [])), Union([String, Null]), Union([Float, Null]), Union([Float, Null]), Int, Bool, Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4285) }, []), Null]), Map { key: String, value: String }, Bool, Union([String, Null]), Bool]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Request" }, []))
+1	list field element (layout Tree, object 4182, types [TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }), List(TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }))]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Tree" }, []))
 
 Per probe / KPI workload:
 Allocation	unsupported: top-level initializers
@@ -113,23 +118,24 @@ SpawnPanicUncaught	unsupported: top-level initializers
 SpawnThrowUncaught	unsupported: top-level initializers
 SpawnedClosures	unsupported: top-level initializers
 Spawns	unsupported: top-level initializers
+StackAllocation	pass
 TaskOverflow	unsupported: top-level initializers
 ThreadLocalParallel	unsupported: top-level initializers
 TimeoutCancellation	unsupported: top-level initializers
 Uncaught	unsupported: top-level initializers
 classes::method call 100k	pass
-compute::array build sum 100k	unsupported: growing list builtin receiver
-compute::array traversal 8k	unsupported: growing list builtin receiver
+compute::array build sum 100k	unsupported: growing list builtin receiver (emitting user.main)
+compute::array traversal 8k	unsupported: growing list builtin receiver (emitting user.setup)
 compute::fib32 recursive	pass
-compute::generate sort 8k	unsupported: generic interface implementation
-compute::json aggregate 2k	unsupported: list element
-compute::json hello	unsupported: terminator Some(Switch { discriminant: Copy(Local(Local(2))), arms: [(Int(1), BlockId(3)), (Int(0), BlockId(2))], otherwise: BlockId(1), exhaustive: true, arm_names: [(Int(1), "Naming.Aliased"), (Int(0), "Naming.Declared")] })
-compute::json ndjson events	unsupported: JSON field union
-compute::json request body	unsupported: list field element
-compute::json tree path	unsupported: field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
-compute::k-nucleotide 25k	unsupported: generic user call
+compute::generate sort 8k	unsupported: closures
+compute::json aggregate 2k	unsupported: JSON union member
+compute::json hello	unsupported: baml.json._stringify
+compute::json ndjson events	pass
+compute::json request body	unsupported: list field element (layout Request, object 4186, types [String, Union([String, Null]), List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])])), List(Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4284) }, [])), Union([String, Null]), Union([Float, Null]), Union([Float, Null]), Int, Bool, Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4285) }, []), Null]), Map { key: String, value: String }, Bool, Union([String, Null]), Bool]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Request" }, []))
+compute::json tree path	unsupported: list field element (layout Tree, object 4182, types [TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }), List(TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }))]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Tree" }, []))
+compute::k-nucleotide 25k	unsupported: baml.Map.get
 compute::merge sort 20k	unsupported: list element
-compute::nbody 20k	unsupported: list element
+compute::nbody 20k	unsupported: baml.Float.itrunc
 compute::nested loops 500x500	pass
 compute::pure call 1m	pass
 compute::quick sort 3-way 1k	unsupported: list element
@@ -137,16 +143,18 @@ interfaces::polymorphic dispatch 100k	pass
 memory::allocation high retention	unsupported: list element
 memory::allocation low retention	unsupported: list element
 memory::binary trees 14	pass
-memory::cycles into live	unsupported: list element
-memory::cyclic churn	unsupported: list field element
-memory::heap calls	unsupported: list element
-memory::live heap	unsupported: list element
-memory::live walk	unsupported: list field element
-memory::splay 2k	unsupported: list element
+memory::cycles into live	unsupported: entry must have no parameters and return int
+memory::cyclic churn	unsupported: entry must have no parameters and return int
+memory::heap calls	unsupported: entry must have no parameters and return int
+memory::live heap	unsupported: entry must have no parameters and return int
+memory::live walk	unsupported: growing list builtin receiver (emitting user.setup)
+memory::splay 2k	unsupported: baml.Array.pop
 process::startup	pass
 programs::agent loop 300	pass
-programs::json parser 15	unsupported: list field element
+programs::json parser 15	unsupported: list field element (layout JArray, object 4180, types [List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4279) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4280) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])]))]) (user.main local 8: Union([Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JArray" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JLiteral" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JNumber" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JObject" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JString" }, [])]))
 programs::richards 50	pass
+rt_setup_state_benchmark	pass
+rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass
 string::split medium literal 10k	pass
 strings::codepoint error	pass
