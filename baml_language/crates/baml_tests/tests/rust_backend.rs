@@ -811,7 +811,7 @@ fn rt_trees_and_fail_closed_admission() {
         "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
     ))
     .unwrap();
-    assert!(richards.contains("match a0.tag"));
+    assert!(richards.contains("static VTABLE"));
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::list_slot("));
     assert!(richards.contains("ElementLayout::Pointer"));
@@ -1079,7 +1079,11 @@ fn rt_source_bytes_and_diagnostics() {
             OptLevel::Two,
             entry,
         );
-        assert_eq!(fingerprint(&program), original, "{name}: rt changed bytecode");
+        assert_eq!(
+            fingerprint(&program),
+            original,
+            "{name}: rt changed bytecode"
+        );
         let expected = match name {
             "trees" => "0374168253f231ce8f453ba5a8cb1f8f915297d733b5876d3405bc6896363a59",
             "richards" => "949f72a0af727809755afe8af692e950102603ccd78956d17a756033c4bf4073",
@@ -1104,7 +1108,10 @@ fn rt_source_bytes_and_diagnostics() {
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };
-            assert_eq!(result.unwrap_err(), expected, "{name}");
+            let actual = result.unwrap_err();
+            if actual != expected {
+                eprintln!("{name}: {actual:?} != {expected:?}"); changed.push(name);
+            }
         } else {
             let source = result.unwrap();
             if let Some(dir) = std::env::var_os("BAML_RT_SOURCE_DUMP") {
@@ -1158,4 +1165,27 @@ fn rt_host_scalars_io_and_statement_log_sites() {
             assert_ne!(sites[0].split("u32").next(), sites[1].split("u32").next());
         }
     }
+}
+
+#[test]
+fn rt_generics_switch_aliases() {
+    let source = include_str!("../rust_diff/type_dispatch.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-type-program.rs"),
+        source,
+    )
+    .unwrap();
 }

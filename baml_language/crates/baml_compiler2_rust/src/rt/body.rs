@@ -19,6 +19,21 @@ impl Emitter<'_, '_> {
                     | Terminator::Call { target, .. }
                     | Terminator::VirtualCall { target, .. }
                     | Terminator::SysOp { target, .. } => Ok(Flow::Goto(target.0)),
+                    Terminator::Switch {
+                        arms, otherwise, ..
+                    } => Ok(Flow::Switch {
+                        arms: arms.iter().map(|(_, b)| b.0).collect(),
+                        otherwise: otherwise.0,
+                    }),
+                    Terminator::NarrowBind {
+                        then_block,
+                        else_block,
+                        ..
+                    } => Ok(Flow::Branch {
+                        then_block: then_block.0,
+                        else_block: else_block.0,
+                    }),
+                    Terminator::Unreachable => Ok(Flow::Exit),
                     Terminator::Branch {
                         then_block,
                         else_block,
@@ -85,8 +100,25 @@ impl Emitter<'_, '_> {
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
+        let capture_arguments = if let Some(frame) = self.plan.function_frames.get(&self.object) {
+            let types = frame
+                .iter()
+                .map(|(n, t)| {
+                    Ok(format!(
+                        "({n:?},&{})",
+                        capture_codegen::capture_type(self.plan, t)?
+                    ))
+                })
+                .collect::<Gen<Vec<_>>>()?
+                .join(",");
+            format!(
+                "{{let mut c=rt::telemetry::capture_arguments(&[{captured_args}]);c.types=rt::telemetry::capture_type_args(&[{types}]);c}}"
+            )
+        } else {
+            format!("rt::telemetry::capture_arguments(&[{captured_args}])")
+        };
         let captures = format!(
-            "||rt::telemetry::capture_arguments(&[{captured_args}]),|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
+            "||{capture_arguments},|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
         );
         let mut code = call_cost::prologue(
             object, &params, &arguments, returned, &captures, attribute, &guard,
@@ -114,9 +146,16 @@ impl Emitter<'_, '_> {
 
             if matches!(
                 b.terminator,
-                Some(Terminator::Branch { .. } | Terminator::ShortCircuit { .. })
+                Some(
+                    Terminator::Branch { .. }
+                        | Terminator::ShortCircuit { .. }
+                        | Terminator::NarrowBind { .. }
+                )
             ) {
                 writeln!(&mut code, "let mut c{}=false;", b.id.0).unwrap();
+            }
+            if matches!(b.terminator, Some(Terminator::Switch { .. })) {
+                writeln!(&mut code, "let mut switch{}=0i64;", b.id.0).unwrap();
             }
         }
         for h in cfg.loop_headers() {
@@ -174,7 +213,27 @@ impl Emitter<'_, '_> {
                 Stmt::BreakLoop(l) => writeln!(&mut out, "break 'l{l};").unwrap(),
                 Stmt::Continue(l) => writeln!(&mut out, "continue 'l{l};").unwrap(),
                 Stmt::Exit(_) => out.push_str("return Ok(l0);\n"),
-                Stmt::Switch { .. } => return Err(no("structured switch")),
+                Stmt::Switch {
+                    block,
+                    arms,
+                    otherwise,
+                } => {
+                    let Terminator::Switch { arms: keys, .. } =
+                        self.body.blocks[*block].terminator.as_ref().unwrap()
+                    else {
+                        unreachable!()
+                    };
+                    writeln!(&mut out, "match switch{block}{{").unwrap();
+                    for (indices, body) in arms {
+                        let keys = indices
+                            .iter()
+                            .map(|i| self.switch_key(keys[*i].0))
+                            .collect::<Gen<Vec<_>>>()?
+                            .join("|");
+                        writeln!(&mut out, "{keys}=>{{{}}},", self.stmts(body, headers)?).unwrap();
+                    }
+                    writeln!(&mut out, "_=>{{{}}}}}", self.stmts(otherwise, headers)?).unwrap();
+                }
             }
         }
         Ok(out)

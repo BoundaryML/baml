@@ -48,12 +48,21 @@ impl Emitter<'_, '_> {
         if source == Repr::Int && target == Repr::Float {
             return Ok(format!("({value} as f64)"));
         }
+        if matches!(source, Repr::Dyn(_)) && matches!(target, Repr::Tagged | Repr::Dyn(_))
+            || source == Repr::Tagged && matches!(target, Repr::Dyn(_))
+        {
+            return Ok(value);
+        }
         if target == Repr::Tagged {
-            let tag = self.tag(source)?;
+            let tag = match source {
+                Repr::Naming => "CAPTURE_NAMING_TAG".into(),
+                Repr::Enum(e) => format!("CAPTURE_ENUM_{e}_TAG"),
+                _ => self.tag(source)?.to_string(),
+            };
             let test = if source.pointer() {
-                "if v==0 {2} else {TAG}".replace("TAG", &tag.to_string())
+                "if v==0 {2} else {TAG}".replace("TAG", &tag)
             } else {
-                tag.to_string()
+                tag
             };
             let payload = if source == Repr::Float {
                 "v.to_bits()"
@@ -64,8 +73,12 @@ impl Emitter<'_, '_> {
                 "{{let v={value};rt::Dyn{{tag:{test},payload:{payload}}}}}"
             ));
         }
-        if source == Repr::Tagged {
-            let tag = self.tag(target)?;
+        if matches!(source, Repr::Tagged | Repr::Dyn(_)) {
+            let tag = match target {
+                Repr::Naming => "CAPTURE_NAMING_TAG".into(),
+                Repr::Enum(e) => format!("CAPTURE_ENUM_{e}_TAG"),
+                _ => self.tag(target)?.to_string(),
+            };
             let bits = self.fallible(&format!("rt::untag({value},{tag},{})", target.pointer()));
             return Ok(if target == Repr::Float {
                 format!("f64::from_bits({bits})")
@@ -75,18 +88,8 @@ impl Emitter<'_, '_> {
                 format!("({bits} as {})", target.rust())
             });
         }
-        if let (Repr::Ptr(c), Repr::Dyn(i)) = (source, target) {
-            if self
-                .plan
-                .implementors(i)?
-                .iter()
-                .any(|(class, _)| *class == c)
-            {
-                return Ok(format!(
-                    "rt::Dyn{{tag:{},payload:({value}) as u64}}",
-                    self.descriptors[&c] + 3
-                ));
-            }
+        if matches!(target, Repr::Dyn(_)) {
+            return self.coerce((value, source), Repr::Tagged);
         }
         Err(no(format!("conversion {source:?} to {target:?}")))
     }
@@ -158,6 +161,9 @@ impl Emitter<'_, '_> {
     pub(super) fn operand(&self, o: &Operand<'_>) -> Gen<(String, Repr)> {
         match o {
             Operand::Copy(p) | Operand::Move(p) => self.place(p),
+            Operand::Constant(Constant::Float(f)) => {
+                Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
+            }
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Float(v)) => {
                 Ok((format!("f64::from_bits({}u64)", v.to_bits()), Repr::Float))
@@ -172,10 +178,10 @@ impl Emitter<'_, '_> {
             )),
             Operand::Constant(Constant::EnumVariant { enum_ref, index }) => {
                 let head = baml_compiler2_hir_ty::layout::enum_head(self.db, *enum_ref);
-                if self.plan.repr(&RuntimeTy::Enum(head))? != Repr::Naming || *index > 1 {
-                    return Err(no("enum constant"));
-                }
-                Ok((format!("{index}usize"), Repr::Naming))
+                Ok((
+                    format!("{index}usize"),
+                    self.plan.repr(&RuntimeTy::Enum(head))?,
+                ))
             }
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),
             Operand::Constant(_) => Err(no(format!("operand {o:?}"))),

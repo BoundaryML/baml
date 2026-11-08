@@ -14,12 +14,23 @@ pub fn compile_rt(
     entry: usize,
 ) -> Gen<String> {
     let mut plan = Plan {
+        root,
         lang: baml_compiler2_hir::package::lang_roots(db),
         index: ProgramIndex::new(db, root, program),
         program,
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
         json_types: Vec::new(),
+        enums: BTreeSet::new(),
+        specialized_calls: BTreeMap::new(),
+        type_codes: Vec::new(),
+        next_object: program.objects.len(),
+        class_instances: Vec::new(),
+        concrete_types: Vec::new(),
+        heads: BTreeMap::new(),
+        dispatches: BTreeMap::new(),
+        function_frames: BTreeMap::new(),
+        alias_tests: std::cell::RefCell::new(BTreeSet::new()),
     };
     let admission::Admitted {
         all,
@@ -86,7 +97,7 @@ pub fn compile_rt(
     let small_program =
         small_program && placements.values().map(|p| p.bytes(&plan)).sum::<usize>() <= 16 * 1024;
     for &object in &reached {
-        let mir = all[&object];
+        let mir = &all[&object];
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
             unreachable!()
         };
@@ -128,6 +139,60 @@ pub fn compile_rt(
             (small_program || stack_leaf) && !recursive(&calls, object),
             stack_leaf,
         )?);
+    }
+    // Membership helpers are mutually recursive for recursive alias groups.
+    let mut emitted = BTreeSet::new();
+    loop {
+        let pending = plan
+            .alias_tests
+            .borrow()
+            .iter()
+            .filter(|h| !emitted.contains(*h))
+            .cloned()
+            .collect::<Vec<_>>();
+        if pending.is_empty() {
+            break;
+        }
+        for head in pending {
+            let alias = baml_compiler2_hir_ty::interfaces::package_resolved_aliases(db, plan.root)
+                .get(&head)
+                .ok_or_else(|| no("alias definition missing"))?;
+            let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root).convert(alias);
+            let template = baml_compiler2_mir::TyTemplate::from(
+                baml_compiler2_mir::RealizedTy::try_from(runtime)
+                    .map_err(|_| no("alias definition is not concrete"))?,
+            );
+            let emitter = Emitter {
+                db,
+                plan: &plan,
+                body: match &all[&entry].kind {
+                    MirFunctionKind::Bytecode(b) => b,
+                    _ => unreachable!(),
+                },
+                object: entry,
+                descriptors: &descriptors,
+                lists: &lists,
+                all: &all,
+                iters: BTreeSet::new(),
+                iter_arrays: BTreeMap::new(),
+                arity: 0,
+                block: 0,
+                unwind_jumps: Vec::new(),
+                sites: Vec::new(),
+                compact_sites: Vec::new(),
+                raise_kinds: Vec::new(),
+                telemetry_sites: &telemetry_sites,
+                site: 0,
+                stack: Default::default(),
+            };
+            let expression =
+                emitter.membership(("value".into(), super::Repr::Tagged), &template)?;
+            let id = emitter.alias_test_id(&head)?;
+            out.push_str(&format!(
+                "unsafe fn rt_alias{id}(value:rt::Dyn)->bool{{unsafe{{{expression}}}}}\n"
+            ));
+            emitted.insert(head);
+        }
     }
     let format_site = telemetry::emit(
         &mut out,

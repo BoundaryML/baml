@@ -190,7 +190,7 @@ pub(super) fn emit(
             .iter()
             .find(|p| {
                 p.objects
-                    .contains(&u32::try_from(id).expect("function index"))
+                    .contains(&u32::try_from(plan.index.rt_origin(id)).expect("function index"))
             })
             .map(|p| baml_base::Name::new(&p.name));
         let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
