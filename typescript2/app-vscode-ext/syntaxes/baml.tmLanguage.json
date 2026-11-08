@@ -13,6 +13,9 @@
       "include": "#client"
     },
     {
+      "include": "#client-value"
+    },
+    {
       "include": "#retry-policy"
     },
     {
@@ -179,7 +182,7 @@
       ]
     },
     "associated-type-extends": {
-      "name": "keyword.operator.extends.baml",
+      "name": "keyword.operator.expression.extends.baml",
       "match": "\\bextends\\b"
     },
     "associated-type-projection": {
@@ -306,7 +309,7 @@
       "match": "\\b\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*\\b"
     },
     "await-expression": {
-      "name": "keyword.operator.await.baml",
+      "name": "keyword.operator.expression.await.baml",
       "match": "\\bawait\\b"
     },
     "backtick-else": {
@@ -1377,6 +1380,30 @@
         }
       ]
     },
+    "client-value": {
+      "name": "meta.client.baml",
+      "begin": "^\\s*(client)\\s+(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(=)(?!=)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.declaration.client.baml"
+        },
+        "2": {
+          "name": "entity.name.client.baml"
+        },
+        "3": {
+          "name": "keyword.operator.assignment.baml"
+        }
+      },
+      "end": "(?=;|^\\s*(?:client|retry_policy|generator|template_string|class|enum|interface|implements|implement|function|testset|test|type)\\b|^\\s*(?:let|const)\\b)",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
     "code-block": {
       "name": "meta.block.code.baml",
       "begin": "\\{",
@@ -1496,7 +1523,7 @@
       "begin": "\\b(is)\\b",
       "beginCaptures": {
         "1": {
-          "name": "keyword.operator.is.baml"
+          "name": "keyword.operator.expression.is.baml"
         }
       },
       "end": "(?=\\s*(?:&&|\\|\\||=>|[,);\\]}{]|$))",
@@ -1803,7 +1830,7 @@
       ]
     },
     "declaration-type-parameter-extends": {
-      "name": "keyword.operator.extends.baml",
+      "name": "keyword.operator.expression.extends.baml",
       "match": "\\bextends\\b"
     },
     "declaration-type-parameter-intersection": {
@@ -2199,7 +2226,7 @@
       ]
     },
     "for-in-keyword": {
-      "name": "keyword.operator.in.baml",
+      "name": "keyword.operator.expression.in.baml",
       "match": "\\bin\\b"
     },
     "for-in-pattern": {
@@ -2802,7 +2829,7 @@
           "name": "variable.other.property.interface.baml"
         },
         "2": {
-          "name": "keyword.operator.as.baml"
+          "name": "keyword.operator.expression.as.baml"
         },
         "3": {
           "name": "variable.other.property.baml"
@@ -2892,7 +2919,7 @@
       "begin": "\\b(is)\\b",
       "beginCaptures": {
         "1": {
-          "name": "keyword.operator.is.baml"
+          "name": "keyword.operator.expression.is.baml"
         }
       },
       "end": "(?=\\s*(?:&&|\\|\\||=>|[,);\\]}]|$))",
@@ -2952,7 +2979,7 @@
       "begin": "\\b(throws)\\b",
       "beginCaptures": {
         "1": {
-          "name": "keyword.operator.throws.baml"
+          "name": "keyword.operator.expression.throws.baml"
         }
       },
       "end": "(?=\\{)",
@@ -3027,7 +3054,7 @@
       "begin": "\\b(extends)\\b",
       "beginCaptures": {
         "1": {
-          "name": "keyword.operator.extends.baml"
+          "name": "keyword.operator.expression.extends.baml"
         }
       },
       "end": "(?=\\s*=)",
@@ -3937,7 +3964,7 @@
       "begin": "\\b(spawn)\\b",
       "beginCaptures": {
         "1": {
-          "name": "keyword.operator.spawn.baml"
+          "name": "keyword.operator.expression.spawn.baml"
         }
       },
       "end": "(?<=\\})|(?=,|;|$)",
@@ -3987,7 +4014,7 @@
       "begin": "\\b(with)\\b",
       "beginCaptures": {
         "1": {
-          "name": "keyword.operator.with.baml"
+          "name": "keyword.operator.expression.with.baml"
         }
       },
       "end": "(?=\\{)",
@@ -4518,7 +4545,7 @@
       ]
     },
     "test-with-keyword": {
-      "name": "keyword.operator.with.baml",
+      "name": "keyword.operator.expression.with.baml",
       "match": "\\bwith\\b"
     },
     "testset": {
@@ -4601,7 +4628,7 @@
       "match": "->"
     },
     "type-as-operator": {
-      "name": "keyword.operator.as.baml",
+      "name": "keyword.operator.expression.as.baml",
       "match": "\\bas\\b"
     },
     "type-expression": {
@@ -4725,7 +4752,7 @@
       }
     },
     "type-throws-operator": {
-      "name": "keyword.operator.throws.baml",
+      "name": "keyword.operator.expression.throws.baml",
       "match": "\\bthrows\\b"
     },
     "typed-binding-pattern": {
@@ -4755,7 +4782,7 @@
           "name": "punctuation.accessor.baml"
         },
         "2": {
-          "name": "keyword.operator.as.baml"
+          "name": "keyword.operator.expression.as.baml"
         }
       },
       "end": "(?<=>)",

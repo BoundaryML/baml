@@ -1,0 +1,128 @@
+1:1-79       "// Client values: one line, an initializer on the next line, and no semicolon." source.baml comment.line.double-slash.baml
+2:1-7        "client"           source.baml meta.client.baml keyword.declaration.client.baml
+2:8-12       "Fast"             source.baml meta.client.baml entity.name.client.baml
+2:13-14      "="                source.baml meta.client.baml keyword.operator.assignment.baml
+2:15-21      "openai"           source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+2:21-22      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+2:22-37      "ResponsesClient"  source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+2:37-38      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+2:38-41      "new"              source.baml meta.client.baml meta.function-call.baml entity.name.function.baml
+2:41-42      "("                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+2:42-47      "model"            source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+2:48-49      "="                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml keyword.operator.assignment.baml
+2:50-51      "\""               source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+2:51-61      "gpt-6-luna"       source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml
+2:61-62      "\""               source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+2:62-63      ","                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.separator.comma.baml
+2:64-71      "api_key"          source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+2:72-73      "="                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml keyword.operator.assignment.baml
+2:74-77      "env"              source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml support.other.namespace.baml
+2:77-78      "."                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml punctuation.accessor.baml
+2:78-92      "OPENAI_API_KEY"   source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+2:92-93      ")"                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+2:93-94      ";"                source.baml punctuation.terminator.statement.baml
+4:1-7        "client"           source.baml meta.client.baml keyword.declaration.client.baml
+4:8-13       "Later"            source.baml meta.client.baml entity.name.client.baml
+4:14-15      "="                source.baml meta.client.baml keyword.operator.assignment.baml
+5:5-11       "openai"           source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+5:11-12      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+5:12-27      "ResponsesClient"  source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+5:27-28      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+5:28-31      "new"              source.baml meta.client.baml meta.function-call.baml entity.name.function.baml
+5:31-32      "("                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+5:32-37      "model"            source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+5:38-39      "="                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml keyword.operator.assignment.baml
+5:40-41      "\""               source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+5:41-51      "gpt-6-luna"       source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml
+5:51-52      "\""               source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+5:52-53      ")"                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+5:53-54      ";"                source.baml punctuation.terminator.statement.baml
+7:1-7        "client"           source.baml meta.client.baml keyword.declaration.client.baml
+7:8-13       "Smart"            source.baml meta.client.baml entity.name.client.baml
+7:14-15      "="                source.baml meta.client.baml keyword.operator.assignment.baml
+7:16-25      "anthropic"        source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+7:25-26      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+7:26-32      "Client"           source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+7:32-33      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+7:33-36      "new"              source.baml meta.client.baml meta.function-call.baml entity.name.function.baml
+7:36-37      "("                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+7:37-42      "model"            source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+7:43-44      "="                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml keyword.operator.assignment.baml
+7:45-46      "\""               source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+7:46-63      "claude-sonnet-5-5" source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml
+7:63-64      "\""               source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+7:64-65      ")"                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+9:1-7        "client"           source.baml meta.client.baml keyword.declaration.client.baml
+9:8-16       "Reliable"         source.baml meta.client.baml entity.name.client.baml
+9:17-18      "="                source.baml meta.client.baml keyword.operator.assignment.baml
+9:19-21      "ai"               source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+9:21-22      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+9:22-29      "clients"          source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+9:29-30      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+9:30-35      "Retry"            source.baml meta.client.baml meta.function-call.baml variable.other.readwrite.baml
+9:35-36      "."                source.baml meta.client.baml meta.function-call.baml punctuation.accessor.baml
+9:36-39      "new"              source.baml meta.client.baml meta.function-call.baml entity.name.function.baml
+9:39-40      "("                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+10:5-10      "inner"            source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+10:11-12     "="                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml keyword.operator.assignment.baml
+10:13-18     "Later"            source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+10:18-19     ","                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.separator.comma.baml
+11:5-17      "max_attempts"     source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+11:18-19     "="                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml keyword.operator.assignment.baml
+11:20-21     "3"                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml constant.numeric.integer.baml
+11:21-22     ","                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.separator.comma.baml
+12:1-2       ")"                source.baml meta.client.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+12:2-3       ";"                source.baml punctuation.terminator.statement.baml
+14:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+14:10-13     "Ask"              source.baml meta.function.baml entity.name.function.baml
+14:13-14     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+14:14-22     "question"         source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+14:22-23     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+14:24-30     "string"           source.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+14:30-31     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+14:32-34     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+14:35-41     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+14:42-43     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+15:5-11      "client"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml keyword.other.llm.client.baml
+15:11-12     ":"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml punctuation.separator.colon.baml
+15:13-21     "Reliable"         source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:5-11      "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
+16:11-12     ":"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml punctuation.separator.colon.baml
+16:13-14     "`"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.interpolated.baml punctuation.definition.string.begin.baml
+16:14-30     "Answer briefly: " source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.interpolated.baml
+16:30-32     "${"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.interpolated.baml meta.interpolation.baml punctuation.section.interpolation.begin.baml
+16:32-40     "question"         source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.interpolated.baml meta.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:40-41     "}"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.interpolated.baml meta.interpolation.baml punctuation.section.interpolation.end.baml
+16:41-42     "`"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.interpolated.baml punctuation.definition.string.end.baml
+17:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+19:1-5       "test"             source.baml meta.test.baml keyword.declaration.test.baml
+19:6-7       "\""               source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+19:7-37      "a companion may follow a space" source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml
+19:37-38     "\""               source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml punctuation.definition.string.end.baml
+19:39-40     "{"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.begin.baml
+20:5-8       "let"              source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+20:9-16      "request"          source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+20:17-18     "="                source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
+20:19-22     "Ask"              source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+20:22-24     " @"               source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml
+20:24-28     "spec"             source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.baml entity.name.function.baml
+20:28-29     "("                source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+20:29-30     "\""               source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+20:30-33     "why"              source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml
+20:33-34     "\""               source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+20:34-35     ")"                source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+20:35-36     "."                source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.member.baml punctuation.accessor.baml
+20:36-49     "build_request"    source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.member.baml entity.name.function.baml
+20:49-50     "("                source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+20:50-56     "client"           source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+20:57-58     "="                source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml keyword.operator.assignment.baml
+20:59-64     "Smart"            source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+20:64-65     ")"                source.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+20:65-66     ";"                source.baml meta.test.baml meta.block.code.baml punctuation.terminator.statement.baml
+21:5-11      "assert"           source.baml meta.test.baml meta.block.code.baml meta.function-call.baml variable.other.readwrite.baml
+21:11-12     "."                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml punctuation.accessor.baml
+21:12-20     "not_null"         source.baml meta.test.baml meta.block.code.baml meta.function-call.baml entity.name.function.baml
+21:20-21     "("                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+21:21-28     "request"          source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+21:28-29     ")"                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+22:1-2       "}"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.end.baml
