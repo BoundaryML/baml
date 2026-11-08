@@ -294,3 +294,41 @@ The prompt is carried twice: as the `text` argument on `Calling __main__.classif
 Datadog and BAML send uncompressed, so they don't shrink. BCS billed bytes don't change either (10 KiB: 219,346 → 221,632 B for ten calls; the English documents JSON-escape their newlines). With prose prompts BAML sends about 5× Logfire's bytes at 10 KiB and 3.4× at 100 KiB.
 
 None of this changes Logfire's bill. It bills 2 records per `classify` call whatever the size.
+
+## 2026-11-08: E15 support chatbot, 1 to 50 turns (`experiments/chat.py`, `results/chat-*.json`)
+
+Question: how many bytes (and GB per million conversations) does a multi-turn agent chat use on each platform, and does BCS's content-addressed storage help?
+
+App (`apps/baml_chat/`, `apps/py_apps.py chat`, script in `lab/chat_script.py`): a support bot with a 4 KB system prompt, a 240-character customer message per turn, an `lookup_order` tool call on every other turn (the model asks for it, the tool result goes back into the conversation, the model answers), and a 600-character answer. Every model call sends the whole conversation so far. BAML uses `${for (let m in history)} ${role(m.role)} ${m.content} ${endfor}` in the prompt; Python sends the same messages through the OpenAI SDK, traced the way each vendor documents (`respond` and `converse` decorated, plus the OpenAI instrumentation). Prompt bytes to the model match within 4% across stacks. Text is English from `lab/corpus.py`. Conversations of 1, 2, 3, 5, 8, 10, 15, 20, 30, 40 and 50 turns, one fresh process each, with a fresh user script per run. BAML uploads were forwarded to the real BCS; Logfire, Datadog and OTel went to the local relay (their byte counts don't depend on the backend).
+
+**BCS delivery drops what is still queued 5 s after shutdown begins.** The first sweep used an instant mock model, so a 50-turn conversation finished in about a second with megabytes of uploads queued. Against the real BCS, the CLI printed `warning: telemetry recording failed: cloud recording delivery: ShutdownTimeout`: 29 of 44 planned uploads arrived (15 lost; 30–32 of 441 captured values had no uploaded content). The local stand-in, which answers instantly, received all 44. The limit is `DeliveryConfig::shutdown_timeout = 5 s` (`btel_bcs/src/delivery.rs:145`); the CLI's `--shutdown-timeout` (default 15 s) does not reach it. A process that makes many model calls without real model latency (a batch job against a cache, a replay, a test) can lose its last few megabytes of traces. With a 1 s model delay, uploads keep pace during the conversation and nothing was lost. All numbers below use a 1 s model delay, which also makes the Python SDKs batch the way they would in production.
+
+Results, one conversation, 1 s model delay (BAML on the real BCS: every planned upload arrived, 0 objects were already stored):
+
+| turns | model calls | prompts to model | BCS billed | BCS network | Datadog | Logfire | OTel |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2 | 9.7 KB | 24.0 KB | 103.7 KB | 31.5 KB | 12.8 KB | 3.6 KB |
+| 10 | 15 | 159.6 KB | 348.7 KB | 533.7 KB | 378.6 KB | 106.5 KB | 25.5 KB |
+| 20 | 30 | 520.4 KB | 1.09 MB | 1.42 MB | 1.16 MB | 276.2 KB | 60.1 KB |
+| 30 | 45 | 1.08 MB | 2.23 MB | 2.70 MB | 2.35 MB | 917.5 KB | 201.5 KB |
+| 50 | 75 | 2.81 MB | 5.68 MB | 6.47 MB | 5.94 MB | 2.80 MB | 661.4 KB |
+
+- Bytes grow with the square of the conversation length, because every call resends the history. 5× the turns (10 → 50) is 16× the BCS bill. In a 10-turn conversation 89% of the bytes sent to the model are repeats.
+- BCS bills about 2.0× the prompts (5.68 MB for 2.81 MB at 50 turns): each call's history is captured as `Respond`'s `history` input and again inside the HTTP request body.
+- **BCS's content-addressed storage saves nothing here.** The shaper cuts a capture into separately stored blobs only when a unit reaches 64 KiB or a string reaches 16 KiB (`btel_settings/src/snapshot.rs` `SPLIT_UNIT_BYTES`, `SPLIT_LEAF_BYTES`). Each message is under 1 KB, so a call's whole `Msg[]` is one new blob, and the prepare responses showed only `inline_with_recording` and `member_of_batch`, never `already_available`. Upload bytes are 1.14× billed (encoding overhead).
+- Datadog sends uncompressed JSON with the history on the workflow span and the LLM span: about the same as BCS.
+- Logfire sends about 1.0× the prompts. It exports every 0.5 s, so each export holds about one call and gzip has no earlier copy of the history to refer to; pending-span placeholders for still-open spans add copies (327 spans on the wire at 50 turns for 176 stored records). With an instant model, where exports hold many calls, the same conversation was 1.29 MB.
+- OTel exports every 5 s (about five calls here) and gzip refers back to the previous call's history while the conversation is under 32 KB: 60 KB at 20 turns, then 201 KB at 30 and 661 KB at 50.
+- With an instant model, hosted BCS uploads were 24–32% larger than local ones at 10–30 turns (for example 1.81 vs 1.39 MB at 20 turns) for identical billed bytes. With the 1 s model they matched local within 1%. Not investigated further.
+
+Per million conversations, list prices:
+
+| turns | BCS billed | BCS cost | Logfire records | Logfire cost | Datadog LLM spans | Datadog cost |
+|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 349 GB | $1,395 | 36M | $72 | 15M | $5,250 |
+| 20 | 1,091 GB | $4,364 | 71M | $142 | 30M | $10,500 |
+| 50 | 5,682 GB | $22,728 | 176M | $352 | 75M | $26,250 |
+
+Logfire records: one per conversation, two per model call, one per lookup (the OTel span count, 176 at 50 turns, matches). BCS overtakes Datadog's per-call price only past about 50 turns; Logfire stays 20–65× cheaper. `http_bodies = false` would remove the second copy and roughly halve the BCS figures (E11 measured 38–50% on single calls); not measured for chat.
+
+Billed bytes sent to BCS by this experiment (test project): 14.3 MB for the 1 s sweep, plus the instant-model sweep (11 runs, two of them partly lost) and three probe runs of 40–50 turns.

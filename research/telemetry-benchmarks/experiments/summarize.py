@@ -99,11 +99,32 @@ def wire_english():
             for r in load("wire-english.json") if not r.get("error")]
 
 
+def chat():
+    """Chatbot runs with a 1 s model delay (BAML uploads to the real BCS), plus the earlier instant-model runs."""
+    rows = []
+    sources = [(f"chat-{st}.json", "") for st in ("baml", "logfire", "datadog", "otel")]
+    sources += [("chat-instant.json", "-instant"), ("chat-instant-hosted.json", "-instant-hosted")]
+    for name, suffix in sources:
+        for r in load(name):
+            if r.get("error"):
+                continue
+            t = r["telemetry"]
+            b = t.get("billing") or {}
+            rows.append({"stack": r["stack"] + suffix, "turns": r["turns"],
+                         "model_calls": r["model_http"]["requests"], "prompt_bytes": r["model_http"]["sent"],
+                         "per_call_sent": r["model_http"]["per_call_sent"], "bytes": t["telemetry_bytes"],
+                         "upload": (t.get("by_operation") or {}).get("upload"),
+                         "already_available": t.get("already_available"), "puts": t.get("puts"),
+                         "planned_uploads": t.get("planned_uploads"),
+                         "spans": t.get("spans"), "billed": b.get("logical_bytes")})
+    return rows
+
+
 def main():
     data = {
         "wire": wire(), "overhead": overhead(), "crash": crash(), "searchable": searchable(),
         "loc": load("loc.json"), "scrub": load("scrub.json"), "pipeline": load("pipeline.json"),
-        "anatomy": anatomy(), "wire_english": wire_english(),
+        "anatomy": anatomy(), "wire_english": wire_english(), "chat": chat(),
     }
     out = ROOT / "site" / "data.json"
     out.parent.mkdir(exist_ok=True)

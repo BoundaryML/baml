@@ -93,6 +93,8 @@ class MockLLM(_Quiet):
             index = len(self.server.requests)
             if self.server.script is not None:
                 answer = self.server.script[index % len(self.server.script)]
+            elif getattr(self.server.rule, "messages", False):
+                answer = self.server.rule(request.get("messages", []))
             else:
                 answer = self.server.rule(prompt)
         if self.server.delay_s:
@@ -258,6 +260,11 @@ class BcsRelay(_Quiet):
                 up["presigned_put_url"] = f"{self.server.url}{handle}"
             reply = json.dumps(doc).encode()
             row["already_available"] = sum(1 for c in doc.get("cas", []) if c["disposition"]["kind"] == "already_available")
+            kinds = {}
+            for c in doc.get("cas", []):
+                kinds[c["disposition"]["kind"]] = kinds.get(c["disposition"]["kind"], 0) + 1
+            row["dispositions"] = kinds
+            row["planned_uploads"] = len(doc.get("uploads", []))
         with self.server.lock:
             self.server.events.append(row)
         self.reply(status, reply, ctype)

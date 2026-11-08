@@ -102,6 +102,10 @@ def summarize_bcs(events, meter):
                          for op in ("heartbeat", "uploads:prepare", "upload")},
         "statuses": sorted({e["status"] for e in events}),
         "already_available": sum(e.get("already_available", 0) for e in events),
+        "dispositions": {k: sum(e.get("dispositions", {}).get(k, 0) for e in events)
+                         for k in sorted({k for e in events for k in e.get("dispositions", {})})},
+        "planned_uploads": sum(e.get("planned_uploads", 0) for e in events),
+        "puts": sum(1 for e in events if e["operation"] == "upload"),
     }
     if meter:
         out["billing"] = meter.summary()

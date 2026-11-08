@@ -240,6 +240,45 @@ logfire.instrument_openai()
   <p class="muted col">Prices are the published list prices on 7 November 2026, after free tiers: BCS Starter $4/GB, Logfire $2 per million records, Datadog LLM Observability $3.50 per 10,000 LLM spans. Logfire does not charge by size, but says it may email customers whose spans average over about 5 KB; most of the spans here are bigger. Datadog also has a $160/month minimum, and APM spans for non-model steps are billed separately. Measured billed bytes come from replaying BCS's billing rules over the exact upload bodies.</p>
 </section>
 
+<section id="chatbot">
+  <span class="eyebrow">Scenario · a support chatbot</span>
+  <h2>A long chat resends the whole conversation every turn</h2>
+  <p class="col">We built the same support bot in BAML and in Python: a 4 KB system prompt, a customer message each turn, an order-lookup tool on every other turn, and a 600-character answer. Like every chat app, it sends the entire conversation to the model on each call. We played conversations of 1 to 50 turns through each platform, one fresh process per conversation, with a mock model that takes 1 second per call. BAML's uploads went to the real BCS.</p>
+
+  <h3>Every model call carries everything before it</h3>
+  <p class="col">One 10-turn conversation. Each row is one model call. The light part was already sent in an earlier call; the dark part is new. By the last call almost everything is a repeat.</p>
+  <div class="chart" id="chatResend"></div>
+  <p class="muted col" id="chatResendNote"></p>
+
+  <h3>Bytes per conversation, by platform</h3>
+  <p class="col">Network bytes each platform sent for one whole conversation, next to BCS's billed bytes and the prompts sent to the model. Hover a point for details.</p>
+  <div class="tabs" role="group" aria-label="Scale" id="chatScale"><button type="button" aria-pressed="true" data-log="0">Linear scale</button><button type="button" aria-pressed="false" data-log="1">Log scale</button></div>
+  <div class="chart" id="chatLines"></div>
+  <div class="legend" id="chatLegend"></div>
+  <p class="muted col" id="chatLinesNote"></p>
+
+  <div class="grid2">
+    <div class="panel">
+      <h3>What BCS caches</h3>
+      <div id="chatCache"></div>
+    </div>
+    <div class="panel">
+      <h3>Batching decides what gzip can reuse</h3>
+      <p>Each call's history is the previous call's history plus one turn, so a compressor that still sees the earlier copy can skip most of it. gzip sees only the last 32 KB of the same export. OpenTelemetry exports every 5 seconds, about five calls at a time here, so it skips repeats until the conversation passes 32 KB around turn 20, then pays for every call in full. Logfire exports every half second, one call at a time, and also sends a "pending" copy of each span still open at export time, so it sends about as many bytes as the prompts themselves. BCS and Datadog don't compress.</p>
+      <p class="muted" id="chatBatchNote"></p>
+    </div>
+  </div>
+  <div class="callout col">
+    <h3>A fast process can exit before its traces are uploaded</h3>
+    <p>Our first run used a model that answered instantly, so a 50-turn conversation finished in about a second with megabytes still queued. The BAML CLI waits only 5 seconds for uploads at exit (<code>btel_bcs</code>'s delivery <code>shutdown_timeout</code>, not changed by <code>--shutdown-timeout</code>). It printed <code>ShutdownTimeout</code>, and 15 of 44 uploads never reached BCS. With a realistic 1-second model, uploads kept pace and nothing was lost. Batch jobs, replays and tests that make many fast calls are the ones at risk.</p>
+  </div>
+
+  <h3>What it costs</h3>
+  <div class="tabs" role="group" aria-label="Conversation length" id="chatTabs"></div>
+  <div class="tablewrap"><table id="chatTable"></table></div>
+  <p class="muted col" id="chatTableNote"></p>
+</section>
+
 <section>
   <span class="eyebrow">Speed and memory</span>
   <h2>A BAML process is done before Python finishes importing</h2>
@@ -367,6 +406,7 @@ function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === 
     ["bad", "Python bridge ignores BAML_TELEMETRY", "Setting it to <code>off</code> in a Python app still uploads, unless the package's baml.toml opts in to the variable."],
     ["bad", "First upload is heavy", "Each process uploads about 55 KB of runtime definitions once. That matters for short-lived processes, not for servers."],
     ["good", "Searchable in seconds", "A finished BAML run showed up in <code>baml query</code> after a median of 5.8 s, against 15 s for Logfire and 38 s for Datadog."],
+    ["bad", "Long chats grow fast", "A 50-turn support chat billed 5.68 MB on BCS ($22,728 per million conversations) because every turn resends the history and BCS's cache only splits out 64 KiB pieces. Logfire: $352."],
     ["mixed", "Logfire is cheap but edits your data", "Its default scrubbing replaced 8 of 10 ordinary support tickets with a placeholder."],
   ];
   document.getElementById("score").innerHTML = items.map(([v, h, t]) =>
@@ -510,6 +550,100 @@ function wireRow(stack, app, size, batch) { return D.wire.find(r => r.stack === 
   let t = `<thead><tr><th>Ticket</th><th>Stored function argument</th></tr></thead><tbody>`;
   for (const r of D.scrub) t += `<tr><td>${esc(r.ticket)}</td><td style="color:${r.argument_scrubbed ? "var(--bad)" : "var(--good)"}">${esc(r.argument_scrubbed ? r.stored_argument : "kept in full")}</td></tr>`;
   document.getElementById("scrub").innerHTML = t + "</tbody>";
+})();
+
+// ---- chatbot scenario
+const chatRows = stack => D.chat.filter(r => r.stack === stack).sort((a, b) => a.turns - b.turns);
+const chatAt = (stack, turns) => D.chat.find(r => r.stack === stack && r.turns === turns);
+const BCS_CHAT = "baml";
+(function chatResend() {
+  const r = chatAt(BCS_CHAT, 10), sent = r.per_call_sent;
+  const W = 720, labelW = 70, valW = 90, rowH = 17, plotW = W - labelW - valW, max = Math.max(...sent);
+  let s = `<svg viewBox="0 0 ${W} ${sent.length * rowH + 30}" role="img" aria-label="Request size of each model call in a 10-turn conversation">`;
+  sent.forEach((b, i) => {
+    const old = i ? Math.min(sent[i - 1], b) : 0, y = 4 + i * rowH, wOld = old / max * plotW, wNew = (b - old) / max * plotW;
+    s += `<text x="${labelW - 8}" y="${y + rowH / 2 + 4}" text-anchor="end">call ${i + 1}</text>`;
+    s += `<rect x="${labelW}" y="${y + 2}" width="${Math.max(wOld - 1, 0)}" height="${rowH - 4}" rx="2" fill="${css("--grid")}" stroke="${css("--rule")}" data-tip="Call ${i + 1}: ${fmtB(old)} already sent in call ${i}"/>`;
+    s += `<rect x="${labelW + wOld}" y="${y + 2}" width="${Math.max(wNew, 2)}" height="${rowH - 4}" rx="2" fill="${css("--accent")}" data-tip="Call ${i + 1}: ${fmtB(b - old)} new"/>`;
+    s += `<text class="val" x="${labelW + wOld + wNew + 6}" y="${y + rowH / 2 + 4}">${fmtB(b)}</text>`;
+  });
+  s += `<text x="${labelW}" y="${sent.length * rowH + 24}">request body sent to the model; calls after an order lookup are the second call of their turn</text>`;
+  const el = document.getElementById("chatResend"); el.innerHTML = s + "</svg>"; bindTips(el);
+  const total = sent.reduce((a, b) => a + b, 0), newBytes = sent.reduce((a, b, i) => a + (b - (i ? Math.min(sent[i - 1], b) : 0)), 0);
+  document.getElementById("chatResendNote").textContent = `${sent.length} calls sent ${fmtB(total)} to the model in total, though the last call alone is ${fmtB(sent[sent.length - 1])}. ${Math.round((1 - newBytes / total) * 100)}% of the bytes were repeats. Tracing that records each request records every repeat.`;
+})();
+
+(function chatLines() {
+  const series = [
+    {label: "Prompts sent to the model", rows: chatRows(BCS_CHAT), f: r => r.prompt_bytes, c: "--ink-3", dash: true},
+    {label: "BCS, billed", rows: chatRows(BCS_CHAT), f: r => r.billed, c: "--s-baml"},
+    {label: "BCS, network", rows: chatRows(BCS_CHAT), f: r => r.bytes, c: "--s-baml", dash: true},
+    {label: "Datadog, network", rows: chatRows("datadog"), f: r => r.bytes, c: "--s-datadog"},
+    {label: "Logfire, network", rows: chatRows("logfire"), f: r => r.bytes, c: "--s-logfire"},
+    {label: "OpenTelemetry, network", rows: chatRows("otel"), f: r => r.bytes, c: "--s-otel"},
+  ].filter(s => s.rows.length);
+  const W = 720, L = 70, R = 20, T = 14, B = 40, H = 320, pw = W - L - R, ph = H - T - B;
+  const top = Math.max(...series.flatMap(se => se.rows.map(se.f)));
+  function draw(log) {
+  const ymin = log ? 3e3 : 0, ymax = log ? top * 1.15 : Math.ceil(top / 1e6) * 1e6;
+  const sx = t => L + t / 50 * pw;
+  const sy = v => log ? T + ph - (Math.log10(Math.max(v, ymin)) - Math.log10(ymin)) / (Math.log10(ymax) - Math.log10(ymin)) * ph : T + ph - v / ymax * ph;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bytes per conversation by number of turns">`;
+  const ticks = log ? [1e4, 1e5, 1e6, 1e7].filter(v => v < ymax) : Array.from({length: ymax / 1e6 + 1}, (_, i) => i * 1e6);
+  for (const v of ticks) s += `<line class="gl" x1="${L}" x2="${W - R}" y1="${sy(v)}" y2="${sy(v)}"/><text x="${L - 8}" y="${sy(v) + 4}" text-anchor="end">${v ? fmtB(v) : "0"}</text>`;
+  for (const t of [1, 10, 20, 30, 40, 50]) s += `<text x="${sx(t)}" y="${H - B + 18}" text-anchor="middle">${t}</text>`;
+  s += `<text x="${L + pw / 2}" y="${H - 4}" text-anchor="middle">turns in the conversation</text>`;
+  series.forEach(se => {
+    s += `<polyline fill="none" stroke="${css(se.c)}" stroke-width="2" ${se.dash ? 'stroke-dasharray="5 4"' : ""} points="${se.rows.map(r => sx(r.turns) + "," + sy(se.f(r))).join(" ")}"/>`;
+    se.rows.forEach(r => {
+      s += `<circle cx="${sx(r.turns)}" cy="${sy(se.f(r))}" r="3.5" fill="${css(se.c)}" stroke="${css("--bg")}" stroke-width="1.5" pointer-events="none"/>`;
+      s += `<circle cx="${sx(r.turns)}" cy="${sy(se.f(r))}" r="10" fill="transparent" data-tip="${esc(se.label)}, ${r.turns} turns (${r.model_calls} model calls): ${fmtB(se.f(r))}"/>`;
+    });
+  });
+  const el = document.getElementById("chatLines"); el.innerHTML = s + "</svg>"; bindTips(el);
+  }
+  draw(false);
+  const sc = document.getElementById("chatScale");
+  sc.addEventListener("click", e => { const x = e.target.closest("button"); if (!x) return;
+    sc.querySelectorAll("button").forEach(y => y.setAttribute("aria-pressed", y === x)); draw(x.dataset.log === "1"); });
+
+  document.getElementById("chatLegend").innerHTML = series.map(se => `<span class="chip"><span class="dot" style="background:${se.dash ? "transparent" : css(se.c)};border:2px ${se.dash ? "dashed" : "solid"} ${css(se.c)}"></span>${se.label}</span>`).join("");
+  const p50 = chatAt(BCS_CHAT, 50), lf20 = chatAt("logfire", 20), lf30 = chatAt("logfire", 30);
+  const lfi = chatAt("logfire-instant", 50), lf50 = chatAt("logfire", 50);
+  if (lfi) document.getElementById("chatBatchNote").textContent = `Same 50-turn conversation with an instant model, where Logfire batches many calls per export: ${fmtB(lfi.bytes)}, against ${fmtB(lf50.bytes)} with a 1-second model.`;
+  document.getElementById("chatLinesNote").textContent = `At 50 turns the bot made ${p50.model_calls} model calls carrying ${fmtB(p50.prompt_bytes)} of prompts. BCS billed ${fmtB(p50.billed)}, about twice the prompts, because each call's history is captured as the function's input and again inside the HTTP request. OpenTelemetry's network bytes jump from ${fmtB(chatAt("otel", 20).bytes)} at 20 turns to ${fmtB(chatAt("otel", 30).bytes)} at 30, when the conversation outgrows gzip's window.`;
+})();
+
+(function chatCache() {
+  const h = chatAt(BCS_CHAT, 50);
+  let html = `<p>BCS stores captured values by content hash and skips uploading a value it already has. But it only splits a capture into separately stored pieces when a piece reaches 64 KiB, or 16 KiB for a single string. A chat message is under 1 KB, so each call's history is one new piece. It never matches anything stored before.</p>`;
+  const rows = [["Prompts to the model", h.prompt_bytes, "--ink-3"], ["Billed by BCS", h.billed, "--s-baml"], ["Uploaded to BCS", h.upload, "--s-baml"]];
+  const max = Math.max(...rows.map(r => r[1]));
+  html += `<div class="bars">` + rows.map(([l, v, c]) => `<div class="bar"><span>${l}</span><div class="track"><div class="fill" style="width:${(v / max * 100).toFixed(1)}%;background:${css(c)}"></div></div><span class="amt">${fmtB(v)}</span></div>`).join("") + `</div>`;
+  html += `<p class="muted">One 50-turn conversation on the real BCS: ${h.already_available} of its objects were already stored. The bill is about twice the prompts because each call's history is captured as the function's input and again inside the HTTP request.</p>`;
+  document.getElementById("chatCache").innerHTML = html;
+})();
+
+(function chatTable() {
+  const tabs = document.getElementById("chatTabs"), lens = [10, 20, 50];
+  tabs.innerHTML = lens.map((t, i) => `<button type="button" id="chat-${t}" aria-pressed="${i === 2}" data-t="${t}">${t} turns</button>`).join("");
+  function draw(turns) {
+    const b = chatAt(BCS_CHAT, turns), lf = chatAt("logfire", turns), dd = chatAt("datadog", turns), ot = chatAt("otel", turns);
+    const calls = b.model_calls, tools = calls - turns, records = 1 + 2 * calls + tools;
+    const rows = [
+      ["BCS", b.bytes, `${fmtB(b.billed)} captured`, b.billed / 1e9 * 4, `${(b.billed / 1e3).toLocaleString("en-US", {maximumFractionDigits: 0})} GB billed`],
+      ["Logfire", lf.bytes, `${records} records`, records / 1e6 * 2, `${records.toLocaleString("en-US")}M records`],
+      ["Datadog LLM Obs", dd.bytes, `${calls} LLM spans`, calls / 1e4 * 3.5, `${calls.toLocaleString("en-US")}M LLM spans`],
+      ["OpenTelemetry", ot.bytes, "self-hosted", null, "—"],
+    ];
+    let t = `<thead><tr><th>Platform</th><th class="n">Network / conversation</th><th class="n">Network / 1M conversations</th><th>Billed on</th><th class="n">Cost / conversation</th><th class="n">Cost / 1M conversations</th><th class="n">Billed units / 1M</th></tr></thead><tbody>`;
+    for (const [name, net, unit, cost, units] of rows) t += `<tr><td>${name}</td><td class="n">${fmtB(net)}</td><td class="n">${(net / 1e3).toLocaleString("en-US", {maximumFractionDigits: 0})} GB</td><td>${unit}</td><td class="n">${cost == null ? "—" : "$" + cost.toFixed(4)}</td><td class="n">${cost == null ? "—" : fmt$(cost * 1e6)}</td><td class="n">${units}</td></tr>`;
+    document.getElementById("chatTable").innerHTML = t + "</tbody>";
+    document.getElementById("chatTableNote").textContent = `${turns} turns = ${calls} model calls and ${tools} order lookups. List prices after free tiers: BCS $4/GB, Logfire $2 per million records, Datadog LLM Observability $3.50 per 10,000 LLM spans (plus a $160/month minimum). Logfire records: one per conversation, two per model call (function and model span), one per lookup.`;
+  }
+  tabs.addEventListener("click", e => { const x = e.target.closest("button"); if (!x) return;
+    tabs.querySelectorAll("button").forEach(y => y.setAttribute("aria-pressed", y === x)); draw(+x.dataset.t); });
+  draw(50);
 })();
 
 // ---- Logfire deep dive

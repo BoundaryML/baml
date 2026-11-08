@@ -36,6 +36,8 @@ All runs use a local fake OpenAI server, so the numbers measure tracing, not the
 5. **About 55 KB fixed upload per process** (runtime definitions), so short-lived processes send 25–50× more bytes than Logfire or OTel for a single call. It is billed at only a few hundred bytes.
 6. **Default `medium` shows nothing per call for plain functions** (timing aggregates only). To see non-LLM steps you need `high` or a call-site `trace.span()`.
 7. **No disk spool.** What is unsent at kill -9 is gone, about the last 0.5 s of work.
+8. **Long chats are expensive, and BCS's cache doesn't help.** A support bot that resends its conversation every turn billed 349 KB at 10 turns and 5.68 MB at 50 turns: $1,395 and $22,728 per million conversations, against $72 and $352 on Logfire and $5,250 and $26,250 on Datadog LLM Obs. Bytes grow with the square of the turn count, and BCS bills about twice the prompts (history as input and inside the HTTP body). Content-addressed storage only splits out pieces of 64 KiB (16 KiB for a string), so each call's history of sub-1 KB messages is one new blob: 0 cache hits in 50 turns (LOG.md, "E15").
+9. **Uploads still queued 5 s after shutdown starts are dropped.** BCS delivery's `shutdown_timeout` is a fixed 5 s, not affected by the CLI's `--shutdown-timeout`. A 50-turn chat against an instant model lost 15 of 44 uploads with `ShutdownTimeout`. With a realistic 1 s model, nothing was lost.
 
 ## Notes on the other stacks
 

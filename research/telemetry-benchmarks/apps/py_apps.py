@@ -3,7 +3,7 @@
     python py_apps.py <stack> <app> --text ... [--n N] [--vary]
 
 stack: off | otel | logfire | datadog | bridge (Python calling the BAML functions)
-app:   hello | classify | extract | agent
+app:   hello | classify | extract | agent | chat (--text is JSON {system, users})
 
 Model calls go to MODEL_BASE_URL with the official OpenAI SDK. Each stack's
 exporter endpoint comes from TELEMETRY_URL (a loopback relay). Setup lines for
@@ -130,6 +130,42 @@ def agent(ticket):
     return ask(f"Respond to the customer. Units available: {stock(sku)}")
 
 
+# App 5: a support chatbot that resends the whole conversation on every model call.
+ORDER_FORMAT = 'Answer in JSON using this schema:\n{\n  kind: "tool" or "reply",\n  text: string,\n}'
+
+
+@trace_tool
+def lookup_order(order_id):
+    return {"id": order_id, "status": "shipped", "carrier": "UPS Ground", "tracking": f"1Z999AA1{order_id}0000784",
+            "eta": "2026-11-12", "address": "1200 Market Street, Apartment 4B, San Francisco, CA 94102, United States",
+            "items": [{"sku": "TRAIL-RUNNER-42", "name": "Trail running shoe, size 42, slate blue", "qty": 1, "price": 129.0},
+                      {"sku": "WOOL-SOCK-M", "name": "Merino wool hiking socks, medium, 3-pack", "qty": 2, "price": 24.5},
+                      {"sku": "BOTTLE-750", "name": "Insulated steel water bottle, 750 ml", "qty": 1, "price": 32.0}]}
+
+
+@trace_app
+def respond(system, history):
+    messages = [{"role": "system", "content": f"{system}\n{ORDER_FORMAT}"}] + history
+    reply = model.chat.completions.create(model=MODEL, messages=messages)
+    return json.loads(reply.choices[0].message.content)
+
+
+@trace_app
+def converse(system, users):
+    history, calls = [], 0
+    for u in users:
+        history.append({"role": "user", "content": u})
+        action = respond(system, list(history))
+        calls += 1
+        if action["kind"] == "tool":
+            history.append({"role": "assistant", "content": f"Looking up order {action['text']}."})
+            history.append({"role": "user", "content": f"Tool lookup_order returned: {json.dumps(lookup_order(action['text']))}"})
+            action = respond(system, list(history))
+            calls += 1
+        history.append({"role": "assistant", "content": action["text"]})
+    return calls
+
+
 if STACK == "bridge":
     # setup:bridge
     import baml_sdk
@@ -149,7 +185,8 @@ def main():
     parser.add_argument("--vary", action="store_true")
     args = parser.parse_args()
     setup_ms = (time.perf_counter() - T0) * 1000
-    fn = {"hello": lambda t: hello(), "classify": classify, "extract": extract, "agent": agent}[args.app]
+    fn = {"hello": lambda t: hello(), "classify": classify, "extract": extract, "agent": agent,
+          "chat": lambda t: converse(*json.loads(t).values())}[args.app]
     timings = []
     for i in range(args.n):
         # With --vary, --text holds one document per call, separated by "|".
