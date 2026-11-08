@@ -41,6 +41,7 @@ pub struct Declaration {
     pub is_enum: bool,
 }
 pub enum Shape {
+    Bigint,
     String,
     Uint8Array,
     RustType,
@@ -63,6 +64,8 @@ pub enum Shape {
         element: &'static Type,
     },
     MapStringInt,
+    Closure,
+    Future,
     MapStringPtr {
         tag: u64,
         value: &'static Type,
@@ -71,6 +74,13 @@ pub enum Shape {
 }
 pub use baml_type::Freshness;
 pub enum Type {
+    Bigint,
+    Future(&'static Type, &'static Type),
+    Function {
+        params: &'static [Parameter],
+        ret: &'static Type,
+        throws: &'static Type,
+    },
     Int,
     LiteralInt(i64, Freshness),
     LiteralBool(bool, Freshness),
@@ -99,9 +109,39 @@ pub enum Type {
     List(&'static Type),
     Union(&'static [Type]),
 }
+pub struct Parameter {
+    pub name: Option<&'static str>,
+    pub optional: bool,
+    pub ty: &'static Type,
+}
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
+            Self::Future(value, error) => OwnedType::Future(
+                Box::new(value.owned(leaves, carried)),
+                Box::new(error.owned(leaves, carried)),
+            ),
+            Self::Function {
+                params,
+                ret,
+                throws,
+            } => OwnedType::Function {
+                params: params
+                    .iter()
+                    .map(|p| baml_type::RealizedFunctionParamTy {
+                        name: p.name.map(baml_type::Name::new),
+                        mode: if p.optional {
+                            baml_type::FunctionParamMode::Optional
+                        } else {
+                            baml_type::FunctionParamMode::Required
+                        },
+                        ty: p.ty.owned(leaves, carried),
+                    })
+                    .collect(),
+                ret: Box::new(ret.owned(leaves, carried)),
+                throws: Box::new(throws.owned(leaves, carried)),
+            },
+            Self::Bigint => OwnedType::Bigint,
             Self::Int => OwnedType::Int,
             Self::LiteralInt(v, f) => OwnedType::Literal(baml_type::Literal::Int(*v), *f),
             Self::LiteralBool(v, f) => OwnedType::Literal(baml_type::Literal::Bool(*v), *f),
@@ -302,7 +342,11 @@ impl Scratch {
         if value.payload == 0 {
             return SnapshotValue::Null;
         }
-        let result = if matches!(shape, Shape::String) {
+        let result = if matches!(shape, Shape::Bigint) {
+            leaves.bigint(&std::sync::Arc::new(unsafe {
+                crate::tasks::bigint_value(value.payload as usize)
+            }))
+        } else if matches!(shape, Shape::String) {
             let text = unsafe { crate::strings::Str::from_raw(value.payload as usize) };
             // Match the shared capture builder's leaf gate before copying a
             // potentially enormous lazy rope into host memory.
@@ -406,9 +450,24 @@ impl Scratch {
                                     payload: unsafe { ptr.cast::<u64>().read() },
                                 },
                             };
-                            (field.name.into(), unsafe {
-                                self.add(shapes, leaves, value, depth + 1)
-                            })
+                            let captured = if field.type_id == u32::MAX - 2 {
+                                let key = Key::Value(ptr as usize);
+                                if let Some(value) = self.seen.get(&key) {
+                                    *value
+                                } else {
+                                    let value = leaves
+                                        .object(SnapshotObject::NonSnapshotableValue {})
+                                        .map_or(
+                                            SnapshotValue::Truncated(Limit::Objects),
+                                            SnapshotValue::Object,
+                                        );
+                                    self.seen.insert(key, value);
+                                    value
+                                }
+                            } else {
+                                unsafe { self.add(shapes, leaves, value, depth + 1) }
+                            };
+                            (field.name.into(), captured)
                         })
                     }
                     SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
@@ -507,6 +566,25 @@ impl Scratch {
                             SnapshotValue::Int((data.add(i * 2 + 1).read() as u64).cast_signed()),
                         )
                     })
+                }
+                (Key::Value(_), Shape::Future) => SnapshotObject::Descriptive {
+                    kind: btel_snapshot::Description::Future,
+                    name: None,
+                },
+                (Key::Value(pointer), Shape::Closure) => {
+                    let name = unsafe { crate::closures::name(pointer) };
+                    SnapshotObject::Descriptive {
+                        kind: if unsafe { crate::closures::is_generic(pointer) } {
+                            btel_snapshot::Description::GenericFunction
+                        } else if name.is_some() {
+                            btel_snapshot::Description::Function
+                        } else if unsafe { crate::closures::is_bound(pointer) } {
+                            btel_snapshot::Description::BoundMethod
+                        } else {
+                            btel_snapshot::Description::Closure
+                        },
+                        name: name.and_then(|name| b.leaves().label(&name.into())),
+                    }
                 }
                 _ => unreachable!("compiler admitted an unsupported capture shape"),
             };

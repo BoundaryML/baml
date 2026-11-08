@@ -181,6 +181,12 @@ impl Emitter<'_, '_> {
             return Ok("false".into());
         }
         let tag = match ty {
+            TyTemplate::Bigint => (self
+                .plan
+                .bigint_descriptor()
+                .ok_or_else(|| no("bigint membership"))?
+                + 3)
+            .to_string(),
             TyTemplate::Int => "0".into(),
             TyTemplate::Float => "4294967294".into(),
             TyTemplate::Bool => "1".into(),
@@ -228,7 +234,9 @@ impl Emitter<'_, '_> {
                 } else {
                     self.descriptors
                         .get(&c)
-                        .map(|d| (d + 3).to_string())
+                        .map(|d| d + 3)
+                        .or_else(|| super::tasks::runtime_exception_tag(self.plan, c))
+                        .map(|tag| tag.to_string())
                         .ok_or_else(|| no("unplanned membership class"))?
                 }
             }

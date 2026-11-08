@@ -261,7 +261,7 @@ def normalize_admission_signature(signature):
     # Reachability/emission coordinates identify the caller, not the blocker.
     signature = re.split(r" \((?:constructor in |reaching |emitting |layout |[^\n]*? local \d+:|interface receiver )", signature, maxsplit=1)[0]
     signature = re.sub(r"\b0x[0-9a-fA-F]+\b", "<ptr>", signature)
-    signature = re.sub(r"\b(TypeTag|TypeId|ObjectIndex|FileId|Ptr|ListPtr|MapStrPtr|Dyn|Enum|Type|Local|BlockId)\(\d+\)", r"\1(<id>)", signature)
+    signature = re.sub(r"\b(TypeTag|TypeId|ObjectIndex|FileId|Ptr|ListPtr|MapStrPtr|ListClosure|ListFuture|Dyn|Enum|Type|Local|BlockId)\(\d+\)", r"\1(<id>)", signature)
     signature = re.sub(r"\bSourceRoot\(Id\([0-9a-fA-F]+\)\)", "SourceRoot(<id>)", signature)
     signature = re.sub(r"\b(type_id|type_tag|object_id|object_index)(\s*[:=]\s*)\d+\b", r"\1\2<id>", signature)
     return " ".join(signature.split())

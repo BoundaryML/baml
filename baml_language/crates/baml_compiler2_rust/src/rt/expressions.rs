@@ -115,6 +115,16 @@ impl Emitter<'_, '_> {
                 Ok((format!("({l} {op} {r})"), ty))
             }
             Rvalue::UnaryOp {
+                op: UnaryOp::Neg,
+                operand,
+            } => {
+                let (value, repr) = self.operand(operand)?;
+                if repr != Repr::Int {
+                    return Err(no("non-integer negation"));
+                }
+                Ok((self.fallible(&format!("rt::sub(0,{value})")), Repr::Int))
+            }
+            Rvalue::UnaryOp {
                 op: UnaryOp::Not,
                 operand,
             } => {

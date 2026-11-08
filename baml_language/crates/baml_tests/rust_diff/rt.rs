@@ -6,9 +6,70 @@ use super::{Artifacts, PROBES, kpis, pack_result};
 // Enable only when all telemetry matrix cells pass, including non-empty
 // recordings and exact normalized equality.
 const TELEMETRY_SUPPORTED: bool = false;
+// The standalone probes exercise closures without the shared project's global
+// initializer dependency. Their admission is a required coverage baseline.
+const REQUIRED_PROBES: &[&str] = &[
+    "RtClosures",
+    "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
+    "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
+    "concurrency::spawn await x10k",
+];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {
-    level == "off" || TELEMETRY_SUPPORTED || probe.starts_with("strings::")
+    level == "off"
+        || TELEMETRY_SUPPORTED
+        || probe.starts_with("strings::")
+        || matches!(
+            probe,
+            "RtClosures"
+                | "RtEmptyClosures"
+                | "RtGenericClosures"
+                | "RtGenericMethods"
+                | "RtNativeCallback"
+                | "RtBuiltinCallbacks"
+                | "RtSpawnAwait"
+                | "RtTaskControls"
+                | "RtTaskSleep"
+                | "RtTaskModifiers"
+                | "RtScalarTaskOrder"
+                | "RtTaskErrors"
+                | "RtBackgroundTask"
+                | "RtBackgroundError"
+                | "RtTokenComposition"
+                | "RtVirtualGenericClosures"
+                | "RtBoundGenericClosures"
+                | "RtVirtualOwnGenericClosure"
+                | "RtNativeHigherOrderValue"
+                | "RtDefaultCallbacks"
+                | "RtTaskLimits"
+                | "RtTaskTimeout"
+                | "RtAutomaticCleanup"
+                | "RtCancelledFailure"
+                | "RtLinkedCancelledFailure"
+                | "concurrency::spawn await x10k"
+        )
 }
 
 #[derive(Debug, Clone)]
@@ -39,7 +100,8 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         // Initializer admission is checked for the whole source project before
         // entry reachability. Rechecking every entry cannot change this result.
         // Standalone fixtures use a different project and must still be packed.
-        if *probe != "StackAllocation"
+        if super::standalone_source(manifest, probe).is_none()
+            && *probe != "StackAllocation"
             && let Some(rejection) = &initializer_rejection
         {
             artifacts.insert((*probe).into(), Err(rejection.clone()));
@@ -66,7 +128,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         let result = pack_result(
             build,
             workspace,
-            &source,
+            &super::standalone_source(manifest, probe).unwrap_or(source),
             &executable,
             [if super::initializer_probes::collects_tests(probe) {
                 "InitializerTestSummary"
@@ -136,7 +198,16 @@ impl Coverage {
                 .map(|(name, result)| {
                     (
                         name.clone(),
-                        result.as_ref().map(|_| ()).map_err(Clone::clone),
+                        match result {
+                            Err(Rejection::Unsupported(reason))
+                                if REQUIRED_PROBES.contains(&name.as_str()) =>
+                            {
+                                Err(Rejection::Fail(format!(
+                                    "required rt coverage regressed: {reason}"
+                                )))
+                            }
+                            _ => result.as_ref().map(|_| ()).map_err(Clone::clone),
+                        },
                     )
                 })
                 .collect(),
@@ -212,7 +283,7 @@ impl Coverage {
             if TELEMETRY_SUPPORTED {
                 "required"
             } else {
-                "not yet supported"
+                "not yet supported generally; required for standalone closure/task probes and spawn KPI"
             }
         );
         for (construct, count) in blockers {
@@ -261,6 +332,21 @@ fn coverage_counts_each_fixture_once_and_preserves_failures() {
     assert!(report.contains("1 pass, 1 unsupported, 2 fail"));
     assert!(report.contains("1\tfloat"));
     assert_eq!(coverage.build_failures().len(), 2);
+}
+
+#[test]
+fn standalone_closure_coverage_cannot_silently_become_unsupported() {
+    let artifacts = BTreeMap::from([(
+        "RtClosures".into(),
+        Err(Rejection::Unsupported("captured local".into())),
+    )]);
+    let coverage = Coverage::new(&artifacts);
+    assert_eq!(coverage.build_failures().len(), 1);
+    assert!(coverage.report().contains("required rt coverage regressed"));
+    for level in ["off", "low", "medium", "high", "default"] {
+        assert!(supports_level("RtClosures", level));
+        assert!(supports_level("RtEmptyClosures", level));
+    }
 }
 
 #[test]

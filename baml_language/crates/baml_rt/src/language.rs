@@ -80,6 +80,13 @@ pub(crate) fn check_stack_before(threshold: usize) -> R<()> {
 #[cold]
 #[inline(never)]
 fn stack_overflow() -> Box<Error> {
+    // A rejected task still enters its observed callable frame. Reuse the
+    // cold guard path to deliver admission failure before user code runs.
+    let error = crate::ENTRY_ERROR.replace(std::ptr::null_mut());
+    if !error.is_null() {
+        crate::ADMISSION_CANCELLED.set(true);
+        return unsafe { Box::from_raw(error) };
+    }
     from_panic(bex_vm_types::errors::VmPanic::StackOverflow)
 }
 
@@ -96,16 +103,17 @@ pub struct Source {
     pub pcs: &'static [u32],
     pub kinds: &'static [crate::telemetry::RaiseKind],
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Frame {
     pub file: &'static str,
     pub function: &'static str,
     pub line: usize,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Error {
     pub telemetry_raise: Option<crate::telemetry::evidence::Raise>,
     pub telemetry_at: Option<btel_types::ClockInstant>,
+    pub telemetry_caught: Option<(btel_types::TelemetryId, btel_types::TelemetryId)>,
     /// Actual rt heap instance of the panic class, zero only for internal errors.
     pub value: usize,
     pub class: &'static str,
@@ -119,6 +127,7 @@ impl Error {
         Box::new(Self {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: 0,
             class: "InternalError",
             message,
@@ -155,6 +164,7 @@ pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Bo
         Box::new(Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: object as usize,
             class,
             message,
@@ -309,35 +319,61 @@ fn driver_configured(
     let result = driver_inner(descriptors, entry, benchmark, &mut session, format_site);
     session.finish(&result);
     match result {
-        Ok(()) => std::process::ExitCode::SUCCESS,
-        Err(error) => {
-            let traceback = bex_vm_types::errors::format_traceback(
-                error
-                    .frames
-                    .iter()
-                    .rev()
-                    .filter(|f| error.value == 0 || !f.file.starts_with("<builtin>/"))
-                    .map(|f| (f.file, f.line, f.function)),
-            );
-            if error.value == 0 {
-                eprintln!("error: {traceback}VM internal error: {}", error.message);
-            } else {
-                let value = error
-                    .display_value
-                    .unwrap_or_else(|| format!("{} {{message: {:?}}}", error.class, error.message));
-                eprintln!("error: {traceback}uncaught throw: {value}");
+        Ok(reports) => {
+            let failed = reports.iter().any(|r| !r.cancelled);
+            for report in reports {
+                render_error(report.error, Some(report.cancelled));
             }
+            if failed {
+                std::process::ExitCode::FAILURE
+            } else {
+                std::process::ExitCode::SUCCESS
+            }
+        }
+        Err(error) => {
+            render_error(error, None);
             std::process::ExitCode::FAILURE
         }
     }
 }
+fn render_error(error: Box<Error>, background: Option<bool>) {
+    let traceback = bex_vm_types::errors::format_traceback(
+        error
+            .frames
+            .iter()
+            .rev()
+            .filter(|f| error.value == 0 || !f.file.starts_with("<builtin>/"))
+            .map(|f| {
+                let function = if background.is_some() {
+                    f.function.strip_prefix("user").unwrap_or(f.function)
+                } else {
+                    f.function
+                };
+                (f.file, f.line, function)
+            }),
+    );
+    let prefix = match background {
+        Some(true) => "Warning: cancelled spawned task failed: ",
+        Some(false) => "error: unhandled spawned task failed: ",
+        None => "error: ",
+    };
+    if error.value == 0 {
+        eprintln!("{prefix}{traceback}VM internal error: {}", error.message);
+    } else {
+        let value = error
+            .display_value
+            .unwrap_or_else(|| format!("{} {{message: {:?}}}", error.class, error.message));
+        eprintln!("{prefix}{traceback}uncaught throw: {value}");
+    }
+}
+
 fn driver_inner(
     descriptors: &'static [Descriptor],
     entry: fn() -> R<i64>,
     benchmark: Option<Benchmark>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
-) -> R<()> {
+) -> R<Vec<crate::tasks::UnhandledTaskError>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let mut jobs = None;
     let mut warmup = 1usize;
@@ -365,15 +401,29 @@ fn driver_inner(
     pointers.extend(vec![true; descriptors.len()]);
     let pointers = Box::leak(pointers.into_boxed_slice());
     let mut instance = Instance::new(descriptors, pointers);
+    // SAFETY: compiler admission and descriptor construction enforce this ABI.
+    let mut unhandled = Vec::new();
+    fn run(
+        instance: &mut Instance,
+        session: &mut crate::telemetry::Session,
+        entry: fn() -> R<i64>,
+        unhandled: &mut Vec<crate::tasks::UnhandledTaskError>,
+    ) -> R<i64> {
+        let result = session.run(|| unsafe { instance.run_baml(entry) });
+        unhandled.extend(instance.take_unhandled_reports());
+        result
+    }
     let elapsed = std::rc::Rc::new(std::cell::Cell::new(0u128));
     // Setup and all jobs share one fiber. Its stack retains the state across
     // collecting calls; no managed pointer is kept in untraced host storage.
     let result = if let (Some(benchmark), Some(jobs)) = (benchmark, jobs) {
         let elapsed = elapsed.clone();
-        session.run(|| unsafe { instance.run_baml(move || benchmark(jobs, warmup, &elapsed)) })?
+        let result =
+            session.run(|| unsafe { instance.run_baml(move || benchmark(jobs, warmup, &elapsed)) });
+        result?
     } else {
         // SAFETY: compiler admission and descriptor construction enforce this ABI.
-        session.run(|| unsafe { instance.run_baml(entry) })?
+        run(&mut instance, session, entry, &mut unhandled)?
     };
     let Some(jobs) = jobs else {
         let text = match format_site {
@@ -381,26 +431,27 @@ fn driver_inner(
             None => result.to_string(),
         };
         println!("{text}");
-        return Ok(());
+        return Ok(unhandled);
     };
     if benchmark.is_some() {
+        unhandled.extend(instance.take_unhandled_reports());
         print_benchmark_result(result, jobs, elapsed.get());
-        return Ok(());
+        return Ok(unhandled);
     }
     for _ in 1..warmup {
-        if session.run(|| unsafe { instance.run_baml(entry) })? != result {
+        if run(&mut instance, session, entry, &mut unhandled)? != result {
             return Err(Error::internal("warmup result mismatch".into()));
         }
     }
     let start = std::time::Instant::now();
     for _ in 0..jobs {
-        if session.run(|| unsafe { instance.run_baml(entry) })? != result {
+        if run(&mut instance, session, entry, &mut unhandled)? != result {
             return Err(Error::internal("timed result mismatch".into()));
         }
     }
     let elapsed = start.elapsed().as_nanos();
     print_benchmark_result(result, jobs, elapsed);
-    Ok(())
+    Ok(unhandled)
 }
 
 fn print_benchmark_result(result: i64, jobs: usize, elapsed: u128) {
@@ -435,7 +486,7 @@ pub fn benchmark_loop(
 }
 
 #[cold]
-fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
+pub(crate) fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
     use bex_vm_types::errors::VmPanic;
     // Same class and declaration-order fields as BexVm::panic_to_exception_value.
     match panic {
@@ -514,6 +565,7 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
         Box::new(Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: object as usize,
             class: "baml.panics.AllocFailure",
             message,
@@ -610,6 +662,7 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
         Box::new(Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: object as usize,
             class: "baml.panics.IndexOutOfBounds",
             message,
@@ -960,6 +1013,7 @@ fn division_zero(left: i64) -> Box<Error> {
     Box::new(Error {
         telemetry_raise: None,
         telemetry_at: None,
+        telemetry_caught: None,
         value: p as usize,
         class: "baml.panics.DivisionByZero",
         message: format!("division by zero: {left} / 0"),

@@ -83,6 +83,44 @@ fn completion_and_io_are_child_start_boundaries() {
     });
     lp.run_until(&root).unwrap();
 }
+
+#[test]
+fn cancellation_during_handoff_resumes_parent_behind_ready_siblings() {
+    for pending in [false, true] {
+        let rt = runtime();
+        let mut lp = scheduler(&rt);
+        let events = Rc::new(RefCell::new(vec![]));
+        let output = events.clone();
+        let parent = lp.spawn(move |cx| {
+            let cancel = cx.cancel();
+            let child_events = output.clone();
+            let child = cx.spawn(move |cx| {
+                child_events.borrow_mut().push(1);
+                cancel.cancel();
+                if pending {
+                    cx.shield(|cx| cx.sleep(Duration::from_secs(60)))?;
+                }
+                Ok(Value::int(0))
+            });
+            let sibling_events = output.clone();
+            cx.spawn_with(
+                SpawnOptions {
+                    detached: true,
+                    ..SpawnOptions::default()
+                },
+                move |_| {
+                    sibling_events.borrow_mut().push(2);
+                    Ok(Value::int(0))
+                },
+            );
+            assert!(matches!(cx.await_future(&child), Err(Err::Cancelled)));
+            output.borrow_mut().push(3);
+            Ok(Value::int(0))
+        });
+        lp.run_until(&parent).unwrap();
+        assert_eq!(&*events.borrow(), &[1, 2, 3], "pending={pending}");
+    }
+}
 #[test]
 fn await_any_scans_input_order_and_carries_trace() {
     let rt = runtime();
@@ -265,7 +303,7 @@ fn gate_registers_synchronously_and_releases_on_cancel() {
                 ..Default::default()
             },
             |cx| {
-                cx.sleep(Duration::from_millis(5))?;
+                cx.sleep(Duration::from_secs(60))?;
                 Ok(Value::int(1))
             },
         );
@@ -282,7 +320,9 @@ fn gate_registers_synchronously_and_releases_on_cancel() {
         b.request_cancel();
         assert_eq!(cx.await_future(&b).unwrap_err(), Err::Cancelled);
         assert_eq!(g.counts(), (1, 0));
-        cx.await_future(&a)
+        a.request_cancel();
+        assert_eq!(cx.await_future(&a).unwrap_err(), Err::Cancelled);
+        Ok(Value::int(0))
     });
     lp.run_until(&f).unwrap();
     assert_eq!(gate.counts(), (0, 0));
@@ -854,4 +894,275 @@ fn idle_poll_word_is_clear_and_local_cancellation_is_immediate_and_sticky() {
         Ok(Value::int(1))
     });
     lp.run_until(&future).unwrap();
+}
+
+#[test]
+fn await_settled_selects_failures_without_observing_them() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        let success = cx.spawn(|_| Ok(Value::int(1)));
+        let failure = cx.spawn(|_| Err(error("not consumed")));
+        cx.await_future(&success)?;
+        assert_eq!(cx.await_settled(&[failure.clone(), success])?, 0);
+        assert_eq!(cx.await_settled(&[failure.clone()])?, 0);
+        assert_eq!(cx.await_settled(&[failure])?, 0);
+        Ok(Value::int(0))
+    });
+    lp.run_until(&root).unwrap();
+    let report = lp.shutdown(Duration::ZERO);
+    assert_eq!(report.unhandled.len(), 1);
+    assert_eq!(report.unhandled[0].1, error("not consumed"));
+}
+
+#[test]
+fn pending_await_handoff_scans_the_waiting_parent_stack() {
+    let rt = runtime();
+    let address = Rc::new(Cell::new(0));
+    let hits = Rc::new(Cell::new(0));
+    let heap = RootProbe {
+        word_addr: address.clone(),
+        hits: hits.clone(),
+        precise: Rc::new(Cell::new(0)),
+    };
+    let mut lp = TaskLoop::new(
+        Config::default(),
+        rt.handle().clone(),
+        Rc::new(RefCell::new(heap)),
+    );
+    let root = lp.spawn(move |cx| {
+        let word = std::hint::black_box(0x1234_abcdusize);
+        address.set(&word as *const usize as usize);
+        let child = cx.spawn(|cx| {
+            cx.collect();
+            cx.sleep(Duration::from_millis(1))?;
+            cx.collect();
+            Ok(Value::int(1))
+        });
+        let result = cx.await_future(&child)?;
+        std::hint::black_box(word);
+        Ok(result)
+    });
+    assert_eq!(lp.run_until(&root).unwrap().as_int(), 1);
+    assert_eq!(hits.get(), 2);
+}
+
+#[test]
+fn switch_hooks_restore_bindings_across_handoff_and_parked_resume() {
+    thread_local! { static CURRENT_ID: Cell<usize> = const { Cell::new(0) }; }
+    unsafe fn enter(data: *mut ()) {
+        CURRENT_ID.set(unsafe { *data.cast::<usize>() });
+    }
+    unsafe fn leave(_: *mut ()) {
+        CURRENT_ID.set(0);
+    }
+    fn bound(cx: &mut TaskCx<'_>, body: impl FnOnce(&mut TaskCx<'_>) -> Outcome) -> Outcome {
+        struct Binding<'a>(*mut TaskCx<'a>, Box<usize>);
+        impl Drop for Binding<'_> {
+            fn drop(&mut self) {
+                unsafe {
+                    (*self.0).set_switch_hook(None);
+                }
+                CURRENT_ID.set(0);
+            }
+        }
+        let mut binding = Binding(cx, Box::new(cx.id() + 1));
+        let hook = SwitchHook {
+            data: (&mut *binding.1 as *mut usize).cast(),
+            enter,
+            leave,
+        };
+        unsafe {
+            enter(hook.data);
+            cx.set_switch_hook(Some(hook));
+        }
+        let result = body(cx);
+        drop(binding);
+        result
+    }
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        bound(cx, |cx| {
+            let id = cx.id() + 1;
+            assert_eq!(CURRENT_ID.get(), id);
+            let child = cx.spawn(|cx| {
+                bound(cx, |cx| {
+                    let id = cx.id() + 1;
+                    assert_eq!(CURRENT_ID.get(), id);
+                    cx.sleep(Duration::from_millis(1))?;
+                    assert_eq!(CURRENT_ID.get(), id);
+                    Ok(Value::int(7))
+                })
+            });
+            let result = cx.await_future(&child)?;
+            assert_eq!(CURRENT_ID.get(), id);
+            Ok(result)
+        })
+    });
+    assert_eq!(lp.run_until(&root).unwrap().as_int(), 7);
+    assert_eq!(CURRENT_ID.get(), 0);
+}
+
+#[test]
+fn forced_unwind_installs_bindings_until_the_fiber_unregisters_them() {
+    thread_local! { static CURRENT_ID: Cell<usize> = const { Cell::new(0) }; }
+    unsafe fn enter(data: *mut ()) {
+        CURRENT_ID.set(unsafe { *data.cast::<usize>() });
+    }
+    unsafe fn leave(_: *mut ()) {
+        CURRENT_ID.set(0);
+    }
+    struct Binding<'a> {
+        cx: *mut TaskCx<'a>,
+        id: Box<usize>,
+        drops: Rc<Cell<usize>>,
+    }
+    impl Drop for Binding<'_> {
+        fn drop(&mut self) {
+            assert_eq!(CURRENT_ID.get(), *self.id);
+            unsafe { (*self.cx).set_switch_hook(None) };
+            CURRENT_ID.set(0);
+            self.drops.set(self.drops.get() + 1);
+        }
+    }
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let drops = Rc::new(Cell::new(0));
+    let output = drops.clone();
+    let future = lp.spawn(move |cx| {
+        let mut binding = Binding {
+            cx,
+            id: Box::new(cx.id() + 1),
+            drops: output,
+        };
+        let hook = SwitchHook {
+            data: (&mut *binding.id as *mut usize).cast(),
+            enter,
+            leave,
+        };
+        unsafe {
+            enter(hook.data);
+            cx.set_switch_hook(Some(hook));
+        }
+        cx.shield(|cx| cx.sleep(Duration::from_secs(60)))?;
+        drop(binding);
+        Ok(Value::int(0))
+    });
+    lp.tick(false);
+    assert_eq!(CURRENT_ID.get(), 0);
+    let report = lp.shutdown(Duration::ZERO);
+    assert_eq!(report.leaked.len(), 1);
+    assert_eq!(drops.get(), 1);
+    assert!(matches!(future.state(), FutureState::Cancelled));
+    assert_eq!(CURRENT_ID.get(), 0);
+}
+
+#[test]
+fn local_tokens_cancel_queued_multi_limit_tasks_without_holding_partial_permits() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let first = Gate::new(1);
+    let second = Gate::new(1);
+    let f = lp.spawn(move |cx| {
+        let token = cx.new_cancel_token(vec![]);
+        let combined = cx.new_cancel_token(vec![token.clone()]);
+        let held = cx.spawn_with(
+            SpawnOptions {
+                gate: Some(second.clone()),
+                ..Default::default()
+            },
+            |cx| {
+                cx.sleep(Duration::from_secs(60))?;
+                Ok(Value::int(1))
+            },
+        );
+        let queued = cx.spawn_with(
+            SpawnOptions {
+                gates: vec![first.clone(), second.clone(), first.clone()],
+                local_linked: vec![combined],
+                ..Default::default()
+            },
+            |_| panic!("cancelled queued body ran"),
+        );
+        let after = cx.spawn_with(
+            SpawnOptions {
+                gate: Some(first.clone()),
+                ..Default::default()
+            },
+            |_| Ok(Value::int(42)),
+        );
+        cx.sleep(Duration::from_millis(1))?;
+        assert_eq!(first.counts(), (0, 2));
+        assert_eq!(second.counts(), (1, 1));
+        assert!(token.request_cancel());
+        assert!(!token.request_cancel());
+        assert_eq!(cx.await_future(&queued).unwrap_err(), Err::Cancelled);
+        assert_eq!(cx.await_future(&after)?.as_int(), 42);
+        assert_eq!(first.counts(), (0, 0));
+        assert_eq!(second.counts(), (1, 0));
+        held.request_cancel();
+        assert_eq!(cx.await_future(&held).unwrap_err(), Err::Cancelled);
+        Ok(Value::int(42))
+    });
+    assert_eq!(lp.run_until(&f).unwrap().as_int(), 42);
+}
+
+#[test]
+fn deep_local_token_composition_checks_and_drops_iteratively() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        let first = cx.new_cancel_token(vec![]);
+        let mut last = first.clone();
+        for _ in 0..20_000 {
+            last = cx.new_cancel_token(vec![last]);
+        }
+        assert!(!last.is_cancelled());
+        first.cancel();
+        assert!(last.is_cancelled());
+        drop(last);
+        Ok(Value::int(1))
+    });
+    assert_eq!(lp.run_until(&root).unwrap().as_int(), 1);
+}
+
+#[test]
+fn cancelling_a_settled_failure_records_the_request_without_changing_its_outcome() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let failed = lp.spawn(|_| Err(error("bad")));
+    lp.run_until_idle();
+    assert!(!failed.was_cancel_requested());
+    assert!(!failed.try_cancel());
+    assert!(failed.was_cancel_requested());
+    assert!(!failed.try_cancel());
+    assert_eq!(failed.result().unwrap().unwrap_err(), error("bad"));
+}
+
+#[test]
+fn failure_preserves_cancellation_received_through_a_linked_token() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        let token = cx.new_cancel_token(vec![]);
+        let trigger = token.clone();
+        let failed = cx.spawn_with(
+            SpawnOptions {
+                local_linked: vec![token],
+                ..Default::default()
+            },
+            move |_| {
+                trigger.cancel();
+                Err(error("failed during cancellation"))
+            },
+        );
+        assert_eq!(
+            cx.await_future(&failed).unwrap_err(),
+            error("failed during cancellation")
+        );
+        assert!(failed.was_cancel_requested());
+        Ok(Value::int(1))
+    });
+    assert_eq!(lp.run_until(&root).unwrap().as_int(), 1);
 }

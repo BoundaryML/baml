@@ -22,6 +22,8 @@ class AdmissionBurndownTests(unittest.TestCase):
                          normalize("conversion Ptr(72) to Ptr(73) (emitting user.other)"))
         self.assertEqual(normalize("SysOp args: [Local(Local(1))], target: BlockId(2)"),
                          normalize("SysOp args: [Local(Local(12))], target: BlockId(20)"))
+        self.assertEqual(normalize("conversion ListClosure(1234) to ListFuture(5678)"),
+                         normalize("conversion ListClosure(9876) to ListFuture(4321)"))
         self.assertNotEqual(normalize("unsupported in baml_rt: type List(Float)"),
                             normalize("unsupported in baml_rt: type List(Bigint)"))
 

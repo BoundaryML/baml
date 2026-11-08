@@ -73,6 +73,7 @@ mod tests {
         crate::Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value: 1,
             class,
             message: "boom".into(),

@@ -2,9 +2,9 @@
   "counts": {
     "crash/timeout": 0,
     "excluded": 0,
-    "match": 2,
+    "match": 4,
     "mismatch": 0,
-    "unsupported": 6052
+    "unsupported": 6050
   },
   "schema": 1,
   "tests": {
@@ -5565,8 +5565,8 @@
       "signature": "unsupported in baml_rt: type argument Unknown"
     },
     "root.exceptions::throw_in_match_arm_propagates": {
-      "category": "unsupported",
-      "signature": "unsupported in baml_rt: terminator Some(Switch { discriminant: Constant(Int(2)), arms: [(Int(1), BlockId(4))], otherwise: BlockId(1), exhaustive: false, arm_names: [(Int(1), \"1\")] })"
+      "category": "match",
+      "signature": ""
     },
     "root.exceptions::typed_binding_dispatch_int_vs_string": {
       "category": "unsupported",
@@ -5609,8 +5609,8 @@
       "signature": "unsupported in baml_rt: non-class throw"
     },
     "root.exceptions::unhandled_throw_string": {
-      "category": "unsupported",
-      "signature": "unsupported in baml_rt: non-class throw"
+      "category": "match",
+      "signature": ""
     },
     "root.exceptions::user_class_plus_panic_plus_wildcard_class_fires": {
       "category": "unsupported",
