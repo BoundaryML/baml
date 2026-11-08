@@ -116,6 +116,9 @@ fn compile(
         })
         .sum::<usize>()
         <= 1024;
+    let MirFunctionKind::Bytecode(entry_body) = &all[&entry].kind else { unreachable!() };
+    let result_repr = plan.repr(&entry_body.locals[0].ty)?;
+    let string_result = result_repr == super::Repr::Str;
     let mut host_sites = vec![(None, 0usize, entry)];
     if let Some((setup, run)) = benchmark {
         let MirFunctionKind::Bytecode(setup_body) = &all[&setup].kind else {
@@ -127,9 +130,9 @@ fn compile(
         if all[&setup].arity != 0
             || all[&run].arity != 1
             || setup_body.locals[0].ty != run_body.locals[1].ty
-            || plan.repr(&run_body.locals[0].ty)? != super::Repr::Int
+            || plan.repr(&run_body.locals[0].ty)? != result_repr
         {
-            return Err(no("benchmark requires setup() -> S and run(S) -> int"));
+            return Err(no("benchmark requires setup() -> S and run(S) matching the entry result"));
         }
         host_sites.extend([(None, 0usize, setup), (None, 0usize, run)]);
     }
@@ -278,6 +281,7 @@ fn compile(
             &builtins,
             format_site,
             !plan.init_chains.is_empty(),
+            string_result,
         );
     } else {
         host::emit(
@@ -286,6 +290,7 @@ fn compile(
             &builtins,
             format_site,
             !plan.init_chains.is_empty(),
+            string_result,
         );
     }
     Ok(out)

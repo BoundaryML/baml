@@ -296,7 +296,21 @@ pub fn driver_observed(
 }
 
 /// Native benchmark entry. Setup state stays on the root fiber's scanned stack.
-pub type Benchmark = fn(usize, usize, &std::cell::Cell<u128>) -> R<i64>;
+pub type Benchmark<T = i64> = fn(usize, usize, &std::cell::Cell<u128>) -> R<T>;
+/// Owned results accepted by the native command and benchmark driver.
+pub trait DriverValue:PartialEq+std::fmt::Display+'static {
+    fn formatted(&self,session:&mut crate::telemetry::Session,site:Option<usize>)->R<String>;
+}
+impl DriverValue for i64 {
+    fn formatted(&self,session:&mut crate::telemetry::Session,site:Option<usize>)->R<String>{
+        match site {Some(site)=>session.format_int(*self,site),None=>Ok(self.to_string())}
+    }
+}
+impl DriverValue for String {
+    fn formatted(&self,session:&mut crate::telemetry::Session,site:Option<usize>)->R<String>{
+        match site {Some(site)=>session.format_string(self,site),None=>Ok(serde_json::to_string(self).expect("string JSON"))}
+    }
+}
 
 pub fn driver_observed_benchmark(
     descriptors: &'static [Descriptor],
@@ -337,10 +351,10 @@ pub fn driver_observed_initialized(
     )
 }
 type Initializer = fn(&mut Instance, &mut crate::telemetry::Session) -> R<()>;
-pub fn driver_configured(
+pub fn driver_configured<T:DriverValue>(
     descriptors: &'static [Descriptor],
-    entry: fn() -> R<i64>,
-    benchmark: Option<Benchmark>,
+    entry: fn() -> R<T>,
+    benchmark: Option<Benchmark<T>>,
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
@@ -399,10 +413,10 @@ pub fn driver_configured(
         }
     }
 }
-fn driver_inner(
+fn driver_inner<T:DriverValue>(
     descriptors: &'static [Descriptor],
-    entry: fn() -> R<i64>,
-    benchmark: Option<Benchmark>,
+    entry: fn() -> R<T>,
+    benchmark: Option<Benchmark<T>>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
     initialize: Option<Initializer>,
@@ -442,40 +456,37 @@ fn driver_inner(
     // collecting calls; no managed pointer is kept in untraced host storage.
     let result = if let (Some(benchmark), Some(jobs)) = (benchmark, jobs) {
         let elapsed = elapsed.clone();
-        session.run(|| unsafe { instance.run_baml(move || benchmark(jobs, warmup, &elapsed)) })?
+        session.run(|| unsafe { instance.run_baml_value(move || benchmark(jobs, warmup, &elapsed)) })?
     } else {
         // SAFETY: compiler admission and descriptor construction enforce this ABI.
-        session.run(|| unsafe { instance.run_baml(entry) })?
+        session.run(|| unsafe { instance.run_baml_value(entry) })?
     };
     let Some(jobs) = jobs else {
-        let text = match format_site {
-            Some(site) => session.format_int(result, site)?,
-            None => result.to_string(),
-        };
+        let text = result.formatted(session,format_site)?;
         println!("{text}");
         return Ok(());
     };
     if benchmark.is_some() {
-        print_benchmark_result(result, jobs, elapsed.get());
+        print_benchmark_result(&result, jobs, elapsed.get());
         return Ok(());
     }
     for _ in 1..warmup {
-        if session.run(|| unsafe { instance.run_baml(entry) })? != result {
+        if session.run(|| unsafe { instance.run_baml_value(entry) })? != result {
             return Err(Error::internal("warmup result mismatch".into()));
         }
     }
     let start = std::time::Instant::now();
     for _ in 0..jobs {
-        if session.run(|| unsafe { instance.run_baml(entry) })? != result {
+        if session.run(|| unsafe { instance.run_baml_value(entry) })? != result {
             return Err(Error::internal("timed result mismatch".into()));
         }
     }
     let elapsed = start.elapsed().as_nanos();
-    print_benchmark_result(result, jobs, elapsed);
+    print_benchmark_result(&result, jobs, elapsed);
     Ok(())
 }
 
-fn print_benchmark_result(result: i64, jobs: usize, elapsed: u128) {
+fn print_benchmark_result(result: &impl std::fmt::Display, jobs: usize, elapsed: u128) {
     println!(
         "{}",
         serde_json::json!({"result":result.to_string(),"jobs":jobs,"elapsed_ns":elapsed})
@@ -504,6 +515,22 @@ pub fn benchmark_loop(
     }
     elapsed.set(start.elapsed().as_nanos());
     Ok(result)
+}
+
+/// Retain the expected text on the fiber, comparing without a per-job copy.
+pub fn benchmark_string_loop(mut job:impl FnMut()->R<usize>,jobs:usize,warmup:usize,elapsed:&std::cell::Cell<u128>)->R<String>{
+    let cx=unsafe{crate::strings::Cx::current()};
+    let result=unsafe{crate::strings::Str::from_raw(std::hint::black_box(&mut job)()?)}.as_str(&cx).to_owned();
+    for _ in 1..warmup {
+        let value=unsafe{crate::strings::Str::from_raw(std::hint::black_box(&mut job)()?)};
+        if value.as_str(&cx)!=result {return Err(Error::internal("warmup result mismatch".into()));}
+    }
+    let start=std::time::Instant::now();
+    for _ in 0..jobs {
+        let value=unsafe{crate::strings::Str::from_raw(std::hint::black_box(&mut job)()?)};
+        if value.as_str(&cx)!=result {return Err(Error::internal("timed result mismatch".into()));}
+    }
+    elapsed.set(start.elapsed().as_nanos());Ok(result)
 }
 
 #[cold]

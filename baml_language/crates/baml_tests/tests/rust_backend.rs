@@ -986,7 +986,7 @@ fn rt_source_bytes_and_diagnostics() {
             include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
         ),
         ("initializer", "const X = 1; function main() -> int { X }"),
-        ("entry", "function main() -> string { \"hello\" }"),
+        ("entry", "function main(value:int) -> int { value }"),
         (
             "hook",
             "/// baml:$trace=trace.span\nfunction main() -> int { 1 }",
@@ -1013,7 +1013,7 @@ fn rt_source_bytes_and_diagnostics() {
         };
         if expected.is_empty() {
             let expected = match name {
-                "entry" => "unsupported in baml_rt: entry must have no parameters and return int",
+                "entry" => "unsupported in baml_rt: entry must have no parameters and return int or string",
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };

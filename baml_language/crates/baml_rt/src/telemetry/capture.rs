@@ -222,6 +222,11 @@ impl Scratch {
         let root = b.leaves().string_value(&value.into());
         b.finish(SnapshotRoot::Value(root), &mut self.shaper)
     }
+    pub fn text_arguments(&mut self,value:&str,omitted:usize)->Snapshot {
+        self.begin();let mut b=self.pool.acquire_beyond_budget();
+        let root=b.arguments(0..omitted+1,|leaves,index|if index==0 {leaves.string_value(&value.into())}else{SnapshotValue::OmittedArg});
+        b.finish(root,&mut self.shaper)
+    }
     pub fn type_args(&mut self, args: &[(&str, &Type)]) -> Snapshot {
         self.begin();
         let mut b = self.pool.acquire_beyond_budget();

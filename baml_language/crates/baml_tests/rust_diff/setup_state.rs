@@ -2,6 +2,11 @@
 use super::*;
 
 pub(super) fn run() {
+    run_case(false);
+    run_case(true);
+}
+
+fn run_case(string_result: bool) {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -20,7 +25,12 @@ BAML_TELEMETRY = "BAML_TELEMETRY"
     )
     .unwrap();
     let input = include_str!("setup_state.baml");
-    std::fs::write(source.join("baml_src/main.baml"), input).unwrap();
+    let input = if string_result {
+        input.replace("-> int {", "-> string {")
+            .replace("777", "\"hello\\n\\\"world\\\"\"")
+            .replace("state.payload.length() + state.stamp + sum % 7", "(state.payload.length() + state.stamp + sum % 7).to_string()")
+    } else { input.to_owned() };
+    std::fs::write(source.join("baml_src/main.baml"), &input).unwrap();
     let executable = build.join("setup-state-benchmark");
     pack_result_options(
         &build,
@@ -46,7 +56,7 @@ BAML_TELEMETRY = "BAML_TELEMETRY"
                 "{}",
                 String::from_utf8_lossy(&plain.stderr)
             );
-            assert_eq!(plain.stdout, b"777\n");
+            assert_eq!(plain.stdout, if string_result { b"\"hello\\n\\\"world\\\"\"\n".as_slice() } else { b"777\n".as_slice() });
             let actual = run_probe(
                 command.args(["--jobs", "3", "--warmup", "2"]),
                 Duration::from_secs(120),
@@ -66,8 +76,8 @@ BAML_TELEMETRY = "BAML_TELEMETRY"
     // A changing checksum must fail: recreating setup state before each run
     // would incorrectly hide this mutation and make these checks succeed.
     let changing = input.replace(
-        "state.payload.length() + state.stamp + sum % 7",
-        "state.stamp += 1; state.stamp",
+        if string_result { "(state.payload.length() + state.stamp + sum % 7).to_string()" } else { "state.payload.length() + state.stamp + sum % 7" },
+        if string_result { "state.stamp += 1; state.stamp.to_string()" } else { "state.stamp += 1; state.stamp" },
     );
     std::fs::write(source.join("baml_src/main.baml"), changing).unwrap();
     pack_result_options(

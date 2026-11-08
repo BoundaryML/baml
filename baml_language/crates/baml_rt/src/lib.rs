@@ -212,12 +212,19 @@ impl Instance {
     /// A returned error's managed `value` is unrooted: inspect it only while
     /// this instance remains alive and before any further managed allocation.
     pub unsafe fn run_baml(&mut self, entry: impl FnOnce() -> R<i64> + 'static) -> R<i64> {
+        unsafe { self.run_baml_value(entry) }
+    }
+    /// Execute a root returning an owned host value.
+    ///
+    /// # Safety
+    /// Captures and results obey `run_baml`'s managed-pointer rooting contract.
+    pub unsafe fn run_baml_value<T:'static>(&mut self,entry:impl FnOnce()->R<T>+'static)->R<T>{
         unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
     }
-    unsafe fn execute<E: 'static>(
+    unsafe fn execute<T: 'static, E: 'static>(
         &mut self,
-        entry: impl FnOnce() -> Result<i64, E> + 'static,
-    ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
+        entry: impl FnOnce() -> Result<T, E> + 'static,
+    ) -> Result<Result<T, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;

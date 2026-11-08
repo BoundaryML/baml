@@ -245,8 +245,8 @@ pub(super) fn collect<'db>(
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         unreachable!()
     };
-    if mir.arity != 0 || plan.repr(&body.locals[0].ty)? != Repr::Int {
-        return Err(no("entry must have no parameters and return int"));
+    if mir.arity != 0 || !matches!(plan.repr(&body.locals[0].ty)?, Repr::Int | Repr::Str) {
+        return Err(no("entry must have no parameters and return int or string"));
     }
     Ok(Admitted {
         all,
