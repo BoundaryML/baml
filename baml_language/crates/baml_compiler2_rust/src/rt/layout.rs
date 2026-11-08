@@ -97,7 +97,7 @@ impl Plan<'_> {
                     _ => return Err(no("map value")),
                 }
             }
-            RuntimeTy::Null => Repr::Null,
+            RuntimeTy::Null | RuntimeTy::Never => Repr::Null,
             RuntimeTy::List(element) => match element.as_ref() {
                 RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::ListInt,
                 RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => {
@@ -380,7 +380,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         })
         .max()
         .unwrap_or(next);
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,rt::exceptions::VALUE_DESC,\n");
     for (&object, layout) in &plan.layouts {
         if super::exceptions::reserved(plan, object).is_some() {
             continue;
@@ -497,7 +497,7 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    14
+    15
 }
 
 // A recursive alias's unfolded union can name containers whose concrete

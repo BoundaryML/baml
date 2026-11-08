@@ -96,7 +96,7 @@ pub struct Source {
     pub pcs: &'static [u32],
     pub kinds: &'static [crate::telemetry::RaiseKind],
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Frame {
     pub file: &'static str,
     pub function: &'static str,
@@ -113,9 +113,69 @@ pub struct Error {
     pub message: String,
     pub frames: Vec<Frame>,
     pub display_value: Option<String>,
+    pub thrown_value: Option<Dyn>,
+    pub context: usize,
+    pub cause: usize,
+    pub trace: Option<Vec<Frame>>,
     pub diagnostic_value: Option<String>,
 }
 impl Error {
+    /// # Safety
+    /// The error's heap value must remain live in its owning runtime.
+    pub unsafe fn dynamic_value(&self) -> Dyn {
+        self.thrown_value.unwrap_or_else(|| Dyn {
+            tag: unsafe { (*(self.value as *const Header)).desc as u64 + 3 },
+            payload: self.value as u64,
+        })
+    }
+
+    pub fn chain(mut self: Box<Self>, cause: usize) -> Box<Self> {
+        if self.context == 0 && self.cause == 0 {
+            self.cause = cause;
+        }
+        self
+    }
+
+    /// Read immutable call-site metadata only after a failure leaves a body.
+    /// # Safety
+    /// `cx` and its frame chain still belong to this active call.
+    pub unsafe fn at_cx(
+        mut self: Box<Self>,
+        source: &'static Source,
+        site: usize,
+        cx: crate::calls::ErrorContext,
+    ) -> Box<Self> {
+        if self.trace.is_none() {
+            let mut trace = vec![Frame {
+                file: source.file,
+                function: source.function,
+                line: source.lines[site],
+            }];
+            let mut current = cx.frame;
+            while !current.is_null() {
+                let frame = unsafe { &*current };
+                if frame.parent.is_null() {
+                    break;
+                }
+                let parent = unsafe { &*frame.parent };
+                let index = parent
+                    .source
+                    .pcs
+                    .iter()
+                    .position(|p| *p == frame.caller_pc)
+                    .unwrap_or(0);
+                trace.push(Frame {
+                    file: parent.source.file,
+                    function: parent.source.function,
+                    line: parent.source.lines[index],
+                });
+                current = frame.parent;
+            }
+            trace.retain(|f| !f.file.starts_with("<builtin>/"));
+            self.trace = Some(trace);
+        }
+        self.chain(cx.handling()).at(source, site)
+    }
     /// Start a new raise while preserving the carried value and original trace.
     #[cold]
     pub fn rethrow_at(mut self: Box<Self>, source: &'static Source, site: usize) -> Box<Self> {
@@ -134,6 +194,10 @@ impl Error {
             class: "InternalError",
             message,
             frames: Vec::new(),
+            thrown_value: None,
+            context: 0,
+            cause: 0,
+            trace: None,
             diagnostic_value: None,
             display_value: None,
         })
@@ -172,6 +236,10 @@ pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Bo
             class,
             message,
             frames: Vec::new(),
+            thrown_value: None,
+            context: 0,
+            cause: 0,
+            trace: None,
             diagnostic_value: None,
             display_value: None,
         })
@@ -533,6 +601,10 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
             class: "baml.panics.AllocFailure",
             message,
             frames: Vec::new(),
+            thrown_value: None,
+            context: 0,
+            cause: 0,
+            trace: None,
             diagnostic_value: None,
             display_value: None,
         })
@@ -631,6 +703,10 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
             class: "baml.panics.IndexOutOfBounds",
             message,
             frames: Vec::new(),
+            thrown_value: None,
+            context: 0,
+            cause: 0,
+            trace: None,
             diagnostic_value: None,
             display_value: Some(format!(
                 "baml.panics.IndexOutOfBounds {{index: {index}, length: {length}}}"
@@ -776,6 +852,7 @@ mod list_tests {
 pub struct CaughtError {
     error: Box<Error>,
     root: baml_rt_tasks::IntegrationRoot,
+    context: baml_rt_tasks::IntegrationRoot,
 }
 impl CaughtError {
     /// # Safety
@@ -785,13 +862,41 @@ impl CaughtError {
         let roots = crate::ROOTS.get();
         assert!(!roots.is_null(), "catch outside a runtime root task");
         let root = unsafe { (&*roots).root(error.value) };
-        Self { error, root }
+        let context = unsafe {
+            (&*roots).root(if error.context != 0 {
+                error.context
+            } else {
+                error.cause
+            })
+        };
+        Self {
+            error,
+            root,
+            context,
+        }
     }
     pub fn value(&self) -> usize {
         self.root.get()
     }
     pub fn error(&self) -> &Error {
         &self.error
+    }
+    pub fn dynamic_value(&self) -> Dyn {
+        unsafe { self.error.dynamic_value() }
+    }
+    pub fn context(&self) -> usize {
+        self.error.context
+    }
+    /// # Safety
+    /// Schema descriptors must match the language's Context/StackTrace layouts.
+    pub unsafe fn materialize(&mut self, schema: crate::exceptions::ContextSchema) -> R<usize> {
+        if self.error.context != 0 {
+            return Ok(self.error.context);
+        }
+        let context = unsafe { crate::exceptions::context(&self.error, schema) }?;
+        self.context = unsafe { (&*crate::ROOTS.get()).root(context) };
+        self.error.context = context;
+        Ok(context)
     }
     /// Transfer the error to its caller. As with any Result error, the caller
     /// must root it before performing another managed allocation.
@@ -983,6 +1088,10 @@ fn division_zero(left: i64) -> Box<Error> {
         class: "baml.panics.DivisionByZero",
         message: format!("division by zero: {left} / 0"),
         frames: vec![],
+        thrown_value: None,
+        context: 0,
+        cause: 0,
+        trace: None,
         diagnostic_value: None,
         display_value: Some(format!("baml.panics.DivisionByZero {{dividend: {left}}}")),
     })

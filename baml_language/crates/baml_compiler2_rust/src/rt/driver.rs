@@ -69,6 +69,10 @@ fn compile_entry<'db>(
         heads: BTreeMap::new(),
         dispatches: BTreeMap::new(),
         function_frames: BTreeMap::new(),
+        frozen_types: BTreeMap::new(),
+        frozen_strings: BTreeSet::new(),
+        type_renderer: None,
+        error_contexts: false,
         structural_strings: false,
         structural_string_calls: BTreeSet::new(),
         string_overrides: BTreeMap::new(),
@@ -98,6 +102,7 @@ fn compile_entry<'db>(
     );
     builtins::emit(&mut out, &builtins)?;
     let layout::LayoutIds { descriptors, lists } = layout::emit(&mut out, &plan)?;
+    super::assertions::emit(&mut out, &plan)?;
     super::regex::emit(&mut out, &plan, &descriptors, &lists, &builtins)?;
     let host_function = |name: &str| {
         program
@@ -284,12 +289,21 @@ fn compile_entry<'db>(
         (stringify, aliased),
         &telemetry_sites,
     )?;
+    let cx_type = super::exceptions::context_type(plan.error_contexts);
     if let Some((setup, run)) = benchmark {
-        host::emit_benchmark(&mut out, entry, setup, run, &builtins, format_site);
+        host::emit_benchmark(
+            &mut out,
+            entry,
+            setup,
+            run,
+            &builtins,
+            format_site,
+            plan.error_contexts,
+        );
     } else if test_entry {
-        write!(&mut out, "fn entry()->R<i64>{{unsafe{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)?;}}else{{f{entry}::<false>(cx,0)?;}}Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name)}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
+        write!(&mut out, "fn entry()->R<i64>{{unsafe{{let cx={cx_type}::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)?;}}else{{f{entry}::<false>(cx,0)?;}}Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name)}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
     } else {
-        host::emit(&mut out, entry, &builtins, format_site);
+        host::emit(&mut out, entry, &builtins, format_site, plan.error_contexts);
     }
     Ok(out)
 }

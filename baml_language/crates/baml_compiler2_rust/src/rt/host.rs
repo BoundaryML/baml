@@ -5,8 +5,9 @@ pub(super) fn emit(
     entry: usize,
     builtins: &BTreeSet<String>,
     format_site: usize,
+    contexts: bool,
 ) {
-    emit_host(out, entry, builtins, format_site, None);
+    emit_host(out, entry, builtins, format_site, contexts, None);
 }
 
 pub(super) fn emit_benchmark(
@@ -16,8 +17,16 @@ pub(super) fn emit_benchmark(
     run: usize,
     builtins: &BTreeSet<String>,
     format_site: usize,
+    contexts: bool,
 ) {
-    emit_host(out, entry, builtins, format_site, Some((setup, run)));
+    emit_host(
+        out,
+        entry,
+        builtins,
+        format_site,
+        contexts,
+        Some((setup, run)),
+    );
 }
 
 fn emit_host(
@@ -25,8 +34,10 @@ fn emit_host(
     entry: usize,
     builtins: &BTreeSet<String>,
     format_site: usize,
+    contexts: bool,
     benchmark: Option<(usize, usize)>,
 ) {
+    let cx_type = super::exceptions::context_type(contexts);
     let builtin_init = if builtins.is_empty() {
         ""
     } else {
@@ -37,8 +48,8 @@ fn emit_host(
     } else {
         "rt::driver_observed(DESCRIPTORS,entry,"
     };
-    write!(&mut out,"fn entry()->R<i64>{{unsafe{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}{driver}TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}\n").unwrap();
+    write!(&mut out,"fn entry()->R<i64>{{unsafe{{let cx={cx_type}::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}}}}}}\nfn main()->std::process::ExitCode{{{builtin_init}{driver}TELEMETRY_FUNCTIONS,TELEMETRY_SITES,Some({format_site}))}}\n").unwrap();
     if let Some((setup, run)) = benchmark {
-        write!(&mut out, "fn benchmark(jobs:usize,warmup:usize,elapsed:&std::cell::Cell<u128>)->R<i64>{{unsafe{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{let state=f{setup}::<true>(cx,1)?;rt::benchmark_loop(||f{run}::<true>(cx,2,state),jobs,warmup,elapsed)}}else{{let state=f{setup}::<false>(cx,1)?;rt::benchmark_loop(||f{run}::<false>(cx,2,state),jobs,warmup,elapsed)}}}}}}\n").unwrap();
+        write!(&mut out, "fn benchmark(jobs:usize,warmup:usize,elapsed:&std::cell::Cell<u128>)->R<i64>{{unsafe{{let cx={cx_type}::current();if rt::telemetry::active(){{let state=f{setup}::<true>(cx,1)?;rt::benchmark_loop(||f{run}::<true>(cx,2,state),jobs,warmup,elapsed)}}else{{let state=f{setup}::<false>(cx,1)?;rt::benchmark_loop(||f{run}::<false>(cx,2,state),jobs,warmup,elapsed)}}}}}}\n").unwrap();
     }
 }

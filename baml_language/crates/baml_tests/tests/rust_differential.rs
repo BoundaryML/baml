@@ -1024,18 +1024,32 @@ fn rt_setup_state_benchmark() {
 #[test]
 #[ignore = "builds generated Rust crates with cargo"]
 fn rt_exception_semantics_at_every_telemetry_level() {
+    let selected = std::env::var("BAML_RT_EXCEPTION_ENTRIES")
+        .unwrap_or_else(|_| "main,uncaught,assertion_failure,contexts,chains,scalars".into());
+    let entries = selected.split(',').collect::<Vec<_>>();
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
     let build = Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-exception-parity");
     std::fs::create_dir_all(&build).unwrap();
-    let source = manifest.join("rust_diff/exceptions");
+    let source = build.join("source");
+    std::fs::create_dir_all(source.join("baml_src")).unwrap();
+    std::fs::write(
+        source.join("baml.toml"),
+        include_str!("../rust_diff/exceptions/baml.toml"),
+    )
+    .unwrap();
+    std::fs::write(
+        source.join("baml_src/main.baml"),
+        include_str!("../rust_diff/exceptions/main.baml"),
+    )
+    .unwrap();
     let bytecode = build.join("bytecode");
     pack_result(
         &build.join("vm-build"),
         workspace,
         &source,
         &bytecode,
-        ["main", "uncaught", "assertion_failure"],
+        entries.iter().copied(),
         false,
     )
     .unwrap();
@@ -1059,7 +1073,8 @@ fn rt_exception_semantics_at_every_telemetry_level() {
         }
         let output = run_probe(&mut command, Duration::from_secs(120)).unwrap();
         assert!(
-            output.status.success() == (entry == "main"),
+            output.status.success()
+                == (matches!(entry, "main" | "contexts" | "chains" | "scalars")),
             "{level}/{is_rt}/{stress}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
@@ -1074,7 +1089,7 @@ fn rt_exception_semantics_at_every_telemetry_level() {
             known_telemetry_divergences::without_gc(&trace, "rt"),
         )
     };
-    for entry in ["main", "uncaught", "assertion_failure"] {
+    for entry in entries {
         let compiled = build.join(format!("rt-{entry}"));
         pack_result(
             &build.join("rt-build"),

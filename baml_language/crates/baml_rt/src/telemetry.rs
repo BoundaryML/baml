@@ -249,6 +249,14 @@ pub fn mode(word: &AtomicU8) -> u8 {
 pub fn active() -> bool {
     !CURRENT.get().is_null()
 }
+
+pub(crate) fn caller_pc(site: usize) -> u32 {
+    let state = CURRENT.get();
+    if state.is_null() {
+        return 0;
+    }
+    unsafe { (&*state).sites[site].pc }
+}
 /// # Safety
 /// A session must own the current task, and the caller must finish this frame
 /// before leaving that task. The site must belong to the compiled program.
@@ -353,6 +361,29 @@ pub unsafe fn capture_arguments(values: &[crate::Dyn]) -> InputCaptures {
         types: None,
     }
 }
+
+/// # Safety
+/// Each pointer is a frozen Type spelling produced by the assertion compiler.
+pub unsafe fn capture_frozen_arguments(
+    values: &[usize],
+    schemas: &[(&str, &capture::Type)],
+) -> InputCaptures {
+    let types = values
+        .iter()
+        .map(|p| {
+            let text = unsafe { crate::strings::Str::from_raw(*p) }.to_owned();
+            schemas
+                .iter()
+                .find(|(s, _)| *s == text)
+                .expect("frozen Type capture schema")
+                .1
+        })
+        .collect::<Vec<_>>();
+    InputCaptures {
+        inputs: Some(with_capture(|s, _| s.type_values(&types))),
+        types: None,
+    }
+}
 /// # Safety
 /// The value must be live in the current session throughout capture.
 pub unsafe fn capture_value(value: crate::Dyn) -> Option<btel_snapshot::Snapshot> {
@@ -364,13 +395,7 @@ pub unsafe fn capture_error(error: &Error) -> Option<btel_snapshot::Snapshot> {
     if error.value == 0 {
         return None;
     }
-    let desc = unsafe { (*(error.value as *const baml_rt_gc::Header)).desc };
-    unsafe {
-        capture_value(crate::Dyn {
-            tag: desc as u64 + 3,
-            payload: error.value as u64,
-        })
-    }
+    unsafe { capture_value(error.dynamic_value()) }
 }
 pub fn capture_text(value: &str) -> Option<btel_snapshot::Snapshot> {
     Some(with_capture(|s, _| s.text(value)))
@@ -631,7 +656,7 @@ fn complete_unusual(
 }
 
 fn outcome(error: &Error) -> InvocationOutcome {
-    if error.class == "baml.panics.Cancelled" {
+    if matches!(error.class, "baml.panics.Cancelled" | "baml.panics.Exit") {
         InvocationOutcome::Cancelled
     } else if error.class.starts_with("baml.panics.") || error.value == 0 {
         InvocationOutcome::Panicked

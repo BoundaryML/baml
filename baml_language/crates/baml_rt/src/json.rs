@@ -173,6 +173,10 @@ fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<Error> {
             } else {
                 "baml.json.ParseError"
             },
+            thrown_value: None,
+            context: 0,
+            cause: 0,
+            trace: None,
             diagnostic_value: None,
             display_value: path
                 .as_ref()

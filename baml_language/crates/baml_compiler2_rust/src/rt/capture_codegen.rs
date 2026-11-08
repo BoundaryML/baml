@@ -99,6 +99,10 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
+        if desc == 14 {
+            out.push_str("rt::telemetry::capture::Shape::Unsupported,\n");
+            continue;
+        }
         if matches!(desc, 10 | 11) {
             out.push_str("rt::telemetry::capture::Shape::String,\n");
             continue;
@@ -235,6 +239,7 @@ pub(super) fn capture_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
 fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     use bex_vm_types::RuntimeTy as T;
     let member = match ty {
+        T::Type => "Type".into(),
         T::Int => "Int".into(),
         T::Literal(lit, f) => match lit {
             baml_type::Literal::Int(v) => {

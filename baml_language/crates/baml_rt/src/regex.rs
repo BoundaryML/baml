@@ -116,6 +116,10 @@ fn build_error(cx: &mut Cx, pattern: Str, error: &BuildError, schema: &Schema) -
         class: "baml.regex.Error",
         message: error.message.clone(),
         frames: vec![],
+        thrown_value: None,
+        context: 0,
+        cause: 0,
+        trace: None,
         diagnostic_value: None,
         display_value: Some(format!(
             "baml.regex.Error {{kind: {}, message: {:?}, pattern: {:?}, span_start: {}, span_end: {}}}",

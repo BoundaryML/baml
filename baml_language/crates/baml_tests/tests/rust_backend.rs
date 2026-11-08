@@ -933,7 +933,7 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         ),
         (
             r#"class A { x: int } class B { y: int } function main() -> int { let a = baml.json.decode<A | B>("x") catch(e) { baml.json.ParseError => null }; 0 }"#,
-            false,
+            true,
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
@@ -1009,9 +1009,9 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "1f785094448b60894a203c1ed19889efd9227d0e3846f4bbc688db86fd34214a",
-            "richards" => "1f7a0893aadd91465f992e6b23602d80c1567d7cdbbf901b6fe69765b9cd236f",
-            "agent" => "bdda30aaebf9478637ae266d872649afdab72a107012f8de5d46c9d68b93a656",
+            "trees" => "a9136266708ac69d78cd683f79c5c050602f41253a9df3a27e0776b19d0a6e8b",
+            "richards" => "1718693dec1f66771348f748093358b884399e5f5da50ce9c405e921ab63d6bd",
+            "agent" => "33f5eee2811f8348c002c6ffab591c1434c3d02e1a198d902ff01bd48548511a",
             _ => "",
         };
         if expected.is_empty() {
@@ -1343,7 +1343,16 @@ fn rt_typed_exceptions_and_assertion_bodies_are_admitted() {
     let program = lower(&db, OptLevel::Two);
     let before = fingerprint(&program);
     for (entry, function) in user_functions(&program) {
-        if !["main", "uncaught", "assertion_failure"].contains(&function.name().as_str()) {
+        if ![
+            "main",
+            "uncaught",
+            "assertion_failure",
+            "contexts",
+            "chains",
+            "scalars",
+        ]
+        .contains(&function.name().as_str())
+        {
             continue;
         }
         let generated = baml_db::rust_backend::compile_rt(

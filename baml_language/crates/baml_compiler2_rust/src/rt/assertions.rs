@@ -1,6 +1,134 @@
 //! The broad equality operation used by the BAML assertion bodies.
 use super::*;
 
+pub(super) fn renderer(plan: &Plan<'_>) -> Gen<usize> {
+    plan.program
+        .objects
+        .iter()
+        .enumerate()
+        .find_map(|(id, o)| {
+            (matches!(o, Object::Function(_))
+                && plan.index.display(id) == "baml.<(reflect.Type as baml.ToString)>.to_string")
+                .then_some(id)
+        })
+        .ok_or_else(|| no("assert.is_type renderer metadata"))
+}
+pub(super) fn emit(out: &mut String, plan: &Plan<'_>) -> Gen<()> {
+    if plan.frozen_types.is_empty() {
+        return Ok(());
+    }
+    out.push_str("static ASSERT_FROZEN_TYPES:&[(&str,&rt::telemetry::capture::Type)]=&[");
+    for (text, ty) in &plan.frozen_types {
+        write!(
+            out,
+            "({text:?},&{}),",
+            super::capture_codegen::capture_type(plan, ty)?
+        )
+        .unwrap();
+    }
+    out.push_str("];\n");
+    Ok(())
+}
+
+fn type_text(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
+    ty.try_map_heads(&mut |head| {
+        for p in &plan.program.packages {
+            for (path, id) in p
+                .classes
+                .iter()
+                .chain(p.enums.iter())
+                .chain(p.interfaces.iter())
+                .chain(p.type_aliases.iter())
+            {
+                let tag = match &plan.program.objects[*id] {
+                    Object::Class(c) => c.type_tag,
+                    Object::Enum(e) => e.type_tag,
+                    Object::Interface(i) => i.type_tag,
+                    Object::TypeAlias(a) => a.type_tag,
+                    _ => continue,
+                };
+                if tag == head.tag() {
+                    return Ok(path.under(&p.name));
+                }
+            }
+        }
+        Err(no("assert.is_type display declaration"))
+    })
+    .map(|ty| ty.to_string())
+}
+
+// assert.is_type only uses its Type.of<T>() value to render the expected type
+// in a failure message. Freeze that immutable spelling in the specialization.
+pub(super) fn specialize(
+    plan: &mut Plan<'_>,
+    callee: usize,
+    frame: &[RuntimeTy],
+    mir: &mut MirFunction<'_>,
+) -> Gen<()> {
+    if plan.index.display(callee) != "assert.is_type"
+        && !(plan.index.display(callee) == "baml.String.from" && frame == [RuntimeTy::Type])
+    {
+        return Ok(());
+    }
+    let MirFunctionKind::Bytecode(body) = &mut mir.kind else {
+        return Ok(());
+    };
+    let mut arguments = BTreeSet::new();
+    for b in &body.blocks {
+        if let Some(
+            Terminator::Call {
+                args, ntypeargs, ..
+            }
+            | Terminator::VirtualCall {
+                args, ntypeargs, ..
+            },
+        ) = &b.terminator
+        {
+            for a in &args[..*ntypeargs] {
+                if let Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) = a {
+                    arguments.insert(l.0);
+                }
+            }
+        }
+    }
+    let mut types = BTreeSet::new();
+    for (i, local) in body.locals.iter_mut().enumerate() {
+        if arguments.contains(&i) {
+            continue;
+        }
+        if matches!(&local.ty, RuntimeTy::Type)
+            || matches!(&local.ty,RuntimeTy::Class(head,args) if args.is_empty() && head.name().as_str()=="Type" && Some(head.root())==plan.lang.get(baml_base::LangPackage::Reflect))
+        {
+            local.ty = RuntimeTy::String;
+            types.insert(i);
+        }
+    }
+    for block in &mut body.blocks {
+        for statement in &mut block.statements {
+            if let StatementKind::Assign {
+                destination: Place::Local(local),
+                value: Rvalue::LoadType(ty),
+            } = &mut statement.kind
+            {
+                if types.contains(&local.0) {
+                    let anchored = plan
+                        .index
+                        .anchor(ty)
+                        .ok_or_else(|| no("assert.is_type type identity"))?;
+                    let text = type_text(plan, &anchored.substitute_symbolic(&[]))?;
+                    plan.frozen_types
+                        .insert(text.clone(), ty.substitute_symbolic(&[]));
+                    statement.kind = StatementKind::Assign {
+                        destination: Place::Local(*local),
+                        value: Rvalue::Use(Operand::Constant(Constant::String(text))),
+                    };
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn validate(plan: &Plan<'_>, builtins: &BTreeSet<String>) -> Gen<()> {
     let _ = builtins;
     // Structural comparison must never silently bypass a user-defined eq.
@@ -58,6 +186,16 @@ impl registry::Feature for Feature {
         _: &[Repr],
         values: &[(String, Repr)],
     ) -> Option<Gen<(String, Repr)>> {
+        if name == "baml._to_string_default" && e.plan.frozen_strings.contains(&e.object) {
+            return Some((|| {
+                if values.len() != 1 || values[0].1 != Repr::Str {
+                    return Err(no("frozen Type renderer storage"));
+                }
+                let renderer = e.plan.type_renderer.expect("frozen Type renderer");
+                let site = e.telemetry_site(renderer);
+                Ok((e.fallible(&format!("rt::assertions::type_string::<OBSERVE>({}, {site}, &O{renderer}, ASSERT_FROZEN_TYPES)",values[0].0)),Repr::Str))
+            })());
+        }
         if matches!(name, "baml.Float.is_nan" | "baml.Float.abs") {
             return Some(if values.len() == 1 && values[0].1 == Repr::Float {
                 let method = if name.ends_with("is_nan") {
@@ -78,6 +216,9 @@ impl registry::Feature for Feature {
             });
         }
         if name != "baml.ops.equals_equals" {
+            return None;
+        }
+        if values.iter().any(|v| matches!(v.1, Repr::Null | Repr::Str)) {
             return None;
         }
         Some(compare(e, values, false))

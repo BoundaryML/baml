@@ -11,6 +11,38 @@ pub(super) struct Admitted<'db> {
     pub builtins: BTreeSet<String>,
     pub json_decode: Option<usize>,
 }
+
+// These adapters need the iterator/list job's closed-world specialization.
+// Reject them before expanding their recursive interface candidates; otherwise
+// the corpus watchdog sees a compiler stall instead of an admission blocker.
+pub(super) fn before_specialization(plan: &Plan<'_>, body: &super::MirFunctionBody<'_>) -> Gen<()> {
+    for local in &body.locals {
+        let mut adapter = false;
+        local.ty.visit_heads(&mut |head| {
+            adapter |= Some(head.root()) == plan.lang.get(baml_base::LangPackage::Baml)
+                && head.namespace().as_slice() == ["iter"]
+                && matches!(
+                    head.name().as_str(),
+                    "Map"
+                        | "Filter"
+                        | "FilterMap"
+                        | "FlatMap"
+                        | "Flatten"
+                        | "Peekable"
+                        | "StepBy"
+                        | "Chain"
+                        | "Take"
+                        | "Skip"
+                        | "TakeWhile"
+                        | "SkipWhile"
+                );
+        });
+        if adapter {
+            return Err(no("lazy iterator adapters"));
+        }
+    }
+    Ok(())
+}
 pub(super) fn collect<'db>(
     db: &'db dyn Db,
     root: SourceRoot,
@@ -65,6 +97,7 @@ pub(super) fn collect<'db>(
             return Err(no(plan.index.display(object)));
         };
         registry::admit(registry::Admission::Function(mir))?;
+        super::exceptions::prepare_contexts(db, plan, body)?;
         if body.locals.len() > 1024 {
             return Err(no("more than 1024 locals in one body"));
         }

@@ -71,6 +71,7 @@ pub enum Shape {
 }
 pub use baml_type::Freshness;
 pub enum Type {
+    Type,
     Int,
     LiteralInt(i64, Freshness),
     LiteralBool(bool, Freshness),
@@ -102,6 +103,7 @@ pub enum Type {
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
+            Self::Type => OwnedType::Type,
             Self::Int => OwnedType::Int,
             Self::LiteralInt(v, f) => OwnedType::Literal(baml_type::Literal::Int(*v), *f),
             Self::LiteralBool(v, f) => OwnedType::Literal(baml_type::Literal::Bool(*v), *f),
@@ -188,6 +190,15 @@ impl Default for Scratch {
     }
 }
 impl Scratch {
+    pub fn type_values(&mut self, types: &[&Type]) -> Snapshot {
+        self.begin();
+        let mut b = self.pool.acquire_beyond_budget();
+        let root = b.arguments(types.iter(), |leaves, ty| {
+            let ty = ty.owned(leaves, &mut self.carried);
+            SnapshotValue::Type(leaves.ty(ty))
+        });
+        b.finish(root, &mut self.shaper)
+    }
     /// # Safety
     /// Every pointer belongs to the current heap and is live throughout this call.
     pub unsafe fn arguments(&mut self, shapes: &[Shape], values: &[Dyn]) -> Snapshot {

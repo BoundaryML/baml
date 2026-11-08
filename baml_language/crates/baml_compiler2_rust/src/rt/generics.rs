@@ -25,6 +25,9 @@ pub(super) fn expand<'db>(
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
             };
+            registry::admit(registry::Admission::Function(&mir))?;
+            super::admission::before_specialization(plan, body)?;
+            super::exceptions::prepare_contexts(db, plan, body)?;
             let iters = crate::analysis::array_iterators(db, body, mir.arity);
             for (i, local) in body.locals.iter().enumerate() {
                 if iters.contains(&i) {
@@ -562,7 +565,8 @@ pub(super) fn instance<'db>(
     };
     let params = callable_generic_frame(db, baml_compiler2_hir::loc::DeclRef::Source(f)).params;
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, f.file(db).source_root(db));
-    let specialized = specialize(source, &params, &frame, &runtime)?;
+    let mut specialized = specialize(source, &params, &frame, &runtime)?;
+    super::assertions::specialize(plan, callee, &frame, &mut specialized)?;
     let runtime_params = baml_type::RuntimeGenericLayout::new(&params);
     if runtime_params.params().len() != frame.len() {
         return Err(no("specialization frame arity"));
@@ -575,6 +579,10 @@ pub(super) fn instance<'db>(
         .collect();
     let id = plan.next_object;
     plan.next_object += 1;
+    if plan.index.display(callee) == "baml.String.from" && frame == [RuntimeTy::Type] {
+        plan.frozen_strings.insert(id);
+        plan.type_renderer = Some(super::assertions::renderer(plan)?);
+    }
     plan.function_frames.insert(id, captures);
     all.insert(id, std::borrow::Cow::Owned(specialized));
     std::rc::Rc::make_mut(&mut plan.index).rt_alias(id, callee);
@@ -611,7 +619,7 @@ impl Plan<'_> {
             }
         });
     }
-    fn candidate(&mut self, ty: &RuntimeTy) {
+    pub(super) fn candidate(&mut self, ty: &RuntimeTy) {
         if matches!(ty,RuntimeTy::Class(head,args) if args.is_empty() && head.builtin_primitive(self.lang)==Some(baml_type::PrimitiveType::String))
         {
             self.candidate(&RuntimeTy::String);

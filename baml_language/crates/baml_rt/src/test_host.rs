@@ -20,7 +20,23 @@ pub fn run(
     pointers.extend(vec![true; descriptors.len()]);
     let mut instance = Instance::new(descriptors, Box::leak(pointers.into_boxed_slice()));
     // SAFETY: same admitted entry ABI as driver_observed; the instance owns the heap.
-    let result = session.run(|| unsafe { instance.run_baml(entry) });
+    let shapes = functions
+        .iter()
+        .find_map(|f| f.captures)
+        .expect("test host capture metadata")
+        .shapes;
+    let failure = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let captured = failure.clone();
+    let result = session.run(|| unsafe {
+        instance.run_baml(move || {
+            entry().map_err(|error| {
+                if error.value != 0 {
+                    *captured.borrow_mut() = Some(crate::exceptions::test_failure(&error, shapes));
+                }
+                error
+            })
+        })
+    });
     session.finish(&result);
     let (outcome, message) = match result {
         Ok(_) => ("pass", None),
@@ -28,7 +44,15 @@ pub fn run(
             eprintln!("VM internal error: {}", e.message);
             return std::process::ExitCode::FAILURE;
         }
-        Err(e) => ("fail", Some(failure_message(&e))),
+        Err(e) => (
+            "fail",
+            Some(
+                failure
+                    .borrow_mut()
+                    .take()
+                    .unwrap_or_else(|| failure_message(&e)),
+            ),
+        ),
     };
     println!(
         "BAML_CORPUS_RESULT\t{}",
@@ -83,6 +107,10 @@ mod tests {
                 function: "user.test",
                 line: 2,
             }],
+            thrown_value: None,
+            context: 0,
+            cause: 0,
+            trace: None,
             diagnostic_value: None,
             display_value: Some(format!("{class} {{ code: 1 }}")),
         }

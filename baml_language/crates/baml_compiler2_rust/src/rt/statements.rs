@@ -7,6 +7,18 @@ impl Emitter<'_, '_> {
         let pcs = &self.plan.index.positions(self.object).block_pcs[b];
         self.mark(pcs.start);
         let mut out = String::new();
+        if self.plan.error_contexts {
+            let cause = block.handling.map_or_else(
+                || "base_cx.handling()".into(),
+                |h| {
+                    format!(
+                        "caught{}.as_ref().map_or(base_cx.handling(),|e|e.context())",
+                        h.0
+                    )
+                },
+            );
+            writeln!(&mut out, "let cx=base_cx.with_handling({cause});").unwrap();
+        }
         if headers.contains(&b) {
             writeln!(
                 &mut out,

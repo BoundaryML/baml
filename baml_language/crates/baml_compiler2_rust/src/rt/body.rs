@@ -99,6 +99,11 @@ impl Emitter<'_, '_> {
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
+        let input_captures = if self.plan.frozen_strings.contains(&self.object) {
+            "rt::telemetry::capture_frozen_arguments(&[l1],ASSERT_FROZEN_TYPES)".to_owned()
+        } else {
+            format!("rt::telemetry::capture_arguments(&[{captured_args}])")
+        };
         let capture_arguments = if let Some(frame) = self.plan.function_frames.get(&self.object) {
             let types = frame
                 .iter()
@@ -111,17 +116,27 @@ impl Emitter<'_, '_> {
                 .collect::<Gen<Vec<_>>>()?
                 .join(",");
             format!(
-                "{{let mut c=rt::telemetry::capture_arguments(&[{captured_args}]);c.types=rt::telemetry::capture_type_args(&[{types}]);c}}"
+                "{{let mut c={input_captures};c.types=rt::telemetry::capture_type_args(&[{types}]);c}}"
             )
         } else {
-            format!("rt::telemetry::capture_arguments(&[{captured_args}])")
+            input_captures
         };
         let captures = format!(
             "||{capture_arguments},|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
         );
         let mut code = call_cost::prologue(
-            object, &params, &arguments, returned, &captures, attribute, &guard,
+            object,
+            &params,
+            &arguments,
+            returned,
+            &captures,
+            attribute,
+            &guard,
+            self.plan.error_contexts,
         );
+        if self.plan.error_contexts {
+            code.push_str("let base_cx=cx;\n");
+        }
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {
                 continue;

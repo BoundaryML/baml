@@ -2,6 +2,50 @@
 use crate::{Dyn, R, telemetry::capture::Shape};
 use std::collections::BTreeSet;
 
+/// The stdlib Type.to_string body rendered through a frozen spelling, with its
+/// original function observation and Type-valued input capture.
+/// # Safety
+/// The string, site, observation word and schemas belong to this active program.
+pub unsafe fn type_string<const OBSERVE: bool>(
+    value: usize,
+    site: usize,
+    word: &std::sync::atomic::AtomicU8,
+    schemas: &[(&str, &crate::telemetry::capture::Type)],
+) -> R<usize> {
+    if !OBSERVE {
+        return Ok(value);
+    }
+    let mode = crate::telemetry::mode(word);
+    if mode == 0 {
+        return Ok(value);
+    }
+    if mode == 1 {
+        let frame = unsafe { crate::telemetry::enter_observed(site) };
+        let mut result = Ok(value);
+        frame.finish(&mut result);
+        return result;
+    }
+    let inputs = || unsafe { crate::telemetry::capture_frozen_arguments(&[value], schemas) };
+    let output = |result: &R<usize>| match result {
+        Ok(p) => unsafe {
+            crate::telemetry::capture_value(Dyn {
+                tag: 3,
+                payload: *p as u64,
+            })
+        },
+        Err(e) => unsafe { crate::telemetry::capture_error(e) },
+    };
+    unsafe {
+        if mode > 3 {
+            crate::telemetry::evidence::observe_captured(site, mode & 3, inputs, output, || {
+                Ok(value)
+            })
+        } else {
+            crate::telemetry::observe_captured(site, mode, inputs, output, || Ok(value))
+        }
+    }
+}
+
 /// # Safety
 /// The operands and shape table belong to the active heap.
 pub unsafe fn equal(a: Dyn, b: Dyn, shapes: &[Shape]) -> R<bool> {
@@ -23,8 +67,47 @@ pub unsafe fn equal(a: Dyn, b: Dyn, shapes: &[Shape]) -> R<bool> {
     let mut pending = vec![(a, b)];
     let mut visited = BTreeSet::new();
     while let Some((a, b)) = pending.pop() {
+        let normalize = |v: Dyn| {
+            if v.payload == 0
+                && v.tag >= 3
+                && v.tag != 4294967294
+                && !matches!(shapes[(v.tag - 3) as usize], Shape::Enum { .. })
+            {
+                Dyn { tag: 2, payload: 0 }
+            } else {
+                v
+            }
+        };
+        let (a, b) = (normalize(a), normalize(b));
         if a.tag != b.tag {
-            return Ok(false);
+            let shape = |v: Dyn| {
+                if v.tag >= 3 && v.tag != 4294967294 {
+                    shapes.get((v.tag - 3) as usize)
+                } else {
+                    None
+                }
+            };
+            if matches!(
+                (shape(a), shape(b)),
+                (Some(Shape::List { .. }), Some(Shape::List { .. }))
+            ) {
+                let left = unsafe { crate::format::children(shapes, a) };
+                let right = unsafe { crate::format::children(shapes, b) };
+                if left.len() != right.len() {
+                    return Ok(false);
+                }
+                pending.extend(left.into_iter().zip(right));
+                continue;
+            }
+            if !matches!(
+                (shape(a), shape(b)),
+                (
+                    Some(Shape::MapStringInt | Shape::MapStringPtr { .. }),
+                    Some(Shape::MapStringInt | Shape::MapStringPtr { .. })
+                )
+            ) {
+                return Ok(false);
+            }
         }
         if a.payload == b.payload {
             continue;

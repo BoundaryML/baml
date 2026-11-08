@@ -401,7 +401,8 @@ impl Emitter<'_, '_> {
                 self.coerce((format!("a{self_arg}"), values[*self_arg].1), Repr::Tagged)?;
             write!(code, "let receiver={receiver};").unwrap();
             let fn_ty = format!(
-                "unsafe fn(rt::calls::Context,usize,{})->R<{}>",
+                "unsafe fn({},usize,{})->R<{}>",
+                super::exceptions::context_type(self.plan.error_contexts),
                 signature
                     .iter()
                     .map(|r| r.rust())

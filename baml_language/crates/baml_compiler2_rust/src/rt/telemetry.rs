@@ -166,7 +166,10 @@ pub(super) fn emit(
             .borrow_mut()
             .push((Some(decode), pc, aliased));
     }
-    for id in [stringify, aliased] {
+    for id in [Some(stringify), Some(aliased), plan.type_renderer]
+        .into_iter()
+        .flatten()
+    {
         if observed.insert(id) {
             writeln!(
                 &mut out,
