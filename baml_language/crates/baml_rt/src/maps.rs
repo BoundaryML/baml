@@ -1,5 +1,6 @@
 //! Typed insertion-ordered maps. All key/value storage belongs to the managed
 //! heap; the hash index contains scalar entry indices only.
+pub mod callbacks;
 pub mod json;
 mod slots;
 use crate::{

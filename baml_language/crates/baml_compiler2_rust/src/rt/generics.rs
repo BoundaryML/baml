@@ -63,6 +63,15 @@ pub(super) fn expand<'db>(
             for t in constants {
                 plan.candidate(&t);
             }
+            for (repr, method, callee, frame) in super::map_keys::discover(db, plan, body)? {
+                let target = instance(db, plan, all, &mut instances, callee, frame)?;
+                plan.key_callbacks
+                    .entry(repr)
+                    .or_default()
+                    .insert(method, target);
+                plan.key_edges.entry(object).or_default().insert(target);
+                queue.push_back(target);
+            }
             for b in &body.blocks {
                 for s in &b.statements {
                     if let StatementKind::Assign { value, .. } = &s.kind {
@@ -153,6 +162,11 @@ pub(super) fn expand<'db>(
                         self_arg,
                         ..
                     }) => {
+                        if super::map_keys::virtual_method(plan, b.terminator.as_ref().unwrap())
+                            .is_some()
+                        {
+                            continue;
+                        }
                         plan.remember_heads(&iface.to_template().substitute_symbolic(&[]));
                         let method_args = args[..*ntypeargs]
                             .iter()

@@ -66,6 +66,9 @@ struct Plan<'a> {
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
     map_types: std::cell::RefCell<Vec<maps::MapType>>,
+    key_callbacks: BTreeMap<Repr, BTreeMap<String, usize>>,
+    key_hasher: Option<usize>,
+    key_edges: BTreeMap<usize, BTreeSet<usize>>,
     json_types: Vec<Vec<usize>>,
     json_maps: BTreeMap<Repr, RuntimeTy>,
     globals: BTreeMap<usize, Repr>,
@@ -159,6 +162,7 @@ pub use driver::compile_rt;
 mod calls;
 mod globals;
 mod map_json;
+mod map_keys;
 mod maps;
 mod registry;
 mod strings;

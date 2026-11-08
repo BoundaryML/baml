@@ -60,6 +60,12 @@ pub(super) fn collect<'db>(
             return Err(no(plan.index.display(object)));
         };
         registry::admit(registry::Admission::Function(mir))?;
+        if let Some(targets) = plan.key_edges.get(&object) {
+            for &target in targets {
+                calls.entry(object).or_default().insert(target);
+                queue.push_back(target);
+            }
+        }
         for target in super::closures::discover(db, plan, object, mir)? {
             calls.entry(object).or_default().insert(target);
             queue.push_back(target);

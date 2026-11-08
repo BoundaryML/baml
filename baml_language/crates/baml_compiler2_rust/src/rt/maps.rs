@@ -270,30 +270,14 @@ impl Emitter<'_, '_> {
             if !seen.insert(repr) {
                 return Ok(());
             }
+            if plan
+                .key_callbacks
+                .get(&repr)
+                .is_some_and(|m| m.contains_key("hash"))
+            {
+                return Ok(());
+            }
             if let Repr::Ptr(c) = repr {
-                let class = plan.class(c);
-                for package in &plan.program.packages {
-                    for (interface, rules) in &package.impl_rules {
-                        let Object::Interface(def) = &plan.program.objects[*interface] else {
-                            continue;
-                        };
-                        if !matches!(def.path.to_string().as_str(), "Hash" | "ops.Equals") {
-                            continue;
-                        }
-                        for rule in rules {
-                            if matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if head.tag()==class.type_tag)
-                                && rule.methods.values().any(|m| {
-                                    matches!(
-                                        &plan.index.info(m.fqn.raw()).identity,
-                                        bex_vm_types::types::FunctionIdentity::Declared(_)
-                                    )
-                                })
-                            {
-                                return Err(no("custom map hash/equality callback"));
-                            }
-                        }
-                    }
-                }
                 for &field in &plan.layouts[&c].fields {
                     check(plan, field, seen)?;
                 }
@@ -325,7 +309,7 @@ impl Emitter<'_, '_> {
         k: &str,
         value: Option<&str>,
     ) -> Gen<String> {
-        if !callback_key(key) {
+        if !callback_key(key) && !self.plan.key_callbacks.contains_key(&key) {
             let v = value.map(|v| format!(",{v}")).unwrap_or_default();
             return Ok(format!(
                 "{map}.{method}(&mut rt::strings::Cx::current(),{k}{v})"
@@ -337,6 +321,12 @@ impl Emitter<'_, '_> {
         let a = capture_codegen::capture_dyn(self.plan, key, "a", self.descriptors, self.lists)?;
         let b = capture_codegen::capture_dyn(self.plan, key, "b", self.descriptors, self.lists)?;
         let v = value.map(|v| format!(",{v}")).unwrap_or_default();
+        if self.plan.key_hasher.is_some() {
+            let hooks = self.key_hooks()?;
+            return Ok(format!(
+                "{{let key={k};let mut key_cx=rt::strings::Cx::current();let hooks={hooks};rt::maps::callbacks::hash(&mut key_cx,{dyn_key},&hooks).and_then(|hash|{map}.{method}_with(&mut key_cx,key{v},hash,|cx,a,b|rt::maps::callbacks::equals(cx,{a},{b},&hooks)))}}"
+            ));
+        }
         Ok(format!(
             "{{let key={k};let mut key_cx=rt::strings::Cx::current();rt::maps::keys::hash(&mut key_cx,{dyn_key},CAPTURE_SHAPES,|cx,message|rt::maps::keys::panic(cx,{desc},message)).and_then(|hash|{map}.{method}_with(&mut key_cx,key{v},hash,|cx,a,b|rt::maps::keys::equals(cx,{a},{b},CAPTURE_SHAPES)))}}"
         ))

@@ -461,7 +461,13 @@ impl Scratch {
                             } else {
                                 let payload = data.add(i).read() as u64;
                                 Dyn {
-                                    tag: if payload == 0 && *tag >= 3 && *tag != crate::FLOAT_TAG {
+                                    tag: if payload == 0
+                                        && *tag >= 3
+                                        && *tag != crate::FLOAT_TAG
+                                        && !matches!(
+                                            shapes[(*tag - 3) as usize],
+                                            Shape::Enum { .. }
+                                        ) {
                                         2
                                     } else {
                                         *tag

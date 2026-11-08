@@ -109,6 +109,11 @@ unsafe fn feed(
         Shape::Class {
             declaration,
             fields,
+        }
+        | Shape::GenericClass {
+            declaration,
+            fields,
+            ..
         } => {
             framed(state, 9, &declaration().tag.as_i64().to_le_bytes());
             state.write(&(fields.len() as u64).to_le_bytes());
@@ -176,7 +181,7 @@ unsafe fn feed(
     Ok(())
 }
 
-unsafe fn field_value(value: Dyn, field: &baml_rt_gc::Field) -> Dyn {
+pub(super) unsafe fn field_value(value: Dyn, field: &baml_rt_gc::Field) -> Dyn {
     let slot = unsafe { (value.payload as *const u8).add(field.offset) };
     match field.slot {
         SlotKind::Tagged => unsafe { slot.cast::<Dyn>().read() },
@@ -193,7 +198,7 @@ unsafe fn field_value(value: Dyn, field: &baml_rt_gc::Field) -> Dyn {
         }
     }
 }
-unsafe fn list_len(value: Dyn, shape: &Shape) -> usize {
+pub(super) unsafe fn list_len(value: Dyn, shape: &Shape) -> usize {
     let Shape::List { growing, .. } = shape else {
         unreachable!()
     };
@@ -204,7 +209,12 @@ unsafe fn list_len(value: Dyn, shape: &Shape) -> usize {
     }
 }
 unsafe fn list_value(value: Dyn, shape: &Shape, i: usize) -> Dyn {
-    let Shape::List { growing, tag, .. } = shape else {
+    let Shape::List {
+        growing,
+        tag,
+        element,
+    } = shape
+    else {
         unreachable!()
     };
     let object = value.payload as *const usize;
@@ -218,7 +228,14 @@ unsafe fn list_value(value: Dyn, shape: &Shape, i: usize) -> Dyn {
     }
     let payload = unsafe { data.add(2 + i).read() as u64 };
     Dyn {
-        tag: if *tag >= 3 && *tag != crate::FLOAT_TAG && payload == 0 {
+        tag: if *tag >= 3
+            && *tag != crate::FLOAT_TAG
+            && payload == 0
+            && !matches!(
+                element,
+                crate::telemetry::capture::Type::Enum(_)
+                    | crate::telemetry::capture::Type::EnumVariant(..)
+            ) {
             2
         } else {
             *tag
@@ -288,14 +305,25 @@ unsafe fn equal(
             Shape::Class {
                 declaration,
                 fields,
+            }
+            | Shape::GenericClass {
+                declaration,
+                fields,
+                ..
             },
             Shape::Class {
                 declaration: other_declaration,
                 fields: other_fields,
+            }
+            | Shape::GenericClass {
+                declaration: other_declaration,
+                fields: other_fields,
+                ..
             },
         ) => {
-            let mut same =
-                declaration().tag == other_declaration().tag && fields.len() == other_fields.len();
+            let mut same = left.tag == right.tag
+                && declaration().tag == other_declaration().tag
+                && fields.len() == other_fields.len();
             if !same {
                 active.pop();
                 return Ok(false);
@@ -371,7 +399,7 @@ unsafe fn equal(
     Ok(result)
 }
 
-unsafe fn map_len(value: Dyn, shape: &Shape) -> usize {
+pub(super) unsafe fn map_len(value: Dyn, shape: &Shape) -> usize {
     match shape {
         Shape::Map { len, .. } => unsafe { len(value.payload as usize) },
         Shape::MapStringInt => {
@@ -380,7 +408,7 @@ unsafe fn map_len(value: Dyn, shape: &Shape) -> usize {
         _ => unreachable!(),
     }
 }
-unsafe fn map_entry(value: Dyn, shape: &Shape, i: usize) -> (Dyn, Dyn) {
+pub(super) unsafe fn map_entry(value: Dyn, shape: &Shape, i: usize) -> (Dyn, Dyn) {
     match shape {
         Shape::Map { entry, .. } => unsafe { entry(value.payload as usize, i) },
         Shape::MapStringInt => {

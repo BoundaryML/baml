@@ -79,6 +79,7 @@ const FEATURES: &[&dyn Feature] = &[
     &globals::Feature,
     &closures::Feature,
     &tasks::Feature,
+    &super::map_keys::Feature,
     &maps::Feature,
     &lists::Feature,
     &containers::Feature,
