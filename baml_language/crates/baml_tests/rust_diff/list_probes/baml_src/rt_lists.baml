@@ -248,3 +248,24 @@ function RuntimeListFloatConstants() -> int {
     let positive_first = [0.0, -0.0].join(",");
     if (positive_first == "0.0,0.0" && NegativeListConstants() == "-0.0,-0.0") { 1 } else { -1 }
 }
+
+function RuntimeListStringEntry() -> string {
+    let values = ["λ", "line\nquote\"", "😀"];
+    values.push("tail");
+    values.join("|")
+}
+
+function RuntimeListScalarBoundaries() -> int {
+    let values: (int|float)[] = [1,2.5,-3.75];
+    let total=0;
+    for(let value in values) {
+        total += match(value) { let i:int => i, let f:float => f.itrunc() };
+    }
+    let text=string.from_code_points([955,128512,10,34]);
+    if(total==0 && text=="λ😀\n\"" && !text.is_ascii() && "ascii".is_ascii() && 9.0.sqrt()==3.0 && (-1.25).floor()==-2.0) {1} else {-1}
+}
+function RuntimeListInvalidCodePoint() -> string { string.from_code_points([65,55296]) }
+function RuntimeListFloatTruncationError() -> int { (0.0/0.0).itrunc() }
+
+class RuntimeListValidationError { message:string, offset:int, scalar:float, ok:bool }
+function RuntimeListValidationThrow() -> int { throw RuntimeListValidationError {message:"quoted\"|λ", offset:2, scalar:1.5, ok:true} }

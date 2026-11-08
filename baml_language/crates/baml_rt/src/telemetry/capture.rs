@@ -216,6 +216,18 @@ impl Scratch {
         let root = SnapshotRoot::Value(unsafe { self.add(shapes, &mut b.leaves(), value, 0) });
         unsafe { self.finish(shapes, b, root) }
     }
+    pub(super) fn text_arguments(&mut self, value: &str) -> Snapshot {
+        self.begin();
+        let mut b = self.pool.acquire_beyond_budget();
+        let root = b.arguments(0..4, |leaves, index| {
+            if index == 0 {
+                leaves.string_value(&value.into())
+            } else {
+                SnapshotValue::OmittedArg
+            }
+        });
+        b.finish(root, &mut self.shaper)
+    }
     pub fn text(&mut self, value: &str) -> Snapshot {
         self.begin();
         let mut b = self.pool.acquire_beyond_budget();
@@ -753,6 +765,40 @@ mod tests {
             unsafe { Scratch::default().value(SHAPES, Dyn { tag: 9, payload: 0 }) }.value(),
             Some(SnapshotValue::Enum { variant: 0, .. })
         ));
+    }
+    #[test]
+    fn owned_host_string_arguments_match_managed_capture() {
+        fn entry() -> crate::R<i64> {
+            let mut cx = unsafe { crate::strings::Cx::current() };
+            let text = "line\n\"|λ|😀";
+            let managed = cx.string(text)?;
+            let mut scratch = Scratch::default();
+            let owned = scratch.text_arguments(text);
+            let omitted = Dyn {
+                tag: u64::MAX,
+                payload: 0,
+            };
+            let managed = unsafe {
+                scratch.arguments(
+                    &[Shape::String],
+                    &[
+                        Dyn {
+                            tag: 3,
+                            payload: managed.as_raw() as u64,
+                        },
+                        omitted,
+                        omitted,
+                        omitted,
+                    ],
+                )
+            };
+            assert_eq!(owned.root_id(), managed.root_id());
+            Ok(0)
+        }
+        let mut instance =
+            crate::Instance::new(&[crate::STRING_DESC], &[false, false, false, true]);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 0);
     }
 }
 

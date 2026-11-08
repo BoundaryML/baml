@@ -819,7 +819,7 @@ fn rt_trees_and_fail_closed_admission() {
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
-    for source in ["function main() -> string { \"hello\" }"] {
+    for source in ["function main() -> bool { true }"] {
         assert!(
             emit(source).unwrap_err().contains("unsupported in baml_rt"),
             "{source}"
@@ -1071,21 +1071,27 @@ fn rt_source_bytes_and_diagnostics() {
             OptLevel::Two,
             entry,
         );
+        if name == "entry" {
+            assert!(result.unwrap().contains("fn entry()->R<String>"));
+            continue;
+        }
         if name == "initializer" {
             let source = result.unwrap();
             assert!(source.contains("rt::globals::begin("));
             continue;
         }
         let expected = match name {
-            "trees" => "4959dbe9d359c0cc795fbc119d87ac23db70c5958457877710d4301b0d088bff",
-            "richards" => "018447bdb05c1db51321d9d8bff4c4e4cf6b3aaa862999212e9be8b99f72236b",
-            "agent" => "2b666cbf0ad653ed09fb2aab1798ff724682a7244d410ee54a966e873fd55742",
+            "trees" => "75abc10d2f6a77e4aa69c28de3081c9a020645731d9943791958294cd806b3ed",
+            "richards" => "3dfe652a80574cee5f829df03b8634707cb08ebce792cbfdec453ee6eac0a051",
+            "agent" => "dbdd2ac81c377d103646c70e3d86b20c101cdaafc8b2250a13c4b1207e97c515",
             _ => "",
         };
         if expected.is_empty() {
             let expected = match name {
                 "initializer" => "unsupported in baml_rt: top-level initializers",
-                "entry" => "unsupported in baml_rt: entry must have no parameters and return int",
+                "entry" => {
+                    "unsupported in baml_rt: entry must have no parameters and return int or string"
+                }
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };
@@ -1253,4 +1259,131 @@ fn rt_shared_recursive_forwarded_and_stored_closures() {
             bex_engine::BexExternalValue::Int(38),
         );
     }
+}
+
+#[test]
+#[ignore = "scoped list KPI admission gate, paired with executable verification"]
+fn rt_list_kpi_admission() {
+    let inputs = [
+        (
+            "ns_k0/main.baml",
+            include_str!(
+                "../../../tools/speedtest/workloads/compute/array-build-sum-100k/main.baml"
+            ),
+        ),
+        (
+            "ns_k1/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/array-traversal-8k/main.baml"),
+        ),
+        (
+            "ns_k2/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/json-aggregate-2k/main.baml"),
+        ),
+        (
+            "ns_k3/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/json-request-body/main.baml"),
+        ),
+        (
+            "ns_k4/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/merge-sort-20k/main.baml"),
+        ),
+        (
+            "ns_k5/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/nbody-20k/main.baml"),
+        ),
+        (
+            "ns_k6/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/quick-sort-3way-1k/main.baml"),
+        ),
+        (
+            "ns_k7/main.baml",
+            include_str!(
+                "../../../tools/speedtest/workloads/memory/allocation-high-retention/main.baml"
+            ),
+        ),
+        (
+            "ns_k8/main.baml",
+            include_str!(
+                "../../../tools/speedtest/workloads/memory/allocation-low-retention/main.baml"
+            ),
+        ),
+        (
+            "ns_k9/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/cycles-into-live/main.baml"),
+        ),
+        (
+            "ns_k10/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/cyclic-churn/main.baml"),
+        ),
+        (
+            "ns_k11/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/heap-calls/main.baml"),
+        ),
+        (
+            "ns_k12/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/live-heap/main.baml"),
+        ),
+        (
+            "ns_k13/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/live-walk/main.baml"),
+        ),
+        (
+            "ns_k14/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/splay-2k/main.baml"),
+        ),
+        (
+            "ns_k15/main.baml",
+            include_str!("../../../tools/speedtest/workloads/programs/json-parser-15/main.baml"),
+        ),
+    ];
+    let names = [
+        "array-build-sum-100k",
+        "array-traversal-8k",
+        "json-aggregate-2k",
+        "json-request-body",
+        "merge-sort-20k",
+        "nbody-20k",
+        "quick-sort-3way-1k",
+        "allocation-high-retention",
+        "allocation-low-retention",
+        "cycles-into-live",
+        "cyclic-churn",
+        "heap-calls",
+        "live-heap",
+        "live-walk",
+        "splay-2k",
+        "json-parser-15",
+    ];
+    let db = baml_test_support::setup_multi_file_db(&inputs);
+    let program = lower(&db, OptLevel::Two);
+    let mut admitted = 0;
+    let mut rejected = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        let entry = program.rendered_callables()[&format!("user.k{i}.main")]
+            .object
+            .raw();
+        match baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        ) {
+            Ok(source) => {
+                admitted += 1;
+                std::fs::write(
+                    std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                        .join(format!("rt-kpi-{name}.rs")),
+                    source,
+                )
+                .unwrap();
+                eprintln!("KPI {name}: admitted");
+            }
+            Err(error) => {
+                eprintln!("KPI {name}: {error}");
+                rejected.push(format!("{name}: {error}"));
+            }
+        }
+    }
+    assert_eq!(admitted, 16, "{}", rejected.join("\n"));
 }

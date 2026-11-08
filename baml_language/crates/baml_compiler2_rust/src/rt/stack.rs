@@ -75,8 +75,8 @@ impl Placement {
     pub(super) fn new<'db>(
         db: &'db dyn Db,
         root: SourceRoot,
+        object: usize,
         body: &MirFunctionBody<'db>,
-        arity: usize,
         opt: OptLevel,
         plan: &Plan<'_>,
         all: &BTreeMap<usize, MirFunction<'db>>,
@@ -95,7 +95,7 @@ impl Placement {
         }) {
             return Self::default();
         }
-        let facts = escape::analyze_function(db, root, body, arity, opt);
+        let facts = escape::analyze_function(db, root, body, all[&object].arity, opt);
         let mut placement = Self::default();
         let mut invalid = BTreeSet::new();
         for block in &body.blocks {
@@ -204,6 +204,13 @@ impl Placement {
             let Some((callee, _)) = plan.index.function(db, *function) else {
                 continue;
             };
+            // Generic calls reach their monomorphized body, whose observation
+            // word and leaf entry are emitted under the specialization's id.
+            let callee = plan
+                .specialized_calls
+                .get(&(object, block.id.0))
+                .copied()
+                .unwrap_or(callee);
             if all.get(&callee).is_some_and(|mir| small_leaf(mir)) {
                 placement.leaf_calls.insert(callee);
             }

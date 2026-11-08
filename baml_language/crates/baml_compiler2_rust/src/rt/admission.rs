@@ -16,6 +16,7 @@ pub(super) fn collect<'db>(
     root: SourceRoot,
     opt: OptLevel,
     entry: usize,
+    benchmark: Option<(usize, usize)>,
     plan: &mut Plan<'_>,
 ) -> Gen<Admitted<'db>> {
     let mut all = BTreeMap::new();
@@ -35,6 +36,9 @@ pub(super) fn collect<'db>(
     }
     let mut queue = VecDeque::from([entry]);
     queue.extend(initializer_roots);
+    if let Some((setup, run)) = benchmark {
+        queue.extend([setup, run]);
+    }
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
     plan.lambda_bodies.clear();
@@ -182,8 +186,14 @@ pub(super) fn collect<'db>(
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         unreachable!()
     };
-    if mir.arity != 0 || plan.repr(&body.locals[0].ty)? != Repr::Int {
-        return Err(no("entry must have no parameters and return int"));
+    if mir.arity != 0
+        || !(plan.repr(&body.locals[0].ty)? == Repr::Int
+            || matches!(
+                &body.locals[0].ty,
+                RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _)
+            ))
+    {
+        return Err(no("entry must have no parameters and return int or string"));
     }
     Ok(Admitted {
         all,

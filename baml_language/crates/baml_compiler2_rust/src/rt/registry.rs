@@ -78,6 +78,8 @@ const FEATURES: &[&dyn Feature] = &[
     &globals::Feature,
     &closures::Feature,
     &tasks::Feature,
+    &super::list_errors::Feature,
+    &super::list_scalars::Feature,
     &lists::Feature,
     &maps::Feature,
     &containers::Feature,
@@ -86,8 +88,8 @@ const FEATURES: &[&dyn Feature] = &[
     &super::switches::Feature,
     &strings::Feature,
     &telemetry::Feature,
-    &loop_ranges::Feature,
     &super::generics::Feature,
+    &loop_ranges::Feature,
     &calls::Feature,
 ];
 

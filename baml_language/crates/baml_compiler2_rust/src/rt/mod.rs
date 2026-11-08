@@ -126,6 +126,8 @@ mod host;
 mod json;
 mod json_lists;
 mod layout;
+mod list_errors;
+mod list_scalars;
 mod lists;
 mod loop_ranges;
 mod places;
@@ -138,7 +140,7 @@ use body::recursive;
 use diagnostics::no;
 use repr::Repr;
 
-pub use driver::compile_rt;
+pub use driver::{compile_rt, compile_rt_benchmark};
 
 mod calls;
 mod globals;

@@ -972,6 +972,50 @@ impl Session {
             }
         })
     }
+    pub fn format_string(&mut self, value: &str, site: usize) -> R<String> {
+        let encoded = serde_json::to_string(value).expect("string JSON");
+        let Some(state) = &self.state else {
+            return Ok(encoded);
+        };
+        let word = state.words[state.sites[site].callee];
+        let alias_word = state.words[state.sites[site + 1].callee];
+        let naming_tag = state.capture_metadata.map_or(0, |m| m.naming_tag);
+        self.run_at(site, || unsafe {
+            observed_captured(
+                word,
+                site,
+                || InputCaptures {
+                    inputs: Some(with_capture(|s, _| s.text_arguments(value))),
+                    types: None,
+                },
+                |r: &R<String>| match r {
+                    Ok(v) => capture_text(v),
+                    Err(e) => capture_error(e),
+                },
+                || {
+                    let aliased: R<bool> = observed_captured(
+                        alias_word,
+                        site + 1,
+                        || {
+                            capture_arguments(&[crate::Dyn {
+                                tag: naming_tag,
+                                payload: 0,
+                            }])
+                        },
+                        |r| match r {
+                            Ok(v) => capture_value(crate::Dyn {
+                                tag: 1,
+                                payload: *v as u64,
+                            }),
+                            Err(e) => capture_error(e),
+                        },
+                        || Ok(false),
+                    );
+                    aliased.map(|_| encoded)
+                },
+            )
+        })
+    }
     pub fn run_at<T>(&mut self, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
         self.run_root(site, call, false)
     }

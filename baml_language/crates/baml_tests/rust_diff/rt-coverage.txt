@@ -1,8 +1,9 @@
-BAML runtime coverage (normal AND GC stress): 36 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 41 pass, 124 unsupported, 0 fail
 Telemetry off: required
-Scoped merge verification: all 22 list probes and both standalone closure probes pass.
+Scoped verification: 27 list probes and both standalone closure probes pass.
+The independent type-dispatch project passes in both GC modes.
+Retained setup benchmarks pass for integer and owned string results, including GC stress and medium telemetry.
 Unselected rows retain prior verification; the full merged differential gate is deferred.
-Includes the previously verified independent rt_type_dispatch_semantics project.
 
 First unsupported constructs (fixtures blocked):
 103	top-level initializers
@@ -117,7 +118,9 @@ RuntimeListBounds	pass
 RuntimeListBuiltins	pass
 RuntimeListFloatConstants	pass
 RuntimeListFloatSpecials	pass
+RuntimeListFloatTruncationError	pass
 RuntimeListInsertError	pass
+RuntimeListInvalidCodePoint	pass
 RuntimeListJson	pass
 RuntimeListJsonError	pass
 RuntimeListJsonField	pass
@@ -132,8 +135,11 @@ RuntimeListMedianError	pass
 RuntimeListRecursiveJson	pass
 RuntimeListReductionOverflow	pass
 RuntimeListReductions	pass
+RuntimeListScalarBoundaries	pass
 RuntimeListStoreBounds	pass
+RuntimeListStringEntry	pass
 RuntimeListStructuralJoin	pass
+RuntimeListValidationThrow	pass
 RuntimeLists	pass
 Scalars	unsupported: top-level initializers
 Shapes	unsupported: top-level initializers

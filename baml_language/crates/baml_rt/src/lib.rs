@@ -9,6 +9,7 @@ pub mod json;
 pub mod json_lists;
 pub mod language;
 pub mod list_errors;
+pub mod list_scalars;
 pub mod lists;
 pub mod maps;
 pub mod strings;
@@ -207,16 +208,17 @@ impl Instance {
     /// Execute generated BAML and preserve its language error.
     ///
     /// # Safety
-    /// The entry must uphold the same rooting contract as `run`. A returned
-    /// error's managed `value` is unrooted: inspect it only while this instance
-    /// remains alive and before any further managed allocation.
-    pub unsafe fn run_baml(&mut self, entry: fn() -> R<i64>) -> R<i64> {
+    /// The entry must uphold the same rooting contract as `run`. Captures must
+    /// not hold unrooted managed pointers; construct retained state on the fiber.
+    /// A returned error's managed `value` is unrooted: inspect it only while
+    /// this instance remains alive and before any further managed allocation.
+    pub unsafe fn run_baml<T: 'static>(&mut self, entry: impl FnOnce() -> R<T> + 'static) -> R<T> {
         unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
     }
-    unsafe fn execute<E: 'static>(
+    unsafe fn execute<T: 'static, E: 'static>(
         &mut self,
-        entry: fn() -> Result<i64, E>,
-    ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
+        entry: impl FnOnce() -> Result<T, E> + 'static,
+    ) -> Result<Result<T, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;

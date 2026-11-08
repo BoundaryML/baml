@@ -127,6 +127,8 @@ pub(super) fn expand<'db>(
                         };
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || super::lists::handles(plan.index.display(callee))
+                            || super::list_scalars::handles(plan.index.display(callee))
+                            || plan.index.display(callee).starts_with("baml.Map.")
                             || matches!(
                                 plan.index.display(callee),
                                 "baml.json.decode" | "baml.Array.filled" | "baml.json.stringify"
@@ -419,9 +421,13 @@ impl registry::Feature for Feature {
                     e.assign(
                         destination,
                         (
-                            e.fallible(&format!(
-                                "f{target}::<OBSERVE>(cx,{},{arguments})",
-                                e.telemetry_site(target)
+                            e.fallible(&e.stack_leaf_call(
+                                target,
+                                &arguments,
+                                &format!(
+                                    "f{target}::<OBSERVE>(cx,{},{arguments})",
+                                    e.telemetry_site(target)
+                                ),
                             )),
                             e.plan.repr(&body.locals[0].ty)?,
                         ),

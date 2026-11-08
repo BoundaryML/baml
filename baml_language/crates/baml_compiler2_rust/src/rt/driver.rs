@@ -4,7 +4,7 @@ use super::{
     no, recursive, telemetry,
 };
 
-/// Emit a single parameterless integer entry, including a compatible benchmark host.
+/// Emit a parameterless integer or string entry and its compatible benchmark host.
 /// Layouts and direct call bodies come exclusively from MIR and linked metadata.
 pub fn compile_rt(
     db: &dyn Db,
@@ -12,6 +12,29 @@ pub fn compile_rt(
     program: &Program,
     opt: OptLevel,
     entry: usize,
+) -> Gen<String> {
+    compile(db, root, program, opt, entry, None)
+}
+
+/// Compile the normal entry plus an explicit setup/run native benchmark host.
+pub fn compile_rt_benchmark(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    setup_run: (usize, usize),
+) -> Gen<String> {
+    compile(db, root, program, opt, entry, Some(setup_run))
+}
+
+fn compile(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    benchmark: Option<(usize, usize)>,
 ) -> Gen<String> {
     let mut plan = Plan {
         root,
@@ -53,7 +76,7 @@ pub fn compile_rt(
         calls,
         builtins,
         json_decode,
-    } = admission::collect(db, root, opt, entry, &mut plan)?;
+    } = admission::collect(db, root, opt, entry, benchmark, &mut plan)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
@@ -93,7 +116,36 @@ pub fn compile_rt(
         })
         .sum::<usize>()
         <= 1024;
-    let telemetry_sites = std::cell::RefCell::new(vec![(None, 0usize, entry)]);
+    let mut host_sites = vec![(None, 0usize, entry)];
+    let entry_repr = plan.repr(&match &all[&entry].kind {
+        MirFunctionKind::Bytecode(b) => b.locals[0].ty.clone(),
+        _ => unreachable!(),
+    })?;
+    if let Some((setup, run)) = benchmark {
+        let MirFunctionKind::Bytecode(setup_body) = &all[&setup].kind else {
+            return Err(no("benchmark setup must be a user function"));
+        };
+        let MirFunctionKind::Bytecode(run_body) = &all[&run].kind else {
+            return Err(no("benchmark run must be a user function"));
+        };
+        if all[&setup].arity != 0
+            || all[&run].arity != 1
+            || setup_body.locals[0].ty != run_body.locals[1].ty
+            || plan.repr(&run_body.locals[0].ty)? != entry_repr
+            || !(entry_repr == super::Repr::Int
+                || matches!(
+                    &run_body.locals[0].ty,
+                    super::RuntimeTy::String
+                        | super::RuntimeTy::Literal(baml_type::Literal::String(_), _)
+                ))
+        {
+            return Err(no(
+                "benchmark requires setup() -> S and run(S) -> int or string",
+            ));
+        }
+        host_sites.extend([(None, 0usize, setup), (None, 0usize, run)]);
+    }
+    let telemetry_sites = std::cell::RefCell::new(host_sites);
     let mut placements = reached
         .iter()
         .map(|&object| {
@@ -103,7 +155,7 @@ pub fn compile_rt(
             };
             (
                 object,
-                super::stack::Placement::new(db, root, body, mir.arity, opt, &plan, &all),
+                super::stack::Placement::new(db, root, object, body, opt, &plan, &all),
             )
         })
         .collect::<BTreeMap<_, _>>();
@@ -153,11 +205,15 @@ pub fn compile_rt(
             site: 0,
         };
         let stack_leaf = stack_leaves.contains(&object);
-        out.push_str(&emitter.function(
-            mir.arity,
-            (small_program || stack_leaf) && !recursive(&calls, object),
-            stack_leaf,
-        )?);
+        out.push_str(
+            &emitter
+                .function(
+                    mir.arity,
+                    (small_program || stack_leaf) && !recursive(&calls, object),
+                    stack_leaf,
+                )
+                .map_err(|e| format!("{e} (emitting {})", plan.index.display(object)))?,
+        );
     }
     // Membership helpers are mutually recursive for recursive alias groups.
     let mut emitted = BTreeSet::new();
@@ -225,12 +281,26 @@ pub fn compile_rt(
         (stringify, aliased),
         &telemetry_sites,
     )?;
-    host::emit(
-        &mut out,
-        entry,
-        &builtins,
-        format_site,
-        !plan.init_chains.is_empty(),
-    );
+    if let Some((setup, run)) = benchmark {
+        host::emit_benchmark(
+            &mut out,
+            entry,
+            setup,
+            run,
+            &builtins,
+            format_site,
+            !plan.init_chains.is_empty(),
+            entry_repr,
+        );
+    } else {
+        host::emit(
+            &mut out,
+            entry,
+            &builtins,
+            format_site,
+            !plan.init_chains.is_empty(),
+            entry_repr,
+        );
+    }
     Ok(out)
 }

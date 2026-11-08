@@ -78,6 +78,8 @@ def build_baml(cli, workload, stage, backend="vm", rust_build_dir=None):
                     "--rust-build-dir", str((rust_build_dir or stage / "rust-build") / backend)]
     if backend == "rt":
         command += ["--rt"]
+        if _has_setup(workload["baml"]):
+            command += ["--rt-benchmark"]
     start = time.perf_counter()
     r = subprocess.run(command,
                        cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
@@ -275,10 +277,6 @@ def cmd_run(args):
             if cell.row.is_baml and b["status"] != "ok":
                 cell.status = b["status"]
                 cell.reason = b["error"]
-                continue
-            if cell.row.kind == "rt" and _has_setup(cell.workload["baml"]):
-                cell.fail("rt driver cannot retain setup() state between jobs")
-                _log(f"  {cell.workload['name']} [{cell.row.key}]: {cell.reason}")
                 continue
             t = _trial(cell, b.get("artifact"), 1, 0, stage, args.cpu)
             loads.append(os.getloadavg()[0])

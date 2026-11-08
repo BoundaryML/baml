@@ -13,6 +13,11 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "RuntimeListValidationThrow",
+    "RuntimeListScalarBoundaries",
+    "RuntimeListInvalidCodePoint",
+    "RuntimeListFloatTruncationError",
+    "RuntimeListStringEntry",
     "RuntimeListFloatConstants",
     "RuntimeListStructuralJoin",
     "RuntimeListFloatSpecials",
@@ -445,6 +450,18 @@ fn pack_result<'a>(
     functions: impl IntoIterator<Item = &'a str>,
     rt: bool,
 ) -> Result<(), String> {
+    pack_result_options(build, workspace, source, executable, functions, rt, false)
+}
+
+fn pack_result_options<'a>(
+    build: &Path,
+    workspace: &Path,
+    source: &Path,
+    executable: &Path,
+    functions: impl IntoIterator<Item = &'a str>,
+    rt: bool,
+    benchmark: bool,
+) -> Result<(), String> {
     // Never accept an executable left over from a previous successful pack.
     if executable.exists() {
         std::fs::remove_file(executable).map_err(|e| e.to_string())?;
@@ -484,6 +501,9 @@ fn pack_result<'a>(
     }
     if rt {
         argv.push("--rt".into());
+    }
+    if benchmark {
+        argv.push("--rt-benchmark".into());
     }
     let result = baml_cli::run_cli(argv).map_err(|error| format!("{error:#}"))?;
     if !matches!(result, baml_cli::ExitCode::Success) {
@@ -1037,4 +1057,16 @@ fn rt_type_dispatch_semantics() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     type_dispatch::run();
+}
+
+#[path = "../rust_diff/setup_state.rs"]
+mod setup_state;
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
+fn rt_setup_state_benchmark() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    setup_state::run();
 }

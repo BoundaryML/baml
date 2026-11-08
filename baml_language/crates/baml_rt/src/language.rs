@@ -277,27 +277,70 @@ pub fn poll() -> R<()> {
 pub fn driver(descriptors: &'static [Descriptor], entry: fn() -> R<i64>) -> std::process::ExitCode {
     driver_observed(descriptors, entry, &[], &[], None)
 }
-pub fn driver_observed(
+// Only owned values cross the host boundary; generated string entries copy
+// their bytes while the owning instance is still bound to the root fiber.
+mod host_result {
+    pub trait Sealed {}
+    impl Sealed for i64 {}
+    impl Sealed for String {}
+}
+pub trait HostResult: host_result::Sealed + PartialEq + 'static {
+    fn text(&self) -> String;
+    fn json(&self) -> String;
+    fn format(&self, session: &mut crate::telemetry::Session, site: usize) -> R<String>;
+}
+impl HostResult for i64 {
+    fn text(&self) -> String {
+        self.to_string()
+    }
+    fn json(&self) -> String {
+        self.to_string()
+    }
+    fn format(&self, session: &mut crate::telemetry::Session, site: usize) -> R<String> {
+        session.format_int(*self, site)
+    }
+}
+impl HostResult for String {
+    fn text(&self) -> String {
+        self.clone()
+    }
+    fn json(&self) -> String {
+        serde_json::to_string(self).expect("string JSON")
+    }
+    fn format(&self, session: &mut crate::telemetry::Session, site: usize) -> R<String> {
+        session.format_string(self, site)
+    }
+}
+pub fn driver_observed<T: HostResult>(
     descriptors: &'static [Descriptor],
-    entry: fn() -> R<i64>,
+    entry: fn() -> R<T>,
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
 ) -> std::process::ExitCode {
-    driver_with_initializer(descriptors, entry, functions, sites, format_site, None)
+    driver_configured(
+        descriptors,
+        entry,
+        None,
+        functions,
+        sites,
+        format_site,
+        None,
+    )
 }
 /// Run package startup as separate observed roots before invoking user code.
-pub fn driver_observed_initialized(
+pub fn driver_observed_initialized<T: HostResult>(
     descriptors: &'static [Descriptor],
-    entry: fn() -> R<i64>,
+    entry: fn() -> R<T>,
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
     initialize: fn(&mut Instance, &mut crate::telemetry::Session) -> R<()>,
 ) -> std::process::ExitCode {
-    driver_with_initializer(
+    driver_configured(
         descriptors,
         entry,
+        None,
         functions,
         sites,
         format_site,
@@ -305,9 +348,51 @@ pub fn driver_observed_initialized(
     )
 }
 type Initializer = fn(&mut Instance, &mut crate::telemetry::Session) -> R<()>;
-fn driver_with_initializer(
+/// Native benchmark entry. Setup state stays on the root fiber's scanned stack.
+pub type Benchmark<T = i64> = fn(usize, usize, &std::cell::Cell<u128>) -> R<T>;
+
+pub fn driver_observed_benchmark<T: HostResult>(
     descriptors: &'static [Descriptor],
-    entry: fn() -> R<i64>,
+    entry: fn() -> R<T>,
+    benchmark: Benchmark<T>,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+) -> std::process::ExitCode {
+    driver_configured(
+        descriptors,
+        entry,
+        Some(benchmark),
+        functions,
+        sites,
+        format_site,
+        None,
+    )
+}
+
+pub fn driver_observed_benchmark_initialized<T: HostResult>(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<T>,
+    benchmark: Benchmark<T>,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+    initialize: Initializer,
+) -> std::process::ExitCode {
+    driver_configured(
+        descriptors,
+        entry,
+        Some(benchmark),
+        functions,
+        sites,
+        format_site,
+        Some(initialize),
+    )
+}
+fn driver_configured<T: HostResult>(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<T>,
+    benchmark: Option<Benchmark<T>>,
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
@@ -320,7 +405,14 @@ fn driver_with_initializer(
             return std::process::ExitCode::FAILURE;
         }
     };
-    let result = driver_inner(descriptors, entry, &mut session, format_site, initialize);
+    let result = driver_inner(
+        descriptors,
+        entry,
+        benchmark,
+        &mut session,
+        format_site,
+        initialize,
+    );
     if result
         .as_ref()
         .is_err_and(|error| error.class == "InitFailed")
@@ -359,9 +451,10 @@ fn driver_with_initializer(
         }
     }
 }
-fn driver_inner(
+fn driver_inner<T: HostResult>(
     descriptors: &'static [Descriptor],
-    entry: fn() -> R<i64>,
+    entry: fn() -> R<T>,
+    benchmark: Option<Benchmark<T>>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
     initialize: Option<Initializer>,
@@ -396,16 +489,28 @@ fn driver_inner(
     if let Some(initialize) = initialize {
         initialize(&mut instance, session)?;
     }
-    // SAFETY: compiler admission and descriptor construction enforce this ABI.
-    let result = session.run(|| unsafe { instance.run_baml(entry) })?;
+    let elapsed = std::rc::Rc::new(std::cell::Cell::new(0u128));
+    // Setup and all jobs share one fiber. Its stack retains the state across
+    // collecting calls; no managed pointer is kept in untraced host storage.
+    let result = if let (Some(benchmark), Some(jobs)) = (benchmark, jobs) {
+        let elapsed = elapsed.clone();
+        session.run(|| unsafe { instance.run_baml(move || benchmark(jobs, warmup, &elapsed)) })?
+    } else {
+        // SAFETY: compiler admission and descriptor construction enforce this ABI.
+        session.run(|| unsafe { instance.run_baml(entry) })?
+    };
     let Some(jobs) = jobs else {
         let text = match format_site {
-            Some(site) => session.format_int(result, site)?,
-            None => result.to_string(),
+            Some(site) => result.format(session, site)?,
+            None => result.json(),
         };
         println!("{text}");
         return Ok(());
     };
+    if benchmark.is_some() {
+        print_benchmark_result(result, jobs, elapsed.get());
+        return Ok(());
+    }
     for _ in 1..warmup {
         if session.run(|| unsafe { instance.run_baml(entry) })? != result {
             return Err(Error::internal("warmup result mismatch".into()));
@@ -418,11 +523,39 @@ fn driver_inner(
         }
     }
     let elapsed = start.elapsed().as_nanos();
+    print_benchmark_result(result, jobs, elapsed);
+    Ok(())
+}
+
+fn print_benchmark_result<T: HostResult>(result: T, jobs: usize, elapsed: u128) {
     println!(
         "{}",
-        serde_json::json!({"result":result.to_string(),"jobs":jobs,"elapsed_ns":elapsed})
+        serde_json::json!({"result":result.text(),"jobs":jobs,"elapsed_ns":elapsed})
     );
-    Ok(())
+}
+
+/// Verify once, warm up, then time only repeated jobs. Called on the fiber
+/// after setup has returned; the closure retains its typed state on that stack.
+pub fn benchmark_loop<T: PartialEq>(
+    mut job: impl FnMut() -> R<T>,
+    jobs: usize,
+    warmup: usize,
+    elapsed: &std::cell::Cell<u128>,
+) -> R<T> {
+    let result = std::hint::black_box(&mut job)()?;
+    for _ in 1..warmup {
+        if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("warmup result mismatch".into()));
+        }
+    }
+    let start = std::time::Instant::now();
+    for _ in 0..jobs {
+        if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("timed result mismatch".into()));
+        }
+    }
+    elapsed.set(start.elapsed().as_nanos());
+    Ok(result)
 }
 
 #[cold]
