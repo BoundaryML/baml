@@ -3,6 +3,59 @@ import unittest
 from rt_corpus import regressions, rt_leaf, vm_leaf
 
 
+class AdmissionBurndownTests(unittest.TestCase):
+    def test_normalization_removes_coordinates_and_ids_but_keeps_types(self):
+        from rt_corpus import normalize_admission_signature as normalize
+        self.assertEqual(normalize("unsupported in baml_rt: typed builtin exception class (constructor in assert.equal)"),
+                         normalize("unsupported in baml_rt: typed builtin exception class (constructor in assert.is_true)"))
+        first = "unsupported in baml_rt: Class(HeapPtr(0xabc), TypeTag(123), type_id: 42)"
+        second = "unsupported in baml_rt: Class(HeapPtr(0xdef), TypeTag(456), type_id: 97)"
+        self.assertEqual(normalize(first), normalize(second))
+        self.assertEqual(normalize("unsupported in baml_rt: list element (root.helper local 12: List(Float))"),
+                         "unsupported in baml_rt: list element")
+        self.assertEqual(normalize("unsupported in baml_rt: exception (user.<lambda(init, 79)> local 2: Class(...))"),
+                         "unsupported in baml_rt: exception")
+        self.assertEqual(normalize("unsupported in baml_rt: field type Bigint (layout time.Instant, object 354, types [Bigint])"),
+                         "unsupported in baml_rt: field type Bigint")
+        self.assertEqual(normalize("SourceRoot(Id(20e))"), normalize("SourceRoot(Id(30a))"))
+        self.assertEqual(normalize("conversion Ptr(4182) to Ptr(4183) (emitting user.main)"),
+                         normalize("conversion Ptr(72) to Ptr(73) (emitting user.other)"))
+        self.assertEqual(normalize("SysOp args: [Local(Local(1))], target: BlockId(2)"),
+                         normalize("SysOp args: [Local(Local(12))], target: BlockId(20)"))
+        self.assertNotEqual(normalize("unsupported in baml_rt: type List(Float)"),
+                            normalize("unsupported in baml_rt: type List(Bigint)"))
+
+    def test_groups_deduplicate_and_distinguish_multiple_observed_blockers(self):
+        from rt_corpus import admission_burndown
+        report = {"tests": {
+            "z": {"category": "unsupported", "signature": "A (constructor in z)"},
+            "a": {"category": "unsupported", "signature": "A", "admission_errors": ["A", "B", "A"]},
+            "b": {"category": "unsupported", "signature": "B", "admission_errors": ["B", "B"]},
+            "match": {"category": "match", "signature": "A"},
+            "crash": {"category": "crash/timeout", "signature": "A"},
+        }}
+        original = __import__("copy").deepcopy(report)
+        groups = admission_burndown(report)
+        self.assertEqual([(g["signature"], g["count"], g["only_estimate"]) for g in groups],
+                         [("A", 2, 1), ("B", 2, 1)])
+        self.assertEqual(groups[0]["examples"], ["a", "z"])
+        self.assertEqual(report, original, "raw evidence must remain intact")
+
+    def test_summary_limits_admission_groups_to_thirty_and_sorts_by_count(self):
+        import contextlib, io
+        from rt_corpus import summarize
+        report = {"tests": {f"leaf{i:02}": {"category": "unsupported", "signature": f"blocker{i:02}"}
+                            for i in range(35)}}
+        report["tests"]["extra"] = {"category": "unsupported", "signature": "blocker34"}
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            summarize(report)
+        rows = [line for line in output.getvalue().splitlines() if "\tblocker" in line]
+        self.assertEqual(len(rows), 30)
+        self.assertTrue(rows[0].startswith("2\t2\tblocker34\t"))
+        self.assertNotIn("\tblocker33\t", output.getvalue())
+
+
 class CorpusGateTests(unittest.TestCase):
     def test_compiler_panics_cannot_masquerade_as_unsupported(self):
         from rt_corpus import admission_category

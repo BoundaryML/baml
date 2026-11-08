@@ -184,6 +184,15 @@ correctness bug. Raw process evidence and the complete per-test JSON report
 remain under `$CARGO_TARGET_DIR/rt-corpus/`. Infrastructure failures never count
 as unsupported. `BAML_RT_CORPUS_TIMEOUT_SECS` bounds each leaf (default 120).
 
+The admission burn-down prints the top 30 normalized signatures, sorted by test
+count with example names. It strips pointer addresses, type/object IDs and caller
+coordinates for grouping; exact diagnostics remain in the per-test evidence.
+The `only` column counts leaves whose observed blockers belong only to that
+group. Admission currently records the first error, so this is an upper-bound
+estimate: fixing it may expose another blocker, and does not guarantee a pass.
+Use `--summarize-report PATH/report.json` to reprint this table from saved evidence
+without compiling or running the corpus again.
+
 `rt-corpus-baseline.json` records category counts **and each canonical test's
 category**, so unchanged aggregate counts cannot hide a match regressing. A
 missing test, new mismatch/crash, lost match or newly excluded test fails the

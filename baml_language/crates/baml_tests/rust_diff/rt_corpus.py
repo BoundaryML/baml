@@ -256,6 +256,37 @@ def regressions(before, after):
     return failures
 
 
+def normalize_admission_signature(signature):
+    """Group diagnostics by blocker; retain raw errors for evidence/comparison."""
+    # Reachability/emission coordinates identify the caller, not the blocker.
+    signature = re.split(r" \((?:constructor in |reaching |emitting |layout |[^\n]*? local \d+:|interface receiver )", signature, maxsplit=1)[0]
+    signature = re.sub(r"\b0x[0-9a-fA-F]+\b", "<ptr>", signature)
+    signature = re.sub(r"\b(TypeTag|TypeId|ObjectIndex|FileId|Ptr|ListPtr|MapStrPtr|Dyn|Enum|Type|Local|BlockId)\(\d+\)", r"\1(<id>)", signature)
+    signature = re.sub(r"\bSourceRoot\(Id\([0-9a-fA-F]+\)\)", "SourceRoot(<id>)", signature)
+    signature = re.sub(r"\b(type_id|type_tag|object_id|object_index)(\s*[:=]\s*)\d+\b", r"\1\2<id>", signature)
+    return " ".join(signature.split())
+
+
+def admission_burndown(report):
+    groups = {}
+    for name, row in report["tests"].items():
+        if row["category"] != "unsupported":
+            continue
+        # Today admission stops at its first error. If a capture has multiple
+        # observed errors, a leaf belongs to each group but is sole-blocked only
+        # when those observations normalize to one signature.
+        signatures = {normalize_admission_signature(error)
+                      for error in (row.get("admission_errors") or [row["signature"]])}
+        for signature in signatures:
+            group = groups.setdefault(signature, {"signature": signature, "count": 0, "only_estimate": 0, "examples": []})
+            group["count"] += 1
+            group["only_estimate"] += len(signatures) == 1
+            group["examples"].append(name)
+    for group in groups.values():
+        group["examples"] = sorted(group["examples"])[:3]
+    return sorted(groups.values(), key=lambda group: (-group["count"], group["signature"]))
+
+
 def summarize(report):
     counts = Counter(row["category"] for row in report["tests"].values())
     print("\nmode                 match mismatch unsupported crash/timeout excluded")
@@ -272,7 +303,13 @@ def summarize(report):
             per_mode[category] += 1
         print(f"{mode:17} {per_mode['match']:8} {per_mode['mismatch']:8} {per_mode['unsupported']:11} {per_mode['crash/timeout']:13} {per_mode['excluded']:8}")
     print(f"{'combined':17} {counts['match']:8} {counts['mismatch']:8} {counts['unsupported']:11} {counts['crash/timeout']:13} {counts['excluded']:8}")
-    for category in ("unsupported", "mismatch", "crash/timeout", "excluded"):
+    groups = admission_burndown(report)
+    print(f"ADMISSION BURN-DOWN: top {min(30, len(groups))} of {len(groups)} normalized groups")
+    print("tests\tonly (first-error estimate)\tadmission signature\texample tests")
+    for group in groups[:30]:
+        print(f"{group['count']}\t{group['only_estimate']}\t{group['signature']}\t{', '.join(group['examples'])}")
+    print("Only is an upper bound from observed first errors; fixing a blocker can expose another.")
+    for category in ("mismatch", "crash/timeout", "excluded"):
         groups = defaultdict(list)
         for name, row in report["tests"].items():
             if row["category"] == category:
@@ -335,7 +372,13 @@ def main():
     parser.add_argument("--cli", type=Path, help="reuse this built CLI instead of building it")
     parser.add_argument("--report-only", action="store_true", help="audit a different worktree; still rejects infrastructure failures")
     parser.add_argument("--select", help="diagnostic subset; cannot update or check the baseline")
+    parser.add_argument("--summarize-report", type=Path, help="print a saved report without rebuilding or running tests")
     args = parser.parse_args()
+    if args.summarize_report:
+        if args.update_baseline:
+            raise RuntimeError("a saved report cannot update the baseline; run the gate")
+        summarize(json.loads(args.summarize_report.read_text()))
+        return 0
     workspace = args.workspace.resolve()
     target = Path(os.environ.get("CARGO_TARGET_DIR", workspace.parent / "target-corpus")).resolve()
     label = args.label or workspace.parent.name
