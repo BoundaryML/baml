@@ -42,6 +42,10 @@ fn compile(
         index: ProgramIndex::new(db, root, program),
         program,
         layouts: BTreeMap::new(),
+        bigints: false,
+        json_tree: false,
+        json_public_to: false,
+        json_to_types: Vec::new(),
         lists: BTreeSet::new(),
         list_elements: std::cell::RefCell::new(Vec::new()),
         json_types: Vec::new(),
@@ -105,6 +109,7 @@ fn compile(
     if plan.list_stringify {
         json_lists::emit_shapes(&mut out, &plan, &descriptors, &lists)?;
     }
+    super::json_tree::emit(&mut out, &cx, &lists)?;
     super::map_json::emit(&mut out, &cx, &lists, json_decode, alias_function)?;
     // Bound forced inlining by the same total-local budget as a single body.
     // Recursive SCCs retain real frames and the normal per-entry stack guard.
@@ -116,7 +121,9 @@ fn compile(
         })
         .sum::<usize>()
         <= 1024;
-    let MirFunctionKind::Bytecode(entry_body) = &all[&entry].kind else { unreachable!() };
+    let MirFunctionKind::Bytecode(entry_body) = &all[&entry].kind else {
+        unreachable!()
+    };
     let result_repr = plan.repr(&entry_body.locals[0].ty)?;
     let string_result = result_repr == super::Repr::Str;
     let mut host_sites = vec![(None, 0usize, entry)];
@@ -132,7 +139,9 @@ fn compile(
             || setup_body.locals[0].ty != run_body.locals[1].ty
             || plan.repr(&run_body.locals[0].ty)? != result_repr
         {
-            return Err(no("benchmark requires setup() -> S and run(S) matching the entry result"));
+            return Err(no(
+                "benchmark requires setup() -> S and run(S) matching the entry result",
+            ));
         }
         host_sites.extend([(None, 0usize, setup), (None, 0usize, run)]);
     }

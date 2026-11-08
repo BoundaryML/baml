@@ -6,6 +6,7 @@ pub(super) enum Repr {
     Float,
     Bool,
     Str,
+    Bigint,
     Ptr(usize),
     ListInt,
     List(usize),
@@ -95,6 +96,7 @@ impl Repr {
         matches!(
             self,
             Self::Str
+                | Self::Bigint
                 | Self::Ptr(_)
                 | Self::List(_)
                 | Self::ListInt

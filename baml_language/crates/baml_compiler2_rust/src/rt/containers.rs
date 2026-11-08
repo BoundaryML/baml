@@ -11,12 +11,13 @@ impl Plan<'_> {
                 let mut elements = self.list_elements.borrow_mut();
                 let id = elements
                     .iter()
-                    .position(|r| r.repr == element && r.members.is_empty())
+                    .position(|r| r.repr == element && r.members.is_empty() && r.declared.is_none())
                     .unwrap_or_else(|| {
                         let id = elements.len();
                         elements.push(ListElement {
                             repr: element,
                             members: Vec::new(),
+                            declared: None,
                         });
                         id
                     });
@@ -25,12 +26,17 @@ impl Plan<'_> {
         }
     }
     pub(super) fn list_union_repr(&self, repr: Repr, members: Vec<Repr>) -> Repr {
-        let key = ListElement { repr, members };
+        let key = ListElement {
+            repr,
+            members,
+            declared: None,
+        };
         let mut elements = self.list_elements.borrow_mut();
         let id = elements
             .iter()
             .position(|r| {
                 r.repr == key.repr
+                    && r.declared == key.declared
                     && r.members.len() == key.members.len()
                     && r.members.iter().all(|m| key.members.contains(m))
             })
@@ -264,5 +270,25 @@ impl Emitter<'_, '_> {
                 unreachable!("container call guard")
             },
         )
+    }
+}
+
+impl Plan<'_> {
+    pub(super) fn alias_list_repr(&self, declared: String) -> Repr {
+        let key = ListElement {
+            repr: Repr::Tagged,
+            members: Vec::new(),
+            declared: Some(declared),
+        };
+        let mut elements = self.list_elements.borrow_mut();
+        let id = elements
+            .iter()
+            .position(|old| *old == key)
+            .unwrap_or_else(|| {
+                let id = elements.len();
+                elements.push(key);
+                id
+            });
+        Repr::List(id)
     }
 }

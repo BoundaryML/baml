@@ -118,7 +118,9 @@ pub(super) fn emit(
                 .iter()
                 .find_map(|(&object, &index)| (index == desc).then_some(object))
         };
-        let shape = if plan
+        let shape = if plan.bigints && desc == plan.bigint_descriptor() {
+            "Bigint".to_owned()
+        } else if plan
             .closure_descriptors()
             .is_some_and(|(_, closure)| desc == closure)
         {
@@ -230,10 +232,11 @@ pub(super) fn capture_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
         .ok_or_else(|| no("capture type head"))?;
     capture_wire_type(plan, &anchored.substitute_symbolic(&[]))
 }
-fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
+pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     use bex_vm_types::RuntimeTy as T;
     let member = match ty {
         T::Int => "Int".into(),
+        T::Bigint => "Bigint".into(),
         T::Literal(lit, f) => match lit {
             baml_type::Literal::Int(v) => {
                 format!("LiteralInt({v},rt::telemetry::capture::Freshness::{f:?})")
@@ -363,6 +366,7 @@ fn capture_element(
 ) -> Gen<(usize, String)> {
     Ok(match repr {
         Repr::Int => (0, "Int".into()),
+        Repr::Bigint => (plan.bigint_descriptor() + 3, "Bigint".into()),
         Repr::Bool => (1, "Bool".into()),
         Repr::Float => ((u32::MAX - 1) as usize, "Float".into()),
         Repr::Str => (3, "String".into()),
@@ -401,6 +405,15 @@ fn capture_list_element(
     }
     let (tag, mut ty) = capture_element(plan, descriptors, lists, plan.element(repr)?)?;
     if let Repr::List(id) = repr {
+        if let Some(declared) = &plan.list_elements.borrow()[id].declared {
+            return Ok((
+                tag,
+                declared
+                    .strip_prefix("rt::telemetry::capture::Type::")
+                    .unwrap()
+                    .to_owned(),
+            ));
+        }
         let members = plan.list_elements.borrow()[id].members.clone();
         if !members.is_empty() {
             let types = members
@@ -453,6 +466,11 @@ pub(super) fn capture_dyn(
         return Ok(value.to_owned());
     }
     let (tag, raw) = match repr {
+        Repr::Bigint => {
+            return Ok(format!(
+                "rt::Dyn{{tag:BIGINT_TAG,payload:({value}).as_raw() as u64}}"
+            ));
+        }
         Repr::Float => {
             return Ok(format!(
                 "rt::Dyn{{tag:rt::FLOAT_TAG,payload:({value}).to_bits()}}"
@@ -482,6 +500,7 @@ fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
 /// nullable/union element types in the recorder's canonical value encoding.
 pub(super) fn declared_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
     match ty {
+        RuntimeTy::TypeAlias(_) => capture_type(plan, ty),
         RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
         RuntimeTy::Union(members) => {
             let members = members
@@ -500,6 +519,7 @@ pub(super) fn declared_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
 }
 pub(super) fn declared_field_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     match ty {
+        bex_vm_types::RuntimeTy::TypeAlias(_) => capture_wire_type(plan, ty),
         bex_vm_types::RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
         bex_vm_types::RuntimeTy::Union(members) => {
             let members = members

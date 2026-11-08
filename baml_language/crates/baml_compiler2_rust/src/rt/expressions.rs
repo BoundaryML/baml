@@ -68,8 +68,18 @@ impl Emitter<'_, '_> {
             Rvalue::LoadType(ty) => Ok(("0usize".into(), Repr::Type(self.plan.type_code(ty)?))),
             Rvalue::Use(o) => self.operand(o),
             Rvalue::BinaryOp { op, left, right } => {
-                let (l, lt) = self.operand(left)?;
-                let (r, rt) = self.operand(right)?;
+                let narrow_integer = |value: (String, Repr)| -> Gen<(String, Repr)> {
+                    // MIR keeps the optional storage type after `??`, although
+                    // the checked arithmetic result is a plain int. Restore
+                    // that proven boundary before selecting the raw operation.
+                    if expected == Repr::Int && value.1 == Repr::Tagged {
+                        Ok((self.coerce(value, Repr::Int)?, Repr::Int))
+                    } else {
+                        Ok(value)
+                    }
+                };
+                let (l, lt) = narrow_integer(self.operand(left)?)?;
+                let (r, rt) = narrow_integer(self.operand(right)?)?;
                 if *op == BinOp::Add && lt == Repr::Str && rt == Repr::Str {
                     return Ok((self.fallible(&format!("rt::strings::concat(&mut rt::strings::Cx::current(),&[rt::strings::Str::from_raw({l}),rt::strings::Str::from_raw({r})]).map(|s|s.as_raw())")), Repr::Str));
                 }
@@ -128,7 +138,9 @@ impl Emitter<'_, '_> {
                     }
                 }
                 if lt != Repr::Int || rt != Repr::Int {
-                    return Err(no("non-integer binary operation"));
+                    return Err(no(format!(
+                        "non-integer binary operation {op:?}: {lt:?} {rt:?}, {left:?} {right:?}, expected {expected:?}"
+                    )));
                 }
                 let helper = match op {
                     BinOp::Add => Some("add"),

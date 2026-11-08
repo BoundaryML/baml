@@ -819,8 +819,9 @@ fn rt_trees_and_fail_closed_admission() {
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
+    assert!(emit("function main() -> string { \"hello\" }").is_ok());
     for source in [
-        "function main() -> string { \"hello\" }",
+        "function main(value:int) -> int { value }",
         "function main() -> int { \"x\".trim().length() }",
     ] {
         assert!(
@@ -1013,7 +1014,9 @@ fn rt_source_bytes_and_diagnostics() {
         };
         if expected.is_empty() {
             let expected = match name {
-                "entry" => "unsupported in baml_rt: entry must have no parameters and return int or string",
+                "entry" => {
+                    "unsupported in baml_rt: entry must have no parameters and return int or string"
+                }
                 "hook" => "unsupported in baml_rt: declaration hooks",
                 _ => unreachable!(),
             };
@@ -1314,5 +1317,29 @@ fn rt_structural_union_map_keys_fail_closed() {
             result.unwrap_err(),
             format!("unsupported in baml_rt: {expected}")
         );
+    }
+}
+
+#[test]
+fn rt_json_scalar_and_primitive_sort_kpis() {
+    for source in [
+        include_str!("../../../tools/speedtest/workloads/compute/json-tree-path/main.baml"),
+        include_str!("../../../tools/speedtest/workloads/compute/json-request-body/main.baml"),
+        include_str!("../../../tools/speedtest/workloads/compute/generate-sort-8k/main.baml"),
+        include_str!("../../../tools/speedtest/workloads/compute/json-aggregate-2k/main.baml"),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("json-kpi.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        assert!(result.is_ok(), "{}", result.unwrap_err());
     }
 }

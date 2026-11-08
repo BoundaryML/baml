@@ -6,10 +6,16 @@ use crate::{
 };
 use baml_rt_gc::{SlotKind, write_ptr};
 use serde_json::Value;
+use smallvec::SmallVec;
+mod stream;
 
 #[derive(Clone, Copy)]
 pub enum Ty {
     Int,
+    Bigint {
+        desc: u32,
+    },
+    Json(&'static crate::json_tree::Config),
     Float,
     Bool,
     Null,
@@ -54,9 +60,9 @@ fn fail(message: impl Into<String>, path: &str) -> Report {
     }
 }
 impl Ty {
-    fn nullable(&self) -> bool {
+    pub(crate) fn nullable(&self) -> bool {
         match self {
-            Self::Null => true,
+            Self::Null | Self::Json(_) => true,
             Self::Union(m) => m.iter().any(|m| m.ty.nullable()),
             _ => false,
         }
@@ -132,6 +138,7 @@ impl Ty {
 
     fn check(&self, value: &Value, path: &str) -> Result<(), Report> {
         let message = match self {
+            Self::Json(_) => None,
             Self::Int => {
                 if !value.is_number() {
                     Some("expected integer")
@@ -141,8 +148,30 @@ impl Ty {
                     None
                 }
             }
+            Self::Bigint { .. } => {
+                let text = if let Some(s) = value.as_str() {
+                    Some(s.to_owned())
+                } else if value.is_number() {
+                    Some(value.to_string())
+                } else {
+                    None
+                };
+                if text
+                    .as_deref()
+                    .and_then(bex_vm_types::json_text::parse_decimal_bigint)
+                    .is_some()
+                {
+                    None
+                } else {
+                    Some("expected integral JSON number or numeric string")
+                }
+            }
             Self::Float => {
-                if value.as_f64().is_some() {
+                let numeric = value.as_f64();
+                if numeric.is_some_and(|f| f.is_finite())
+                    || (numeric.is_some()
+                        && matches!(value.to_string().as_str(), "NaN" | "inf" | "-inf"))
+                {
                     None
                 } else {
                     Some("expected number")
@@ -246,7 +275,8 @@ impl Ty {
     }
     fn empty(&self) -> Value {
         match self {
-            Self::Int => Value::from(0),
+            Self::Json(_) => Value::Null,
+            Self::Int | Self::Bigint { .. } => Value::from(0),
             Self::Float => Value::from(0.0),
             Self::Bool => Value::Bool(false),
             Self::Null => Value::Null,
@@ -273,6 +303,18 @@ impl Ty {
     }
     unsafe fn build(&self, cx: &mut Cx, value: &Value) -> R<Dyn> {
         Ok(match self {
+            Self::Json(config) => unsafe { config.build(cx, value) }?,
+            Self::Bigint { desc } => {
+                let text = value
+                    .as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| value.to_string());
+                let pointer = unsafe { crate::bigint::from_decimal(cx, *desc, &text) }?;
+                Dyn {
+                    tag: *desc as u64 + 3,
+                    payload: pointer.as_raw() as u64,
+                }
+            }
             Self::Int | Self::LiteralInt(_) => Dyn {
                 tag: 0,
                 payload: value.as_i64().unwrap() as u64,
@@ -389,8 +431,18 @@ impl Ty {
 /// # Safety
 /// Schema descriptors, offsets and slot kinds match the generated program.
 pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
-    let source = text.as_str(cx).to_owned();
-    let value = crate::json::parse_owned(cx, &source)?;
+    // The reader borrows the non-moving string. Its interior pointer remains
+    // on the scanned fiber stack through every managed allocation.
+    let read_cx = unsafe { Cx::current() };
+    let source = text.as_str(&read_cx);
+    let mut syntax = bex_vm_types::json_text::Reader::new(source);
+    if syntax.skip_value().is_err() || syntax.finish().is_err() {
+        return Err(crate::json::syntax_error(cx, source));
+    }
+    if let Some(value) = unsafe { stream::decode(cx, source, ty) }? {
+        return Ok(value);
+    }
+    let value = crate::json::parse_owned(cx, source)?;
     if let Err(report) = ty.check(&value, "") {
         return Err(crate::json::decode_error(cx, report.message, report.path));
     }
@@ -399,6 +451,7 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
 
 pub enum Shape {
     Unsupported,
+    Bigint,
     List {
         tag: u64,
         tagged: bool,
@@ -417,6 +470,11 @@ pub struct EncodeField {
     pub tag: u64,
     pub tagged: bool,
 }
+enum PathStep {
+    Field(&'static str),
+    Index(usize),
+    Key(Str),
+}
 struct Encoder<'a> {
     shapes: &'static [Shape],
     cx: &'a mut Cx,
@@ -424,9 +482,52 @@ struct Encoder<'a> {
     omit_nulls: bool,
     indent: String,
     out: String,
-    ancestors: std::collections::BTreeSet<usize>,
+    ancestors: SmallVec<[usize; 16]>,
+    path: SmallVec<[PathStep; 16]>,
 }
 impl Encoder<'_> {
+    #[cold]
+    fn error(&mut self, message: String, reason: &str) -> Box<crate::Error> {
+        use std::fmt::Write;
+        let mut path = String::new();
+        for step in &self.path {
+            match step {
+                PathStep::Field(name) => write!(path, ".{name}").unwrap(),
+                PathStep::Index(i) => write!(path, "[{i}]").unwrap(),
+                PathStep::Key(key) => write!(path, "[{:?}]", key.as_str(self.cx)).unwrap(),
+            }
+        }
+        crate::list_errors::serialization(self.cx, message, &path, reason)
+    }
+    fn quoted(&mut self, text: &str) {
+        self.out.push('"');
+        let mut start = 0;
+        let bytes = text.as_bytes();
+        while start < bytes.len() {
+            let end = start + bex_vm_types::json_text::plain_run(&bytes[start..]);
+            self.out.push_str(&text[start..end]);
+            if end == bytes.len() {
+                break;
+            }
+            match bytes[end] {
+                b'"' => self.out.push_str("\\\""),
+                b'\\' => self.out.push_str("\\\\"),
+                b'\n' => self.out.push_str("\\n"),
+                b'\r' => self.out.push_str("\\r"),
+                b'\t' => self.out.push_str("\\t"),
+                8 => self.out.push_str("\\b"),
+                12 => self.out.push_str("\\f"),
+                control => {
+                    const HEX: &[u8; 16] = b"0123456789abcdef";
+                    self.out.push_str("\\u00");
+                    self.out.push(HEX[(control >> 4) as usize] as char);
+                    self.out.push(HEX[(control & 15) as usize] as char);
+                }
+            }
+            start = end + 1;
+        }
+        self.out.push('"');
+    }
     fn separator(&mut self, first: bool, depth: usize) {
         if !first {
             self.out.push(',');
@@ -441,35 +542,36 @@ impl Encoder<'_> {
             self.out.push_str(&self.indent);
         }
     }
-    unsafe fn value(&mut self, value: Dyn, path: &str, depth: usize) -> R<()> {
+    unsafe fn value(&mut self, value: Dyn, depth: usize) -> R<()> {
         let value = if value.payload == 0 && value.tag >= 3 && value.tag != (u32::MAX - 1) as u64 {
             Dyn { tag: 2, payload: 0 }
         } else {
             value
         };
         match value.tag {
-            0 => self.out.push_str(&(value.payload as i64).to_string()),
+            0 => {
+                self.out
+                    .push_str(itoa::Buffer::new().format(value.payload as i64));
+            }
             1 => self
                 .out
                 .push_str(if value.payload == 0 { "false" } else { "true" }),
             2 => self.out.push_str("null"),
             3 => {
                 let text = unsafe { Str::from_raw(value.payload as usize) };
-                self.out
-                    .push_str(&serde_json::to_string(text.as_str(self.cx)).expect("string JSON"));
+                let cx = unsafe { Cx::current() };
+                self.quoted(text.as_str(&cx));
             }
             tag if tag == (u32::MAX - 1) as u64 => {
                 let f = f64::from_bits(value.payload);
                 if !f.is_finite() {
-                    return Err(crate::list_errors::serialization(
-                        self.cx,
+                    return Err(self.error(
                         format!("{f} has no JSON form: a JSON number is finite"),
-                        path,
                         "non_finite",
                     ));
                 }
-                self.out
-                    .push_str(&serde_json::to_string(&f).expect("finite float JSON"));
+                serde_json::to_writer(unsafe { self.out.as_mut_vec() }, &f)
+                    .expect("finite float JSON");
             }
             tag => {
                 let pointer = value.payload as usize;
@@ -477,19 +579,22 @@ impl Encoder<'_> {
                     self.out.push_str("null");
                     return Ok(());
                 }
-                if !self.ancestors.insert(pointer) {
-                    return Err(crate::list_errors::serialization(
-                        self.cx,
+                if self.ancestors.contains(&pointer) {
+                    return Err(self.error(
                         "value contains itself, so it has no JSON form".into(),
-                        path,
                         "cycle",
                     ));
                 }
+                self.ancestors.push(pointer);
                 let shape = self
                     .shapes
                     .get((tag - 3) as usize)
                     .unwrap_or(&Shape::Unsupported);
                 match shape {
+                    Shape::Bigint => {
+                        let text = unsafe { Str::from_raw(pointer) };
+                        self.out.push_str(text.as_str(self.cx));
+                    }
                     Shape::List { tag, tagged } => {
                         let ptr = pointer as *const usize;
                         let (buffer, len) = unsafe { (ptr.add(1).read(), ptr.add(2).read()) };
@@ -507,7 +612,9 @@ impl Encoder<'_> {
                                     }
                                 }
                             };
-                            unsafe { self.value(value, &format!("{path}[{i}]"), depth + 1) }?;
+                            self.path.push(PathStep::Index(i));
+                            unsafe { self.value(value, depth + 1) }?;
+                            self.path.pop();
                             if i & 255 == 255 {
                                 self.cx.poll()?;
                             }
@@ -550,13 +657,14 @@ impl Encoder<'_> {
                             } else {
                                 field.name
                             };
-                            self.out
-                                .push_str(&serde_json::to_string(name).expect("key JSON"));
+                            self.quoted(name);
                             self.out.push(':');
                             if !self.indent.is_empty() {
                                 self.out.push(' ');
                             }
-                            unsafe { self.value(value, &format!("{path}.{name}"), depth + 1) }?;
+                            self.path.push(PathStep::Field(name));
+                            unsafe { self.value(value, depth + 1) }?;
+                            self.path.pop();
                         }
                         if !first && !self.indent.is_empty() {
                             self.newline(depth);
@@ -569,24 +677,25 @@ impl Encoder<'_> {
                         for i in 0..len {
                             let (key, value) = unsafe { entry(pointer, i) };
                             if key.tag != 3 || key.payload == 0 {
-                                return Err(crate::list_errors::serialization(
-                                    self.cx,
+                                return Err(self.error(
                                     "JSON requires maps with string keys".into(),
-                                    path,
                                     "map_key",
                                 ));
                             }
-                            let key = unsafe { Str::from_raw(key.payload as usize) }
-                                .as_str(self.cx)
-                                .to_owned();
+                            let key = unsafe { Str::from_raw(key.payload as usize) };
                             self.separator(i == 0, depth + 1);
-                            self.out
-                                .push_str(&serde_json::to_string(&key).expect("key JSON"));
+                            let read_cx = unsafe { Cx::current() };
+                            self.quoted(key.as_str(&read_cx));
                             self.out.push(':');
                             if !self.indent.is_empty() {
                                 self.out.push(' ');
                             }
-                            unsafe { self.value(value, &format!("{path}[{:?}]", key), depth + 1) }?;
+                            self.path.push(PathStep::Key(key));
+                            unsafe { self.value(value, depth + 1) }?;
+                            // Keep the managed key on the native frame even if
+                            // the path SmallVec has spilled into host storage.
+                            std::hint::black_box(key);
+                            self.path.pop();
                             if i & 255 == 255 {
                                 self.cx.poll()?;
                             }
@@ -597,15 +706,10 @@ impl Encoder<'_> {
                         self.out.push('}');
                     }
                     Shape::Unsupported => {
-                        return Err(crate::list_errors::serialization(
-                            self.cx,
-                            "value has no JSON form".into(),
-                            path,
-                            "unserializable",
-                        ));
+                        return Err(self.error("value has no JSON form".into(), "unserializable"));
                     }
                 }
-                self.ancestors.remove(&pointer);
+                self.ancestors.pop();
             }
         }
         Ok(())
@@ -665,10 +769,11 @@ pub unsafe fn stringify(
         aliased,
         omit_nulls,
         indent: indentation,
-        out: String::new(),
-        ancestors: std::collections::BTreeSet::new(),
+        out: String::with_capacity(64),
+        ancestors: SmallVec::new(),
+        path: SmallVec::new(),
     };
-    unsafe { encoder.value(value, "", 0) }?;
+    unsafe { encoder.value(value, 0) }?;
     let result = encoder.out;
     encoder.cx.string(&result)
 }
@@ -855,4 +960,43 @@ mod tests {
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 5);
     }
+    #[test]
+    fn quoted_strings_match_shared_json_escaping() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let mut encoder = Encoder {
+                shapes: &[],
+                cx: &mut cx,
+                aliased: false,
+                omit_nulls: false,
+                indent: String::new(),
+                out: String::new(),
+                ancestors: SmallVec::new(),
+                path: SmallVec::new(),
+            };
+            for code in 0..1024 {
+                let ch = char::from_u32(code).unwrap();
+                let text = format!(r#"prefix {ch} " \ suffix 🦀"#);
+                encoder.out.clear();
+                encoder.quoted(&text);
+                assert_eq!(encoder.out, serde_json::to_string(&text).unwrap());
+            }
+            Ok(1)
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[
+                false, false, false, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true,
+            ],
+        );
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+}
+
+pub(crate) unsafe fn from_owned(cx: &mut Cx, ty: &Ty, value: &Value) -> R<Dyn> {
+    if let Err(report) = ty.check(value, "") {
+        return Err(crate::json::decode_error(cx, report.message, report.path));
+    }
+    unsafe { ty.build(cx, value) }
 }

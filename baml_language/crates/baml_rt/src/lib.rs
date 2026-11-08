@@ -2,11 +2,14 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod bigint;
 pub mod calls;
 pub mod closures;
 pub mod globals;
 pub mod json;
 pub mod json_lists;
+pub mod json_scalars;
+pub mod json_tree;
 pub mod language;
 pub mod list_errors;
 pub mod lists;
@@ -218,7 +221,10 @@ impl Instance {
     ///
     /// # Safety
     /// Captures and results obey `run_baml`'s managed-pointer rooting contract.
-    pub unsafe fn run_baml_value<T:'static>(&mut self,entry:impl FnOnce()->R<T>+'static)->R<T>{
+    pub unsafe fn run_baml_value<T: 'static>(
+        &mut self,
+        entry: impl FnOnce() -> R<T> + 'static,
+    ) -> R<T> {
         unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
     }
     unsafe fn execute<T: 'static, E: 'static>(

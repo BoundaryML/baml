@@ -719,3 +719,26 @@ mod tests {
         assert_eq!(unsafe { instance().run_baml(run) }.unwrap(), 1);
     }
 }
+
+impl<V: Slot> Map<Str, V> {
+    /// Heap-neutral lookup for JSON field/path readers. No temporary managed key.
+    pub fn get_text(self, cx: &Cx, key: &str) -> Option<V> {
+        if self.is_empty() {
+            return None;
+        }
+        let hash = slots::hash_bytes(key.as_bytes());
+        let mask = self.bucket_len() - 1;
+        let mut bucket = hash as usize & mask;
+        loop {
+            let raw = unsafe { *self.bucket(bucket) };
+            if raw == 0 {
+                return None;
+            }
+            let entry = unsafe { &*self.entry_ptr(raw - 1) };
+            if entry.hash == hash && entry.key.as_str(cx) == key {
+                return Some(entry.value);
+            }
+            bucket = (bucket + 1) & mask;
+        }
+    }
+}

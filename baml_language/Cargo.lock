@@ -1011,8 +1011,10 @@ dependencies = [
  "btel_settings",
  "btel_snapshot",
  "btel_types",
+ "itoa",
  "libc",
  "serde_json",
+ "smallvec",
  "tokio",
 ]
 

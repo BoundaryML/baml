@@ -120,6 +120,7 @@ impl Emitter<'_, '_> {
         let scalar = match r {
             Repr::Int => Some(0),
             Repr::Float => Some(4),
+            Repr::Bigint => Some(baml_type::typetag::BIGINT),
             Repr::Str => Some(1),
             Repr::Bool => Some(2),
             Repr::Null => Some(3),
@@ -147,6 +148,15 @@ impl Emitter<'_, '_> {
             return Err(no("type tag"));
         }
         let mut out = format!("{{let v={v};match v.tag{{0=>0i64,1=>2,2=>3,3=>1,4294967294=>4,");
+        if self.plan.bigints {
+            write!(
+                out,
+                "{}=>{},",
+                self.plan.bigint_descriptor() + 3,
+                baml_type::typetag::BIGINT
+            )
+            .unwrap();
+        }
         for (&c, &desc) in self.descriptors {
             let class = self.plan.class(c);
             write!(out, "{}=>{},", desc + 3, class.type_tag.as_i64()).unwrap();
@@ -190,6 +200,7 @@ impl Emitter<'_, '_> {
         }
         let tag = match ty {
             TyTemplate::Int => "0".into(),
+            TyTemplate::Bigint => (self.plan.bigint_descriptor() + 3).to_string(),
             TyTemplate::Float => "4294967294".into(),
             TyTemplate::Bool => "1".into(),
             TyTemplate::Null => "2".into(),
@@ -356,4 +367,23 @@ impl Emitter<'_, '_> {
         let v = self.coerce(value, Repr::Tagged)?;
         Ok(format!("({v}).tag=={tag}"))
     }
+}
+
+pub(super) fn record_test(plan: &mut Plan<'_>, ty: &TyTemplate) -> Gen<()> {
+    if let TyTemplate::Class(head, args) = ty {
+        if head.namespace().as_slice() == ["iter"] && head.name().as_str() == "Done" {
+            return Ok(());
+        }
+        if args.is_empty()
+            && plan
+                .index
+                .class_at(head)
+                .is_some_and(|(c, _)| plan.class(c).generic_param_count > 0)
+        {
+            return Ok(());
+        }
+    }
+    let ty = ty.substitute_symbolic(&[]);
+    plan.register_class_type(&ty)?;
+    plan.record_ty(&ty)
 }

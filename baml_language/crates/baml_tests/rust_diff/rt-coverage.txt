@@ -1,17 +1,13 @@
-BAML runtime coverage (normal AND GC stress): 11 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 16 pass, 118 unsupported, 1 fail
 Telemetry off: required
-Telemetry low/medium/high/default: not yet supported
+Telemetry low/medium/high/default: not yet supported generally; standalone JSON semantics checked at off/low/medium/high
 
 First unsupported constructs (fixtures blocked):
 103	function-valued global
-10	list element
-4	list field element
+9	list element
+3	list field element
 2	growing list builtin receiver
-1	JSON field union
 1	baml.String.split
-1	entry must have no parameters and return int
-1	field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
-1	generic interface implementation
 
 Per probe / KPI workload:
 Allocation	unsupported: function-valued global
@@ -121,12 +117,12 @@ classes::method call 100k	pass
 compute::array build sum 100k	unsupported: growing list builtin receiver
 compute::array traversal 8k	unsupported: growing list builtin receiver
 compute::fib32 recursive	pass
-compute::generate sort 8k	unsupported: generic interface implementation
-compute::json aggregate 2k	unsupported: list element
-compute::json hello	unsupported: entry must have no parameters and return int
-compute::json ndjson events	unsupported: JSON field union
-compute::json request body	unsupported: list field element
-compute::json tree path	unsupported: field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
+compute::generate sort 8k	pass
+compute::json aggregate 2k	pass
+compute::json hello	pass
+compute::json ndjson events	pass
+compute::json request body	pass
+compute::json tree path	fail: GC stress timed out after 600s; normal execution passes
 compute::k-nucleotide 25k	pass
 compute::merge sort 20k	unsupported: list element
 compute::nbody 20k	unsupported: list element

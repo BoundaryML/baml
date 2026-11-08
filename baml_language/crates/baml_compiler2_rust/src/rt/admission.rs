@@ -96,6 +96,22 @@ pub(super) fn collect<'db>(
                     .map_err(|e| format!("{e} (constructor in {})", plan.index.display(object)))?;
             }
         }
+        // Type-test declarations may occur only in a catch arm, including
+        // native-produced errors which have no constructor in reachable MIR.
+        for block in &body.blocks {
+            if let Some(Terminator::NarrowBind { test, .. }) = &block.terminator {
+                super::switches::record_test(plan, &test.template(db))?;
+            }
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    value: Rvalue::IsType { test, .. },
+                    ..
+                } = &statement.kind
+                {
+                    super::switches::record_test(plan, &test.template(db))?;
+                }
+            }
+        }
         // A generic type argument is not a JSON schema request. In particular
         // generic class heads may occur as type values without field bindings.
         // Plan schemas only for the concrete argument to decode itself.
@@ -106,6 +122,11 @@ pub(super) fn collect<'db>(
                 ..
             }) = &block.terminator
             {
+                if plan.index.function(db, *f).is_some_and(|(id, _)| {
+                    matches!(plan.index.display(id), "baml.json._to" | "baml.json.to")
+                }) {
+                    super::json_tree::register_to(plan, body, args)?;
+                }
                 if plan
                     .index
                     .function(db, *f)

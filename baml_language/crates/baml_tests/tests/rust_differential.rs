@@ -1073,3 +1073,16 @@ fn rt_setup_state_benchmark() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     setup_state::run();
 }
+
+#[test]
+#[ignore = "targeted recursive JSON semantic differential"]
+fn rt_json_runtime_semantics() {
+    let _lock = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    type_dispatch::run_source(
+        "json-runtime",
+        include_str!("../rust_diff/json_runtime.baml"),
+    );
+    type_dispatch::compare_json_telemetry();
+}

@@ -1,5 +1,6 @@
 //! Typed growing lists. Known-capacity lists embed their initial buffer in the
 //! stable object; growth replaces the buffer pointer without invalidating aliases.
+mod natural_sort;
 use crate::{
     R,
     language::{allocation_failure, index_error},

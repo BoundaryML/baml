@@ -45,6 +45,7 @@ struct Layout {
 struct ListElement {
     repr: Repr,
     members: Vec<Repr>,
+    declared: Option<String>,
 }
 struct Plan<'a> {
     root: SourceRoot,
@@ -52,6 +53,10 @@ struct Plan<'a> {
     index: ProgramIndex<'a>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
+    bigints: bool,
+    json_tree: bool,
+    json_public_to: bool,
+    json_to_types: Vec<baml_compiler2_mir::TyTemplate>,
     lists: BTreeSet<Repr>,
     list_elements: std::cell::RefCell<Vec<ListElement>>,
     json_types: Vec<Vec<usize>>,
@@ -125,6 +130,8 @@ mod expressions;
 mod host;
 mod json;
 mod json_lists;
+mod json_scalars;
+mod json_tree;
 mod layout;
 mod lists;
 mod loop_ranges;

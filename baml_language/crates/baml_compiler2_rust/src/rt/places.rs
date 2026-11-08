@@ -25,6 +25,7 @@ impl Emitter<'_, '_> {
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
+            Repr::Bigint => Ok(self.plan.bigint_descriptor() + 3),
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
@@ -193,6 +194,7 @@ impl Emitter<'_, '_> {
             Operand::Constant(Constant::Float(f)) => {
                 Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
             }
+            Operand::Constant(Constant::Bigint(value)) => Ok((self.fallible(&format!("rt::bigint::from_decimal(&mut rt::strings::Cx::current(),{}, {:?}).map(|s|s.as_raw())",self.plan.bigint_descriptor(),value.to_string())),Repr::Bigint)),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
             Operand::Constant(Constant::String(text)) => Ok((

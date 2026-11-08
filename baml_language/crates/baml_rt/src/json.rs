@@ -380,8 +380,9 @@ impl<'a, const N: usize> Stream<'a, N> {
                 first = false;
                 let slot = field(key);
                 if let Some(slot) = slot {
+                    let next = reader.peek();
                     let mark = reader.mark();
-                    fields[slot] = Some(match reader.peek() {
+                    fields[slot] = Some(match next {
                         Some(b'"') => match reader.borrowed_string()? {
                             Some(value) => Token::String(value),
                             None => Token::Escaped(mark),
@@ -446,10 +447,7 @@ impl<'a, const N: usize> Stream<'a, N> {
     fn text(&mut self, token: Token<'a>) -> Option<&str> {
         match token {
             Token::String(s) => Some(s),
-            Token::Escaped(mark) => {
-                self.reader.reset(mark);
-                Some(self.reader.string().expect("validated escape"))
-            }
+            Token::Escaped(mark) => Some(self.reader.string_at(mark).expect("validated escape")),
             _ => None,
         }
     }

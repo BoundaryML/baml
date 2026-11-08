@@ -17,6 +17,16 @@ impl Plan<'_> {
             return None;
         };
         match class.path.to_string().as_str() {
+            "panics.IntegerOverflow" => Some(1),
+            "panics.NegativeBitShift" => Some(2),
+            "panics.Cancelled" => Some(3),
+            "panics.StackOverflow" => Some(4),
+            "panics.AllocFailure" => Some(5),
+            "panics.IndexOutOfBounds" => Some(6),
+            "json.ParseError" => Some(7),
+            "json.DecodeError" => Some(8),
+            "panics.DivisionByZero" => Some(9),
+            "panics.MapKeyNotFound" => Some(12),
             "json.SerializationError" => Some(10),
             "errors.InvalidArgument" => Some(11),
             _ => None,
@@ -217,7 +227,7 @@ impl Emitter<'_, '_> {
                     }
                     _ => return Err(no("list natural-sort comparator")),
                 };
-                Ok((self.fallible(&format!("{{let read_cx=rt::strings::Cx::current();{list}.sort_by({cx},|a,b|Ok({compare})).map(|v|v.as_raw())}}")),repr))
+                Ok((self.fallible(&format!("{{let read_cx=rt::strings::Cx::current();{list}.sort_native({cx},|a,b|{compare}).map(|v|v.as_raw())}}")),repr))
             }
 
             ("length", 1) => Ok((format!("{list}.len({cx})"), Repr::Int)),

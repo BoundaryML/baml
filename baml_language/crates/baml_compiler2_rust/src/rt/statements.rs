@@ -56,8 +56,12 @@ impl Emitter<'_, '_> {
                 else {
                     unreachable!()
                 };
-                if self.plan.layouts[&c].fields.iter().any(|r| *r != Repr::Int) {
-                    return Err(no("throw class with non-int fields"));
+                if self.plan.layouts[&c]
+                    .fields
+                    .iter()
+                    .any(|r| !matches!(r, Repr::Int | Repr::Str | Repr::Float | Repr::Bool))
+                {
+                    return Err(no("throw class with unsupported fields"));
                 }
                 let package = self
                     .plan
@@ -75,7 +79,15 @@ impl Emitter<'_, '_> {
                     .join(", ");
                 let display = format!("{name} {{{{{fields}}}}}");
                 let values = (0..class.fields.len())
-                    .map(|i| format!("(*(p as *const C{c})).f{i}"))
+                    .map(|i| {
+                        let field=format!("(*(p as *const C{c})).f{i}");
+                        match self.plan.layouts[&c].fields[i] {
+                            Repr::Str=>format!("if {field}==0{{String::from(\"null\")}}else{{format!(\"{{:?}}\",rt::strings::Str::from_raw({field}).as_str(&rt::strings::Cx::current()))}}"),
+                            Repr::Float=>format!("rt::format_float({field})"),
+                            Repr::Bool=>format!("({field}!=0)"),
+                            _=>field,
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join(",");
                 let error = format!(

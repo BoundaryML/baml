@@ -46,8 +46,20 @@ const REQUIRED_LIST_COVERAGE: &[&str] = &[
     "memory::live walk",
     "memory::splay 2k",
 ];
+const REQUIRED_JSON_KPIS: &[&str] = &[
+    "compute::generate sort 8k",
+    "compute::json aggregate 2k",
+    "compute::json hello",
+    "compute::json ndjson events",
+    "compute::json request body",
+    "compute::json tree path",
+    "interfaces::polymorphic dispatch 100k",
+];
 fn require_list_coverage<T>(name: &str, result: Result<T, Rejection>) -> Result<T, Rejection> {
     match result {
+        Err(Rejection::Unsupported(reason)) if REQUIRED_JSON_KPIS.contains(&name) => Err(
+            Rejection::Fail(format!("JSON KPI coverage regression: {reason}")),
+        ),
         Err(Rejection::Unsupported(reason)) if REQUIRED_LIST_COVERAGE.contains(&name) => Err(
             Rejection::Fail(format!("list coverage regression: {reason}")),
         ),

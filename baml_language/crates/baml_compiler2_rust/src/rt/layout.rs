@@ -64,6 +64,7 @@ impl Plan<'_> {
     }
     pub(super) fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
+            Repr::Bigint => self.bigints = true,
             Repr::Enum(e) => {
                 self.enums.insert(e);
             }
@@ -117,6 +118,9 @@ impl Plan<'_> {
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
+            RuntimeTy::Bigint | RuntimeTy::Literal(baml_type::Literal::Bigint(_), _) => {
+                Repr::Bigint
+            }
             RuntimeTy::Float | RuntimeTy::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
@@ -146,7 +150,9 @@ impl Plan<'_> {
                 if matches!(element.as_ref(), RuntimeTy::Function { .. }) {
                     return Ok(Repr::ListClosure(self.closure_type(element)?.0));
                 }
-                if let RuntimeTy::Union(members) = element.as_ref() {
+                if matches!(element.as_ref(), RuntimeTy::TypeAlias(_)) {
+                    self.alias_list_repr(capture_codegen::capture_type(self, element)?)
+                } else if let RuntimeTy::Union(members) = element.as_ref() {
                     self.list_union_repr(
                         self.repr(element)?,
                         members
@@ -228,6 +234,7 @@ impl Plan<'_> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
             T::Null => Repr::Null,
+            T::Bigint | T::Literal(baml_type::Literal::Bigint(_), _) => Repr::Bigint,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
             T::Enum(head) | T::EnumVariant(head, _)
                 if self.program.packages.iter().any(|p| {
@@ -272,7 +279,9 @@ impl Plan<'_> {
             }
             T::List(element) => {
                 if matches!(element.as_ref(),T::Function {..}) { return Ok(Repr::ListClosure(self.closure_field_type(element)?.0)); }
-                if let T::Union(members) = element.as_ref() {
+                if matches!(element.as_ref(),T::TypeAlias(_)) {
+                    self.alias_list_repr(capture_codegen::capture_wire_type(self,element)?)
+                }else if let T::Union(members) = element.as_ref() {
                     self.list_union_repr(
                         self.field_repr(element)?,
                         members
@@ -349,11 +358,12 @@ impl Plan<'_> {
                 && package
                     .objects
                     .contains(&u32::try_from(object).expect("object index"))
-        }) && (class.path.to_string().starts_with("panics.")
-            || matches!(
-                class.path.to_string().as_str(),
-                "json.ParseError" | "json.DecodeError"
-            ))
+        }) && self.list_error_descriptor(object).is_none()
+            && (class.path.to_string().starts_with("panics.")
+                || matches!(
+                    class.path.to_string().as_str(),
+                    "json.ParseError" | "json.DecodeError"
+                ))
         {
             return Err(no("typed builtin exception class"));
         }
@@ -463,6 +473,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         } else {
             0
         };
+    let after_descriptors = after_descriptors + usize::from(plan.bigints);
     out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::MAP_KEY_DESC,\n");
     for (&object, layout) in &plan.layouts {
         if plan.list_error_descriptor(object).is_some() {
@@ -498,6 +509,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                         Repr::Tagged => after_descriptors + 3,
                         Repr::Dyn(i) => after_descriptors + i + 4,
                         Repr::Str => 3,
+                        Repr::Bigint => plan.bigint_descriptor() + 3,
                         Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
                         Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
                         Repr::Int => 0,
@@ -563,7 +575,23 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         )
         .unwrap();
     }
+    if plan.bigints {
+        writeln!(
+            out,
+            "rt::bigint::descriptor({}),",
+            plan.bigint_descriptor() + 3
+        )
+        .unwrap();
+    }
     out.push_str("];\n");
+    if plan.bigints {
+        writeln!(
+            out,
+            "const BIGINT_TAG:u64={};",
+            plan.bigint_descriptor() + 3
+        )
+        .unwrap();
+    }
     out.push_str(&capture_codegen::emit(
         plan,
         &descriptors,
@@ -686,5 +714,34 @@ fn scalar_json_field_value(ty: &bex_vm_types::RuntimeTy) -> bool {
         members.iter().all(scalar_json_field_value)
     } else {
         scalar_field_key(ty)
+    }
+}
+
+impl Plan<'_> {
+    pub(super) fn bigint_descriptor(&self) -> usize {
+        rt_descriptors()
+            + self
+                .layouts
+                .keys()
+                .filter(|c| self.list_error_descriptor(**c).is_none())
+                .count()
+            + self
+                .lists
+                .iter()
+                .map(|r| {
+                    if matches!(r, Repr::Map(_) | Repr::MapStrInt) {
+                        4
+                    } else if r.growing() {
+                        2
+                    } else {
+                        1
+                    }
+                })
+                .sum::<usize>()
+            + if self.closure_descriptors().is_some() {
+                2
+            } else {
+                0
+            }
     }
 }

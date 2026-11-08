@@ -25,6 +25,7 @@ pub struct Declaration {
 }
 pub enum Shape {
     String,
+    Bigint,
     Enum {
         declaration: fn() -> &'static Declaration,
         variants: &'static [&'static str],
@@ -64,6 +65,7 @@ pub enum Type {
     Never,
     Unknown,
     Int,
+    Bigint,
     LiteralInt(i64, Freshness),
     LiteralBool(bool, Freshness),
     LiteralString(&'static str, Freshness),
@@ -127,6 +129,7 @@ impl Type {
                 OwnedType::Literal(baml_type::Literal::String((*v).into()), *f)
             }
             Self::Float => OwnedType::Float,
+            Self::Bigint => OwnedType::Bigint,
             Self::Alias(tag, name) => OwnedType::TypeAlias(named_identity(*tag, name)),
             Self::Interface(tag, name, args, assoc) => OwnedType::Interface(
                 named_identity(*tag, name),
@@ -222,10 +225,17 @@ impl Scratch {
         let root = b.leaves().string_value(&value.into());
         b.finish(SnapshotRoot::Value(root), &mut self.shaper)
     }
-    pub fn text_arguments(&mut self,value:&str,omitted:usize)->Snapshot {
-        self.begin();let mut b=self.pool.acquire_beyond_budget();
-        let root=b.arguments(0..omitted+1,|leaves,index|if index==0 {leaves.string_value(&value.into())}else{SnapshotValue::OmittedArg});
-        b.finish(root,&mut self.shaper)
+    pub fn text_arguments(&mut self, value: &str, omitted: usize) -> Snapshot {
+        self.begin();
+        let mut b = self.pool.acquire_beyond_budget();
+        let root = b.arguments(0..omitted + 1, |leaves, index| {
+            if index == 0 {
+                leaves.string_value(&value.into())
+            } else {
+                SnapshotValue::OmittedArg
+            }
+        });
+        b.finish(root, &mut self.shaper)
     }
     pub fn type_args(&mut self, args: &[(&str, &Type)]) -> Snapshot {
         self.begin();
@@ -320,7 +330,13 @@ impl Scratch {
         if value.payload == 0 {
             return SnapshotValue::Null;
         }
-        let result = if matches!(shape, Shape::String) {
+        let result = if matches!(shape, Shape::Bigint) {
+            let cx = unsafe { crate::strings::Cx::current() };
+            let text = unsafe { crate::strings::Str::from_raw(value.payload as usize) };
+            let integer = bex_vm_types::json_text::parse_decimal_bigint(text.as_str(&cx))
+                .expect("normalized bigint");
+            leaves.bigint(&std::sync::Arc::new(integer))
+        } else if matches!(shape, Shape::String) {
             let ptr = value.payload as *const u8;
             let len = unsafe { ptr.add(8).cast::<usize>().read() };
             let bytes = unsafe { std::slice::from_raw_parts(ptr.add(16), len) };

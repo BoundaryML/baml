@@ -38,6 +38,7 @@ pub(super) fn expand<'db>(
                 if let Operand::Constant(c) = operand {
                     let ty = match c {
                         Constant::Int(_) => Some(RuntimeTy::Int),
+                        Constant::Bigint(_) => Some(RuntimeTy::Bigint),
                         Constant::Bool(_) => Some(RuntimeTy::Bool),
                         Constant::Float(_) => Some(RuntimeTy::Float),
                         Constant::String(_) => Some(RuntimeTy::String),
@@ -130,7 +131,11 @@ pub(super) fn expand<'db>(
                             || plan.index.display(callee).starts_with("baml.Map.")
                             || matches!(
                                 plan.index.display(callee),
-                                "baml.json.decode" | "baml.json.stringify" | "baml.Array.filled"
+                                "baml.json.decode"
+                                    | "baml.json.stringify"
+                                    | "baml.json._to"
+                                    | "baml.json.to"
+                                    | "baml.Array.filled"
                             )
                         {
                             continue;
@@ -542,7 +547,8 @@ fn instance<'db>(
     };
     let params = callable_generic_frame(db, baml_compiler2_hir::loc::DeclRef::Source(f)).params;
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, f.file(db).source_root(db));
-    let specialized = specialize(source, &params, &frame, &runtime)?;
+    let mut specialized = specialize(source, &params, &frame, &runtime)?;
+    fold_primitive_sort_guards(db, plan, &mut specialized);
     let runtime_params = baml_type::RuntimeGenericLayout::new(&params);
     if runtime_params.params().len() != frame.len() {
         return Err(no("specialization frame arity"));
@@ -630,6 +636,12 @@ impl Plan<'_> {
             RuntimeTy::Literal(baml_type::Literal::String(_), _) => {
                 self.candidate(&RuntimeTy::String)
             }
+            RuntimeTy::Bigint => {
+                self.bigints = true;
+                if !self.concrete_types.contains(ty) {
+                    self.concrete_types.push(ty.clone());
+                }
+            }
             RuntimeTy::Int
             | RuntimeTy::Bool
             | RuntimeTy::String
@@ -641,6 +653,95 @@ impl Plan<'_> {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+// A homogeneous primitive list always takes the native natural-sort branch.
+// Preserve the guard call (and its source site), but discard the impossible
+// comparator closure before reachability and closure admission. Block numbers
+// stay intact because error evidence refers to the original MIR coordinates.
+fn fold_primitive_sort_guards(db: &dyn Db, plan: &Plan<'_>, mir: &mut MirFunction<'_>) {
+    let MirFunctionKind::Bytecode(body) = &mut mir.kind else {
+        return;
+    };
+    let mut guards = Vec::new();
+    for block in &body.blocks {
+        let Some(Terminator::Call {
+            callee: Operand::Constant(Constant::Function(f)),
+            args,
+            ntypeargs,
+            destination: Place::Local(result),
+            target,
+            ..
+        }) = &block.terminator
+        else {
+            continue;
+        };
+        if !plan
+            .index
+            .function(db, *f)
+            .is_some_and(|(id, _)| plan.index.display(id) == "baml._is_primitive_array")
+        {
+            continue;
+        }
+        let Some(Operand::Copy(Place::Local(list)) | Operand::Move(Place::Local(list))) =
+            args.get(*ntypeargs)
+        else {
+            continue;
+        };
+        if matches!(&body.locals[list.0].ty,RuntimeTy::List(t) if matches!(t.as_ref(), RuntimeTy::Int|RuntimeTy::Float|RuntimeTy::String))
+        {
+            guards.push((*result, *target));
+        }
+    }
+    if guards.is_empty() {
+        return;
+    }
+    for (result, target) in guards {
+        let block = &mut body.blocks[target.0];
+        if block.statements.is_empty() {
+            if let Some(Terminator::Branch {
+                condition: Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)),
+                then_block,
+                ..
+            }) = &block.terminator
+            {
+                if *l == result {
+                    block.terminator = Some(Terminator::Goto {
+                        target: *then_block,
+                    });
+                }
+            }
+        }
+    }
+    let mut reached = BTreeSet::new();
+    let mut pending = vec![body.entry];
+    while let Some(id) = pending.pop() {
+        if !reached.insert(id.0) {
+            continue;
+        }
+        let block = &body.blocks[id.0];
+        pending.extend(block.unwind);
+        if let Some(term) = &block.terminator {
+            pending.extend(term.successors());
+        }
+    }
+    for block in &mut body.blocks {
+        if !reached.contains(&block.id.0) {
+            // Erased type locals still need their concrete metadata for the
+            // Rust local declarations; LoadType has no runtime side effect.
+            block.statements.retain(|s| {
+                matches!(
+                    &s.kind,
+                    StatementKind::Assign {
+                        value: Rvalue::LoadType(_),
+                        ..
+                    }
+                )
+            });
+            block.terminator = Some(Terminator::Unreachable);
+            block.unwind = None;
         }
     }
 }

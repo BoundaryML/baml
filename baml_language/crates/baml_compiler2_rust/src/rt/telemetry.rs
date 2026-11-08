@@ -149,6 +149,32 @@ pub(super) fn emit(
         writeln!(out,"unsafe fn f{stringify}_list_json(site:usize,value:rt::Dyn,naming:usize,indent:rt::Dyn,omit:bool,on:bool,oi:bool,oo:bool)->R<usize>{{unsafe{{rt::telemetry::observed_captured(&O{stringify},site,||rt::telemetry::capture_arguments(&[value,rt::Dyn{{tag:if on{{u64::MAX}}else{{CAPTURE_NAMING_TAG}},payload:naming as u64}},if oi{{rt::Dyn{{tag:u64::MAX,payload:0}}}}else{{indent}},rt::Dyn{{tag:if oo{{u64::MAX}}else{{1}},payload:omit as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::check_stack().map_err(|e|e.at(&S_LIST_STRINGIFY,0))?;let aliased=rt::telemetry::observed_captured(&O{aliased},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;rt::json_lists::stringify(&mut rt::strings::Cx::current(),value,JSON_LIST_SHAPES,aliased,indent,omit).map(|s|s.as_raw()).map_err(|e|e.at(&S_LIST_STRINGIFY,0))}})}}}}").unwrap();
     }
     let mut observed = reached.clone();
+    if plan.json_public_to {
+        let to = plan
+            .program
+            .objects
+            .iter()
+            .enumerate()
+            .find_map(|(i, o)| {
+                (matches!(o, Object::Function(_)) && plan.index.display(i) == "baml.json.to")
+                    .then_some(i)
+            })
+            .unwrap();
+        observed.insert(to);
+        let MirFunctionKind::Bytecode(body) = &all[&to].kind else {
+            unreachable!()
+        };
+        let block=body.blocks.iter().find(|b|matches!(&b.terminator,Some(Terminator::Call{callee:Operand::Constant(Constant::Function(f)),..})if plan.index.function(db,*f).is_some_and(|(id,_)|id==aliased))).unwrap();
+        let positions = plan.index.positions(to);
+        let instruction = positions.block_pcs[block.id.0].terminator.unwrap();
+        let pc = positions
+            .lower_to_compact_with_offsets()
+            .offset_of(instruction)
+            .unwrap();
+        let site = telemetry_sites.borrow().len();
+        writeln!(out, "const JSON_TO_ALIAS_SITE:usize={site};").unwrap();
+        telemetry_sites.borrow_mut().push((Some(to), pc, aliased));
+    }
     for (chain, _) in &plan.init_chains {
         observed.insert(*chain);
         writeln!(
