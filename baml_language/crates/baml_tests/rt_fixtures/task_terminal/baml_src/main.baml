@@ -5,3 +5,12 @@ function RtCancelledFailure()->int {
     if(cancelled || !failed.is_error() || index!=0) {return -1;}
     7
 }
+
+function RtLinkedCancelledFailure()->int {
+    let token=baml.spawn.CancelToken.new();
+    let failed=spawn with token {
+        token.cancel();
+        let n=4611686018427387903; n+1
+    };
+    7
+}

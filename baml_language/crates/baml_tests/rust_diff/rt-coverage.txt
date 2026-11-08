@@ -1,4 +1,4 @@
-BAML runtime coverage (normal AND GC stress): 37 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 38 pass, 124 unsupported, 0 fail
 Telemetry off: required
 Telemetry low/medium/high/default: required for standalone closure/task probes and spawn KPI; otherwise not yet supported
 Includes the independent rt_type_dispatch_semantics project, compared with bytecode in both GC modes.
@@ -120,6 +120,7 @@ RtDefaultCallbacks	pass
 RtEmptyClosures	pass
 RtGenericClosures	pass
 RtGenericMethods	pass
+RtLinkedCancelledFailure	pass
 RtNativeCallback	pass
 RtNativeHigherOrderValue	pass
 RtScalarTaskOrder	pass

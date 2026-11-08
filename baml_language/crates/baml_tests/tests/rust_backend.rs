@@ -1376,16 +1376,18 @@ fn rt_generated_terminal_cancelled_error() {
     let source = include_str!("../rt_fixtures/task_terminal/baml_src/main.baml");
     let db = baml_test_support::setup_multi_file_db(&[("task_terminal.baml", source)]);
     let program = lower(&db, OptLevel::Two);
-    let entry = program.rendered_callables()["user.RtCancelledFailure"]
-        .object
-        .raw();
-    let source = baml_db::rust_backend::compile_rt(
-        &db,
-        db.workspace_root().unwrap(),
-        &program,
-        OptLevel::Two,
-        entry,
-    )
-    .unwrap();
-    syn::parse_file(&source).unwrap();
+    for name in ["RtCancelledFailure", "RtLinkedCancelledFailure"] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        syn::parse_file(&source).unwrap();
+    }
 }

@@ -33,6 +33,7 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtTaskTimeout",
     "RtAutomaticCleanup",
     "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
     "concurrency::spawn await x10k",
 ];
 
@@ -65,6 +66,7 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
                 | "RtTaskTimeout"
                 | "RtAutomaticCleanup"
                 | "RtCancelledFailure"
+                | "RtLinkedCancelledFailure"
                 | "concurrency::spawn await x10k"
         )
 }

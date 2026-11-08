@@ -1188,3 +1188,30 @@ fn cancelling_a_settled_failure_records_the_request_without_changing_its_outcome
     assert!(!failed.try_cancel());
     assert_eq!(failed.result().unwrap().unwrap_err(), error("bad"));
 }
+
+#[test]
+fn failure_preserves_cancellation_received_through_a_linked_token() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        let token = cx.new_cancel_token(vec![]);
+        let trigger = token.clone();
+        let failed = cx.spawn_with(
+            SpawnOptions {
+                local_linked: vec![token],
+                ..Default::default()
+            },
+            move |_| {
+                trigger.cancel();
+                Err(error("failed during cancellation"))
+            },
+        );
+        assert_eq!(
+            cx.await_future(&failed).unwrap_err(),
+            error("failed during cancellation")
+        );
+        assert!(failed.was_cancel_requested());
+        Ok(Value::int(1))
+    });
+    assert_eq!(lp.run_until(&root).unwrap().as_int(), 1);
+}

@@ -37,6 +37,7 @@ const PROBES: &[&str] = &[
     "RtTaskTimeout",
     "RtAutomaticCleanup",
     "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -299,7 +300,9 @@ fn probe_timeout_kills_and_reaps() {
 
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
-        "RtCancelledFailure" => Some(manifest.join("rt_fixtures/task_terminal")),
+        "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
+            Some(manifest.join("rt_fixtures/task_terminal"))
+        }
         "RtTaskLimits" | "RtTaskTimeout" | "RtAutomaticCleanup" => {
             Some(manifest.join("rt_fixtures/task_timeouts"))
         }
@@ -409,6 +412,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         "RtTaskTimeout",
         "RtAutomaticCleanup",
         "RtCancelledFailure",
+        "RtLinkedCancelledFailure",
     ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;

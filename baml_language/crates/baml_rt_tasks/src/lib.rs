@@ -914,6 +914,9 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
             let mut task = c.tasks.remove(&id).unwrap();
             task.state = TaskState::Done;
             if result.is_err() {
+                // Preserve cancellation from ancestors, linked tokens and
+                // deadlines before firing the producer's own token below.
+                task.future.0.borrow_mut().cancel_requested |= task.cancel.is_cancelled();
                 task.cancel.cancel();
             }
             if let Some(token) = task.io_cancel.take() {
