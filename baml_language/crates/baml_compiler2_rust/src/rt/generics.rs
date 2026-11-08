@@ -577,7 +577,7 @@ pub(super) fn instance<'db>(
     plan.next_object += 1;
     plan.function_frames.insert(id, captures);
     all.insert(id, specialized);
-    plan.index.rt_alias(id, callee);
+    std::rc::Rc::make_mut(&mut plan.index).rt_alias(id, callee);
     instances.push((callee, frame, id));
     Ok(id)
 }

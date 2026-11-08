@@ -17,23 +17,29 @@ pub(super) fn collect<'db>(
     opt: OptLevel,
     entry: usize,
     benchmark: Option<(usize, usize)>,
+    test_entry: bool,
     plan: &mut Plan<'_>,
+    prepared: Option<&BTreeMap<usize, MirFunction<'db>>>,
 ) -> Gen<Admitted<'db>> {
-    let mut all = BTreeMap::new();
-    for &file in world_files(db, root) {
-        registry::admit(registry::Admission::Initializers(
-            file.source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib
-                && !file_lets(db, file).is_empty(),
-        ))?;
-        for &f in file_functions(db, file) {
-            if is_required_interface_method(db, f) {
-                continue;
+    let mut all = prepared.cloned().unwrap_or_default();
+    if prepared.is_none() {
+        for &file in world_files(db, root) {
+            if !test_entry {
+                registry::admit(registry::Admission::Initializers(
+                    file.source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib
+                        && !file_lets(db, file).is_empty(),
+                ))?;
             }
-            let mir = lower_function(db, f, opt)
-                .as_ref()
-                .map_err(|e| no(format!("MIR: {e:?}")))?;
-            if let Some(object) = plan.index.declared(db, f) {
-                all.insert(object, mir.clone());
+            for &f in file_functions(db, file) {
+                if is_required_interface_method(db, f) {
+                    continue;
+                }
+                let mir = lower_function(db, f, opt)
+                    .as_ref()
+                    .map_err(|e| no(format!("MIR: {e:?}")))?;
+                if let Some(object) = plan.index.declared(db, f) {
+                    all.insert(object, mir.clone());
+                }
             }
         }
     }
@@ -195,8 +201,14 @@ pub(super) fn collect<'db>(
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         unreachable!()
     };
-    if mir.arity != 0 || plan.repr(&body.locals[0].ty)? != Repr::Int {
-        return Err(no("entry must have no parameters and return int"));
+    if mir.arity != 0
+        || plan.repr(&body.locals[0].ty)? != if test_entry { Repr::Null } else { Repr::Int }
+    {
+        return Err(no(if test_entry {
+            "test entry must have no parameters and return null"
+        } else {
+            "entry must have no parameters and return int"
+        }));
     }
     Ok(Admitted {
         all,
@@ -205,4 +217,44 @@ pub(super) fn collect<'db>(
         builtins,
         json_decode,
     })
+}
+
+fn insert_lambdas<'db>(
+    db: &'db dyn Db,
+    index: &crate::index::ProgramIndex<'_>,
+    mir: &'db MirFunction<'db>,
+    all: &mut BTreeMap<usize, MirFunction<'db>>,
+) {
+    for lambda in &mir.lambdas {
+        if let Some(object) = index.lambda(db, &lambda.identity) {
+            all.insert(object, lambda.clone());
+        }
+        insert_lambdas(db, index, lambda, all);
+    }
+}
+
+pub(super) type Prepared<'db> = Gen<BTreeMap<usize, MirFunction<'db>>>;
+
+pub(super) fn prepare_tests<'db>(
+    db: &'db dyn Db,
+    root: SourceRoot,
+    opt: OptLevel,
+    index: &crate::index::ProgramIndex<'_>,
+) -> Prepared<'db> {
+    let mut all = BTreeMap::new();
+    for &file in world_files(db, root) {
+        for &function in file_functions(db, file) {
+            if is_required_interface_method(db, function) {
+                continue;
+            }
+            let mir = lower_function(db, function, opt)
+                .as_ref()
+                .map_err(|e| no(format!("MIR: {e:?}")))?;
+            if let Some(object) = index.declared(db, function) {
+                all.insert(object, mir.clone());
+                insert_lambdas(db, index, mir, &mut all);
+            }
+        }
+    }
+    Ok(all)
 }

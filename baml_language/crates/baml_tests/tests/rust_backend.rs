@@ -1275,3 +1275,63 @@ fn rt_public_string_surface_is_admitted() {
     }
     assert!(rejected.is_empty(), "{}", rejected.join("\n"));
 }
+
+#[test]
+fn rt_test_admission_does_not_reach_sibling_tests_or_unrelated_initializers() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "tests.baml",
+        r#"
+const UNUSED = "unrelated initializer";
+test "admitted" { let scalar = 1 + 1; }
+test "unsupported sibling" { let callback = () -> int { 1 }; assert.equal(callback(), 1) }
+"#,
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let mut admitted = 0;
+    let mut rejected = 0;
+    for (entry, object) in program.objects.iter().enumerate() {
+        if !program.packages[program.root as usize]
+            .objects
+            .contains(&(entry as u32))
+        {
+            continue;
+        }
+        let bex_vm_types::Object::Function(function) = object else {
+            continue;
+        };
+        if !matches!(
+            function.identity,
+            bex_vm_types::types::FunctionIdentity::Synthetic { .. }
+        ) || function.arity != 0
+        {
+            continue;
+        }
+        let result = baml_db::rust_backend::compile_rt_test(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if result
+            .as_ref()
+            .is_ok_and(|source| source.contains("test_host::run"))
+        {
+            admitted += 1;
+        }
+        if result
+            .as_ref()
+            .is_err_and(|error| error.contains("unsupported in baml_rt: closures"))
+        {
+            rejected += 1;
+        }
+    }
+    assert!(
+        admitted >= 1,
+        "a supported leaf must compile despite unrelated globals/tests"
+    );
+    assert_eq!(
+        rejected, 1,
+        "the sibling's own reachable closure is rejected"
+    );
+}

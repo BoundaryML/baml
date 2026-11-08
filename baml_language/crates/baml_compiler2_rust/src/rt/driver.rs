@@ -3,6 +3,7 @@ use super::{
     ProgramEmission, ProgramIndex, SourceRoot, admission, builtins, host, json, layout, no,
     recursive, telemetry,
 };
+use std::fmt::Write as _;
 
 /// Emit a single parameterless integer entry, including a compatible benchmark host.
 /// Layouts and direct call bodies come exclusively from MIR and linked metadata.
@@ -13,10 +14,9 @@ pub fn compile_rt(
     opt: OptLevel,
     entry: usize,
 ) -> Gen<String> {
-    compile(db, root, program, opt, entry, None)
+    compile_entry(db, root, program, opt, entry, None, false, None)
 }
 
-/// Compile the normal entry plus an explicit setup/run native benchmark host.
 pub fn compile_rt_benchmark(
     db: &dyn Db,
     root: SourceRoot,
@@ -25,21 +25,37 @@ pub fn compile_rt_benchmark(
     entry: usize,
     setup_run: (usize, usize),
 ) -> Gen<String> {
-    compile(db, root, program, opt, entry, Some(setup_run))
+    compile_entry(db, root, program, opt, entry, Some(setup_run), false, None)
 }
 
-fn compile(
+/// Compile one zero-argument test body and its reachable closure, without a VM.
+pub fn compile_rt_test(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+) -> Gen<String> {
+    RtTestCompiler::new(db, root, program, opt).compile(entry)
+}
+
+fn compile_entry(
     db: &dyn Db,
     root: SourceRoot,
     program: &Program,
     opt: OptLevel,
     entry: usize,
     benchmark: Option<(usize, usize)>,
+    test_entry: bool,
+    prepared: Option<&RtTestCompiler<'_, '_>>,
 ) -> Gen<String> {
     let mut plan = Plan {
         root,
         lang: baml_compiler2_hir::package::lang_roots(db),
-        index: ProgramIndex::new(db, root, program),
+        index: prepared.map_or_else(
+            || std::rc::Rc::new(ProgramIndex::new(db, root, program)),
+            |p| p.index.clone(),
+        ),
         program,
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
@@ -64,7 +80,18 @@ fn compile(
         calls,
         builtins,
         json_decode,
-    } = admission::collect(db, root, opt, entry, benchmark, &mut plan)?;
+    } = admission::collect(
+        db,
+        root,
+        opt,
+        entry,
+        benchmark,
+        test_entry,
+        &mut plan,
+        prepared
+            .map(|p| p.all.as_ref().map_err(Clone::clone))
+            .transpose()?,
+    )?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
@@ -258,8 +285,52 @@ fn compile(
     )?;
     if let Some((setup, run)) = benchmark {
         host::emit_benchmark(&mut out, entry, setup, run, &builtins, format_site);
+    } else if test_entry {
+        write!(&mut out, "fn entry()->R<i64>{{unsafe{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{entry}::<true>(cx,0)?;}}else{{f{entry}::<false>(cx,0)?;}}Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name)}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
     } else {
         host::emit(&mut out, entry, &builtins, format_site);
     }
     Ok(out)
+}
+
+/// Shared immutable lookup/lowering work; each leaf still has its own admission
+/// walk, layouts and emitted program. No admission result is shared across roots.
+pub struct RtTestCompiler<'db, 'program> {
+    db: &'db dyn Db,
+    root: SourceRoot,
+    program: &'program Program,
+    opt: OptLevel,
+    index: std::rc::Rc<ProgramIndex<'program>>,
+    all: admission::Prepared<'db>,
+}
+impl<'db, 'program> RtTestCompiler<'db, 'program> {
+    pub fn new(
+        db: &'db dyn Db,
+        root: SourceRoot,
+        program: &'program Program,
+        opt: OptLevel,
+    ) -> Self {
+        let index = std::rc::Rc::new(ProgramIndex::new(db, root, program));
+        let all = admission::prepare_tests(db, root, opt, &index);
+        Self {
+            db,
+            root,
+            program,
+            opt,
+            index,
+            all,
+        }
+    }
+    pub fn compile(&self, entry: usize) -> Gen<String> {
+        compile_entry(
+            self.db,
+            self.root,
+            self.program,
+            self.opt,
+            entry,
+            None,
+            true,
+            Some(self),
+        )
+    }
 }
