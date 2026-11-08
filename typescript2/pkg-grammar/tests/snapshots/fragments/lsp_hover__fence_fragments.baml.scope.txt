@@ -59,11 +59,11 @@
 21:6-11      "Assoc"            source.baml meta.associated-type.baml entity.name.type.associated.baml
 22:1-5       "type"             source.baml meta.associated-type.baml keyword.declaration.associated-type.baml
 22:6-11      "Assoc"            source.baml meta.associated-type.baml entity.name.type.associated.baml
-22:12-19     "extends"          source.baml meta.associated-type.baml keyword.operator.extends.baml
+22:12-19     "extends"          source.baml meta.associated-type.baml keyword.operator.expression.extends.baml
 22:20-25     "Store"            source.baml meta.associated-type.baml meta.type-reference.baml entity.name.type.baml
 23:1-5       "type"             source.baml meta.associated-type.baml keyword.declaration.associated-type.baml
 23:6-11      "Assoc"            source.baml meta.associated-type.baml entity.name.type.associated.baml
-23:12-19     "extends"          source.baml meta.associated-type.baml keyword.operator.extends.baml
+23:12-19     "extends"          source.baml meta.associated-type.baml keyword.operator.expression.extends.baml
 23:20-25     "Store"            source.baml meta.associated-type.baml meta.type-reference.baml entity.name.type.baml
 23:26-27     "="                source.baml meta.associated-type.baml keyword.operator.assignment.baml
 23:28-34     "string"           source.baml meta.associated-type.baml support.type.primitive.baml

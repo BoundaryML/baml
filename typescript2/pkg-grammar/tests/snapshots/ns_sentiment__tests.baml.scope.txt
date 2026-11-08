@@ -187,7 +187,7 @@
 50:9-10      "("                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 50:10-13     "let"              source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 50:14-19     "label"            source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-50:20-22     "in"               source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+50:20-22     "in"               source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 50:23-29     "labels"           source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 50:29-30     ")"                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 50:31-32     "{"                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml
@@ -325,7 +325,7 @@
 83:9-10      "("                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 83:10-13     "let"              source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 83:14-19     "label"            source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-83:20-22     "in"               source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+83:20-22     "in"               source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 83:23-29     "labels"           source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 83:29-30     ")"                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 83:31-32     "{"                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml
@@ -364,7 +364,7 @@
 88:21-22     "("                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 88:22-25     "let"              source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 88:26-30     "text"             source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-88:31-33     "in"               source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+88:31-33     "in"               source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 88:34-42     "examples"         source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 88:42-43     ")"                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 88:44-45     "{"                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml
@@ -449,7 +449,7 @@
 113:9-10     "("                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 113:10-13    "let"              source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 113:14-18    "name"             source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-113:19-21    "in"               source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+113:19-21    "in"               source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 113:22-27    "names"            source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 113:27-28    ")"                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 113:29-30    "{"                source.baml meta.testset.baml meta.testset.body.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml
@@ -514,7 +514,7 @@
 131:9-12     "let"              source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 131:13-16    "fut"              source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
 131:17-18    "="                source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
-131:19-24    "spawn"            source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.expression.spawn.baml keyword.operator.spawn.baml
+131:19-24    "spawn"            source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.expression.spawn.baml keyword.operator.expression.spawn.baml
 131:25-26    "{"                source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.expression.spawn.baml meta.block.code.baml punctuation.definition.block.begin.baml
 132:13-29    "serve_cases_once" source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.expression.spawn.baml meta.block.code.baml meta.function-call.baml entity.name.function.baml
 132:29-30    "("                source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.expression.spawn.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
@@ -626,7 +626,7 @@
 148:13-14    "_"                source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.wildcard.baml variable.language.wildcard.baml
 148:15-16    "="                source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
 148:17-18    "("                source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.group.expression.baml punctuation.definition.group.begin.baml
-148:18-23    "await"            source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.group.expression.baml keyword.operator.await.baml
+148:18-23    "await"            source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.group.expression.baml keyword.operator.expression.await.baml
 148:24-27    "fut"              source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.group.expression.baml meta.dotted-expression.baml variable.other.readwrite.baml
 148:27-28    ")"                source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.group.expression.baml punctuation.definition.group.end.baml
 148:29-34    "catch"            source.baml meta.testset.baml meta.testset.body.baml meta.test.baml meta.block.code.baml meta.statement.let.baml meta.expression.catch.baml keyword.control.exception.catch.baml

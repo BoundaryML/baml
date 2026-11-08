@@ -883,3 +883,85 @@ let y = {
           (number)
           (number)
           (number))))))
+
+==================
+client value declarations
+==================
+
+client Fast = openai.ResponsesClient.new(model = "gpt-6-luna", api_key = env.OPENAI_API_KEY);
+
+client Smart = anthropic.Client.new(model = "claude-sonnet-5-5");
+
+---
+
+(source_file
+  (client_value_declaration
+    (identifier)
+    (call_expression
+      (member_expression
+        (member_expression
+          (identifier)
+          (property_identifier))
+        (property_identifier))
+      (arguments
+        (assignment_expression
+          (identifier)
+          (string))
+        (named_argument
+          (identifier)
+          (member_expression
+            (identifier)
+            (property_identifier))))))
+  (client_value_declaration
+    (identifier)
+    (call_expression
+      (member_expression
+        (member_expression
+          (identifier)
+          (property_identifier))
+        (property_identifier))
+      (arguments
+        (assignment_expression
+          (identifier)
+          (string))))))
+
+==================
+llm function with backtick prompt
+==================
+
+function Extract(raw: string) -> Invoice {
+  client: Reliable
+  prompt: `Extract the invoice. ${ctx.output_format()}\n${raw}`
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (config_value_path
+          (identifier)))
+      (prompt_field
+        (property_identifier)
+        (backtick_string
+          (string_content)
+          (interpolation
+            (expression_statement
+              (call_expression
+                (member_expression
+                  (identifier)
+                  (property_identifier))
+                (arguments))))
+          (escape_sequence)
+          (interpolation
+            (expression_statement
+              (identifier))))))))
