@@ -42,6 +42,7 @@ struct Plan<'a> {
     lambda_targets: BTreeMap<(usize, usize), usize>,
     generic_functions: Vec<(usize, Vec<RuntimeTy>, usize)>,
     generic_values: BTreeMap<(usize, usize, usize), usize>,
+    virtual_values: BTreeMap<(usize, usize, usize), Vec<(Repr, usize)>>,
     callables: BTreeSet<usize>,
     closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
     enums: BTreeSet<usize>,

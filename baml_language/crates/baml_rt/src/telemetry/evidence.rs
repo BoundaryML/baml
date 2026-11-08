@@ -82,6 +82,41 @@ pub unsafe fn observe_captured<T>(
     result
 }
 
+fn propagated_origin(
+    state: &mut State,
+    error: &Error,
+    kind: RaiseKind,
+    raise_id: TelemetryId,
+) -> Option<TelemetryId> {
+    let via = match kind {
+        RaiseKind::Rethrow => btel_records::OriginVia::Rethrow,
+        RaiseKind::Await => btel_records::OriginVia::Await,
+        _ => return None,
+    };
+    if let Some((origin, previous)) = error.telemetry_caught {
+        state.span(SpanRecord::ErrorRaiseOrigin {
+            raise_id,
+            origin: btel_records::RaiseOrigin::Proven {
+                origin,
+                previous: Some(previous),
+                via,
+            },
+        });
+        Some(origin)
+    } else {
+        if kind == RaiseKind::Await {
+            state.span(SpanRecord::ErrorRaiseOrigin {
+                raise_id,
+                origin: btel_records::RaiseOrigin::Unresolved {
+                    reason: btel_records::UnresolvedOrigin::FutureLinkMissing,
+                    via,
+                },
+            });
+        }
+        None
+    }
+}
+
 /// Called before the first frame completion; all unwound frames share its clock.
 #[cold]
 pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Option<usize>) {
@@ -150,21 +185,7 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
     }
     let raised_at = *error.telemetry_at.get_or_insert_with(|| state.read());
     let may_promote = unsafe { (*frame).mode } == 3;
-    let origin = if kind == RaiseKind::Rethrow {
-        error.telemetry_caught.map(|(origin, previous)| {
-            state.span(SpanRecord::ErrorRaiseOrigin {
-                raise_id,
-                origin: btel_records::RaiseOrigin::Proven {
-                    origin,
-                    previous: Some(previous),
-                    via: btel_records::OriginVia::Rethrow,
-                },
-            });
-            origin
-        })
-    } else {
-        None
-    };
+    let origin = propagated_origin(state, error, kind, raise_id);
     state.span(SpanRecord::ErrorRaised {
         raise_id,
         raised_at,
@@ -202,7 +223,7 @@ pub(super) fn end(error: &mut Error, result: UnwindResult, handler_pc: Option<u3
         return;
     };
     let state = unsafe { &mut *CURRENT.get() };
-    if result == UnwindResult::Caught {
+    if matches!(result, UnwindResult::Caught | UnwindResult::Unhandled) {
         error.telemetry_caught = Some((raise.origin.unwrap_or(raise.id), raise.id));
     }
     let handler_function = handler_pc.map(|_| {
@@ -242,21 +263,7 @@ fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, 
     } else {
         kind
     };
-    let origin = if kind == RaiseKind::Rethrow {
-        error.telemetry_caught.map(|(origin, previous)| {
-            state.span(SpanRecord::ErrorRaiseOrigin {
-                raise_id,
-                origin: btel_records::RaiseOrigin::Proven {
-                    origin,
-                    previous: Some(previous),
-                    via: btel_records::OriginVia::Rethrow,
-                },
-            });
-            origin
-        })
-    } else {
-        None
-    };
+    let origin = propagated_origin(state, error, kind, raise_id);
     state.span(SpanRecord::ErrorRaised {
         raise_id,
         raised_at,

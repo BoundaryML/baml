@@ -40,20 +40,6 @@ impl Plan<'_> {
         let ty = ty.try_map_heads(&mut |head| self.class_tag(head.tag()))?;
         Ok((signature_key(&ty), ty))
     }
-    fn virtual_callable_targets(
-        &self,
-        iface: &baml_compiler2_mir::TyTemplateInterface,
-        method: &str,
-    ) -> Gen<Vec<(usize, usize)>> {
-        if !iface.generics.is_empty() {
-            return Err(no("generic bound interface"));
-        }
-        let id = self
-            .index
-            .interface_at(&iface.name)
-            .ok_or_else(|| no("bound method interface"))?;
-        self.targets(id, method)
-    }
     pub(super) fn local_repr(
         &self,
         body: &MirFunctionBody<'_>,
@@ -219,6 +205,15 @@ impl registry::Feature for Feature {
         _types: &[Repr],
         values: &[(String, Repr)],
     ) -> Option<Gen<(String, Repr)>> {
+        if name == "baml.ops.equals_equals"
+            && values.len() == 2
+            && values.iter().all(|v| v.1 == Repr::Closure)
+        {
+            return Some(Ok((
+                format!("rt::closures::equal({},{})", values[0].0, values[1].0),
+                Repr::Bool,
+            )));
+        }
         if !matches!(name, "baml.Array.push" | "baml.Array.length")
             || values
                 .first()
@@ -268,6 +263,17 @@ impl registry::Feature for Feature {
         _expected: Repr,
     ) -> Option<Gen<(String, Repr)>> {
         if let Rvalue::BinaryOp { op, left, right } = value {
+            if matches!(op, super::BinOp::Eq | super::BinOp::Ne) {
+                if let (Ok((l, Repr::Closure)), Ok((r, Repr::Closure))) =
+                    (emitter.operand(left), emitter.operand(right))
+                {
+                    let negate = if *op == super::BinOp::Ne { "!" } else { "" };
+                    return Some(Ok((
+                        format!("{negate}rt::closures::equal({l},{r})"),
+                        Repr::Bool,
+                    )));
+                }
+            }
             if matches!(op, super::BinOp::Eq | super::BinOp::Ne)
                 && (matches!(left, Operand::Constant(super::Constant::OmittedArg))
                     || matches!(right, Operand::Constant(super::Constant::OmittedArg)))
@@ -298,62 +304,65 @@ impl registry::Feature for Feature {
                 })());
             }
         }
-        if let Rvalue::MakeVirtualBoundMethod {
-            iface,
-            method,
-            receiver,
-            type_args,
-        } = value
-        {
+        if matches!(
+            value,
+            Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::MakeVirtualFunction { .. }
+        ) {
             return Some((|| {
-                if !type_args.is_empty() {
-                    return Err(no("generic bound method"));
-                }
-                let receiver = emitter.coerce(emitter.operand(receiver)?, Repr::Tagged)?;
-                let targets = emitter.plan.virtual_callable_targets(iface, method)?;
-                let cases = targets
-                    .into_iter()
-                    .map(|(class, object)| {
-                        format!(
-                            "{}=>rt::closures::bind({},{},{object},closure{object},receiver),",
-                            emitter.descriptors[&class] + 3,
+                let targets = emitter
+                    .plan
+                    .virtual_values
+                    .get(&(emitter.object, emitter.block, emitter.statement))
+                    .ok_or_else(|| no("interface callable has no concrete target"))?;
+                if let Rvalue::MakeVirtualBoundMethod { receiver, .. } = value {
+                    let receiver = emitter.coerce(emitter.operand(receiver)?, Repr::Tagged)?;
+                    let mut cases = String::new();
+                    for &(repr, object) in targets {
+                        let bind = if emitter
+                            .plan
+                            .function_frames
+                            .get(&object)
+                            .is_some_and(|f| !f.is_empty())
+                        {
+                            "bind_generic"
+                        } else {
+                            "bind"
+                        };
+                        cases.push_str(&format!(
+                            "{}=>rt::closures::{bind}({},{},{object},closure{object},receiver),",
+                            emitter.tag(repr)?,
                             emitter.plan.closure_descriptors().unwrap().0,
                             emitter.plan.closure_descriptors().unwrap().1
-                        )
-                    })
-                    .collect::<String>();
-                Ok((emitter.fallible(&format!("{{let receiver={receiver};match receiver.tag{{{cases}_=>Err(rt::Error::internal(\"invalid bound interface receiver\".into()))}}}}")),Repr::Closure))
-            })());
-        }
-        if let Rvalue::MakeVirtualFunction {
-            self_ty: baml_compiler2_mir::TyTemplate::Class(head, args),
-            iface,
-            method,
-            type_args,
-        } = value
-        {
-            return Some((|| {
-                if !args.is_empty() || !type_args.is_empty() {
-                    return Err(no("generic interface function value"));
+                        ));
+                    }
+                    Ok((emitter.fallible(&format!("{{let receiver={receiver};match receiver.tag{{{cases}_=>Err(rt::Error::internal(\"invalid bound interface receiver\".into()))}}}}")),Repr::Closure))
+                } else {
+                    let [(_, object)] = targets.as_slice() else {
+                        return Err(no("ambiguous interface function value"));
+                    };
+                    let function = if emitter
+                        .plan
+                        .function_frames
+                        .get(object)
+                        .is_some_and(|f| !f.is_empty())
+                    {
+                        "generic_function"
+                    } else {
+                        "function"
+                    };
+                    let name = if function == "function" {
+                        format!(",{:?}", emitter.plan.index.info(*object).name().as_str())
+                    } else {
+                        String::new()
+                    };
+                    Ok((
+                        emitter.fallible(&format!(
+                            "rt::closures::{function}({}, {object},closure{object}{name})",
+                            emitter.plan.closure_descriptors().unwrap().1
+                        )),
+                        Repr::Closure,
+                    ))
                 }
-                let (class, _) = emitter
-                    .plan
-                    .index
-                    .class_at(head)
-                    .ok_or_else(|| no("interface function class"))?;
-                let object = emitter
-                    .plan
-                    .virtual_callable_targets(iface, method)?
-                    .into_iter()
-                    .find_map(|(c, f)| (c == class).then_some(f))
-                    .ok_or_else(|| no("interface function target"))?;
-                Ok((
-                    emitter.fallible(&format!(
-                        "rt::closures::new({}, {object},closure{object},&[])",
-                        emitter.plan.closure_descriptors().unwrap().1
-                    )),
-                    Repr::Closure,
-                ))
             })());
         }
         if let Rvalue::MakeBoundMethod {
@@ -377,9 +386,19 @@ impl registry::Feature for Feature {
                     })
                     .ok_or_else(|| no("bound method target"))?;
                 let receiver = emitter.coerce(emitter.operand(receiver)?, Repr::Tagged)?;
+                let bind = if emitter
+                    .plan
+                    .function_frames
+                    .get(&object)
+                    .is_some_and(|f| !f.is_empty())
+                {
+                    "bind_generic"
+                } else {
+                    "bind"
+                };
                 Ok((
                     emitter.fallible(&format!(
-                        "rt::closures::bind({},{},{object},closure{object},{receiver})",
+                        "rt::closures::{bind}({},{},{object},closure{object},{receiver})",
                         emitter.plan.closure_descriptors().unwrap().0,
                         emitter.plan.closure_descriptors().unwrap().1
                     )),
@@ -393,9 +412,8 @@ impl registry::Feature for Feature {
                     [&(emitter.object, emitter.block, emitter.statement)];
                 Ok((
                     emitter.fallible(&format!(
-                        "rt::closures::function({}, {object},closure{object},{:?})",
-                        emitter.plan.closure_descriptors().unwrap().1,
-                        emitter.plan.index.info(object).name().as_str()
+                        "rt::closures::generic_function({}, {object},closure{object})",
+                        emitter.plan.closure_descriptors().unwrap().1
                     )),
                     Repr::Closure,
                 ))
@@ -592,15 +610,13 @@ pub(super) fn discover<'db>(
             plan.callables.insert(target);
             targets.push(target);
         }
-        if let StatementKind::Assign {
-            value:
-                Rvalue::MakeVirtualBoundMethod { iface, method, .. }
-                | Rvalue::MakeVirtualFunction { iface, method, .. },
-            ..
-        } = &statement.kind
+        if let Some(cases) = plan
+            .virtual_values
+            .get(&(object, block, statement_index))
+            .cloned()
         {
-            for (class, target) in plan.virtual_callable_targets(iface, method)? {
-                plan.add(class)?;
+            for (repr, target) in cases {
+                plan.record(repr)?;
                 plan.callables.insert(target);
                 targets.push(target);
             }
@@ -703,11 +719,11 @@ impl super::Emitter<'_, '_> {
         let arguments = (1..=self.arity)
             .map(|i| {
                 let value = if self.plan.captures.contains_key(&self.object) {
-                    format!("args[{}]", i - 1)
+                    format!("args.get({}).copied().unwrap_or(rt::Dyn{{tag:u64::MAX,payload:0}})",i-1)
                 } else if i == 1 {
-                    "if rt::closures::is_bound(env){rt::closures::load(rt::closures::capture(env,0))}else{args[0]}".to_owned()
+                    "if rt::closures::is_bound(env){rt::closures::load(rt::closures::capture(env,0))}else{args.get(0).copied().unwrap_or(rt::Dyn{tag:u64::MAX,payload:0})}".to_owned()
                 } else {
-                    format!("args[if rt::closures::is_bound(env){{{}}}else{{{}}}]", i - 2, i - 1)
+                    format!("args.get(if rt::closures::is_bound(env){{{}}}else{{{}}}).copied().unwrap_or(rt::Dyn{{tag:u64::MAX,payload:0}})",i-2,i-1)
                 };
                 self.closure_argument(value, self.plan.local_repr(self.body, i, 0)?)
             })

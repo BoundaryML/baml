@@ -934,7 +934,7 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         ),
         (
             r#"class A { x: int } class B { y: int } function main() -> int { let a = baml.json.decode<A | B>("x") catch(e) { baml.json.ParseError => null }; 0 }"#,
-            false,
+            true,
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
@@ -1282,4 +1282,110 @@ fn rt_generated_task_controls() {
         )
         .unwrap();
     }
+}
+
+#[test]
+fn rt_generated_task_errors_and_background_work() {
+    let source = include_str!("../rt_fixtures/task_edges/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("task_edges.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    for name in [
+        "RtTaskErrors",
+        "RtBackgroundTask",
+        "RtBackgroundError",
+        "RtTokenComposition",
+    ] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        syn::parse_file(&source).unwrap();
+    }
+}
+
+#[test]
+fn rt_generic_interface_and_bound_callable_frames() {
+    let source = include_str!("../rt_fixtures/closure_edges/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("closure_edges.baml", source)]);
+    for opt in [OptLevel::Zero, OptLevel::Two] {
+        let program = lower(&db, opt);
+        for name in [
+            "RtVirtualGenericClosures",
+            "RtBoundGenericClosures",
+            "RtVirtualOwnGenericClosure",
+            "RtNativeHigherOrderValue",
+            "RtDefaultCallbacks",
+        ] {
+            let entry = program.rendered_callables()[&format!("user.{name}")]
+                .object
+                .raw();
+            let source = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap();
+            syn::parse_file(&source).unwrap();
+            std::fs::write(
+                std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                    .join(format!("rt-{name}-{opt:?}.rs")),
+                source,
+            )
+            .unwrap();
+        }
+    }
+}
+
+#[test]
+fn rt_generated_timeouts_limits_and_collected_cleanup() {
+    let source = include_str!("../rt_fixtures/task_timeouts/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("task_timeouts.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    for name in ["RtTaskLimits", "RtTaskTimeout", "RtAutomaticCleanup"] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
+        syn::parse_file(&source).unwrap();
+        std::fs::write(
+            std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rt-{name}.rs")),
+            source,
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn rt_generated_terminal_cancelled_error() {
+    let source = include_str!("../rt_fixtures/task_terminal/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("task_terminal.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let entry = program.rendered_callables()["user.RtCancelledFailure"]
+        .object
+        .raw();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    syn::parse_file(&source).unwrap();
 }

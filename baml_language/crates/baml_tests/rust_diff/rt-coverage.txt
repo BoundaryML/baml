@@ -1,6 +1,6 @@
-BAML runtime coverage (normal AND GC stress): 23 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 37 pass, 124 unsupported, 0 fail
 Telemetry off: required
-Telemetry low/medium/high/default: required for standalone closure/task probes; otherwise not yet supported
+Telemetry low/medium/high/default: required for standalone closure/task probes and spawn KPI; otherwise not yet supported
 Includes the independent rt_type_dispatch_semantics project, compared with bytecode in both GC modes.
 
 First unsupported constructs (fixtures blocked):
@@ -109,17 +109,30 @@ ManualSpan	unsupported: top-level initializers
 NoLeaks	unsupported: top-level initializers
 Overflow	unsupported: top-level initializers
 RecursiveCancellation	unsupported: top-level initializers
+RtAutomaticCleanup	pass
+RtBackgroundError	pass
+RtBackgroundTask	pass
+RtBoundGenericClosures	pass
 RtBuiltinCallbacks	pass
+RtCancelledFailure	pass
 RtClosures	pass
+RtDefaultCallbacks	pass
 RtEmptyClosures	pass
 RtGenericClosures	pass
 RtGenericMethods	pass
 RtNativeCallback	pass
+RtNativeHigherOrderValue	pass
 RtScalarTaskOrder	pass
 RtSpawnAwait	pass
 RtTaskControls	pass
+RtTaskErrors	pass
+RtTaskLimits	pass
 RtTaskModifiers	pass
 RtTaskSleep	pass
+RtTaskTimeout	pass
+RtTokenComposition	pass
+RtVirtualGenericClosures	pass
+RtVirtualOwnGenericClosure	pass
 RuntimeClass	unsupported: top-level initializers
 Scalars	unsupported: top-level initializers
 Shapes	unsupported: top-level initializers
@@ -151,6 +164,7 @@ compute::nbody 20k	unsupported: baml.Float.itrunc
 compute::nested loops 500x500	pass
 compute::pure call 1m	pass
 compute::quick sort 3-way 1k	unsupported: list element
+concurrency::spawn await x10k	pass
 interfaces::polymorphic dispatch 100k	pass
 memory::allocation high retention	unsupported: list element
 memory::allocation low retention	unsupported: list element

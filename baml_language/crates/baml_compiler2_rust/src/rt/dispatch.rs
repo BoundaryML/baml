@@ -11,6 +11,11 @@ pub(super) fn resolve(
     method: &str,
     method_args: &[RuntimeTy],
 ) -> Gen<Option<(usize, Vec<RuntimeTy>)>> {
+    // The VM invokes the structural primitive conversion directly, without
+    // entering the interface's default BAML body or emitting its call record.
+    if let Some(target) = super::tasks::duration_string_default(plan, concrete, iface, method) {
+        return Ok(Some(target));
+    }
     let Some(w) = witness(db, plan, concrete, iface)? else {
         return Ok(None);
     };
@@ -241,9 +246,6 @@ impl registry::Feature for Feature {
                 if !tags.insert(tag.clone()) {
                     return Err(no("overlapping dispatch storage tags"));
                 }
-                let MirFunctionKind::Bytecode(body) = &e.all[&callee].kind else {
-                    return Err(no("interface builtin implementation"));
-                };
                 let mut call_values = values
                     .iter()
                     .enumerate()
@@ -275,6 +277,14 @@ impl registry::Feature for Feature {
                 if call_values.len() != e.all[&callee].arity {
                     return Err(no("interface call arity"));
                 }
+                let MirFunctionKind::Bytecode(body) = &e.all[&callee].kind else {
+                    let name = e.plan.index.display(callee);
+                    let (value, repr) = registry::call(e, name, &[], &call_values)
+                        .ok_or_else(|| no("interface builtin implementation"))??;
+                    let result = e.coerce((value, repr), returned)?;
+                    write!(expression, "{tag}=>{{{result}}},").unwrap();
+                    continue;
+                };
                 let arguments = call_values
                     .into_iter()
                     .enumerate()

@@ -9,6 +9,35 @@ pub(super) fn class_is(plan: &Plan<'_>, class: usize, path: &str) -> bool {
             .iter()
             .any(|p| p.name == "baml" && p.objects.contains(&(origin as u32)))
 }
+fn invalid_argument(plan: &Plan<'_>) -> usize {
+    plan.program
+        .packages
+        .iter()
+        .find(|p| p.name == "baml")
+        .and_then(|p| {
+            p.classes
+                .iter()
+                .find(|(path, _)| path.to_string() == "errors.InvalidArgument")
+                .map(|(_, id)| id.raw())
+        })
+        .expect("stdlib InvalidArgument")
+}
+pub(super) fn runtime_exception_tag(plan: &Plan<'_>, class: usize) -> Option<usize> {
+    [
+        "panics.IntegerOverflow",
+        "panics.NegativeBitShift",
+        "panics.Cancelled",
+        "panics.StackOverflow",
+        "panics.AllocFailure",
+        "panics.IndexOutOfBounds",
+        "json.ParseError",
+        "json.DecodeError",
+        "panics.DivisionByZero",
+    ]
+    .iter()
+    .position(|path| class_is(plan, class, path))
+    .map(|i| i + 4)
+}
 pub(super) fn native(name: &str) -> bool {
     name.starts_with("baml.future.Future.")
         || name == "baml._cleanup_begin"
@@ -111,6 +140,42 @@ pub(super) fn fast_plan(
         "fast_plan_body{local}={body};fast_plan_name{local}={name};l{local}=0usize;"
     )))
 }
+// Duration timeout messages use the implicit structural ToString default for
+// bigint; this primitive has no explicit implementation rule to dispatch on.
+pub(super) fn duration_string_default(
+    plan: &Plan<'_>,
+    concrete: &RuntimeTy,
+    iface: &baml_compiler2_mir::TyTemplateInterface,
+    method: &str,
+) -> Option<(usize, Vec<RuntimeTy>)> {
+    if *concrete != RuntimeTy::Bigint || method != "to_string" {
+        return None;
+    }
+    let i = plan.index.interface_at(&iface.name)?;
+    if !plan.program.packages.iter().any(|p| {
+        p.name == "baml"
+            && p.interfaces
+                .iter()
+                .any(|(path, id)| id.raw() == i && path.to_string() == "ToString")
+    }) {
+        return None;
+    }
+    let function = plan
+        .program
+        .packages
+        .iter()
+        .find(|p| p.name == "baml")?
+        .objects
+        .clone()
+        .map(|id| id as usize)
+        .find(|&id| {
+            matches!(
+                &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(id)],
+                Object::Function(_)
+            ) && plan.index.display(id) == "baml._to_string_default"
+        })?;
+    Some((function, vec![concrete.clone()]))
+}
 pub(super) struct Feature;
 impl registry::Feature for Feature {
     fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
@@ -125,6 +190,10 @@ impl registry::Feature for Feature {
         _: &[Repr],
         values: &[(String, Repr)],
     ) -> Option<Gen<(String, Repr)>> {
+        if name == "baml._to_string_default" && values.len() == 1 && values[0].1 == Repr::Bigint {
+            return Some(Ok((e.fallible(&format!("rt::strings::Cx::current().string(&rt::tasks::bigint_value({}).to_string()).map(|s|s.as_raw())",values[0].0)),Repr::Str)));
+        }
+
         if name!="baml.Array.concat" || values.first().is_none_or(|v|!matches!(v.1,Repr::ListPtr(c) if class_is(e.plan,c,"spawn.Limit") || class_is(e.plan,c,"spawn.CancelToken"))) {return None;}
         Some((|| {
             if values.len() != 2 || values[0].1 != values[1].1 {
@@ -163,7 +232,8 @@ impl registry::Feature for Feature {
                         _ => Err(no("duration bigint operand")),
                     }
                 };
-                let l = operand(left?)?;
+                let left_value = left?;
+                let l = operand(left_value.clone())?;
                 let r = operand(right?)?;
                 let desc = e.plan.bigint_descriptor().unwrap();
                 match op {
@@ -171,6 +241,15 @@ impl registry::Feature for Feature {
                         e.fallible(&format!("rt::tasks::bigint({desc},&({l}{op}{r}))")),
                         Repr::Bigint,
                     )),
+                    BinOp::Div => {
+                        let dividend = e.coerce(left_value, Repr::Tagged)?;
+                        Ok((
+                            e.fallible(&format!(
+                                "rt::tasks::divide_bigint({desc},&({l}),&({r}),{dividend})"
+                            )),
+                            Repr::Bigint,
+                        ))
+                    }
                     BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
                         Ok((format!("({l}{op}{r})"), Repr::Bool))
                     }
@@ -211,7 +290,16 @@ impl registry::Feature for Feature {
                 .function(db, *f)
                 .is_some_and(|(id, _)| native(plan.index.display(id))) =>
             {
-                Some(Ok(registry::Reach::default()))
+                Some((|| {
+                    if plan
+                        .index
+                        .function(db, *f)
+                        .is_some_and(|(id, _)| plan.index.display(id) == "baml.spawn.Limit.new")
+                    {
+                        plan.add(invalid_argument(plan))?;
+                    }
+                    Ok(registry::Reach::default())
+                })())
             }
             _ => None,
         }
@@ -376,7 +464,8 @@ impl registry::Feature for Feature {
                             if name.starts_with("baml.spawn.Limit.") {
                                 (
                                     e.fallible(&format!(
-                                        "rt::tasks::limit_new({desc},{})",
+                                        "rt::tasks::limit_new({desc},{},{})",
+                                        e.descriptors[&invalid_argument(e.plan)],
                                         values[0].0
                                     )),
                                     Repr::Ptr(class),
@@ -402,6 +491,9 @@ impl registry::Feature for Feature {
                                     format!("rt::tasks::token_is_cancelled({receiver})"),
                                     Repr::Bool,
                                 ),
+                                "capacity" => {
+                                    (format!("rt::tasks::limit_capacity({receiver})"), Repr::Int)
+                                }
                                 "active_count" => {
                                     (format!("rt::tasks::limit_counts({receiver}).0"), Repr::Int)
                                 }

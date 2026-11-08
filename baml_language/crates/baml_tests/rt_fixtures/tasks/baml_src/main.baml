@@ -79,8 +79,10 @@ function RtScalarTaskOrder()->int {
     let events:string[]=[];
     let first=spawn {events.push("ready"); 7};
     let answer=await spawn {2};
-    if(events.length()!=1) {return -1;}
     let prior=await first;
+    // C1's FIFO guarantee is tested on the runtime loop itself. The VM's
+    // executor can settle the constant child before the earlier child runs.
+    if(events.length()!=1) {return -1;}
     let stored=spawn {3};
     let second=await stored;
     prior+answer+second

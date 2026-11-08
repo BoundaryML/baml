@@ -24,6 +24,19 @@ const PROBES: &[&str] = &[
     "RtTaskSleep",
     "RtTaskModifiers",
     "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -286,6 +299,18 @@ fn probe_timeout_kills_and_reaps() {
 
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
+        "RtCancelledFailure" => Some(manifest.join("rt_fixtures/task_terminal")),
+        "RtTaskLimits" | "RtTaskTimeout" | "RtAutomaticCleanup" => {
+            Some(manifest.join("rt_fixtures/task_timeouts"))
+        }
+        "RtVirtualGenericClosures"
+        | "RtBoundGenericClosures"
+        | "RtVirtualOwnGenericClosure"
+        | "RtNativeHigherOrderValue"
+        | "RtDefaultCallbacks" => Some(manifest.join("rt_fixtures/closure_edges")),
+        "RtTaskErrors" | "RtBackgroundTask" | "RtBackgroundError" | "RtTokenComposition" => {
+            Some(manifest.join("rt_fixtures/task_edges"))
+        }
         "RtClosures" | "RtEmptyClosures" | "RtGenericClosures" | "RtGenericMethods"
         | "RtNativeCallback" | "RtBuiltinCallbacks" => Some(manifest.join("rt_fixtures/closures")),
         "RtSpawnAwait" | "RtTaskControls" | "RtTaskSleep" | "RtTaskModifiers"
@@ -371,6 +396,19 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         "RtTaskSleep",
         "RtTaskModifiers",
         "RtScalarTaskOrder",
+        "RtTaskErrors",
+        "RtBackgroundTask",
+        "RtBackgroundError",
+        "RtTokenComposition",
+        "RtVirtualGenericClosures",
+        "RtBoundGenericClosures",
+        "RtVirtualOwnGenericClosure",
+        "RtNativeHigherOrderValue",
+        "RtDefaultCallbacks",
+        "RtTaskLimits",
+        "RtTaskTimeout",
+        "RtAutomaticCleanup",
+        "RtCancelledFailure",
     ] {
         if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
             continue;
@@ -660,6 +698,19 @@ fn rust_differential() {
                             | "RtTaskSleep"
                             | "RtTaskModifiers"
                             | "RtScalarTaskOrder"
+                            | "RtTaskErrors"
+                            | "RtBackgroundTask"
+                            | "RtBackgroundError"
+                            | "RtTokenComposition"
+                            | "RtVirtualGenericClosures"
+                            | "RtBoundGenericClosures"
+                            | "RtVirtualOwnGenericClosure"
+                            | "RtNativeHigherOrderValue"
+                            | "RtDefaultCallbacks"
+                            | "RtTaskLimits"
+                            | "RtTaskTimeout"
+                            | "RtAutomaticCleanup"
+                            | "RtCancelledFailure"
                     ))
             {
                 continue;

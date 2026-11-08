@@ -1050,6 +1050,9 @@ impl Heap {
             }
         }
     }
+    pub fn has_pending_finalizers(&self) -> bool {
+        !self.ready.is_empty()
+    }
     pub fn take_pending_finalizers(&mut self) -> Vec<Finalizer> {
         std::mem::take(&mut self.ready)
     }

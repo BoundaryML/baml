@@ -499,7 +499,9 @@ impl Scratch {
                 (Key::Value(pointer), Shape::Closure) => {
                     let name = unsafe { crate::closures::name(pointer) };
                     SnapshotObject::Descriptive {
-                        kind: if name.is_some() {
+                        kind: if unsafe { crate::closures::is_generic(pointer) } {
+                            btel_snapshot::Description::GenericFunction
+                        } else if name.is_some() {
                             btel_snapshot::Description::Function
                         } else if unsafe { crate::closures::is_bound(pointer) } {
                             btel_snapshot::Description::BoundMethod

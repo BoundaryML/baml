@@ -191,7 +191,7 @@ impl Instance {
         &mut self,
         entry: fn() -> Result<i64, baml_rt_tasks::Err>,
     ) -> Result<i64, baml_rt_tasks::Err> {
-        unsafe { self.execute(entry) }.and_then(|result| result)
+        unsafe { self.execute(entry, |_| 0) }.and_then(|result| result)
     }
     /// Execute generated BAML and preserve its language error.
     ///
@@ -200,11 +200,13 @@ impl Instance {
     /// error's managed `value` is unrooted: inspect it only while this instance
     /// remains alive and before any further managed allocation.
     pub unsafe fn run_baml(&mut self, entry: fn() -> R<i64>) -> R<i64> {
-        unsafe { self.execute(entry) }.map_err(|error| Error::internal(format!("{error:?}")))?
+        unsafe { self.execute(entry, |error| error.value) }
+            .map_err(|error| Error::internal(format!("{error:?}")))?
     }
     unsafe fn execute<E: 'static>(
         &mut self,
         entry: fn() -> Result<i64, E>,
+        error_pointer: fn(&E) -> usize,
     ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();
@@ -243,15 +245,61 @@ impl Instance {
             unsafe {
                 binding.install();
             }
-            *output.borrow_mut() = Some(entry());
-            Ok(Value::int(0))
+            let result = entry();
+            let pointer = result.as_ref().err().map_or(0, error_pointer);
+            let _error_root = unsafe { (&*ROOTS.get()).root(pointer) };
+            if result.is_err() {
+                cx.cancel().cancel();
+            }
+            unsafe {
+                tasks::drain_finalizers();
+            }
+            *output.borrow_mut() = Some(result);
+            Ok(Value::pointer(pointer))
         });
+        let mut host_telemetry =
+            unsafe { crate::telemetry::Fiber::current(crate::telemetry::current_raw()) };
         self.tasks.run_until(&future)?;
+        // A CLI invocation owns its spawned work. Finish it while the producing
+        // session and generated dispatch tables are still alive.
+        loop {
+            while self.tasks.task_count() != 0 {
+                self.tasks.tick(true);
+            }
+            if !self.heap.has_pending_finalizers() {
+                break;
+            }
+            let telemetry = crate::telemetry::current_raw() as usize;
+            let maintenance = self.tasks.spawn(move |cx| {
+                let mut binding = unsafe { tasks::FiberBinding::new(cx, telemetry as *mut ()) };
+                unsafe {
+                    binding.install();
+                    tasks::drain_finalizers();
+                }
+                Ok(Value::int(0))
+            });
+            self.tasks.run_until(&maintenance)?;
+        }
         unsafe {
-            tasks::drain_finalizers();
+            self.finalizers.finish_invocation();
+        }
+        let _ = self.tasks.take_unhandled();
+        if let Some(host) = &mut host_telemetry {
+            unsafe {
+                host.enter();
+            }
         }
         let result = result.borrow_mut().take().expect("root task completed");
         Ok(result)
+    }
+
+    /// Unawaited producer errors are process failures, after the root's own
+    /// completion has been observed with its original outcome.
+    pub fn take_unhandled_reports(&mut self) -> Vec<tasks::UnhandledTaskError> {
+        self.finalizers.take_reports()
+    }
+    pub fn take_unhandled(&mut self) -> Option<Box<Error>> {
+        self.finalizers.take_unhandled()
     }
 
     pub fn set_heap_limit(&mut self, bytes: usize) {

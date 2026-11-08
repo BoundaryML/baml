@@ -55,38 +55,15 @@ impl Emitter<'_, '_> {
         }
         match term {
             Terminator::Throw { value } => {
-                let (value, Repr::Ptr(c)) = self.operand(value)? else {
-                    return Err(no("non-class throw"));
+                let (value, repr) = self.operand(value)?;
+                let name = match repr {
+                    Repr::Ptr(class) => super::errors::thrown_class(self, class)?,
+                    Repr::Str => "string".into(),
+                    _ => return Err(no("non-pointer throw")),
                 };
-                let Object::Class(class) =
-                    &self.plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-                else {
-                    unreachable!()
-                };
-                if self.plan.layouts[&c].fields.iter().any(|r| *r != Repr::Int) {
-                    return Err(no("throw class with non-int fields"));
-                }
-                let package = self
-                    .plan
-                    .program
-                    .packages
-                    .iter()
-                    .find(|p| p.objects.contains(&u32::try_from(c).expect("object index")))
-                    .ok_or_else(|| no("throw class package"))?;
-                let name = format!("{}.{}", package.name, class.path);
-                let fields = class
-                    .fields
-                    .iter()
-                    .map(|f| format!("{}: {{}}", f.name))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let display = format!("{name} {{{{{fields}}}}}");
-                let values = (0..class.fields.len())
-                    .map(|i| format!("(*(p as *const C{c})).f{i}"))
-                    .collect::<Vec<_>>()
-                    .join(",");
+                let display = super::errors::thrown_display(self, repr, "p", &mut BTreeSet::new())?;
                 let error = format!(
-                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,telemetry_caught:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some(format!({display:?},{values}))}}).at(&S{},{})",
+                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,telemetry_caught:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some({display})}}).at(&S{},{})",
                     self.object, self.site
                 );
                 writeln!(&mut out, "{{let p={value};{}}}", self.raise(&error)).unwrap();

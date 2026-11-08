@@ -58,10 +58,12 @@ pub(super) fn collect<'db>(
             .ok_or_else(|| no(format!("missing MIR for {}", plan.index.display(object))))?;
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
             let name = plan.index.display(object);
-            if !baml_builtins2_codegen::supports_rt(name) {
+            if !baml_builtins2_codegen::supports_rt(name) && !super::callbacks::native(name) {
                 return Err(no(name));
             }
-            builtins.insert(name.to_owned());
+            if !super::callbacks::native(name) {
+                builtins.insert(name.to_owned());
+            }
             let frame = plan.linked_function_frame(object)?;
             let info = plan.index.info(object);
             let types = info
@@ -198,7 +200,13 @@ pub(super) fn collect<'db>(
                     let Some(result) = registry::reach(db, plan, other.as_ref()) else {
                         return Err(no(format!("terminator {other:?}")));
                     };
-                    let reach = result?;
+                    let reach = result.map_err(|error| {
+                        if let Some(Terminator::VirtualCall { method, .. }) = other {
+                            format!("{error} (reaching {}.{method})", plan.index.display(object))
+                        } else {
+                            error
+                        }
+                    })?;
                     if let Some(name) = reach.builtin {
                         builtins.insert(name);
                     }

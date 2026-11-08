@@ -31,6 +31,7 @@ pub fn compile_rt(
         lambda_targets: BTreeMap::new(),
         generic_functions: Vec::new(),
         generic_values: BTreeMap::new(),
+        virtual_values: BTreeMap::new(),
         callables: BTreeSet::new(),
         closure_lists: BTreeMap::new(),
         enums: BTreeSet::new(),
@@ -142,14 +143,15 @@ pub fn compile_rt(
         );
     }
     if !plan.cleanup_methods.is_empty() {
-        out.push_str("unsafe fn cleanup_dispatch(id:u32,object:usize)->R<()>{unsafe{let cx=rt::calls::Context::current();match id{");
+        out.push_str("unsafe fn cleanup_dispatch(id:u32,object:usize)->R<()>{unsafe{match id{");
         for (&class, &method) in &plan.cleanup_methods {
             let site = telemetry_sites.borrow().len();
             telemetry_sites.borrow_mut().push((None, 0, method));
-            out.push_str(&format!("{class}=>{{if rt::telemetry::active(){{f{method}::<true>(cx,{site},object)?;}}else{{f{method}::<false>(cx,{site},object)?;}}Ok(())}},"));
+            out.push_str(&format!("{class}=>rt::tasks::run_cleanup({site},object,move ||{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{method}::<true>(cx,{site},object)?;}}else{{f{method}::<false>(cx,{site},object)?;}}Ok(())}}),"));
         }
         out.push_str("_=>unreachable!(),}}}\n");
     }
+    super::callbacks::callback_tables(&mut out, &plan, &telemetry_sites);
     // Membership helpers are mutually recursive for recursive alias groups.
     let mut emitted = BTreeSet::new();
     loop {

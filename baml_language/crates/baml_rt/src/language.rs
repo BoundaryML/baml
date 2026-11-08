@@ -147,7 +147,7 @@ impl Error {
     }
 }
 #[cold]
-fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
+pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Box<Error> {
     // SAFETY: called only from a running generated root. The string is rooted
     // in this stack frame across the class allocation; initialization cannot GC.
     unsafe {
@@ -288,33 +288,53 @@ pub fn driver_observed(
     let result = driver_inner(descriptors, entry, &mut session, format_site);
     session.finish(&result);
     match result {
-        Ok(()) => std::process::ExitCode::SUCCESS,
-        Err(error) => {
-            let traceback = bex_vm_types::errors::format_traceback(
-                error
-                    .frames
-                    .iter()
-                    .rev()
-                    .map(|f| (f.file, f.line, f.function)),
-            );
-            if error.value == 0 {
-                eprintln!("error: {traceback}VM internal error: {}", error.message);
-            } else {
-                let value = error
-                    .display_value
-                    .unwrap_or_else(|| format!("{} {{message: {:?}}}", error.class, error.message));
-                eprintln!("error: {traceback}uncaught throw: {value}");
+        Ok(reports) => {
+            let failed = reports.iter().any(|r| !r.cancelled);
+            for report in reports {
+                render_error(report.error, Some(report.cancelled));
             }
+            if failed {
+                std::process::ExitCode::FAILURE
+            } else {
+                std::process::ExitCode::SUCCESS
+            }
+        }
+        Err(error) => {
+            render_error(error, None);
             std::process::ExitCode::FAILURE
         }
     }
 }
+fn render_error(error: Box<Error>, background: Option<bool>) {
+    let traceback = bex_vm_types::errors::format_traceback(error.frames.iter().rev().map(|f| {
+        let function = if background.is_some() {
+            f.function.strip_prefix("user").unwrap_or(f.function)
+        } else {
+            f.function
+        };
+        (f.file, f.line, function)
+    }));
+    let prefix = match background {
+        Some(true) => "Warning: cancelled spawned task failed: ",
+        Some(false) => "error: unhandled spawned task failed: ",
+        None => "error: ",
+    };
+    if error.value == 0 {
+        eprintln!("{prefix}{traceback}VM internal error: {}", error.message);
+    } else {
+        let value = error
+            .display_value
+            .unwrap_or_else(|| format!("{} {{message: {:?}}}", error.class, error.message));
+        eprintln!("{prefix}{traceback}uncaught throw: {value}");
+    }
+}
+
 fn driver_inner(
     descriptors: &'static [Descriptor],
     entry: fn() -> R<i64>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
-) -> R<()> {
+) -> R<Vec<crate::tasks::UnhandledTaskError>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let mut jobs = None;
     let mut warmup = 1usize;
@@ -343,23 +363,29 @@ fn driver_inner(
     let pointers = Box::leak(pointers.into_boxed_slice());
     let mut instance = Instance::new(descriptors, pointers);
     // SAFETY: compiler admission and descriptor construction enforce this ABI.
-    let result = session.run(|| unsafe { instance.run_baml(entry) })?;
+    let mut unhandled = Vec::new();
+    let mut run = |session: &mut crate::telemetry::Session| -> R<i64> {
+        let result = session.run(|| unsafe { instance.run_baml(entry) });
+        unhandled.extend(instance.take_unhandled_reports());
+        result
+    };
+    let result = run(session)?;
     let Some(jobs) = jobs else {
         let text = match format_site {
             Some(site) => session.format_int(result, site)?,
             None => result.to_string(),
         };
         println!("{text}");
-        return Ok(());
+        return Ok(unhandled);
     };
     for _ in 1..warmup {
-        if session.run(|| unsafe { instance.run_baml(entry) })? != result {
+        if run(session)? != result {
             return Err(Error::internal("warmup result mismatch".into()));
         }
     }
     let start = std::time::Instant::now();
     for _ in 0..jobs {
-        if session.run(|| unsafe { instance.run_baml(entry) })? != result {
+        if run(session)? != result {
             return Err(Error::internal("timed result mismatch".into()));
         }
     }
@@ -368,7 +394,7 @@ fn driver_inner(
         "{}",
         serde_json::json!({"result":result.to_string(),"jobs":jobs,"elapsed_ns":elapsed})
     );
-    Ok(())
+    Ok(unhandled)
 }
 
 #[cold]

@@ -234,7 +234,9 @@ impl Emitter<'_, '_> {
                 } else {
                     self.descriptors
                         .get(&c)
-                        .map(|d| (d + 3).to_string())
+                        .map(|d| d + 3)
+                        .or_else(|| super::tasks::runtime_exception_tag(self.plan, c))
+                        .map(|tag| tag.to_string())
                         .ok_or_else(|| no("unplanned membership class"))?
                 }
             }

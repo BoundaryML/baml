@@ -249,9 +249,8 @@ impl Emitter<'_, '_> {
                     .ok_or_else(|| no("generic function instance"))?;
                 Ok((
                     self.fallible(&format!(
-                        "rt::closures::function({}, {object},closure{object},{:?})",
-                        self.plan.closure_descriptors().unwrap().1,
-                        self.plan.index.info(object).name().as_str()
+                        "rt::closures::generic_function({}, {object},closure{object})",
+                        self.plan.closure_descriptors().unwrap().1
                     )),
                     Repr::Closure,
                 ))

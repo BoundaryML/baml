@@ -63,3 +63,84 @@ impl Emitter<'_, '_> {
         )
     }
 }
+
+/// Debug display for thrown task error values uses the same concrete layouts
+/// as their traced/captured payload. No user formatting callback is invoked.
+pub(super) fn thrown_display(
+    e: &super::Emitter<'_, '_>,
+    repr: super::Repr,
+    value: &str,
+    seen: &mut super::BTreeSet<usize>,
+) -> super::Gen<String> {
+    use super::Repr;
+    Ok(match repr {
+        Repr::Int | Repr::Bool => format!("format!(\"{{}}\",{value})"),
+        Repr::Str => format!(
+            "format!(\"{{:?}}\",rt::strings::Str::from_raw({value}).as_str(&rt::strings::Cx::current()))"
+        ),
+        Repr::Bigint => format!("format!(\"{{}}n\",rt::tasks::bigint_value({value}))"),
+        Repr::Null => "String::from(\"null\")".into(),
+        Repr::Ptr(class) => {
+            if !seen.insert(class) {
+                return Err(super::no("thrown recursive class display"));
+            }
+            let name = thrown_class(e, class)?;
+            let info = e.plan.class(class);
+            // Retain the compact formatter for the original scalar error ABI.
+            if e.plan.layouts[&class]
+                .fields
+                .iter()
+                .all(|r| *r == Repr::Int)
+            {
+                let fields = info
+                    .fields
+                    .iter()
+                    .map(|f| format!("{}: {{}}", f.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let display = format!("{name} {{{{{fields}}}}}");
+                let values = (0..info.fields.len())
+                    .map(|i| format!("(*({value} as *const C{class})).f{i}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                seen.remove(&class);
+                return Ok(format!("format!({display:?},{values})"));
+            }
+            let mut fields = Vec::new();
+            let mut values = Vec::new();
+            for (i, field) in info.fields.iter().enumerate() {
+                fields.push(format!("{}: {{}}", field.name));
+                let repr = e.plan.layouts[&class].fields[i];
+                let raw = format!("(*(({value}) as *const C{class})).f{i}");
+                let raw = if repr == Repr::Bool {
+                    format!("({raw}!=0)")
+                } else {
+                    raw
+                };
+                values.push(thrown_display(e, repr, &raw, seen)?);
+            }
+            seen.remove(&class);
+            let display = format!("{name} {{{{{}}}}}", fields.join(", "));
+            if values.is_empty() {
+                format!("String::from({:?})", format!("{name} {{}}"))
+            } else {
+                format!(
+                    "{{let object={value};if object==0{{String::from(\"null\")}}else{{format!({display:?},{})}}}}",
+                    values.join(",")
+                )
+            }
+        }
+        _ => return Err(super::no("thrown value display")),
+    })
+}
+pub(super) fn thrown_class(e: &super::Emitter<'_, '_>, class: usize) -> super::Gen<String> {
+    let origin = e.plan.class_origin(class);
+    let package = e
+        .plan
+        .program
+        .packages
+        .iter()
+        .find(|p| p.objects.contains(&(origin as u32)))
+        .ok_or_else(|| super::no("throw class package"))?;
+    Ok(format!("{}.{}", package.name, e.plan.class(class).path))
+}

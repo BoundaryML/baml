@@ -20,6 +20,20 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtTaskSleep",
     "RtTaskModifiers",
     "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
+    "concurrency::spawn await x10k",
 ];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {
@@ -38,6 +52,20 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
                 | "RtTaskSleep"
                 | "RtTaskModifiers"
                 | "RtScalarTaskOrder"
+                | "RtTaskErrors"
+                | "RtBackgroundTask"
+                | "RtBackgroundError"
+                | "RtTokenComposition"
+                | "RtVirtualGenericClosures"
+                | "RtBoundGenericClosures"
+                | "RtVirtualOwnGenericClosure"
+                | "RtNativeHigherOrderValue"
+                | "RtDefaultCallbacks"
+                | "RtTaskLimits"
+                | "RtTaskTimeout"
+                | "RtAutomaticCleanup"
+                | "RtCancelledFailure"
+                | "concurrency::spawn await x10k"
         )
 }
 
@@ -213,7 +241,7 @@ impl Coverage {
             if TELEMETRY_SUPPORTED {
                 "required"
             } else {
-                "not yet supported generally; required for standalone closure probes"
+                "not yet supported generally; required for standalone closure/task probes and spawn KPI"
             }
         );
         for (construct, count) in blockers {

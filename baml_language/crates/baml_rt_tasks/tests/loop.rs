@@ -1156,3 +1156,35 @@ fn exported_host_submission_disables_scalar_task_elision() {
     });
     lp.run_until(&root).unwrap();
 }
+
+#[test]
+fn deep_local_token_composition_checks_and_drops_iteratively() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        let first = cx.new_cancel_token(vec![]);
+        let mut last = first.clone();
+        for _ in 0..20_000 {
+            last = cx.new_cancel_token(vec![last]);
+        }
+        assert!(!last.is_cancelled());
+        first.cancel();
+        assert!(last.is_cancelled());
+        drop(last);
+        Ok(Value::int(1))
+    });
+    assert_eq!(lp.run_until(&root).unwrap().as_int(), 1);
+}
+
+#[test]
+fn cancelling_a_settled_failure_records_the_request_without_changing_its_outcome() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let failed = lp.spawn(|_| Err(error("bad")));
+    lp.run_until_idle();
+    assert!(!failed.was_cancel_requested());
+    assert!(!failed.try_cancel());
+    assert!(failed.was_cancel_requested());
+    assert!(!failed.try_cancel());
+    assert_eq!(failed.result().unwrap().unwrap_err(), error("bad"));
+}

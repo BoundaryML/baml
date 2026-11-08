@@ -35,7 +35,9 @@ impl super::Emitter<'_, '_> {
             values.push((format!("a{i}"), repr));
         }
         let mut types = Vec::new();
-        if let Some(frame) = self.plan.function_frames.get(&object) {
+        if !super::callbacks::native(name)
+            && let Some(frame) = self.plan.function_frames.get(&object)
+        {
             for (_, ty) in frame {
                 let realized = baml_compiler2_mir::RealizedTy::try_from(ty.clone())
                     .map_err(|_| no("builtin frame"))?;
@@ -60,7 +62,7 @@ impl super::Emitter<'_, '_> {
         };
         let expression = self.coerce((expression, repr), Repr::Tagged)?;
         Ok(format!(
-            "static O{object}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);unsafe fn closure{object}(env:usize,_site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{{prelude}Ok({expression})}}}}\n"
+            "static O{object}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);unsafe fn closure{object}(env:usize,_site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let cx=rt::calls::Context::current();{prelude}Ok({expression})}}}}\n"
         ))
     }
 }

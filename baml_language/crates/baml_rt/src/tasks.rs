@@ -29,6 +29,10 @@ pub const fn future_descriptor(type_id: u32) -> Descriptor {
     }
 }
 
+pub struct UnhandledTaskError {
+    pub error: Box<Error>,
+    pub cancelled: bool,
+}
 // The table is deliberately NOT a root source. Objects own their native data;
 // the GC callback clears its entry, including cycles of settled future values.
 #[derive(Default)]
@@ -36,8 +40,44 @@ pub(crate) struct NativeFinalizers {
     entries: Vec<usize>,
     free: Vec<usize>,
     resources: std::collections::HashMap<usize, Resource>,
+    unhandled: Vec<(crate::CaughtError, bool)>,
 }
 impl NativeFinalizers {
+    unsafe fn save_unhandled(&mut self, f: &Future) {
+        if !f.error.is_null()
+            && unsafe { &*f.error }.class != "baml.panics.Cancelled"
+            && f.handle.as_ref().is_some_and(|h| !h.is_observed())
+        {
+            let error = Box::new(unsafe { &*f.error }.clone());
+            self.unhandled.push((
+                unsafe { crate::CaughtError::new(error) },
+                f.handle.as_ref().unwrap().was_cancel_requested(),
+            ));
+            let _ = f.handle.as_ref().unwrap().result();
+        }
+    }
+    pub(crate) unsafe fn finish_invocation(&mut self) {
+        for pointer in self.entries.clone().into_iter().filter(|p| *p != 0) {
+            unsafe {
+                self.save_unhandled(&*(pointer as *const Future));
+            }
+        }
+    }
+    pub(crate) fn take_reports(&mut self) -> Vec<UnhandledTaskError> {
+        std::mem::take(&mut self.unhandled)
+            .into_iter()
+            .map(|(error, cancelled)| UnhandledTaskError {
+                error: error.rethrow(),
+                cancelled,
+            })
+            .collect()
+    }
+    pub(crate) fn take_unhandled(&mut self) -> Option<Box<Error>> {
+        self.take_reports()
+            .into_iter()
+            .find(|r| !r.cancelled)
+            .map(|r| r.error)
+    }
     fn register(&mut self, pointer: usize) -> usize {
         if let Some(i) = self.free.pop() {
             self.entries[i] = pointer;
@@ -83,6 +123,7 @@ unsafe fn release_registration(f: &mut Future) {
 pub(crate) unsafe fn finalize(pointer: usize) {
     unsafe {
         let f = &mut *(pointer as *mut Future);
+        (&mut *FINALIZERS.get()).save_unhandled(f);
         f.handle.take();
         f.telemetry.take();
         if !f.error.is_null() {
@@ -322,7 +363,9 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
             // A cancelled await is a fresh raise in the awaiting task.
             error.telemetry_raise = None;
             error.telemetry_at = None;
-            error.telemetry_caught = None;
+            if error.class == "baml.panics.Cancelled" {
+                error.telemetry_caught = None;
+            }
             return Err(error);
         }
         if (*pointer).registration != usize::MAX {
@@ -359,11 +402,95 @@ mod tests {
         crate::closures::CELL_DESC,
         crate::closures::CLOSURE_DESC,
         future_descriptor(15),
+        Descriptor {
+            kind: Kind::Class,
+            size: 16,
+            ptr_slots: (0, 0),
+            tagged_slots: (0, 0),
+            elem: None,
+            type_id: 16,
+            fields: &[],
+            finalizer: Some(42),
+        },
     ];
     static POINTERS: &[bool] = &[
         false, false, false, true, true, true, true, true, true, true, true, true, true, true,
-        true, true,
+        true, true, true,
     ];
+    thread_local! {
+        static FINALIZED: Cell<usize> = const { Cell::new(0) };
+        static ROOT_TASK: Cell<usize> = const { Cell::new(0) };
+    }
+    unsafe fn cleanup_dispatch(_: u32, object: usize) -> R<()> {
+        unsafe {
+            run_cleanup(0, object, move || {
+                assert_ne!((&*crate::TASK.get()).id(), ROOT_TASK.get());
+                assert!(cleanup_begin(object));
+                (&mut *crate::TASK.get())
+                    .sleep(std::time::Duration::ZERO)
+                    .map_err(loop_error)?;
+                FINALIZED.set(FINALIZED.get() + 1);
+                Ok(())
+            })
+        }
+    }
+    #[test]
+    fn gc_cleanup_uses_a_separate_shielded_fiber_and_completes_once() {
+        fn entry() -> R<i64> {
+            unsafe {
+                ROOT_TASK.set((&*crate::TASK.get()).id());
+                set_cleanup_dispatch(cleanup_dispatch);
+                let _ = crate::try_alloc(13, 16)?;
+                (&*crate::TASK.get()).cancel().cancel();
+                (&mut *crate::HEAP.get()).collect(&baml_rt_gc::NoRoots);
+                drain_finalizers();
+                assert_eq!(FINALIZED.get(), 1);
+                (&mut *crate::HEAP.get()).collect(&baml_rt_gc::NoRoots);
+                drain_finalizers();
+                assert_eq!(FINALIZED.get(), 1);
+                Ok(1)
+            }
+        }
+        FINALIZED.set(0);
+        let mut instance = crate::Instance::new(DESCRIPTORS, POINTERS);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+    unsafe fn background_error(_: usize, _: usize, _: &[Dyn]) -> R<Dyn> {
+        crate::add((1i64 << 62) - 1, 1).map(|n| Dyn {
+            tag: 0,
+            payload: n as u64,
+        })
+    }
+    #[test]
+    fn background_work_finishes_before_reuse_and_saved_errors_remain_rooted() {
+        fn entry() -> R<i64> {
+            unsafe {
+                let env = crate::closures::new(11, 123, background_error, &[])?;
+                let _ = spawn(12, env, 0, 0, SpawnOptions::default(), None)?;
+            }
+            Ok(7)
+        }
+        fn next() -> R<i64> {
+            unsafe {
+                collect()?;
+            }
+            Ok(9)
+        }
+        let mut instance = crate::Instance::new(DESCRIPTORS, POINTERS);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 7);
+        assert_eq!(instance.tasks.task_count(), 0);
+        for _ in 0..5 {
+            assert_eq!(unsafe { instance.run_baml(next) }.unwrap(), 9);
+        }
+        let error = instance.take_unhandled().unwrap();
+        assert_eq!(error.class, "baml.panics.IntegerOverflow");
+        unsafe {
+            assert_eq!((*(error.value as *const Header)).desc, 1);
+        }
+        assert!(instance.take_unhandled().is_none());
+    }
+
     unsafe fn child(env: usize, _: usize, _: &[Dyn]) -> R<Dyn> {
         unsafe {
             (&mut *crate::TASK.get())
@@ -515,11 +642,15 @@ pub unsafe fn cleanup_begin(object: usize) -> bool {
 /// # Safety
 /// Managed roots obey the ordinary safepoint contract.
 pub unsafe fn collect() -> R<()> {
-    unsafe {
+    crate::telemetry::before_yield();
+    crate::telemetry::sysop(|| unsafe {
+        (&mut *crate::TASK.get())
+            .check_cancel()
+            .map_err(loop_error)?;
         (&mut *crate::HEAP.get()).collect(&crate::Roots(&*crate::ROOTS.get()));
         drain_finalizers();
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 // Duration arithmetic stays exact. The managed value contains inline limbs;
@@ -611,9 +742,13 @@ enum Resource {
 }
 /// # Safety
 /// The descriptor is the generated one-word native resource class.
-pub unsafe fn limit_new(desc: u32, capacity: i64) -> R<usize> {
+pub unsafe fn limit_new(desc: u32, invalid_argument: u32, capacity: i64) -> R<usize> {
     if capacity <= 0 {
-        return Err(Error::internal("Limit capacity must be positive".into()));
+        return Err(crate::language::panic_value(
+            invalid_argument,
+            "baml.errors.InvalidArgument",
+            format!("baml.spawn.Limit.new: capacity must be positive, got {capacity}"),
+        ));
     }
     unsafe {
         let p = crate::try_alloc(desc, 16)? as usize;
@@ -648,7 +783,11 @@ pub unsafe fn token_new(desc: u32, inputs: &[usize]) -> R<usize> {
 pub unsafe fn token_cancel(object: usize) -> i64 {
     unsafe {
         match &(&*FINALIZERS.get()).resources[&object] {
-            Resource::Cancel(token) => i64::from(token.request_cancel()),
+            Resource::Cancel(token) => {
+                let was = token.is_cancelled();
+                token.cancel();
+                i64::from(!was)
+            }
             _ => unreachable!(),
         }
     }
@@ -739,4 +878,89 @@ pub unsafe fn await_scalar(pointer: usize, value: Dyn) -> R<Dyn> {
     }
     unsafe { (&mut *crate::TASK.get()).check_cancel() }.map_err(loop_error)?;
     Ok(value)
+}
+
+/// Run an automatic finalizer on an independently named, shielded root fiber.
+/// # Safety
+/// The object and closure belong to the active heap and generated program.
+pub unsafe fn run_cleanup(
+    site: usize,
+    object: usize,
+    call: impl FnOnce() -> R<()> + 'static,
+) -> R<()> {
+    let telemetry = crate::telemetry::Task::root(site);
+    let handle = unsafe {
+        (&mut *crate::TASK.get()).spawn_with(
+            SpawnOptions {
+                detached: true,
+                managed_roots: [object, 0],
+                ..Default::default()
+            },
+            move |cx| {
+                let mut binding = unsafe { FiberBinding::new(cx, ptr::null_mut()) };
+                binding.telemetry = telemetry.as_ref().map(|task| task.fiber.clone());
+                unsafe {
+                    binding.install();
+                }
+                if let Some(task) = &telemetry {
+                    task.announce();
+                }
+                let _shield = unsafe { shield() };
+                let mut result = call();
+                if let Err(error) = &mut result {
+                    crate::telemetry::evidence::unhandled(error);
+                }
+                if let Some(task) = &telemetry {
+                    task.finish(&result);
+                }
+                result
+                    .map(|_| Value::int(0))
+                    .map_err(|error| baml_rt_tasks::Err::Error {
+                        message: error.message,
+                        trace: error.frames.iter().map(|f| f.function.to_owned()).collect(),
+                    })
+            },
+        )
+    };
+    crate::telemetry::before_yield();
+    unsafe { (&mut *crate::TASK.get()).await_future(&handle) }
+        .map(|_| ())
+        .map_err(loop_error)
+}
+
+/// # Safety
+/// The object is a live Limit resource in this instance.
+pub unsafe fn limit_capacity(object: usize) -> i64 {
+    unsafe {
+        match &(&*FINALIZERS.get()).resources[&object] {
+            Resource::Limit(gate) => gate.capacity() as i64,
+            _ => unreachable!(),
+        }
+    }
+}
+/// # Safety
+/// The descriptor is a bigint and dividend obeys the tagged-slot ABI.
+pub unsafe fn divide_bigint(
+    desc: u32,
+    left: &num_bigint::BigInt,
+    right: &num_bigint::BigInt,
+    dividend: Dyn,
+) -> R<usize> {
+    if right.sign() == num_bigint::Sign::NoSign {
+        let p = unsafe { crate::try_alloc(9, 24)? };
+        unsafe {
+            crate::write_dyn(p, p.add(8).cast(), dividend);
+        }
+        return Err(Box::new(Error {
+            telemetry_raise: None,
+            telemetry_at: None,
+            telemetry_caught: None,
+            value: p as usize,
+            class: "baml.panics.DivisionByZero",
+            message: format!("division by zero: {left} / 0"),
+            frames: vec![],
+            display_value: Some(format!("baml.panics.DivisionByZero {{dividend: {left}n}}")),
+        }));
+    }
+    unsafe { bigint(desc, &(left / right)) }
 }

@@ -19,9 +19,11 @@ pub(super) fn expand<'db>(
             if !seen.insert(object) {
                 continue;
             }
-            let Some(mir) = all.get(&object).cloned() else {
+            let Some(mut mir) = all.get(&object).cloned() else {
                 continue;
             };
+            specialize_bound_values(plan, object, &mut mir)?;
+            all.insert(object, mir.clone());
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
             };
@@ -230,8 +232,76 @@ pub(super) fn expand<'db>(
                 }
             }
             for b in &body.blocks {
-                for s in &b.statements {
+                for (statement, s) in b.statements.iter().enumerate() {
                     if let StatementKind::Assign { value, .. } = &s.kind {
+                        let virtual_value = match value {
+                            Rvalue::MakeVirtualBoundMethod {
+                                iface,
+                                method,
+                                receiver,
+                                type_args,
+                            } => Some((
+                                iface,
+                                method,
+                                operand_ty(plan, object, body, receiver),
+                                type_args
+                                    .iter()
+                                    .map(|t| t.substitute_symbolic(&[]))
+                                    .collect::<Vec<_>>(),
+                            )),
+                            Rvalue::MakeVirtualFunction {
+                                iface,
+                                method,
+                                self_ty,
+                                type_args,
+                            } => Some((
+                                iface,
+                                method,
+                                Some(self_ty.substitute_symbolic(&[])),
+                                type_args
+                                    .iter()
+                                    .map(|arg| type_operand(body, arg))
+                                    .collect::<Gen<Vec<_>>>()?,
+                            )),
+                            _ => None,
+                        };
+                        if let Some((iface, method, receiver, method_args)) = virtual_value {
+                            plan.remember_heads(&iface.to_template().substitute_symbolic(&[]));
+                            let candidates = match receiver {
+                                Some(RuntimeTy::Union(types)) => types.to_vec(),
+                                Some(
+                                    RuntimeTy::Interface(..)
+                                    | RuntimeTy::Unknown
+                                    | RuntimeTy::Function { .. },
+                                )
+                                | None => plan.concrete_types.clone(),
+                                Some(concrete) => vec![concrete],
+                            };
+                            let mut targets = Vec::new();
+                            for concrete in candidates {
+                                if let Some((callee, frame)) = super::dispatch::resolve(
+                                    db,
+                                    plan,
+                                    &concrete,
+                                    iface,
+                                    method,
+                                    &method_args,
+                                )? {
+                                    let target =
+                                        instance(db, plan, all, &mut instances, callee, frame)?;
+                                    let repr = plan.repr(&concrete)?;
+                                    if !targets.contains(&(repr, target)) {
+                                        targets.push((repr, target));
+                                    }
+                                    queue.push_back(target);
+                                }
+                            }
+                            if !targets.is_empty() {
+                                plan.virtual_values
+                                    .insert((object, b.id.0, statement), targets);
+                            }
+                        }
+
                         // A constructor can write straight into an interface or
                         // unknown slot; its concrete type need not occur in any
                         // local declaration (e.g. `return Square { ... }`).
@@ -382,6 +452,129 @@ pub(super) fn expand<'db>(
     plan.generic_functions = instances;
     Ok(())
 }
+// The lowerer emits a private bound-method temporary before specializing its
+// callable-owned suffix. Fuse that one-use pair without constructing an open
+// generic adapter. The receiver and its owner frame are preserved exactly.
+fn specialize_bound_values(plan: &Plan<'_>, object: usize, mir: &mut MirFunction<'_>) -> Gen<()> {
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        return Ok(());
+    };
+    let mut replacements = Vec::new();
+    for (bi, block) in body.blocks.iter().enumerate() {
+        for (si, statement) in block.statements.iter().enumerate() {
+            let StatementKind::Assign {
+                value:
+                    Rvalue::MakeGenericFunctionFromValue {
+                        value:
+                            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)),
+                        type_arg_templates,
+                    },
+                ..
+            } = &statement.kind
+            else {
+                continue;
+            };
+            if body.locals[local.0].name.is_some() || body.locals[local.0].is_captured {
+                continue;
+            }
+            let mut uses = 0;
+            let mut count = |operand: &Operand<'_>| {
+                if matches!(operand,Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) if l==local)
+                {
+                    uses += 1;
+                }
+            };
+            for b in &body.blocks {
+                for s in &b.statements {
+                    crate::operands::walk_statement_operands(&s.kind, &mut count);
+                }
+                if let Some(t) = &b.terminator {
+                    crate::operands::walk_terminator_operands(t, &mut count);
+                }
+            }
+            if uses != 1 {
+                continue;
+            }
+            let Some((from, source)) =
+                block.statements[..si]
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find_map(|(i, s)| match &s.kind {
+                        StatementKind::Assign {
+                            destination: Place::Local(l),
+                            value,
+                        } if l == local => Some((i, value)),
+                        _ => None,
+                    })
+            else {
+                continue;
+            };
+            let value = match source {
+                Rvalue::MakeBoundMethod {
+                    func,
+                    receiver,
+                    frame,
+                } => {
+                    let mut prefix = match frame {
+                        baml_compiler2_mir::BoundFrame::Explicit(types) => types.clone(),
+                        baml_compiler2_mir::BoundFrame::Receiver => {
+                            let types = match operand_ty(plan, object, body, receiver) {
+                                Some(RuntimeTy::Class(_, args)) => args.to_vec(),
+                                Some(RuntimeTy::List(element)) => vec![*element],
+                                Some(RuntimeTy::Map { key, value }) => vec![*key, *value],
+                                _ => vec![],
+                            };
+                            types
+                                .into_iter()
+                                .map(|t| {
+                                    baml_compiler2_mir::RealizedTy::try_from(t)
+                                        .map(TyTemplate::from)
+                                        .map_err(|_| no("bound generic owner frame"))
+                                })
+                                .collect::<Gen<Vec<_>>>()?
+                        }
+                    };
+                    prefix.extend(type_arg_templates.iter().cloned());
+                    Rvalue::MakeBoundMethod {
+                        func: *func,
+                        receiver: receiver.clone(),
+                        frame: baml_compiler2_mir::BoundFrame::Explicit(prefix),
+                    }
+                }
+                Rvalue::MakeVirtualBoundMethod {
+                    iface,
+                    method,
+                    receiver,
+                    type_args,
+                } => {
+                    let mut args = type_args.clone();
+                    args.extend(type_arg_templates.iter().cloned());
+                    Rvalue::MakeVirtualBoundMethod {
+                        iface: iface.clone(),
+                        method: method.clone(),
+                        receiver: receiver.clone(),
+                        type_args: args,
+                    }
+                }
+                _ => continue,
+            };
+            replacements.push((bi, from, si, value));
+        }
+    }
+    let MirFunctionKind::Bytecode(body) = &mut mir.kind else {
+        unreachable!()
+    };
+    for (bi, from, si, value) in replacements {
+        body.blocks[bi].statements[from].kind = StatementKind::Nop;
+        let StatementKind::Assign { value: target, .. } = &mut body.blocks[bi].statements[si].kind
+        else {
+            unreachable!()
+        };
+        *target = value;
+    }
+    Ok(())
+}
 pub(super) fn type_operand(body: &MirFunctionBody<'_>, operand: &Operand<'_>) -> Gen<RuntimeTy> {
     let (Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l))) = operand else {
         return Err(no("non-static generic type argument"));
@@ -530,6 +723,28 @@ pub(super) fn specialize<'db>(
                             }
                         }
                         Rvalue::IsType { test: t, .. } => test(t)?,
+                        Rvalue::MakeVirtualBoundMethod {
+                            iface, type_args, ..
+                        } => {
+                            for ty in type_args {
+                                *ty = template(ty)?;
+                            }
+                            for ty in &mut iface.generics {
+                                *ty = template(ty)?;
+                            }
+                            for (_, ty) in &mut iface.associated_types {
+                                *ty = template(ty)?;
+                            }
+                        }
+                        Rvalue::MakeVirtualFunction { iface, self_ty, .. } => {
+                            *self_ty = template(self_ty)?;
+                            for ty in &mut iface.generics {
+                                *ty = template(ty)?;
+                            }
+                            for (_, ty) in &mut iface.associated_types {
+                                *ty = template(ty)?;
+                            }
+                        }
                         Rvalue::VirtualFieldAccess { iface, .. } => {
                             for t in &mut iface.generics {
                                 *t = template(t)?;
@@ -867,6 +1082,7 @@ impl Plan<'_> {
                 self.candidate(&RuntimeTy::String)
             }
             RuntimeTy::Int
+            | RuntimeTy::Bigint
             | RuntimeTy::Bool
             | RuntimeTy::String
             | RuntimeTy::Null

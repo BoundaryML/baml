@@ -135,13 +135,15 @@ struct CancelNode {
 }
 impl Drop for CancelNode {
     fn drop(&mut self) {
-        // Finished parents may leave a long chain owned only by a descendant.
-        // Releasing that chain must not recursively consume a small fiber stack.
+        let mut pending: Vec<_> = self.local_linked.drain(..).map(|t| t.node).collect();
         let mut parent = self.parent.take();
-        while let Some(node) = parent {
-            match Rc::try_unwrap(node) {
-                Ok(mut node) => parent = node.parent.take(),
-                Err(_) => break, // Shared ancestor remains owned elsewhere.
+        loop {
+            let Some(node) = parent.take().or_else(|| pending.pop()) else {
+                break;
+            };
+            if let Ok(mut node) = Rc::try_unwrap(node) {
+                parent = node.parent.take();
+                pending.extend(node.local_linked.drain(..).map(|t| t.node));
             }
         }
     }
@@ -200,17 +202,25 @@ impl TaskCancel {
     }
     #[inline]
     pub fn is_cancelled(&self) -> bool {
-        let mut node = Some(&*self.node);
-        while let Some(n) = node {
-            if n.cancelled.get()
-                || n.linked.iter().any(CancellationToken::is_cancelled)
-                || n.local_linked.iter().any(TaskCancel::is_cancelled)
-            {
+        let mut pending = Vec::new();
+        let mut token = self;
+        loop {
+            if token.deadline.is_some_and(|d| Instant::now() >= d) {
                 return true;
             }
-            node = n.parent.as_deref();
+            let mut node = Some(&*token.node);
+            while let Some(n) = node {
+                if n.cancelled.get() || n.linked.iter().any(CancellationToken::is_cancelled) {
+                    return true;
+                }
+                pending.extend(n.local_linked.iter());
+                node = n.parent.as_deref();
+            }
+            match pending.pop() {
+                Some(next) => token = next,
+                None => return false,
+            }
         }
-        self.deadline.is_some_and(|d| Instant::now() >= d)
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -241,6 +251,7 @@ struct FutureData {
     cancel: TaskCancel,
     waiters: Vec<usize>,
     observed: bool,
+    cancel_requested: bool,
     errors: Rc<RefCell<Vec<(usize, Err)>>>,
 }
 impl Drop for FutureHandle {
@@ -290,12 +301,13 @@ impl FutureHandle {
     }
     /// Requests only: settlement occurs when the producer actually exits.
     pub fn request_cancel(&self) {
-        self.0.borrow().cancel.cancel();
+        let _ = self.try_cancel();
     }
     /// Fire the producer token once, without settling its future early.
     pub fn try_cancel(&self) -> bool {
-        let future = self.0.borrow();
-        if !matches!(future.state, FutureState::Pending) || future.cancel.node.cancelled.get() {
+        let mut future = self.0.borrow_mut();
+        let previous = std::mem::replace(&mut future.cancel_requested, true);
+        if previous || !matches!(future.state, FutureState::Pending) {
             return false;
         }
         future.cancel.cancel();
@@ -303,6 +315,12 @@ impl FutureHandle {
     }
     pub fn id(&self) -> usize {
         self.0.borrow().id
+    }
+    pub fn was_cancel_requested(&self) -> bool {
+        self.0.borrow().cancel_requested
+    }
+    pub fn is_observed(&self) -> bool {
+        self.0.borrow().observed
     }
     pub fn result(&self) -> Option<Outcome> {
         let mut f = self.0.borrow_mut();
@@ -329,6 +347,9 @@ impl Gate {
             active: 0,
             queue: VecDeque::new(),
         })))
+    }
+    pub fn capacity(&self) -> usize {
+        self.0.borrow().limit
     }
     pub fn counts(&self) -> (usize, usize) {
         let g = self.0.borrow();
@@ -698,6 +719,24 @@ impl TaskLoop {
         }
         future.result().unwrap()
     }
+    /// Retire reported failures between isolated host invocations without
+    /// closing submissions or discarding reusable fibers.
+    pub fn take_unhandled(&mut self) -> Vec<(usize, Err)> {
+        let core = self.core.borrow();
+        for weak in &core.futures {
+            if let Some(future) = weak.upgrade() {
+                let mut future = future.borrow_mut();
+                if !future.observed
+                    && let Some(Err(error @ (Err::Error { .. } | Err::InternalError(_)))) =
+                        future.state.result()
+                {
+                    core.errors.borrow_mut().push((future.id, error));
+                    future.observed = true;
+                }
+            }
+        }
+        std::mem::take(&mut *core.errors.borrow_mut())
+    }
     pub fn run_until_idle(&mut self) {
         while self.tick(false) {}
     }
@@ -977,6 +1016,7 @@ fn spawn(
             data.cancel.deadline = deadline;
             data.id = id;
             data.observed = false;
+            data.cancel_requested = false;
         }
         FutureHandle(f)
     } else {
@@ -996,6 +1036,7 @@ fn spawn(
             },
             waiters: vec![],
             observed: false,
+            cancel_requested: false,
             errors: c.errors.clone(),
         }));
         c.futures.push(Rc::downgrade(&f));
@@ -1126,6 +1167,7 @@ impl TaskCx<'_> {
     }
     /// A loop-owned token wakes checkpoints without cross-thread atomics.
     pub fn new_cancel_token(&self, linked: Vec<TaskCancel>) -> TaskCancel {
+        let external = linked.iter().any(|token| token.node.external);
         let core = self.core.borrow();
         TaskCancel {
             node: Rc::new(CancelNode {
@@ -1133,7 +1175,7 @@ impl TaskCx<'_> {
                 parent: None,
                 linked: Vec::new(),
                 local_linked: linked,
-                external: false,
+                external,
                 epoch: core.cancel_epoch.clone(),
                 poll_word: core.poll_word.clone(),
             }),

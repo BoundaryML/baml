@@ -268,6 +268,11 @@ impl Fiber {
     }
     pub(crate) unsafe fn enter(&mut self) {
         let state = unsafe { &mut *self.state };
+        // A completing fiber unregisters its hook before returning to the loop.
+        // Its last span chunk still belongs to that thread until it is sealed.
+        if state.thread != self.thread {
+            state.flush();
+        }
         state.awaits = std::mem::take(&mut self.awaits);
         if let Some(started) = self.waiting_since.take()
             && self.depth > 0
@@ -301,12 +306,18 @@ impl Fiber {
 }
 pub(crate) struct Task {
     pub(crate) fiber: Fiber,
-    parent: TelemetryId,
+    parent: Option<TelemetryId>,
     path: CallPathId,
     callee: usize,
 }
 impl Task {
     pub(crate) fn spawn(site_id: usize, name: Option<String>) -> Option<Box<Self>> {
+        Self::create(site_id, name, false)
+    }
+    pub(crate) fn root(site_id: usize) -> Option<Box<Self>> {
+        Self::create(site_id, None, true)
+    }
+    fn create(site_id: usize, name: Option<String>, root: bool) -> Option<Box<Self>> {
         let pointer = CURRENT.get();
         if pointer.is_null() {
             return None;
@@ -320,7 +331,9 @@ impl Task {
             callee: site.callee,
             spawn: true,
         };
-        let path = if let Some(&(path, _)) = state.paths.get(&key) {
+        let path = if root {
+            CallPathId::ROOT
+        } else if let Some(&(path, _)) = state.paths.get(&key) {
             path
         } else {
             state.next_path = state.next_path.checked_add(1).expect("call path exhausted");
@@ -347,12 +360,20 @@ impl Task {
             active_function: None,
             active_slot: std::ptr::null_mut(),
             thread: allocate_telemetry_id(),
-            name: name.map(|n| Arc::new(n.into_boxed_str())),
+            name: if root {
+                Some(state.names[site.callee].clone())
+            } else {
+                name.map(|n| Arc::new(n.into_boxed_str()))
+            },
             started: state.read(),
         };
         Some(Box::new(Self {
             fiber,
-            parent: state.active_span.unwrap_or(state.thread),
+            parent: if root {
+                None
+            } else {
+                Some(state.active_span.unwrap_or(state.thread))
+            },
             path,
             callee: site.callee,
         }))
@@ -361,7 +382,7 @@ impl Task {
         let state = unsafe { &mut *self.fiber.state };
         state.span(SpanRecord::ThreadSpanAnnouncement {
             id: self.fiber.thread,
-            parent_id: Some(self.parent),
+            parent_id: self.parent,
             spawn_call_path: self.path,
             started_at: self.fiber.started,
             clock: state.clock.clone(),
@@ -388,7 +409,7 @@ impl Task {
         let state = unsafe { &mut *self.fiber.state };
         state.span(SpanRecord::ThreadSpanCompletion {
             id: self.fiber.thread,
-            parent_id: Some(self.parent),
+            parent_id: self.parent,
             spawn_call_path: self.path,
             started_at: self.fiber.started,
             completed_at: state.read(),
