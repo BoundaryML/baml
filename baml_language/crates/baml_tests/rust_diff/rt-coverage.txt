@@ -1,7 +1,7 @@
-BAML runtime coverage (normal AND GC stress): 38 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 51 pass, 123 unsupported, 0 fail
 Telemetry off: required
-Telemetry low/medium/high/default: required for standalone closure/task probes and spawn KPI; otherwise not yet supported
-Includes the independent rt_type_dispatch_semantics project, compared with bytecode in both GC modes.
+Telemetry low/medium/high/default: required for standalone closure/task/string probes and spawn KPI; otherwise not yet supported
+Includes independent type-dispatch and retained-setup-state projects.
 
 First unsupported constructs (fixtures blocked):
 103	top-level initializers
@@ -12,7 +12,6 @@ First unsupported constructs (fixtures blocked):
 1	baml.Array.pop
 1	baml.Float.itrunc
 1	baml.Map.get
-1	baml.String.split
 1	baml._is_primitive_array
 1	baml.json._stringify
 1	growing list builtin receiver (emitting user.main)
@@ -145,6 +144,7 @@ SpawnPanicUncaught	unsupported: top-level initializers
 SpawnThrowUncaught	unsupported: top-level initializers
 SpawnedClosures	unsupported: top-level initializers
 Spawns	unsupported: top-level initializers
+StackAllocation	pass
 TaskOverflow	unsupported: top-level initializers
 ThreadLocalParallel	unsupported: top-level initializers
 TimeoutCancellation	unsupported: top-level initializers
@@ -180,6 +180,17 @@ process::startup	pass
 programs::agent loop 300	pass
 programs::json parser 15	unsupported: list field element (layout JArray, object 4180, types [List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4279) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4280) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])]))]) (user.main local 8: Union([Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JArray" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JLiteral" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JNumber" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JObject" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JString" }, [])]))
 programs::richards 50	pass
+rt_setup_state_benchmark	pass
 rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass
-string::split medium literal 10k	unsupported: baml.String.split
+string::split medium literal 10k	pass
+strings::codepoint error	pass
+strings::float	pass
+strings::float error	pass
+strings::formatting	pass
+strings::parse error	pass
+strings::regex	pass
+strings::regex error	pass
+strings::semantics	pass
+strings::utf8	pass
+strings::utf8 error	pass

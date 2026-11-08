@@ -12,6 +12,69 @@ use super::make_db;
 use crate::engine::TestDbExt;
 
 #[test]
+fn function_lifetime_is_stricter_than_thread_locality() {
+    let source = r#"
+class Item { value: int }
+class Holder { item: Item }
+class Finalized {
+    value: int
+    function cleanup(self) -> void throws never {}
+}
+function borrow(x: Item) -> int { x.value }
+function alias(x: Item) -> Item { x }
+function retain(h: Holder, x: Item) -> int { h.item = x; 0 }
+function main(incoming: Holder) -> Item {
+    let finalized = Finalized { value: 5 };
+    let borrowed = Item { value: 1 };
+    borrowed.value += finalized.value;
+    borrow(borrowed);
+    let aliased = Item { value: 2 };
+    let copy = alias(aliased);
+    borrow(copy);
+    let retained = Item { value: 3 };
+    retain(incoming, retained);
+    let returned = Item { value: 4 };
+    returned
+}
+"#;
+    let mut db = make_db();
+    let file = db.file("test.baml", source);
+    let opt = OptLevel::Two;
+    assert_no_diagnostic_errors(&db);
+    let function = *file_functions(&db, file)
+        .iter()
+        .find(|&&loc| function_data(&db, loc).name == "main")
+        .unwrap();
+    let mir = lower_function(&db, function, opt).as_ref().unwrap();
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        panic!("bytecode")
+    };
+    let lifetime = escape::analyze_function(&db, file.source_root(&db), body, mir.arity, opt);
+    let thread = escape::analyze(&db, file.source_root(&db), body, mir.arity, opt);
+    assert!(!lifetime.local_stays_in_function(baml_compiler2_mir::Local(1)));
+    assert!(!lifetime.local_stays_in_function(baml_compiler2_mir::Local(0)));
+    assert!(
+        thread.local_is_thread_local(baml_compiler2_mir::Local(0)),
+        "returning remains thread-local for bytecode"
+    );
+    // Identify allocation values rather than optimized-away binding names.
+    for (value, stays) in [(1, true), (2, true), (3, false), (4, false), (5, false)] {
+        let local = body.blocks.iter().flat_map(|b| &b.statements).find_map(|statement| {
+            let baml_compiler2_mir::StatementKind::Assign {
+                destination: baml_compiler2_mir::Place::Local(local),
+                value: baml_compiler2_mir::Rvalue::Aggregate { fields, .. },
+            } = &statement.kind else { return None };
+            matches!(fields.first(), Some(baml_compiler2_mir::Operand::Constant(baml_compiler2_mir::Constant::Int(v))) if *v == value).then_some(*local)
+        }).unwrap_or_else(|| panic!("no allocation initialized with {value}"));
+        assert_eq!(
+            lifetime.local_stays_in_function(local),
+            stays,
+            "allocation {value}"
+        );
+    }
+}
+
+#[test]
 fn audit_unrelated_iter_method_can_spawn_with_receiver() {
     assert_locality(
         r#"

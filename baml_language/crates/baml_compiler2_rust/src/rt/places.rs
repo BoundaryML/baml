@@ -16,6 +16,9 @@ impl Emitter<'_, '_> {
         if self.iters.contains(&i) {
             return Ok(Repr::Iter);
         }
+        if let Some(repr) = super::string_defaults::parameter(self.plan, self.object, i) {
+            return Ok(repr);
+        }
         self.plan.local_repr(self.body, i, 0)
     }
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
@@ -29,6 +32,8 @@ impl Emitter<'_, '_> {
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
             Repr::Future => Ok(self.plan.future_descriptor().unwrap() + 3),
+            Repr::Opaque => Ok(15),
+            Repr::Bytes => Ok(16),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::ListInt
             | Repr::ListStr
@@ -36,7 +41,8 @@ impl Emitter<'_, '_> {
             | Repr::ListClosure(_)
             | Repr::ListFuture(_)
             | Repr::ListPtr(_)
-            | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
+            | Repr::MapStrInt
+            | Repr::MapStrPtr(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
     }
@@ -201,13 +207,7 @@ impl Emitter<'_, '_> {
             )),
             Operand::Constant(Constant::Int(i)) => Ok((format!("{i}i64"), Repr::Int)),
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
-            Operand::Constant(Constant::String(text)) => Ok((
-                self.fallible(&format!(
-                    "rt::strings::Cx::current().string({:?}).map(|s|s.as_raw())",
-                    text.as_str()
-                )),
-                Repr::Str,
-            )),
+            Operand::Constant(Constant::String(text)) => self.string_literal(text.as_str()),
             Operand::Constant(Constant::EnumVariant { enum_ref, index }) => {
                 let head = baml_compiler2_hir_ty::layout::enum_head(self.db, *enum_ref);
                 Ok((

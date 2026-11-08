@@ -1,7 +1,13 @@
 use super::*;
 
 impl Emitter<'_, '_> {
-    pub(super) fn function(&mut self, arity: usize, inline: bool, recursive: bool) -> Gen<String> {
+    pub(super) fn function(
+        &mut self,
+        arity: usize,
+        inline: bool,
+        stack_leaf: bool,
+        recursive: bool,
+    ) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
             unwinds: self
@@ -96,6 +102,14 @@ impl Emitter<'_, '_> {
         };
         let attribute = if inline { "#[inline(always)]\n" } else { "" };
         let object = self.object;
+        // These bounded leaf bodies are forced inline at every call site, so
+        // they add no frame. Their caller retains the ordinary stack guard.
+        let guard = if stack_leaf {
+            assert!(inline);
+            String::new()
+        } else {
+            format!("cx.check_stack().map_err(|e|e.at(&S{object},0))?;")
+        };
         let returned = self.local(0)?.rust();
         let arguments = (1..=arity)
             .map(|i| format!("l{i}"))
@@ -131,8 +145,9 @@ impl Emitter<'_, '_> {
         let captures = format!(
             "||{capture_arguments},|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
         );
-        let mut code =
-            call_cost::prologue(object, &params, &arguments, returned, &captures, attribute);
+        let mut code = call_cost::prologue(
+            object, &params, &arguments, returned, &captures, attribute, &guard,
+        );
         if recursive {
             code.push_str(&format!("{};\n", self.fallible("cx.poll()")));
         }
@@ -171,6 +186,7 @@ impl Emitter<'_, '_> {
         for iter in &self.iters {
             writeln!(&mut code, "let mut iter_index{iter}=0i64;").unwrap();
         }
+        code.push_str(&self.stack.declarations(self));
         for b in &self.body.blocks {
             if b.landing.is_some() {
                 writeln!(
@@ -198,7 +214,9 @@ impl Emitter<'_, '_> {
         for h in cfg.loop_headers() {
             writeln!(&mut code, "let mut poll{h}=0u32;").unwrap();
         }
-        code.push_str(&self.stmts(&structured.stmts, &cfg.loop_headers())?);
+        let body = self.stmts(&structured.stmts, &cfg.loop_headers())?;
+        code.push_str(&self.string_literal_locals());
+        code.push_str(&body);
         code.push_str("}}\n");
         let lines = self
             .sites

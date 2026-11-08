@@ -369,6 +369,22 @@ pub(super) fn expand<'db>(
                         let Some((callee, _)) = plan.index.function(db, *f) else {
                             continue;
                         };
+                        if plan.index.display(callee) == "baml._to_string_default" {
+                            let ty = operand_ty(plan, object, body, &args[*ntypeargs]);
+                            if !matches!(
+                                ty,
+                                Some(
+                                    RuntimeTy::Int
+                                        | RuntimeTy::Float
+                                        | RuntimeTy::Bool
+                                        | RuntimeTy::String
+                                        | RuntimeTy::Null
+                                        | RuntimeTy::Literal(..)
+                                )
+                            ) {
+                                plan.structural_strings = true;
+                            }
+                        }
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || plan.index.display(callee) == "baml.json.decode"
                             || super::tasks::native(plan.index.display(callee))
@@ -430,6 +446,11 @@ pub(super) fn expand<'db>(
                             let repr = plan.repr(&concrete).map_err(|error| {
                                 format!("{error} (interface receiver {concrete:?})")
                             })?;
+                            if super::dispatch::structural_string_default(
+                                db, plan, &concrete, iface, method,
+                            )? {
+                                plan.structural_string_calls.insert((object, b.id.0, repr));
+                            }
                             if !targets.contains(&(repr, target)) {
                                 targets.push((repr, target));
                             }
@@ -442,6 +463,10 @@ pub(super) fn expand<'db>(
                     _ => {}
                 }
             }
+        }
+        super::formatting::register(db, plan, all, &mut instances, &mut queue)?;
+        if !queue.is_empty() {
+            continue;
         }
         if plan.concrete_types.len() == type_count {
             break;
@@ -836,9 +861,13 @@ impl registry::Feature for Feature {
                     let ordinary = e.assign(
                         destination,
                         (
-                            e.fallible(&format!(
-                                "f{target}::<OBSERVE>(cx,{},{arguments})",
-                                e.telemetry_site(target)
+                            e.fallible(&e.stack_leaf_call(
+                                target,
+                                &arguments,
+                                &format!(
+                                    "f{target}::<OBSERVE>(cx,{},{arguments})",
+                                    e.telemetry_site(target)
+                                ),
                             )),
                             e.plan.repr(&body.locals[0].ty)?,
                         ),
@@ -929,7 +958,7 @@ impl Plan<'_> {
     }
 }
 
-fn instance<'db>(
+pub(super) fn instance<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
     all: &mut BTreeMap<usize, MirFunction<'db>>,
@@ -1048,6 +1077,11 @@ impl Plan<'_> {
             self.candidate(&RuntimeTy::String);
             return;
         }
+        if matches!(ty,RuntimeTy::Class(head,args) if args.is_empty() && head.builtin_primitive(self.lang)==Some(baml_type::PrimitiveType::Uint8Array))
+        {
+            self.candidate(&RuntimeTy::Uint8Array);
+            return;
+        }
         self.remember_heads(ty);
         match ty {
             RuntimeTy::Union(m) => {
@@ -1087,6 +1121,7 @@ impl Plan<'_> {
             | RuntimeTy::String
             | RuntimeTy::Null
             | RuntimeTy::Float
+            | RuntimeTy::Uint8Array
             | RuntimeTy::Enum(_) => {
                 if !self.concrete_types.contains(ty) {
                     self.concrete_types.push(ty.clone());

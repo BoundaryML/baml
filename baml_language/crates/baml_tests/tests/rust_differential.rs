@@ -38,6 +38,7 @@ const PROBES: &[&str] = &[
     "RtAutomaticCleanup",
     "RtCancelledFailure",
     "RtLinkedCancelledFailure",
+    "StackAllocation",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -464,6 +465,18 @@ fn pack_result<'a>(
     functions: impl IntoIterator<Item = &'a str>,
     rt: bool,
 ) -> Result<(), String> {
+    pack_result_options(build, workspace, source, executable, functions, rt, false)
+}
+
+fn pack_result_options<'a>(
+    build: &Path,
+    workspace: &Path,
+    source: &Path,
+    executable: &Path,
+    functions: impl IntoIterator<Item = &'a str>,
+    rt: bool,
+    benchmark: bool,
+) -> Result<(), String> {
     // Never accept an executable left over from a previous successful pack.
     if executable.exists() {
         std::fs::remove_file(executable).map_err(|e| e.to_string())?;
@@ -504,6 +517,9 @@ fn pack_result<'a>(
     if rt {
         argv.push("--rt".into());
     }
+    if benchmark {
+        argv.push("--rt-benchmark".into());
+    }
     let result = baml_cli::run_cli(argv).map_err(|error| format!("{error:#}"))?;
     if !matches!(result, baml_cli::ExitCode::Success) {
         return Err(format!("pack exited {result:?}"));
@@ -528,7 +544,7 @@ fn rt_call_cost_semantics_at_every_telemetry_level() {
         workspace,
         &source,
         &bytecode,
-        ["main", "uncaught"],
+        ["main", "uncaught", "stack_calls"],
         false,
     )
     .unwrap();
@@ -552,7 +568,7 @@ fn rt_call_cost_semantics_at_every_telemetry_level() {
         }
         let output = run_probe(&mut command, Duration::from_secs(120)).unwrap();
         assert!(
-            output.status.success() == (entry == "main"),
+            output.status.success() == (entry != "uncaught"),
             "{level}/{is_rt}/{stress}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
@@ -567,7 +583,7 @@ fn rt_call_cost_semantics_at_every_telemetry_level() {
             known_telemetry_divergences::without_gc(&trace, "rt"),
         )
     };
-    for entry in ["main", "uncaught"] {
+    for entry in ["main", "uncaught", "stack_calls"] {
         let compiled = build.join(format!("rt-{entry}"));
         pack_result(
             &build.join("rt-build"),
@@ -582,6 +598,8 @@ fn rt_call_cost_semantics_at_every_telemetry_level() {
             let (expected, trace) = run(&bytecode, entry, false, false, level);
             if entry == "main" {
                 assert_eq!(expected.stdout, b"511\n");
+            } else if entry == "stack_calls" {
+                assert_eq!(expected.stdout, b"28\n");
             }
             for stress in [false, true] {
                 let (actual, observed) = run(&compiled, entry, true, stress, level);
@@ -620,6 +638,33 @@ fn rust_differential() {
     assert!(timeout > 0);
     let timeout = Duration::from_secs(timeout);
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
+    let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok().or_else(|| {
+        std::env::var("BAML_RUST_DIFF_RT_ONLY")
+            .is_ok_and(|v| v == "1")
+            .then(|| "rt,rt-gc-stress".to_owned())
+    });
+    if let Some(selected) = &selected {
+        for name in selected.split(',') {
+            assert!(
+                BACKENDS.iter().any(|b| b.name == name),
+                "unknown backend: {name}"
+            );
+        }
+    }
+    // The bytecode oracle is mandatory even for a scoped backend run.
+    let backends: Vec<_> = BACKENDS
+        .iter()
+        .filter(|backend| {
+            backend.name == "bytecode"
+                || selected
+                    .as_ref()
+                    .is_none_or(|names| names.split(',').any(|name| name == backend.name))
+        })
+        .collect();
+    let rt_only = backends
+        .iter()
+        .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
+    let levels = LEVELS;
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -642,22 +687,33 @@ fn rust_differential() {
     // Focused runtime jobs retain the bytecode oracle and both GC modes, while
     // avoiding unrelated compiled-VM variants and unsupported telemetry levels.
     // The default merged-branch gate still runs the complete matrix.
-    let rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
-    let backends: Vec<_> = BACKENDS
-        .iter()
-        .filter(|b| !rt_only || matches!(b.name, "bytecode" | "rt" | "rt-gc-stress"))
-        .collect();
-    let levels = LEVELS;
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
+    let oracle_only = if rt_only {
+        let rt_artifacts = rt::build(&build.join("rt"), workspace, manifest, only.as_deref());
+        let admitted = rt_artifacts
+            .iter()
+            .filter(|(_, result)| result.is_ok())
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        artifacts.insert("rt", rt_artifacts);
+        Some(admitted)
+    } else {
+        None
+    };
     for backend in &backends {
+        if rt_only && backend.artifact_key == "rust" && oracle_only.as_deref() == Some("") {
+            artifacts.insert("rust", Artifacts::new());
+            continue;
+        }
         artifacts.entry(backend.artifact_key).or_insert_with(|| {
             (backend.build)(
                 &build.join(backend.artifact_key),
                 workspace,
                 manifest,
-                only.as_deref(),
+                oracle_only.as_deref().or(only.as_deref()),
             )
         });
     }
@@ -676,46 +732,53 @@ fn rust_differential() {
             .is_none_or(|s| s.split(',').any(|p| p == probe))
     });
     assert!(!probes.is_empty(), "no probes selected");
-    let mut coverage = rt::Coverage::new(&artifacts["rt"]);
-    let mut failures = coverage.build_failures();
+    let mut coverage = artifacts.get("rt").map(rt::Coverage::new);
+    let mut failures = coverage
+        .as_ref()
+        .map_or_else(Vec::new, rt::Coverage::build_failures);
     for probe in probes {
+        if rt_only && artifacts["rt"][&probe].is_err() {
+            continue;
+        }
         let failures_before = failures.len();
         for level in levels {
             if rt_only && !rt::supports_level(&probe, level) {
                 continue;
             }
-            if (probe.contains("::") && matches!(*level, "default" | "low"))
-                || (*level == "default"
-                    && !matches!(
-                        probe.as_str(),
-                        "Scalars"
-                            | "Hooked"
-                            | "ManualSpan"
-                            | "RtClosures"
-                            | "RtEmptyClosures"
-                            | "RtGenericClosures"
-                            | "RtGenericMethods"
-                            | "RtNativeCallback"
-                            | "RtBuiltinCallbacks"
-                            | "RtSpawnAwait"
-                            | "RtTaskControls"
-                            | "RtTaskSleep"
-                            | "RtTaskModifiers"
-                            | "RtScalarTaskOrder"
-                            | "RtTaskErrors"
-                            | "RtBackgroundTask"
-                            | "RtBackgroundError"
-                            | "RtTokenComposition"
-                            | "RtVirtualGenericClosures"
-                            | "RtBoundGenericClosures"
-                            | "RtVirtualOwnGenericClosure"
-                            | "RtNativeHigherOrderValue"
-                            | "RtDefaultCallbacks"
-                            | "RtTaskLimits"
-                            | "RtTaskTimeout"
-                            | "RtAutomaticCleanup"
-                            | "RtCancelledFailure"
-                    ))
+            if !probe.starts_with("strings::")
+                && ((probe.contains("::") && matches!(*level, "default" | "low"))
+                    || (*level == "default"
+                        && !matches!(
+                            probe.as_str(),
+                            "Scalars"
+                                | "Hooked"
+                                | "ManualSpan"
+                                | "RtClosures"
+                                | "RtEmptyClosures"
+                                | "RtGenericClosures"
+                                | "RtGenericMethods"
+                                | "RtNativeCallback"
+                                | "RtBuiltinCallbacks"
+                                | "RtSpawnAwait"
+                                | "RtTaskControls"
+                                | "RtTaskSleep"
+                                | "RtTaskModifiers"
+                                | "RtScalarTaskOrder"
+                                | "RtTaskErrors"
+                                | "RtBackgroundTask"
+                                | "RtBackgroundError"
+                                | "RtTokenComposition"
+                                | "RtVirtualGenericClosures"
+                                | "RtBoundGenericClosures"
+                                | "RtVirtualOwnGenericClosure"
+                                | "RtNativeHigherOrderValue"
+                                | "RtDefaultCallbacks"
+                                | "RtTaskLimits"
+                                | "RtTaskTimeout"
+                                | "RtAutomaticCleanup"
+                                | "RtCancelledFailure"
+                                | "RtLinkedCancelledFailure"
+                        )))
             {
                 continue;
             }
@@ -827,7 +890,10 @@ fn rust_differential() {
                 if *level != "off" && trace.is_empty() {
                     failures.push(format!("{probe}/{mode}: no telemetry recording produced"));
                 }
-                if probe.contains("::") && output.as_ref().is_ok_and(|o| !o.status.success()) {
+                if probe.contains("::")
+                    && kpis::expects_success(&probe)
+                    && output.as_ref().is_ok_and(|o| !o.status.success())
+                {
                     failures.push(format!("{probe}/{mode}: KPI must succeed"));
                 }
                 std::fs::create_dir_all(build.join("telemetry")).unwrap();
@@ -843,6 +909,13 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
+            if let Some(expected) = kpis::string_probe_output(&probe) {
+                assert_eq!(
+                    outputs[reference].as_ref().unwrap().stdout,
+                    expected,
+                    "{probe}: oracle semantic assertions"
+                );
+            }
             for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;
@@ -871,25 +944,19 @@ fn rust_differential() {
                 }
                 if traces[reference] != traces[index] {
                     if backend.artifact_key == "rt" {
-                        // C5 already applies to both runtime modes. Use their
-                        // shared artifact key for the existing GC-only filter;
-                        // none of the legacy backend's other exceptions apply.
-                        let expected = known_telemetry_divergences::without_gc(
-                            &traces[reference],
-                            backend.artifact_key,
-                        );
-                        let actual = known_telemetry_divergences::without_gc(
-                            &traces[index],
-                            backend.artifact_key,
-                        );
-                        let detail = diff(&traces[reference], &traces[index], &mode);
+                        // C5 is the runtime's sole telemetry exception. Both
+                        // modes share the rt artifact and its normalizer; the
+                        // old backend's other exceptions never apply here.
+                        let expected =
+                            known_telemetry_divergences::without_gc(&traces[reference], "rt");
+                        let actual = known_telemetry_divergences::without_gc(&traces[index], "rt");
                         if expected == actual {
                             report_known(
                                 &build,
                                 &probe,
                                 &mode,
                                 known_telemetry_divergences::GC_REASON,
-                                &detail,
+                                &diff(&traces[reference], &traces[index], &mode),
                             );
                         } else {
                             failures.push(format!(
@@ -981,9 +1048,13 @@ fn rust_differential() {
                 }
             }
         }
-        coverage.record(&probe, &failures[failures_before..]);
+        if let Some(coverage) = &mut coverage {
+            coverage.record(&probe, &failures[failures_before..]);
+        }
     }
-    coverage.write(&build);
+    if let Some(coverage) = coverage {
+        coverage.write(&build);
+    }
     for failure in &failures {
         eprintln!("{failure}");
     }
@@ -1063,4 +1134,16 @@ fn rt_type_dispatch_semantics() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     type_dispatch::run();
+}
+
+#[path = "../rust_diff/setup_state.rs"]
+mod setup_state;
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
+fn rt_setup_state_benchmark() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    setup_state::run();
 }

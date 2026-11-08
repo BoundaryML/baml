@@ -13,6 +13,29 @@ pub fn compile_rt(
     opt: OptLevel,
     entry: usize,
 ) -> Gen<String> {
+    compile(db, root, program, opt, entry, None)
+}
+
+/// Compile the normal entry plus an explicit setup/run native benchmark host.
+pub fn compile_rt_benchmark(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    setup_run: (usize, usize),
+) -> Gen<String> {
+    compile(db, root, program, opt, entry, Some(setup_run))
+}
+
+fn compile(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    benchmark: Option<(usize, usize)>,
+) -> Gen<String> {
     let mut plan = Plan {
         root,
         lang: baml_compiler2_hir::package::lang_roots(db),
@@ -43,6 +66,9 @@ pub fn compile_rt(
         heads: BTreeMap::new(),
         dispatches: BTreeMap::new(),
         function_frames: BTreeMap::new(),
+        structural_strings: false,
+        structural_string_calls: BTreeSet::new(),
+        string_overrides: BTreeMap::new(),
         alias_tests: std::cell::RefCell::new(BTreeSet::new()),
     };
     let admission::Admitted {
@@ -51,12 +77,13 @@ pub fn compile_rt(
         calls,
         builtins,
         json_decode,
-    } = admission::collect(db, root, opt, entry, &mut plan)?;
+    } = admission::collect(db, root, opt, entry, benchmark, &mut plan)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
     builtins::emit(&mut out, &builtins)?;
     let layout::LayoutIds { descriptors, lists } = layout::emit(&mut out, &plan)?;
+    super::regex::emit(&mut out, &plan, &descriptors, &lists, &builtins)?;
     let host_function = |name: &str| {
         program
             .objects
@@ -87,7 +114,45 @@ pub fn compile_rt(
         })
         .sum::<usize>()
         <= 1024;
-    let telemetry_sites = std::cell::RefCell::new(vec![(None, 0usize, entry)]);
+    let mut host_sites = vec![(None, 0usize, entry)];
+    if let Some((setup, run)) = benchmark {
+        let MirFunctionKind::Bytecode(setup_body) = &all[&setup].kind else {
+            return Err(no("benchmark setup must be a user function"));
+        };
+        let MirFunctionKind::Bytecode(run_body) = &all[&run].kind else {
+            return Err(no("benchmark run must be a user function"));
+        };
+        if all[&setup].arity != 0
+            || all[&run].arity != 1
+            || setup_body.locals[0].ty != run_body.locals[1].ty
+            || plan.repr(&run_body.locals[0].ty)? != super::Repr::Int
+        {
+            return Err(no("benchmark requires setup() -> S and run(S) -> int"));
+        }
+        host_sites.extend([(None, 0usize, setup), (None, 0usize, run)]);
+    }
+    let telemetry_sites = std::cell::RefCell::new(host_sites);
+    let mut placements = reached
+        .iter()
+        .map(|&object| {
+            let mir = &all[&object];
+            let MirFunctionKind::Bytecode(body) = &mir.kind else {
+                return (object, super::stack::Placement::default());
+            };
+            (
+                object,
+                super::stack::Placement::new(db, root, object, body, opt, &plan, &all),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let stack_leaves = placements
+        .values()
+        .flat_map(|p| p.leaf_calls.iter().copied())
+        .collect::<BTreeSet<_>>();
+    // Inlined bodies share one physical frame. Keep their combined object
+    // storage below the stack guard's 64 KiB reserve, including ordinary locals.
+    let small_program =
+        small_program && placements.values().map(|p| p.bytes(&plan)).sum::<usize>() <= 16 * 1024;
     for &object in &reached {
         let mir = &all[&object];
         let body = match &mir.kind {
@@ -120,6 +185,7 @@ pub fn compile_rt(
             arity: mir.arity,
             block: 0,
             statement: 0,
+            stack: placements.remove(&object).unwrap(),
             proven_arithmetic: BTreeSet::new(),
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
@@ -127,16 +193,20 @@ pub fn compile_rt(
             raise_kinds: Vec::new(),
             telemetry_sites: &telemetry_sites,
             site: 0,
+            string_cx: std::cell::Cell::new(false),
+            string_literals: std::cell::RefCell::new(BTreeMap::new()),
         };
         if matches!(mir.kind, MirFunctionKind::Builtin(_)) {
             out.push_str(&emitter.native_closure_adapter()?);
             continue;
         }
+        let stack_leaf = stack_leaves.contains(&object);
         out.push_str(
             &emitter
                 .function(
                     mir.arity,
-                    small_program && !recursive(&calls, object),
+                    (small_program || stack_leaf) && !recursive(&calls, object),
+                    stack_leaf,
                     recursive(&calls, object),
                 )
                 .map_err(|e| format!("{e} (emitting {})", plan.index.display(object)))?,
@@ -190,6 +260,7 @@ pub fn compile_rt(
                 arity: 0,
                 block: 0,
                 statement: 0,
+                stack: super::stack::Placement::default(),
                 proven_arithmetic: BTreeSet::new(),
                 unwind_jumps: Vec::new(),
                 sites: Vec::new(),
@@ -197,6 +268,8 @@ pub fn compile_rt(
                 raise_kinds: Vec::new(),
                 telemetry_sites: &telemetry_sites,
                 site: 0,
+                string_cx: std::cell::Cell::new(false),
+                string_literals: std::cell::RefCell::new(BTreeMap::new()),
             };
             let expression =
                 emitter.membership(("value".into(), super::Repr::Tagged), &template)?;
@@ -215,12 +288,24 @@ pub fn compile_rt(
         (stringify, aliased),
         &telemetry_sites,
     )?;
-    host::emit(
-        &mut out,
-        entry,
-        &builtins,
-        format_site,
-        !plan.cleanup_methods.is_empty(),
-    );
+    if let Some((setup, run)) = benchmark {
+        host::emit_benchmark(
+            &mut out,
+            entry,
+            setup,
+            run,
+            &builtins,
+            format_site,
+            !plan.cleanup_methods.is_empty(),
+        );
+    } else {
+        host::emit(
+            &mut out,
+            entry,
+            &builtins,
+            format_site,
+            !plan.cleanup_methods.is_empty(),
+        );
+    }
     Ok(out)
 }

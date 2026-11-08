@@ -17,7 +17,7 @@ pub(super) fn resolve(
         return Ok(Some(target));
     }
     let Some(w) = witness(db, plan, concrete, iface)? else {
-        return Ok(None);
+        return super::formatting::structural_fallback(plan, concrete, iface, method);
     };
     let Witness {
         rule,
@@ -71,6 +71,17 @@ struct Witness<'p> {
     bindings: Vec<bex_vm_types::RuntimeTy>,
     interface: usize,
     concrete: bex_vm_types::RuntimeTy,
+}
+pub(super) fn structural_string_default(
+    db: &dyn Db,
+    plan: &Plan<'_>,
+    concrete: &RuntimeTy,
+    iface: &TyTemplateInterface,
+    method: &str,
+) -> Gen<bool> {
+    Ok(super::formatting::is_to_string(plan, iface, method)
+        && witness(db, plan, concrete, iface)?.is_none()
+        && super::formatting::primitive_override(plan, concrete, iface)?.is_none())
 }
 fn witness<'p>(
     db: &dyn Db,
@@ -246,6 +257,23 @@ impl registry::Feature for Feature {
                 if !tags.insert(tag.clone()) {
                     return Err(no("overlapping dispatch storage tags"));
                 }
+                if e.plan
+                    .structural_string_calls
+                    .contains(&(e.object, e.block, repr))
+                {
+                    // The VM selects the native structural default directly;
+                    // its BAML interface body is only used by explicit rules.
+                    let raw = match repr {
+                        Repr::Bool => "receiver.payload!=0".into(),
+                        Repr::Float => "f64::from_bits(receiver.payload)".into(),
+                        _ => format!("receiver.payload as {}", repr.rust()),
+                    };
+                    let value = registry::call(e, "baml._to_string_default", &[], &[(raw, repr)])
+                        .ok_or_else(|| no("structural string renderer"))??;
+                    let result = e.coerce(value, returned)?;
+                    write!(expression, "{tag}=>{{{result}}},").unwrap();
+                    continue;
+                }
                 let mut call_values = values
                     .iter()
                     .enumerate()
@@ -314,6 +342,13 @@ impl Emitter<'_, '_> {
         targets: &[(Repr, usize)],
     ) -> Option<Gen<String>> {
         if targets.len() <= 2 || !targets.iter().all(|(r, _)| matches!(r, Repr::Ptr(_))) {
+            return None;
+        }
+        if targets.iter().any(|(repr, _)| {
+            self.plan
+                .structural_string_calls
+                .contains(&(self.object, self.block, *repr))
+        }) {
             return None;
         }
         let Terminator::VirtualCall {
@@ -388,20 +423,21 @@ impl Emitter<'_, '_> {
             for &(repr, callee) in targets {
                 table.insert(self.tag(repr)?, (callee, self.telemetry_site(callee)));
             }
-            for (table_name, observe) in [("VTABLE_ON", "true"), ("VTABLE_OFF", "false")] {
-                write!(code, "static {table_name}:&[Option<({fn_ty},usize)>]=&[").unwrap();
-                for tag in 0..=*table.keys().last().unwrap() {
-                    if let Some((callee, site)) = table.get(&tag) {
-                        write!(code, "Some((f{callee}::<{observe}> as {fn_ty},{site})),").unwrap();
-                    } else {
-                        code.push_str("None,");
-                    }
+            write!(code, "static VTABLE:&[Option<({fn_ty},{fn_ty},usize)>]=&[").unwrap();
+            for tag in 0..=*table.keys().last().unwrap() {
+                if let Some((callee, site)) = table.get(&tag) {
+                    write!(
+                        code,
+                        "Some((f{callee}::<false> as {fn_ty},f{callee}::<true> as {fn_ty},{site})),"
+                    )
+                    .unwrap();
+                } else {
+                    code.push_str("None,");
                 }
-                code.push_str("];");
             }
-            code.push_str("let table=if OBSERVE{VTABLE_ON}else{VTABLE_OFF};let (callee,site)=");
-            code.push_str(&self.fallible("table.get(receiver.tag as usize).copied().flatten().ok_or_else(||rt::Error::internal(\"invalid closed-world interface receiver\".into()))"));
-            code.push(';');
+            code.push_str("];let (plain,observed,site)=");
+            code.push_str(&self.fallible("VTABLE.get(receiver.tag as usize).copied().flatten().ok_or_else(||rt::Error::internal(\"invalid closed-world interface receiver\".into()))"));
+            code.push_str(";let callee=if OBSERVE{observed}else{plain};");
             let mut values = values
                 .iter()
                 .enumerate()
@@ -471,4 +507,20 @@ pub(super) fn implements(
     iface: &TyTemplateInterface,
 ) -> Gen<bool> {
     Ok(witness(db, plan, concrete, iface)?.is_some())
+}
+
+// Native structural rendering dispatches only explicit implementations. The
+// ordinary default would call the renderer again, so it is deliberately absent.
+pub(super) fn resolve_string_override(
+    db: &dyn Db,
+    plan: &Plan<'_>,
+    concrete: &RuntimeTy,
+    iface: &TyTemplateInterface,
+) -> Gen<Option<(usize, Vec<RuntimeTy>)>> {
+    if witness(db, plan, concrete, iface)?.is_some_and(|w| w.rule.methods.contains_key("to_string"))
+    {
+        resolve(db, plan, concrete, iface, "to_string", &[])
+    } else {
+        super::formatting::primitive_override(plan, concrete, iface)
+    }
 }

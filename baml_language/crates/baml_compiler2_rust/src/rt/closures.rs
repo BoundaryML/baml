@@ -439,10 +439,7 @@ impl registry::Feature for Feature {
                 "rt::closures::new({}, {object},closure{object},&[{captures}])",
                 emitter.plan.closure_descriptors().unwrap().1
             ));
-            Ok((
-                super::scalar_tasks::closure(emitter, ordinary),
-                Repr::Closure,
-            ))
+            Ok((ordinary, Repr::Closure))
         })())
     }
     fn statement(

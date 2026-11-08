@@ -865,21 +865,6 @@ pub unsafe fn concat_pointers(desc: u32, a: usize, b: usize) -> R<usize> {
     }
 }
 
-/// Compiler-private marker: scalar_tasks proves this future cannot escape.
-pub const SCALAR_FUTURE: usize = 1;
-pub fn can_elide_scalar_task() -> bool {
-    unsafe { (&*crate::TASK.get()).can_elide_scalar_task() }
-}
-/// # Safety
-/// A marker argument is produced only by the compiler's immediate scalar proof.
-pub unsafe fn await_scalar(pointer: usize, value: Dyn) -> R<Dyn> {
-    if pointer != SCALAR_FUTURE {
-        return unsafe { await_future(pointer) };
-    }
-    unsafe { (&mut *crate::TASK.get()).check_cancel() }.map_err(loop_error)?;
-    Ok(value)
-}
-
 /// Run an automatic finalizer on an independently named, shielded root fiber.
 /// # Safety
 /// The object and closure belong to the active heap and generated program.

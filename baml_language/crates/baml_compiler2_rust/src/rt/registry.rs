@@ -1,7 +1,7 @@
 //! Ordered extension points. First matching lowering wins; errors never fall through.
 use super::{
     BTreeMap, Db, Emitter, Gen, MirFunction, Plan, Repr, Rvalue, SourceRoot, StatementKind,
-    Terminator, calls, closures, containers, dispatch, globals, loop_ranges, strings, tasks,
+    Terminator, calls, closures, containers, dispatch, globals, loop_ranges, stack, strings, tasks,
     telemetry,
 };
 
@@ -75,18 +75,23 @@ pub(super) trait Feature {
 }
 
 const FEATURES: &[&dyn Feature] = &[
+    &stack::Feature,
     &globals::Feature,
     &closures::Feature,
     &tasks::Feature,
     &super::callbacks::Feature,
+    &super::string_defaults::Feature,
+    &super::string_bytes::Feature,
+    &super::regex::Feature,
     &containers::Feature,
     &dispatch::Feature,
     &super::interface_fields::Feature,
     &super::switches::Feature,
+    &super::formatting::Feature,
     &strings::Feature,
     &telemetry::Feature,
-    &loop_ranges::Feature,
     &super::generics::Feature,
+    &loop_ranges::Feature,
     &calls::Feature,
 ];
 

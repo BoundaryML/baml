@@ -1136,17 +1136,6 @@ pub struct TaskCx<'a> {
     scheduled: slice_clock::Stamp,
 }
 impl TaskCx<'_> {
-    /// Whether a private, immediately awaited scalar task has no scheduling
-    /// observer. External cancellation and outstanding loop services disable it.
-    pub fn can_elide_scalar_task(&self) -> bool {
-        let core = self.core.borrow();
-        core.tasks.len() == 1
-            && !core.host_enabled
-            && core.ready.is_empty()
-            && core.slow_tasks == 0
-            && !self.cancel.node.external
-            && self.cancel.deadline.is_none()
-    }
     pub fn id(&self) -> usize {
         self.id
     }

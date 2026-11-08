@@ -9,10 +9,10 @@ pub type R<T> = Result<T, Box<Error>>;
 pub const STRING_DESC: Descriptor = Descriptor {
     kind: Kind::String,
     size: 8,
-    ptr_slots: (0, 0),
+    ptr_slots: (8, 3),
     tagged_slots: (0, 0),
     elem: Some(Elements {
-        offset: 16,
+        offset: 48,
         layout: ElementLayout::Scalar,
     }),
     type_id: 3,
@@ -151,12 +151,11 @@ pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Bo
     // SAFETY: called only from a running generated root. The string is rooted
     // in this stack frame across the class allocation; initialization cannot GC.
     unsafe {
-        let string = match crate::try_alloc(0, 16 + message.len().next_multiple_of(8)) {
+        let string = match crate::try_alloc(0, 80 + message.len().next_multiple_of(8)) {
             Ok(p) => p,
             Err(e) => return e,
         };
-        string.add(8).cast::<usize>().write(message.len());
-        std::ptr::copy_nonoverlapping(message.as_ptr(), string.add(16), message.len());
+        crate::strings::init_flat(string, &message);
         let object = match crate::try_alloc(desc, std::mem::size_of::<MessagePanic>()) {
             Ok(p) => p.cast::<MessagePanic>(),
             Err(e) => return e,
@@ -278,6 +277,38 @@ pub fn driver_observed(
     sites: &'static [crate::telemetry::Site],
     format_site: Option<usize>,
 ) -> std::process::ExitCode {
+    driver_configured(descriptors, entry, None, functions, sites, format_site)
+}
+
+/// Native benchmark entry. Setup state stays on the root fiber's scanned stack.
+pub type Benchmark = fn(usize, usize, &std::cell::Cell<u128>) -> R<i64>;
+
+pub fn driver_observed_benchmark(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    benchmark: Benchmark,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+) -> std::process::ExitCode {
+    driver_configured(
+        descriptors,
+        entry,
+        Some(benchmark),
+        functions,
+        sites,
+        format_site,
+    )
+}
+
+fn driver_configured(
+    descriptors: &'static [Descriptor],
+    entry: fn() -> R<i64>,
+    benchmark: Option<Benchmark>,
+    functions: &'static [crate::telemetry::Function],
+    sites: &'static [crate::telemetry::Site],
+    format_site: Option<usize>,
+) -> std::process::ExitCode {
     let mut session = match crate::telemetry::Session::new(functions, sites) {
         Ok(s) => s,
         Err(e) => {
@@ -285,7 +316,7 @@ pub fn driver_observed(
             return std::process::ExitCode::FAILURE;
         }
     };
-    let result = driver_inner(descriptors, entry, &mut session, format_site);
+    let result = driver_inner(descriptors, entry, benchmark, &mut session, format_site);
     session.finish(&result);
     match result {
         Ok(reports) => {
@@ -306,14 +337,21 @@ pub fn driver_observed(
     }
 }
 fn render_error(error: Box<Error>, background: Option<bool>) {
-    let traceback = bex_vm_types::errors::format_traceback(error.frames.iter().rev().map(|f| {
-        let function = if background.is_some() {
-            f.function.strip_prefix("user").unwrap_or(f.function)
-        } else {
-            f.function
-        };
-        (f.file, f.line, function)
-    }));
+    let traceback = bex_vm_types::errors::format_traceback(
+        error
+            .frames
+            .iter()
+            .rev()
+            .filter(|f| error.value == 0 || !f.file.starts_with("<builtin>/"))
+            .map(|f| {
+                let function = if background.is_some() {
+                    f.function.strip_prefix("user").unwrap_or(f.function)
+                } else {
+                    f.function
+                };
+                (f.file, f.line, function)
+            }),
+    );
     let prefix = match background {
         Some(true) => "Warning: cancelled spawned task failed: ",
         Some(false) => "error: unhandled spawned task failed: ",
@@ -332,6 +370,7 @@ fn render_error(error: Box<Error>, background: Option<bool>) {
 fn driver_inner(
     descriptors: &'static [Descriptor],
     entry: fn() -> R<i64>,
+    benchmark: Option<Benchmark>,
     session: &mut crate::telemetry::Session,
     format_site: Option<usize>,
 ) -> R<Vec<crate::tasks::UnhandledTaskError>> {
@@ -364,12 +403,28 @@ fn driver_inner(
     let mut instance = Instance::new(descriptors, pointers);
     // SAFETY: compiler admission and descriptor construction enforce this ABI.
     let mut unhandled = Vec::new();
-    let mut run = |session: &mut crate::telemetry::Session| -> R<i64> {
+    fn run(
+        instance: &mut Instance,
+        session: &mut crate::telemetry::Session,
+        entry: fn() -> R<i64>,
+        unhandled: &mut Vec<crate::tasks::UnhandledTaskError>,
+    ) -> R<i64> {
         let result = session.run(|| unsafe { instance.run_baml(entry) });
         unhandled.extend(instance.take_unhandled_reports());
         result
+    }
+    let elapsed = std::rc::Rc::new(std::cell::Cell::new(0u128));
+    // Setup and all jobs share one fiber. Its stack retains the state across
+    // collecting calls; no managed pointer is kept in untraced host storage.
+    let result = if let (Some(benchmark), Some(jobs)) = (benchmark, jobs) {
+        let elapsed = elapsed.clone();
+        let result =
+            session.run(|| unsafe { instance.run_baml(move || benchmark(jobs, warmup, &elapsed)) });
+        result?
+    } else {
+        // SAFETY: compiler admission and descriptor construction enforce this ABI.
+        run(&mut instance, session, entry, &mut unhandled)?
     };
-    let result = run(session)?;
     let Some(jobs) = jobs else {
         let text = match format_site {
             Some(site) => session.format_int(result, site)?,
@@ -378,23 +433,56 @@ fn driver_inner(
         println!("{text}");
         return Ok(unhandled);
     };
+    if benchmark.is_some() {
+        unhandled.extend(instance.take_unhandled_reports());
+        print_benchmark_result(result, jobs, elapsed.get());
+        return Ok(unhandled);
+    }
     for _ in 1..warmup {
-        if run(session)? != result {
+        if run(&mut instance, session, entry, &mut unhandled)? != result {
             return Err(Error::internal("warmup result mismatch".into()));
         }
     }
     let start = std::time::Instant::now();
     for _ in 0..jobs {
-        if run(session)? != result {
+        if run(&mut instance, session, entry, &mut unhandled)? != result {
             return Err(Error::internal("timed result mismatch".into()));
         }
     }
     let elapsed = start.elapsed().as_nanos();
+    print_benchmark_result(result, jobs, elapsed);
+    Ok(unhandled)
+}
+
+fn print_benchmark_result(result: i64, jobs: usize, elapsed: u128) {
     println!(
         "{}",
         serde_json::json!({"result":result.to_string(),"jobs":jobs,"elapsed_ns":elapsed})
     );
-    Ok(unhandled)
+}
+
+/// Verify once, warm up, then time only repeated jobs. Called on the fiber
+/// after setup has returned; the closure retains its typed state on that stack.
+pub fn benchmark_loop(
+    mut job: impl FnMut() -> R<i64>,
+    jobs: usize,
+    warmup: usize,
+    elapsed: &std::cell::Cell<u128>,
+) -> R<i64> {
+    let result = std::hint::black_box(&mut job)()?;
+    for _ in 1..warmup {
+        if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("warmup result mismatch".into()));
+        }
+    }
+    let start = std::time::Instant::now();
+    for _ in 0..jobs {
+        if std::hint::black_box(&mut job)()? != result {
+            return Err(Error::internal("timed result mismatch".into()));
+        }
+    }
+    elapsed.set(start.elapsed().as_nanos());
+    Ok(result)
 }
 
 #[cold]
@@ -444,8 +532,8 @@ mod tests {
                     let object = error.value as *const MessagePanic;
                     assert!(!object.is_null());
                     let string = (*object).message as *const u8;
-                    let len = string.add(8).cast::<usize>().read();
-                    let bytes = std::slice::from_raw_parts(string.add(16), len);
+                    let len = string.add(32).cast::<usize>().read();
+                    let bytes = std::slice::from_raw_parts(string.add(80), len);
                     assert_eq!(bytes, error.message.as_bytes());
                 }
             }
@@ -469,9 +557,8 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
         unreachable!()
     };
     unsafe {
-        let string = crate::emergency_alloc(0, 16 + message.len().next_multiple_of(8));
-        string.add(8).cast::<usize>().write(message.len());
-        std::ptr::copy_nonoverlapping(message.as_ptr(), string.add(16), message.len());
+        let string = crate::emergency_alloc(0, 80 + message.len().next_multiple_of(8));
+        crate::strings::init_flat(string, &message);
         let object =
             crate::emergency_alloc(5, std::mem::size_of::<MessagePanic>()).cast::<MessagePanic>();
         baml_rt_gc::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
@@ -513,9 +600,9 @@ mod allocation_tests {
                 let object = value as *const MessagePanic;
                 assert_eq!((*object).header.desc, 5);
                 let message = (*object).message as *const u8;
-                let len = message.add(8).cast::<usize>().read();
+                let len = message.add(32).cast::<usize>().read();
                 assert_eq!(
-                    std::slice::from_raw_parts(message.add(16), len),
+                    std::slice::from_raw_parts(message.add(80), len),
                     b"Allocation of 16 bytes failed"
                 );
             }
@@ -772,16 +859,16 @@ mod caught_tests {
             let error = add(Int63::MAX.get(), 1).unwrap_err().at(&SOURCE, 0);
             let caught = unsafe { CaughtError::new(error) };
             for _ in 0..100 {
-                unsafe { crate::try_alloc(0, 32) }?;
+                unsafe { crate::try_alloc(0, 80) }?;
                 unsafe { crate::safepoint() }.unwrap();
             }
             unsafe {
                 let object = caught.value() as *const MessagePanic;
                 assert_eq!((*object).header.desc, 1);
                 let string = (*object).message as *const u8;
-                let len = string.add(8).cast::<usize>().read();
+                let len = string.add(32).cast::<usize>().read();
                 assert_eq!(
-                    std::slice::from_raw_parts(string.add(16), len),
+                    std::slice::from_raw_parts(string.add(80), len),
                     caught.error().message.as_bytes()
                 );
             }

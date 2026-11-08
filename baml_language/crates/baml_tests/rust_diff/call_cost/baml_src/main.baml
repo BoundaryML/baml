@@ -87,3 +87,18 @@ function error_chain(depth: int) -> int {
     if depth > 0 { error_chain(depth - 1) } else { error_leaf(4611686018427387903) }
 }
 function uncaught() -> int { error_chain(4) }
+
+// Exercise stack placement through both the off call graph and the observed
+// wrapper. The short method is inlined while its receiver stays in the caller.
+class StackValue {
+    n: int
+    function read(self) -> int { self.n }
+}
+function stack_calls() -> int {
+    let sum = 0;
+    for (let i = 0; i < 8; i += 1) {
+        let value = StackValue { n: i };
+        sum += value.read();
+    };
+    sum
+}

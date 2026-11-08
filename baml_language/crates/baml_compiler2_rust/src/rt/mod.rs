@@ -54,6 +54,9 @@ struct Plan<'a> {
     heads: BTreeMap<baml_type::typetag::TypeTag, baml_type::DeclName>,
     dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
     function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
+    structural_strings: bool,
+    structural_string_calls: BTreeSet<(usize, usize, Repr)>,
+    string_overrides: BTreeMap<Repr, usize>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
 }
 struct Emitter<'a, 'db> {
@@ -69,6 +72,7 @@ struct Emitter<'a, 'db> {
     arity: usize,
     block: usize,
     statement: usize,
+    stack: stack::Placement,
     proven_arithmetic: BTreeSet<(usize, usize)>,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
@@ -76,6 +80,8 @@ struct Emitter<'a, 'db> {
     raise_kinds: Vec<&'static str>,
     telemetry_sites: &'a std::cell::RefCell<Vec<(Option<usize>, usize, usize)>>,
     site: usize,
+    string_cx: std::cell::Cell<bool>,
+    string_literals: std::cell::RefCell<BTreeMap<String, usize>>,
 }
 
 struct ProgramEmission<'a, 'db> {
@@ -103,6 +109,7 @@ mod layout;
 mod loop_ranges;
 mod places;
 mod repr;
+mod stack;
 mod statements;
 mod telemetry;
 
@@ -110,11 +117,15 @@ use body::recursive;
 use diagnostics::no;
 use repr::Repr;
 
-pub use driver::compile_rt;
+pub use driver::{compile_rt, compile_rt_benchmark};
 
 mod calls;
+mod formatting;
 mod globals;
+mod regex;
 mod registry;
+mod string_bytes;
+mod string_defaults;
 mod strings;
 mod tasks;
 
@@ -125,5 +136,3 @@ mod generics;
 mod interface_fields;
 
 mod callbacks;
-
-mod scalar_tasks;

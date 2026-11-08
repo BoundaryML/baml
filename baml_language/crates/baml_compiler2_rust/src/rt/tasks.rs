@@ -379,23 +379,19 @@ impl registry::Feature for Feature {
                 let id = e.fallible("rt::closures::object(body)");
                 let launch = |body: &str, name: &str, options: &str| {
                     format!(
-                        "{{let body={body};let object={id};let site=match object{{{cases}_=>unreachable!()}};let entry=match object{{{entries}_=>unreachable!()}};let name=if {name}==0{{None}}else{{Some(rt::strings::Str::from_raw({name}).as_str(&rt::strings::Cx::current()).to_owned())}};rt::tasks::spawn({},body,site,entry,{options},name)}}",
+                        "{{let body={body};let object={id};let site=match object{{{cases}_=>unreachable!()}};let entry=match object{{{entries}_=>unreachable!()}};let name=if {name}==0{{None}}else{{Some(rt::strings::Str::from_raw({name}).to_owned())}};rt::tasks::spawn({},body,site,entry,{options},name)}}",
                         e.plan.future_descriptor().unwrap()
                     )
                 };
                 let fast = ephemeral_spawn(e, plan).map(|local| {
-                    super::scalar_tasks::launch(
-                        e,
-                        local,
-                        launch(
-                            &format!("fast_plan_body{local}"),
-                            &format!("fast_plan_name{local}"),
-                            "rt::tasks::SpawnOptions::default()",
-                        ),
+                    launch(
+                        &format!("fast_plan_body{local}"),
+                        &format!("fast_plan_name{local}"),
+                        "rt::tasks::SpawnOptions::default()",
                     )
                 });
                 let call = format!(
-                    "{{let plan={value};let body={body};let object={id};let site=match object{{{cases}_=>unreachable!()}};let entry=match object{{{entries}_=>unreachable!()}};let name=if {name}==0{{None}}else{{Some(rt::strings::Str::from_raw({name}).as_str(&rt::strings::Cx::current()).to_owned())}};rt::tasks::spawn({},body,site,entry,rt::tasks::spawn_options({detached}!=0,rt::tasks::pointer_list({limits}),rt::tasks::pointer_list({tokens})),name)}}",
+                    "{{let plan={value};let body={body};let object={id};let site=match object{{{cases}_=>unreachable!()}};let entry=match object{{{entries}_=>unreachable!()}};let name=if {name}==0{{None}}else{{Some(rt::strings::Str::from_raw({name}).to_owned())}};rt::tasks::spawn({},body,site,entry,rt::tasks::spawn_options({detached}!=0,rt::tasks::pointer_list({limits}),rt::tasks::pointer_list({tokens})),name)}}",
                     e.plan.future_descriptor().unwrap()
                 );
                 let call = fast.map_or(call.clone(), |fast| {
@@ -412,10 +408,7 @@ impl registry::Feature for Feature {
                 e.assign(
                     destination,
                     (
-                        e.fallible(
-                            &super::scalar_tasks::await_value(e, future)?
-                                .unwrap_or_else(|| format!("rt::tasks::await_future({value})")),
-                        ),
+                        e.fallible(&format!("rt::tasks::await_future({value})")),
                         Repr::Tagged,
                     ),
                 )

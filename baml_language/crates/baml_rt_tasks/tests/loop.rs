@@ -1109,55 +1109,6 @@ fn local_tokens_cancel_queued_multi_limit_tasks_without_holding_partial_permits(
 }
 
 #[test]
-fn scalar_task_elision_requires_an_idle_loop_without_external_cancellation() {
-    let rt = runtime();
-    let mut lp = scheduler(&rt);
-    let root = lp.spawn(|cx| {
-        assert!(cx.can_elide_scalar_task());
-        let child = cx.spawn(|_| Ok(Value::int(1)));
-        assert!(!cx.can_elide_scalar_task());
-        cx.await_future(&child)?;
-        assert!(cx.can_elide_scalar_task());
-        let deadline = cx.spawn_with(
-            SpawnOptions {
-                deadline: Some(Instant::now() + Duration::from_secs(60)),
-                ..Default::default()
-            },
-            |cx| {
-                assert!(!cx.can_elide_scalar_task());
-                Ok(Value::int(0))
-            },
-        );
-        cx.await_future(&deadline)?;
-        let linked = cx.spawn_with(
-            SpawnOptions {
-                linked: vec![tokio_util::sync::CancellationToken::new()],
-                ..Default::default()
-            },
-            |cx| {
-                assert!(!cx.can_elide_scalar_task());
-                Ok(Value::int(0))
-            },
-        );
-        cx.await_future(&linked)?;
-        Ok(Value::int(0))
-    });
-    lp.run_until(&root).unwrap();
-}
-
-#[test]
-fn exported_host_submission_disables_scalar_task_elision() {
-    let rt = runtime();
-    let mut lp = scheduler(&rt);
-    let _submission = lp.submission_handle();
-    let root = lp.spawn(|cx| {
-        assert!(!cx.can_elide_scalar_task());
-        Ok(Value::int(0))
-    });
-    lp.run_until(&root).unwrap();
-}
-
-#[test]
 fn deep_local_token_composition_checks_and_drops_iteratively() {
     let rt = runtime();
     let mut lp = scheduler(&rt);

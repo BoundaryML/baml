@@ -2,13 +2,18 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod bytes;
 pub mod callbacks;
 pub mod calls;
 pub mod closures;
+pub mod format;
 pub mod json;
 pub mod language;
 pub mod lists;
 pub mod maps;
+pub mod native;
+pub mod regex;
+pub mod regex_map;
 pub mod strings;
 pub mod tasks;
 pub mod telemetry;
@@ -72,13 +77,15 @@ pub unsafe fn alloc(desc: u32, bytes: usize) -> *mut u8 {
 /// Same contract as `alloc`.
 #[inline(always)]
 pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
-    let result = HEAP.with(|heap| {
-        assert!(
-            !heap.get().is_null() && !ROOTS.get().is_null(),
-            "rt allocation outside a root task"
-        );
-        unsafe { (&mut *heap.get()).try_alloc(desc, bytes, &Roots(&*ROOTS.get())) }
-    });
+    // Keep the TLS getters small: a closure containing the whole allocation
+    // path prevents LLVM from inlining LocalKey::with into string concat loops.
+    let heap = HEAP.get();
+    let roots = ROOTS.get();
+    assert!(
+        !heap.is_null() && !roots.is_null(),
+        "rt allocation outside a root task"
+    );
+    let result = unsafe { (&mut *heap).try_alloc(desc, bytes, &Roots(&*roots)) };
     result.map_err(|failure| language::allocation_failure(failure.bytes))
 }
 
@@ -147,6 +154,7 @@ pub struct Instance {
     _io: tokio::runtime::Runtime,
     functions: FunctionValues,
     finalizers: tasks::NativeFinalizers,
+    compact_strings: bool,
 }
 impl Instance {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
@@ -179,6 +187,7 @@ impl Instance {
             _io: io,
             functions: FunctionValues::new(),
             finalizers: tasks::NativeFinalizers::default(),
+            compact_strings: strings::compact_descriptor(descriptors),
         }
     }
 
@@ -199,13 +208,13 @@ impl Instance {
     /// The entry must uphold the same rooting contract as `run`. A returned
     /// error's managed `value` is unrooted: inspect it only while this instance
     /// remains alive and before any further managed allocation.
-    pub unsafe fn run_baml(&mut self, entry: fn() -> R<i64>) -> R<i64> {
+    pub unsafe fn run_baml(&mut self, entry: impl FnOnce() -> R<i64> + 'static) -> R<i64> {
         unsafe { self.execute(entry, |error| error.value) }
             .map_err(|error| Error::internal(format!("{error:?}")))?
     }
     unsafe fn execute<E: 'static>(
         &mut self,
-        entry: fn() -> Result<i64, E>,
+        entry: impl FnOnce() -> Result<i64, E> + 'static,
         error_pointer: fn(&E) -> usize,
     ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
@@ -220,6 +229,7 @@ impl Instance {
             *mut FunctionValues,
             *mut tasks::NativeFinalizers,
             Option<tasks::Cleanup>,
+            bool,
         );
         impl Drop for HostBinding {
             fn drop(&mut self) {
@@ -229,6 +239,7 @@ impl Instance {
                 FUNCTIONS.set(self.3);
                 tasks::FINALIZERS.set(self.4);
                 tasks::CLEANUP.set(self.5);
+                strings::COMPACT_STRINGS.set(self.6);
             }
         }
         let _binding = HostBinding(
@@ -238,6 +249,7 @@ impl Instance {
             FUNCTIONS.replace(&mut self.functions),
             tasks::FINALIZERS.replace(&mut self.finalizers),
             tasks::CLEANUP.replace(None),
+            strings::COMPACT_STRINGS.replace(self.compact_strings),
         );
         let future = self.tasks.spawn(move |cx| {
             let telemetry = crate::telemetry::current_raw();

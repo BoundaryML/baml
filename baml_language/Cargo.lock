@@ -1015,7 +1015,9 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "serde_json",
+ "sys_regex",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]

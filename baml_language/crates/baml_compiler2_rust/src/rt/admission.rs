@@ -16,6 +16,7 @@ pub(super) fn collect<'db>(
     root: SourceRoot,
     opt: OptLevel,
     entry: usize,
+    benchmark: Option<(usize, usize)>,
     plan: &mut Plan<'_>,
 ) -> Gen<Admitted<'db>> {
     let mut all = BTreeMap::new();
@@ -37,6 +38,9 @@ pub(super) fn collect<'db>(
         }
     }
     let mut queue = VecDeque::from([entry]);
+    if let Some((setup, run)) = benchmark {
+        queue.extend([setup, run]);
+    }
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
     plan.lambda_bodies.clear();
@@ -45,6 +49,7 @@ pub(super) fn collect<'db>(
             plan.lambda_bodies.insert(body as *const _ as usize, id);
         }
     }
+    queue.extend(plan.string_overrides.values().copied());
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -201,11 +206,11 @@ pub(super) fn collect<'db>(
                         return Err(no(format!("terminator {other:?}")));
                     };
                     let reach = result.map_err(|error| {
-                        if let Some(Terminator::VirtualCall { method, .. }) = other {
-                            format!("{error} (reaching {}.{method})", plan.index.display(object))
-                        } else {
-                            error
-                        }
+                        format!(
+                            "{error} (reaching {} block {})",
+                            plan.index.display(object),
+                            block.id.0
+                        )
                     })?;
                     if let Some(name) = reach.builtin {
                         builtins.insert(name);

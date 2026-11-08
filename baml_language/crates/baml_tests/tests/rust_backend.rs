@@ -863,7 +863,6 @@ fn rt_string_receiver_storage_and_function_values() {
             "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
             true,
         ),
-        ("function main() -> int { \"x\".trim().length() }", false),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
         let program = lower(&db, OptLevel::Two);
@@ -972,7 +971,7 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
 // codegen changes may update these after checking the generated-source diff.
 fn rt_source_bytes_and_diagnostics() {
     use sha2::{Digest, Sha256};
-    let mut changes = Vec::new();
+    let mut mismatches = Vec::new();
     for (name, source) in [
         (
             "trees",
@@ -1010,9 +1009,9 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "3fb3c406a0d814f8f5586e44689d4c1c5606daa70a87548e178363e24342ee69",
-            "richards" => "f4c83bcf39560550c9dbd702f85f5fb5c095ef1085f1cd3d7bef1fbdcd7e0d23",
-            "agent" => "97962f5266056d9db561903c04870df570c36c7b067c5e91300261a4bb3226de",
+            "trees" => "3d83bd0d1edd52c335d43197123e59fdf53524b6c9139ddf3f1eb6be1b60b66a",
+            "richards" => "1f7a0893aadd91465f992e6b23602d80c1567d7cdbbf901b6fe69765b9cd236f",
+            "agent" => "4c6d9b3ceed159554c5b0233c06f55e01f4316d740c07243e88a65c2bca879d9",
             _ => "",
         };
         if expected.is_empty() {
@@ -1025,24 +1024,121 @@ fn rt_source_bytes_and_diagnostics() {
             };
             let actual = result.unwrap_err();
             if actual != expected {
-                changes.push(format!("{name}: {actual:?} != {expected:?}"));
+                mismatches.push(format!("{name}: {actual:?} != {expected:?}"));
             }
         } else {
             let source = result.unwrap();
+            std::fs::write(
+                std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rt-{name}.rs")),
+                &source,
+            )
+            .unwrap();
             let actual = format!("{:x}", Sha256::digest(source.as_bytes()));
             if actual != expected {
-                let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
-                    .join(format!("rt-source-{name}.rs"));
-                std::fs::write(&path, &source).unwrap();
-                changes.push(format!("{name}: {actual} ({})", path.display()));
+                mismatches.push(format!("{name}: {actual} != {expected}"));
             }
         }
     }
-    assert!(
-        changes.is_empty(),
-        "generated source changed:\n{}",
-        changes.join("\n")
-    );
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+#[test]
+fn rt_stack_placement_preserves_lifetimes_and_bytecode() {
+    for (source, sites) in [
+        (
+            include_str!("../../../tools/speedtest/workloads/classes/method-call-100k/main.baml"),
+            1,
+        ),
+        (
+            "class C { x: int } function make() -> C { C { x: 1 } } function main() -> int { make().x }",
+            0,
+        ),
+        (
+            "class C { x: int } function alias(c: C) -> C { c } function main() -> int { let c = C { x: 1 }; alias(c).x }",
+            1,
+        ),
+        (
+            "class C { x: int } function main() -> int { let p = C { x: 0 }; let sum = 0; for (let i = 1; i < 9; i += 1) { let c = C { x: i }; sum += p.x; p = c; }; sum + p.x }",
+            0,
+        ),
+        (
+            include_str!("../rust_diff/baml_src/stack_allocation.baml"),
+            4,
+        ),
+    ] {
+        let entry_name = if source.contains("function StackAllocation()") {
+            "StackAllocation"
+        } else {
+            "main"
+        };
+        let db = baml_test_support::setup_multi_file_db(&[("stack.baml", source)]);
+        for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+            let program = lower(&db, opt);
+            let before = fingerprint(&program);
+            let (entry, _) = user_functions(&program)
+                .find(|(_, f)| f.name() == entry_name)
+                .unwrap();
+            let generated = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap();
+            syn::parse_file(&generated).expect("stack layouts parse");
+            let actual = generated.matches("(&raw mut stack").count();
+            assert!(
+                actual <= sites,
+                "unexpected stack site: {entry_name} at {opt:?}"
+            );
+            // Unoptimized trace hooks can conservatively retain arguments.
+            if opt == OptLevel::Two {
+                assert_eq!(actual, sites, "{entry_name} at {opt:?}");
+                if source.contains("function norm2(self)") {
+                    assert!(generated.contains("let stack_mode"));
+                    assert!(generated.contains("=if OBSERVE {rt::telemetry::mode("));
+                    assert!(generated.contains("==0 {f"));
+                    assert!(generated.contains("_body::<OBSERVE>(cx,"));
+                }
+            }
+            assert_eq!(before, fingerprint(&program));
+            assert_eq!(
+                before,
+                fingerprint(&lower(&db, opt)),
+                "escape queries must not change emitted bytecode"
+            );
+        }
+    }
+}
+
+#[test]
+fn rt_string_builtins_and_unicode_views_compile_without_changing_bytecode() {
+    let source = include_str!("../rust_diff/strings/semantics.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let generated = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    for helper in [
+        "rt_string_split",
+        "rt_string_slice",
+        "rt_string_at",
+        "rt_int_parse",
+        "rt_from_code_points",
+    ] {
+        assert!(generated.contains(helper), "missing {helper}");
+    }
+    assert_eq!(before, fingerprint(&program));
 }
 
 #[test]
@@ -1210,8 +1306,9 @@ fn rt_generated_spawn_await() {
     .unwrap();
     syn::parse_file(&source).unwrap();
     assert!(source.contains("rt::tasks::spawn("));
-    assert!(source.contains("rt::tasks::await_scalar("));
-    assert!(source.contains("rt::tasks::can_elide_scalar_task()"));
+    assert!(source.contains("rt::tasks::await_future("));
+    assert!(!source.contains("SCALAR_FUTURE"));
+    assert!(!source.contains("await_scalar"));
     std::fs::write(
         std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-spawn-await.rs"),
         source,
@@ -1390,4 +1487,41 @@ fn rt_generated_terminal_cancelled_error() {
         .unwrap();
         syn::parse_file(&source).unwrap();
     }
+}
+
+#[test]
+fn rt_public_string_surface_is_admitted() {
+    let mut rejected = Vec::new();
+    for (name, source) in [
+        (
+            "formatting",
+            include_str!("../rust_diff/strings/formatting.baml"),
+        ),
+        ("regex", include_str!("../rust_diff/strings/regex.baml")),
+        (
+            "regex error",
+            include_str!("../rust_diff/strings/regex_error.baml"),
+        ),
+        ("utf8", include_str!("../rust_diff/strings/utf8.baml")),
+        (
+            "utf8 error",
+            include_str!("../rust_diff/strings/utf8_error.baml"),
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        if let Err(error) = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        ) {
+            rejected.push(format!("{name}: {error}"));
+        }
+    }
+    assert!(rejected.is_empty(), "{}", rejected.join("\n"));
 }

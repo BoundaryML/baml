@@ -75,9 +75,7 @@ pub(super) fn thrown_display(
     use super::Repr;
     Ok(match repr {
         Repr::Int | Repr::Bool => format!("format!(\"{{}}\",{value})"),
-        Repr::Str => format!(
-            "format!(\"{{:?}}\",rt::strings::Str::from_raw({value}).as_str(&rt::strings::Cx::current()))"
-        ),
+        Repr::Str => format!("format!(\"{{:?}}\",rt::strings::Str::from_raw({value}).to_owned())"),
         Repr::Bigint => format!("format!(\"{{}}n\",rt::tasks::bigint_value({value}))"),
         Repr::Null => "String::from(\"null\")".into(),
         Repr::Ptr(class) => {
