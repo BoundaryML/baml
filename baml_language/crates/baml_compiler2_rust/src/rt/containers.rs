@@ -132,6 +132,10 @@ impl Emitter<'_, '_> {
                     fields.len()
                 )
                 .unwrap();
+                if matches!(r,Rvalue::Array(t,_) if matches!(t.substitute_symbolic(&[]),RuntimeTy::Union(ref m) if m.iter().any(|t|matches!(t,RuntimeTy::Null))))
+                {
+                    code.push_str("(*(p as *mut baml_rt_gc::Header)).aux=rt::telemetry::capture::OPTIONAL_ELEMENT_TYPE;");
+                }
                 for i in 0..fields.len() {
                     if element.pointer() {
                         write!(

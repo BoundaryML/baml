@@ -12,6 +12,23 @@ use btel_snapshot::{
 use btel_types::Definition;
 use std::collections::HashMap;
 
+// Container runtime element types can differ from their static field types.
+// Regex natives produce unknown elements; nullable class literals retain their
+// concrete optional type even though they share the pointer storage layout.
+pub const UNKNOWN_ELEMENT_TYPE: u32 = 1;
+pub const OPTIONAL_ELEMENT_TYPE: u32 = 2;
+fn element_type(ty: &Type, aux: u32, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
+    if aux == UNKNOWN_ELEMENT_TYPE {
+        return OwnedType::Unknown;
+    }
+    let ty = ty.owned(leaves, carried);
+    if aux == OPTIONAL_ELEMENT_TYPE {
+        OwnedType::Union(vec![ty, OwnedType::Null].into())
+    } else {
+        ty
+    }
+}
+
 pub struct Metadata {
     pub shapes: &'static [Shape],
     pub naming_tag: u64,
@@ -25,6 +42,8 @@ pub struct Declaration {
 }
 pub enum Shape {
     String,
+    Uint8Array,
+    RustType,
     Enum {
         declaration: fn() -> &'static Declaration,
         variants: &'static [&'static str],
@@ -44,6 +63,10 @@ pub enum Shape {
         element: &'static Type,
     },
     MapStringInt,
+    MapStringPtr {
+        tag: u64,
+        value: &'static Type,
+    },
     Unsupported,
 }
 pub use baml_type::Freshness;
@@ -59,6 +82,8 @@ pub enum Type {
     Never,
     Bool,
     String,
+    Uint8Array,
+    RustType,
     Class(fn() -> &'static Declaration),
     GenericClass(fn() -> &'static Declaration, &'static [Type]),
     Enum(fn() -> &'static Declaration),
@@ -116,6 +141,8 @@ impl Type {
             },
             Self::Bool => OwnedType::Bool,
             Self::String => OwnedType::String,
+            Self::Uint8Array => OwnedType::Uint8Array,
+            Self::RustType => OwnedType::RustType,
             Self::Class(declaration) => OwnedType::Class(
                 TypeIdentity::Defined(leaves.define(&declaration().definition, carried)),
                 Box::new([]),
@@ -402,7 +429,12 @@ impl Scratch {
                     } else {
                         (unsafe { ptr.add(2) }, unsafe { ptr.add(1).read() })
                     };
-                    let ty = element.owned(&mut b.leaves(), &mut self.carried);
+                    let ty = element_type(
+                        element,
+                        unsafe { (*(pointer as *const baml_rt_gc::Header)).aux },
+                        &mut b.leaves(),
+                        &mut self.carried,
+                    );
                     let ty = b.leaves().ty(ty);
                     b.list(ty, 0..len, |leaves, i| unsafe {
                         self.add(
@@ -413,6 +445,45 @@ impl Scratch {
                                 payload: data.add(i).read() as u64,
                             },
                             depth + 1,
+                        )
+                    })
+                }
+                (Key::Value(pointer), Shape::Uint8Array) => {
+                    b.bytes(unsafe { crate::bytes::data(pointer) })
+                }
+                (Key::Value(_), Shape::RustType) => SnapshotObject::NonSnapshotableValue {},
+                (Key::Value(pointer), Shape::MapStringPtr { tag, value }) => {
+                    let ptr = pointer as *const usize;
+                    let data = unsafe { ptr.add(1).read() as *const usize }.wrapping_add(2);
+                    let len = unsafe { ptr.add(2).read() };
+                    let key_type = b.leaves().ty(OwnedType::String);
+                    let value = element_type(
+                        value,
+                        unsafe { (*(pointer as *const baml_rt_gc::Header)).aux },
+                        &mut b.leaves(),
+                        &mut self.carried,
+                    );
+                    let value_type = b.leaves().ty(value);
+                    b.map(key_type, value_type, 0..len, |leaves, i| unsafe {
+                        (
+                            self.add(
+                                shapes,
+                                leaves,
+                                Dyn {
+                                    tag: 3,
+                                    payload: data.add(i * 2).read() as u64,
+                                },
+                                depth + 1,
+                            ),
+                            self.add(
+                                shapes,
+                                leaves,
+                                Dyn {
+                                    tag: *tag,
+                                    payload: data.add(i * 2 + 1).read() as u64,
+                                },
+                                depth + 1,
+                            ),
                         )
                     })
                 }

@@ -2,11 +2,16 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod bytes;
 pub mod calls;
+pub mod format;
 pub mod json;
 pub mod language;
 pub mod lists;
 pub mod maps;
+pub mod native;
+pub mod regex;
+pub mod regex_map;
 pub mod strings;
 pub mod telemetry;
 use baml_rt_gc::{Descriptor, Heap, RootSource};

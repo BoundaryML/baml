@@ -13,6 +13,9 @@ impl Emitter<'_, '_> {
         if self.iters.contains(&i) {
             return Ok(Repr::Iter);
         }
+        if let Some(repr) = super::string_defaults::parameter(self.plan, self.object, i) {
+            return Ok(repr);
+        }
         self.plan.local_repr(self.body, i, 0)
     }
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
@@ -22,12 +25,15 @@ impl Emitter<'_, '_> {
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
+            Repr::Opaque => Ok(15),
+            Repr::Bytes => Ok(16),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::ListInt
             | Repr::ListStr
             | Repr::ListListStr
             | Repr::ListPtr(_)
-            | Repr::MapStrInt) => Ok(self.lists[&r] + 3),
+            | Repr::MapStrInt
+            | Repr::MapStrPtr(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
     }
@@ -170,6 +176,11 @@ impl Emitter<'_, '_> {
                     format!("{index}usize"),
                     self.plan.repr(&RuntimeTy::Enum(head))?,
                 ))
+            }
+            Operand::Constant(Constant::OmittedArg)
+                if super::string_defaults::allows_omission(self) =>
+            {
+                Ok(("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged))
             }
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),
             Operand::Constant(_) => Err(no(format!("operand {o:?}"))),

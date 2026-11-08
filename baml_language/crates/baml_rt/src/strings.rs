@@ -570,7 +570,7 @@ fn ascii_append(cx: &Cx, left: Str, bytes: usize, suffix: u8) -> R<Str> {
     }
 }
 
-fn byte_slice(cx: &mut Cx, value: Str, start: usize, end: usize) -> R<Str> {
+pub(crate) fn byte_slice(cx: &mut Cx, value: Str, start: usize, end: usize) -> R<Str> {
     if start == 0 && end == value.byte_len() {
         return Ok(value);
     }

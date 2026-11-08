@@ -1009,9 +1009,9 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "8f8e282f438c25de456665be29e45112aa98b7601657c98323b8e6da808178c8",
-            "richards" => "b0453ba1e7ba8e52d50883ac0d5390bf801760e00f9abba10f35a405af8c9b38",
-            "agent" => "5b5555715b658026698fcb876f736d700da973438cd91789b68937b266214ac6",
+            "trees" => "1f785094448b60894a203c1ed19889efd9227d0e3846f4bbc688db86fd34214a",
+            "richards" => "1f7a0893aadd91465f992e6b23602d80c1567d7cdbbf901b6fe69765b9cd236f",
+            "agent" => "bdda30aaebf9478637ae266d872649afdab72a107012f8de5d46c9d68b93a656",
             _ => "",
         };
         if expected.is_empty() {
@@ -1237,4 +1237,41 @@ fn rt_loop_range_proofs_cover_every_update_and_preserve_bytecode() {
             "{name}: rt changed bytecode"
         );
     }
+}
+
+#[test]
+fn rt_public_string_surface_is_admitted() {
+    let mut rejected = Vec::new();
+    for (name, source) in [
+        (
+            "formatting",
+            include_str!("../rust_diff/strings/formatting.baml"),
+        ),
+        ("regex", include_str!("../rust_diff/strings/regex.baml")),
+        (
+            "regex error",
+            include_str!("../rust_diff/strings/regex_error.baml"),
+        ),
+        ("utf8", include_str!("../rust_diff/strings/utf8.baml")),
+        (
+            "utf8 error",
+            include_str!("../rust_diff/strings/utf8_error.baml"),
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        if let Err(error) = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        ) {
+            rejected.push(format!("{name}: {error}"));
+        }
+    }
+    assert!(rejected.is_empty(), "{}", rejected.join("\n"));
 }

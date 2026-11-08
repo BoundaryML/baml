@@ -15,8 +15,23 @@ pub struct Fixture {
 pub fn expects_success(name: &str) -> bool {
     !matches!(
         name,
-        "strings::parse error" | "strings::codepoint error" | "strings::float error"
+        "strings::parse error"
+            | "strings::codepoint error"
+            | "strings::float error"
+            | "strings::utf8 error"
+            | "strings::regex error"
     )
+}
+
+pub fn string_probe_output(name: &str) -> Option<&'static [u8]> {
+    Some(match name {
+        "strings::semantics" => b"288\n",
+        "strings::float" => b"8\n",
+        "strings::utf8" => b"6\n",
+        "strings::regex" => b"12\n",
+        "strings::formatting" => b"4\n",
+        _ => return None,
+    })
 }
 
 pub fn fixtures(workspace: &Path, only: Option<&str>) -> Vec<Fixture> {
@@ -70,6 +85,11 @@ pub fn fixtures(workspace: &Path, only: Option<&str>) -> Vec<Fixture> {
     for (name, file) in [
         ("strings::semantics", "semantics"),
         ("strings::float", "float"),
+        ("strings::utf8", "utf8"),
+        ("strings::utf8 error", "utf8_error"),
+        ("strings::regex", "regex"),
+        ("strings::regex error", "regex_error"),
+        ("strings::formatting", "formatting"),
         ("strings::float error", "float_error"),
         ("strings::parse error", "parse_error"),
         ("strings::codepoint error", "codepoint_error"),

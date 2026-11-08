@@ -1,4 +1,4 @@
-BAML runtime coverage (normal AND GC stress): 20 pass, 123 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 25 pass, 123 unsupported, 0 fail
 Telemetry off: required
 String probes: off/low/medium/high/default required
 Telemetry low/medium/high/default for other probes: not yet supported
@@ -161,5 +161,10 @@ string::split medium literal 10k	pass
 strings::codepoint error	pass
 strings::float	pass
 strings::float error	pass
+strings::formatting	pass
 strings::parse error	pass
+strings::regex	pass
+strings::regex error	pass
 strings::semantics	pass
+strings::utf8	pass
+strings::utf8 error	pass

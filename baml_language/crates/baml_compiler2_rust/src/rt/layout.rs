@@ -46,6 +46,11 @@ impl Plan<'_> {
                 self.lists.insert(repr);
                 self.add(c)?;
             }
+            Repr::MapStrPtr(c) => {
+                self.lists.insert(repr);
+                self.record(Repr::ListPtr(c))?;
+                self.record(Repr::ListStr)?;
+            }
             Repr::MapStrInt => {
                 self.lists.insert(repr);
                 self.record(Repr::ListInt)?;
@@ -69,11 +74,19 @@ impl Plan<'_> {
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
+            RuntimeTy::Uint8Array => Repr::Bytes,
+            RuntimeTy::RustType => Repr::Opaque,
             RuntimeTy::Map { key, value }
                 if matches!(key.as_ref(), RuntimeTy::String)
                     && matches!(value.as_ref(), RuntimeTy::Int) =>
             {
                 Repr::MapStrInt
+            }
+            RuntimeTy::Map { key, value } if matches!(key.as_ref(), RuntimeTy::String) => {
+                match self.repr(value)? {
+                    Repr::Ptr(c) => Repr::MapStrPtr(c),
+                    _ => return Err(no("map value")),
+                }
             }
             RuntimeTy::Null => Repr::Null,
             RuntimeTy::List(element) => match element.as_ref() {
@@ -105,6 +118,13 @@ impl Plan<'_> {
                     .enum_at(head)
                     .ok_or_else(|| no("unlinked enum"))?,
             ),
+            RuntimeTy::Class(head, args)
+                if args.is_empty()
+                    && head.builtin_primitive(self.lang)
+                        == Some(baml_type::PrimitiveType::Uint8Array) =>
+            {
+                Repr::Bytes
+            }
             RuntimeTy::Class(head, args)
                 if args.is_empty()
                     && head.builtin_primitive(self.lang)
@@ -155,6 +175,8 @@ impl Plan<'_> {
         Ok(match ty {
             T::Null => Repr::Null,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
+            T::Uint8Array => Repr::Bytes,
+            T::RustType => Repr::Opaque,
             T::Enum(head) | T::EnumVariant(head, _)
                 if self.program.packages.iter().any(|p| {
                     p.enums.iter().any(|(path, index)| {
@@ -182,6 +204,7 @@ impl Plan<'_> {
             {
                 Repr::MapStrInt
             }
+            T::Map {key,value} if matches!(key.as_ref(),T::String)=>match self.field_repr(value)? { Repr::Ptr(c)=>Repr::MapStrPtr(c),_=>return Err(no("map field value")) },
             T::List(element) => match element.as_ref() {
                 T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::ListInt,
                 T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::ListStr,
@@ -253,7 +276,8 @@ impl Plan<'_> {
                 && package
                     .objects
                     .contains(&u32::try_from(object).expect("object index"))
-        }) && (class.path.to_string().starts_with("panics.")
+        }) && ((class.path.to_string().starts_with("panics.")
+            && class.path.to_string() != "panics.UserPanic")
             || matches!(
                 class.path.to_string().as_str(),
                 "json.ParseError" | "json.DecodeError"
@@ -331,7 +355,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         .iter()
         .scan(descriptors.len() + rt_descriptors(), |next, r| {
             let id = *next;
-            *next += if *r == Repr::MapStrInt {
+            *next += if matches!(*r, Repr::MapStrInt | Repr::MapStrPtr(_)) {
                 3
             } else if r.growing() {
                 2
@@ -344,7 +368,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     let after_lists = lists
         .iter()
         .map(|(repr, id)| {
-            id + if *repr == Repr::MapStrInt {
+            id + if matches!(*repr, Repr::MapStrInt | Repr::MapStrPtr(_)) {
                 3
             } else if repr.growing() {
                 2
@@ -354,7 +378,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         })
         .max()
         .unwrap_or(rt_descriptors() + descriptors.len());
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,\n");
     for (&object, layout) in &plan.layouts {
         let class = plan.class(object);
         let fields = class
@@ -379,10 +403,13 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                         | Repr::ListPtr(_)
                         | Repr::ListStr
                         | Repr::ListListStr
-                        | Repr::MapStrInt) => lists[&r] + 3,
+                        | Repr::MapStrInt
+                        | Repr::MapStrPtr(_)) => lists[&r] + 3,
                         Repr::Tagged => after_lists + 3,
                         Repr::Dyn(i) => after_lists + i + 4,
                         Repr::Str => 3,
+                        Repr::Opaque => 15,
+                        Repr::Bytes => 16,
                         Repr::Int => 0,
                         Repr::Float => u32::MAX as usize - 1,
                         Repr::Bool => 1,
@@ -399,9 +426,14 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
-        if *repr == Repr::MapStrInt {
+        if matches!(*repr, Repr::MapStrInt | Repr::MapStrPtr(_)) {
             for i in 0..3 {
-                writeln!(&mut out, "rt::maps::descriptors({desc})[{i}],").unwrap();
+                let module = if matches!(*repr, Repr::MapStrPtr(_)) {
+                    "regex_map"
+                } else {
+                    "maps"
+                };
+                writeln!(&mut out, "rt::{module}::descriptors({desc})[{i}],").unwrap();
             }
             continue;
         }
@@ -460,7 +492,7 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    12
+    14
 }
 
 // A recursive alias's unfolded union can name containers whose concrete

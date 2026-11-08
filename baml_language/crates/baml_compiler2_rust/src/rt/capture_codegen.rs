@@ -103,6 +103,14 @@ pub(super) fn emit(
             out.push_str("rt::telemetry::capture::Shape::String,\n");
             continue;
         }
+        if matches!(desc, 12 | 13) {
+            out.push_str(if desc == 12 {
+                "rt::telemetry::capture::Shape::RustType,\n"
+            } else {
+                "rt::telemetry::capture::Shape::Uint8Array,\n"
+            });
+            continue;
+        }
         let class = if desc < rt_descriptors() {
             Some(runtime[desc - 1])
         } else {
@@ -125,7 +133,12 @@ pub(super) fn emit(
                 format!("Class{{declaration:CAPTURE_D{class},fields:DESCRIPTORS[{desc}].fields}}")
             }
         } else if let Some((&repr, _)) = lists.iter().find(|(_, index)| **index == desc) {
-            if repr == Repr::MapStrInt {
+            if let Repr::MapStrPtr(c) = repr {
+                format!(
+                    "MapStringPtr{{tag:{},value:&rt::telemetry::capture::Type::Class(CAPTURE_D{c})}}",
+                    descriptors[&c] + 3
+                )
+            } else if repr == Repr::MapStrInt {
                 "MapStringInt".to_owned()
             } else {
                 let element = Emitter::element(repr)?;
@@ -245,6 +258,8 @@ fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<Strin
         T::Unknown => "Unknown".into(),
         T::Never => "Never".into(),
         T::String => "String".into(),
+        T::Uint8Array => "Uint8Array".into(),
+        T::RustType => "RustType".into(),
         T::Class(head, args) => {
             let c = plan.class_tag(head.tag())?;
             if args.is_empty() {

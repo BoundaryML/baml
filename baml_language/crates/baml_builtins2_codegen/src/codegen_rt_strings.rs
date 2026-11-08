@@ -222,6 +222,21 @@ pub(super) fn generate(d: &NativeBuiltin) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn every_native_string_method_has_a_checked_adapter() {
+        let (declarations, _, _) = crate::extract_native_builtins().unwrap();
+        let methods = declarations
+            .iter()
+            .filter(|d| d.path.starts_with("baml.String."))
+            .collect::<Vec<_>>();
+        let missing = methods
+            .iter()
+            .filter(|d| !crate::supports_rt(&d.path))
+            .map(|d| d.path.as_str())
+            .collect::<Vec<_>>();
+        assert!(missing.is_empty(), "missing string adapters: {missing:?}");
+        eprintln!("{} native String methods admitted", methods.len());
+    }
+    #[test]
     fn all_string_adapters_match_stdlib_and_parse_as_rust() {
         let (declarations, _, _) = crate::extract_native_builtins().unwrap();
         let requested = declarations

@@ -113,6 +113,7 @@ impl registry::Feature for Feature {
         }
         if name == "baml._to_string_default" && values.len() == 1 {
             match values[0].1 {
+                Repr::Int=>return Some(Ok((emitter.fallible(&format!("rt_int_to_string(&mut rt::strings::Cx::current(),{}).map(|s|s.as_raw())",values[0].0)),Repr::Str))),
                 Repr::Str=>return Some(Ok(values[0].clone())),
                 Repr::Float=>return Some(Ok((emitter.fallible(&format!("rt::strings::float_to_string(&mut rt::strings::Cx::current(),{}).map(|s|s.as_raw())",values[0].0)),Repr::Str))),
                 Repr::Bool=>return Some(Ok((emitter.fallible(&format!("rt::strings::Cx::current().string(if {}{{\"true\"}}else{{\"false\"}}).map(|s|s.as_raw())",values[0].0)),Repr::Str))),
@@ -219,16 +220,22 @@ impl Emitter<'_, '_> {
         types: &[Repr],
         values: &[(String, Repr)],
     ) -> Gen<(String, Repr)> {
-        if !types.is_empty() || values.first().is_none_or(|v| v.1 != Repr::Str) {
+        if !types.is_empty() || values.is_empty() {
             return Err(super::no("string builtin arguments"));
         }
         self.string_cx.set(true);
         let mut args = vec!["&mut string_cx".to_owned()];
-        for (value, repr) in values {
-            args.push(match repr {
-                Repr::Str => format!("rt::strings::Str::from_raw({value})"),
-                Repr::Int => value.clone(),
-                _ => return Err(super::no("string builtin argument type")),
+        for (i, value) in values.iter().enumerate() {
+            let repr = if i > 0 && matches!(method, "at" | "code_point_at" | "repeat") {
+                Repr::Int
+            } else {
+                Repr::Str
+            };
+            let value = self.coerce(value.clone(), repr)?;
+            args.push(if repr == Repr::Str {
+                format!("rt::strings::Str::from_raw({value})")
+            } else {
+                value
             });
         }
         let repr = match method {
@@ -287,7 +294,7 @@ impl Emitter<'_, '_> {
     }
 }
 
-fn builtin_class(plan: &Plan<'_>, name: &str) -> Gen<usize> {
+pub(super) fn builtin_class(plan: &Plan<'_>, name: &str) -> Gen<usize> {
     plan.program
         .packages
         .iter()

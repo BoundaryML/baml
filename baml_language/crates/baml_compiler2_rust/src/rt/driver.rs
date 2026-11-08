@@ -53,6 +53,9 @@ fn compile(
         heads: BTreeMap::new(),
         dispatches: BTreeMap::new(),
         function_frames: BTreeMap::new(),
+        structural_strings: false,
+        structural_string_calls: BTreeSet::new(),
+        string_overrides: BTreeMap::new(),
         alias_tests: std::cell::RefCell::new(BTreeSet::new()),
     };
     let admission::Admitted {
@@ -67,6 +70,7 @@ fn compile(
     );
     builtins::emit(&mut out, &builtins)?;
     let layout::LayoutIds { descriptors, lists } = layout::emit(&mut out, &plan)?;
+    super::regex::emit(&mut out, &plan, &descriptors, &lists, &builtins)?;
     let host_function = |name: &str| {
         program
             .objects

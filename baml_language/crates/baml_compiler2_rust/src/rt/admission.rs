@@ -43,6 +43,7 @@ pub(super) fn collect<'db>(
     }
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
+    queue.extend(plan.string_overrides.values().copied());
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -169,7 +170,13 @@ pub(super) fn collect<'db>(
                     let Some(result) = registry::reach(db, plan, other.as_ref()) else {
                         return Err(no(format!("terminator {other:?}")));
                     };
-                    let reach = result?;
+                    let reach = result.map_err(|error| {
+                        format!(
+                            "{error} (reaching {} block {})",
+                            plan.index.display(object),
+                            block.id.0
+                        )
+                    })?;
                     if let Some(name) = reach.builtin {
                         builtins.insert(name);
                     }

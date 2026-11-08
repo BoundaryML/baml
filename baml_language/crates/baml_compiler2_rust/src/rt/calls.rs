@@ -164,7 +164,13 @@ impl Emitter<'_, '_> {
                         return Err(no("call arity"));
                     }
                     for (i, value) in values.iter_mut().enumerate() {
-                        let expected = self.plan.repr(&body.locals[i + 1].ty)?;
+                        let expected = if let Some(repr) =
+                            super::string_defaults::parameter(self.plan, c, i + 1)
+                        {
+                            repr
+                        } else {
+                            self.plan.repr(&body.locals[i + 1].ty)?
+                        };
                         *value = (self.coerce(value.clone(), expected)?, expected);
                     }
                     let arguments = values

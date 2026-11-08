@@ -1,4 +1,6 @@
 mod codegen_rt;
+mod codegen_rt_bytes;
+mod codegen_rt_regex;
 mod codegen_rt_strings;
 pub use codegen_rt::{generate_rt, supports_rt};
 mod codegen;

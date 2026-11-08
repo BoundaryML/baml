@@ -782,6 +782,13 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
+            if let Some(expected) = kpis::string_probe_output(&probe) {
+                assert_eq!(
+                    outputs[reference].as_ref().unwrap().stdout,
+                    expected,
+                    "{probe}: oracle semantic assertions"
+                );
+            }
             for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;

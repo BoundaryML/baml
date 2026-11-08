@@ -316,6 +316,7 @@ fn driver_configured(
                     .frames
                     .iter()
                     .rev()
+                    .filter(|f| error.value == 0 || !f.file.starts_with("<builtin>/"))
                     .map(|f| (f.file, f.line, f.function)),
             );
             if error.value == 0 {
