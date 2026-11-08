@@ -7,6 +7,7 @@ reports fail the gate. All process evidence stays in the Cargo target directory.
 from __future__ import annotations
 
 import argparse
+import bisect
 from collections import Counter, defaultdict
 import hashlib
 import json
@@ -14,6 +15,7 @@ import os
 from pathlib import Path
 import signal
 import shutil
+import re
 import subprocess
 import sys
 import time
@@ -25,6 +27,78 @@ CATEGORIES = ("match", "mismatch", "unsupported", "crash/timeout", "excluded")
 EXCLUSIONS = {
     # Exact canonical IDs, with an evidence-backed reason, belong here.
 }
+
+
+def write_json(path, value, **formatting):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(value, **formatting) + "\n")
+    temporary.replace(path)
+
+
+def restore_native_compilation_entries(admission, originals):
+    # Native sources can change without changing the CLI. Retry previously
+    # broken generated modules on each invocation, retaining compiler admission.
+    for backup in originals.glob("*.json"):
+        record = json.loads(backup.read_text())
+        cache = (admission / record["cache_file"]).resolve()
+        cache.relative_to(admission.resolve())
+        if cache.exists() and json.loads(cache.read_text()).get("Err", "").startswith("RT native compilation failed:"):
+            write_json(cache, record["original"])
+
+
+def isolate_native_compilation_errors(stderr, source, admission, originals):
+    """Attribute generated-module diagnostics; shared/entry-host errors stay fatal."""
+    if not source.exists():
+        return []
+    text = source.read_text()
+    lines = text.splitlines()
+    modules = [(i + 1, int(match[1])) for i, line in enumerate(lines)
+               if (match := re.match(r"^mod test_(\d+) \{", line))]
+    if not modules:
+        return []
+    starts = [line for line, _ in modules]
+    end = next((i + 1 for i, line in enumerate(lines)
+                if i + 1 > starts[-1] and line.startswith("fn main(")), len(lines) + 1)
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", stderr)
+    headers = list(re.finditer(r"(?m)^error(?:\[[^\]]+\])?: [^\n]+", plain))
+    failures = defaultdict(set)
+    for index, header in enumerate(headers):
+        message = header.group()
+        if message.startswith(("error: could not compile", "error: aborting due", "error: cargo build")):
+            continue
+        block = plain[header.end():headers[index + 1].start() if index + 1 < len(headers) else len(plain)]
+        location = re.search(r"(?m)^\s*-->\s+(.+):(\d+):(\d+)\s*$", block)
+        if location is None:
+            return []
+        filename, line = location[1], int(location[2])
+        reported = Path(filename)
+        if not reported.is_absolute():
+            reported = source.parent.parent / reported
+        if reported.resolve() != source.resolve() or line < 1 or line > len(lines):
+            return []
+        module = bisect.bisect_right(starts, line) - 1
+        if module < 0 or line >= end or lines[line - 1].lstrip().startswith(("fn entry(", "pub fn run(")):
+            return []
+        failures[modules[module][1]].add(message)
+    pending = []
+    for entry, messages in failures.items():
+        candidates = []
+        for cache in admission.rglob(f"{entry}.json"):
+            record = json.loads(cache.read_text())
+            if "Ok" in record and record["Ok"] in text:
+                candidates.append((cache, record))
+        if not candidates:
+            return []
+        reason = "RT native compilation failed: " + "; ".join(sorted(messages))
+        pending.append((entry, reason, candidates))
+    for entry, reason, candidates in pending:
+        for cache, record in candidates:
+            relative = str(cache.relative_to(admission))
+            backup = originals / (hashlib.sha256(relative.encode()).hexdigest() + ".json")
+            write_json(backup, {"cache_file": relative, "original": record})
+            write_json(cache, {"Err": reason})
+    return [(entry, reason) for entry, reason, _ in pending]
 
 
 def invoke(argv, *, env, cwd, timeout, evidence):
@@ -40,7 +114,7 @@ def invoke(argv, *, env, cwd, timeout, evidence):
             active, active_start = None, None
             position = 0
             limit = int(env.get("BAML_RT_CORPUS_TIMEOUT_SECS", "120"))
-            with evidence.with_suffix(".stderr").open() as progress:
+            with evidence.with_suffix(".stderr").open(errors="surrogateescape") as progress:
                 while True:
                     progress.seek(position)
                     while True:
@@ -80,22 +154,62 @@ def invoke(argv, *, env, cwd, timeout, evidence):
                 code = child.wait()
     return {"code": code, "timeout": timed_out, "admission_timeout": admission_timeout,
             "admission_crash": admission_crash,
-            "stdout": evidence.with_suffix(".stdout").read_text(errors="replace"),
-            "stderr": evidence.with_suffix(".stderr").read_text(errors="replace")}
+            "stdout": evidence.with_suffix(".stdout").read_bytes().decode("utf-8", "surrogateescape"),
+            "stderr": evidence.with_suffix(".stderr").read_bytes().decode("utf-8", "surrogateescape")}
+
+
+def marker_parts(result, prefix):
+    # Programs can write without a final newline, or print the marker literally.
+    # The host appends its report last; remove only that JSON record and newline.
+    position = result["stdout"].rfind(prefix)
+    try:
+        if position < 0:
+            raise ValueError("marker missing")
+        payload = result["stdout"][position + len(prefix):]
+        report, end = json.JSONDecoder().raw_decode(payload)
+        if not isinstance(report, dict):
+            raise ValueError("report must be an object")
+    except ValueError as error:
+        raise RuntimeError(f"invalid {prefix.strip()} report; exit={result['code']}; {result['stderr'][-2000:]}") from error
+    tail = payload[end:]
+    if tail.startswith("\r\n"):
+        tail = tail[2:]
+    elif tail.startswith("\n"):
+        tail = tail[1:]
+    return report, result["stdout"][:position] + tail
 
 
 def marker(result, prefix):
-    rows = [json.loads(line[len(prefix):]) for line in result["stdout"].splitlines() if line.startswith(prefix)]
-    if len(rows) != 1:
-        raise RuntimeError(f"expected one {prefix.strip()} report, found {len(rows)}; exit={result['code']}; {result['stderr'][-2000:]}")
-    return rows[0]
+    return marker_parts(result, prefix)[0]
+
+
+def vm_program_stderr(result, report):
+    stderr = result["stderr"]
+    if report.get("stream_protocol", 1) >= 2:
+        return stderr
+    # Saved CLIs from protocol 1 append exactly one terminal status record.
+    # Remove that record, never identically worded program lines before it.
+    passed, failed, tolerated = (len(report[key]) for key in ("passed", "failed", "tolerated"))
+    total = report["total"]
+    if tolerated:
+        failures = "failure" if tolerated == 1 else "failures"
+        if result["code"] == 2:
+            summary = f"{passed} passed, {failed} failed, {tolerated} tolerated {failures}, {total} total"
+        else:
+            summary = f"aggregate passed — {passed} passed, {tolerated} tolerated {failures}, {total} total"
+    else:
+        summary = f"{passed} passed, {failed} failed, {total} total"
+    escaped = re.escape(summary)
+    pattern = rf"(?m)^[ \t]*(?:Finished {escaped}(?: in [^\r\n]+)?|(?:[Ee]rror: )?test failures — {escaped})\r?\n?\Z"
+    terminal = re.search(pattern, stderr)
+    return stderr[:terminal.start()] if terminal else stderr
 
 
 def vm_leaf(result, name):
     if result["timeout"] or result["code"] not in (0, 2):
         return None
     try:
-        report = marker(result, "BAML_CORPUS_REPORT\t")
+        report, output = marker_parts(result, "BAML_CORPUS_REPORT\t")
     except RuntimeError:
         return None
     if result["code"] == 2 and report.get("outcome") == "pass":
@@ -103,23 +217,21 @@ def vm_leaf(result, name):
     selected = report["passed"] + report["failed"] + report["tolerated"]
     if selected != [name] or report["total"] != 1:
         raise RuntimeError(f"VM selector did not select exactly {name}: {report}")
-    output = "".join(line for line in result["stdout"].splitlines(keepends=True)
-                     if not line.startswith("BAML_CORPUS_REPORT\t"))
     return {"outcome": "pass" if name in report["passed"] else "tolerated" if name in report["tolerated"] else "fail",
-            "messages": sorted(report["messages"]), "output": output}
+            "messages": sorted(report["messages"]), "output": output, "stderr": vm_program_stderr(result, report)}
 
 
 def rt_leaf(result, name):
     if result["timeout"] or result["code"] not in (0, 2, 3):
         return None
     try:
-        report = marker(result, "BAML_CORPUS_RESULT\t")
+        report, output = marker_parts(result, "BAML_CORPUS_RESULT\t")
     except RuntimeError:
         return None
     if report["name"] != name:
         raise RuntimeError(f"wrong RT test identity: {report}")
-    output = "".join(line for line in result["stdout"].splitlines(keepends=True) if not line.startswith("BAML_CORPUS_RESULT\t"))
-    return {"outcome": report["outcome"], "messages": [] if report["message"] is None else [report["message"]], "output": output}
+    return {"outcome": report["outcome"], "messages": [] if report["message"] is None else [report["message"]],
+            "output": output, "stderr": result["stderr"]}
 
 
 def admission_category(error):
@@ -169,7 +281,7 @@ def summarize(report):
             print(f"{category}\t{len(names)}\t{signature}\t{', '.join(names[:3])}")
     for name, row in report["tests"].items():
         if row["category"] in ("mismatch", "crash/timeout"):
-            print(f"BUG {name}\n  VM: {json.dumps(row.get('vm'), ensure_ascii=False)}\n  rt: {json.dumps(row.get('rt'), ensure_ascii=False)}\n  rt-gc-stress: {json.dumps(row.get('rt-gc-stress'), ensure_ascii=False)}")
+            print(f"BUG {name}\n  VM: {json.dumps(row.get('vm'))}\n  rt: {json.dumps(row.get('rt'))}\n  rt-gc-stress: {json.dumps(row.get('rt-gc-stress'))}")
     report["counts"] = {key: counts[key] for key in CATEGORIES}
 
 
@@ -179,7 +291,8 @@ def oracle_fingerprint(workspace, env):
     The RT emitter, RT runtime and the RT-only builtin emitter cannot execute in
     an interpreter invocation. All frontend/VM/stdlib/corpus sources stay hashed.
     """
-    digest = hashlib.sha256()
+    # Capture-format changes must not reuse observations from a lossy decoder.
+    digest = hashlib.sha256(b"rt-corpus-vm-evidence-v2-lossless-streams")
     ignored_crates = {"baml_compiler2_rust", "baml_rt", "baml_rt_gc", "baml_rt_tasks", "baml_rt_island"}
     for root in (workspace / "crates", workspace / "sdks", workspace / "forks", workspace / "vendor"):
         for path in sorted(root.rglob("*")):
@@ -207,9 +320,8 @@ def cached_invoke(argv, *, cache, **kwargs):
     if cache.exists():
         return json.loads(cache.read_text())
     result = invoke(argv, **kwargs)
-    if not result["timeout"] and result["code"] in (0, 2) and any(line.startswith("BAML_CORPUS_REPORT\t") for line in result["stdout"].splitlines()):
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(json.dumps(result) + "\n")
+    if not result["timeout"] and result["code"] in (0, 2) and "BAML_CORPUS_REPORT\t" in result["stdout"]:
+        write_json(cache, result)
     return result
 
 
@@ -282,17 +394,26 @@ def main():
         (pack_dir / "target").symlink_to(shared_native_target, target_is_directory=True)
     print(f"Packing {len(vm_names)} VM tests with per-leaf RT admission", flush=True)
     env["BAML_RT_CORPUS_ADMISSION_CACHE"] = str(scratch / "admission" / hashlib.sha256(cli.read_bytes()).hexdigest())
+    native_originals = scratch / "native-compile-originals"
+    restore_native_compilation_entries(scratch / "admission", native_originals)
     pack_command = [cli, "--agent-skill-check", "off", "pack", "--tests", "--rust", "--rt", "--from", corpus, "--rust-profile", "fast", "--rust-workspace", workspace, "--rust-build-dir", scratch / "pack", "-o", binary]
     for attempt in range(len(vm_names) + 1):
         pack = invoke(pack_command, env=env, cwd=workspace, timeout=7200, evidence=scratch / f"pack-{attempt}")
         expired = pack.get("admission_timeout") or pack.get("admission_crash")
         if expired is None:
+            if pack["code"] and not pack["timeout"]:
+                failures = isolate_native_compilation_errors(pack["stderr"], pack_dir / "src/main.rs",
+                                                            scratch / "admission", native_originals)
+                if failures:
+                    for entry, reason in failures:
+                        print(f"NATIVE COMPILE CRASH entry {entry}: {reason}; restarting with other entries", flush=True)
+                    continue
             break
         cache_file = Path(expired["cache_file"]).resolve()
         cache_file.relative_to(Path(env["BAML_RT_CORPUS_ADMISSION_CACHE"]).resolve())
         reason = (f"RT admission timed out after {timeout}s" if pack.get("admission_timeout")
                   else f"RT admission process crashed (exit {pack['code']})")
-        cache_file.write_text(json.dumps({"Err":reason}) + "\n")
+        write_json(cache_file, {"Err":reason})
         print(f"ADMISSION CRASH {expired['name']}: {reason}; restarting with completed admissions cached", flush=True)
 
     if pack["code"] or pack["timeout"]:
@@ -340,7 +461,7 @@ def main():
                 signatures.append(f"{mode}: VM exit {vm_result['code']}, RT exit {native_result['code']}, timeout {vm_result['timeout'] or native_result['timeout']}")
             elif native != oracle:
                 if category != "crash/timeout": category = "mismatch"
-                signatures.append(f"{mode}: VM {oracle['outcome']} / RT {native['outcome']}; " + "; ".join(field for field in ("messages", "output") if oracle[field] != native[field]))
+                signatures.append(f"{mode}: VM {oracle['outcome']} / RT {native['outcome']}; " + "; ".join(field for field in ("messages", "output", "stderr") if oracle[field] != native[field]))
         if category == "mismatch" and oracle is not None:
             repeat_result = invoke(command + leaf_selectors, env=env, cwd=workspace, timeout=timeout,
                                    evidence=scratch / "leaves" / f"{key}-vm-repeat")
@@ -359,14 +480,14 @@ def main():
         report["tests"][name] = {"category":"excluded", "signature":reason}
     summarize(report)
     output = scratch / "report.json"
-    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    write_json(output, report, indent=2, sort_keys=True)
     print(f"Evidence: {output}")
     if args.select:
         if args.update_baseline: raise RuntimeError("a subset cannot update the full baseline")
         return 0 if all(row["category"] not in ("mismatch", "crash/timeout") for row in report["tests"].values()) else 1
     if args.update_baseline:
         baseline = {"schema": 1, "counts":report["counts"], "tests": {name: {key: row[key] for key in ("category", "signature", "fingerprint") if key in row} for name,row in report["tests"].items()}}
-        args.baseline.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n")
+        write_json(args.baseline, baseline, indent=2, sort_keys=True)
         return 0
     if args.report_only:
         return 0

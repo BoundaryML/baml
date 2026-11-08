@@ -582,6 +582,7 @@ impl TestArgs {
                             println!(
                                 "BAML_CORPUS_REPORT\t{}",
                                 serde_json::json!({
+                                    "stream_protocol":2,
                                     "outcome":flat.outcome, "passed":flat.passed_names,
                                     "failed":flat.failed_names, "tolerated":flat.tolerated_names,
                                     "messages":flat.messages, "total":flat.total,
@@ -635,6 +636,15 @@ impl TestArgs {
         if total == 0 {
             reporter.finish("Finished", "no tests selected");
             return Ok(crate::ExitCode::NoTestsRun);
+        }
+        // The machine report already contains the outcome. Preserve stderr for
+        // the program itself so the corpus gate can compare both output streams.
+        if self.corpus_report {
+            return Ok(if command_failed {
+                crate::ExitCode::TestFailure
+            } else {
+                crate::ExitCode::Success
+            });
         }
 
         let summary = if command_failed && tolerated > 0 {

@@ -175,7 +175,7 @@ explicitly unsupported until the native test host can reproduce them. An
 unsupported sibling or unrelated initializer does not reject admitted leaves.
 
 Each admitted leaf runs in a separate process on VM, RT and `BAML_GC_STRESS=1`.
-Outcomes, failure messages and printed output are compared; durations are not.
+Outcomes, failure messages, stdout and stderr are compared; durations are not.
 The gate prints category totals, grouped admission/failure signatures and every
 correctness bug. Raw process evidence and the complete per-test JSON report
 remain under `$CARGO_TARGET_DIR/rt-corpus/`. Infrastructure failures never count
@@ -211,3 +211,7 @@ the gate records that leaf as a crash/timeout and restarts the pack, reusing
 completed admission results. The private cache is keyed by the CLI executable
 hash and packed-program digest. A stuck specialization cannot hide the other
 leaves. Ordinary pack/compiler/build errors still fail the gate.
+Native compiler diagnostics inside generated test modules are attributed to
+those leaves as crashes, then the remaining modules are rebuilt. Shared host or
+library build errors remain fatal. Failed modules are retried on the next gate
+invocation so a runtime-only fix cannot leave a stale compilation failure.

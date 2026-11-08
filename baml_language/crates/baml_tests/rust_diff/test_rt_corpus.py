@@ -37,6 +37,43 @@ class CorpusGateTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             vm_leaf(vm, "a")
 
+    def test_program_stderr_is_part_of_the_comparison(self):
+        vm = {"code": 0, "timeout": False, "stderr": "program warning\n", "stdout": 'BAML_CORPUS_REPORT\t{"passed":["a"],"failed":[],"tolerated":[],"total":1,"messages":[]}\n'}
+        rt = {"code": 0, "timeout": False, "stderr": "program warning\n", "stdout": 'BAML_CORPUS_RESULT\t{"name":"a","outcome":"pass","message":null}\n'}
+        self.assertEqual(vm_leaf(vm, "a"), rt_leaf(rt, "a"))
+        rt["stderr"] = "different warning\n"
+        self.assertNotEqual(vm_leaf(vm, "a"), rt_leaf(rt, "a"))
+
+    def test_output_without_newline_and_literal_marker_is_preserved(self):
+        output = 'BAML_CORPUS_RESULT\tuser output without newline'
+        vm = {"code": 0, "timeout": False, "stderr": "", "stdout": output + 'BAML_CORPUS_REPORT\t{"passed":["a"],"failed":[],"tolerated":[],"total":1,"messages":[]}\n'}
+        rt = {"code": 0, "timeout": False, "stderr": "", "stdout": output + 'BAML_CORPUS_RESULT\t{"name":"a","outcome":"pass","message":null}\n'}
+        self.assertEqual(vm_leaf(vm, "a"), rt_leaf(rt, "a"))
+        self.assertEqual(vm_leaf(vm, "a")["output"], output)
+
+    def test_legacy_cli_footer_is_metadata_but_protocol_two_preserves_program_lines(self):
+        import json
+        program = "    Finished 1 passed, 0 failed, 1 total in 2s\n"
+        report = {"passed":["a"], "failed":[], "tolerated":[], "total":1, "messages":[]}
+        vm = {"code":0, "timeout":False, "stderr":program + "    Finished 1 passed, 0 failed, 1 total in 3s\n",
+              "stdout":"BAML_CORPUS_REPORT\t" + json.dumps(report) + "\n"}
+        self.assertEqual(vm_leaf(vm, "a")["stderr"], program)
+        report["stream_protocol"] = 2
+        vm.update(stderr=program, stdout="BAML_CORPUS_REPORT\t" + json.dumps(report) + "\n")
+        self.assertEqual(vm_leaf(vm, "a")["stderr"], program)
+
+    def test_distinct_non_utf8_output_bytes_remain_distinct(self):
+        import os, sys, tempfile
+        from pathlib import Path
+        from rt_corpus import invoke
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = invoke([sys.executable, "-c", "import sys; sys.stdout.buffer.write(bytes([255,13,10])); sys.stderr.buffer.write(bytes([254,10]))"],
+                            env=os.environ, cwd=root, timeout=10, evidence=root/"bytes")
+            self.assertEqual(result["stdout"].encode("utf-8", "surrogateescape"), b"\xff\r\n")
+            self.assertEqual(result["stderr"].encode("utf-8", "surrogateescape"), b"\xfe\n")
+            self.assertNotEqual(result["stdout"], result["stderr"])
+
 class OracleCacheTests(unittest.TestCase):
     def test_vm_edits_invalidate_observations_but_rt_edits_do_not(self):
         import tempfile
@@ -63,6 +100,32 @@ class OracleCacheTests(unittest.TestCase):
 
 
 class AdmissionWatchdogTests(unittest.TestCase):
+    def test_generated_module_build_error_isolated_and_retried_next_run(self):
+        import json, tempfile
+        from pathlib import Path
+        from rt_corpus import isolate_native_compilation_errors, restore_native_compilation_entries
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "pack/src/main.rs"
+            source.parent.mkdir(parents=True)
+            body = "const VALUE: i64 = missing;\n"
+            source.write_text("mod test_3 {\n" + body + "}\nfn main() {}\n")
+            admission = root / "admission"
+            cache = admission / "cli/program/3.json"
+            cache.parent.mkdir(parents=True)
+            original = {"Ok": body}
+            cache.write_text(json.dumps(original))
+            backups = root / "originals"
+            shared_error = "error[E0425]: missing runtime symbol\n --> runtime/src/lib.rs:1:2\n"
+            self.assertEqual(isolate_native_compilation_errors(shared_error, source, admission, backups), [])
+            self.assertEqual(json.loads(cache.read_text()), original)
+            error = "error[E0425]: missing symbol\n --> src/main.rs:2:20\nerror: could not compile `host`\n"
+            failures = isolate_native_compilation_errors(error, source, admission, backups)
+            self.assertEqual(failures, [(3, "RT native compilation failed: error[E0425]: missing symbol")])
+            self.assertEqual(json.loads(cache.read_text()), {"Err": failures[0][1]})
+            restore_native_compilation_entries(admission, backups)
+            self.assertEqual(json.loads(cache.read_text()), original)
+
     def test_aborted_compiler_is_attributed_to_its_active_entry(self):
         import json, os, sys, tempfile
         from pathlib import Path
