@@ -24,13 +24,23 @@ struct Layout {
     pointers: usize,
     tagged: usize,
 }
+#[derive(Clone, PartialEq, Eq)]
+struct ListElement {
+    repr: Repr,
+    members: Vec<Repr>,
+}
 struct Plan<'a> {
     lang: baml_base::LangRoots,
     index: ProgramIndex<'a>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
+    list_elements: std::cell::RefCell<Vec<ListElement>>,
     json_types: Vec<Vec<usize>>,
+    list_stringify: bool,
+    list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
+    json_decode_codes: BTreeSet<usize>,
+    json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -72,7 +82,9 @@ mod errors;
 mod expressions;
 mod host;
 mod json;
+mod json_lists;
 mod layout;
+mod lists;
 mod places;
 mod repr;
 mod statements;

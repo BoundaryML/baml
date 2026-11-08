@@ -1,7 +1,7 @@
 use super::{
     BTreeMap, BTreeSet, Db, Emitter, Gen, MirFunctionKind, Object, OptLevel, Plan, Program,
-    ProgramEmission, ProgramIndex, SourceRoot, admission, builtins, host, json, layout, no,
-    recursive, telemetry,
+    ProgramEmission, ProgramIndex, SourceRoot, admission, builtins, host, json, json_lists, layout,
+    no, recursive, telemetry,
 };
 
 /// Emit a single parameterless integer entry, including a compatible benchmark host.
@@ -19,7 +19,12 @@ pub fn compile_rt(
         program,
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
+        list_elements: std::cell::RefCell::new(Vec::new()),
         json_types: Vec::new(),
+        list_stringify: false,
+        list_render_roots: std::cell::RefCell::new(BTreeSet::new()),
+        json_decode_codes: BTreeSet::new(),
+        json_list_types: Vec::new(),
     };
     let admission::Admitted {
         all,
@@ -52,7 +57,10 @@ pub fn compile_rt(
         all: &all,
         descriptors: &descriptors,
     };
-    json::emit(&mut out, &cx, json_decode, alias_function)?;
+    json::emit(&mut out, &cx, json_decode, alias_function, &lists)?;
+    if plan.list_stringify {
+        json_lists::emit_shapes(&mut out, &plan, &descriptors, &lists)?;
+    }
     // Bound forced inlining by the same total-local budget as a single body.
     // Recursive SCCs retain real frames and the normal per-entry stack guard.
     let small_program = reached
@@ -100,6 +108,7 @@ pub fn compile_rt(
         };
         out.push_str(&emitter.function(mir.arity, small_program && !recursive(&calls, object))?);
     }
+    super::lists::emit_render_shapes(&mut out, &plan, &descriptors, &lists)?;
     let format_site = telemetry::emit(
         &mut out,
         &cx,

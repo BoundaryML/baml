@@ -53,10 +53,23 @@ impl Emitter<'_, '_> {
                     .function(self.db, *f)
                     .ok_or_else(|| no("call"))?;
                 if self.plan.index.display(c) == "baml.json.decode" {
+                    let ordered;
+                    let args = if let Some(layout) = argument_layout {
+                        let mapping = layout.map_to(&info.argument_layout()).map_err(no)?;
+                        let mut arguments = args[..*ntypeargs].to_vec();
+                        arguments.extend(mapping.into_iter().map(|i| {
+                            i.map(|i| args[*ntypeargs + i].clone())
+                                .unwrap_or(Operand::Constant(Constant::OmittedArg))
+                        }));
+                        ordered = arguments;
+                        &ordered
+                    } else {
+                        args
+                    };
                     let Repr::Type(code) = self.operand(&args[0])?.1 else {
                         return Err(no("JSON type argument"));
                     };
-                    if *ntypeargs != 1 || args.len() != 3 || code < 3 {
+                    if *ntypeargs != 1 || args.len() != 3 || code < 3 || code == usize::MAX {
                         return Err(no("JSON decode specialization/naming"));
                     }
                     let omitted = matches!(args[2], Operand::Constant(Constant::OmittedArg));

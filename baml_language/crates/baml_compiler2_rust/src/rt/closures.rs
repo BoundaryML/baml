@@ -109,6 +109,11 @@ impl Plan<'_> {
                         .field_type,
                 )
             }
+            Place::Index {
+                base,
+                kind: baml_compiler2_mir::IndexKind::Array,
+                ..
+            } => self.element(self.storage_repr(body, base, depth)?),
             _ => Err(no("receiver storage place")),
         }
     }

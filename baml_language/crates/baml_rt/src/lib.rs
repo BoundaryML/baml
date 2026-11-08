@@ -3,13 +3,17 @@
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
 pub mod json;
+pub mod json_lists;
 pub mod language;
+pub mod list_errors;
 pub mod lists;
 pub mod maps;
 pub mod strings;
 pub mod telemetry;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
 use baml_rt_tasks::{Config, TaskCx, TaskLoop, Value};
+pub use bex_vm_types::float_order::{cmp as float_cmp, eq as float_eq};
+pub use bex_vm_types::format_float;
 pub use language::*;
 use std::{
     cell::{Cell, RefCell},

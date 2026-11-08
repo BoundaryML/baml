@@ -42,23 +42,34 @@ pub enum Shape {
     Unsupported,
 }
 pub enum Type {
+    Unknown,
+    Null,
+    Float,
     Int,
     Bool,
     String,
     Class(fn() -> &'static Declaration),
     List(&'static Type),
+    Map(&'static Type, &'static Type),
     Union(&'static [Type]),
 }
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
             Self::Int => OwnedType::Int,
+            Self::Null => OwnedType::Null,
+            Self::Unknown => OwnedType::Unknown,
+            Self::Float => OwnedType::Float,
             Self::Bool => OwnedType::Bool,
             Self::String => OwnedType::String,
             Self::Class(declaration) => OwnedType::Class(
                 TypeIdentity::Defined(leaves.define(&declaration().definition, carried)),
                 Box::new([]),
             ),
+            Self::Map(key, value) => OwnedType::Map {
+                key: Box::new(key.owned(leaves, carried)),
+                value: Box::new(value.owned(leaves, carried)),
+            },
             Self::List(element) => OwnedType::List(Box::new(element.owned(leaves, carried))),
             Self::Union(members) => OwnedType::Union(
                 members
@@ -157,6 +168,9 @@ impl Scratch {
         value: Dyn,
         depth: usize,
     ) -> SnapshotValue {
+        if value.tag == u32::MAX as u64 {
+            return SnapshotValue::Float(f64::from_bits(value.payload));
+        }
         let key = if value.tag >= 3
             && value.tag != u64::MAX
             && matches!(
@@ -294,6 +308,13 @@ impl Scratch {
                                         payload: unsafe { ptr.cast::<u64>().read() },
                                     },
                                 };
+                                let value = if matches!(field.slot, SlotKind::Pointer)
+                                    && value.payload == 0
+                                {
+                                    Dyn { tag: 2, payload: 0 }
+                                } else {
+                                    value
+                                };
                                 (field.name.into(), unsafe {
                                     self.add(shapes, leaves, value, depth + 1)
                                 })
@@ -324,9 +345,18 @@ impl Scratch {
                         self.add(
                             shapes,
                             leaves,
-                            Dyn {
-                                tag: *tag,
-                                payload: data.add(i).read() as u64,
+                            if *tag == u64::MAX - 1 {
+                                data.cast::<Dyn>().add(i).read()
+                            } else {
+                                let payload = data.add(i).read() as u64;
+                                Dyn {
+                                    tag: if payload == 0 && *tag >= 3 && *tag != u32::MAX as u64 {
+                                        2
+                                    } else {
+                                        *tag
+                                    },
+                                    payload,
+                                }
                             },
                             depth + 1,
                         )

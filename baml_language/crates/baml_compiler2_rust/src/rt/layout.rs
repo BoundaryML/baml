@@ -13,7 +13,10 @@ impl Plan<'_> {
             .ok_or_else(|| no("unlinked class tag"))
     }
     pub(super) fn record_ty(&mut self, ty: &RuntimeTy) -> Gen<()> {
-        if let RuntimeTy::Union(members) = ty {
+        if let RuntimeTy::List(element) = ty {
+            self.record_ty(element)?;
+            self.record(self.repr(ty)?)?;
+        } else if let RuntimeTy::Union(members) = ty {
             for member in members {
                 self.record_ty(member)?;
             }
@@ -23,7 +26,10 @@ impl Plan<'_> {
         Ok(())
     }
     pub(super) fn record_field_ty(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
-        if let bex_vm_types::RuntimeTy::Union(members) = ty {
+        if let bex_vm_types::RuntimeTy::List(element) = ty {
+            self.record_field_ty(element)?;
+            self.record(self.field_repr(ty)?)?;
+        } else if let bex_vm_types::RuntimeTy::Union(members) = ty {
             for member in members {
                 self.record_field_ty(member)?;
             }
@@ -35,6 +41,14 @@ impl Plan<'_> {
     pub(super) fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
             Repr::Ptr(c) => self.add(c)?,
+            Repr::List(id) => {
+                self.lists.insert(repr);
+                let element = self.list_elements.borrow()[id].clone();
+                self.record(element.repr)?;
+                for member in element.members {
+                    self.record(member)?;
+                }
+            }
             Repr::ListPtr(c) => {
                 self.lists.insert(repr);
                 self.add(c)?;
@@ -64,6 +78,7 @@ impl Plan<'_> {
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         Ok(match ty {
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
+            RuntimeTy::Float | RuntimeTy::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown => Repr::Tagged,
@@ -74,16 +89,23 @@ impl Plan<'_> {
                 Repr::MapStrInt
             }
             RuntimeTy::Null => Repr::Null,
-            RuntimeTy::List(element) => match element.as_ref() {
-                RuntimeTy::Int => Repr::ListInt,
-                RuntimeTy::String => Repr::ListStr,
-                RuntimeTy::List(t) if matches!(t.as_ref(), RuntimeTy::String) => Repr::ListListStr,
-                RuntimeTy::Union(_) => match self.repr(element)? {
-                    Repr::Ptr(c) => Repr::ListPtr(c),
-                    _ => return Err(no("list element")),
-                },
-                _ => return Err(no("list element")),
-            },
+            RuntimeTy::List(element) => {
+                if let RuntimeTy::Union(members) = element.as_ref() {
+                    self.list_union_repr(
+                        self.repr(element)?,
+                        members
+                            .iter()
+                            .map(|m| self.repr(m))
+                            .collect::<Gen<Vec<_>>>()?,
+                    )
+                } else {
+                    if matches!(element.as_ref(), RuntimeTy::Null) {
+                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+                    } else {
+                        self.list_repr(self.repr(element)?)
+                    }
+                }
+            }
             RuntimeTy::Interface(head, args, assoc) if args.is_empty() && assoc.is_empty() => {
                 Repr::Dyn(
                     self.index
@@ -134,7 +156,9 @@ impl Plan<'_> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
             T::Null => Repr::Null,
+            T::Unknown => Repr::Tagged,
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
+            T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             T::Map { key, value }
@@ -142,16 +166,23 @@ impl Plan<'_> {
             {
                 Repr::MapStrInt
             }
-            T::List(element) => match element.as_ref() {
-                T::Int => Repr::ListInt,
-                T::String => Repr::ListStr,
-                T::List(t) if matches!(t.as_ref(), T::String) => Repr::ListListStr,
-                T::Union(_) => match self.field_repr(element)? {
-                    Repr::Ptr(c) => Repr::ListPtr(c),
-                    _ => return Err(no("list field element")),
-                },
-                _ => return Err(no("list field element")),
-            },
+            T::List(element) => {
+                if let T::Union(members) = element.as_ref() {
+                    self.list_union_repr(
+                        self.field_repr(element)?,
+                        members
+                            .iter()
+                            .map(|m| self.field_repr(m))
+                            .collect::<Gen<Vec<_>>>()?,
+                    )
+                } else {
+                    if matches!(element.as_ref(), T::Null) {
+                        self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+                    } else {
+                        self.list_repr(self.field_repr(element)?)
+                    }
+                }
+            }
             T::Interface(head, args, assoc) if args.is_empty() && assoc.is_empty() => Repr::Dyn(
                 self.program
                     .objects
@@ -270,16 +301,23 @@ impl Plan<'_> {
 
 pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     let program = plan.program;
+    let mut next_class = rt_descriptors();
     let descriptors: BTreeMap<_, _> = plan
         .layouts
         .keys()
-        .enumerate()
-        .map(|(i, c)| (*c, i + rt_descriptors()))
+        .map(|c| {
+            let id = plan.list_error_descriptor(*c).unwrap_or_else(|| {
+                let id = next_class;
+                next_class += 1;
+                id
+            });
+            (*c, id)
+        })
         .collect();
     let lists: BTreeMap<_, _> = plan
         .lists
         .iter()
-        .scan(descriptors.len() + rt_descriptors(), |next, r| {
+        .scan(next_class, |next, r| {
             let id = *next;
             *next += if *r == Repr::MapStrInt {
                 3
@@ -303,9 +341,12 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             }
         })
         .max()
-        .unwrap_or(rt_descriptors() + descriptors.len());
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,\n");
+        .unwrap_or(next_class);
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,\n");
     for (&object, layout) in &plan.layouts {
+        if plan.list_error_descriptor(object).is_some() {
+            continue;
+        }
         let Object::Class(class) = &program.objects[bex_vm_types::ObjectIndex::from_raw(object)]
         else {
             unreachable!()
@@ -328,7 +369,8 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                     },
                     match layout.fields[i] {
                         Repr::Ptr(c) => descriptors[&c] + 3,
-                        r @ (Repr::ListInt
+                        r @ (Repr::List(_)
+                        | Repr::ListInt
                         | Repr::ListPtr(_)
                         | Repr::ListStr
                         | Repr::ListListStr
@@ -337,6 +379,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                         Repr::Dyn(i) => after_lists + i + 4,
                         Repr::Str => 3,
                         Repr::Int => 0,
+                        Repr::Float => u32::MAX as usize,
                         Repr::Bool => 1,
                         Repr::Iter | Repr::Naming | Repr::Null | Repr::Type(_) =>
                             unreachable!("null/type fields are rejected"),
@@ -355,10 +398,10 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             continue;
         }
         if repr.growing() {
-            let slot = Emitter::element(*repr)?.slot()?;
+            let slot = plan.element(*repr)?.slot()?;
             writeln!(
                 &mut out,
-                "rt::lists::descriptor({}),rt::lists::buffer_descriptor::<{slot}>({}),",
+                "rt::lists::descriptor::<{slot}>({}),rt::lists::buffer_descriptor::<{slot}>({}),",
                 desc + 3,
                 desc + 4
             )
@@ -409,5 +452,5 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    10
+    12
 }

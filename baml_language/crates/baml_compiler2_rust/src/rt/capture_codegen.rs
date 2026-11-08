@@ -33,6 +33,8 @@ pub(super) fn emit(
         "baml.json.ParseError",
         "baml.json.DecodeError",
         "baml.panics.DivisionByZero",
+        "baml.json.SerializationError",
+        "baml.errors.InvalidArgument",
     ]
     .map(named)
     .into_iter()
@@ -69,22 +71,9 @@ pub(super) fn emit(
             if repr == Repr::MapStrInt {
                 "MapStringInt".to_owned()
             } else {
-                let element = Emitter::element(repr)?;
-                let (tag, ty) = match element {
-                    Repr::Int => (0, "Int".to_owned()),
-                    Repr::Str => (3, "String".to_owned()),
-                    Repr::Ptr(class) => {
-                        (descriptors[&class] + 3, format!("Class(CAPTURE_D{class})"))
-                    }
-                    Repr::ListStr => (
-                        lists[&Repr::ListStr] + 3,
-                        "List(&rt::telemetry::capture::Type::String)".to_owned(),
-                    ),
-                    _ => return Err(no("capture list type")),
-                };
+                let (tag, ty) = capture_list_element(plan, descriptors, lists, repr)?;
                 format!(
-                    "List{{growing:{},tag:{tag},element:&rt::telemetry::capture::Type::{ty}}}",
-                    repr.growing()
+                    "List{{growing:true,tag:{tag},element:&rt::telemetry::capture::Type::{ty}}}"
                 )
             }
         } else {
@@ -118,4 +107,63 @@ fn emit_group(
         .join(",");
     writeln!(out,"fn CAPTURE_G{index}()->std::sync::Arc<rt::telemetry::types::DefinitionBlob>{{static VALUE:std::sync::OnceLock<std::sync::Arc<rt::telemetry::types::DefinitionBlob>>=std::sync::OnceLock::new();VALUE.get_or_init(||std::sync::Arc::new(rt::telemetry::types::DefinitionBlob::new({:?},vec!{:?}.into_boxed_slice(),vec![{children}].into_boxed_slice()))).clone()}}",group.id(),group.bytes()).unwrap();
     index
+}
+
+fn capture_element(
+    plan: &Plan<'_>,
+    descriptors: &BTreeMap<usize, usize>,
+    lists: &BTreeMap<Repr, usize>,
+    repr: Repr,
+) -> Gen<(usize, String)> {
+    Ok(match repr {
+        Repr::Int => (0, "Int".into()),
+        Repr::Bool => (1, "Bool".into()),
+        Repr::Float => (u32::MAX as usize, "Float".into()),
+        Repr::Str => (3, "String".into()),
+        Repr::Ptr(c) => (descriptors[&c] + 3, format!("Class(CAPTURE_D{c})")),
+        r if r.growing() => {
+            let (_, element) = capture_list_element(plan, descriptors, lists, r)?;
+            (
+                lists[&r] + 3,
+                format!("List(&rt::telemetry::capture::Type::{element})"),
+            )
+        }
+        Repr::MapStrInt => (
+            lists[&Repr::MapStrInt] + 3,
+            "Map(&rt::telemetry::capture::Type::String,&rt::telemetry::capture::Type::Int)".into(),
+        ),
+        Repr::Tagged => (usize::MAX - 1, "Unknown".into()),
+        Repr::Null => (2, "Null".into()),
+        _ => return Err(no("capture list element")),
+    })
+}
+
+fn capture_list_element(
+    plan: &Plan<'_>,
+    descriptors: &BTreeMap<usize, usize>,
+    lists: &BTreeMap<Repr, usize>,
+    repr: Repr,
+) -> Gen<(usize, String)> {
+    let (tag, mut ty) = capture_element(plan, descriptors, lists, plan.element(repr)?)?;
+    if let Repr::List(id) = repr {
+        let members = plan.list_elements.borrow()[id].members.clone();
+        if !members.is_empty() {
+            let types = members
+                .into_iter()
+                .map(|m| {
+                    capture_element(plan, descriptors, lists, m)
+                        .map(|(_, ty)| format!("rt::telemetry::capture::Type::{ty}"))
+                })
+                .collect::<Gen<Vec<_>>>()?;
+            ty = if types.len() == 1 {
+                types[0]
+                    .strip_prefix("rt::telemetry::capture::Type::")
+                    .unwrap()
+                    .to_owned()
+            } else {
+                format!("Union(&[{}])", types.join(","))
+            };
+        }
+    }
+    Ok((tag, ty))
 }
