@@ -1387,3 +1387,35 @@ fn rt_list_kpi_admission() {
     }
     assert_eq!(admitted, 16, "{}", rejected.join("\n"));
 }
+
+#[test]
+fn rt_list_callbacks_are_typed_and_closed() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "lists.baml",
+        include_str!("../rust_diff/list_probes/baml_src/rt_lists.baml"),
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    for name in [
+        "RuntimeListCallbacks",
+        "RuntimeListPublicSort",
+        "RuntimeListSortClasses",
+        "RuntimeListCallbackThrow",
+        "RuntimeListSortThrow",
+    ] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let emitted = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+        syn::parse_file(&emitted).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(!emitted.contains("BexVm"));
+    }
+    assert_eq!(before, fingerprint(&program));
+}

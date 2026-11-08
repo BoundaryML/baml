@@ -70,8 +70,37 @@ impl Emitter<'_, '_> {
             Rvalue::BinaryOp { op, left, right } => {
                 let (l, lt) = self.operand(left)?;
                 let (r, rt) = self.operand(right)?;
+                if matches!(op, BinOp::Eq | BinOp::Ne) && (lt == Repr::Null || rt == Repr::Null) {
+                    let test = Self::null_test(&if lt == Repr::Null { (r, rt) } else { (l, lt) });
+                    return Ok((
+                        if *op == BinOp::Ne {
+                            format!("!({test})")
+                        } else {
+                            test
+                        },
+                        Repr::Bool,
+                    ));
+                }
                 if *op == BinOp::Add && lt == Repr::Str && rt == Repr::Str {
                     return Ok((self.fallible(&format!("rt::strings::concat(&mut rt::strings::Cx::current(),&[rt::strings::Str::from_raw({l}),rt::strings::Str::from_raw({r})]).map(|s|s.as_raw())")), Repr::Str));
+                }
+                if lt == Repr::Str
+                    && rt == Repr::Str
+                    && matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge)
+                {
+                    let method = match op {
+                        BinOp::Lt => "is_lt",
+                        BinOp::Le => "is_le",
+                        BinOp::Gt => "is_gt",
+                        BinOp::Ge => "is_ge",
+                        _ => unreachable!(),
+                    };
+                    return Ok((
+                        format!(
+                            "{{let cx=rt::strings::Cx::current();rt::strings::Str::from_raw({l}).as_str(&cx).cmp(rt::strings::Str::from_raw({r}).as_str(&cx)).{method}()}}"
+                        ),
+                        Repr::Bool,
+                    ));
                 }
                 if lt == Repr::Str && rt == Repr::Str && matches!(op, BinOp::Eq | BinOp::Ne) {
                     let expression = format!(
@@ -128,7 +157,9 @@ impl Emitter<'_, '_> {
                     return Ok((format!("({l} {op} {r})"), Repr::Bool));
                 }
                 if lt != Repr::Int || rt != Repr::Int {
-                    return Err(no("non-integer binary operation"));
+                    return Err(no(format!(
+                        "non-integer binary operation {lt:?} {op} {rt:?}"
+                    )));
                 }
                 let helper = match op {
                     BinOp::Add => Some("add"),

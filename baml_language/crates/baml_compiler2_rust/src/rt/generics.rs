@@ -34,6 +34,7 @@ pub(super) fn expand<'db>(
                 plan.candidate(&local.ty);
             }
             let mut constants = Vec::new();
+            let mut function_values = Vec::new();
             let mut constant = |operand: &Operand<'_>| {
                 if let Operand::Constant(c) = operand {
                     let ty = match c {
@@ -52,20 +53,50 @@ pub(super) fn expand<'db>(
                     }
                 }
             };
+            let mut function_value = |operand: &Operand<'_>| {
+                if let Operand::Constant(Constant::Function(f)) = operand {
+                    if let Some((callee, _)) = plan.index.function(db, *f) {
+                        function_values.push(callee);
+                    }
+                }
+            };
             for b in &body.blocks {
                 for s in &b.statements {
-                    crate::operands::walk_statement_operands(&s.kind, &mut constant);
+                    crate::operands::walk_statement_operands(&s.kind, &mut |o| {
+                        constant(o);
+                        function_value(o)
+                    });
                 }
                 if let Some(t) = &b.terminator {
                     crate::operands::walk_terminator_operands(t, &mut constant);
+                    match t {
+                        Terminator::Call { args, .. } | Terminator::VirtualCall { args, .. } => {
+                            for arg in args {
+                                function_value(arg);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
+            queue.extend(function_values);
             for t in constants {
                 plan.candidate(&t);
             }
             for b in &body.blocks {
                 for s in &b.statements {
                     if let StatementKind::Assign { value, .. } = &s.kind {
+                        if let Rvalue::MakeClosure { lambda_idx, .. } = value {
+                            let target = plan
+                                .specialized_lambdas
+                                .get(&(object, *lambda_idx))
+                                .copied()
+                                .or_else(|| {
+                                    plan.index.lambda(db, &mir.lambdas[*lambda_idx].identity)
+                                })
+                                .ok_or_else(|| no("unlinked generic lambda"))?;
+                            queue.push_back(target);
+                        }
                         // A constructor can write straight into an interface or
                         // unknown slot; its concrete type need not occur in any
                         // local declaration (e.g. `return Square { ... }`).
@@ -128,6 +159,7 @@ pub(super) fn expand<'db>(
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || super::lists::handles(plan.index.display(callee))
                             || super::list_scalars::handles(plan.index.display(callee))
+                            || super::list_callbacks::handles(plan.index.display(callee))
                             || plan.index.display(callee).starts_with("baml.Map.")
                             || matches!(
                                 plan.index.display(callee),
@@ -557,11 +589,43 @@ fn instance<'db>(
     let id = plan.next_object;
     plan.next_object += 1;
     plan.function_frames.insert(id, captures);
+    register_lambdas(db, plan, all, id, &specialized, &params, &frame, &runtime)?;
     all.insert(id, specialized);
     plan.index.rt_alias(id, callee);
     instances.push((callee, frame, id));
     Ok(id)
 }
+// Lambda MIR shares the lexical generic frame of its declaration. A callable
+// in a monomorphized stdlib body must have the same concrete element layouts.
+fn register_lambdas<'db>(
+    db: &'db dyn Db,
+    plan: &mut Plan<'_>,
+    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    parent: usize,
+    mir: &MirFunction<'db>,
+    params: &[baml_type::ParamTy],
+    args: &[RuntimeTy],
+    runtime: &baml_compiler2_mir::RuntimeLowering<'_>,
+) -> Gen<()> {
+    for (index, lambda) in mir.lambdas.iter().enumerate() {
+        let origin = plan
+            .index
+            .lambda(db, &lambda.identity)
+            .ok_or_else(|| no("generic lambda origin"))?;
+        let body = specialize(&MirFunction::from(lambda), params, args, runtime)?;
+        let id = plan.next_object;
+        plan.next_object += 1;
+        plan.specialized_lambdas.insert((parent, index), id);
+        if let Some(frame) = plan.function_frames.get(&parent).cloned() {
+            plan.function_frames.insert(id, frame);
+        }
+        plan.index.rt_alias(id, origin);
+        register_lambdas(db, plan, all, id, &body, params, args, runtime)?;
+        all.insert(id, body);
+    }
+    Ok(())
+}
+
 fn operand_ty(
     plan: &Plan<'_>,
     body: &MirFunctionBody<'_>,

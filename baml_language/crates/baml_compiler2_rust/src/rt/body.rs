@@ -211,7 +211,19 @@ impl Emitter<'_, '_> {
             self.object,
             self.object,
             self.plan.index.info(self.object).source_file,
-            self.plan.index.display(self.object)
+            if matches!(
+                self.plan.index.info(self.object).identity,
+                bex_vm_types::types::FunctionIdentity::Synthetic { .. }
+            ) {
+                self.plan
+                    .program
+                    .function_name(bex_vm_types::ObjectIndex::from_raw(
+                        self.plan.index.rt_origin(self.object),
+                    ))
+                    .unwrap()
+            } else {
+                self.plan.index.display(self.object).to_owned()
+            }
         ))
     }
     pub(super) fn stmts(&mut self, stmts: &[Stmt], headers: &BTreeSet<usize>) -> Gen<String> {

@@ -176,7 +176,7 @@ pub(super) fn collect<'db>(
                             | baml_compiler2_mir::Operand::Move(_),
                         ..
                     })
-                )
+                ) || matches!(&b.terminator,Some(Terminator::Call {callee:baml_compiler2_mir::Operand::Constant(baml_compiler2_mir::Constant::Function(f)),..}) if plan.index.function(db,*f).is_some_and(|(id,_)| super::list_callbacks::handles(plan.index.display(id))))
             })
         {
             calls.entry(object).or_default().extend(&plan.callables);

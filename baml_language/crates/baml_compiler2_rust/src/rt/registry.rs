@@ -79,6 +79,7 @@ const FEATURES: &[&dyn Feature] = &[
     &closures::Feature,
     &tasks::Feature,
     &super::list_errors::Feature,
+    &super::list_callbacks::Feature,
     &super::list_scalars::Feature,
     &lists::Feature,
     &maps::Feature,

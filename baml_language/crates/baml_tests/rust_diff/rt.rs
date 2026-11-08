@@ -17,6 +17,16 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
 // List coverage baseline: each admitted fixture must keep passing both runtime
 // variants. An admission regression is a failure, never an unsupported skip.
 const REQUIRED_LIST_COVERAGE: &[&str] = &[
+    "RuntimeListCallbacks",
+    "RuntimeListPublicSort",
+    "RuntimeListSortClasses",
+    "RuntimeListCallbackThrow",
+    "RuntimeListSortThrow",
+    "RuntimeListTaggedSort",
+    "RuntimeListSortMixedError",
+    "RuntimeListSortNullError",
+    "RuntimeListSortBoolError",
+    "RuntimeListPointerCallbacks",
     "RuntimeListValidationThrow",
     "RuntimeListScalarBoundaries",
     "RuntimeListInvalidCodePoint",

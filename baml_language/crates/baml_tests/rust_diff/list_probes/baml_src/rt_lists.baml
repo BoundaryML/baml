@@ -269,3 +269,74 @@ function RuntimeListFloatTruncationError() -> int { (0.0/0.0).itrunc() }
 
 class RuntimeListValidationError { message:string, offset:int, scalar:float, ok:bool }
 function RuntimeListValidationThrow() -> int { throw RuntimeListValidationError {message:"quoted\"|λ", offset:2, scalar:1.5, ok:true} }
+
+function RuntimeListCallbackIncrement(x:int) -> int { x + 1 }
+function RuntimeListCallbacks() -> int {
+    let xs=[1,2,3];
+    let mapped=xs.map((x:int)->int { xs.push(9); x*2 });
+    let selected=mapped.filter((x:int)->bool {x>2});
+    let all=selected.every((x:int)->bool {x%2==0});
+    let any=selected.some((x:int)->bool {x==6});
+    let first=selected.find((x:int)->bool{x>3}) ?? 0;
+    let last=selected.find_last((x:int)->bool{x>3}) ?? 0;
+    let idx=selected.find_index((x:int)->bool{x==6}) ?? -1;
+    let last_idx=selected.find_last_index((x:int)->bool{x>0}) ?? -1;
+    let total=selected.reduce((a:int,x:int)->int{a+x},0);
+    let flat=selected.flat_map((x:int)->int[]{[x,-x]});
+    let filtered=selected.filter_map((x:int)->int? {if(x>4){x}else{null}});
+    let generated=baml.Array.generate(4,(i:int)->int{i*i});
+    let named=generated.map(RuntimeListCallbackIncrement);
+    let seen:int[]=[];
+    named.for_each((x:int)->void { seen.push(x); });
+    let floats=[1.5,2.5].map((x:float)->float{x*2.0});
+    let texts=selected.map((x:int)->string{x.to_string()});
+    if(xs.length()==6 && mapped.length()==3 && all && any && first==4 && last==6 && idx==1 && last_idx==1 && total==10 && flat.join(",")=="4,-4,6,-6" && filtered[0]==6 && seen.join(",")=="1,2,5,10" && floats[1]==5.0 && texts.join("|")=="4|6") {1}else{-1}
+}
+function RuntimeListPublicSort() -> int {
+    let ints=[3,1,2,1]; let alias=ints; ints.sort();
+    let floats=[2.5,-1.5,0.0]; floats.sort();
+    let strings=["z","a","ab"]; strings.sort();
+    let bools=[true,false,true]; bools.sort();
+    let reverse=[1,3,2]; reverse.sort_by((a:int,b:int)->baml.ops.Ordering {b.cmp(a)});
+    if(alias.join(",")=="1,1,2,3" && floats[0]==-1.5 && strings.join(",")=="a,ab,z" && !bools[0] && reverse.join(",")=="3,2,1") {1}else{-1}
+}
+class RuntimeListOrdered {
+    key:int
+    order:int
+    implements baml.ops.Equals { function eq(self,other:Self)->bool throws never { self.key==other.key } }
+    implements baml.ops.Compare { function cmp(self,other:Self)->baml.ops.Ordering throws never { self.key.cmp(other.key) } }
+}
+function RuntimeListSortClasses() -> int {
+    let xs=[RuntimeListOrdered{key:2,order:1},RuntimeListOrdered{key:1,order:2},RuntimeListOrdered{key:2,order:3}];
+    xs.sort();
+    let keyed=xs.reverse();
+    let calls:int[]=[];
+    keyed.sort_by_key((x:RuntimeListOrdered)->int {calls.push(x.order);x.key});
+    if(xs[0].order==2 && xs[1].order==1 && xs[2].order==3 && keyed[0].order==2 && keyed[1].order==3 && keyed[2].order==1 && calls.join(",")=="3,1,2") {1}else{-1}
+}
+class RuntimeListCallbackError { value:int }
+function RuntimeListCallbackThrow() -> int {
+    let xs=[1,2,3];
+    xs.map((x:int)->int throws RuntimeListCallbackError {if(x==2){throw RuntimeListCallbackError{value:x};}x}).length()
+}
+function RuntimeListSortThrow() -> int {
+    let xs=[3,2,1];
+    xs.sort_by((a:int,b:int)->baml.ops.Ordering throws RuntimeListCallbackError {throw RuntimeListCallbackError{value:a+b};}).length()
+}
+
+function RuntimeListTaggedSort() -> int {
+    let xs:(int|float)[]=[3,1.5,-2,0.25];
+    baml._rust_sort(xs);
+    if(xs.join(",")=="-2,0.25,1.5,3"){1}else{-1}
+}
+function RuntimeListSortMixedError() -> int { let xs:(int|string)[]=[1,"a"]; baml._rust_sort(xs); 0 }
+function RuntimeListSortNullError() -> int { let xs:int?[]=[1,null]; baml._rust_sort(xs); 0 }
+function RuntimeListSortBoolError() -> int { baml._rust_sort([true,false]); 0 }
+function RuntimeListPointerCallbacks() -> int {
+    let xs=[1,2];
+    let maps=xs.map((x:int)->map<string,int>{ {"k":x} });
+    let objects=xs.map((x:int)->RuntimeListItem{ RuntimeListItem{value:x} });
+    let maybe=xs.map((x:int)->int?{if(x==1){null}else{x}});
+    let nested=xs.flat_map((x:int)->string[][]{[[x.to_string()]]});
+    if(maps[1]["k"]==2 && objects[0].value==1 && maybe[0]==null && (maybe[1] ?? 0)==2 && nested[1][0]=="2"){1}else{-1}
+}

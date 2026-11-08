@@ -1350,3 +1350,77 @@ mod tests {
         assert!(instance.stats().collections >= 65);
     }
 }
+
+impl List<crate::Dyn> {
+    pub fn is_primitive(self, cx: &Cx) -> bool {
+        self.len(cx) == 0
+            || self
+                .get(cx, 0)
+                .is_ok_and(|v| matches!(v.tag, 0 | 3 | 4294967295))
+    }
+    pub fn natural_sort(self, cx: &mut Cx, descriptors: &[Descriptor]) -> R<Self> {
+        if self.len(cx) <= 1 {
+            return Ok(self);
+        }
+        let (mut strings, mut integers, mut floats) = (false, false, false);
+        for i in 0..self.len(cx) {
+            let value = self.get(cx, i)?;
+            let unsupported = match value.tag {
+                0 => {
+                    integers = true;
+                    None
+                }
+                3 if value.payload != 0 => {
+                    strings = true;
+                    None
+                }
+                4294967295 => {
+                    floats = true;
+                    None
+                }
+                2 | 3 => Some("null"),
+                1 => Some("bool"),
+                tag => Some(
+                    match tag
+                        .checked_sub(3)
+                        .and_then(|tag| descriptors.get(tag as usize))
+                        .map(|d| d.kind)
+                    {
+                        Some(Kind::List) => "array",
+                        Some(Kind::Map) => "map",
+                        Some(Kind::Class) => "instance",
+                        Some(Kind::Closure) => "closure",
+                        _ => "enum variant",
+                    },
+                ),
+            };
+            if let Some(kind) = unsupported {
+                return Err(crate::Error::internal(format!(
+                    "bridge failure: sort: natural ordering does not support {kind}"
+                )));
+            }
+        }
+        if strings && (integers || floats) {
+            return Err(crate::Error::internal("bridge failure: sort: natural ordering does not support mixing string with numeric values".into()));
+        }
+        let read = unsafe { Cx::current() };
+        self.sort_by(cx, |a, b| {
+            Ok(if strings {
+                unsafe { Str::from_raw(a.payload as usize) }
+                    .as_str(&read)
+                    .cmp(unsafe { Str::from_raw(b.payload as usize) }.as_str(&read))
+            } else if floats {
+                let number = |v: crate::Dyn| {
+                    if v.tag == 0 {
+                        (v.payload as i64) as f64
+                    } else {
+                        f64::from_bits(v.payload)
+                    }
+                };
+                crate::float_cmp(number(a), number(b))
+            } else {
+                (a.payload as i64).cmp(&(b.payload as i64))
+            })
+        })
+    }
+}

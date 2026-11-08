@@ -1,6 +1,6 @@
-BAML runtime coverage (normal AND GC stress): 41 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 51 pass, 124 unsupported, 0 fail
 Telemetry off: required
-Scoped verification: 27 list probes and both standalone closure probes pass.
+Scoped verification: 37 list probes and both standalone closure probes pass.
 The independent type-dispatch project passes in both GC modes.
 Retained setup benchmarks pass for integer and owned string results, including GC stress and medium telemetry.
 Unselected rows retain prior verification; the full merged differential gate is deferred.
@@ -114,6 +114,16 @@ RecursiveCancellation	unsupported: top-level initializers
 RtClosures	pass
 RtEmptyClosures	pass
 RuntimeClass	unsupported: top-level initializers
+RuntimeListCallbacks	pass
+RuntimeListPublicSort	pass
+RuntimeListSortClasses	pass
+RuntimeListCallbackThrow	pass
+RuntimeListSortThrow	pass
+RuntimeListTaggedSort	pass
+RuntimeListSortMixedError	pass
+RuntimeListSortNullError	pass
+RuntimeListSortBoolError	pass
+RuntimeListPointerCallbacks	pass
 RuntimeListBounds	pass
 RuntimeListBuiltins	pass
 RuntimeListFloatConstants	pass

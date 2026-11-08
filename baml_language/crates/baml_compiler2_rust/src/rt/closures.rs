@@ -341,14 +341,21 @@ impl registry::Feature for Feature {
             return None;
         };
         Some((|| {
-            if !type_arg_templates.is_empty() {
+            if !type_arg_templates.is_empty()
+                && !emitter
+                    .plan
+                    .specialized_lambdas
+                    .contains_key(&(emitter.object, *lambda_idx))
+            {
                 return Err(no("generic closure environment"));
             }
             let lambda = &emitter.all[&emitter.object].lambdas[*lambda_idx];
             let object = emitter
                 .plan
-                .index
-                .lambda(emitter.db, &lambda.identity)
+                .specialized_lambdas
+                .get(&(emitter.object, *lambda_idx))
+                .copied()
+                .or_else(|| emitter.plan.index.lambda(emitter.db, &lambda.identity))
                 .ok_or_else(|| no("unlinked lambda"))?;
             let captures = captures
                 .iter()
@@ -484,8 +491,10 @@ pub(super) fn discover<'db>(
         {
             let lambda = &mir.lambdas[*lambda_idx];
             let target = plan
-                .index
-                .lambda(db, &lambda.identity)
+                .specialized_lambdas
+                .get(&(object, *lambda_idx))
+                .copied()
+                .or_else(|| plan.index.lambda(db, &lambda.identity))
                 .ok_or_else(|| no("unlinked lambda"))?;
             let types = captures
                 .iter()

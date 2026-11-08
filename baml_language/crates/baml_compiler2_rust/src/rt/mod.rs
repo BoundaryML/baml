@@ -61,6 +61,7 @@ struct Plan<'a> {
     json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
     enums: BTreeSet<usize>,
     specialized_calls: BTreeMap<(usize, usize), usize>,
+    specialized_lambdas: BTreeMap<(usize, usize), usize>,
     type_codes: Vec<baml_compiler2_mir::TyTemplate>,
     next_object: usize,
     class_instances: Vec<(usize, Vec<bex_vm_types::RuntimeTy>, usize)>,
@@ -126,6 +127,7 @@ mod host;
 mod json;
 mod json_lists;
 mod layout;
+mod list_callbacks;
 mod list_errors;
 mod list_scalars;
 mod lists;

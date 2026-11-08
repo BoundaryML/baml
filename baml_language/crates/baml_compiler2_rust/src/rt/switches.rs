@@ -21,7 +21,7 @@ impl registry::Feature for Feature {
         match term {
             Terminator::Switch { discriminant, .. } => Some((|| {
                 let (v, r) = e.operand(discriminant)?;
-                if !matches!(r, Repr::Int | Repr::Naming | Repr::Enum(_)) {
+                if !matches!(r, Repr::Int | Repr::Bool | Repr::Naming | Repr::Enum(_)) {
                     return Err(no("non-integer switch discriminant"));
                 }
                 Ok(format!("switch{}=({v}) as i64;", e.block))

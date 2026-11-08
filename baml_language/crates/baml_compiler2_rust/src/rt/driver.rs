@@ -51,6 +51,7 @@ fn compile(
         json_list_types: Vec::new(),
         enums: BTreeSet::new(),
         specialized_calls: BTreeMap::new(),
+        specialized_lambdas: BTreeMap::new(),
         type_codes: Vec::new(),
         next_object: program.objects.len(),
         class_instances: Vec::new(),

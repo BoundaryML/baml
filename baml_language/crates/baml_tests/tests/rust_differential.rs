@@ -13,6 +13,16 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "RuntimeListCallbacks",
+    "RuntimeListPublicSort",
+    "RuntimeListSortClasses",
+    "RuntimeListCallbackThrow",
+    "RuntimeListSortThrow",
+    "RuntimeListTaggedSort",
+    "RuntimeListSortMixedError",
+    "RuntimeListSortNullError",
+    "RuntimeListSortBoolError",
+    "RuntimeListPointerCallbacks",
     "RuntimeListValidationThrow",
     "RuntimeListScalarBoundaries",
     "RuntimeListInvalidCodePoint",

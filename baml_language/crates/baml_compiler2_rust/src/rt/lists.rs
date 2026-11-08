@@ -198,16 +198,27 @@ impl Emitter<'_, '_> {
                 Ok((self.fallible(&format!("{list}.median({cx})")), Repr::Float))
             }
             ("baml._is_primitive_array", 1) => Ok((
-                matches!(element, Repr::Int | Repr::Float | Repr::Str).to_string(),
+                if matches!(element, Repr::Tagged | Repr::Dyn(_)) {
+                    format!("{list}.is_primitive(&rt::strings::Cx::current())")
+                } else if matches!(element, Repr::Int | Repr::Float) {
+                    "true".into()
+                } else if element == Repr::Str {
+                    format!(
+                        "{list}.len(&rt::strings::Cx::current())==0 || {list}.get(&rt::strings::Cx::current(),0).unwrap().as_raw()!=0"
+                    )
+                } else {
+                    format!("{list}.len(&rt::strings::Cx::current())==0")
+                },
                 Repr::Bool,
             )),
             ("baml._rust_sort", 1) => {
-                if let Repr::List(id) = repr
-                    && self.plan.list_elements.borrow()[id]
-                        .members
-                        .contains(&Repr::Null)
-                {
-                    return Err(no("natural sort of nullable list elements"));
+                if matches!(element, Repr::Tagged | Repr::Dyn(_)) {
+                    return Ok((
+                        self.fallible(&format!(
+                            "{list}.natural_sort({cx},DESCRIPTORS).map(|v|v.as_raw())"
+                        )),
+                        repr,
+                    ));
                 }
                 let compare = match element {
                     Repr::Int => "a.cmp(&b)",
@@ -215,9 +226,32 @@ impl Emitter<'_, '_> {
                     Repr::Str => {
                         "rt::strings::Str::from_raw(a.as_raw()).as_str(&read_cx).cmp(rt::strings::Str::from_raw(b.as_raw()).as_str(&read_cx))"
                     }
-                    _ => return Err(no("list natural-sort comparator")),
+                    other => {
+                        let kind = match other {
+                            Repr::Bool => "bool",
+                            Repr::Null => "null",
+                            Repr::Ptr(_) => "instance",
+                            Repr::Map(_) | Repr::MapStrInt => "map",
+                            r if r.growing() => "array",
+                            _ => "enum variant",
+                        };
+                        let error = format!(
+                            "bridge failure: sort: natural ordering does not support {kind}"
+                        );
+                        return Ok((self.fallible(&format!("if {list}.len(&rt::strings::Cx::current())<=1{{Ok({receiver})}}else{{Err(rt::Error::internal({error:?}.into()))}}")),repr));
+                    }
                 };
-                Ok((self.fallible(&format!("{{let read_cx=rt::strings::Cx::current();{list}.sort_by({cx},|a,b|Ok({compare})).map(|v|v.as_raw())}}")),repr))
+                let validate = if element == Repr::Str {
+                    format!(
+                        "for i in 0..{list}.len(&read_cx){{if {list}.get(&read_cx,i)?.as_raw()==0{{return Err(rt::Error::internal(\"bridge failure: sort: natural ordering does not support null\".into()));}}}}"
+                    )
+                } else {
+                    String::new()
+                };
+                let sort = format!(
+                    "(||->R<usize>{{let read_cx=rt::strings::Cx::current();{validate}{list}.sort_by({cx},|a,b|Ok({compare})).map(|v|v.as_raw())}})()"
+                );
+                Ok((self.fallible(&sort), repr))
             }
 
             ("length", 1) => Ok((format!("{list}.len({cx})"), Repr::Int)),

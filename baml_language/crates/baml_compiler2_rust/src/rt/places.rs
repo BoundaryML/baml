@@ -40,7 +40,7 @@ impl Emitter<'_, '_> {
         }
     }
     pub(super) fn null_test(value: &(String, Repr)) -> String {
-        if value.1 == Repr::Tagged {
+        if matches!(value.1, Repr::Tagged | Repr::Dyn(_)) {
             format!("({}).tag==2", value.0)
         } else if value.1.pointer() || value.1 == Repr::Null {
             format!("({})==0", value.0)
