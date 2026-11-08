@@ -1129,11 +1129,15 @@ python:
   details: |
     You install `baml_bridge` (the runtime); you import `baml_sdk` (the generated
     code). Functions become top-level Python functions; classes/enums become
-    Pydantic models:
+    Pydantic models. Each function is async; its blocking twin ends in `_sync`:
 
       import baml_sdk                       # initializes the BAML runtime
-      from baml_sdk import classify_ticket
-      ticket = classify_ticket("login is broken")   # typed in, typed Pydantic out
+      from baml_sdk import classify_ticket, classify_ticket_sync
+
+      async def main():
+          ticket = await classify_ticket("login is broken")   # typed in, typed Pydantic out
+
+      ticket = classify_ticket_sync("login is broken")        # same call, blocking
 
     See also: `baml describe baml_sdk`, `baml describe typescript`.
 
