@@ -181,6 +181,7 @@ struct Block {
     base: *mut u8,
     starts: [u64; SLOTS / 64],
     marks: [u64; SLOTS / 64],
+    start_words: u32,
     sizes: [u16; SLOTS],
     lines: [u8; BLOCK_BYTES / LINE_BYTES],
     needs_sweep: bool,
@@ -198,6 +199,7 @@ impl Block {
             base,
             starts: [0; 32],
             marks: [0; 32],
+            start_words: 0,
             sizes: [0; SLOTS],
             lines: [0; 256],
             needs_sweep: false,
@@ -206,8 +208,12 @@ impl Block {
     }
     fn sweep(&mut self) {
         if self.needs_sweep {
+            self.start_words = 0;
             for i in 0..32 {
                 self.starts[i] &= self.marks[i];
+                if self.starts[i] != 0 {
+                    self.start_words |= 1 << i;
+                }
             }
             self.needs_sweep = false;
         }
@@ -220,20 +226,21 @@ impl Block {
         let slot = offset / 16;
         let mut word = slot / 64;
         let mut bits = self.starts[word] & (u64::MAX >> (63 - slot % 64));
-        loop {
-            if bits != 0 {
-                let i = word * 64 + 63 - bits.leading_zeros() as usize;
-                if self.needs_sweep && !bit(&self.marks, i) {
-                    return None;
-                }
-                return (offset < i * 16 + self.sizes[i] as usize).then_some(i);
-            }
-            if word == 0 {
+        if bits == 0 {
+            // A second-level bitmap bounds predecessor lookup to two words,
+            // even for an interior root thousands of bytes after its header.
+            let preceding = self.start_words & ((1u32 << word) - 1);
+            if preceding == 0 {
                 return None;
             }
-            word -= 1;
+            word = 31 - preceding.leading_zeros() as usize;
             bits = self.starts[word];
         }
+        let i = word * 64 + 63 - bits.leading_zeros() as usize;
+        if self.needs_sweep && !bit(&self.marks, i) {
+            return None;
+        }
+        (offset < i * 16 + self.sizes[i] as usize).then_some(i)
     }
     fn run(&mut self, bytes: usize) -> Option<(usize, usize)> {
         self.sweep();
@@ -307,12 +314,13 @@ pub struct Heap {
     block_index: HashMap<usize, usize, std::hash::BuildHasherDefault<BlockHasher>>,
     large: BTreeMap<usize, Large>,
     active_metadata: *mut Block,
-    layout_key: u64,
-    layout_finalizer: Option<FinalizerId>,
+    validated_bytes: Vec<usize>,
+    has_finalizers: bool,
+    lookup_cache: Cell<(usize, usize)>,
+    mark_stack: Vec<(usize, usize)>,
     cursor: usize,
     accounted_cursor: usize,
     budget_end: usize,
-    budget_guard: usize,
     limit: usize,
     search: usize,
     finalizable: Vec<Finalizable>,
@@ -368,12 +376,13 @@ impl Heap {
             block_index: HashMap::default(),
             large: BTreeMap::new(),
             active_metadata: std::ptr::null_mut(),
-            layout_key: u64::MAX,
-            layout_finalizer: None,
+            validated_bytes: vec![usize::MAX; descriptors.len()],
+            has_finalizers: descriptors.iter().any(|d| d.finalizer.is_some()),
+            lookup_cache: Cell::new((usize::MAX, 0)),
+            mark_stack: Vec::new(),
             cursor: 0,
             accounted_cursor: 0,
             budget_end: 0,
-            budget_guard: 0,
             limit: 0,
             search: 0,
             finalizable: vec![],
@@ -467,9 +476,9 @@ impl Heap {
     ) -> Result<*mut u8, AllocFailure> {
         let aligned = bytes.checked_add(15).ok_or(AllocFailure { bytes })? & !15;
         if bytes > LARGE_THRESHOLD
-            || self.layout_key != ((u64::from(desc) << 32) | bytes as u64)
+            || self.validated_bytes[desc as usize] != bytes
             || self.limit - self.cursor < aligned
-            || self.cursor >= self.budget_guard
+            || self.cursor + aligned >= self.budget_end
         {
             return unsafe { self.alloc_slow(desc, bytes, aligned, roots) };
         }
@@ -543,6 +552,7 @@ impl Heap {
         let slot = (self.emergency_cursor - block.base as usize) / 16;
         self.emergency_cursor += aligned;
         set(&mut block.starts, slot);
+        block.start_words |= 1 << (slot / 64);
         block.sizes[slot] = bytes as u16;
         unsafe {
             p.cast::<Header>().write(Header { desc, aux: 0 });
@@ -564,12 +574,13 @@ impl Heap {
         debug_assert!(slot < SLOTS);
         unsafe {
             *b.starts.get_unchecked_mut(slot / 64) |= 1 << (slot % 64);
+            b.start_words |= 1 << (slot / 64);
             *b.sizes.get_unchecked_mut(slot) = bytes as u16;
         }
         unsafe {
             p.cast::<Header>().write(Header { desc, aux: 0 });
         }
-        self.register_finalizer(p as usize);
+        self.register_finalizer(desc, p as usize);
         p
     }
     // Only used by the cold allocator. The fast allocation guard routes the
@@ -580,7 +591,6 @@ impl Heap {
         bytes: usize,
         aligned: usize,
     ) -> *mut u8 {
-        self.budget_guard = self.budget_end.saturating_sub(aligned);
         let pointer = unsafe { self.bump(desc, bytes, aligned) };
         if self.cursor >= self.budget_end {
             self.request_poll();
@@ -588,8 +598,10 @@ impl Heap {
         pointer
     }
     #[inline(always)]
-    fn register_finalizer(&mut self, object: usize) {
-        if let Some(cleanup) = self.layout_finalizer {
+    fn register_finalizer(&mut self, desc: DescId, object: usize) {
+        if self.has_finalizers
+            && let Some(cleanup) = self.descriptors[desc as usize].finalizer
+        {
             self.finalizable.push(Finalizable {
                 object,
                 cleanup,
@@ -618,12 +630,7 @@ impl Heap {
         } else {
             assert_eq!(bytes, d.size);
         }
-        self.layout_key = if bytes <= LARGE_THRESHOLD {
-            (u64::from(desc) << 32) | bytes as u64
-        } else {
-            u64::MAX
-        };
-        self.layout_finalizer = d.finalizer;
+        self.validated_bytes[desc as usize] = bytes;
         if self.stress || self.stats.allocated_since_gc >= self.stats.budget {
             unsafe {
                 self.collect(roots);
@@ -666,7 +673,7 @@ impl Heap {
                     .budget
                     .saturating_sub(self.stats.allocated_since_gc),
             );
-            self.register_finalizer(p as usize);
+            self.register_finalizer(desc, p as usize);
             self.refresh_poll_word();
             return Ok(p);
         }
@@ -750,11 +757,18 @@ impl Heap {
         self.stats.allocated_since_gc = self.stats().allocated_since_gc;
         self.accounted_cursor = self.cursor;
     }
+    #[inline(always)]
     fn locate(&self, address: usize) -> Option<(usize, usize)> {
-        if let Some(&i) = self.block_index.get(&(address & !(BLOCK_BYTES - 1))) {
-            return self.blocks[i].candidate(address).map(|slot| (i, slot));
-        }
-        None
+        let base = address & !(BLOCK_BYTES - 1);
+        let (cached_base, cached_index) = self.lookup_cache.get();
+        let i = if base == cached_base {
+            cached_index
+        } else {
+            let &i = self.block_index.get(&base)?;
+            self.lookup_cache.set((base, i));
+            i
+        };
+        self.blocks[i].candidate(address).map(|slot| (i, slot))
     }
     /// Returns the base of an allocated object containing this address.
     pub fn object_start(&self, address: usize) -> Option<usize> {
@@ -772,7 +786,7 @@ impl Heap {
         }
         self.large.get(&address).is_some_and(|l| l.marked)
     }
-    fn mark(&mut self, address: usize, queue: &mut Vec<usize>) {
+    fn mark(&mut self, address: usize, queue: &mut Vec<(usize, usize)>) {
         if address == 0 {
             return;
         }
@@ -785,17 +799,22 @@ impl Heap {
             let bytes = b.sizes[s] as usize;
             b.lines[s * 16 / LINE_BYTES..(s * 16 + bytes).div_ceil(LINE_BYTES)].fill(1);
             self.stats.live_bytes += (bytes + 15) & !15;
-            queue.push(b.base as usize + s * 16);
+            queue.push((b.base as usize + s * 16, bytes));
         } else if let Some((&base, l)) = self.large.range_mut(..=address).next_back()
             && address - base < l.bytes
             && !l.marked
         {
             l.marked = true;
             self.stats.live_bytes += l.mem.layout.size();
-            queue.push(base);
+            queue.push((base, l.bytes));
         }
     }
-    unsafe fn slots(&self, base: usize, d: &Descriptor, visit: &mut dyn FnMut(usize)) {
+    unsafe fn slots(
+        pointer_types: &[bool],
+        base: usize,
+        d: &Descriptor,
+        visit: &mut impl FnMut(usize),
+    ) {
         for i in 0..d.ptr_slots.1 {
             visit(unsafe { *((base + d.ptr_slots.0 + i * 8) as *const usize) });
         }
@@ -803,7 +822,7 @@ impl Heap {
             let slot = unsafe { &*((base + d.tagged_slots.0 + i * 16) as *const TaggedSlot) };
             if usize::try_from(slot.tag)
                 .ok()
-                .and_then(|id| self.pointer_types.get(id))
+                .and_then(|id| pointer_types.get(id))
                 .copied()
                 .unwrap_or(false)
             {
@@ -811,28 +830,33 @@ impl Heap {
             }
         }
     }
-    unsafe fn trace(&self, object: usize, visit: &mut dyn FnMut(usize)) {
+    unsafe fn trace_object(
+        descriptors: &[Descriptor],
+        pointer_types: &[bool],
+        object: usize,
+        bytes: usize,
+        visit: &mut impl FnMut(usize),
+    ) {
         let h = unsafe { &*(object as *const Header) };
-        let d = &self.descriptors[h.desc as usize];
+        let d = &descriptors[h.desc as usize];
         unsafe {
-            self.slots(object, d, visit);
+            Self::slots(pointer_types, object, d, visit);
         }
         if let Some(e) = d.elem {
-            let bytes = if let Some((i, s)) = self.locate(object) {
-                self.blocks[i].sizes[s] as usize
-            } else {
-                self.large[&object].bytes
-            };
+            // Scalar buffers have no edges, irrespective of their capacity.
+            if matches!(e.layout, ElementLayout::Scalar) {
+                return;
+            }
             for offset in (e.offset..bytes).step_by(d.size) {
                 let base = object + offset;
                 match e.layout {
-                    ElementLayout::Scalar => {}
+                    ElementLayout::Scalar => unreachable!(),
                     ElementLayout::Pointer => visit(unsafe { *(base as *const usize) }),
                     ElementLayout::Tagged => {
                         let s = unsafe { &*(base as *const TaggedSlot) };
                         if usize::try_from(s.tag)
                             .ok()
-                            .and_then(|id| self.pointer_types.get(id))
+                            .and_then(|id| pointer_types.get(id))
                             .copied()
                             .unwrap_or(false)
                         {
@@ -840,21 +864,34 @@ impl Heap {
                         }
                     }
                     ElementLayout::Descriptor(id) => unsafe {
-                        self.slots(base, &self.descriptors[id as usize], visit);
+                        Self::slots(pointer_types, base, &descriptors[id as usize], visit);
                     },
                 }
             }
         }
     }
-    unsafe fn drain(&mut self, queue: &mut Vec<usize>) {
-        let mut edges = Vec::new();
-        while let Some(p) = queue.pop() {
-            edges.clear();
+    unsafe fn trace(&self, object: usize, visit: &mut impl FnMut(usize)) {
+        let bytes = if let Some((i, s)) = self.locate(object) {
+            self.blocks[i].sizes[s] as usize
+        } else {
+            self.large[&object].bytes
+        };
+        unsafe {
+            Self::trace_object(self.descriptors, self.pointer_types, object, bytes, visit);
+        }
+    }
+    unsafe fn drain(&mut self, queue: &mut Vec<(usize, usize)>) {
+        while let Some((object, bytes)) = queue.pop() {
+            // Descriptors outlive the heap. Traversal borrows only object memory,
+            // so each edge can be marked directly without an intermediate vector.
             unsafe {
-                self.trace(p, &mut |edge| edges.push(edge));
-            }
-            for &edge in &edges {
-                self.mark(edge, queue);
+                Self::trace_object(
+                    self.descriptors,
+                    self.pointer_types,
+                    object,
+                    bytes,
+                    &mut |edge| self.mark(edge, queue),
+                );
             }
         }
     }
@@ -869,7 +906,6 @@ impl Heap {
         self.cursor = 0;
         self.accounted_cursor = 0;
         self.budget_end = 0;
-        self.budget_guard = 0;
         self.limit = 0;
         self.search = 0;
         self.emergency_cursor = 0;
@@ -891,7 +927,7 @@ impl Heap {
         for l in self.large.values_mut() {
             l.marked = false;
         }
-        let mut queue = Vec::new();
+        let mut queue = std::mem::take(&mut self.mark_stack);
         roots.conservative_ranges(&mut |low, high| {
             assert_eq!(low as usize % 8, 0);
             assert_eq!(high as usize % 8, 0);
@@ -967,6 +1003,7 @@ impl Heap {
             }
             l.marked
         });
+        self.mark_stack = queue;
         self.stats.allocated_since_gc = 0;
         self.stats.budget = Self::budget_for(self.stats.live_bytes);
         self.stats.collections += 1;

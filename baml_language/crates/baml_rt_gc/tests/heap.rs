@@ -699,3 +699,73 @@ fn allocatable_descriptors_still_require_headers() {
     }];
     let _ = Heap::new(&D, &TYPES);
 }
+
+#[test]
+fn sparse_start_words_and_cached_blocks_preserve_interior_bounds_after_sweep() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        let mut objects = Vec::new();
+        for i in 0..128 {
+            let bytes = [24, 40, 2056, 8192][i % 4];
+            let p = h.alloc(2, bytes, &roots) as usize;
+            roots.precise.borrow_mut().push(p);
+            objects.push((p, bytes));
+        }
+        // Reverse visits cross block boundaries and exercise sparse bitmap words.
+        for &(p, bytes) in objects.iter().rev() {
+            for offset in [0, 7, 15, bytes / 2, bytes - 1] {
+                assert_eq!(h.object_start(p + offset), Some(p));
+            }
+            if bytes % 16 != 0 {
+                assert_eq!(h.object_start(p + bytes), None);
+            }
+        }
+        *roots.precise.borrow_mut() = objects.iter().step_by(3).map(|&(p, _)| p).collect();
+        for _ in 0..2 {
+            h.collect(&roots);
+            for (i, &(p, bytes)) in objects.iter().enumerate().rev() {
+                assert_eq!(h.object_start(p + bytes - 1), (i % 3 == 0).then_some(p));
+            }
+        }
+        for _ in 0..1024 {
+            let p = h.alloc(2, 40, &roots);
+            assert!(
+                std::slice::from_raw_parts(p.add(8), 32)
+                    .iter()
+                    .all(|&v| v == 0)
+            );
+            p.add(8).write_bytes(0xab, 32);
+        }
+        h.collect(&roots);
+        for &(p, bytes) in objects.iter().step_by(3) {
+            assert_eq!(h.object_start(p + bytes - 1), Some(p));
+        }
+    }
+}
+
+#[test]
+fn direct_mark_stack_traces_deep_cycles_without_recursive_frames() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        let head = h.alloc(0, 32, &roots);
+        roots.precise.borrow_mut().push(head as usize);
+        let mut previous = head;
+        for _ in 1..65536 {
+            let next = h.alloc(0, 32, &roots);
+            link(previous, 1, next as usize);
+            link(next, 2, head as usize);
+            previous = next;
+        }
+        link(previous, 1, head as usize);
+        for _ in 0..3 {
+            h.collect(&roots);
+            assert_eq!(h.stats().live_bytes, 65536 * 32);
+        }
+        roots.precise.borrow_mut().clear();
+        h.collect(&roots);
+        assert_eq!(h.stats().live_bytes, 0);
+        assert_eq!(h.object_start(head as usize), None);
+    }
+}
