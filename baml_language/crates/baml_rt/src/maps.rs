@@ -404,23 +404,23 @@ impl<K: Slot, V: Slot> Map<K, V> {
 }
 impl<K: Key, V: Slot> Map<K, V> {
     pub fn get(self, cx: &mut Cx, key: K) -> R<Option<V>> {
-        let hash = key.hash(cx);
-        self.get_with(cx, key, hash, |cx, a, b| Ok(a.equals(b, cx)))
+        let hash = key.hash(cx)?;
+        self.get_with(cx, key, hash, |cx, a, b| a.equals(b, cx))
     }
     pub fn has(self, cx: &mut Cx, key: K) -> R<bool> {
         Ok(self.get(cx, key)?.is_some())
     }
     pub fn set(self, cx: &mut Cx, key: K, value: V) -> R<Option<V>> {
-        let hash = key.hash(cx);
-        self.set_with(cx, key, value, hash, |cx, a, b| Ok(a.equals(b, cx)))
+        let hash = key.hash(cx)?;
+        self.set_with(cx, key, value, hash, |cx, a, b| a.equals(b, cx))
     }
     pub fn delete(self, cx: &mut Cx, key: K) -> R<Option<V>> {
-        let hash = key.hash(cx);
-        self.delete_with(cx, key, hash, |cx, a, b| Ok(a.equals(b, cx)))
+        let hash = key.hash(cx)?;
+        self.delete_with(cx, key, hash, |cx, a, b| a.equals(b, cx))
     }
     pub fn get_or_insert(self, cx: &mut Cx, key: K, value: V) -> R<V> {
-        let hash = key.hash(cx);
-        self.get_or_insert_with(cx, key, value, hash, |cx, a, b| Ok(a.equals(b, cx)))
+        let hash = key.hash(cx)?;
+        self.get_or_insert_with(cx, key, value, hash, |cx, a, b| a.equals(b, cx))
     }
 }
 /// Immutable, managed snapshot: keeping it on the stack roots every entry,
@@ -448,7 +448,7 @@ impl<K: Slot, V: Slot> Snapshot<K, V> {
 #[derive(Clone, Copy)]
 pub struct StringIntMap(Map<Str, i64>);
 impl StringIntMap {
-    pub(crate) fn structural_string(self, cx: &Cx) -> String {
+    pub(crate) fn structural_string(self, cx: &Cx) -> R<String> {
         use std::fmt::Write;
         let mut text = String::from("{");
         for i in 0..self.0.len() {
@@ -456,10 +456,10 @@ impl StringIntMap {
                 text.push_str(", ");
             }
             let (key, value) = self.0.entry(i).unwrap();
-            write!(&mut text, "{:?}: {}", key.as_str(cx), value).unwrap();
+            write!(&mut text, "{:?}: {}", key.try_as_str(cx)?, value).unwrap();
         }
         text.push('}');
-        text
+        Ok(text)
     }
     /// # Safety
     /// The descriptors describe a growing List<i64> and its buffer.

@@ -859,7 +859,7 @@ fn rt_string_receiver_storage_and_function_values() {
             "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
             true,
         ),
-        ("function main() -> int { \"x\".trim().length() }", false),
+        ("function main() -> int { \"x\".trim().length() }", true),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
         let program = lower(&db, OptLevel::Two);
@@ -1081,9 +1081,9 @@ fn rt_source_bytes_and_diagnostics() {
             continue;
         }
         let expected = match name {
-            "trees" => "75abc10d2f6a77e4aa69c28de3081c9a020645731d9943791958294cd806b3ed",
-            "richards" => "3dfe652a80574cee5f829df03b8634707cb08ebce792cbfdec453ee6eac0a051",
-            "agent" => "2695a859b11039012e8cf7b079775e2167a9e2b20c5bd080513055307496b48f",
+            "trees" => "07a489d81bdb983a496221c5ab0bbdd0f4f81d879b392342596871c49d23f0b2",
+            "richards" => "d697a2bd47ccc8144264b9d6d9b7e40b792cfefb3ceb90a632b01897724919e5",
+            "agent" => "ad6107f6160961863e30a198448d4be7a27185a3f60af2b0380d3c42ebea4a3a",
             _ => "",
         };
         if expected.is_empty() {
@@ -1420,4 +1420,70 @@ fn rt_list_callbacks_are_typed_and_closed() {
         assert!(!emitted.contains("BexVm"));
     }
     assert_eq!(before, fingerprint(&program));
+}
+
+#[test]
+fn rt_string_builtins_and_unicode_views_compile_without_changing_bytecode() {
+    let source = include_str!("../rust_diff/strings/semantics.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let generated = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    for helper in [
+        "rt_string_split",
+        "rt_string_slice",
+        "rt_string_at",
+        "rt_int_parse",
+        "rt_from_code_points",
+    ] {
+        assert!(generated.contains(helper), "missing {helper}");
+    }
+    assert_eq!(before, fingerprint(&program));
+}
+
+#[test]
+fn rt_public_string_surface_is_admitted() {
+    let mut rejected = Vec::new();
+    for (name, source) in [
+        (
+            "formatting",
+            include_str!("../rust_diff/strings/formatting.baml"),
+        ),
+        ("regex", include_str!("../rust_diff/strings/regex.baml")),
+        (
+            "regex error",
+            include_str!("../rust_diff/strings/regex_error.baml"),
+        ),
+        ("utf8", include_str!("../rust_diff/strings/utf8.baml")),
+        (
+            "utf8 error",
+            include_str!("../rust_diff/strings/utf8_error.baml"),
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        if let Err(error) = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        ) {
+            rejected.push(format!("{name}: {error}"));
+        }
+    }
+    assert!(rejected.is_empty(), "{}", rejected.join("\n"));
 }

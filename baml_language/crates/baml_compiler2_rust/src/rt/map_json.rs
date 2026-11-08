@@ -99,10 +99,10 @@ fn emit_encoders(
             Repr::ListInt => "rt::maps::json::write_int_list(value.as_raw(),out)?;".into(),
             Repr::ListStr => "rt::maps::json::write_string_list(cx,rt::lists::List::from_raw(value.as_raw()),out)?;".into(),
             Repr::ListListStr => "rt::maps::json::write_nested_string_list(cx,rt::lists::List::from_raw(value.as_raw()),out)?;".into(),
-            Repr::Str => "rt::maps::json::write_string(out,value.as_str(cx));".to_owned(),
+            Repr::Str => "rt::maps::json::write_string(out,value.try_as_str(cx)?);".to_owned(),
             Repr::Null => "out.push_str(\"null\");".to_owned(),
             Repr::MapStrInt | Repr::Map(_) => format!(
-                "let text=rt_map_json_encode_{}(cx,value.as_raw(),path)?;out.push_str(text.as_str(cx));",
+                "let text=rt_map_json_encode_{}(cx,value.as_raw(),path)?;out.push_str(text.try_as_str(cx)?);",
                 self::code(value)?
             ),
             _ => unreachable!(),

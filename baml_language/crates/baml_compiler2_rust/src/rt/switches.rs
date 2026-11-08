@@ -189,10 +189,10 @@ impl Emitter<'_, '_> {
             TyTemplate::Literal(lit, _) => {
                 let tagged = self.coerce(value, Repr::Tagged)?;
                 return Ok(match lit {
-                    baml_type::Literal::String(s) => format!(
-                        "{{let v={tagged};v.tag==3 && rt::strings::Str::from_raw(v.payload as usize).as_str(&rt::strings::Cx::current())=={:?}}}",
-                        s.as_str()
-                    ),
+                    baml_type::Literal::String(s) => {
+                        let read = self.fallible("rt::strings::Str::from_raw(v.payload as usize).try_as_str(&rt::strings::Cx::current())");
+                        format!("{{let v={tagged};v.tag==3 && {read}=={:?}}}", s.as_str())
+                    }
                     baml_type::Literal::Int(i) => {
                         format!("{{let v={tagged};v.tag==0 && v.payload==({i}i64 as u64)}}")
                     }

@@ -90,6 +90,11 @@ impl Plan<'_> {
                     self.record(self.list_repr(element))?;
                 }
             }
+            Repr::MapStrPtr(c) => {
+                self.lists.insert(repr);
+                self.record(Repr::ListPtr(c))?;
+                self.record(Repr::ListStr)?;
+            }
             Repr::MapStrInt => {
                 self.lists.insert(repr);
                 self.record(Repr::ListInt)?;
@@ -117,7 +122,18 @@ impl Plan<'_> {
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
+            RuntimeTy::Uint8Array => Repr::Bytes,
+            RuntimeTy::RustType => Repr::Opaque,
             RuntimeTy::Function { .. } => Repr::Closure,
+            RuntimeTy::Map { key, value }
+                if matches!(key.as_ref(), RuntimeTy::String)
+                    && matches!(self.repr(value), Ok(Repr::Ptr(c)) if super::strings::builtin_class(self,"baml.regex.Group")==Ok(c)) =>
+            {
+                match self.repr(value)? {
+                    Repr::Ptr(c) => Repr::MapStrPtr(c),
+                    _ => unreachable!(),
+                }
+            }
             RuntimeTy::Map { key, value } => {
                 if matches!(key.as_ref(), RuntimeTy::Union(m) if !m.iter().all(scalar_key))
                     || matches!(key.as_ref(), RuntimeTy::Unknown)
@@ -190,6 +206,13 @@ impl Plan<'_> {
             RuntimeTy::Class(head, args)
                 if args.is_empty()
                     && head.builtin_primitive(self.lang)
+                        == Some(baml_type::PrimitiveType::Uint8Array) =>
+            {
+                Repr::Bytes
+            }
+            RuntimeTy::Class(head, args)
+                if args.is_empty()
+                    && head.builtin_primitive(self.lang)
                         == Some(baml_type::PrimitiveType::String) =>
             {
                 Repr::Str
@@ -239,6 +262,8 @@ impl Plan<'_> {
         Ok(match ty {
             T::Null => Repr::Null,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
+            T::Uint8Array => Repr::Bytes,
+            T::RustType => Repr::Opaque,
             T::Enum(head) | T::EnumVariant(head, _)
                 if self.program.packages.iter().any(|p| {
                     p.enums.iter().any(|(path, index)| {
@@ -262,6 +287,7 @@ impl Plan<'_> {
             T::Float | T::Literal(baml_type::Literal::Float(_), _) => Repr::Float,
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::String | T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
+            T::Map {key,value} if matches!(key.as_ref(),T::String) && matches!(self.field_repr(value),Ok(Repr::Ptr(c)) if super::strings::builtin_class(self,"baml.regex.Group")==Ok(c)) => { match self.field_repr(value)? {Repr::Ptr(c)=>Repr::MapStrPtr(c),_=>unreachable!()} }
             T::Map { key, value } => {
                 if matches!(key.as_ref(), T::Union(m) if !m.iter().all(scalar_field_key))
                     || matches!(key.as_ref(), T::Unknown)
@@ -363,7 +389,8 @@ impl Plan<'_> {
                 && package
                     .objects
                     .contains(&u32::try_from(object).expect("object index"))
-        }) && (class.path.to_string().starts_with("panics.")
+        }) && ((class.path.to_string().starts_with("panics.")
+            && class.path.to_string() != "panics.UserPanic")
             || matches!(
                 class.path.to_string().as_str(),
                 "json.ParseError" | "json.DecodeError"
@@ -450,6 +477,8 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             let id = *next;
             *next += if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
                 4
+            } else if matches!(r, Repr::MapStrPtr(_)) {
+                3
             } else if r.growing() {
                 2
             } else {
@@ -463,6 +492,8 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         .map(|(repr, id)| {
             id + if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
                 4
+            } else if matches!(repr, Repr::MapStrPtr(_)) {
+                3
             } else if repr.growing() {
                 2
             } else {
@@ -477,56 +508,63 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         } else {
             0
         };
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::MAP_KEY_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::MAP_KEY_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,\n");
     for (&object, layout) in &plan.layouts {
         if plan.list_error_descriptor(object).is_some() {
             continue;
         }
         let class = plan.class(object);
-        let fields = class
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(i, f)| {
-                format!(
-                    "Field{{name:{:?},offset:{},slot:SlotKind::{},type_id:{}}}",
-                    f.name,
-                    layout.offsets[i],
-                    if layout.fields[i].pointer() {
-                        "Pointer"
-                    } else if matches!(layout.fields[i], Repr::Dyn(_) | Repr::Tagged) {
-                        "Tagged"
-                    } else {
-                        "Scalar"
-                    },
-                    match layout.fields[i] {
-                        Repr::Ptr(c) => descriptors[&c] + 3,
-                        r @ (Repr::List(_)
-                        | Repr::ListInt
-                        | Repr::ListPtr(_)
-                        | Repr::ListStr
-                        | Repr::ListListStr
-                        | Repr::ListClosure(_)
-                        | Repr::MapStrInt
-                        | Repr::Map(_)) => lists[&r] + 3,
-                        Repr::Tagged => after_descriptors + 3,
-                        Repr::Dyn(i) => after_descriptors + i + 4,
-                        Repr::Str => 3,
-                        Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
-                        Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
-                        Repr::Int => 0,
-                        Repr::Float => u32::MAX as usize,
-                        Repr::Bool => 1,
-                        Repr::Enum(e) =>
-                            after_lists + 4 + plan.enums.iter().position(|i| *i == e).unwrap(),
-                        Repr::Naming => after_lists + 3,
-                        Repr::Null => 2,
-                        Repr::Iter | Repr::Type(_) => unreachable!("null/type fields are rejected"),
-                    }
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",");
+        let fields =
+            class
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(i, f)| {
+                    format!(
+                        "Field{{name:{:?},offset:{},slot:SlotKind::{},type_id:{}}}",
+                        f.name,
+                        layout.offsets[i],
+                        if layout.fields[i].pointer() {
+                            "Pointer"
+                        } else if matches!(layout.fields[i], Repr::Dyn(_) | Repr::Tagged) {
+                            "Tagged"
+                        } else {
+                            "Scalar"
+                        },
+                        match layout.fields[i] {
+                            Repr::Ptr(c) => descriptors[&c] + 3,
+                            r @ (Repr::List(_)
+                            | Repr::ListInt
+                            | Repr::ListPtr(_)
+                            | Repr::ListStr
+                            | Repr::ListListStr
+                            | Repr::ListClosure(_)
+                            | Repr::MapStrInt
+                            | Repr::Map(_)
+                            | Repr::MapStrPtr(_)) => lists[&r] + 3,
+                            Repr::Tagged => after_descriptors + 3,
+                            Repr::Dyn(i) => after_descriptors + i + 4,
+                            Repr::Str => 3,
+                            Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
+                            Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
+                            Repr::Opaque => 18,
+                            Repr::Bytes => 19,
+                            Repr::Int => 0,
+                            Repr::Float => u32::MAX as usize,
+                            Repr::Bool => 1,
+                            Repr::Enum(e) =>
+                                after_descriptors
+                                    + 4
+                                    + plan.enums.iter().position(|i| *i == e).unwrap(),
+                            Repr::Naming => after_descriptors + 3,
+                            Repr::Null => 2,
+                            Repr::Iter | Repr::Type(_) =>
+                                unreachable!("null/type fields are rejected"),
+                        }
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
         writeln!(&mut out,"Descriptor{{kind:Kind::Class,size:{},ptr_slots:(8,{}),tagged_slots:({},{}),elem:None,type_id:{},fields:&[{fields}],finalizer:None}},",layout.bytes,layout.pointers,8+layout.pointers*8,layout.tagged,descriptors[&object]+3).unwrap();
     }
     for (repr, desc) in &lists {
@@ -543,9 +581,14 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             }
             continue;
         }
-        if *repr == Repr::MapStrInt {
-            for i in 0..4 {
-                writeln!(&mut out, "rt::maps::descriptors({desc})[{i}],").unwrap();
+        if matches!(*repr, Repr::MapStrInt | Repr::MapStrPtr(_)) {
+            for i in 0..if *repr == Repr::MapStrInt { 4 } else { 3 } {
+                let module = if *repr == Repr::MapStrInt {
+                    "maps"
+                } else {
+                    "regex_map"
+                };
+                writeln!(&mut out, "rt::{module}::descriptors({desc})[{i}],").unwrap();
             }
             continue;
         }
@@ -613,8 +656,10 @@ pub(super) struct LayoutIds {
     pub descriptors: BTreeMap<usize, usize>,
     pub lists: BTreeMap<Repr, usize>,
 }
+// Existing runtime descriptors keep indices 0..13; rope nodes, native handles and
+// byte buffers occupy 13..17. Their runtime allocation IDs must match this prefix.
 pub(super) fn rt_descriptors() -> usize {
-    13
+    17
 }
 
 // A recursive alias's unfolded union can name containers whose concrete
@@ -651,6 +696,8 @@ impl Plan<'_> {
             .map(|repr| {
                 if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
                     4
+                } else if matches!(repr, Repr::MapStrPtr(_)) {
+                    3
                 } else if repr.growing() {
                     2
                 } else {

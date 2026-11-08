@@ -3,11 +3,7 @@ use super::*;
 pub(super) fn handles(name: &str) -> bool {
     matches!(
         name,
-        "baml.Float.itrunc"
-            | "baml.Float.floor"
-            | "baml.Float.sqrt"
-            | "baml.String.is_ascii"
-            | "baml.String.from_code_points"
+        "baml.Float.itrunc" | "baml.Float.floor" | "baml.Float.sqrt"
     )
 }
 pub(super) struct Feature;
@@ -46,7 +42,7 @@ impl registry::Feature for Feature {
                 ("baml.Float.floor",Repr::Float)=>(format!("({value}).floor()"),Repr::Float),
                 ("baml.Float.sqrt",Repr::Float)=>(format!("({value}).sqrt()"),Repr::Float),
                 ("baml.Float.itrunc",Repr::Float)=>(e.fallible(&format!("rt::list_scalars::itrunc(&mut rt::strings::Cx::current(),{value})")),Repr::Int),
-                ("baml.String.is_ascii",Repr::Str)=>(format!("rt::strings::Str::from_raw({value}).as_str(&rt::strings::Cx::current()).is_ascii()"),Repr::Bool),
+                ("baml.String.is_ascii",Repr::Str)=>(format!("rt::strings::Str::from_raw({value}).try_as_str(&rt::strings::Cx::current())?.is_ascii()"),Repr::Bool),
                 ("baml.String.from_code_points",Repr::ListInt)=>(e.fallible(&format!("rt::list_scalars::from_code_points(&mut rt::strings::Cx::current(),rt::lists::List::<i64>::from_raw({value})).map(|s|s.as_raw())")),Repr::Str),
                 _=>return Err(no("list scalar builtin representation")),
             })

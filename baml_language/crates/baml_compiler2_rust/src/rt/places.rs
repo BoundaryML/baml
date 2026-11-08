@@ -16,6 +16,9 @@ impl Emitter<'_, '_> {
         if self.iters.contains(&i) {
             return Ok(Repr::Iter);
         }
+        if let Some(repr) = super::string_defaults::parameter(self.plan, self.object, i) {
+            return Ok(repr);
+        }
         self.plan.local_repr(self.body, i, 0)
     }
     pub(super) fn tag(&self, repr: Repr) -> Gen<usize> {
@@ -27,6 +30,8 @@ impl Emitter<'_, '_> {
             Repr::Str => Ok(3),
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
+            Repr::Opaque => Ok(18),
+            Repr::Bytes => Ok(19),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::List(_)
             | Repr::ListInt
@@ -35,7 +40,8 @@ impl Emitter<'_, '_> {
             | Repr::ListClosure(_)
             | Repr::ListPtr(_)
             | Repr::MapStrInt
-            | Repr::Map(_)) => Ok(self.lists[&r] + 3),
+            | Repr::Map(_)
+            | Repr::MapStrPtr(_)) => Ok(self.lists[&r] + 3),
             _ => Err(no("static tag")),
         }
     }
@@ -223,13 +229,7 @@ impl Emitter<'_, '_> {
                 Ok((format!("f64::from_bits({bits})"), Repr::Float))
             }
             Operand::Constant(Constant::Bool(b)) => Ok((b.to_string(), Repr::Bool)),
-            Operand::Constant(Constant::String(text)) => Ok((
-                self.fallible(&format!(
-                    "rt::strings::Cx::current().string({:?}).map(|s|s.as_raw())",
-                    text.as_str()
-                )),
-                Repr::Str,
-            )),
+            Operand::Constant(Constant::String(text)) => self.string_literal(text.as_str()),
             Operand::Constant(Constant::EnumVariant { enum_ref, index }) => {
                 let head = baml_compiler2_hir_ty::layout::enum_head(self.db, *enum_ref);
                 Ok((
@@ -252,7 +252,9 @@ impl Emitter<'_, '_> {
                     Repr::Closure,
                 ))
             }
-            Operand::Constant(Constant::OmittedArg) => {
+            Operand::Constant(Constant::OmittedArg)
+                if super::string_defaults::allows_omission(self) =>
+            {
                 Ok(("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged))
             }
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),

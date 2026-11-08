@@ -2,8 +2,10 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod bytes;
 pub mod calls;
 pub mod closures;
+pub mod format;
 pub mod globals;
 pub mod json;
 pub mod json_lists;
@@ -12,6 +14,9 @@ pub mod list_errors;
 pub mod list_scalars;
 pub mod lists;
 pub mod maps;
+pub mod native;
+pub mod regex;
+pub mod regex_map;
 pub mod strings;
 pub mod telemetry;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
@@ -79,13 +84,15 @@ pub unsafe fn alloc(desc: u32, bytes: usize) -> *mut u8 {
 /// Same contract as `alloc`.
 #[inline(always)]
 pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
-    let result = HEAP.with(|heap| {
-        assert!(
-            !heap.get().is_null() && !ROOTS.get().is_null(),
-            "rt allocation outside a root task"
-        );
-        unsafe { (&mut *heap.get()).try_alloc(desc, bytes, &Roots(&*ROOTS.get())) }
-    });
+    // Keep the TLS getters small: a closure containing the whole allocation
+    // path prevents LLVM from inlining LocalKey::with into string concat loops.
+    let heap = HEAP.get();
+    let roots = ROOTS.get();
+    assert!(
+        !heap.is_null() && !roots.is_null(),
+        "rt allocation outside a root task"
+    );
+    let result = unsafe { (&mut *heap).try_alloc(desc, bytes, &Roots(&*roots)) };
     result.map_err(|failure| language::allocation_failure(failure.bytes))
 }
 
@@ -153,6 +160,7 @@ pub struct Instance {
     tasks: TaskLoop,
     _io: tokio::runtime::Runtime,
     functions: FunctionValues,
+    compact_strings: bool,
 }
 impl Instance {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
@@ -191,6 +199,7 @@ impl Instance {
             tasks,
             _io: io,
             functions: FunctionValues::new(),
+            compact_strings: strings::compact_descriptor(descriptors),
         }
     }
 
@@ -225,6 +234,7 @@ impl Instance {
         let globals = &self.globals as *const globals::Globals;
         let roots = self.tasks.integration_roots();
         let functions = &mut self.functions as *mut FunctionValues;
+        let compact_strings = self.compact_strings;
         let future = self.tasks.spawn(move |cx| {
             struct Binding(
                 *mut Heap,
@@ -234,6 +244,7 @@ impl Instance {
                 *const Cell<u8>,
                 *mut FunctionValues,
                 *const globals::Globals,
+                bool,
             );
             impl Drop for Binding {
                 fn drop(&mut self) {
@@ -244,6 +255,7 @@ impl Instance {
                     POLL_WORD.set(self.4);
                     FUNCTIONS.set(self.5);
                     globals::CURRENT.set(self.6);
+                    strings::COMPACT_STRINGS.set(self.7);
                 }
             }
             let previous_functions = FUNCTIONS.replace(functions);
@@ -256,6 +268,7 @@ impl Instance {
             let previous_limit = STACK_LIMIT.replace(roots.stack_limit(cx.id()));
             let poll_word = roots.poll_word();
             let previous_poll = POLL_WORD.replace(Rc::as_ptr(&poll_word));
+            let previous_strings = strings::COMPACT_STRINGS.replace(compact_strings);
             let _binding = Binding(
                 previous_heap,
                 previous_task,
@@ -264,6 +277,7 @@ impl Instance {
                 previous_poll,
                 previous_functions,
                 previous_globals,
+                previous_strings,
             );
             *output.borrow_mut() = Some(entry());
             Ok(Value::int(0))

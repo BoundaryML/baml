@@ -6,6 +6,8 @@ pub(super) enum Repr {
     Float,
     Bool,
     Str,
+    Bytes,
+    Opaque,
     Ptr(usize),
     ListInt,
     List(usize),
@@ -17,6 +19,7 @@ pub(super) enum Repr {
     Tagged,
     MapStrInt,
     Map(usize),
+    MapStrPtr(usize),
     Iter,
     Naming,
     Enum(usize),
@@ -94,6 +97,8 @@ impl Repr {
         matches!(
             self,
             Self::Str
+                | Self::Bytes
+                | Self::Opaque
                 | Self::Ptr(_)
                 | Self::List(_)
                 | Self::ListInt
@@ -105,6 +110,7 @@ impl Repr {
                 | Self::Cell
                 | Self::ListClosure(_)
                 | Self::Map(_)
+                | Self::MapStrPtr(_)
         )
     }
 }

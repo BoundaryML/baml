@@ -111,6 +111,18 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
+        if matches!(desc, 13 | 14) {
+            out.push_str("rt::telemetry::capture::Shape::String,\n");
+            continue;
+        }
+        if matches!(desc, 15 | 16) {
+            out.push_str(if desc == 15 {
+                "rt::telemetry::capture::Shape::RustType,\n"
+            } else {
+                "rt::telemetry::capture::Shape::Uint8Array,\n"
+            });
+            continue;
+        }
         let class = if desc < layout::rt_descriptors() {
             Some(runtime[desc - 1])
         } else {
@@ -138,7 +150,12 @@ pub(super) fn emit(
                 format!("Class{{declaration:CAPTURE_D{class},fields:DESCRIPTORS[{desc}].fields}}")
             }
         } else if let Some((&repr, _)) = lists.iter().find(|(_, index)| **index == desc) {
-            if repr == Repr::MapStrInt {
+            if let Repr::MapStrPtr(c) = repr {
+                format!(
+                    "MapStringPtr{{tag:{},value:&rt::telemetry::capture::Type::Class(CAPTURE_D{c})}}",
+                    descriptors[&c] + 3
+                )
+            } else if repr == Repr::MapStrInt {
                 "MapStringInt".to_owned()
             } else if matches!(repr, Repr::Map(_)) {
                 let (key, value) = plan.map_parts(repr)?;
@@ -243,6 +260,15 @@ fn capture_element(
         Repr::Bool => (1, "Bool".into()),
         Repr::Float => (u32::MAX as usize, "Float".into()),
         Repr::Str => (3, "String".into()),
+        Repr::Opaque => (18, "RustType".into()),
+        Repr::Bytes => (19, "Uint8Array".into()),
+        Repr::MapStrPtr(c) => (
+            lists[&repr] + 3,
+            format!(
+                "Map(&rt::telemetry::capture::Type::String,&rt::telemetry::capture::Type::{})",
+                capture_class(plan, c)?
+            ),
+        ),
         Repr::Ptr(c) => (descriptors[&c] + 3, capture_class(plan, c)?),
         r if r.growing() => {
             let (_, element) = capture_list_element(plan, descriptors, lists, r)?;
@@ -354,6 +380,8 @@ fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<Strin
         T::Unknown => "Unknown".into(),
         T::Never => "Never".into(),
         T::String => "String".into(),
+        T::Uint8Array => "Uint8Array".into(),
+        T::RustType => "RustType".into(),
         T::Class(head, args) => {
             let c = plan.class_tag(head.tag())?;
             if args.is_empty() {
@@ -460,6 +488,12 @@ pub(super) fn capture_repr(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
         Repr::Float => format!("{prefix}Float"),
         Repr::Bool => format!("{prefix}Bool"),
         Repr::Str => format!("{prefix}String"),
+        Repr::Opaque => format!("{prefix}RustType"),
+        Repr::Bytes => format!("{prefix}Uint8Array"),
+        Repr::MapStrPtr(c) => format!(
+            "{prefix}Map(&{prefix}String,&{prefix}{})",
+            capture_class(plan, c)?
+        ),
         Repr::Null => format!("{prefix}Null"),
         Repr::Tagged | Repr::Dyn(_) => format!("{prefix}Unknown"),
         Repr::Ptr(c) => format!("{prefix}{}", capture_class(plan, c)?),

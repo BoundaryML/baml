@@ -1,6 +1,12 @@
 use super::*;
 
 impl Emitter<'_, '_> {
+    fn parameter_repr(&self, index: usize) -> Gen<Repr> {
+        if let Some(repr) = super::string_defaults::parameter(self.plan, self.object, index) {
+            return Ok(repr);
+        }
+        self.plan.local_repr(self.body, index, 0)
+    }
     pub(super) fn function(&mut self, arity: usize, inline: bool, stack_leaf: bool) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
@@ -77,12 +83,7 @@ impl Emitter<'_, '_> {
         }
         let environment = self.plan.captures.contains_key(&self.object);
         let params = (1..=arity)
-            .map(|i| {
-                Ok(format!(
-                    "mut l{i}:{}",
-                    self.plan.local_repr(self.body, i, 0)?.rust()
-                ))
-            })
+            .map(|i| Ok(format!("mut l{i}:{}", self.parameter_repr(i)?.rust())))
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let params = if environment {
@@ -111,7 +112,7 @@ impl Emitter<'_, '_> {
             arguments
         };
         let captured_args = (1..=arity)
-            .map(|i| self.capture_value(format!("l{i}"), self.plan.local_repr(self.body, i, 0)?))
+            .map(|i| self.capture_value(format!("l{i}"), self.parameter_repr(i)?))
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
@@ -140,10 +141,8 @@ impl Emitter<'_, '_> {
         );
         for i in 1..=arity {
             if self.body.locals[i].is_captured {
-                let value = self.coerce(
-                    (format!("l{i}"), self.plan.local_repr(self.body, i, 0)?),
-                    Repr::Tagged,
-                )?;
+                let value =
+                    self.coerce((format!("l{i}"), self.parameter_repr(i)?), Repr::Tagged)?;
                 writeln!(
                     &mut code,
                     "let mut l{i}=rt::closures::cell({},{value}).map_err(|e|e.at(&S{object},0))?;",
@@ -190,7 +189,9 @@ impl Emitter<'_, '_> {
         for h in cfg.loop_headers() {
             writeln!(&mut code, "let mut poll{h}=0u32;").unwrap();
         }
-        code.push_str(&self.stmts(&structured.stmts, &cfg.loop_headers())?);
+        let body = self.stmts(&structured.stmts, &cfg.loop_headers())?;
+        code.push_str(&self.string_literal_locals());
+        code.push_str(&body);
         code.push_str("}}\n");
         let lines = self
             .sites

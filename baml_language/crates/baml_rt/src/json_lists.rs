@@ -422,7 +422,7 @@ impl Ty {
 /// # Safety
 /// Schema descriptors, offsets and slot kinds match the generated program.
 pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
-    let source = text.as_str(cx).to_owned();
+    let source = text.try_as_str(cx)?.to_owned();
     let value = crate::json::parse_owned(cx, &source)?;
     if let Err(report) = ty.check(&value, "") {
         return Err(crate::json::decode_error(cx, report.message, report.path));
@@ -489,8 +489,9 @@ impl Encoder<'_> {
             2 => self.out.push_str("null"),
             3 => {
                 let text = unsafe { Str::from_raw(value.payload as usize) };
-                self.out
-                    .push_str(&serde_json::to_string(text.as_str(self.cx)).expect("string JSON"));
+                self.out.push_str(
+                    &serde_json::to_string(text.try_as_str(self.cx)?).expect("string JSON"),
+                );
             }
             tag if tag == u32::MAX as u64 => {
                 let f = f64::from_bits(value.payload);
@@ -579,7 +580,7 @@ impl Encoder<'_> {
                         for i in 0..len {
                             let (key, value) = unsafe { entry(pointer, i) };
                             let key = unsafe { Str::from_raw(key.payload as usize) }
-                                .as_str(self.cx)
+                                .try_as_str(self.cx)?
                                 .to_owned();
                             self.separator(i == 0, depth + 1);
                             self.out
@@ -686,7 +687,7 @@ pub unsafe fn stringify(
         " ".repeat(n as usize)
     } else {
         let text = unsafe { Str::from_raw(indent.payload as usize) }
-            .as_str(cx)
+            .try_as_str(cx)?
             .to_owned();
         let width = text.chars().count();
         if width > 10 {

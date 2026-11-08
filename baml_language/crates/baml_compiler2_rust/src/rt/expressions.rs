@@ -31,9 +31,10 @@ impl Emitter<'_, '_> {
                     baml_compiler2_mir::TyTemplate::Literal(baml_type::Literal::String(literal), _),
                 ) = test
                 {
+                    let text=self.fallible("rt::strings::Str::from_raw(v.payload as usize).try_as_str(&rt::strings::Cx::current())");
                     return Ok((
                         format!(
-                            "{{let v={value};v.tag==3 && rt::strings::Str::from_raw(v.payload as usize).as_str(&rt::strings::Cx::current())=={:?}}}",
+                            "{{let v={value};v.tag==3 && {text}=={:?}}}",
                             literal.as_str()
                         ),
                         Repr::Bool,
@@ -95,16 +96,14 @@ impl Emitter<'_, '_> {
                         BinOp::Ge => "is_ge",
                         _ => unreachable!(),
                     };
-                    return Ok((
-                        format!(
-                            "{{let cx=rt::strings::Cx::current();rt::strings::Str::from_raw({l}).as_str(&cx).cmp(rt::strings::Str::from_raw({r}).as_str(&cx)).{method}()}}"
-                        ),
-                        Repr::Bool,
+                    let ordering = self.fallible(&format!(
+                        "(||->R<std::cmp::Ordering>{{let cx=rt::strings::Cx::current();Ok(rt::strings::Str::from_raw({l}).try_as_str(&cx)?.cmp(rt::strings::Str::from_raw({r}).try_as_str(&cx)?))}})()"
                     ));
+                    return Ok((format!("({ordering}).{method}()"), Repr::Bool));
                 }
                 if lt == Repr::Str && rt == Repr::Str && matches!(op, BinOp::Eq | BinOp::Ne) {
                     let expression = format!(
-                        "{{let a={l};let b={r};if a==0 || b==0 {{a==b}} else {{rt::strings::Str::from_raw(a).as_str(&rt::strings::Cx::current())==rt::strings::Str::from_raw(b).as_str(&rt::strings::Cx::current())}}}}"
+                        "{{let a={l};let b={r};if a==0 || b==0 {{a==b}} else {{rt::strings::Str::from_raw(a).try_as_str(&rt::strings::Cx::current())?==rt::strings::Str::from_raw(b).try_as_str(&rt::strings::Cx::current())?}}}}"
                     );
                     return Ok((
                         if *op == BinOp::Ne {

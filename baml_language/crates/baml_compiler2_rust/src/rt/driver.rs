@@ -60,6 +60,9 @@ fn compile(
         heads: BTreeMap::new(),
         dispatches: BTreeMap::new(),
         function_frames: BTreeMap::new(),
+        structural_strings: false,
+        structural_string_calls: BTreeSet::new(),
+        string_overrides: BTreeMap::new(),
         alias_tests: std::cell::RefCell::new(BTreeSet::new()),
         environments: false,
         captures: BTreeMap::new(),
@@ -84,6 +87,7 @@ fn compile(
     );
     builtins::emit(&mut out, &builtins)?;
     let layout::LayoutIds { descriptors, lists } = layout::emit(&mut out, &plan)?;
+    super::regex::emit(&mut out, &plan, &descriptors, &lists, &builtins)?;
     let host_function = |name: &str| {
         program
             .objects
@@ -206,6 +210,8 @@ fn compile(
             raise_kinds: Vec::new(),
             telemetry_sites: &telemetry_sites,
             site: 0,
+            string_cx: std::cell::Cell::new(false),
+            string_literals: std::cell::RefCell::new(BTreeMap::new()),
         };
         let stack_leaf = stack_leaves.contains(&object);
         out.push_str(
@@ -265,6 +271,8 @@ fn compile(
                 raise_kinds: Vec::new(),
                 telemetry_sites: &telemetry_sites,
                 site: 0,
+                string_cx: std::cell::Cell::new(false),
+                string_literals: std::cell::RefCell::new(BTreeMap::new()),
             };
             let expression =
                 emitter.membership(("value".into(), super::Repr::Tagged), &template)?;

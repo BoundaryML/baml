@@ -21,7 +21,12 @@ impl Plan<'_> {
                 let runtime = baml_compiler2_mir::RealizedTy::try_from(ty)
                     .map(RuntimeTy::from)
                     .map_err(|_| no("map type argument"))?;
-                super::map_json::code(self.repr(&runtime)?)
+                match self.repr(&runtime)? {
+                    // Regex named-group maps carry type arguments through ordinary
+                    // BAML formatting too, without requesting a JSON decoder.
+                    Repr::MapStrPtr(c) => Ok(3_000_000 + c),
+                    repr => super::map_json::code(repr),
+                }
             }
             _ => Ok(self
                 .type_codes
@@ -213,7 +218,7 @@ pub(super) fn emit(
                                     .or_insert(next);
                             }
                         }
-                        writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.as_str(&read_cx);let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
+                        writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.try_as_str(&read_cx)?;let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
                         for (name, index) in &names {
                             writeln!(&mut out, "{name:?}=>Some({index}),").unwrap();
                         }

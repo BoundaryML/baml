@@ -4,18 +4,21 @@
 use crate::{BamlType, BuiltinPipeline, NativeBuiltin, ReceiverType};
 
 pub fn supports_rt(path: &str) -> bool {
-    matches!(
-        path,
-        "baml._to_string_default"
-            | "baml.String.to_code_points"
-            | "baml.Map.set"
-            | "baml.Map.values"
-            | "baml.String.char_count"
-            | "baml.String.slice"
-            | "baml.Array.push"
-            | "baml.Array.join"
-            | "baml.Array.length"
-    )
+    crate::codegen_rt_regex::supports(path)
+        || crate::codegen_rt_bytes::supports(path)
+        || crate::codegen_rt_strings::supports(path)
+        || matches!(
+            path,
+            "baml._to_string_default"
+                | "baml.String.to_code_points"
+                | "baml.Map.set"
+                | "baml.Map.values"
+                | "baml.String.char_count"
+                | "baml.String.slice"
+                | "baml.Array.push"
+                | "baml.Array.join"
+                | "baml.Array.length"
+        )
 }
 
 /// Generate only requested adapters, checked against extracted stdlib declarations.
@@ -33,6 +36,18 @@ pub fn generate_rt(
             .iter()
             .find(|d| d.path == *path)
             .ok_or_else(|| format!("baml_rt builtin declaration missing: {path}"))?;
+        if crate::codegen_rt_regex::supports(path) {
+            output.push_str(&crate::codegen_rt_regex::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_bytes::supports(path) {
+            output.push_str(&crate::codegen_rt_bytes::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_strings::supports(path) {
+            output.push_str(&crate::codegen_rt_strings::generate(declaration)?);
+            continue;
+        }
         if path == "baml._to_string_default" || path == "baml.String.to_code_points" {
             let integer = path == "baml._to_string_default";
             let params = if integer {
@@ -246,7 +261,7 @@ mod tests {
                 .contains("changed builtin signature")
         );
         assert!(
-            generate_rt(&declarations, &["baml.String.trim".into()].into())
+            generate_rt(&declarations, &["baml.String.unknown".into()].into())
                 .unwrap_err()
                 .contains("unsupported in baml_rt")
         );

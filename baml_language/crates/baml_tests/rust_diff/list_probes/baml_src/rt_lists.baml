@@ -434,3 +434,24 @@ function RuntimeListNarrowSavedTest(v:RuntimeListNarrowInts|RuntimeListNarrowFlo
 function RuntimeListSavedTypeTest() -> int {
     if(RuntimeListNarrowSavedTest(RuntimeListNarrowInts{values:[1]})==2 && RuntimeListNarrowSavedTest(RuntimeListNarrowFloats{values:[1.5]})==0){1}else{-1}
 }
+
+// Exercise ropes/views across the growing-list ABI and tagged search/JSON paths.
+function RuntimeListRopes() -> int {
+    let prefix = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefgh";
+    let suffix = "-suffix";
+    let rope = prefix + suffix;
+    let view = rope.slice(58, 65);
+    let values = [rope, prefix, view];
+    values.push(prefix + suffix);
+    let found = values.includes(prefix + suffix);
+    let sorted = baml._rust_sort(values);
+    let tagged: (int | string)[] = [1, rope];
+    let decoded = baml.json.decode<string[]>(baml.json.stringify(values));
+    let mixed: (int | string | float)[] = [1, rope, 2.5];
+    let formatted = string.from(mixed);
+    let mapping: map<string, int> = {};
+    mapping[rope] = 7;
+    if (formatted.includes("2.5") && found && tagged.includes(prefix + suffix) && decoded[0] == prefix && sorted[-1] == view && mapping[prefix + suffix] == 7 && values.join("|").length() > 100) {
+        string.from_code_points(view.to_code_points()).length()
+    } else { -1 }
+}

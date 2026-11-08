@@ -60,7 +60,7 @@ fn emit_host(
         "i64"
     };
     let convert = if returned == Repr::Str {
-        "rt::strings::Str::from_raw(value).as_str(&rt::strings::Cx::current()).to_owned()"
+        "rt::strings::Str::from_raw(value).to_owned()"
     } else {
         "value"
     };

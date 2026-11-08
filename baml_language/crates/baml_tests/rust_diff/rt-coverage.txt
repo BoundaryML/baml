@@ -1,18 +1,17 @@
-BAML runtime differential coverage (normal AND GC stress): 62 pass, 108 unsupported, 0 fail
+BAML runtime coverage baseline: 77 pass, 107 unsupported, 0 fail
 Telemetry off: required
-Scoped verification: 48 list probes and both standalone closure probes pass.
-KPI admission and execution: 16/16 verified on rt-off, rt-medium, vm-off and Node (3 trials, 0 failures).
-KPI rows marked verified record normal execution.
-Full-size GC stress also matches for both arrays, merge sort, quicksort, nbody, JSON aggregate and JSON request body.
-Full-size JSON parser GC stress reached the 60-second limit; retained memory graphs are left to the GC job.
-The independent type-dispatch project passes in both GC modes.
-Retained setup benchmarks pass for integer and owned string results, including GC stress and medium telemetry.
-Unselected rows retain prior verification; the full merged differential gate is deferred.
+Current scoped verification: 49 list probes and both standalone closure probes pass on rt and rt-gc-stress.
+All 10 string probes pass on rt and rt-gc-stress at off/low/medium/high/default telemetry.
+Call-cost main/uncaught/stack_calls match the VM in both GC modes at all five telemetry levels.
+KPI admission and execution: 16/16 list KPIs plus concat and split verify on rt-off, rt-medium, vm-off and Node (3 trials, 216 successful trials).
+KPI rows record normal execution; the full-size retained-graph GC-stress runs belong to the GC job.
+Before this integration, full-size GC stress matched both arrays, merge sort, quicksort, nbody, JSON aggregate and JSON request body; JSON parser reached the 60-second limit.
+The earlier independent type-dispatch and retained setup benchmarks pass in both GC modes.
+Unselected rows retain historical verification; the full merged differential/corpus gates are deferred.
 
 First unsupported constructs (historical unselected fixtures):
 103	top-level initializers
 1	baml.Map.get
-1	baml.String.split
 1	baml.json._stringify
 1	closures
 1	list field element (layout Tree, object 4182, types [TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }), List(TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }))]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Tree" }, []))
@@ -142,6 +141,7 @@ RuntimeListPublicSort	pass
 RuntimeListRecursiveJson	pass
 RuntimeListReductionOverflow	pass
 RuntimeListReductions	pass
+RuntimeListRopes	pass
 RuntimeListSavedTypeTest	pass
 RuntimeListScalarBoundaries	pass
 RuntimeListSortBoolError	pass
@@ -167,40 +167,37 @@ SpawnPanicUncaught	unsupported: top-level initializers
 SpawnThrowUncaught	unsupported: top-level initializers
 SpawnedClosures	unsupported: top-level initializers
 Spawns	unsupported: top-level initializers
+StackAllocation	pass
 TaskOverflow	unsupported: top-level initializers
 ThreadLocalParallel	unsupported: top-level initializers
 TimeoutCancellation	unsupported: top-level initializers
 Uncaught	unsupported: top-level initializers
 classes::method call 100k	pass
-compute::array build sum 100k	verified
-compute::array traversal 8k	verified
 compute::fib32 recursive	pass
 compute::generate sort 8k	unsupported: closures
-compute::json aggregate 2k	verified
 compute::json hello	unsupported: baml.json._stringify
 compute::json ndjson events	pass
-compute::json request body	verified
 compute::json tree path	unsupported: list field element (layout Tree, object 4182, types [TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }), List(TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) }))]) (user.main local 1: Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "Tree" }, []))
 compute::k-nucleotide 25k	unsupported: baml.Map.get
-compute::merge sort 20k	verified
-compute::nbody 20k	verified
 compute::nested loops 500x500	pass
 compute::pure call 1m	pass
-compute::quick sort 3-way 1k	verified
 interfaces::polymorphic dispatch 100k	pass
-memory::allocation high retention	verified
-memory::allocation low retention	verified
 memory::binary trees 14	pass
-memory::cycles into live	verified
-memory::cyclic churn	verified
-memory::heap calls	verified
-memory::live heap	verified
-memory::live walk	verified
-memory::splay 2k	verified
 process::startup	pass
 programs::agent loop 300	pass
-programs::json parser 15	verified
 programs::richards 50	pass
+rt_call_cost_semantics_at_every_telemetry_level	pass
+rt_setup_state_benchmark	pass
 rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass
-string::split medium literal 10k	unsupported: baml.String.split
+string::split medium literal 10k	pass
+strings::codepoint error	pass
+strings::float	pass
+strings::float error	pass
+strings::formatting	pass
+strings::parse error	pass
+strings::regex	pass
+strings::regex error	pass
+strings::semantics	pass
+strings::utf8	pass
+strings::utf8 error	pass

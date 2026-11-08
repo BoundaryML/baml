@@ -39,7 +39,7 @@ impl registry::Feature for Feature {
             let values=fields.iter().enumerate().map(|(i,r)|{
                 let value=format!("(*(p as *const C{c})).f{i}");
                 match r {
-                    Repr::Str=>format!("if {value}==0{{String::from(\"null\")}}else{{format!(\"{{:?}}\",rt::strings::Str::from_raw({value}).as_str(&rt::strings::Cx::current()))}}"),
+                    Repr::Str=>format!("if {value}==0{{String::from(\"null\")}}else{{format!(\"{{:?}}\",rt::strings::Str::from_raw({value}).to_owned())}}"),
                     Repr::Bool=>format!("({value}!=0)"),
                     Repr::Float=>format!("{{let v={value};let mut text=v.to_string();if v.is_finite()&&!text.contains('.'){{text.push_str(\".0\");}}text}}"),
                     _=>value,

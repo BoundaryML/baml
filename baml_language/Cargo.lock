@@ -1013,7 +1013,9 @@ dependencies = [
  "btel_types",
  "libc",
  "serde_json",
+ "sys_regex",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]

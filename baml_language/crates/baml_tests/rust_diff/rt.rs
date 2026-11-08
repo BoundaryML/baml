@@ -11,12 +11,16 @@ const TELEMETRY_SUPPORTED: bool = false;
 const REQUIRED_PROBES: &[&str] = &["RtClosures", "RtEmptyClosures"];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {
-    level == "off" || TELEMETRY_SUPPORTED || REQUIRED_PROBES.contains(&probe)
+    level == "off"
+        || TELEMETRY_SUPPORTED
+        || REQUIRED_PROBES.contains(&probe)
+        || probe.starts_with("strings::")
 }
 
 // List coverage baseline: each admitted fixture must keep passing both runtime
 // variants. An admission regression is a failure, never an unsupported skip.
 const REQUIRED_LIST_COVERAGE: &[&str] = &[
+    "RuntimeListRopes",
     "RuntimeListCallbacks",
     "RuntimeListPublicSort",
     "RuntimeListSortClasses",
@@ -256,6 +260,13 @@ impl Coverage {
             .iter()
             .filter_map(|(name, result)| match result {
                 Err(Rejection::Fail(reason)) => Some(format!("{name}/rt: {reason}")),
+                Err(Rejection::Unsupported(reason))
+                    if name.starts_with("strings::") || name.starts_with("string::") =>
+                {
+                    Some(format!(
+                        "{name}/rt: required string fixture unsupported: {reason}"
+                    ))
+                }
                 _ => None,
             })
             .collect()
@@ -286,7 +297,7 @@ impl Coverage {
         let mut blockers: Vec<_> = blockers.into_iter().collect();
         blockers.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
         let mut report = format!(
-            "BAML runtime coverage (normal AND GC stress): {} pass, {} unsupported, {} fail\nTelemetry off: required\nTelemetry low/medium/high/default: {}\n\nFirst unsupported constructs (fixtures blocked):\n",
+            "BAML runtime coverage (normal AND GC stress): {} pass, {} unsupported, {} fail\nTelemetry off: required\nString probes: off/low/medium/high/default required\nTelemetry low/medium/high/default for other probes: {}\n\nFirst unsupported constructs (fixtures blocked):\n",
             counts[0],
             counts[1],
             counts[2],
@@ -372,4 +383,23 @@ fn standalone_closure_coverage_cannot_silently_become_unsupported() {
         assert!(supports_level("RtClosures", level));
         assert!(supports_level("RtEmptyClosures", level));
     }
+}
+
+#[test]
+fn string_admission_regressions_fail_the_gate() {
+    let artifacts = BTreeMap::from([
+        (
+            "strings::semantics".into(),
+            Err(Rejection::Unsupported("builtin".into())),
+        ),
+        (
+            "string::concat loop 10k".into(),
+            Err(Rejection::Unsupported("loop".into())),
+        ),
+        (
+            "other".into(),
+            Err(Rejection::Unsupported("other job".into())),
+        ),
+    ]);
+    assert_eq!(Coverage::new(&artifacts).build_failures().len(), 2);
 }
