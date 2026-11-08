@@ -183,23 +183,20 @@ pub unsafe fn split(
     }
     Ok(list.as_raw())
 }
-unsafe fn fixed_list(cx: &mut Cx, desc: u32, length: usize) -> R<usize> {
-    let bytes = length
-        .checked_mul(8)
-        .and_then(|n| n.checked_add(16))
-        .ok_or_else(|| crate::allocation_failure(usize::MAX))?;
-    let object = cx.alloc(desc, bytes)?;
-    unsafe { object.add(8).cast::<usize>().write(length) };
-    Ok(object as usize)
+unsafe fn pointer_list(cx: &mut Cx, desc: u32, length: usize) -> R<usize> {
+    let list = unsafe { crate::lists::List::<crate::lists::Ptr>::with_capacity(cx, desc, length) }?;
+    for _ in 0..length {
+        list.push(cx, unsafe { crate::lists::Ptr::from_raw(0) })?;
+    }
+    Ok(list.as_raw())
 }
 unsafe fn list_pointer(list: usize, index: usize, value: usize) {
-    unsafe {
-        baml_rt_gc::write_ptr(
-            list as *mut u8,
-            (list + 16 + index * 8) as *mut usize,
-            value,
-        )
-    }
+    let cx = unsafe { Cx::current() };
+    unsafe { crate::lists::List::<crate::lists::Ptr>::from_raw(list) }
+        .set(&cx, index as i64, unsafe {
+            crate::lists::Ptr::from_raw(value)
+        })
+        .expect("preallocated regex list index");
 }
 fn materialize(
     cx: &mut Cx,
@@ -209,7 +206,7 @@ fn materialize(
     chars: &[usize],
     schema: &Schema,
 ) -> R<usize> {
-    let groups = unsafe { fixed_list(cx, schema.groups_desc, raw.groups.len())? };
+    let groups = unsafe { pointer_list(cx, schema.groups_desc, raw.groups.len())? };
     // VM regex groups deliberately carry unknown as their runtime element type.
     unsafe {
         (*(groups as *mut baml_rt_gc::Header)).aux = crate::telemetry::capture::UNKNOWN_ELEMENT_TYPE
@@ -234,7 +231,9 @@ fn materialize(
         }
         if let Some(name) = names.get(index).and_then(Option::as_deref) {
             let key = cx.string(name)?;
-            let group = unsafe { ((groups + 16 + index * 8) as *const usize).read() };
+            let group = unsafe { crate::lists::List::<crate::lists::Ptr>::from_raw(groups) }
+                .get(cx, index as i64)?
+                .as_raw();
             named.set(cx, key, group)?;
         }
     }
@@ -286,7 +285,7 @@ pub unsafe fn matches(
         .collect();
     let offsets = sys_regex::char_offsets(text, &spans);
     let mut remaining = offsets.as_slice();
-    let list = unsafe { fixed_list(cx, schema.matches_desc, found.len())? };
+    let list = unsafe { pointer_list(cx, schema.matches_desc, found.len())? };
     unsafe {
         (*(list as *mut baml_rt_gc::Header)).aux = crate::telemetry::capture::UNKNOWN_ELEMENT_TYPE;
     }
@@ -302,7 +301,9 @@ pub unsafe fn matches(
     } else if found.is_empty() {
         0
     } else {
-        unsafe { ((list + 16) as *const usize).read() }
+        unsafe { crate::lists::List::<crate::lists::Ptr>::from_raw(list) }
+            .get(cx, 0)?
+            .as_raw()
     })
 }
 pub fn index_from(cx: &Cx, haystack: Str, search: Str, start: i64) -> R<Dyn> {

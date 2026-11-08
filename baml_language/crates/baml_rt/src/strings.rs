@@ -11,7 +11,7 @@ const INLINE_CAPACITY: usize = 54;
 // Flat strings, views, and wide ropes share the variable-size descriptor.
 // Common ropes fit in 32 bytes: their codepoint count uses the header's aux
 // word. Counts beyond 31 bits retain the full-width representation.
-pub const CONCAT_DESC_ID: u32 = 10;
+pub const CONCAT_DESC_ID: u32 = 13;
 pub const CONCAT_DESC: baml_rt_gc::Descriptor = baml_rt_gc::Descriptor {
     kind: baml_rt_gc::Kind::String,
     size: 32,
@@ -25,7 +25,7 @@ pub const CONCAT_DESC: baml_rt_gc::Descriptor = baml_rt_gc::Descriptor {
 /// ASCII suffix runs store the suffix byte and total length in the header.
 /// Persistent versions take one pointer and one header; repeated suffixes share
 /// their original prefix rather than retaining intermediate versions.
-pub const ASCII_APPEND_DESC_ID: u32 = 11;
+pub const ASCII_APPEND_DESC_ID: u32 = 14;
 pub const ASCII_APPEND_DESC: baml_rt_gc::Descriptor = baml_rt_gc::Descriptor {
     kind: baml_rt_gc::Kind::String,
     size: 16,
@@ -292,6 +292,31 @@ impl Str {
             });
             Ok(target as usize)
         }
+    }
+    /// Inspect text without changing the managed heap. Flat values borrow;
+    /// ropes copy to host memory for infallible lookup and diagnostic paths.
+    pub fn text<'a>(self, _cx: &'a Cx) -> std::borrow::Cow<'a, str> {
+        unsafe {
+            let object = self.object();
+            if (*object).header.desc == 0 {
+                let data = match (*object).header.aux {
+                    FLAT => Some(self.0 + BASE),
+                    VIEW => Some((*object).left + BASE + self.offset()),
+                    _ => None,
+                };
+                if let Some(data) = data {
+                    return std::borrow::Cow::Borrowed(std::str::from_utf8_unchecked(
+                        std::slice::from_raw_parts(data as *const u8, (*object).bytes),
+                    ));
+                }
+            }
+            if let Some(flat) = self.flat_cache() {
+                return std::borrow::Cow::Borrowed(std::str::from_utf8_unchecked(
+                    std::slice::from_raw_parts((flat + BASE) as *const u8, self.byte_len()),
+                ));
+            }
+        }
+        std::borrow::Cow::Owned(self.to_owned())
     }
     /// Flatten once, caching only a precisely traced managed pointer. Byte
     /// borrows remain valid across later allocations: this heap never moves.
@@ -636,20 +661,14 @@ pub fn code_points(cx: &Cx, value: Str) -> R<Vec<i64>> {
         .collect())
 }
 /// # Safety
-/// `desc` describes a fixed int list. The result obeys Cx rooting.
+/// `desc` and `desc+1` describe List<i64> and its buffer in the active instance.
 pub unsafe fn to_code_points(cx: &mut Cx, value: Str, desc: u32) -> R<usize> {
     let values = code_points(cx, value)?;
-    let bytes = values
-        .len()
-        .checked_mul(8)
-        .and_then(|n| n.checked_add(16))
-        .ok_or_else(|| allocation_failure(usize::MAX))?;
-    let ptr = cx.alloc(desc, bytes)?;
-    unsafe {
-        ptr.add(8).cast::<usize>().write(values.len());
-        std::ptr::copy_nonoverlapping(values.as_ptr(), ptr.add(16).cast(), values.len());
+    let list = unsafe { crate::lists::List::<i64>::with_capacity(cx, desc, values.len()) }?;
+    for value in values {
+        list.push(cx, value)?;
     }
-    Ok(ptr as usize)
+    Ok(list.as_raw())
 }
 
 /// The VM's float spelling, including signed zero, infinities and NaN.
@@ -691,12 +710,13 @@ pub fn parse_int(cx: &Cx, value: Str, error_desc: u32) -> R<i64> {
     Ok(value)
 }
 /// # Safety
-/// `values` names a rooted fixed-layout int list in the current instance.
+/// `values` names a rooted growing int list in the current instance.
 pub unsafe fn from_code_points(cx: &mut Cx, values: usize, error_desc: u32) -> R<Str> {
-    let len = unsafe { ((values + 8) as *const usize).read() };
-    let mut text = String::with_capacity(len);
+    let values = unsafe { crate::lists::List::<i64>::from_raw(values) };
+    let len = values.len(cx);
+    let mut text = String::with_capacity(len as usize);
     for i in 0..len {
-        let n = unsafe { ((values + 16) as *const i64).add(i).read() };
+        let n = values.get(cx, i)?;
         let Some(cp) = u32::try_from(n).ok().and_then(char::from_u32) else {
             return Err(crate::language::panic_value(
                 error_desc,
@@ -966,6 +986,9 @@ mod tests {
         crate::json::PARSE_DESC,
         crate::json::DECODE_DESC,
         DIV_DESC,
+        crate::list_errors::SERIALIZATION_DESC,
+        crate::list_errors::INVALID_ARGUMENT_DESC,
+        crate::MAP_KEY_DESC,
         CONCAT_DESC,
         ASCII_APPEND_DESC,
     ];
@@ -995,7 +1018,7 @@ mod tests {
             DESCRIPTORS,
             &[
                 false, false, false, true, true, true, true, true, true, true, true, true, true,
-                true,
+                true, true, true,
             ],
         );
         instance.set_stress(true);
@@ -1063,7 +1086,7 @@ mod tests {
             DESCRIPTORS,
             &[
                 false, false, false, true, true, true, true, true, true, true, true, true, true,
-                true,
+                true, true, true,
             ],
         );
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 24000);
@@ -1109,7 +1132,7 @@ mod tests {
             DESCRIPTORS,
             &[
                 false, false, false, true, true, true, true, true, true, true, true, true, true,
-                true,
+                true, true, true,
             ],
         );
         instance.set_stress(true);
@@ -1124,7 +1147,7 @@ mod tests {
             CANCEL_DESC,
             STACK_DESC,
             ALLOC_DESC,
-            crate::lists::descriptor(9),
+            crate::lists::descriptor::<Str>(9),
             crate::lists::buffer_descriptor::<Str>(10),
         ];
         fn entry() -> R<i64> {
@@ -1254,7 +1277,7 @@ mod tests {
             DESCRIPTORS,
             &[
                 false, false, false, true, true, true, true, true, true, true, true, true, true,
-                true,
+                true, true, true,
             ],
         );
         instance.set_heap_limit(32768);
@@ -1299,7 +1322,7 @@ mod tests {
             DESCRIPTORS,
             &[
                 false, false, false, true, true, true, true, true, true, true, true, true, true,
-                true,
+                true, true, true,
             ],
         );
         instance.set_heap_limit(32768);

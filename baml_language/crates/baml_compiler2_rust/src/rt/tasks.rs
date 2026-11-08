@@ -235,7 +235,7 @@ impl registry::Feature for Feature {
                 let left_value = left?;
                 let l = operand(left_value.clone())?;
                 let r = operand(right?)?;
-                let desc = e.plan.bigint_descriptor().unwrap();
+                let desc = e.plan.bigint_descriptor();
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul => Ok((
                         e.fallible(&format!("rt::tasks::bigint({desc},&({l}{op}{r}))")),

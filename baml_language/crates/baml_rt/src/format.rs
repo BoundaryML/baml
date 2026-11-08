@@ -36,13 +36,43 @@ unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
                 (p, unsafe { p.add(1).read() })
             };
             (0..len)
-                .map(|i| Dyn {
-                    tag: *tag,
-                    payload: unsafe { data.add(i + 2).read() } as u64,
+                .map(|i| {
+                    if *tag == u64::MAX - 1 {
+                        unsafe { data.add(2).cast::<Dyn>().add(i).read() }
+                    } else {
+                        Dyn {
+                            tag: *tag,
+                            payload: unsafe { data.add(i + 2).read() } as u64,
+                        }
+                    }
                 })
                 .collect()
         }
-        Shape::MapStringInt | Shape::MapStringPtr { .. } => {
+        Shape::Map { len, entry, .. } => (0..unsafe { len(pointer) })
+            .flat_map(|i| {
+                let (key, value) = unsafe { entry(pointer, i) };
+                [key, value]
+            })
+            .collect(),
+        Shape::MapStringInt => {
+            let map = unsafe { crate::maps::Map::<Str, i64>::from_raw(pointer) };
+            (0..map.len())
+                .flat_map(|i| {
+                    let (key, value) = map.entry(i).unwrap();
+                    [
+                        Dyn {
+                            tag: 3,
+                            payload: key.as_raw() as u64,
+                        },
+                        Dyn {
+                            tag: 0,
+                            payload: value as u64,
+                        },
+                    ]
+                })
+                .collect()
+        }
+        Shape::MapStringPtr { .. } => {
             let p = pointer as *const usize;
             let data = (unsafe { p.add(1).read() } + 16) as *const u64;
             let len = unsafe { p.add(2).read() };
@@ -206,7 +236,7 @@ unsafe fn write(
             }
             out.push(']');
         }
-        Shape::MapStringInt | Shape::MapStringPtr { .. } => {
+        Shape::MapStringInt | Shape::MapStringPtr { .. } | Shape::Map { .. } => {
             out.push('{');
             let values = unsafe { children(shapes, value) };
             for (i, pair) in values.chunks_exact(2).enumerate() {

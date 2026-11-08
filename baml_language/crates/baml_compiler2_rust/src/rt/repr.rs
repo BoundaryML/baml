@@ -11,6 +11,7 @@ pub(super) enum Repr {
     Opaque,
     Ptr(usize),
     ListInt,
+    List(usize),
     ListStr,
     ListListStr,
     Type(usize),
@@ -18,6 +19,7 @@ pub(super) enum Repr {
     Dyn(usize),
     Tagged,
     MapStrInt,
+    Map(usize),
     MapStrPtr(usize),
     Iter,
     Naming,
@@ -60,36 +62,63 @@ impl Repr {
     pub(super) fn growing(self) -> bool {
         matches!(
             self,
-            Self::ListStr | Self::ListListStr | Self::ListClosure(_) | Self::ListFuture(_)
+            Self::ListFuture(_)
+                | Self::ListClosure(_)
+                | Self::ListInt
+                | Self::ListPtr(_)
+                | Self::ListStr
+                | Self::ListListStr
+                | Self::List(_)
         )
     }
     pub(super) fn slot(self) -> Gen<&'static str> {
-        match self {
-            Self::Str => Ok("rt::strings::Str"),
-            Self::ListStr => Ok("rt::lists::List<rt::strings::Str>"),
-            Self::Closure => Ok("rt::closures::Closure"),
-            Self::Future => Ok("rt::tasks::FutureSlot"),
-            _ => Err(no("growing list element")),
+        Ok(match self {
+            Self::Int => "i64",
+            Self::Float => "f64",
+            Self::Bool => "bool",
+            Self::Str => "rt::lists::Ptr",
+            Self::Closure => "rt::closures::Closure",
+            Self::Future => "rt::tasks::FutureSlot",
+            Self::Dyn(_) | Self::Tagged => "rt::Dyn",
+            r if r.pointer() => "rt::lists::Ptr",
+            _ => return Err(no("list element slot")),
+        })
+    }
+    pub(super) fn to_slot(self, value: &str) -> Gen<String> {
+        Ok(if self.pointer() {
+            format!("<{}>::from_raw({value})", self.slot()?)
+        } else {
+            value.into()
+        })
+    }
+    pub(super) fn from_slot(self, value: &str) -> String {
+        if self.pointer() {
+            format!("({value}).as_raw()")
+        } else {
+            value.into()
         }
     }
+
     pub(super) fn pointer(self) -> bool {
         matches!(
             self,
-            Self::Bigint
-                | Self::Str
+            Self::Str
+                | Self::Bigint
                 | Self::Bytes
                 | Self::Opaque
                 | Self::Ptr(_)
+                | Self::List(_)
                 | Self::ListInt
                 | Self::ListPtr(_)
                 | Self::ListStr
                 | Self::ListListStr
                 | Self::MapStrInt
-                | Self::Future
-                | Self::ListFuture(_)
                 | Self::Closure
                 | Self::Cell
                 | Self::ListClosure(_)
+                | Self::Map(_)
+                | Self::Future
+                | Self::ListFuture(_)
                 | Self::MapStrPtr(_)
         )
     }

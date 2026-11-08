@@ -13,6 +13,29 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "StackAllocation",
+    "RuntimeListFloatConstants",
+    "RuntimeListStructuralJoin",
+    "RuntimeListFloatSpecials",
+    "RuntimeListJsonNonFinite",
+    "RuntimeListReductions",
+    "RuntimeListReductionOverflow",
+    "RuntimeListMedianError",
+    "RuntimeListMaps",
+    "RuntimeListRecursiveJson",
+    "RuntimeListLiteralJson",
+    "RuntimeListLiteralJsonError",
+    "RuntimeListJsonFieldError",
+    "RuntimeListJsonOptional",
+    "RuntimeListJsonOptionalError",
+    "RuntimeListBuiltins",
+    "RuntimeListInsertError",
+    "RuntimeLists",
+    "RuntimeListBounds",
+    "RuntimeListStoreBounds",
+    "RuntimeListJson",
+    "RuntimeListJsonField",
+    "RuntimeListJsonError",
     "RtClosures",
     "RtEmptyClosures",
     "RtGenericClosures",
@@ -38,7 +61,6 @@ const PROBES: &[&str] = &[
     "RtAutomaticCleanup",
     "RtCancelledFailure",
     "RtLinkedCancelledFailure",
-    "StackAllocation",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -299,6 +321,10 @@ fn probe_timeout_kills_and_reaps() {
     assert!(error.contains("kill: Ok(()), reap: Ok("), "{error}");
 }
 
+fn is_list_probe(probe: &str) -> bool {
+    probe.starts_with("RuntimeList")
+}
+
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
         "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
@@ -329,7 +355,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
     if PROBES
         .iter()
         .filter(|p| standalone_source(manifest, p).is_none())
-        .any(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
+        .any(|p| !is_list_probe(p) && only.is_none_or(|o| o.split(',').any(|name| name == *p)))
     {
         let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
         pack(
@@ -340,6 +366,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
             PROBES
                 .iter()
                 .copied()
+                .filter(|p| !is_list_probe(p))
                 .filter(|p| !initializer_probes::collects_tests(p))
                 .filter(|p| standalone_source(manifest, p).is_none())
                 .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
@@ -383,9 +410,31 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
             .iter()
             .filter(|p| standalone_source(manifest, p).is_none())
         {
+            if is_list_probe(probe) {
+                continue;
+            }
             artifacts
                 .entry((*probe).into())
                 .or_insert_with(|| executable.clone());
+        }
+    }
+    let list_probes: Vec<_> = PROBES
+        .iter()
+        .copied()
+        .filter(|p| is_list_probe(p))
+        .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
+        .collect();
+    if !list_probes.is_empty() {
+        let executable = build.join("list-probes");
+        pack(
+            build,
+            workspace,
+            &manifest.join("rust_diff/list_probes"),
+            &executable,
+            list_probes.iter().copied(),
+        );
+        for probe in list_probes {
+            artifacts.insert(probe.into(), executable.clone());
         }
     }
     for probe in [
@@ -652,19 +701,20 @@ fn rust_differential() {
         }
     }
     // The bytecode oracle is mandatory even for a scoped backend run.
+    let requested_rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
     let backends: Vec<_> = BACKENDS
         .iter()
         .filter(|backend| {
             backend.name == "bytecode"
-                || selected
-                    .as_ref()
-                    .is_none_or(|names| names.split(',').any(|name| name == backend.name))
+                || ((!requested_rt_only || backend.artifact_key == "rt")
+                    && selected
+                        .as_ref()
+                        .is_none_or(|names| names.split(',').any(|name| name == backend.name)))
         })
         .collect();
     let rt_only = backends
         .iter()
         .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
-    let levels = LEVELS;
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -687,6 +737,7 @@ fn rust_differential() {
     // Focused runtime jobs retain the bytecode oracle and both GC modes, while
     // avoiding unrelated compiled-VM variants and unsupported telemetry levels.
     // The default merged-branch gate still runs the complete matrix.
+    let levels = LEVELS;
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
@@ -944,19 +995,25 @@ fn rust_differential() {
                 }
                 if traces[reference] != traces[index] {
                     if backend.artifact_key == "rt" {
-                        // C5 is the runtime's sole telemetry exception. Both
-                        // modes share the rt artifact and its normalizer; the
-                        // old backend's other exceptions never apply here.
-                        let expected =
-                            known_telemetry_divergences::without_gc(&traces[reference], "rt");
-                        let actual = known_telemetry_divergences::without_gc(&traces[index], "rt");
+                        // C5 already applies to both runtime modes. Use their
+                        // shared artifact key for the existing GC-only filter;
+                        // none of the legacy backend's other exceptions apply.
+                        let expected = known_telemetry_divergences::without_gc(
+                            &traces[reference],
+                            backend.artifact_key,
+                        );
+                        let actual = known_telemetry_divergences::without_gc(
+                            &traces[index],
+                            backend.artifact_key,
+                        );
+                        let detail = diff(&traces[reference], &traces[index], &mode);
                         if expected == actual {
                             report_known(
                                 &build,
                                 &probe,
                                 &mode,
                                 known_telemetry_divergences::GC_REASON,
-                                &diff(&traces[reference], &traces[index], &mode),
+                                &detail,
                             );
                         } else {
                             failures.push(format!(
@@ -1146,4 +1203,17 @@ fn rt_setup_state_benchmark() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     setup_state::run();
+}
+
+#[test]
+#[ignore = "targeted recursive JSON semantic differential"]
+fn rt_json_runtime_semantics() {
+    let _lock = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    type_dispatch::run_source(
+        "json-runtime",
+        include_str!("../rust_diff/json_runtime.baml"),
+    );
+    type_dispatch::compare_json_telemetry();
 }

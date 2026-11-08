@@ -124,7 +124,7 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
         return;
     }
     let ptr = CURRENT.get();
-    if ptr.is_null() || error.telemetry_raise.is_some() {
+    if ptr.is_null() || error.telemetry_raise.is_some() || error.class == "InternalError" {
         return;
     }
     let state = unsafe { &mut *ptr };

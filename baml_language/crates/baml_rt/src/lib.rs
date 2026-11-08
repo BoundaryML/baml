@@ -2,13 +2,19 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod bigint;
 pub mod bytes;
 pub mod callbacks;
 pub mod calls;
 pub mod closures;
 pub mod format;
+pub mod globals;
 pub mod json;
+pub mod json_lists;
+pub mod json_scalars;
+pub mod json_tree;
 pub mod language;
+pub mod list_errors;
 pub mod lists;
 pub mod maps;
 pub mod native;
@@ -19,6 +25,8 @@ pub mod tasks;
 pub mod telemetry;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
 use baml_rt_tasks::{Config, TaskCx, TaskLoop, Value};
+pub use bex_vm_types::float_order::{cmp as float_cmp, eq as float_eq};
+pub use bex_vm_types::format_float;
 pub use language::*;
 use std::{
     cell::{Cell, RefCell},
@@ -34,6 +42,11 @@ impl RootSource for Roots<'_> {
     }
     fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
         self.0.with_roots(|roots| roots.precise_roots(visit));
+        globals::CURRENT.with(|current| {
+            if !current.get().is_null() {
+                unsafe { (&*current.get()).roots(visit) };
+            }
+        });
     }
 }
 
@@ -150,6 +163,7 @@ unsafe fn function_value(object: usize, create: impl FnOnce() -> R<usize>) -> R<
 /// A reusable, single-owner program instance. Heap capacity survives jobs.
 pub struct Instance {
     heap: Heap,
+    globals: globals::Globals,
     tasks: TaskLoop,
     _io: tokio::runtime::Runtime,
     functions: FunctionValues,
@@ -183,6 +197,7 @@ impl Instance {
         heap.bind_poll_word(tasks.integration_roots().poll_word());
         Self {
             heap,
+            globals: globals::Globals::new(pointer_types),
             tasks,
             _io: io,
             functions: FunctionValues::new(),
@@ -209,17 +224,28 @@ impl Instance {
     /// error's managed `value` is unrooted: inspect it only while this instance
     /// remains alive and before any further managed allocation.
     pub unsafe fn run_baml(&mut self, entry: impl FnOnce() -> R<i64> + 'static) -> R<i64> {
+        unsafe { self.run_baml_value(entry) }
+    }
+    /// Execute a root returning an owned host value.
+    ///
+    /// # Safety
+    /// Captures and results obey `run_baml`'s managed-pointer rooting contract.
+    pub unsafe fn run_baml_value<T: 'static>(
+        &mut self,
+        entry: impl FnOnce() -> R<T> + 'static,
+    ) -> R<T> {
         unsafe { self.execute(entry, |error| error.value) }
             .map_err(|error| Error::internal(format!("{error:?}")))?
     }
-    unsafe fn execute<E: 'static>(
+    unsafe fn execute<T: 'static, E: 'static>(
         &mut self,
-        entry: impl FnOnce() -> Result<i64, E> + 'static,
+        entry: impl FnOnce() -> Result<T, E> + 'static,
         error_pointer: fn(&E) -> usize,
-    ) -> Result<Result<i64, E>, baml_rt_tasks::Err> {
+    ) -> Result<Result<T, E>, baml_rt_tasks::Err> {
         let result = Rc::new(RefCell::new(None));
         let output = result.clone();
         let heap = &mut self.heap as *mut Heap;
+        let globals = &self.globals as *const globals::Globals;
         let roots = self.tasks.integration_roots();
         let poll_word = roots.poll_word();
         struct HostBinding(
@@ -230,6 +256,7 @@ impl Instance {
             *mut tasks::NativeFinalizers,
             Option<tasks::Cleanup>,
             bool,
+            *const globals::Globals,
         );
         impl Drop for HostBinding {
             fn drop(&mut self) {
@@ -240,6 +267,7 @@ impl Instance {
                 tasks::FINALIZERS.set(self.4);
                 tasks::CLEANUP.set(self.5);
                 strings::COMPACT_STRINGS.set(self.6);
+                globals::CURRENT.set(self.7);
             }
         }
         let _binding = HostBinding(
@@ -250,6 +278,7 @@ impl Instance {
             tasks::FINALIZERS.replace(&mut self.finalizers),
             tasks::CLEANUP.replace(None),
             strings::COMPACT_STRINGS.replace(self.compact_strings),
+            globals::CURRENT.replace(globals),
         );
         let future = self.tasks.spawn(move |cx| {
             let telemetry = crate::telemetry::current_raw();
