@@ -1174,14 +1174,26 @@ impl Session {
         self.run_at(0, call)
     }
     pub fn format_int(&mut self, value: i64, site: usize) -> R<String> {
+        self.format_scalar(
+            crate::Dyn {
+                tag: 0,
+                payload: value as u64,
+            },
+            value.to_string(),
+            site,
+        )
+    }
+    /// Record the pack host's stringify call for a scalar result (int, bool,
+    /// null, float) whose JSON text the caller already rendered.
+    pub fn format_scalar(&mut self, value: crate::Dyn, text: String, site: usize) -> R<String> {
         let Some(state) = &self.state else {
-            return Ok(value.to_string());
+            return Ok(text);
         };
         let word = state.words[state.sites[site].callee];
         let alias_word = state.words[state.sites[site + 1].callee];
         let naming_tag = state.capture_metadata.map_or(0, |m| m.naming_tag);
         self.run_at(site, || {
-            // Typed specialization of stringify(int, Declared, 0, false):
+            // Typed specialization of stringify(scalar, Declared, 0, false):
             // resolve the naming mode, then encode the scalar without a heap.
             unsafe {
                 observed_captured(
@@ -1189,10 +1201,7 @@ impl Session {
                     site,
                     || {
                         capture_arguments(&[
-                            crate::Dyn {
-                                tag: 0,
-                                payload: value as u64,
-                            },
+                            value,
                             crate::Dyn {
                                 tag: u64::MAX,
                                 payload: 0,
@@ -1230,7 +1239,7 @@ impl Session {
                             },
                             || Ok(false),
                         );
-                        aliased.map(|_| value.to_string())
+                        aliased.map(|_| text)
                     },
                 )
             }

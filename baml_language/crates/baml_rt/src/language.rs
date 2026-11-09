@@ -585,7 +585,8 @@ fn render_error(error: Box<Error>, background: Option<bool>) {
         None => "error: ",
     };
     if error.class == "InitFailed" {
-        eprintln!("error: {}", error.message);
+        // The pack host reports startup failure from engine construction.
+        eprintln!("error: failed to initialize engine: {}", error.message);
         return;
     }
     if error.value == 0 {

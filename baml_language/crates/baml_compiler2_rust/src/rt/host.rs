@@ -345,6 +345,6 @@ pub(super) fn emit_owned(
         format!("rt::Dyn{{tag:{tag},payload:{payload}}}")
     };
     let returned = host_type(plan, lists, &body.locals[0].ty)?;
-    writeln!(&mut out,"({returned}).copy_out({value},0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::host::driver_initialized(DESCRIPTORS,&HOST_FUNCTION,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,{host_initialize})}}").unwrap();
+    writeln!(&mut out,"({returned}).copy_out({value},0)}}}}\nfn main()->std::process::ExitCode{{{builtin_init}rt::host::driver_initialized(DESCRIPTORS,&HOST_FUNCTION,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,{host_initialize},Some({format_site}))}}").unwrap();
     Ok(())
 }

@@ -858,9 +858,18 @@ fn large_heap_stress_forces_bounded_full_collections_during_allocation_and_reads
             h.safepoint(&roots);
         }
         assert_eq!(h.stats().live_bytes, 0);
+        // A tiny heap collects at the first poll after any allocation, and
+        // otherwise once per 64 polls (deep recursion polls on every entry).
+        h.alloc(0, 32, &roots);
         let before = h.stats().collections;
         h.safepoint(&roots);
         assert_eq!(h.stats().collections, before + 1);
+        for _ in 0..63 {
+            h.safepoint(&roots);
+        }
+        assert_eq!(h.stats().collections, before + 1);
+        h.safepoint(&roots);
+        assert_eq!(h.stats().collections, before + 2);
     }
 }
 

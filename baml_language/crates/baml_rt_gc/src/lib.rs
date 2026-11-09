@@ -1239,7 +1239,10 @@ impl Heap {
     /// heaps and pace full walks of large heaps by allocation pressure or polls.
     pub unsafe fn safepoint(&mut self, roots: &dyn RootSource) {
         self.stress_polls += usize::from(self.stress);
-        if self.stress_allocation_due()
+        // A poll with nothing allocated since the last collection is paced by
+        // the poll count alone: deep non-allocating recursion polls on every
+        // entry, and each collection walks the whole (deep) stack.
+        if (self.stats().allocated_since_gc > 0 && self.stress_allocation_due())
             || self.stress && self.stress_polls >= (self.stats.live_bytes / 64).max(64)
             || self.stats().allocated_since_gc >= self.stats.budget
         {
@@ -1460,9 +1463,16 @@ mod allocation_tests {
             h.set_stress(true);
             assert_eq!(word.get(), 3);
             let collections = h.stats().collections;
-            h.safepoint(&NoRoots);
+            h.alloc(0, 32, &NoRoots);
             h.safepoint(&NoRoots);
             assert_eq!(h.stats().collections, collections + 2);
+            // Polls without allocation collect once per 64 polls.
+            for _ in 0..63 {
+                h.safepoint(&NoRoots);
+            }
+            assert_eq!(h.stats().collections, collections + 2);
+            h.safepoint(&NoRoots);
+            assert_eq!(h.stats().collections, collections + 3);
             assert_eq!(word.get(), 3);
             h.set_stress(false);
             assert_eq!(word.get(), 1);

@@ -238,7 +238,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         let result = pack_result(
             build,
             workspace,
-            &super::standalone_source(manifest, probe).unwrap_or(source),
+            &source,
             &executable,
             [if super::initializer_probes::collects_tests(probe) {
                 "InitializerTestSummary"
@@ -248,18 +248,18 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
             true,
         )
         .map_err(classify)
+        .and_then(|()| match initializer_failure_mode(probe) {
+            // Pack checks the unmodified project (it runs initializers to
+            // resolve signatures); the failing variant is compiled directly.
+            Some(mode) => build_initializer_variant(build, workspace, manifest, probe, mode)
+                .map(|()| ())
+                .map_err(classify),
+            None => Ok(()),
+        })
         .and_then(|()| {
             // These fixtures mutate the packed initializer or use a test-registry
             // host. Do not silently run their unmodified source if admission grows.
-            if matches!(
-                *probe,
-                "InitializerTests"
-                    | "InitializerTestErrors"
-                    | "InitializerUncaught"
-                    | "InitializerPanic"
-                    | "InitializerPending"
-                    | "GlobalCallPending"
-            ) {
+            if matches!(*probe, "InitializerTests" | "InitializerTestErrors") {
                 Err(Rejection::Fail(
                     "admitted initializer fixture needs the rt variant/registry host".into(),
                 ))
@@ -296,6 +296,94 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         artifacts.insert(fixture.name, result);
     }
     artifacts
+}
+
+/// Startup-failure fixtures select their failing initializer with a literal,
+/// as the bytecode and compiled-body variants do (initializers cannot read the
+/// environment before the engine exists).
+fn initializer_failure_mode(probe: &str) -> Option<&'static str> {
+    match probe {
+        "InitializerUncaught" => Some("throw"),
+        "InitializerPanic" => Some("panic"),
+        "InitializerPending" => Some("pending"),
+        "GlobalCallPending" => Some("pending-call"),
+        _ => None,
+    }
+}
+
+/// Emit the rt host for a startup-failure variant into the build directory
+/// prepared by the preceding pack, then rebuild it as that probe's executable.
+fn build_initializer_variant(
+    build: &Path,
+    workspace: &Path,
+    manifest: &Path,
+    probe: &str,
+    mode: &str,
+) -> Result<(), String> {
+    let opt = baml_compiler2_emit::OptLevel::Two;
+    let mut sources: Vec<_> = std::fs::read_dir(manifest.join("rust_diff/baml_src"))
+        .unwrap()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            (
+                entry.file_name().into_string().unwrap(),
+                std::fs::read_to_string(entry.path()).unwrap().replace(
+                    "const INIT_FAILURE = \"none\";",
+                    &format!("const INIT_FAILURE = {mode:?};"),
+                ),
+            )
+        })
+        .collect();
+    sources.sort_by(|a, b| a.0.cmp(&b.0));
+    assert!(
+        sources
+            .iter()
+            .any(|(_, s)| s.contains(&format!("const INIT_FAILURE = {mode:?};"))),
+        "initializer selector literal not found"
+    );
+    let files: Vec<_> = sources
+        .iter()
+        .map(|(name, source)| (name.as_str(), source.as_str()))
+        .collect();
+    let db = baml_test_support::setup_multi_file_db(&files);
+    let root = db.workspace_root().unwrap();
+    let program = baml_db::CheckedWorld::collect(&db, root)
+        .expect("the world checks")
+        .compile(opt)
+        .unwrap();
+    let package = &program.packages[program.root as usize].name;
+    let entry = program.rendered_callables()[&format!("{package}.{probe}")]
+        .object
+        .raw();
+    let source = baml_db::rust_backend::compile_rt(&db, root, &program, opt, entry)?;
+    std::fs::write(build.join("src/main.rs"), source).unwrap();
+    let mut cargo = std::process::Command::new("cargo");
+    cargo
+        .args(["build", "--release", "--manifest-path"])
+        .arg(build.join("Cargo.toml"))
+        .arg("--target-dir")
+        .arg(build.join("target"))
+        .current_dir(workspace)
+        .env_remove("CARGO_TARGET_DIR");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("CARGO_PROFILE_") {
+            cargo.env_remove(key);
+        }
+    }
+    let status = cargo.status().map_err(|e| e.to_string())?;
+    if !status.success() {
+        return Err(format!(
+            "cargo build of the {probe} variant failed ({status})"
+        ));
+    }
+    std::fs::copy(
+        build
+            .join("target/release")
+            .join(format!("baml_rust_program{}", std::env::consts::EXE_SUFFIX)),
+        build.join(probe),
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub struct Coverage {

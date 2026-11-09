@@ -365,7 +365,7 @@ pub fn driver(
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
 ) -> std::process::ExitCode {
-    driver_initialized(descriptors, function, functions, sites, None)
+    driver_initialized(descriptors, function, functions, sites, None, None)
 }
 pub fn driver_initialized(
     descriptors: &'static [baml_rt_gc::Descriptor],
@@ -373,6 +373,7 @@ pub fn driver_initialized(
     functions: &'static [crate::telemetry::Function],
     sites: &'static [crate::telemetry::Site],
     initialize: Option<fn(&mut crate::Instance, &mut crate::telemetry::Session) -> R<()>>,
+    format_site: Option<usize>,
 ) -> std::process::ExitCode {
     let result = (|| -> R<()> {
         let mut args = std::env::args().skip(1);
@@ -421,7 +422,7 @@ pub fn driver_initialized(
             }
             let value = call(&mut instance, &mut session)?;
             let Some(jobs) = jobs else {
-                println!("{value}");
+                println!("{}", format_result(&mut session, &value, format_site)?);
                 return Ok(());
             };
             for _ in 1..warmup {
@@ -460,6 +461,41 @@ pub fn driver_initialized(
             std::process::ExitCode::FAILURE
         }
     }
+}
+
+/// The pack host prints a result through `baml.json.stringify`, an observed
+/// root of its own. Scalars and strings replay that call; other values print
+/// their copied-out JSON unobserved.
+fn format_result(
+    session: &mut crate::telemetry::Session,
+    value: &Owned,
+    site: Option<usize>,
+) -> R<String> {
+    let text = value.to_string();
+    let Some(site) = site else {
+        return Ok(text);
+    };
+    let scalar = match value {
+        Owned::Null => Dyn { tag: 2, payload: 0 },
+        Owned::Bool(b) => Dyn {
+            tag: 1,
+            payload: u64::from(*b),
+        },
+        Owned::Number(n) => match (n.as_i64(), n.as_f64()) {
+            (Some(i), _) => Dyn {
+                tag: 0,
+                payload: i.cast_unsigned(),
+            },
+            (None, Some(f)) => Dyn {
+                tag: crate::FLOAT_TAG,
+                payload: f.to_bits(),
+            },
+            _ => return Ok(text),
+        },
+        Owned::String(s) => return session.format_string(s, site),
+        _ => return Ok(text),
+    };
+    session.format_scalar(scalar, text, site)
 }
 
 #[cfg(test)]

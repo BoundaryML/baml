@@ -160,7 +160,15 @@ pub(super) fn emit(
                 format!("rt::Dyn{{tag:{tag},payload:{payload}}}")
             };
             let cxt = super::exceptions::context_type(plan.error_contexts);
-            writeln!(out,"let cx={cxt}::current();let value=(if rt::telemetry::active(){{f{callee}::<true>(cx,{site})}}else{{f{callee}::<false>(cx,{site})}}).map_err(|e|e.at(&S{chain},{step}))?;rt::globals::store({slot},{value},{});",repr.pointer()).unwrap();
+            // Error-context traces end at the package's `$init` frame, as in the VM.
+            let cx = if plan.error_contexts {
+                format!(
+                    "let init_frame=rt::calls::ErrorFrame{{source:&S{chain},caller_pc:0,parent:std::ptr::null()}};let cx={cxt}::current().with_frame(&init_frame);"
+                )
+            } else {
+                format!("let cx={cxt}::current();")
+            };
+            writeln!(out,"{cx}let value=(if rt::telemetry::active(){{f{callee}::<true>(cx,{site})}}else{{f{callee}::<false>(cx,{site})}}).map_err(|e|e.at(&S{chain},{step}))?;rt::globals::store({slot},{value},{});",repr.pointer()).unwrap();
         }
         let package = plan
             .program

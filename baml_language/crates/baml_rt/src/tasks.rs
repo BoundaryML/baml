@@ -107,6 +107,10 @@ impl NativeFinalizers {
         sequence
     }
     pub(crate) fn take_reports(&mut self) -> Vec<UnhandledTaskError> {
+        // The host prints every report at shutdown. Collection timing (and
+        // so batching) depends on the heap, e.g. under GC stress; spawn order
+        // is the VM's order whenever its collector finds them together.
+        self.unhandled.sort_by_key(|report| report.2);
         std::mem::take(&mut self.unhandled)
             .into_iter()
             .map(|(error, cancelled, _)| UnhandledTaskError {
