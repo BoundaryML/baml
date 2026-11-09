@@ -19,32 +19,21 @@ use std::fmt::Write as _;
 type Gen<T> = Result<T, String>;
 #[derive(Clone)]
 struct MirFunction<'db> {
-    arity: usize,
     identity: Option<baml_compiler2_mir::MirFunctionId<'db>>,
-    kind: std::borrow::Cow<'db, MirFunctionKind<'db>>,
-    lambdas: std::borrow::Cow<'db, [baml_compiler2_mir::MirFunction<'db>]>,
+    arity: usize,
+    kind: MirFunctionKind<'db>,
+    lambdas: Vec<MirFunction<'db>>,
 }
-impl<'db> From<&'db baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
-    fn from(mir: &'db baml_compiler2_mir::MirFunction<'db>) -> Self {
+impl<'db> From<&baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
+    fn from(mir: &baml_compiler2_mir::MirFunction<'db>) -> Self {
         Self {
-            arity: mir.arity,
             identity: Some(mir.identity.clone()),
-            kind: std::borrow::Cow::Borrowed(&mir.kind),
-            lambdas: std::borrow::Cow::Borrowed(&mir.lambdas),
-        }
-    }
-}
-impl<'db> From<baml_compiler2_mir::MirFunction<'db>> for MirFunction<'db> {
-    fn from(mir: baml_compiler2_mir::MirFunction<'db>) -> Self {
-        Self {
             arity: mir.arity,
-            identity: Some(mir.identity),
-            kind: std::borrow::Cow::Owned(mir.kind),
-            lambdas: std::borrow::Cow::Owned(mir.lambdas),
+            kind: mir.kind.clone(),
+            lambdas: mir.lambdas.iter().map(Self::from).collect(),
         }
     }
 }
-
 struct Layout {
     fields: Vec<Repr>,
     offsets: Vec<usize>,
@@ -64,15 +53,25 @@ struct Plan<'a> {
     index: ProgramIndex<'a>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
+    bigints: bool,
+    json_tree: bool,
+    json_public_to: bool,
+    json_to_types: Vec<baml_compiler2_mir::TyTemplate>,
     lists: BTreeSet<Repr>,
-    map_types: std::cell::RefCell<Vec<maps::MapType>>,
-    key_callbacks: BTreeMap<Repr, BTreeMap<String, usize>>,
-    key_hasher: Option<usize>,
-    key_edges: BTreeMap<usize, BTreeSet<usize>>,
+    list_elements: std::cell::RefCell<Vec<ListElement>>,
     json_types: Vec<Vec<usize>>,
-    json_maps: BTreeMap<Repr, RuntimeTy>,
-    globals: BTreeMap<usize, Repr>,
-    init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
+    environments: bool,
+    task_support: bool,
+    cleanup_methods: BTreeMap<usize, usize>,
+    captures: BTreeMap<usize, Vec<Repr>>,
+    capture_types: BTreeMap<usize, Vec<RuntimeTy>>,
+    lambda_bodies: BTreeMap<usize, usize>,
+    lambda_targets: BTreeMap<(usize, usize), usize>,
+    generic_functions: Vec<(usize, Vec<RuntimeTy>, usize)>,
+    generic_values: BTreeMap<(usize, usize, usize), usize>,
+    virtual_values: BTreeMap<(usize, usize, usize), Vec<(Repr, usize)>>,
+    callables: BTreeSet<usize>,
+    closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
     enums: BTreeSet<usize>,
     specialized_calls: BTreeMap<(usize, usize), usize>,
     type_codes: Vec<baml_compiler2_mir::TyTemplate>,
@@ -82,17 +81,22 @@ struct Plan<'a> {
     heads: BTreeMap<baml_type::typetag::TypeTag, baml_type::DeclName>,
     dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
     function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
+    structural_strings: bool,
+    structural_string_calls: BTreeSet<(usize, usize, Repr)>,
+    string_overrides: BTreeMap<Repr, usize>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
-    environments: bool,
-    captures: BTreeMap<usize, Vec<Repr>>,
-    lambda_bodies: BTreeMap<usize, usize>,
-    callables: BTreeSet<usize>,
-    closure_lists: BTreeMap<u64, baml_type::RuntimeTy<usize>>,
-    list_elements: std::cell::RefCell<Vec<ListElement>>,
     list_stringify: bool,
     list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
     json_decode_codes: BTreeSet<usize>,
     json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
+    map_types: std::cell::RefCell<Vec<maps::MapType>>,
+    key_callbacks: BTreeMap<Repr, BTreeMap<String, usize>>,
+    key_hasher: Option<usize>,
+    key_edges: BTreeMap<usize, BTreeSet<usize>>,
+    json_maps: BTreeMap<Repr, RuntimeTy>,
+    map_stringify: bool,
+    globals: BTreeMap<usize, Repr>,
+    init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
 }
 struct Emitter<'a, 'db> {
     db: &'db dyn Db,
@@ -115,6 +119,8 @@ struct Emitter<'a, 'db> {
     raise_kinds: Vec<&'static str>,
     telemetry_sites: &'a std::cell::RefCell<Vec<(Option<usize>, usize, usize)>>,
     site: usize,
+    string_cx: std::cell::Cell<bool>,
+    string_literals: std::cell::RefCell<BTreeMap<String, usize>>,
 }
 
 struct ProgramEmission<'a, 'db> {
@@ -126,7 +132,6 @@ struct ProgramEmission<'a, 'db> {
 
 mod admission;
 mod body;
-mod builtin_classes;
 mod builtins;
 mod call_cost;
 mod capture_codegen;
@@ -138,17 +143,16 @@ mod driver;
 mod errors;
 mod expressions;
 mod host;
-mod io;
 mod json;
+mod json_flat_lists;
 mod json_lists;
+mod json_scalars;
+mod json_tree;
 mod layout;
 mod lists;
-mod logging;
 mod loop_ranges;
-mod native;
 mod places;
 mod repr;
-mod scalars;
 mod stack;
 mod statements;
 mod telemetry;
@@ -157,19 +161,27 @@ use body::recursive;
 use diagnostics::no;
 use repr::Repr;
 
-pub use driver::compile_rt;
+pub use driver::{compile_rt, compile_rt_benchmark};
 
 mod calls;
+mod formatting;
 mod globals;
 mod map_json;
-mod map_keys;
 mod maps;
+mod map_keys;
+mod regex;
 mod registry;
+mod string_bytes;
+mod string_defaults;
 mod strings;
 mod tasks;
+
+use layout::rt_descriptors;
 
 mod switches;
 
 mod generics;
 
 mod interface_fields;
+
+mod callbacks;

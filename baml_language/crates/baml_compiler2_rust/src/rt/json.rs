@@ -3,14 +3,15 @@ use super::*;
 impl Plan<'_> {
     pub(super) fn type_code(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<usize> {
         use baml_compiler2_mir::TyTemplate as T;
-        if let Some(index) = self.json_list_types.iter().position(|t| t == ty) {
-            return Ok(json_lists::TYPE_BASE + index);
-        }
+        let fallback = || {
+            self.type_codes
+                .iter()
+                .position(|t| t == ty)
+                .map(|i| i + 100000)
+                .ok_or_else(|| no("unregistered type argument"))
+        };
         match ty {
             T::Function { .. } => Ok(usize::MAX - 1),
-            T::Bigint => Ok(89997),
-            T::Uint8Array => Ok(89995),
-            T::RustType => Ok(89994),
             T::Int => Ok(0),
             T::Bool => Ok(90000),
             T::Float => Ok(89998),
@@ -20,37 +21,31 @@ impl Plan<'_> {
                     .map(RuntimeTy::from)
                     .map_err(|_| no("map type argument"))?;
                 let repr = self.repr(&ty)?;
-                Ok(super::map_json::code(repr)?)
+                // Regex named-group maps carry native pointer-map storage;
+                // ordinary generic calls still need their declared type token.
+                super::map_json::code(repr).or_else(|_| fallback())
             }
             T::String => Ok(1),
-            T::List(t) if matches!(t.as_ref(), T::String) => Ok(2),
-            T::Class(_, _) | T::Union(_) => {
-                let Ok(classes) = self.json_class_types(ty) else {
-                    return self
-                        .type_codes
-                        .iter()
-                        .position(|t| t == ty)
-                        .map(|i| i + 100000)
-                        .ok_or_else(|| no("unregistered type argument"));
-                };
-                self.json_types
-                    .iter()
-                    .position(|c| *c == classes)
-                    .map(|i| i + 3)
-                    .or_else(|| {
-                        self.type_codes
-                            .iter()
-                            .position(|t| t == ty)
-                            .map(|i| i + 100000)
-                    })
-                    .ok_or_else(|| no("unregistered JSON specialization"))
+            T::List(_) | T::Union(_) | T::TypeAlias(_) => {
+                if let Some(i) = self.json_list_types.iter().position(|t| t == ty) {
+                    return Ok(i + json_lists::TYPE_BASE);
+                }
+                if let Ok(classes) = self.json_class_types(ty) {
+                    if let Some(i) = self.json_types.iter().position(|c| *c == classes) {
+                        return Ok(i + 3);
+                    }
+                }
+                fallback()
             }
-            _ => self
-                .type_codes
-                .iter()
-                .position(|t| t == ty)
-                .map(|i| i + 100000)
-                .ok_or_else(|| no(format!("type argument {ty:?}"))),
+            T::Class(..) => {
+                if let Ok(classes) = self.json_class_types(ty) {
+                    if let Some(i) = self.json_types.iter().position(|c| *c == classes) {
+                        return Ok(i + 3);
+                    }
+                }
+                fallback()
+            }
+            _ => fallback(),
         }
     }
     pub(super) fn json_class_types(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<Vec<usize>> {
@@ -90,8 +85,8 @@ pub(super) fn emit(
     let program = plan.program;
     if let Some(callee) = json_decode {
         if plan.json_types.is_empty()
-            && plan.json_maps.is_empty()
             && plan.json_list_types.is_empty()
+            && plan.json_maps.is_empty()
         {
             return Err(no("missing JSON specialization"));
         }
@@ -116,15 +111,7 @@ pub(super) fn emit(
                 let compound = list_type.is_some()
                     || json_classes.iter().any(|c| {
                         plan.layouts[c].fields.iter().any(|r| {
-                            r.growing()
-                                || matches!(
-                                    r,
-                                    Repr::Float
-                                        | Repr::Bool
-                                        | Repr::Ptr(_)
-                                        | Repr::MapStrInt
-                                        | Repr::Map(_)
-                                )
+                            r.growing() || matches!(r, Repr::Float | Repr::Bool | Repr::Ptr(_))
                         })
                     });
                 if compound {
@@ -134,7 +121,6 @@ pub(super) fn emit(
                         descriptors,
                         lists,
                         list_type,
-                        None,
                         json_classes,
                         code,
                         aliased,
@@ -174,6 +160,13 @@ pub(super) fn emit(
                                 T::Int => "rt::json::Ty::Int".into(),
                                 T::Literal(baml_type::Literal::String(value), _) => {
                                     format!("rt::json::Ty::Literal({:?})", value.as_str())
+                                }
+                                T::Union(m)
+                                    if m.len() == 2
+                                        && m.iter().any(|t| matches!(t, T::Null))
+                                        && m.iter().any(|t| matches!(t, T::String)) =>
+                                {
+                                    "rt::json::Ty::OptionalString".into()
                                 }
                                 T::Union(m)
                                     if m.len() == 2
@@ -245,7 +238,7 @@ pub(super) fn emit(
                                     .or_insert(next);
                             }
                         }
-                        writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.as_str(&read_cx);let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
+                        writeln!(&mut out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{let read_cx=unsafe{{rt::strings::Cx::current()}};let text=unsafe{{rt::strings::Str::from_raw(s)}};let source=text.try_as_str(&read_cx)?;let mut input=match rt::json::Stream::<{}>::scan(source,|key|match key{{",names.len()).unwrap();
                         for (name, index) in &names {
                             writeln!(&mut out, "{name:?}=>Some({index}),").unwrap();
                         }
@@ -318,7 +311,7 @@ pub(super) fn emit(
                     }
                 }
                 let mir = &all[&callee];
-                let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
+                let MirFunctionKind::Bytecode(body) = &mir.kind else {
                     return Err(no("JSON wrapper body"));
                 };
                 let mut line = None;
@@ -441,23 +434,6 @@ pub(super) fn register_decoders(
             let repr = plan.repr(&runtime)?;
             plan.record(repr)?;
             plan.json_maps.insert(repr, runtime);
-        } else if matches!(ty, baml_compiler2_mir::TyTemplate::List(_))
-            || (matches!(ty, baml_compiler2_mir::TyTemplate::Union(_))
-                && plan.json_class_types(ty).is_err())
-        {
-            let repr = plan.template_repr(ty)?;
-            plan.record(repr)?;
-            if !plan.json_list_types.contains(ty) {
-                plan.json_list_types.push(ty.clone());
-            }
-        } else {
-            let classes = plan.json_class_types(ty)?;
-            for &class in &classes {
-                plan.add(class)?;
-            }
-            if !plan.json_types.contains(&classes) {
-                plan.json_types.push(classes);
-            }
         }
     }
     Ok(())

@@ -19,7 +19,7 @@ pub(super) fn emit(
     if plan.json_maps.is_empty() {
         return Ok(());
     }
-    let MirFunctionKind::Bytecode(body) = cx.all[&callee].kind.as_ref() else {
+    let MirFunctionKind::Bytecode(body) = &cx.all[&callee].kind else {
         return Err(no("JSON decode body"));
     };
     let block=body.blocks.iter().find(|b|matches!(&b.terminator,Some(Terminator::Call{callee:Operand::Constant(Constant::Function(f)),..}) if plan.index.function(cx.db,*f).is_some_and(|(id,_)|plan.index.display(id)=="baml.json._decode"))).ok_or_else(||no("JSON source location"))?;
@@ -50,8 +50,10 @@ pub(super) fn emit(
                     plan,
                     cx.descriptors,
                     lists,
-                    None,
-                    Some(ty),
+                    Some(&baml_compiler2_mir::TyTemplate::from(
+                        baml_compiler2_mir::RealizedTy::try_from(ty)
+                            .map_err(|_| no("JSON map schema"))?,
+                    )),
                     &[],
                     code(repr)?,
                     aliased,
@@ -70,7 +72,7 @@ pub(super) fn emit(
         let tag = lists[&repr] + 3;
         let desc = lists[&repr];
         let slot = maps::slot_type(value_repr, cx.descriptors, lists)?;
-        let ty = capture_codegen::capture_repr_type(plan, repr)?;
+        let ty = capture_codegen::capture_repr(plan, repr)?;
         let decode = if recursive {
             format!(
                 "if naming==0{{json_specialized_{code}_0(&mut rt::strings::Cx::current(),s)}}else{{json_specialized_{code}_1(&mut rt::strings::Cx::current(),s)}}"
@@ -117,7 +119,7 @@ fn decode_value(
             let member_repr = plan.repr(member)?;
             if repr == Repr::Tagged {
                 let tagged =
-                    capture_codegen::capture_dyn(plan, member_repr, "value", descriptors, lists)?;
+                    capture_codegen::capture_dyn(member_repr, "value", descriptors, lists)?;
                 format!(
                     "if reader.peek()==Some(b'n'){{rt::maps::json::null(cx,reader,path).map(|_|rt::Dyn{{tag:2,payload:0}})}}else{{({nested}).map(|value|{tagged})}}"
                 )
@@ -155,7 +157,7 @@ pub(super) fn schema(
     let key_type = if let Repr::Map(id) = repr {
         plan.map_types.borrow()[id].key_type.clone()
     } else {
-        capture_codegen::capture_repr_type(plan, key)?
+        capture_codegen::capture_repr(plan, key)?
     };
     let key_slot = maps::slot_type(key, descriptors, lists)?;
     if !matches!(key, Repr::Str | Repr::Tagged) {
@@ -189,27 +191,6 @@ pub(super) fn schema(
     Ok(format!(
         "rt::json_lists::Ty::Map{{key:&{key_type},value:&{value},adapter:&rt::maps::json::Adapter{{tag:{},new:|cx|unsafe{{{map}::new(cx,{desc}).map(|m|m.as_raw())}},insert:|cx,p,key,value|unsafe{{{insert}}}}}}}",
         desc + 3
-    ))
-}
-pub(super) fn encode_shape(
-    plan: &Plan<'_>,
-    repr: Repr,
-    descriptors: &BTreeMap<usize, usize>,
-    lists: &BTreeMap<Repr, usize>,
-) -> Gen<String> {
-    let (key, value) = plan.map_parts(repr)?;
-    let key_slot = maps::slot_type(key, descriptors, lists)?;
-    let value_slot = maps::slot_type(value, descriptors, lists)?;
-    let map = format!("rt::maps::Map::<{key_slot},{value_slot}>");
-    let key_type = if let Repr::Map(id) = repr {
-        plan.map_types.borrow()[id].key_type.clone()
-    } else {
-        capture_codegen::capture_repr_type(plan, key)?
-    };
-    let key = capture_codegen::capture_dyn(plan, key, "key", descriptors, lists)?;
-    let value = capture_codegen::capture_dyn(plan, value, "value", descriptors, lists)?;
-    Ok(format!(
-        "rt::json_lists::Shape::Map{{key:&{key_type},len:|p|unsafe{{{map}::from_raw(p).len()}},entry:|p,i|unsafe{{let (key,value)={map}::from_raw(p).entry(i).unwrap();({key},{value})}}}}"
     ))
 }
 fn recursive_value(ty: &RuntimeTy) -> bool {

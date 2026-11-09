@@ -180,6 +180,7 @@ function main()->int { GATE }"#,
         r#"enum A{One} enum B{One} function main()->int {let a:A[]=[A.One];let b:B[]=[B.One];let m:map<A[]|B[],int> = {a:1,b:2};m[a]+m[b]+m.length()}"#,
         r#"class Counter{calls:int} class Key{id:int counter:Counter implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{self.counter.calls+=1;self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{0.hash(state);}}} function main()->int {let counter=Counter{calls:0};let a=Key{id:1,counter};let b=Key{id:1,counter};let m:map<Key[],int> = {[a,a]:7};m[[b,b]]+counter.calls}"#,
         r#"class Counter{calls:int values:Key[]} class Key{id:int counter:Counter implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{self.counter.calls+=1;self.counter.values.clear();baml.sys.collect_garbage();0.hash(state);}}} function main()->int {let counter=Counter{calls:0,values:[]};counter.values=[Key{id:1,counter},Key{id:2,counter}];let m:map<Key[],int> = {};m[counter.values]=7;counter.calls+m.length()}"#,
+        r#"enum E{A B} class Box{kind:E maybe:int?} function main()->int{let m:map<string,Box> = {"a":Box{kind:E.A,maybe:null}};let text=baml.json.stringify(m,omit_nulls=true);let n=0;for(let c in text.to_code_points()){n=(n*31+c)%1000000007;}n}"#,
     ];
     let selected = std::env::var("BAML_RT_GLOBALS_MAPS_CASES")
         .ok()

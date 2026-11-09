@@ -19,7 +19,11 @@ impl Context {
         Self {
             // A running fiber has at least this reserve above its valid stack
             // mapping's lower bound. Pre-add it so each call needs one compare.
-            stack_threshold: crate::STACK_LIMIT.get() + crate::language::STACK_RESERVE,
+            stack_threshold: if crate::ENTRY_ERROR.get().is_null() {
+                crate::STACK_LIMIT.get() + crate::language::STACK_RESERVE
+            } else {
+                usize::MAX
+            },
             poll_word: crate::POLL_WORD.get(),
         }
     }

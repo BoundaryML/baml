@@ -87,6 +87,11 @@ impl RootSource for Core {
             }
         }
         for task in self.tasks.values() {
+            for slot in &task.managed_roots {
+                if unsafe { *slot.get() } != 0 {
+                    visit(slot.get());
+                }
+            }
             for value in &task.roots {
                 value.roots(visit);
             }

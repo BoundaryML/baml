@@ -118,16 +118,19 @@ impl Emitter<'_, '_> {
     pub(super) fn vm_tag(&self, value: (String, Repr)) -> Gen<String> {
         let (v, r) = value;
         let scalar = match r {
-            Repr::Bigint => Some(13),
-            Repr::Bytes => Some(12),
             Repr::Int => Some(0),
             Repr::Float => Some(4),
+            Repr::Bigint => Some(baml_type::typetag::BIGINT),
             Repr::Str => Some(1),
             Repr::Bool => Some(2),
             Repr::Null => Some(3),
             Repr::Naming | Repr::Enum(_) => Some(5),
-            Repr::ListInt | Repr::ListStr | Repr::ListListStr | Repr::ListPtr(_) => Some(6),
-            Repr::MapStrInt => Some(7),
+            Repr::List(_)
+            | Repr::ListInt
+            | Repr::ListStr
+            | Repr::ListListStr
+            | Repr::ListPtr(_) => Some(6),
+            Repr::MapStrInt | Repr::Map(_) => Some(7),
             Repr::Ptr(c) => {
                 let c = self.plan.class(c);
                 Some(c.type_tag.as_i64())
@@ -144,8 +147,16 @@ impl Emitter<'_, '_> {
         if !matches!(r, Repr::Tagged | Repr::Dyn(_)) {
             return Err(no("type tag"));
         }
-        let mut out =
-            format!("{{let v={v};match v.tag{{0=>0i64,1=>2,2=>3,3=>1,4294967294=>4,18=>13,19=>12,");
+        let mut out = format!("{{let v={v};match v.tag{{0=>0i64,1=>2,2=>3,3=>1,4294967294=>4,");
+        if self.plan.bigints {
+            write!(
+                out,
+                "{}=>{},",
+                self.plan.bigint_descriptor() + 3,
+                baml_type::typetag::BIGINT
+            )
+            .unwrap();
+        }
         for (&c, &desc) in self.descriptors {
             let class = self.plan.class(c);
             write!(out, "{}=>{},", desc + 3, class.type_tag.as_i64()).unwrap();
@@ -155,7 +166,11 @@ impl Emitter<'_, '_> {
                 out,
                 "{}=>{},",
                 desc + 3,
-                if *repr == Repr::MapStrInt { 7 } else { 6 }
+                if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
+                    7
+                } else {
+                    6
+                }
             )
             .unwrap();
         }
@@ -184,8 +199,7 @@ impl Emitter<'_, '_> {
             return Ok("false".into());
         }
         let tag = match ty {
-            TyTemplate::Bigint => "18".into(),
-            TyTemplate::Uint8Array => "19".into(),
+            TyTemplate::Bigint => (self.plan.bigint_descriptor() + 3).to_string(),
             TyTemplate::Int => "0".into(),
             TyTemplate::Float => "4294967294".into(),
             TyTemplate::Bool => "1".into(),
@@ -194,10 +208,10 @@ impl Emitter<'_, '_> {
             TyTemplate::Literal(lit, _) => {
                 let tagged = self.coerce(value, Repr::Tagged)?;
                 return Ok(match lit {
-                    baml_type::Literal::String(s) => format!(
-                        "{{let v={tagged};v.tag==3 && rt::strings::Str::from_raw(v.payload as usize).as_str(&rt::strings::Cx::current())=={:?}}}",
-                        s.as_str()
-                    ),
+                    baml_type::Literal::String(s) => {
+                        let read = self.fallible("rt::strings::Str::from_raw(v.payload as usize).try_as_str(&rt::strings::Cx::current())");
+                        format!("{{let v={tagged};v.tag==3 && {read}=={:?}}}", s.as_str())
+                    }
                     baml_type::Literal::Int(i) => {
                         format!("{{let v={tagged};v.tag==0 && v.payload==({i}i64 as u64)}}")
                     }
@@ -233,7 +247,9 @@ impl Emitter<'_, '_> {
                 } else {
                     self.descriptors
                         .get(&c)
-                        .map(|d| (d + 3).to_string())
+                        .map(|d| d + 3)
+                        .or_else(|| super::tasks::runtime_exception_tag(self.plan, c))
+                        .map(|tag| tag.to_string())
                         .ok_or_else(|| no("unplanned membership class"))?
                 }
             }
@@ -353,4 +369,23 @@ impl Emitter<'_, '_> {
         let v = self.coerce(value, Repr::Tagged)?;
         Ok(format!("({v}).tag=={tag}"))
     }
+}
+
+pub(super) fn record_test(plan: &mut Plan<'_>, ty: &TyTemplate) -> Gen<()> {
+    if let TyTemplate::Class(head, args) = ty {
+        if head.namespace().as_slice() == ["iter"] && head.name().as_str() == "Done" {
+            return Ok(());
+        }
+        if args.is_empty()
+            && plan
+                .index
+                .class_at(head)
+                .is_some_and(|(c, _)| plan.class(c).generic_param_count > 0)
+        {
+            return Ok(());
+        }
+    }
+    let ty = ty.substitute_symbolic(&[]);
+    plan.register_class_type(&ty)?;
+    plan.record_ty(&ty)
 }

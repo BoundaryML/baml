@@ -545,7 +545,7 @@ impl StringIntMap {
                 text.push_str(", ");
             }
             let (key, value) = self.0.entry(i).unwrap();
-            write!(&mut text, "{:?}: {}", key.as_str(cx), value).unwrap();
+            write!(&mut text, "{:?}: {}", key.text(cx), value).unwrap();
         }
         text.push('}');
         text
@@ -563,6 +563,15 @@ impl StringIntMap {
     }
     pub fn as_raw(self) -> usize {
         self.0.as_raw()
+    }
+    /// # Safety
+    /// `desc` describes the growing integer list and buffer layouts.
+    pub unsafe fn growing_values(self, cx: &mut Cx, desc: u32) -> R<usize> {
+        let list = unsafe { crate::lists::List::<i64>::with_capacity(cx, desc, self.0.len())? };
+        for i in 0..self.0.len() {
+            list.push(cx, self.0.entry(i).unwrap().1)?;
+        }
+        Ok(list.as_raw())
     }
     pub fn set(self, cx: &mut Cx, key: Str, value: i64) -> R<Dyn> {
         Ok(self
@@ -710,12 +719,12 @@ mod tests {
             let key = cx.string("key-3")?;
             let old = map.set(&mut cx, key, Dyn { tag: 2, payload: 0 })?.unwrap();
             assert_eq!(
-                unsafe { Str::from_raw(old.payload as usize) }.as_str(&cx),
+                unsafe { Str::from_raw(old.payload as usize) }.text(&cx),
                 "value-3"
             );
             assert!(map.has(&mut cx, key)?); // A stored null remains present.
             let before = map.entry(3).unwrap();
-            assert_eq!(before.0.as_str(&cx), "key-3");
+            assert_eq!(before.0.text(&cx), "key-3");
             assert_eq!(map.delete(&mut cx, key)?.unwrap().tag, 2);
             assert!(!map.has(&mut cx, key)?);
             let replacement = cx.string("replacement")?;
@@ -728,14 +737,14 @@ mod tests {
                 },
             )?;
             cx.poll()?;
-            assert_eq!(map.entry(3).unwrap().0.as_str(&cx), "key-4");
-            assert_eq!(map.entry(95).unwrap().0.as_str(&cx), "key-3");
+            assert_eq!(map.entry(3).unwrap().0.text(&cx), "key-4");
+            assert_eq!(map.entry(95).unwrap().0.text(&cx), "key-3");
             for i in 0..map.len() {
                 let (key, value) = map.entry(i).unwrap();
-                assert!(key.as_str(&cx).starts_with("key-"));
+                assert!(key.text(&cx).starts_with("key-"));
                 assert!(
                     unsafe { Str::from_raw(value.payload as usize) }
-                        .as_str(&cx)
+                        .text(&cx)
                         .starts_with(if i == 95 { "replacement" } else { "value-" })
                 );
             }
@@ -745,10 +754,10 @@ mod tests {
             cx.poll()?;
             for i in 0..snapshot.len() {
                 let (key, value) = snapshot.entry(i).unwrap();
-                assert!(key.as_str(&cx).starts_with("key-"));
+                assert!(key.text(&cx).starts_with("key-"));
                 assert!(
                     unsafe { Str::from_raw(value.payload as usize) }
-                        .as_str(&cx)
+                        .text(&cx)
                         .starts_with(if i == 95 { "replacement" } else { "value-" })
                 );
             }
@@ -770,14 +779,14 @@ mod tests {
                 })
             }?;
             cx.poll()?;
-            assert_eq!(map.entry(0).unwrap().0.as_str(&cx), "z");
+            assert_eq!(map.entry(0).unwrap().0.text(&cx), "z");
             let text = json::stringify(&mut cx, map, |cx, v, _, out| {
                 map.clear();
                 cx.poll()?;
                 out.push_str(&(v.payload as i64).to_string());
                 Ok(())
             })?;
-            assert_eq!(text.as_str(&cx), r#"{"z":3,"a":2}"#);
+            assert_eq!(text.text(&cx), r#"{"z":3,"a":2}"#);
             let text = cx.string(r#"{"a":false}"#)?;
             let error = unsafe {
                 json::decode::<Dyn>(&mut cx, 11, text, |cx, reader, path| {
@@ -827,10 +836,33 @@ mod tests {
                     Ok(a == b)
                 })?
                 .unwrap();
-            assert_eq!(found.as_str(&cx), "new");
+            assert_eq!(found.text(&cx), "new");
             assert!(mutated);
             Ok(1)
         }
         assert_eq!(unsafe { instance().run_baml(run) }.unwrap(), 1);
+    }
+}
+
+impl<V: Slot> Map<Str, V> {
+    /// Heap-neutral lookup for JSON field/path readers. No temporary managed key.
+    pub fn get_text(self, cx: &Cx, key: &str) -> Option<V> {
+        if self.is_empty() {
+            return None;
+        }
+        let hash = slots::hash_bytes(key.as_bytes());
+        let mask = self.bucket_len() - 1;
+        let mut bucket = hash as usize & mask;
+        loop {
+            let raw = unsafe { *self.bucket(bucket) };
+            if raw == 0 {
+                return None;
+            }
+            let entry = unsafe { &*self.entry_ptr(raw - 1) };
+            if entry.hash == hash && entry.key.text(cx) == key {
+                return Some(entry.value);
+            }
+            bucket = (bucket + 1) & mask;
+        }
     }
 }

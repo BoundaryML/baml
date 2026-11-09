@@ -1,157 +1,165 @@
-BAML runtime coverage (normal AND GC stress): 15 pass, 124 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 59 pass, 117 unsupported, 0 fail
 Telemetry off: required
-Telemetry low/medium/high/default: not yet supported generally; required for standalone closure probes
+String probes: off/low/medium/high/default required
+Standalone JSON and closure/task telemetry checked; not enabled generally
 
 First unsupported constructs (fixtures blocked):
-49	generic user call
-32	type Future(Int, Never)
-10	list element
-4	list field element
-4	type Future(Int, String)
-3	type Future(List(Int), Never)
-2	field type Type (layout Class, object 14, types [Type])
+100	function-valued global
+9	list element
+3	list field element
 2	growing list builtin receiver
-2	specialization frame arity
-2	type Future(Null, Never)
-1	JSON field union
-1	baml.String.split
-1	defer/shielding
-1	entry must have no parameters and return int
-1	field type Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]) (layout iter.Chain, object 4864, types [Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]), Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]), Bool])
-1	field type Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]) (layout iter.Filter, object 4862, types [Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]), Function { params: [RuntimeFunctionParamTy { name: None, ty: Int, mode: Required }], ret: Bool, throws: Never }])
-1	field type Media(Image) (layout content.Media, object 1663, types [Union([Media(Image), Media(Audio), Media(Video), Media(Pdf)]), Union([String, Null]), Union([String, Null])])
-1	field type Type (layout ModelTurnInput, object 1689, types [Function { params: [RuntimeFunctionParamTy { name: None, ty: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1779) }, []), mode: Required }], ret: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1785) }, []), throws: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1819) }, []) }, Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1778) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1788) }, []), Type])
-1	field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
-1	generic class or cleanup
-1	generic interface implementation
-1	terminator Some(Call { has_trace: true, argument_layout: Some(CallLayout([None])), callee: Constant(GlobalItem(Source(LetLoc(..)))), args: [Copy(Local(Local(47))), Copy(Local(Local(27)))], ntypeargs: 0, destination: Local(Local(26)), target: BlockId(18), unwind: None })
-1	type Future(Int, Literal(String("leaf-error"), Regular))
-1	type Type (interface receiver Type)
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(5), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(5), unwind: None })
 
 Per probe / KPI workload:
-Allocation	unsupported: generic user call
-AnyWithFailure	unsupported: type Future(Int, String)
-ArrayWalk	unsupported: generic user call
-Async	unsupported: type Future(Int, Never)
-AwaitChain	unsupported: type Future(Int, Never)
-AwaitErrors	unsupported: type Future(Int, String)
-BoundTypes	unsupported: type Type (interface receiver Type)
-CallbackDepth	unsupported: generic user call
-CancelDeep	unsupported: type Future(Int, Never)
-CancelDuringUnwind	unsupported: type Future(Int, Literal(String("leaf-error"), Regular))
-Cancellation	unsupported: type Future(Null, Never)
-CatchAllThrownPanic	unsupported: generic user call
-CatchAllocation	unsupported: generic user call
-CatchBindChain	unsupported: generic user call
-CatchBindJumpTable	unsupported: generic user call
-CatchMixedUnion	unsupported: generic user call
-CatchNonstreamCancellation	unsupported: field type Type (layout ModelTurnInput, object 1689, types [Function { params: [RuntimeFunctionParamTy { name: None, ty: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1779) }, []), mode: Required }], ret: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1785) }, []), throws: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1819) }, []) }, Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1778) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1788) }, []), Type])
-CatchOrPanics	unsupported: generic user call
-CatchStreamingCancellation	unsupported: field type Media(Image) (layout content.Media, object 1663, types [Union([Media(Image), Media(Audio), Media(Video), Media(Pdf)]), Union([String, Null]), Union([String, Null])])
-CatchUnmatchedChain	unsupported: generic user call
-CatchWildcardDivision	unsupported: generic user call
-CatchWildcardIndex	unsupported: generic user call
-CatchWildcardReassigned	unsupported: generic user call
-CatchWildcardThenBoundary	unsupported: generic user call
-CatchWildcardThrownPanic	unsupported: generic user call
-CauseChains	unsupported: generic user call
-Closures	unsupported: generic user call
-Containers	unsupported: generic user call
-Contexts	unsupported: generic user call
-DeepErrors	unsupported: generic user call
-DeepUncaught	unsupported: generic user call
-DeferUnwind	unsupported: generic user call
-DeferUnwindUncaught	unsupported: defer/shielding
-Depth	unsupported: generic user call
-Equality	unsupported: generic user call
-EscapeAwaitResult	unsupported: type Future(List(Int), Never)
-EscapeAwaitShared	unsupported: type Future(List(Int), Never)
-EscapeCaptureAlias	unsupported: type Future(Int, Never)
-EscapeClosure	unsupported: type Future(Int, Never)
-EscapeField	unsupported: type Future(Int, Never)
-EscapeFinalizer	unsupported: generic class or cleanup
-EscapeGlobal	unsupported: type Future(Int, Never)
-EscapeInsert	unsupported: type Future(Int, Never)
-EscapeInsertContents	unsupported: type Future(Int, Never)
-EscapeIterator	unsupported: type Future(Int, Never)
-EscapeMap	unsupported: type Future(Int, Never)
-EscapeMapSetContents	unsupported: type Future(Int, Never)
-EscapeMapValue	unsupported: type Future(Int, Never)
-EscapeMaskClosure	unsupported: type Future(Int, Never)
-EscapeMaskMixed	unsupported: type Future(Int, Never)
-EscapeOrderedReturn	unsupported: type Future(List(Int), Never)
-EscapeOrderedSpawn	unsupported: type Future(Int, Never)
-EscapePublishedField	unsupported: type Future(Int, Never)
-EscapePushContents	unsupported: type Future(Int, Never)
-EscapeRecursive	unsupported: type Future(Int, Never)
-EscapeReturnedAlias	unsupported: type Future(Int, Never)
-EscapeSessionHandoff	unsupported: generic user call
-EscapeSpawn	unsupported: type Future(Int, Never)
-EscapeSpawnInCallee	unsupported: type Future(Int, Never)
-EscapeStoredDeep	unsupported: type Future(Int, Never)
-EscapeThrowCaught	unsupported: type Future(Int, Never)
-EscapeUnshiftContents	unsupported: type Future(Int, Never)
-FrameLimit	unsupported: generic user call
-GenericChains	unsupported: field type Type (layout Class, object 14, types [Type])
-GenericClosures	unsupported: specialization frame arity
-GlobalCallPending	unsupported: generic user call
-GlobalCalls	unsupported: terminator Some(Call { has_trace: true, argument_layout: Some(CallLayout([None])), callee: Constant(GlobalItem(Source(LetLoc(..)))), args: [Copy(Local(Local(47))), Copy(Local(Local(27)))], ntypeargs: 0, destination: Local(Local(26)), target: BlockId(18), unwind: None })
-Hidden	unsupported: field type Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]) (layout iter.Filter, object 4862, types [Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]), Function { params: [RuntimeFunctionParamTy { name: None, ty: Int, mode: Required }], ret: Bool, throws: Never }])
-Hooked	unsupported: generic user call
-HookedDeep	unsupported: generic user call
-InitializerClosures	unsupported: generic user call
-InitializerErrors	unsupported: generic user call
-InitializerPanic	unsupported: generic user call
-InitializerPending	unsupported: generic user call
-InitializerTestErrors	unsupported: generic user call
-InitializerTests	unsupported: generic user call
-InitializerUncaught	unsupported: generic user call
-Initializers	unsupported: generic user call
-InterfaceErrors	unsupported: generic user call
-Interfaces	unsupported: generic user call
-IteratorInterfaceIdentity	unsupported: generic user call
-Iterators	unsupported: field type Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]) (layout iter.Chain, object 4864, types [Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]), Interface(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(489) }, [], [("Error", Never), ("Item", Int)]), Bool])
-Logs	unsupported: generic user call
-LogsDeep	unsupported: generic user call
-ManualSpan	unsupported: generic user call
-NoLeaks	unsupported: specialization frame arity
-Overflow	unsupported: generic user call
-RecursiveCancellation	unsupported: type Future(Int, Never)
+Allocation	unsupported: function-valued global
+AnyWithFailure	unsupported: function-valued global
+ArrayWalk	unsupported: function-valued global
+Async	unsupported: function-valued global
+AwaitChain	unsupported: function-valued global
+AwaitErrors	unsupported: function-valued global
+BoundTypes	unsupported: function-valued global
+CallbackDepth	unsupported: function-valued global
+CancelDeep	unsupported: function-valued global
+CancelDuringUnwind	unsupported: function-valued global
+Cancellation	unsupported: function-valued global
+CatchAllThrownPanic	unsupported: function-valued global
+CatchAllocation	unsupported: function-valued global
+CatchBindChain	unsupported: function-valued global
+CatchBindJumpTable	unsupported: function-valued global
+CatchMixedUnion	unsupported: function-valued global
+CatchNonstreamCancellation	unsupported: function-valued global
+CatchOrPanics	unsupported: function-valued global
+CatchStreamingCancellation	unsupported: function-valued global
+CatchUnmatchedChain	unsupported: function-valued global
+CatchWildcardDivision	unsupported: function-valued global
+CatchWildcardIndex	unsupported: function-valued global
+CatchWildcardReassigned	unsupported: function-valued global
+CatchWildcardThenBoundary	unsupported: function-valued global
+CatchWildcardThrownPanic	unsupported: function-valued global
+CauseChains	unsupported: function-valued global
+Closures	unsupported: function-valued global
+Containers	unsupported: function-valued global
+Contexts	unsupported: function-valued global
+DeepErrors	unsupported: function-valued global
+DeepUncaught	unsupported: function-valued global
+DeferUnwind	unsupported: function-valued global
+DeferUnwindUncaught	unsupported: function-valued global
+Depth	unsupported: function-valued global
+Equality	unsupported: function-valued global
+EscapeAwaitResult	unsupported: function-valued global
+EscapeAwaitShared	unsupported: function-valued global
+EscapeCaptureAlias	unsupported: function-valued global
+EscapeClosure	unsupported: function-valued global
+EscapeField	unsupported: function-valued global
+EscapeFinalizer	unsupported: function-valued global
+EscapeGlobal	unsupported: function-valued global
+EscapeInsert	unsupported: function-valued global
+EscapeInsertContents	unsupported: function-valued global
+EscapeIterator	unsupported: function-valued global
+EscapeMap	unsupported: function-valued global
+EscapeMapSetContents	unsupported: function-valued global
+EscapeMapValue	unsupported: function-valued global
+EscapeMaskClosure	unsupported: function-valued global
+EscapeMaskMixed	unsupported: function-valued global
+EscapeOrderedReturn	unsupported: function-valued global
+EscapeOrderedSpawn	unsupported: function-valued global
+EscapePublishedField	unsupported: function-valued global
+EscapePushContents	unsupported: function-valued global
+EscapeRecursive	unsupported: function-valued global
+EscapeReturnedAlias	unsupported: function-valued global
+EscapeSessionHandoff	unsupported: function-valued global
+EscapeSpawn	unsupported: function-valued global
+EscapeSpawnInCallee	unsupported: function-valued global
+EscapeStoredDeep	unsupported: function-valued global
+EscapeThrowCaught	unsupported: function-valued global
+EscapeUnshiftContents	unsupported: function-valued global
+FrameLimit	unsupported: function-valued global
+GenericChains	unsupported: function-valued global
+GenericClosures	unsupported: function-valued global
+GlobalCallPending	unsupported: function-valued global
+GlobalCalls	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(5), unwind: None })
+Hidden	unsupported: function-valued global
+Hooked	unsupported: function-valued global
+HookedDeep	unsupported: function-valued global
+InitializerClosures	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(5), unwind: None })
+InitializerErrors	unsupported: function-valued global
+InitializerPanic	unsupported: function-valued global
+InitializerPending	unsupported: function-valued global
+InitializerTestErrors	unsupported: function-valued global
+InitializerTests	unsupported: function-valued global
+InitializerUncaught	unsupported: function-valued global
+Initializers	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(5), unwind: None })
+InterfaceErrors	unsupported: function-valued global
+Interfaces	unsupported: function-valued global
+IteratorInterfaceIdentity	unsupported: function-valued global
+Iterators	unsupported: function-valued global
+JsonRuntime	pass
+Logs	unsupported: function-valued global
+LogsDeep	unsupported: function-valued global
+ManualSpan	unsupported: function-valued global
+NoLeaks	unsupported: function-valued global
+Overflow	unsupported: function-valued global
+RecursiveCancellation	unsupported: function-valued global
+RtAutomaticCleanup	pass
+RtBackgroundError	pass
+RtBackgroundTask	pass
+RtBoundGenericClosures	pass
+RtBuiltinCallbacks	pass
+RtCancelledFailure	pass
 RtClosures	pass
+RtDefaultCallbacks	pass
 RtEmptyClosures	pass
-RuntimeClass	unsupported: field type Type (layout Class, object 14, types [Type])
+RtGenericClosures	pass
+RtGenericMethods	pass
+RtLinkedCancelledFailure	pass
+RtNativeCallback	pass
+RtNativeHigherOrderValue	pass
+RtScalarTaskOrder	pass
+RtSpawnAwait	pass
+RtTaskControls	pass
+RtTaskErrors	pass
+RtTaskLimits	pass
+RtTaskModifiers	pass
+RtTaskSleep	pass
+RtTaskTimeout	pass
+RtTokenComposition	pass
+RtVirtualGenericClosures	pass
+RtVirtualOwnGenericClosure	pass
+RuntimeClass	unsupported: function-valued global
 RuntimeListMaps	pass
-Scalars	unsupported: generic user call
-Shapes	unsupported: generic user call
-Shielded	unsupported: type Future(Null, Never)
-SpawnChains	unsupported: generic user call
-SpawnPanicCaught	unsupported: type Future(Int, Never)
-SpawnPanicDetached	unsupported: type Future(Int, Never)
-SpawnPanicUncaught	unsupported: type Future(Int, Never)
-SpawnThrowUncaught	unsupported: type Future(Int, String)
-SpawnedClosures	unsupported: type Future(Int, String)
-Spawns	unsupported: type Future(Int, Never)
+Scalars	unsupported: function-valued global
+Shapes	unsupported: function-valued global
+Shielded	unsupported: function-valued global
+SpawnChains	unsupported: function-valued global
+SpawnPanicCaught	unsupported: function-valued global
+SpawnPanicDetached	unsupported: function-valued global
+SpawnPanicUncaught	unsupported: function-valued global
+SpawnThrowUncaught	unsupported: function-valued global
+SpawnedClosures	unsupported: function-valued global
+Spawns	unsupported: function-valued global
 StackAllocation	pass
-TaskOverflow	unsupported: type Future(Int, Never)
-ThreadLocalParallel	unsupported: type Future(Int, Never)
-TimeoutCancellation	unsupported: generic user call
-Uncaught	unsupported: generic user call
+TaskOverflow	unsupported: function-valued global
+ThreadLocalParallel	unsupported: function-valued global
+TimeoutCancellation	unsupported: function-valued global
+Uncaught	unsupported: function-valued global
 classes::method call 100k	pass
 compute::array build sum 100k	unsupported: growing list builtin receiver
 compute::array traversal 8k	unsupported: growing list builtin receiver
 compute::fib32 recursive	pass
-compute::generate sort 8k	unsupported: generic interface implementation
-compute::json aggregate 2k	unsupported: list element
-compute::json hello	unsupported: entry must have no parameters and return int
-compute::json ndjson events	unsupported: JSON field union
-compute::json request body	unsupported: list field element
-compute::json tree path	unsupported: field type TypeAlias(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(509) })
+compute::generate sort 8k	pass
+compute::json aggregate 2k	pass
+compute::json hello	pass
+compute::json ndjson events	pass
+compute::json request body	pass
+compute::json tree path	pass
 compute::k-nucleotide 25k	pass
 compute::merge sort 20k	unsupported: list element
 compute::nbody 20k	unsupported: list element
 compute::nested loops 500x500	pass
 compute::pure call 1m	pass
 compute::quick sort 3-way 1k	unsupported: list element
+concurrency::spawn await x10k	pass
 interfaces::polymorphic dispatch 100k	pass
 memory::allocation high retention	unsupported: list element
 memory::allocation low retention	unsupported: list element
@@ -166,5 +174,17 @@ process::startup	pass
 programs::agent loop 300	pass
 programs::json parser 15	unsupported: list field element
 programs::richards 50	pass
+rt_setup_state_benchmark	pass
+rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass
-string::split medium literal 10k	unsupported: baml.String.split
+string::split medium literal 10k	pass
+strings::codepoint error	pass
+strings::float	pass
+strings::float error	pass
+strings::formatting	pass
+strings::parse error	pass
+strings::regex	pass
+strings::regex error	pass
+strings::semantics	pass
+strings::utf8	pass
+strings::utf8 error	pass

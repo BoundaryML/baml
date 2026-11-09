@@ -1,6 +1,6 @@
 //! Hash/equality callbacks and managed structural snapshots for map keys.
 use super::keys::Panic;
-use crate::{Dyn, R, lists::List, opaque::Opaque, strings::Cx, telemetry::capture::Shape};
+use crate::{Dyn, R, lists::List, strings::Cx, telemetry::capture::Shape};
 use std::{cell::RefCell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 pub struct Hooks {
@@ -11,27 +11,25 @@ pub struct Hooks {
     pub hasher_desc: u32,
     pub snapshot_desc: u32,
 }
-type State = Opaque<RefCell<DefaultHasher>>;
+type State = std::rc::Rc<RefCell<DefaultHasher>>;
 
 pub unsafe fn new_hasher(desc: u32) -> R<usize> {
-    let state = State::new(
-        crate::native::OPAQUE_DESC,
-        RefCell::new(DefaultHasher::new()),
-    )?;
+    let state =
+        unsafe { crate::native::new(&mut Cx::current(), RefCell::new(DefaultHasher::new()))? };
     let p = unsafe { crate::try_alloc(desc, 16)? };
     unsafe {
-        baml_rt_gc::write_ptr(p, p.add(8).cast(), state.as_raw());
+        baml_rt_gc::write_ptr(p, p.add(8).cast(), state);
     }
     Ok(p as usize)
 }
 unsafe fn state(hasher: usize) -> State {
-    unsafe { State::from_raw((hasher as *const usize).add(1).read()) }
+    unsafe { crate::native::get((hasher as *const usize).add(1).read()) }
 }
 pub unsafe fn write(hasher: usize, bytes: &[u8]) {
-    unsafe { state(hasher) }.with(|s| s.borrow_mut().write(bytes));
+    unsafe { state(hasher) }.borrow_mut().write(bytes);
 }
 pub unsafe fn finish(hasher: usize) -> u64 {
-    unsafe { state(hasher) }.with(|s| s.borrow().finish())
+    unsafe { state(hasher) }.borrow().finish()
 }
 unsafe fn frame(hasher: usize, tag: u8, bytes: &[u8]) {
     unsafe {
@@ -155,7 +153,7 @@ unsafe fn feed(
                     hasher,
                     5,
                     crate::strings::Str::from_raw(value.payload as usize)
-                        .as_str(cx)
+                        .text(cx)
                         .as_bytes(),
                 );
                 return Ok(());
@@ -173,16 +171,12 @@ unsafe fn feed(
                 frame(
                     hasher,
                     4,
-                    &crate::native::bigint_owned(value.payload as usize).to_signed_bytes_le(),
+                    &crate::tasks::bigint_value(value.payload as usize).to_signed_bytes_le(),
                 );
                 return Ok(());
             }
-            Shape::Bytes => {
-                frame(
-                    hasher,
-                    6,
-                    &crate::native::bytes_owned(value.payload as usize),
-                );
+            Shape::Uint8Array => {
+                frame(hasher, 6, &crate::bytes::data(value.payload as usize));
                 return Ok(());
             }
             _ => {}
@@ -287,8 +281,8 @@ unsafe fn equal(
     if let Some(result) = unsafe { (hooks.equals)(a, b)? } {
         return Ok(result);
     }
-    if matches!(s, Shape::Enum { .. } | Shape::Bigint | Shape::Bytes)
-        || matches!(t, Shape::Enum { .. } | Shape::Bigint | Shape::Bytes)
+    if matches!(s, Shape::Enum { .. } | Shape::Bigint | Shape::Uint8Array)
+        || matches!(t, Shape::Enum { .. } | Shape::Bigint | Shape::Uint8Array)
     {
         return unsafe { super::keys::equals(cx, a, b, hooks.shapes) };
     }
@@ -347,10 +341,10 @@ unsafe fn equal(
 
 /// A synchronous collection keeps callback tests on the owner thread and roots.
 pub unsafe fn collect() {
-    let started = crate::telemetry::sysop_started();
-    unsafe {
-        (&mut *crate::HEAP.get()).collect(&crate::Roots(&*crate::ROOTS.get()));
-        crate::opaque::drain();
-    }
-    crate::telemetry::sysop_finished(started);
+    let _ = crate::telemetry::sysop(|| {
+        unsafe {
+            (&mut *crate::HEAP.get()).collect(&crate::Roots(&*crate::ROOTS.get()));
+        }
+        Ok(())
+    });
 }

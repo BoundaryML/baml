@@ -307,7 +307,7 @@ fn identity_call(
         return None;
     };
     let (c, info) = emitter.plan.index.function(emitter.db, *f)?;
-    let MirFunctionKind::Bytecode(body) = emitter.all.get(&c)?.kind.as_ref() else {
+    let MirFunctionKind::Bytecode(body) = &emitter.all.get(&c)?.kind else {
         return None;
     };
     let mut returned = None;

@@ -1,5 +1,6 @@
 //! Typed growing lists. Known-capacity lists embed their initial buffer in the
 //! stable object; growth replaces the buffer pointer without invalidating aliases.
+mod natural_sort;
 use crate::{
     R,
     language::{allocation_failure, index_error},
@@ -39,8 +40,8 @@ macro_rules! scalar_slot {
         }
     };
 }
+scalar_slot!(usize, |v| v as usize, |v:usize|v as u64);
 scalar_slot!(i64, |v| v as i64, |v: i64| v as u64);
-scalar_slot!(usize, |v| v as usize, |v: usize| v as u64);
 scalar_slot!(f64, f64::from_bits, f64::to_bits);
 scalar_slot!(bool, |v| v != 0, |v: bool| v as u64);
 /// An opaque heap pointer slot, also used for classes, maps and nested lists.
@@ -197,6 +198,16 @@ impl<T: Slot> List<T> {
                 ((buffer + 16) as *const u8).add(resolved as usize * T::SIZE),
             ))
         }
+    }
+    /// Independent snapshot; immutable elements may be shared.
+    pub fn copy(self, cx: &mut Cx) -> R<Self> {
+        let desc = unsafe { (*(self.pointer as *const Object)).header.desc };
+        let len = self.len(cx) as usize;
+        let result = unsafe { Self::with_capacity(cx, desc, len) }?;
+        for i in 0..len {
+            result.push(cx, self.get(cx, i as i64)?)?;
+        }
+        Ok(result)
     }
     #[inline(always)]
     pub fn set(self, cx: &Cx, index: i64, value: T) -> R<()> {
@@ -811,11 +822,11 @@ pub fn builtin_eq(cx: &Cx, a: crate::Dyn, b: crate::Dyn) -> bool {
             if a.payload == 0 || b.payload == 0 {
                 a.payload == b.payload
             } else {
-                unsafe { Str::from_raw(a.payload as usize) }.as_str(cx)
-                    == unsafe { Str::from_raw(b.payload as usize) }.as_str(cx)
+                unsafe { Str::from_raw(a.payload as usize) }.text(cx)
+                    == unsafe { Str::from_raw(b.payload as usize) }.text(cx)
             }
         }
-        tag if tag == crate::FLOAT_TAG => {
+        tag if tag == (u32::MAX - 1) as u64 => {
             bex_vm_types::float_order::eq(f64::from_bits(a.payload), f64::from_bits(b.payload))
         }
         _ => a.payload == b.payload,
@@ -833,7 +844,9 @@ pub fn primitive_string(cx: &mut Cx, value: crate::Dyn) -> R<Str> {
                 return Ok(unsafe { Str::from_raw(value.payload as usize) });
             }
         }
-        tag if tag == crate::FLOAT_TAG => bex_vm_types::format_float(f64::from_bits(value.payload)),
+        tag if tag == (u32::MAX - 1) as u64 => {
+            bex_vm_types::format_float(f64::from_bits(value.payload))
+        }
         _ => {
             return Err(crate::Error::internal(
                 "non-primitive list join reached primitive adapter".into(),
@@ -878,13 +891,13 @@ pub unsafe fn structural_string(
                     let string = unsafe { Str::from_raw(value.payload as usize) };
                     if nested {
                         use std::fmt::Write;
-                        write!(text, "{:?}", string.as_str(cx)).unwrap();
+                        write!(text, "{:?}", string.try_as_str(cx)?).unwrap();
                     } else {
-                        text.push_str(string.as_str(cx));
+                        text.push_str(string.try_as_str(cx)?);
                     }
                 }
             }
-            tag if tag == crate::FLOAT_TAG => {
+            tag if tag == (u32::MAX - 1) as u64 => {
                 text.push_str(&crate::format_float(f64::from_bits(value.payload)))
             }
             tag => {
@@ -972,10 +985,10 @@ pub fn join_with<T: Slot>(
     let mut text = String::new();
     for i in 0..snapshot.len(cx) {
         if i != 0 {
-            text.push_str(separator.as_str(cx));
+            text.push_str(separator.try_as_str(cx)?);
         }
         let value = render(snapshot.get(cx, i)?)?;
-        text.push_str(value.as_str(cx));
+        text.push_str(value.try_as_str(cx)?);
         if i & 15 == 15 {
             cx.poll()?;
         }
@@ -989,13 +1002,13 @@ pub fn join_pointers(cx: &mut Cx, list: List<Ptr>, separator: Str) -> R<Str> {
     let mut text = String::new();
     for i in 0..list.len(cx) {
         if i != 0 {
-            text.push_str(separator.as_str(cx));
+            text.push_str(separator.try_as_str(cx)?);
         }
         let value = list.get(cx, i)?.as_raw();
         if value == 0 {
             text.push_str("null");
         } else {
-            text.push_str(unsafe { Str::from_raw(value) }.as_str(cx));
+            text.push_str(unsafe { Str::from_raw(value) }.try_as_str(cx)?);
         }
         if i & 15 == 15 {
             cx.poll()?;
@@ -1008,13 +1021,13 @@ pub fn join(cx: &mut Cx, list: List<Str>, separator: Str) -> R<Str> {
     let mut text = String::new();
     for i in 0..list.len(cx) {
         if i != 0 {
-            text.push_str(separator.as_str(cx));
+            text.push_str(separator.try_as_str(cx)?);
         }
         let value = list.get(cx, i)?;
         text.push_str(if value.as_raw() == 0 {
             "null"
         } else {
-            value.as_str(cx)
+            value.try_as_str(cx)?
         });
         if i & 15 == 15 {
             cx.poll()?;

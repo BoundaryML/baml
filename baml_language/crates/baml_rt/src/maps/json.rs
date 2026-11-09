@@ -20,7 +20,7 @@ pub unsafe fn decode<V: Slot>(
     decode: impl FnMut(&mut Cx, &mut Reader<'_>, &str) -> R<V>,
 ) -> R<Map<Str, V>> {
     let read_cx = unsafe { Cx::current() };
-    let source = text.as_str(&read_cx);
+    let source = text.try_as_str(&read_cx)?;
     if bex_vm_types::json_text::check(source).is_err() {
         return Err(crate::json::syntax_error(cx, source));
     }
@@ -41,7 +41,7 @@ pub unsafe fn decode_at<V: Slot>(
     if reader.open_object().is_err() {
         return Err(crate::json::error(
             cx,
-            "expected JSON object".into(),
+            "expected object".into(),
             Some(path.into()),
         ));
     }
@@ -132,8 +132,8 @@ pub fn stringify_at<V: Slot>(
         if i != 0 {
             out.push(',');
         }
-        let written = serde_json::to_string(key.as_str(cx)).expect("string serialization");
-        let path = format!("{prefix}[{:?}]", key.as_str(cx));
+        let written = serde_json::to_string(key.try_as_str(cx)?).expect("string serialization");
+        let path = format!("{prefix}[{:?}]", key.try_as_str(cx)?);
         out.push_str(&written);
         out.push(':');
         encode(cx, value, &path, &mut out)?;
@@ -174,7 +174,7 @@ pub fn pretty(cx: &mut Cx, text: Str, indent: &str) -> R<Str> {
         return Ok(text);
     }
     let read = unsafe { Cx::current() };
-    let source = text.as_str(&read).as_bytes();
+    let source = text.try_as_str(&read)?.as_bytes();
     let mut output = Vec::with_capacity(source.len());
     let mut level = 0;
     let mut quoted = false;
@@ -253,6 +253,7 @@ pub unsafe fn serialization_error(
     match value {
         Err(error) => error,
         Ok(value) => Box::new(crate::Error {
+            telemetry_caught: None,
             telemetry_raise: None,
             telemetry_at: None,
             value,
@@ -280,7 +281,7 @@ pub unsafe fn indent(cx: &mut Cx, value: crate::Dyn, desc: u32) -> R<String> {
         }
         3 => {
             let read = unsafe { Cx::current() };
-            let text = unsafe { Str::from_raw(value.payload as usize) }.as_str(&read);
+            let text = unsafe { Str::from_raw(value.payload as usize) }.try_as_str(&read)?;
             let width = text.chars().count();
             if width > 10 {
                 format!("indent must be at most 10 characters, got {width}")
@@ -338,7 +339,7 @@ pub unsafe fn write_scalar(
         2 => out.push_str("null"),
         3 => write_string(
             out,
-            unsafe { Str::from_raw(value.payload as usize) }.as_str(cx),
+            unsafe { Str::from_raw(value.payload as usize) }.try_as_str(cx)?,
         ),
         crate::FLOAT_TAG => {
             unsafe { write_float(cx, f64::from_bits(value.payload), path, desc, out) }?
@@ -348,17 +349,15 @@ pub unsafe fn write_scalar(
     Ok(())
 }
 /// # Safety
-/// `list` is a live growing integer list in the active instance.
+/// `list` is a live fixed integer list in the active instance.
 pub unsafe fn write_int_list(list: usize, out: &mut String) -> R<()> {
-    let cx = unsafe { Cx::current() };
-    let list = unsafe { crate::lists::List::<i64>::from_raw(list) };
-    let len = list.len(&cx);
+    let len = unsafe { *((list + 8) as *const usize) };
     out.push('[');
     for i in 0..len {
         if i != 0 {
             out.push(',');
         }
-        let value = list.get(&cx, i)?;
+        let value = unsafe { *(crate::list_slot(list, i as i64)?.cast::<i64>()) };
         out.push_str(&value.to_string());
     }
     out.push(']');
@@ -370,7 +369,7 @@ pub fn write_string_list(cx: &Cx, list: crate::lists::List<Str>, out: &mut Strin
         if i != 0 {
             out.push(',');
         }
-        write_string(out, list.get(cx, i)?.as_str(cx));
+        write_string(out, list.get(cx, i)?.try_as_str(cx)?);
     }
     out.push(']');
     Ok(())
@@ -448,8 +447,6 @@ mod tests {
     }
 }
 
-/// Typed map construction for recursive JSON schemas. Managed values never
-/// live in the serde tree: each decoded value is stored in the traced map.
 pub struct Adapter {
     pub tag: u64,
     pub new: unsafe fn(&mut Cx) -> R<usize>,

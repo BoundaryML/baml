@@ -52,6 +52,7 @@ impl Plan<'_> {
             Repr::ListInt => Ok(Repr::Int),
             Repr::ListStr => Ok(Repr::Str),
             Repr::ListClosure(_) => Ok(Repr::Closure),
+            Repr::ListFuture(_) => Ok(Repr::Future),
             Repr::ListListStr => Ok(Repr::ListStr),
             Repr::ListPtr(c) => Ok(Repr::Ptr(c)),
             Repr::List(id) => Ok(self.list_elements.borrow()[id].repr),
@@ -169,6 +170,10 @@ impl Emitter<'_, '_> {
                     fields.len()
                 )
                 .unwrap();
+                if matches!(r,Rvalue::Array(t,_) if matches!(t.substitute_symbolic(&[]),RuntimeTy::Union(ref m) if m.iter().any(|t|matches!(t,RuntimeTy::Null))))
+                {
+                    code.push_str("(*(p as *mut baml_rt_gc::Header)).aux=rt::telemetry::capture::OPTIONAL_ELEMENT_TYPE;");
+                }
                 for i in 0..fields.len() {
                     if element.pointer() {
                         write!(
@@ -270,5 +275,25 @@ impl Emitter<'_, '_> {
                 unreachable!("container call guard")
             },
         )
+    }
+}
+
+impl Plan<'_> {
+    pub(super) fn alias_list_repr(&self, declared: String) -> Repr {
+        let key = ListElement {
+            repr: Repr::Tagged,
+            members: Vec::new(),
+            declared: Some(declared),
+        };
+        let mut elements = self.list_elements.borrow_mut();
+        let id = elements
+            .iter()
+            .position(|old| *old == key)
+            .unwrap_or_else(|| {
+                let id = elements.len();
+                elements.push(key);
+                id
+            });
+        Repr::List(id)
     }
 }

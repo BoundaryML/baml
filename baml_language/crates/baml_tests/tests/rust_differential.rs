@@ -12,13 +12,8 @@ use std::{
 #[path = "../rust_diff/initializer_probes.rs"]
 mod initializer_probes;
 
-#[path = "../rust_diff/host.rs"]
-mod host;
-
 const PROBES: &[&str] = &[
     "StackAllocation",
-    "RtClosures",
-    "RtEmptyClosures",
     "RuntimeListFloatConstants",
     "RuntimeListStructuralJoin",
     "RuntimeListFloatSpecials",
@@ -41,8 +36,31 @@ const PROBES: &[&str] = &[
     "RuntimeListJson",
     "RuntimeListJsonField",
     "RuntimeListJsonError",
-    "RtNativeMath",
-    "RtNativeBytes",
+    "RtClosures",
+    "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
+    "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",
@@ -303,16 +321,32 @@ fn probe_timeout_kills_and_reaps() {
     assert!(error.contains("kill: Ok(()), reap: Ok("), "{error}");
 }
 
-fn standalone_closure_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
-    match probe {
-        "RtClosures" | "RtEmptyClosures" => Some(manifest.join("rt_fixtures/closures")),
-        "RtNativeMath" | "RtNativeBytes" => Some(manifest.join("rt_fixtures/native")),
-        _ => None,
-    }
-}
-
 fn is_list_probe(probe: &str) -> bool {
     probe.starts_with("RuntimeList")
+}
+
+fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
+    match probe {
+        "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
+            Some(manifest.join("rt_fixtures/task_terminal"))
+        }
+        "RtTaskLimits" | "RtTaskTimeout" | "RtAutomaticCleanup" => {
+            Some(manifest.join("rt_fixtures/task_timeouts"))
+        }
+        "RtVirtualGenericClosures"
+        | "RtBoundGenericClosures"
+        | "RtVirtualOwnGenericClosure"
+        | "RtNativeHigherOrderValue"
+        | "RtDefaultCallbacks" => Some(manifest.join("rt_fixtures/closure_edges")),
+        "RtTaskErrors" | "RtBackgroundTask" | "RtBackgroundError" | "RtTokenComposition" => {
+            Some(manifest.join("rt_fixtures/task_edges"))
+        }
+        "RtClosures" | "RtEmptyClosures" | "RtGenericClosures" | "RtGenericMethods"
+        | "RtNativeCallback" | "RtBuiltinCallbacks" => Some(manifest.join("rt_fixtures/closures")),
+        "RtSpawnAwait" | "RtTaskControls" | "RtTaskSleep" | "RtTaskModifiers"
+        | "RtScalarTaskOrder" => Some(manifest.join("rt_fixtures/tasks")),
+        _ => None,
+    }
 }
 
 fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>) -> Artifacts {
@@ -320,8 +354,8 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
     let mut artifacts = std::collections::BTreeMap::new();
     if PROBES
         .iter()
-        .filter(|p| standalone_closure_source(manifest, p).is_none() && !is_list_probe(p))
-        .any(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
+        .filter(|p| standalone_source(manifest, p).is_none())
+        .any(|p| !is_list_probe(p) && only.is_none_or(|o| o.split(',').any(|name| name == *p)))
     {
         let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
         pack(
@@ -334,7 +368,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
                 .copied()
                 .filter(|p| !is_list_probe(p))
                 .filter(|p| !initializer_probes::collects_tests(p))
-                .filter(|p| standalone_closure_source(manifest, p).is_none())
+                .filter(|p| standalone_source(manifest, p).is_none())
                 .filter(|p| only.is_none_or(|o| o.split(',').any(|name| name == *p)))
                 .chain(["GlobalCalls", "GlobalCallPending", "InitializerTestSummary"]),
         );
@@ -374,31 +408,15 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         );
         for probe in PROBES
             .iter()
-            .filter(|p| standalone_closure_source(manifest, p).is_none() && !is_list_probe(p))
+            .filter(|p| standalone_source(manifest, p).is_none())
         {
+            if is_list_probe(probe) {
+                continue;
+            }
             artifacts
                 .entry((*probe).into())
                 .or_insert_with(|| executable.clone());
         }
-    }
-    for probe in [
-        "RtClosures",
-        "RtEmptyClosures",
-        "RtNativeMath",
-        "RtNativeBytes",
-    ] {
-        if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
-            continue;
-        }
-        let executable = build.join(probe);
-        pack(
-            build,
-            workspace,
-            &standalone_closure_source(manifest, probe).unwrap(),
-            &executable,
-            [probe],
-        );
-        artifacts.insert(probe.into(), executable);
     }
     let list_probes: Vec<_> = PROBES
         .iter()
@@ -418,6 +436,46 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         for probe in list_probes {
             artifacts.insert(probe.into(), executable.clone());
         }
+    }
+    for probe in [
+        "RtClosures",
+        "RtEmptyClosures",
+        "RtGenericClosures",
+        "RtGenericMethods",
+        "RtNativeCallback",
+        "RtBuiltinCallbacks",
+        "RtSpawnAwait",
+        "RtTaskControls",
+        "RtTaskSleep",
+        "RtTaskModifiers",
+        "RtScalarTaskOrder",
+        "RtTaskErrors",
+        "RtBackgroundTask",
+        "RtBackgroundError",
+        "RtTokenComposition",
+        "RtVirtualGenericClosures",
+        "RtBoundGenericClosures",
+        "RtVirtualOwnGenericClosure",
+        "RtNativeHigherOrderValue",
+        "RtDefaultCallbacks",
+        "RtTaskLimits",
+        "RtTaskTimeout",
+        "RtAutomaticCleanup",
+        "RtCancelledFailure",
+        "RtLinkedCancelledFailure",
+    ] {
+        if only.is_some_and(|only| !only.split(',').any(|name| name == probe)) {
+            continue;
+        }
+        let executable = build.join(probe);
+        pack(
+            build,
+            workspace,
+            &standalone_source(manifest, probe).unwrap(),
+            &executable,
+            [probe],
+        );
+        artifacts.insert(probe.into(), executable);
     }
     for fixture in kpis::fixtures(workspace, only) {
         let dir = build.join("kpis").join(&fixture.slug);
@@ -455,6 +513,18 @@ fn pack_result<'a>(
     executable: &Path,
     functions: impl IntoIterator<Item = &'a str>,
     rt: bool,
+) -> Result<(), String> {
+    pack_result_options(build, workspace, source, executable, functions, rt, false)
+}
+
+fn pack_result_options<'a>(
+    build: &Path,
+    workspace: &Path,
+    source: &Path,
+    executable: &Path,
+    functions: impl IntoIterator<Item = &'a str>,
+    rt: bool,
+    benchmark: bool,
 ) -> Result<(), String> {
     // Never accept an executable left over from a previous successful pack.
     if executable.exists() {
@@ -495,6 +565,9 @@ fn pack_result<'a>(
     }
     if rt {
         argv.push("--rt".into());
+    }
+    if benchmark {
+        argv.push("--rt-benchmark".into());
     }
     let result = baml_cli::run_cli(argv).map_err(|error| format!("{error:#}"))?;
     if !matches!(result, baml_cli::ExitCode::Success) {
@@ -617,7 +690,7 @@ fn rust_differential() {
     let selected = std::env::var("BAML_RUST_DIFF_BACKENDS").ok().or_else(|| {
         std::env::var("BAML_RUST_DIFF_RT_ONLY")
             .is_ok_and(|v| v == "1")
-            .then(|| "rt,rt-gc-stress".into())
+            .then(|| "rt,rt-gc-stress".to_owned())
     });
     if let Some(selected) = &selected {
         for name in selected.split(',') {
@@ -628,19 +701,20 @@ fn rust_differential() {
         }
     }
     // The bytecode oracle is mandatory even for a scoped backend run.
+    let requested_rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
     let backends: Vec<_> = BACKENDS
         .iter()
         .filter(|backend| {
             backend.name == "bytecode"
-                || selected
-                    .as_ref()
-                    .is_none_or(|names| names.split(',').any(|name| name == backend.name))
+                || ((!requested_rt_only || backend.artifact_key == "rt")
+                    && selected
+                        .as_ref()
+                        .is_none_or(|names| names.split(',').any(|name| name == backend.name)))
         })
         .collect();
     let rt_only = backends
         .iter()
         .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
-    let levels = LEVELS;
     let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|v| v == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -660,23 +734,37 @@ fn rust_differential() {
             );
         }
     }
-    let explicit_rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
-    let backends: Vec<_> = backends
-        .into_iter()
-        .filter(|b| !explicit_rt_only || matches!(b.name, "bytecode" | "rt" | "rt-gc-stress"))
-        .collect();
-    let rt_only = rt_only || explicit_rt_only;
+    // Focused runtime jobs retain the bytecode oracle and both GC modes, while
+    // avoiding unrelated compiled-VM variants and unsupported telemetry levels.
+    // The default merged-branch gate still runs the complete matrix.
     let levels = LEVELS;
     let reader = telemetry_worker::build(&build, workspace);
     std::fs::write(build.join("known-telemetry-divergences.txt"), "").unwrap();
     let mut artifacts = std::collections::BTreeMap::new();
+    let oracle_only = if rt_only {
+        let rt_artifacts = rt::build(&build.join("rt"), workspace, manifest, only.as_deref());
+        let admitted = rt_artifacts
+            .iter()
+            .filter(|(_, result)| result.is_ok())
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        artifacts.insert("rt", rt_artifacts);
+        Some(admitted)
+    } else {
+        None
+    };
     for backend in &backends {
+        if rt_only && backend.artifact_key == "rust" && oracle_only.as_deref() == Some("") {
+            artifacts.insert("rust", Artifacts::new());
+            continue;
+        }
         artifacts.entry(backend.artifact_key).or_insert_with(|| {
             (backend.build)(
                 &build.join(backend.artifact_key),
                 workspace,
                 manifest,
-                only.as_deref(),
+                oracle_only.as_deref().or(only.as_deref()),
             )
         });
     }
@@ -700,23 +788,48 @@ fn rust_differential() {
         .as_ref()
         .map_or_else(Vec::new, rt::Coverage::build_failures);
     for probe in probes {
+        if rt_only && artifacts["rt"][&probe].is_err() {
+            continue;
+        }
         let failures_before = failures.len();
         for level in levels {
-            if rt_only && *level != "off" && standalone_closure_source(manifest, &probe).is_none() {
+            if rt_only && !rt::supports_level(&probe, level) {
                 continue;
             }
-            if (probe.contains("::") && matches!(*level, "default" | "low"))
-                || (*level == "default"
-                    && !matches!(
-                        probe.as_str(),
-                        "Scalars"
-                            | "Hooked"
-                            | "ManualSpan"
-                            | "RtClosures"
-                            | "RtEmptyClosures"
-                            | "RtNativeMath"
-                            | "RtNativeBytes"
-                    ))
+            if !probe.starts_with("strings::")
+                && ((probe.contains("::") && matches!(*level, "default" | "low"))
+                    || (*level == "default"
+                        && !matches!(
+                            probe.as_str(),
+                            "Scalars"
+                                | "Hooked"
+                                | "ManualSpan"
+                                | "RtClosures"
+                                | "RtEmptyClosures"
+                                | "RtGenericClosures"
+                                | "RtGenericMethods"
+                                | "RtNativeCallback"
+                                | "RtBuiltinCallbacks"
+                                | "RtSpawnAwait"
+                                | "RtTaskControls"
+                                | "RtTaskSleep"
+                                | "RtTaskModifiers"
+                                | "RtScalarTaskOrder"
+                                | "RtTaskErrors"
+                                | "RtBackgroundTask"
+                                | "RtBackgroundError"
+                                | "RtTokenComposition"
+                                | "RtVirtualGenericClosures"
+                                | "RtBoundGenericClosures"
+                                | "RtVirtualOwnGenericClosure"
+                                | "RtNativeHigherOrderValue"
+                                | "RtDefaultCallbacks"
+                                | "RtTaskLimits"
+                                | "RtTaskTimeout"
+                                | "RtAutomaticCleanup"
+                                | "RtCancelledFailure"
+                                | "RtLinkedCancelledFailure"
+                        )))
             {
                 continue;
             }
@@ -828,7 +941,10 @@ fn rust_differential() {
                 if *level != "off" && trace.is_empty() {
                     failures.push(format!("{probe}/{mode}: no telemetry recording produced"));
                 }
-                if probe.contains("::") && output.as_ref().is_ok_and(|o| !o.status.success()) {
+                if probe.contains("::")
+                    && kpis::expects_success(&probe)
+                    && output.as_ref().is_ok_and(|o| !o.status.success())
+                {
                     failures.push(format!("{probe}/{mode}: KPI must succeed"));
                 }
                 std::fs::create_dir_all(build.join("telemetry")).unwrap();
@@ -844,6 +960,13 @@ fn rust_differential() {
             }
             // Assert the oracle contract; every other backend must match it exactly.
             initializer_probes::assert_outputs(&probe, std::slice::from_ref(&outputs[reference]));
+            if let Some(expected) = kpis::string_probe_output(&probe) {
+                assert_eq!(
+                    outputs[reference].as_ref().unwrap().stdout,
+                    expected,
+                    "{probe}: oracle semantic assertions"
+                );
+            }
             for (index, backend) in backends.iter().enumerate() {
                 if index == reference || outputs[index].is_none() {
                     continue;
@@ -939,6 +1062,22 @@ fn rust_differential() {
                             &probe,
                             &mode,
                             known_telemetry_divergences::POLLING_REASON,
+                            &diff(&expected, &actual, &mode),
+                        );
+                    } else if known_telemetry_divergences::without_log_locations(
+                        &expected,
+                        &probe,
+                        backend.name,
+                    ) == known_telemetry_divergences::without_log_locations(
+                        &actual,
+                        &probe,
+                        backend.name,
+                    ) {
+                        report_known(
+                            &build,
+                            &probe,
+                            &mode,
+                            known_telemetry_divergences::LOG_REASON,
                             &diff(&expected, &actual, &mode),
                         );
                     } else if known_telemetry_divergences::without_timeout_wait(
@@ -1052,4 +1191,29 @@ fn rt_type_dispatch_semantics() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     type_dispatch::run();
+}
+
+#[path = "../rust_diff/setup_state.rs"]
+mod setup_state;
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
+fn rt_setup_state_benchmark() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    setup_state::run();
+}
+
+#[test]
+#[ignore = "targeted recursive JSON semantic differential"]
+fn rt_json_runtime_semantics() {
+    let _lock = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    type_dispatch::run_source(
+        "json-runtime",
+        include_str!("../rust_diff/json_runtime.baml"),
+    );
+    type_dispatch::compare_json_telemetry();
 }

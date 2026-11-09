@@ -82,8 +82,9 @@ pub(super) fn telemetry_metadata_source(m: &btel_types::FunctionMetadata) -> Str
             )
         },
     );
+    let kind = &m.kind;
     format!(
-        "FunctionMetadata{{function_id,fqn:{},display_name:{},source_file:{},source_span:{span},kind:RuntimeFunctionKind::Bytecode,origin:RuntimeFunctionOrigin::{:?},owner_type:{},parent_function:{},lambda_path:{},definition_key:{},package_name:{},namespace:vec![{}],argument_layout:{args},source_map:{map},model_invoke:{}}}",
+        "FunctionMetadata{{function_id,fqn:{},display_name:{},source_file:{},source_span:{span},kind:RuntimeFunctionKind::{kind:?},origin:RuntimeFunctionOrigin::{:?},owner_type:{},parent_function:{},lambda_path:{},definition_key:{},package_name:{},namespace:vec![{}],argument_layout:{args},source_map:{map},model_invoke:{}}}",
         string(&m.fqn),
         string(&m.display_name),
         optional(m.source_file.as_deref()),
@@ -115,7 +116,7 @@ pub(super) fn emit(
     let (stringify, aliased) = host;
     // The pack host formats an integer through stringify and _aliased(Declared).
     // Preserve these logical calls in the typed host specialization too.
-    let MirFunctionKind::Bytecode(host_body) = all[&stringify].kind.as_ref() else {
+    let MirFunctionKind::Bytecode(host_body) = &all[&stringify].kind else {
         return Err(no("host stringify body"));
     };
     let alias_block = host_body
@@ -146,9 +147,35 @@ pub(super) fn emit(
         let line = bytecode.source_line_for_pc(instruction);
         writeln!(out,"static S_LIST_STRINGIFY:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}],pcs:&[{pc}],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};",plan.index.info(stringify).source_file,plan.index.display(stringify)).unwrap();
         let alias_site = format_site + 1;
-        writeln!(out,"unsafe fn f{stringify}_list_json(site:usize,value:rt::Dyn,naming:usize,indent:rt::Dyn,omit:bool,on:bool,oi:bool,oo:bool)->R<usize>{{unsafe{{rt::telemetry::observed_captured(&O{stringify},site,||rt::telemetry::capture_arguments(&[value,rt::Dyn{{tag:if on{{u64::MAX}}else{{CAPTURE_NAMING_TAG}},payload:naming as u64}},if oi{{rt::Dyn{{tag:u64::MAX,payload:0}}}}else{{indent}},rt::Dyn{{tag:if oo{{u64::MAX}}else{{1}},payload:omit as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::check_stack().map_err(|e|e.at(&S_LIST_STRINGIFY,0))?;let aliased=rt::telemetry::observed_captured(&O{aliased},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;rt::json_lists::stringify(&mut rt::strings::Cx::current(),value,JSON_LIST_SHAPES,aliased,indent,omit).map(|s|s.as_raw()).map_err(|mut e|{{rt::telemetry::evidence::raised(&mut e,&S_LIST_STRINGIFY,0,None);e}})}})}}}}").unwrap();
+        writeln!(out,"unsafe fn f{stringify}_list_json(site:usize,value:rt::Dyn,naming:usize,indent:rt::Dyn,omit:bool,on:bool,oi:bool,oo:bool)->R<usize>{{unsafe{{rt::telemetry::observed_captured(&O{stringify},site,||rt::telemetry::capture_arguments(&[value,rt::Dyn{{tag:if on{{u64::MAX}}else{{CAPTURE_NAMING_TAG}},payload:naming as u64}},if oi{{rt::Dyn{{tag:u64::MAX,payload:0}}}}else{{indent}},rt::Dyn{{tag:if oo{{u64::MAX}}else{{1}},payload:omit as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:3,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::check_stack().map_err(|e|e.at(&S_LIST_STRINGIFY,0))?;let aliased=rt::telemetry::observed_captured(&O{aliased},{alias_site},||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;rt::json_lists::stringify(&mut rt::strings::Cx::current(),value,JSON_LIST_SHAPES,aliased,indent,omit).map(|s|s.as_raw()).map_err(|e|e.at(&S_LIST_STRINGIFY,0))}})}}}}").unwrap();
     }
     let mut observed = reached.clone();
+    if plan.json_public_to {
+        let to = plan
+            .program
+            .objects
+            .iter()
+            .enumerate()
+            .find_map(|(i, o)| {
+                (matches!(o, Object::Function(_)) && plan.index.display(i) == "baml.json.to")
+                    .then_some(i)
+            })
+            .unwrap();
+        observed.insert(to);
+        let MirFunctionKind::Bytecode(body) = &all[&to].kind else {
+            unreachable!()
+        };
+        let block=body.blocks.iter().find(|b|matches!(&b.terminator,Some(Terminator::Call{callee:Operand::Constant(Constant::Function(f)),..})if plan.index.function(db,*f).is_some_and(|(id,_)|id==aliased))).unwrap();
+        let positions = plan.index.positions(to);
+        let instruction = positions.block_pcs[block.id.0].terminator.unwrap();
+        let pc = positions
+            .lower_to_compact_with_offsets()
+            .offset_of(instruction)
+            .unwrap();
+        let site = telemetry_sites.borrow().len();
+        writeln!(out, "const JSON_TO_ALIAS_SITE:usize={site};").unwrap();
+        telemetry_sites.borrow_mut().push((Some(to), pc, aliased));
+    }
     for (chain, _) in &plan.init_chains {
         observed.insert(*chain);
         writeln!(
@@ -159,7 +186,7 @@ pub(super) fn emit(
     }
     if let Some(decode) = json_decode {
         observed.insert(decode);
-        let MirFunctionKind::Bytecode(body) = all[&decode].kind.as_ref() else {
+        let MirFunctionKind::Bytecode(body) = &all[&decode].kind else {
             unreachable!()
         };
         let block = body
@@ -215,45 +242,13 @@ pub(super) fn emit(
             .map(|p| baml_base::Name::new(&p.name));
         let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
         let metadata = telemetry_metadata_source(&metadata);
-        let hidden = info.trace_passthrough
-            || matches!(all.get(&id).map(|m| m.kind.as_ref()),
+        let hidden = matches!(all.get(&id).map(|m|&m.kind), Some(MirFunctionKind::Builtin(_)))
+            || info.trace_passthrough
+            || matches!(all.get(&id).map(|m|&m.kind),
             Some(MirFunctionKind::Bytecode(body)) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
                 StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
 
-        let hook = match all.get(&id).map(|mir| mir.kind.as_ref()) {
-            Some(MirFunctionKind::Bytecode(body)) => body
-                .blocks
-                .iter()
-                .flat_map(|b| &b.statements)
-                .find_map(|s| match &s.kind {
-                    StatementKind::Intrinsic {
-                        op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(mode),
-                        ..
-                    } => Some(mode),
-                    _ => None,
-                }),
-            _ => None,
-        };
-        use baml_compiler2_mir::BuiltinTraceHook as Hook;
-        let hook_mode = match hook {
-            Some(Hook::Hidden) => "Some(rt::telemetry::types::InvocationMode::Hidden)",
-            Some(Hook::Timing) => "Some(rt::telemetry::types::InvocationMode::Timing)",
-            Some(_) => "Some(rt::telemetry::types::InvocationMode::Span)",
-            None => "None",
-        };
-        let policy = match hook {
-            Some(Hook::Span) => {
-                "rt::telemetry::Policy{span_from_entry:true,capture_output:true,capture_error:true,..rt::telemetry::Policy::NONE}"
-            }
-            Some(Hook::Rich) => {
-                "rt::telemetry::Policy{span_from_entry:true,capture_inputs:true,capture_output:true,capture_error:true,..rt::telemetry::Policy::NONE}"
-            }
-            Some(Hook::EmptySpan) => {
-                "rt::telemetry::Policy{span_from_entry:true,..rt::telemetry::Policy::NONE}"
-            }
-            _ => "rt::telemetry::Policy::NONE",
-        };
-        writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:{policy},hidden:{hidden},hook_mode:{hook_mode}}},").unwrap();
+        writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();
     }
     out.push_str("];\nstatic TELEMETRY_SITES:&[rt::telemetry::Site]=&[\n");
     for &(caller, pc, callee) in telemetry_sites.borrow().iter() {
@@ -271,27 +266,13 @@ pub(super) fn emit(
 
 pub(super) struct Feature;
 impl registry::Feature for Feature {
-    fn statement(
-        &self,
-        _e: &mut Emitter<'_, '_>,
-        statement: &StatementKind<'_>,
-    ) -> Option<Gen<String>> {
-        match statement {
-            StatementKind::Intrinsic {
-                op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(_),
-                args,
-            } => Some(if args.is_empty() {
-                Ok(String::new())
-            } else {
-                Err(no("builtin hook arguments"))
-            }),
-            _ => None,
-        }
-    }
-
     fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
         if let registry::Admission::Statement(statement) = event {
             let unsupported_hook = match statement {
+                StatementKind::Intrinsic {
+                    op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(mode),
+                    ..
+                } => *mode != baml_compiler2_mir::BuiltinTraceHook::Hidden,
                 StatementKind::Intrinsic {
                     op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook,
                     ..

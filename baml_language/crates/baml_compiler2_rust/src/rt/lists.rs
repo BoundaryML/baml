@@ -1,5 +1,4 @@
 //! Typed list builtins, independent of map and generic-call lowering.
-use super::layout::rt_descriptors;
 use super::*;
 
 impl Plan<'_> {
@@ -18,14 +17,24 @@ impl Plan<'_> {
             return None;
         };
         match class.path.to_string().as_str() {
-            "json.SerializationError" => Some(19),
-            "errors.InvalidArgument" => Some(10),
+            "panics.IntegerOverflow" => Some(1),
+            "panics.NegativeBitShift" => Some(2),
+            "panics.Cancelled" => Some(3),
+            "panics.StackOverflow" => Some(4),
+            "panics.AllocFailure" => Some(5),
+            "panics.IndexOutOfBounds" => Some(6),
+            "json.ParseError" => Some(7),
+            "json.DecodeError" => Some(8),
+            "panics.DivisionByZero" => Some(9),
+            "panics.MapKeyNotFound" => Some(12),
+            "json.SerializationError" => Some(10),
+            "errors.InvalidArgument" => Some(11),
             _ => None,
         }
     }
 }
 
-fn handles(name: &str) -> bool {
+pub(super) fn handles(name: &str) -> bool {
     matches!(
         name,
         "baml._sum_int"
@@ -214,11 +223,11 @@ impl Emitter<'_, '_> {
                     Repr::Int => "a.cmp(&b)",
                     Repr::Float => "rt::float_cmp(a,b)",
                     Repr::Str => {
-                        "rt::strings::Str::from_raw(a.as_raw()).as_str(&read_cx).cmp(rt::strings::Str::from_raw(b.as_raw()).as_str(&read_cx))"
+                        "rt::strings::Str::from_raw(a.as_raw()).text(&read_cx).cmp(&rt::strings::Str::from_raw(b.as_raw()).text(&read_cx))"
                     }
                     _ => return Err(no("list natural-sort comparator")),
                 };
-                Ok((self.fallible(&format!("{{let read_cx=rt::strings::Cx::current();{list}.sort_by({cx},|a,b|Ok({compare})).map(|v|v.as_raw())}}")),repr))
+                Ok((self.fallible(&format!("{{let read_cx=rt::strings::Cx::current();{list}.sort_native({cx},|a,b|{compare}).map(|v|v.as_raw())}}")),repr))
             }
 
             ("length", 1) => Ok((format!("{list}.len({cx})"), Repr::Int)),
@@ -271,7 +280,7 @@ impl Emitter<'_, '_> {
             ("includes" | "index_of" | "last_index_of", 2) => {
                 let item = element.to_slot(&self.coerce(values[1].clone(), element)?)?;
                 let equality=match element {
-                    Repr::Str=>"if a.as_raw()==0 || b.as_raw()==0 {a.as_raw()==b.as_raw()} else {rt::strings::Str::from_raw(a.as_raw()).as_str(&read_cx)==rt::strings::Str::from_raw(b.as_raw()).as_str(&read_cx)}".into(),
+                    Repr::Str=>"if a.as_raw()==0 || b.as_raw()==0 {a.as_raw()==b.as_raw()} else {rt::strings::Str::from_raw(a.as_raw()).text(&read_cx)==rt::strings::Str::from_raw(b.as_raw()).text(&read_cx)}".into(),
                     Repr::Float=>"rt::float_eq(a,b)".into(),
                     Repr::Tagged|Repr::Dyn(_)=>"rt::lists::builtin_eq(&read_cx,a,b)".into(),
                     r if r.pointer()=>"a.as_raw()==b.as_raw()".into(),
@@ -333,11 +342,7 @@ pub(super) fn emit_render_shapes(
         }
         match repr {
             Repr::Ptr(c) => {
-                let Object::Class(class) =
-                    &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-                else {
-                    unreachable!()
-                };
+                let class = plan.class(c);
                 for package in &plan.program.packages {
                     for rules in package.impl_rules.values() {
                         for rule in rules {
@@ -353,9 +358,7 @@ pub(super) fn emit_render_shapes(
                 }
                 pending.extend(&plan.layouts[&c].fields);
             }
-            Repr::Dyn(i) => {
-                pending.extend(plan.implementors(i)?.into_iter().map(|(c, _)| Repr::Ptr(c)))
-            }
+            Repr::Dyn(_) => pending.extend(plan.layouts.keys().copied().map(Repr::Ptr)),
             Repr::Tagged => pending.extend(plan.layouts.keys().copied().map(Repr::Ptr)),
             r if r.growing() => {
                 pending.push(plan.element(r)?);
@@ -379,11 +382,7 @@ pub(super) fn emit_render_shapes(
     out.push_str("static LIST_RENDER_SHAPES:&[rt::lists::RenderShape]=&[\n");
     for desc in 0..last {
         if let Some((&c, _)) = descriptors.iter().find(|(_, id)| **id == desc) {
-            let Object::Class(class) =
-                &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-            else {
-                unreachable!()
-            };
+            let class = plan.class(c);
             writeln!(
                 out,
                 "rt::lists::RenderShape::Class({:?}),",
@@ -401,7 +400,7 @@ pub(super) fn emit_render_shapes(
                 Repr::Bool => 1,
                 Repr::Null => 2,
                 Repr::Str => 3,
-                Repr::Float => u32::MAX as usize - 1,
+                Repr::Float => (u32::MAX - 1) as usize,
                 Repr::Ptr(c) => descriptors[&c] + 3,
                 r if r.growing() || r == Repr::MapStrInt => lists[&r] + 3,
                 _ => return Err(no("list join element representation")),

@@ -81,7 +81,7 @@ fn mix(a: u64, b: u64) -> u64 {
     product as u64 ^ (product >> 64) as u64
 }
 #[inline(always)]
-fn hash_bytes(mut bytes: &[u8]) -> u64 {
+pub(super) fn hash_bytes(mut bytes: &[u8]) -> u64 {
     const A: u64 = 0xa0761d6478bd642f;
     const B: u64 = 0xe7037ed1a0b428db;
     let mut seed = A ^ (bytes.len() as u64).wrapping_mul(B);
@@ -121,15 +121,17 @@ impl Key for Str {
     }
     #[inline(always)]
     fn hash(self, cx: &Cx) -> u64 {
-        hash_bytes(self.as_str(cx).as_bytes())
+        hash_bytes(self.text(cx).as_bytes())
     }
     #[inline(always)]
     fn equals(self, other: Self, cx: &Cx) -> bool {
         if self.as_raw() == other.as_raw() {
             return true;
         }
-        let a = self.as_str(cx).as_bytes();
-        let b = other.as_str(cx).as_bytes();
+        let a_text = self.text(cx);
+        let a = a_text.as_bytes();
+        let b_text = other.text(cx);
+        let b = b_text.as_bytes();
         let len = a.len();
         if len != b.len() {
             return false;

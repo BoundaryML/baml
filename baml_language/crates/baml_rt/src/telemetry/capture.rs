@@ -12,6 +12,23 @@ use btel_snapshot::{
 use btel_types::Definition;
 use std::collections::HashMap;
 
+// Container runtime element types can differ from their static field types.
+// Regex natives produce unknown elements; nullable class literals retain their
+// concrete optional type even though they share the pointer storage layout.
+pub const UNKNOWN_ELEMENT_TYPE: u32 = 1;
+pub const OPTIONAL_ELEMENT_TYPE: u32 = 2;
+fn element_type(ty: &Type, aux: u32, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
+    if aux == UNKNOWN_ELEMENT_TYPE {
+        return OwnedType::Unknown;
+    }
+    let ty = ty.owned(leaves, carried);
+    if aux == OPTIONAL_ELEMENT_TYPE {
+        OwnedType::Union(vec![ty, OwnedType::Null].into())
+    } else {
+        ty
+    }
+}
+
 pub struct Metadata {
     pub shapes: &'static [Shape],
     pub naming_tag: u64,
@@ -24,10 +41,10 @@ pub struct Declaration {
     pub is_enum: bool,
 }
 pub enum Shape {
-    Bigint,
-    Bytes,
-    Opaque,
     String,
+    Bigint,
+    Uint8Array,
+    RustType,
     Enum {
         declaration: fn() -> &'static Declaration,
         variants: &'static [&'static str],
@@ -47,28 +64,32 @@ pub enum Shape {
         element: &'static Type,
     },
     MapStringInt,
+    Closure,
     Map {
         key: &'static Type,
         value: &'static Type,
         len: unsafe fn(usize) -> usize,
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
-    Closure,
+    Future,
+    MapStringPtr {
+        tag: u64,
+        value: &'static Type,
+    },
     Unsupported,
 }
 pub use baml_type::Freshness;
 pub enum Type {
+    Null,
+    Never,
+    Unknown,
     Bigint,
-    Bytes,
-    Opaque,
+    Future(&'static Type, &'static Type),
     Function {
         params: &'static [Parameter],
         ret: &'static Type,
         throws: &'static Type,
     },
-    Null,
-    Never,
-    Unknown,
     Int,
     LiteralInt(i64, Freshness),
     LiteralBool(bool, Freshness),
@@ -77,6 +98,8 @@ pub enum Type {
     Float,
     Bool,
     String,
+    Uint8Array,
+    RustType,
     Class(fn() -> &'static Declaration),
     GenericClass(fn() -> &'static Declaration, &'static [Type]),
     Enum(fn() -> &'static Declaration),
@@ -101,11 +124,12 @@ impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
             Self::Null => OwnedType::Null,
-            Self::Unknown => OwnedType::Unknown,
-            Self::Bigint => OwnedType::Bigint,
-            Self::Bytes => OwnedType::Uint8Array,
-            Self::Opaque => OwnedType::RustType,
             Self::Never => OwnedType::Never,
+            Self::Unknown => OwnedType::Unknown,
+            Self::Future(value, error) => OwnedType::Future(
+                Box::new(value.owned(leaves, carried)),
+                Box::new(error.owned(leaves, carried)),
+            ),
             Self::Function {
                 params,
                 ret,
@@ -126,6 +150,7 @@ impl Type {
                 ret: Box::new(ret.owned(leaves, carried)),
                 throws: Box::new(throws.owned(leaves, carried)),
             },
+            Self::Bigint => OwnedType::Bigint,
             Self::Int => OwnedType::Int,
             Self::LiteralInt(v, f) => OwnedType::Literal(baml_type::Literal::Int(*v), *f),
             Self::LiteralBool(v, f) => OwnedType::Literal(baml_type::Literal::Bool(*v), *f),
@@ -162,6 +187,8 @@ impl Type {
             },
             Self::Bool => OwnedType::Bool,
             Self::String => OwnedType::String,
+            Self::Uint8Array => OwnedType::Uint8Array,
+            Self::RustType => OwnedType::RustType,
             Self::Class(declaration) => OwnedType::Class(
                 TypeIdentity::Defined(leaves.define(&declaration().definition, carried)),
                 Box::new([]),
@@ -231,6 +258,18 @@ impl Scratch {
         let root = b.leaves().string_value(&value.into());
         b.finish(SnapshotRoot::Value(root), &mut self.shaper)
     }
+    pub fn text_arguments(&mut self, value: &str, omitted: usize) -> Snapshot {
+        self.begin();
+        let mut b = self.pool.acquire_beyond_budget();
+        let root = b.arguments(0..omitted + 1, |leaves, index| {
+            if index == 0 {
+                leaves.string_value(&value.into())
+            } else {
+                SnapshotValue::OmittedArg
+            }
+        });
+        b.finish(root, &mut self.shaper)
+    }
     pub fn type_args(&mut self, args: &[(&str, &Type)]) -> Snapshot {
         self.begin();
         let mut b = self.pool.acquire_beyond_budget();
@@ -264,11 +303,12 @@ impl Scratch {
         value: Dyn,
         depth: usize,
     ) -> SnapshotValue {
-        if value.tag == crate::scalars::FLOAT_TAG {
-            if leaves.limits().max_depth.is_some_and(|limit| depth > limit) {
-                return SnapshotValue::Truncated(Limit::Depth);
-            }
-            return SnapshotValue::Float(f64::from_bits(value.payload));
+        if value.tag == u64::from(u32::MAX - 1) {
+            return if leaves.limits().max_depth.is_some_and(|limit| depth > limit) {
+                SnapshotValue::Truncated(Limit::Depth)
+            } else {
+                SnapshotValue::Float(f64::from_bits(value.payload))
+            };
         }
         let key = if value.tag >= 3
             && value.tag != u64::MAX
@@ -323,15 +363,19 @@ impl Scratch {
         if value.payload == 0 {
             return SnapshotValue::Null;
         }
-        if matches!(shape, Shape::Bigint) {
-            let owned = unsafe { crate::native::bigint_owned(value.payload as usize) };
-            return leaves.bigint(&std::sync::Arc::new(owned));
-        }
-        let result = if matches!(shape, Shape::String) {
-            let ptr = value.payload as *const u8;
-            let len = unsafe { ptr.add(8).cast::<usize>().read() };
-            let bytes = unsafe { std::slice::from_raw_parts(ptr.add(16), len) };
-            leaves.string_value(&unsafe { std::str::from_utf8_unchecked(bytes) }.into())
+        let result = if matches!(shape, Shape::Bigint) {
+            leaves.bigint(&std::sync::Arc::new(unsafe {
+                crate::tasks::bigint_value(value.payload as usize)
+            }))
+        } else if matches!(shape, Shape::String) {
+            let text = unsafe { crate::strings::Str::from_raw(value.payload as usize) };
+            // Match the shared capture builder's leaf gate before copying a
+            // potentially enormous lazy rope into host memory.
+            if text.byte_len() > leaves.limits().max_leaf_bytes {
+                SnapshotValue::Truncated(Limit::Bytes)
+            } else {
+                leaves.string_value(&text.to_owned().into())
+            }
         } else {
             let Some(slot) = leaves.reserve() else {
                 return SnapshotValue::Truncated(Limit::Objects);
@@ -427,9 +471,30 @@ impl Scratch {
                                     payload: unsafe { ptr.cast::<u64>().read() },
                                 },
                             };
-                            (field.name.into(), unsafe {
-                                self.add(shapes, leaves, value, depth + 1)
-                            })
+                            let value =
+                                if matches!(field.slot, SlotKind::Pointer) && value.payload == 0 {
+                                    Dyn { tag: 2, payload: 0 }
+                                } else {
+                                    value
+                                };
+                            let captured = if field.type_id == u32::MAX - 2 {
+                                let key = Key::Value(ptr as usize);
+                                if let Some(value) = self.seen.get(&key) {
+                                    *value
+                                } else {
+                                    let value = leaves
+                                        .object(SnapshotObject::NonSnapshotableValue {})
+                                        .map_or(
+                                            SnapshotValue::Truncated(Limit::Objects),
+                                            SnapshotValue::Object,
+                                        );
+                                    self.seen.insert(key, value);
+                                    value
+                                }
+                            } else {
+                                unsafe { self.add(shapes, leaves, value, depth + 1) }
+                            };
+                            (field.name.into(), captured)
                         })
                     }
                     SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
@@ -450,7 +515,12 @@ impl Scratch {
                     } else {
                         (unsafe { ptr.add(2) }, unsafe { ptr.add(1).read() })
                     };
-                    let ty = element.owned(&mut b.leaves(), &mut self.carried);
+                    let ty = element_type(
+                        element,
+                        unsafe { (*(pointer as *const baml_rt_gc::Header)).aux },
+                        &mut b.leaves(),
+                        &mut self.carried,
+                    );
                     let ty = b.leaves().ty(ty);
                     b.list(ty, 0..len, |leaves, i| unsafe {
                         self.add(
@@ -463,11 +533,8 @@ impl Scratch {
                                 Dyn {
                                     tag: if payload == 0
                                         && *tag >= 3
-                                        && *tag != crate::FLOAT_TAG
-                                        && !matches!(
-                                            shapes[(*tag - 3) as usize],
-                                            Shape::Enum { .. }
-                                        ) {
+                                        && *tag != (u32::MAX - 1) as u64
+                                    {
                                         2
                                     } else {
                                         *tag
@@ -503,6 +570,45 @@ impl Scratch {
                         }
                     })
                 }
+                (Key::Value(pointer), Shape::Uint8Array) => {
+                    b.bytes(unsafe { crate::bytes::data(pointer) })
+                }
+                (Key::Value(_), Shape::RustType) => SnapshotObject::NonSnapshotableValue {},
+                (Key::Value(pointer), Shape::MapStringPtr { tag, value }) => {
+                    let ptr = pointer as *const usize;
+                    let data = unsafe { ptr.add(1).read() as *const usize }.wrapping_add(2);
+                    let len = unsafe { ptr.add(2).read() };
+                    let key_type = b.leaves().ty(OwnedType::String);
+                    let value = element_type(
+                        value,
+                        unsafe { (*(pointer as *const baml_rt_gc::Header)).aux },
+                        &mut b.leaves(),
+                        &mut self.carried,
+                    );
+                    let value_type = b.leaves().ty(value);
+                    b.map(key_type, value_type, 0..len, |leaves, i| unsafe {
+                        (
+                            self.add(
+                                shapes,
+                                leaves,
+                                Dyn {
+                                    tag: 3,
+                                    payload: data.add(i * 2).read() as u64,
+                                },
+                                depth + 1,
+                            ),
+                            self.add(
+                                shapes,
+                                leaves,
+                                Dyn {
+                                    tag: *tag,
+                                    payload: data.add(i * 2 + 1).read() as u64,
+                                },
+                                depth + 1,
+                            ),
+                        )
+                    })
+                }
                 (Key::Value(pointer), Shape::MapStringInt) => {
                     let map =
                         unsafe { crate::maps::Map::<crate::strings::Str, i64>::from_raw(pointer) };
@@ -524,14 +630,16 @@ impl Scratch {
                         )
                     })
                 }
-                (Key::Value(pointer), Shape::Bytes) => {
-                    b.bytes(&unsafe { crate::native::bytes_owned(pointer) })
-                }
-                (Key::Value(_), Shape::Opaque) => SnapshotObject::NonSnapshotableValue {},
+                (Key::Value(_), Shape::Future) => SnapshotObject::Descriptive {
+                    kind: btel_snapshot::Description::Future,
+                    name: None,
+                },
                 (Key::Value(pointer), Shape::Closure) => {
                     let name = unsafe { crate::closures::name(pointer) };
                     SnapshotObject::Descriptive {
-                        kind: if name.is_some() {
+                        kind: if unsafe { crate::closures::is_generic(pointer) } {
+                            btel_snapshot::Description::GenericFunction
+                        } else if name.is_some() {
                             btel_snapshot::Description::Function
                         } else if unsafe { crate::closures::is_bound(pointer) } {
                             btel_snapshot::Description::BoundMethod

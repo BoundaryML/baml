@@ -5,6 +5,7 @@ pub(super) struct MapType {
     pub value: Repr,
     pub key_type: String,
     pub value_type: String,
+    pub scalar_json_value: bool,
     key_identity: String,
     value_identity: String,
 }
@@ -43,6 +44,7 @@ impl Plan<'_> {
         value: Repr,
         key_ty: String,
         value_ty: String,
+        scalar_json_value: bool,
         key_identity: String,
         value_identity: String,
     ) -> Repr {
@@ -56,10 +58,11 @@ impl Plan<'_> {
         let ty = MapType {
             key,
             value,
-            key_type: key_ty,
-            value_type: value_ty,
+            key_type: key_ty.clone(),
+            value_type: value_ty.clone(),
             key_identity,
             value_identity,
+            scalar_json_value,
         };
         let mut types = self.map_types.borrow_mut();
         let id = types.iter().position(|old| old == &ty).unwrap_or_else(|| {
@@ -76,8 +79,8 @@ impl Plan<'_> {
             (types[id].key_type.clone(), types[id].value_type.clone())
         } else {
             (
-                capture_codegen::capture_repr_type(self, key)?,
-                capture_codegen::capture_repr_type(self, value)?,
+                capture_codegen::capture_repr(self, key)?,
+                capture_codegen::capture_repr(self, value)?,
             )
         };
         let declared = if keys { key_type } else { value_type };
@@ -87,11 +90,7 @@ impl Plan<'_> {
             self.list_repr(element)
         };
         let expected = format!("rt::telemetry::capture::Type::List(&{declared})");
-        if capture_codegen::capture_repr_type(self, default)
-            .ok()
-            .as_ref()
-            == Some(&expected)
-        {
+        if capture_codegen::capture_repr(self, default).ok().as_ref() == Some(&expected) {
             return Ok(default);
         }
         let storage = if element == Repr::Null {
@@ -138,9 +137,10 @@ pub(super) fn slot_type(
         Repr::Tagged | Repr::Dyn(_) => "rt::Dyn".into(),
         Repr::Str => "rt::strings::Str".into(),
         Repr::Closure => "rt::closures::Closure".into(),
-        Repr::Bigint => "rt::maps::Pointer<18>".into(),
+        Repr::Future => "rt::maps::Pointer<FUTURE_TAG>".into(),
+        Repr::Bigint => "rt::maps::Pointer<BIGINT_TAG>".into(),
         Repr::Bytes => "rt::maps::Pointer<19>".into(),
-        Repr::Opaque => "rt::maps::Pointer<20>".into(),
+        Repr::Opaque => "rt::maps::Pointer<18>".into(),
         Repr::Enum(_) | Repr::Naming => "usize".into(),
         Repr::Ptr(c) => format!("rt::maps::Pointer<{}>", descriptors[&c] + 3),
         r if r.pointer() => format!("rt::maps::Pointer<{}>", lists[&r] + 3),
@@ -201,6 +201,12 @@ impl registry::Feature for Feature {
         _types: &[Repr],
         values: &[(String, Repr)],
     ) -> Option<Gen<(String, Repr)>> {
+        if values
+            .first()
+            .is_some_and(|v| matches!(v.1, Repr::MapStrPtr(_)))
+        {
+            return None;
+        }
         name.starts_with("baml.Map.")
             .then(|| emitter.map_call(name, values))
     }
@@ -211,6 +217,9 @@ impl registry::Feature for Feature {
         expected: Repr,
     ) -> Option<Gen<(String, Repr)>> {
         if let Rvalue::Map(_, _, entries) = value {
+            if matches!(expected, Repr::MapStrPtr(_)) {
+                return None;
+            }
             Some(emitter.map_literal(entries, expected))
         } else if let Rvalue::Len(place) = value {
             match emitter.place(place) {
@@ -281,10 +290,6 @@ impl Emitter<'_, '_> {
                 for &field in &plan.layouts[&c].fields {
                     check(plan, field, seen)?;
                 }
-            } else if matches!(repr, Repr::Tagged | Repr::Dyn(_)) {
-                for &class in plan.layouts.keys() {
-                    check(plan, Repr::Ptr(class), seen)?;
-                }
             } else if let Repr::Map(_) | Repr::MapStrInt = repr {
                 let (k, v) = plan.map_parts(repr)?;
                 check(plan, k, seen)?;
@@ -316,10 +321,9 @@ impl Emitter<'_, '_> {
             ));
         }
         let desc = self.descriptors[&panic_class(self.plan)?];
-        let dyn_key =
-            capture_codegen::capture_dyn(self.plan, key, "key", self.descriptors, self.lists)?;
-        let a = capture_codegen::capture_dyn(self.plan, key, "a", self.descriptors, self.lists)?;
-        let b = capture_codegen::capture_dyn(self.plan, key, "b", self.descriptors, self.lists)?;
+        let dyn_key = capture_codegen::capture_dyn(key, "key", self.descriptors, self.lists)?;
+        let a = capture_codegen::capture_dyn(key, "a", self.descriptors, self.lists)?;
+        let b = capture_codegen::capture_dyn(key, "b", self.descriptors, self.lists)?;
         let v = value.map(|v| format!(",{v}")).unwrap_or_default();
         if self.plan.key_hasher.is_some() {
             let hooks = self.key_hooks()?;
@@ -430,7 +434,7 @@ impl Emitter<'_, '_> {
             let list_element = self.plan.element(repr)?;
             let slot = list_element.slot()?;
             let new = self.fallible(&format!(
-                "rt::lists::List::<{slot}>::new(&mut rt::strings::Cx::current(),{desc})"
+                "rt::lists::List::<{slot}>::with_capacity(&mut rt::strings::Cx::current(),{desc},len)"
             ));
             let raw = self.map_out(&format!("map.entry(i).unwrap().{select}"), element);
             let item = list_element.to_slot(&self.coerce((raw, element), list_element)?)?;

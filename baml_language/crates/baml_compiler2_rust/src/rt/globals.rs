@@ -28,10 +28,10 @@ pub(super) fn prepare<'db>(
             all.insert(
                 object,
                 MirFunction {
-                    arity: 0,
                     identity: None,
-                    kind: std::borrow::Cow::Owned(MirFunctionKind::Bytecode(body)),
-                    lambdas: std::borrow::Cow::Owned(lambdas),
+                    arity: 0,
+                    kind: MirFunctionKind::Bytecode(body),
+                    lambdas: lambdas.iter().map(MirFunction::from).collect(),
                 },
             );
         }
@@ -61,7 +61,7 @@ pub(super) fn prepare<'db>(
                     };
                     let object = callee.raw();
                     let repr = if let Some(mir) = all.get(&object) {
-                        let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
+                        let MirFunctionKind::Bytecode(body) = &mir.kind else {
                             return Err(no("initializer body"));
                         };
                         roots.push(object);
@@ -136,6 +136,10 @@ pub(super) fn emit(
                 Repr::Str => 3,
                 Repr::Ptr(c) => descriptors[&c] + 3,
                 Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
+                Repr::Future => plan.future_descriptor().unwrap() + 3,
+                Repr::Bigint => plan.bigint_descriptor() + 3,
+                Repr::Bytes => 19,
+                Repr::Opaque => 18,
                 r if r.pointer() => lists[&r] + 3,
                 Repr::Tagged | Repr::Dyn(_) => 0,
                 _ => return Err(no("global representation")),
@@ -147,11 +151,6 @@ pub(super) fn emit(
                     "value.to_bits()"
                 } else {
                     "value as u64"
-                };
-                let tag = if repr.pointer() {
-                    format!("if value==0{{2}}else{{{tag}}}")
-                } else {
-                    tag.to_string()
                 };
                 format!("rt::Dyn{{tag:{tag},payload:{payload}}}")
             };

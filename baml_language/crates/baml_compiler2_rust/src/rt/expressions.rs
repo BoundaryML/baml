@@ -31,9 +31,10 @@ impl Emitter<'_, '_> {
                     baml_compiler2_mir::TyTemplate::Literal(baml_type::Literal::String(literal), _),
                 ) = test
                 {
+                    let text=self.fallible("rt::strings::Str::from_raw(v.payload as usize).try_as_str(&rt::strings::Cx::current())");
                     return Ok((
                         format!(
-                            "{{let v={value};v.tag==3 && rt::strings::Str::from_raw(v.payload as usize).as_str(&rt::strings::Cx::current())=={:?}}}",
+                            "{{let v={value};v.tag==3 && {text}=={:?}}}",
                             literal.as_str()
                         ),
                         Repr::Bool,
@@ -68,15 +69,31 @@ impl Emitter<'_, '_> {
             Rvalue::LoadType(ty) => Ok(("0usize".into(), Repr::Type(self.plan.type_code(ty)?))),
             Rvalue::Use(o) => self.operand(o),
             Rvalue::BinaryOp { op, left, right } => {
-                let (l, lt) = self.operand(left)?;
-                let (r, rt) = self.operand(right)?;
+                let narrow_integer = |value: (String, Repr)| -> Gen<(String, Repr)> {
+                    // MIR keeps the optional storage type after `??`, although
+                    // the checked arithmetic result is a plain int. Restore
+                    // that proven boundary before selecting the raw operation.
+                    if expected == Repr::Int && value.1 == Repr::Tagged {
+                        Ok((self.coerce(value, Repr::Int)?, Repr::Int))
+                    } else {
+                        Ok(value)
+                    }
+                };
+                let (l, lt) = narrow_integer(self.operand(left)?)?;
+                let (r, rt) = narrow_integer(self.operand(right)?)?;
                 if *op == BinOp::Add && lt == Repr::Str && rt == Repr::Str {
                     return Ok((self.fallible(&format!("rt::strings::concat(&mut rt::strings::Cx::current(),&[rt::strings::Str::from_raw({l}),rt::strings::Str::from_raw({r})]).map(|s|s.as_raw())")), Repr::Str));
                 }
+                if matches!(lt, Repr::Enum(_) | Repr::Naming)
+                    && lt == rt
+                    && matches!(op, BinOp::Eq | BinOp::Ne)
+                {
+                    return Ok((format!("({l} {op} {r})"), Repr::Bool));
+                }
                 if lt == Repr::Str && rt == Repr::Str && matches!(op, BinOp::Eq | BinOp::Ne) {
-                    let expression = format!(
-                        "{{let a={l};let b={r};if a==0 || b==0 {{a==b}} else {{rt::strings::Str::from_raw(a).as_str(&rt::strings::Cx::current())==rt::strings::Str::from_raw(b).as_str(&rt::strings::Cx::current())}}}}"
-                    );
+                    let expression = self.fallible(&format!(
+                        "rt::strings::equals_raw(&rt::strings::Cx::current(),{l},{r})"
+                    ));
                     return Ok((
                         if *op == BinOp::Ne {
                             format!("!({expression})")
@@ -121,26 +138,10 @@ impl Emitter<'_, '_> {
                         return Ok((format!("(({l}) as f64 {op} ({r}) as f64)"), Repr::Float));
                     }
                 }
-                if matches!(lt, Repr::Enum(_) | Repr::Naming)
-                    && lt == rt
-                    && matches!(op, BinOp::Eq | BinOp::Ne)
-                {
-                    return Ok((format!("({l} {op} {r})"), Repr::Bool));
-                }
-                if lt == Repr::Float && rt == Repr::Float {
-                    let repr = match op {
-                        BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
-                            Repr::Float
-                        }
-                        BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                            Repr::Bool
-                        }
-                        _ => return Err(no("float binary operation")),
-                    };
-                    return Ok((format!("({l} {op} {r})"), repr));
-                }
                 if lt != Repr::Int || rt != Repr::Int {
-                    return Err(no("non-integer binary operation"));
+                    return Err(no(format!(
+                        "non-integer binary operation {op:?}: {lt:?} {rt:?}, {left:?} {right:?}, expected {expected:?}"
+                    )));
                 }
                 let helper = match op {
                     BinOp::Add => Some("add"),

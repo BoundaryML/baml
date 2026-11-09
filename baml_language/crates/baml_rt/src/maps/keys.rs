@@ -65,7 +65,7 @@ unsafe fn feed(
                 state,
                 5,
                 unsafe { Str::from_raw(value.payload as usize) }
-                    .as_str(cx)
+                    .text(cx)
                     .as_bytes(),
             );
             return Ok(());
@@ -87,14 +87,13 @@ unsafe fn feed(
             framed(
                 state,
                 4,
-                &unsafe { crate::native::bigint_owned(value.payload as usize) }
-                    .to_signed_bytes_le(),
+                &unsafe { crate::tasks::bigint_value(value.payload as usize) }.to_signed_bytes_le(),
             );
             return Ok(());
         }
-        Shape::Bytes => {
+        Shape::Uint8Array => {
             framed(state, 6, &unsafe {
-                crate::native::bytes_owned(value.payload as usize)
+                crate::bytes::data(value.payload as usize)
             });
             return Ok(());
         }
@@ -164,7 +163,7 @@ unsafe fn feed(
             for i in 0..map.len() {
                 let (key, child) = map.entry(i).unwrap();
                 let mut item = DefaultHasher::new();
-                framed(&mut item, 5, key.as_str(cx).as_bytes());
+                framed(&mut item, 5, key.text(cx).as_bytes());
                 framed(&mut item, 1, &child.to_le_bytes());
                 hashes.push(item.finish());
             }
@@ -274,8 +273,8 @@ unsafe fn equal(
             ));
         }
         3 => {
-            return Ok(unsafe { Str::from_raw(left.payload as usize) }.as_str(cx)
-                == unsafe { Str::from_raw(right.payload as usize) }.as_str(cx));
+            return Ok(unsafe { Str::from_raw(left.payload as usize) }.text(cx)
+                == unsafe { Str::from_raw(right.payload as usize) }.text(cx));
         }
         _ => {}
     }
@@ -294,12 +293,11 @@ unsafe fn equal(
     let other_shape = &shapes[(right.tag - 3) as usize];
     let result = match (shape, other_shape) {
         (Shape::Bigint, Shape::Bigint) => unsafe {
-            crate::native::bigint_owned(left.payload as usize)
-                == crate::native::bigint_owned(right.payload as usize)
+            crate::tasks::bigint_value(left.payload as usize)
+                == crate::tasks::bigint_value(right.payload as usize)
         },
-        (Shape::Bytes, Shape::Bytes) => unsafe {
-            crate::native::bytes_owned(left.payload as usize)
-                == crate::native::bytes_owned(right.payload as usize)
+        (Shape::Uint8Array, Shape::Uint8Array) => unsafe {
+            crate::bytes::data(left.payload as usize) == crate::bytes::data(right.payload as usize)
         },
         (
             Shape::Class {
@@ -445,6 +443,7 @@ pub unsafe fn panic(cx: &mut Cx, desc: u32, message: &str) -> Box<crate::Error> 
         Err(error) => error,
         Ok(value) => Box::new(crate::Error {
             telemetry_raise: None,
+            telemetry_caught: None,
             telemetry_at: None,
             value,
             class: "baml.panics.UserPanic",

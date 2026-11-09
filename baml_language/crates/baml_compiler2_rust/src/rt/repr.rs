@@ -2,13 +2,13 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Repr {
-    Bigint,
-    Bytes,
-    Opaque,
     Int,
+    Bigint,
     Float,
     Bool,
     Str,
+    Bytes,
+    Opaque,
     Ptr(usize),
     ListInt,
     List(usize),
@@ -20,10 +20,13 @@ pub(super) enum Repr {
     Tagged,
     MapStrInt,
     Map(usize),
+    MapStrPtr(usize),
     Iter,
     Naming,
     Enum(usize),
     Null,
+    Future,
+    ListFuture(u64),
     Closure,
     Cell,
     ListClosure(u64),
@@ -59,21 +62,25 @@ impl Repr {
     pub(super) fn growing(self) -> bool {
         matches!(
             self,
-            Self::ListInt
+            Self::ListFuture(_)
+                | Self::ListClosure(_)
+                | Self::ListInt
                 | Self::ListPtr(_)
                 | Self::ListStr
                 | Self::ListListStr
                 | Self::List(_)
-                | Self::ListClosure(_)
         )
     }
     pub(super) fn slot(self) -> Gen<&'static str> {
         Ok(match self {
             Self::Int => "i64",
+            Self::Enum(_) | Self::Naming=>"usize",
+            Self::Null=>"rt::maps::Null",
             Self::Float => "f64",
             Self::Bool => "bool",
             Self::Str => "rt::lists::Ptr",
-            Self::Enum(_) | Self::Naming => "usize",
+            Self::Closure => "rt::closures::Closure",
+            Self::Future => "rt::tasks::FutureSlot",
             Self::Dyn(_) | Self::Tagged => "rt::Dyn",
             r if r.pointer() => "rt::lists::Ptr",
             _ => return Err(no("list element slot")),
@@ -108,10 +115,13 @@ impl Repr {
                 | Self::ListStr
                 | Self::ListListStr
                 | Self::MapStrInt
-                | Self::Map(_)
                 | Self::Closure
                 | Self::Cell
                 | Self::ListClosure(_)
+                | Self::Map(_)
+                | Self::Future
+                | Self::ListFuture(_)
+                | Self::MapStrPtr(_)
         )
     }
 }

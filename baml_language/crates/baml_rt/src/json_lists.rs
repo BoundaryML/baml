@@ -6,11 +6,23 @@ use crate::{
 };
 use baml_rt_gc::{SlotKind, write_ptr};
 use serde_json::Value;
+use smallvec::SmallVec;
+pub mod flat;
+mod stream;
 
 #[derive(Clone, Copy)]
 pub enum Ty {
     InvalidMap,
+    Map {
+        key: &'static crate::telemetry::capture::Type,
+        value: &'static Ty,
+        adapter: &'static crate::maps::json::Adapter,
+    },
     Int,
+    Bigint {
+        desc: u32,
+    },
+    Json(&'static crate::json_tree::Config),
     Float,
     Bool,
     Null,
@@ -31,11 +43,6 @@ pub enum Ty {
         fields: &'static [Field],
     },
     Union(&'static [Member]),
-    Map {
-        key: &'static crate::telemetry::capture::Type,
-        value: &'static Ty,
-        adapter: &'static crate::maps::json::Adapter,
-    },
 }
 pub struct Field {
     pub name: &'static str,
@@ -60,9 +67,9 @@ fn fail(message: impl Into<String>, path: &str) -> Report {
     }
 }
 impl Ty {
-    fn nullable(&self) -> bool {
+    pub(crate) fn nullable(&self) -> bool {
         match self {
-            Self::Null => true,
+            Self::Null | Self::Json(_) => true,
             Self::Union(m) => m.iter().any(|m| m.ty.nullable()),
             _ => false,
         }
@@ -80,7 +87,7 @@ impl Ty {
                         .len()
                 })
                 .unwrap_or(0),
-            Self::Map { .. } => value.as_object().map_or(0, |m| m.len()),
+            Self::Map{..}=>value.as_object().map_or(0,|m|m.len()),
             Self::Int if value.as_i64().is_some() => 1,
             _ => 0,
         }
@@ -140,6 +147,29 @@ impl Ty {
     fn check(&self, value: &Value, path: &str) -> Result<(), Report> {
         let message = match self {
             Self::InvalidMap => Some("JSON requires maps with string keys"),
+            Self::Map {
+                key,
+                value: element,
+                ..
+            } => {
+                if !crate::maps::json::string_key_type(key) {
+                    return Err(fail("JSON requires maps with string keys", path));
+                }
+                let Some(values) = value.as_object() else {
+                    return Err(fail("expected JSON object", path));
+                };
+                if values
+                    .keys()
+                    .any(|name| !crate::maps::json::key_fits(key, name))
+                {
+                    return Err(fail("map key does not match declared key type", path));
+                }
+                for (key, v) in values {
+                    element.check(v, &format!("{path}[{key:?}]"))?;
+                }
+                None
+            }
+            Self::Json(_) => None,
             Self::Int => {
                 if !value.is_number() {
                     Some("expected integer")
@@ -149,8 +179,30 @@ impl Ty {
                     None
                 }
             }
+            Self::Bigint { .. } => {
+                let text = if let Some(s) = value.as_str() {
+                    Some(s.to_owned())
+                } else if value.is_number() {
+                    Some(value.to_string())
+                } else {
+                    None
+                };
+                if text
+                    .as_deref()
+                    .and_then(bex_vm_types::json_text::parse_decimal_bigint)
+                    .is_some()
+                {
+                    None
+                } else {
+                    Some("expected integral JSON number or numeric string")
+                }
+            }
             Self::Float => {
-                if value.as_f64().is_some() {
+                let numeric = value.as_f64();
+                if numeric.is_some_and(|f| f.is_finite())
+                    || (numeric.is_some()
+                        && matches!(value.to_string().as_str(), "NaN" | "inf" | "-inf"))
+                {
                     None
                 } else {
                     Some("expected number")
@@ -221,29 +273,6 @@ impl Ty {
                 }
                 None
             }
-            Self::Map {
-                key,
-                value: element,
-                ..
-            } => {
-                if !crate::maps::json::string_key_type(key) {
-                    return Err(fail("JSON requires maps with string keys", path));
-                }
-                let Some(values) = value.as_object() else {
-                    return Err(fail("expected JSON object", path));
-                };
-                if values
-                    .keys()
-                    .any(|name| !crate::maps::json::key_fits(key, name))
-                {
-                    return Err(fail("map key does not match declared key type", path));
-                }
-
-                for (key, value) in values {
-                    element.check(value, &format!("{path}[{key:?}]"))?;
-                }
-                None
-            }
             Self::Class { name, fields, .. } => {
                 let Some(object) = value.as_object() else {
                     return Err(fail(
@@ -277,8 +306,9 @@ impl Ty {
     }
     fn empty(&self) -> Value {
         match self {
-            Self::InvalidMap => Value::Object(Default::default()),
-            Self::Int => Value::from(0),
+            Self::Map { .. } | Self::InvalidMap => Value::Object(Default::default()),
+            Self::Json(_) => Value::Null,
+            Self::Int | Self::Bigint { .. } => Value::from(0),
             Self::Float => Value::from(0.0),
             Self::Bool => Value::Bool(false),
             Self::Null => Value::Null,
@@ -288,7 +318,6 @@ impl Ty {
             Self::LiteralFloat(n) => Value::from(*n),
             Self::LiteralBool(b) => Value::from(*b),
             Self::List { .. } => Value::Array(vec![]),
-            Self::Map { .. } => Value::Object(Default::default()),
             Self::Class { fields, .. } => Value::Object(
                 fields
                     .iter()
@@ -306,13 +335,41 @@ impl Ty {
     }
     unsafe fn build(&self, cx: &mut Cx, value: &Value) -> R<Dyn> {
         Ok(match self {
-            Self::InvalidMap => unreachable!("invalid map schema cannot build a value"),
+            Self::InvalidMap => unreachable!("invalid map schema"),
+            Self::Map {
+                value: element,
+                adapter,
+                ..
+            } => {
+                let map = unsafe { (adapter.new)(cx)? };
+                for (key, value) in value.as_object().unwrap() {
+                    let value = unsafe { element.build(cx, value)? };
+                    let key = cx.string(key)?;
+                    unsafe { (adapter.insert)(cx, map, key, value)? };
+                }
+                Dyn {
+                    tag: adapter.tag,
+                    payload: map as u64,
+                }
+            }
+            Self::Json(config) => unsafe { config.build(cx, value) }?,
+            Self::Bigint { desc } => {
+                let text = value
+                    .as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| value.to_string());
+                let pointer = unsafe { crate::bigint::from_decimal(cx, *desc, &text) }?;
+                Dyn {
+                    tag: *desc as u64 + 3,
+                    payload: pointer.as_raw() as u64,
+                }
+            }
             Self::Int | Self::LiteralInt(_) => Dyn {
                 tag: 0,
                 payload: value.as_i64().unwrap() as u64,
             },
             Self::Float | Self::LiteralFloat(_) => Dyn {
-                tag: crate::FLOAT_TAG,
+                tag: (u32::MAX - 1) as u64,
                 payload: value.as_f64().unwrap().to_bits(),
             },
             Self::Bool | Self::LiteralBool(_) => Dyn {
@@ -329,22 +386,6 @@ impl Ty {
                     .expect("validated union")
                     .build(cx, value)
             }?,
-            Self::Map {
-                value: element,
-                adapter,
-                ..
-            } => {
-                let map = unsafe { (adapter.new)(cx) }?;
-                for (key, value) in value.as_object().unwrap() {
-                    let decoded = unsafe { element.build(cx, value) }?;
-                    let key = cx.string(key)?;
-                    unsafe { (adapter.insert)(cx, map, key, decoded) }?;
-                }
-                Dyn {
-                    tag: adapter.tag,
-                    payload: map as u64,
-                }
-            }
             Self::Class {
                 desc,
                 bytes,
@@ -439,19 +480,40 @@ impl Ty {
 /// # Safety
 /// Schema descriptors, offsets and slot kinds match the generated program.
 pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
-    let source = text.as_str(cx).to_owned();
-    let value = crate::json::parse_owned(cx, &source)?;
+    // The reader borrows the non-moving string. Its interior pointer remains
+    // on the scanned fiber stack through every managed allocation.
+    let read_cx = unsafe { Cx::current() };
+    let source = text.try_as_str(&read_cx)?;
+    let mut syntax = bex_vm_types::json_text::Reader::new(source);
+    if syntax.skip_value().is_err() || syntax.finish().is_err() {
+        return Err(crate::json::syntax_error(cx, source));
+    }
+    if let Some(value) = unsafe { stream::decode(cx, source, ty) }? {
+        return Ok(value);
+    }
+    let value = crate::json::parse_owned(cx, source)?;
     if let Err(report) = ty.check(&value, "") {
         return Err(crate::json::decode_error(cx, report.message, report.path));
     }
     unsafe { ty.build(cx, &value) }
 }
 
+pub struct EnumVariant {
+    pub name: &'static str,
+    pub alias: &'static str,
+    pub skip: bool,
+}
 pub enum Shape {
-    Unsupported,
-    Enum(&'static [EnumVariant]),
-    Bigint,
+    Enum {
+        name: &'static str,
+        variants: &'static [EnumVariant],
+    },
     Bytes,
+    Function,
+    Future,
+    Unsupported,
+    ClassEncoded(unsafe fn(&mut Encoder<'_>, usize, usize) -> R<()>),
+    Bigint,
     List {
         tag: u64,
         tagged: bool,
@@ -462,12 +524,6 @@ pub enum Shape {
         len: unsafe fn(usize) -> usize,
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
-    Function,
-}
-pub struct EnumVariant {
-    pub name: &'static str,
-    pub alias: &'static str,
-    pub skip: bool,
 }
 pub struct EncodeField {
     pub name: &'static str,
@@ -477,16 +533,133 @@ pub struct EncodeField {
     pub tag: u64,
     pub tagged: bool,
 }
-struct Encoder<'a> {
+enum PathStep {
+    Field(&'static str),
+    Index(usize),
+    Key(Str),
+}
+pub struct Encoder<'a> {
     shapes: &'static [Shape],
     cx: &'a mut Cx,
     aliased: bool,
     omit_nulls: bool,
     indent: String,
     out: String,
-    ancestors: std::collections::BTreeSet<usize>,
+    ancestors: SmallVec<[usize; 16]>,
+    path: SmallVec<[PathStep; 16]>,
 }
 impl Encoder<'_> {
+    #[cold]
+    fn error(&mut self, message: String, reason: &str) -> Box<crate::Error> {
+        use std::fmt::Write;
+        let mut path = String::new();
+        for step in &self.path {
+            match step {
+                PathStep::Field(name) => write!(path, ".{name}").unwrap(),
+                PathStep::Index(i) => write!(path, "[{i}]").unwrap(),
+                PathStep::Key(key) => write!(path, "[{:?}]", key.text(self.cx)).unwrap(),
+            }
+        }
+        crate::list_errors::serialization(self.cx, message, &path, reason)
+    }
+    fn quoted(&mut self, text: &str) {
+        self.out.push('"');
+        let mut start = 0;
+        let bytes = text.as_bytes();
+        while start < bytes.len() {
+            let end = start + bex_vm_types::json_text::plain_run(&bytes[start..]);
+            self.out.push_str(&text[start..end]);
+            if end == bytes.len() {
+                break;
+            }
+            match bytes[end] {
+                b'"' => self.out.push_str("\\\""),
+                b'\\' => self.out.push_str("\\\\"),
+                b'\n' => self.out.push_str("\\n"),
+                b'\r' => self.out.push_str("\\r"),
+                b'\t' => self.out.push_str("\\t"),
+                8 => self.out.push_str("\\b"),
+                12 => self.out.push_str("\\f"),
+                control => {
+                    const HEX: &[u8; 16] = b"0123456789abcdef";
+                    self.out.push_str("\\u00");
+                    self.out.push(HEX[(control >> 4) as usize] as char);
+                    self.out.push(HEX[(control & 15) as usize] as char);
+                }
+            }
+            start = end + 1;
+        }
+        self.out.push('"');
+    }
+    pub fn begin_class(&mut self) {
+        self.out.push('{');
+    }
+    pub fn finish_class(&mut self, first: bool, depth: usize) {
+        if !first && !self.indent.is_empty() {
+            self.newline(depth);
+        }
+        self.out.push('}');
+    }
+    /// # Safety
+    /// The generated tagged field and pre-escaped names use this encoder's ABI.
+    #[inline(always)]
+    pub unsafe fn class_field(
+        &mut self,
+        name: &'static str,
+        alias: &'static str,
+        json_name: &'static str,
+        json_alias: &'static str,
+        skip: bool,
+        value: Dyn,
+        first: &mut bool,
+        depth: usize,
+    ) -> R<()> {
+        if self.aliased && skip {
+            return Ok(());
+        }
+        let null = value.tag == 2
+            || (value.tag >= 3
+                && value.tag != crate::FLOAT_TAG
+                && value.payload == 0
+                && !matches!(
+                    self.shapes.get((value.tag - 3) as usize),
+                    Some(Shape::Enum { .. })
+                ));
+        if self.omit_nulls && null {
+            return Ok(());
+        }
+        self.separator(*first, depth + 1);
+        *first = false;
+        self.out
+            .push_str(if self.aliased { json_alias } else { json_name });
+        self.out.push(':');
+        if !self.indent.is_empty() {
+            self.out.push(' ');
+        }
+        if null {
+            self.out.push_str("null");
+            return Ok(());
+        }
+        match value.tag {
+            0 => self
+                .out
+                .push_str(itoa::Buffer::new().format(value.payload as i64)),
+            1 => self
+                .out
+                .push_str(if value.payload == 0 { "false" } else { "true" }),
+            3 => {
+                let cx = unsafe { Cx::current() };
+                self.quoted(unsafe { Str::from_raw(value.payload as usize) }.try_as_str(&cx)?);
+            }
+            _ => {
+                self.path
+                    .push(PathStep::Field(if self.aliased { alias } else { name }));
+                unsafe { self.value(value, depth + 1) }?;
+                self.path.pop();
+            }
+        }
+        Ok(())
+    }
     fn separator(&mut self, first: bool, depth: usize) {
         if !first {
             self.out.push(',');
@@ -501,60 +674,53 @@ impl Encoder<'_> {
             self.out.push_str(&self.indent);
         }
     }
-    unsafe fn value(&mut self, value: Dyn, path: &str, depth: usize) -> R<()> {
+    unsafe fn value(&mut self, value: Dyn, depth: usize) -> R<()> {
         if value.tag >= 3 && value.tag != crate::FLOAT_TAG {
-            if let Some(Shape::Enum(variants)) = self.shapes.get((value.tag - 3) as usize) {
-                let variant = &variants[value.payload as usize];
-                if self.aliased && variant.skip {
-                    return Err(crate::list_errors::serialization(
-                        self.cx,
+            if let Some(Shape::Enum { name, variants }) = self.shapes.get((value.tag - 3) as usize)
+            {
+                let v = &variants[value.payload as usize];
+                if self.aliased && v.skip {
+                    return Err(self.error(
                         format!(
-                            "enum variant `{}` is `@skip`, so JSON has no name for it",
-                            variant.name
+                            "enum variant `{name}.{}` is `@skip`, so JSON has no name for it",
+                            v.name
                         ),
-                        path,
                         "enum",
                     ));
                 }
-                self.out.push_str(
-                    &serde_json::to_string(if self.aliased {
-                        variant.alias
-                    } else {
-                        variant.name
-                    })
-                    .expect("enum JSON"),
-                );
+                self.quoted(if self.aliased { v.alias } else { v.name });
                 return Ok(());
             }
         }
-        let value = if value.payload == 0 && value.tag >= 3 && value.tag != crate::FLOAT_TAG {
+        let value = if value.payload == 0 && value.tag >= 3 && value.tag != (u32::MAX - 1) as u64 {
             Dyn { tag: 2, payload: 0 }
         } else {
             value
         };
         match value.tag {
-            0 => self.out.push_str(&(value.payload as i64).to_string()),
+            0 => {
+                self.out
+                    .push_str(itoa::Buffer::new().format(value.payload as i64));
+            }
             1 => self
                 .out
                 .push_str(if value.payload == 0 { "false" } else { "true" }),
             2 => self.out.push_str("null"),
             3 => {
                 let text = unsafe { Str::from_raw(value.payload as usize) };
-                self.out
-                    .push_str(&serde_json::to_string(text.as_str(self.cx)).expect("string JSON"));
+                let cx = unsafe { Cx::current() };
+                self.quoted(text.try_as_str(&cx)?);
             }
-            tag if tag == crate::FLOAT_TAG => {
+            tag if tag == (u32::MAX - 1) as u64 => {
                 let f = f64::from_bits(value.payload);
                 if !f.is_finite() {
-                    return Err(crate::list_errors::serialization(
-                        self.cx,
+                    return Err(self.error(
                         format!("{f} has no JSON form: a JSON number is finite"),
-                        path,
                         "non_finite",
                     ));
                 }
-                self.out
-                    .push_str(&serde_json::to_string(&f).expect("finite float JSON"));
+                serde_json::to_writer(unsafe { self.out.as_mut_vec() }, &f)
+                    .expect("finite float JSON");
             }
             tag => {
                 let pointer = value.payload as usize;
@@ -562,31 +728,22 @@ impl Encoder<'_> {
                     self.out.push_str("null");
                     return Ok(());
                 }
-                if !self.ancestors.insert(pointer) {
-                    return Err(crate::list_errors::serialization(
-                        self.cx,
+                if self.ancestors.contains(&pointer) {
+                    return Err(self.error(
                         "value contains itself, so it has no JSON form".into(),
-                        path,
                         "cycle",
                     ));
                 }
+                self.ancestors.push(pointer);
                 let shape = self
                     .shapes
                     .get((tag - 3) as usize)
                     .unwrap_or(&Shape::Unsupported);
                 match shape {
-                    Shape::Enum(_) => unreachable!(),
-                    Shape::Bigint => self
-                        .out
-                        .push_str(&unsafe { crate::native::bigint_owned(pointer) }.to_string()),
-                    Shape::Bytes => {
-                        return Err(crate::list_errors::serialization(
-                            self.cx,
-                            "uint8array requires explicit encoding (use to_base64() or to_hex())"
-                                .into(),
-                            path,
-                            "uint8array",
-                        ));
+                    Shape::ClassEncoded(encode) => unsafe { encode(self, pointer, depth) }?,
+                    Shape::Bigint => {
+                        self.out
+                            .push_str(&unsafe { crate::tasks::bigint_value(pointer) }.to_string());
                     }
                     Shape::List { tag, tagged } => {
                         let ptr = pointer as *const usize;
@@ -605,7 +762,9 @@ impl Encoder<'_> {
                                     }
                                 }
                             };
-                            unsafe { self.value(value, &format!("{path}[{i}]"), depth + 1) }?;
+                            self.path.push(PathStep::Index(i));
+                            unsafe { self.value(value, depth + 1) }?;
+                            self.path.pop();
                             if i & 255 == 255 {
                                 self.cx.poll()?;
                             }
@@ -614,43 +773,6 @@ impl Encoder<'_> {
                             self.newline(depth);
                         }
                         self.out.push(']');
-                    }
-                    Shape::Map { key, len, entry } => {
-                        if !crate::maps::json::string_key_type(key) {
-                            return Err(crate::list_errors::serialization(
-                                self.cx,
-                                "JSON requires maps with string keys".into(),
-                                path,
-                                "map_key",
-                            ));
-                        }
-                        self.out.push('{');
-                        let count = unsafe { len(pointer) };
-                        for i in 0..count {
-                            let (key, value) = unsafe { entry(pointer, i) };
-                            let name = unsafe { Str::from_raw(key.payload as usize) }
-                                .as_str(self.cx)
-                                .to_owned();
-                            self.separator(i == 0, depth + 1);
-                            self.out.push_str(&serde_json::to_string(&name).unwrap());
-                            self.out.push(':');
-                            if !self.indent.is_empty() {
-                                self.out.push(' ');
-                            }
-                            unsafe { self.value(value, &format!("{path}[{name:?}]"), depth + 1) }?;
-                        }
-                        if count > 0 && !self.indent.is_empty() {
-                            self.newline(depth);
-                        }
-                        self.out.push('}');
-                    }
-                    Shape::Function => {
-                        return Err(crate::list_errors::serialization(
-                            self.cx,
-                            "a function has no JSON form".into(),
-                            path,
-                            "function",
-                        ));
                     }
                     Shape::Class(fields) => {
                         self.out.push('{');
@@ -673,7 +795,7 @@ impl Encoder<'_> {
                             if self.omit_nulls
                                 && (value.tag == 2
                                     || (value.tag >= 3
-                                        && value.tag != crate::FLOAT_TAG
+                                        && value.tag != (u32::MAX - 1) as u64
                                         && value.payload == 0))
                             {
                                 continue;
@@ -685,29 +807,84 @@ impl Encoder<'_> {
                             } else {
                                 field.name
                             };
-                            self.out
-                                .push_str(&serde_json::to_string(name).expect("key JSON"));
+                            self.quoted(name);
                             self.out.push(':');
                             if !self.indent.is_empty() {
                                 self.out.push(' ');
                             }
-                            unsafe { self.value(value, &format!("{path}.{name}"), depth + 1) }?;
+                            self.path.push(PathStep::Field(name));
+                            unsafe { self.value(value, depth + 1) }?;
+                            self.path.pop();
                         }
                         if !first && !self.indent.is_empty() {
                             self.newline(depth);
                         }
                         self.out.push('}');
                     }
-                    Shape::Unsupported => {
-                        return Err(crate::list_errors::serialization(
-                            self.cx,
-                            "value has no JSON form".into(),
-                            path,
-                            "unserializable",
+                    Shape::Map { key, len, entry } => {
+                        if !crate::maps::json::string_key_type(key) {
+                            return Err(
+                                self.error("JSON requires maps with string keys".into(), "map_key")
+                            );
+                        }
+                        let len = unsafe { len(pointer) };
+                        self.out.push('{');
+                        for i in 0..len {
+                            let (key, value) = unsafe { entry(pointer, i) };
+                            if key.tag != 3 || key.payload == 0 {
+                                return Err(self.error(
+                                    "JSON requires maps with string keys".into(),
+                                    "map_key",
+                                ));
+                            }
+                            let key = unsafe { Str::from_raw(key.payload as usize) };
+                            self.separator(i == 0, depth + 1);
+                            let read_cx = unsafe { Cx::current() };
+                            self.quoted(key.try_as_str(&read_cx)?);
+                            self.out.push(':');
+                            if !self.indent.is_empty() {
+                                self.out.push(' ');
+                            }
+                            self.path.push(PathStep::Key(key));
+                            unsafe { self.value(value, depth + 1) }?;
+                            // Keep the managed key on the native frame even if
+                            // the path SmallVec has spilled into host storage.
+                            std::hint::black_box(key);
+                            self.path.pop();
+                            if i & 255 == 255 {
+                                self.cx.poll()?;
+                            }
+                        }
+                        if len > 0 && !self.indent.is_empty() {
+                            self.newline(depth);
+                        }
+                        self.out.push('}');
+                    }
+                    Shape::Enum { .. } => unreachable!("enum handled before null"),
+                    Shape::Bytes => {
+                        return Err(self.error(
+                            "uint8array requires explicit encoding (use to_base64() or to_hex())"
+                                .into(),
+                            "uint8array",
                         ));
                     }
+                    Shape::Function => {
+                        return Err(self.error("a function has no JSON form".into(), "function"));
+                    }
+                    Shape::Future => {
+                        return Err(self.error(
+                            "a future has no JSON form (await it first)".into(),
+                            "future",
+                        ));
+                    }
+                    Shape::Unsupported => {
+                        return Err(self.error("value has no JSON form".into(), "unserializable"));
+                    }
                 }
-                self.ancestors.remove(&pointer);
+                // Ancestors may outgrow the inline path/ancestor buffers.
+                // Keep each owner in its native frame through recursive polls.
+                std::hint::black_box(pointer);
+                self.ancestors.pop();
             }
         }
         Ok(())
@@ -740,7 +917,7 @@ pub unsafe fn stringify(
         " ".repeat(n as usize)
     } else {
         let text = unsafe { Str::from_raw(indent.payload as usize) }
-            .as_str(cx)
+            .try_as_str(cx)?
             .to_owned();
         let width = text.chars().count();
         if width > 10 {
@@ -767,10 +944,11 @@ pub unsafe fn stringify(
         aliased,
         omit_nulls,
         indent: indentation,
-        out: String::new(),
-        ancestors: std::collections::BTreeSet::new(),
+        out: String::with_capacity(64),
+        ancestors: SmallVec::new(),
+        path: SmallVec::new(),
     };
-    unsafe { encoder.value(value, "", 0) }?;
+    unsafe { encoder.value(value, 0) }?;
     let result = encoder.out;
     encoder.cx.string(&result)
 }
@@ -951,10 +1129,49 @@ mod tests {
             DESCRIPTORS,
             &[
                 false, false, false, true, true, true, true, true, true, true, true, true, true,
-                true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true,
             ],
         );
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 5);
     }
+    #[test]
+    fn quoted_strings_match_shared_json_escaping() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let mut encoder = Encoder {
+                shapes: &[],
+                cx: &mut cx,
+                aliased: false,
+                omit_nulls: false,
+                indent: String::new(),
+                out: String::new(),
+                ancestors: SmallVec::new(),
+                path: SmallVec::new(),
+            };
+            for code in 0..1024 {
+                let ch = char::from_u32(code).unwrap();
+                let text = format!(r#"prefix {ch} " \ suffix 🦀"#);
+                encoder.out.clear();
+                encoder.quoted(&text);
+                assert_eq!(encoder.out, serde_json::to_string(&text).unwrap());
+            }
+            Ok(1)
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[
+                false, false, false, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true,
+            ],
+        );
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+}
+
+pub(crate) unsafe fn from_owned(cx: &mut Cx, ty: &Ty, value: &Value) -> R<Dyn> {
+    if let Err(report) = ty.check(value, "") {
+        return Err(crate::json::decode_error(cx, report.message, report.path));
+    }
+    unsafe { ty.build(cx, value) }
 }

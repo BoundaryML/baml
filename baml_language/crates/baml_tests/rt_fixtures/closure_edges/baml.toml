@@ -1,0 +1,5 @@
+[package]
+name = "closure_edges"
+
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"

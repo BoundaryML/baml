@@ -1057,3 +1057,112 @@ fn forced_unwind_installs_bindings_until_the_fiber_unregisters_them() {
     assert!(matches!(future.state(), FutureState::Cancelled));
     assert_eq!(CURRENT_ID.get(), 0);
 }
+
+#[test]
+fn local_tokens_cancel_queued_multi_limit_tasks_without_holding_partial_permits() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let first = Gate::new(1);
+    let second = Gate::new(1);
+    let f = lp.spawn(move |cx| {
+        let token = cx.new_cancel_token(vec![]);
+        let combined = cx.new_cancel_token(vec![token.clone()]);
+        let held = cx.spawn_with(
+            SpawnOptions {
+                gate: Some(second.clone()),
+                ..Default::default()
+            },
+            |cx| {
+                cx.sleep(Duration::from_secs(60))?;
+                Ok(Value::int(1))
+            },
+        );
+        let queued = cx.spawn_with(
+            SpawnOptions {
+                gates: vec![first.clone(), second.clone(), first.clone()],
+                local_linked: vec![combined],
+                ..Default::default()
+            },
+            |_| panic!("cancelled queued body ran"),
+        );
+        let after = cx.spawn_with(
+            SpawnOptions {
+                gate: Some(first.clone()),
+                ..Default::default()
+            },
+            |_| Ok(Value::int(42)),
+        );
+        cx.sleep(Duration::from_millis(1))?;
+        assert_eq!(first.counts(), (0, 2));
+        assert_eq!(second.counts(), (1, 1));
+        assert!(token.request_cancel());
+        assert!(!token.request_cancel());
+        assert_eq!(cx.await_future(&queued).unwrap_err(), Err::Cancelled);
+        assert_eq!(cx.await_future(&after)?.as_int(), 42);
+        assert_eq!(first.counts(), (0, 0));
+        assert_eq!(second.counts(), (1, 0));
+        held.request_cancel();
+        assert_eq!(cx.await_future(&held).unwrap_err(), Err::Cancelled);
+        Ok(Value::int(42))
+    });
+    assert_eq!(lp.run_until(&f).unwrap().as_int(), 42);
+}
+
+#[test]
+fn deep_local_token_composition_checks_and_drops_iteratively() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        let first = cx.new_cancel_token(vec![]);
+        let mut last = first.clone();
+        for _ in 0..20_000 {
+            last = cx.new_cancel_token(vec![last]);
+        }
+        assert!(!last.is_cancelled());
+        first.cancel();
+        assert!(last.is_cancelled());
+        drop(last);
+        Ok(Value::int(1))
+    });
+    assert_eq!(lp.run_until(&root).unwrap().as_int(), 1);
+}
+
+#[test]
+fn cancelling_a_settled_failure_records_the_request_without_changing_its_outcome() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let failed = lp.spawn(|_| Err(error("bad")));
+    lp.run_until_idle();
+    assert!(!failed.was_cancel_requested());
+    assert!(!failed.try_cancel());
+    assert!(failed.was_cancel_requested());
+    assert!(!failed.try_cancel());
+    assert_eq!(failed.result().unwrap().unwrap_err(), error("bad"));
+}
+
+#[test]
+fn failure_preserves_cancellation_received_through_a_linked_token() {
+    let rt = runtime();
+    let mut lp = scheduler(&rt);
+    let root = lp.spawn(|cx| {
+        let token = cx.new_cancel_token(vec![]);
+        let trigger = token.clone();
+        let failed = cx.spawn_with(
+            SpawnOptions {
+                local_linked: vec![token],
+                ..Default::default()
+            },
+            move |_| {
+                trigger.cancel();
+                Err(error("failed during cancellation"))
+            },
+        );
+        assert_eq!(
+            cx.await_future(&failed).unwrap_err(),
+            error("failed during cancellation")
+        );
+        assert!(failed.was_cancel_requested());
+        Ok(Value::int(1))
+    });
+    assert_eq!(lp.run_until(&root).unwrap().as_int(), 1);
+}

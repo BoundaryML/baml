@@ -646,6 +646,7 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "btel_types",
+ "serde_json",
 ]
 
 [[package]]
@@ -1011,10 +1012,15 @@ dependencies = [
  "btel_settings",
  "btel_snapshot",
  "btel_types",
+ "itoa",
  "libc",
  "num-bigint",
+ "num-traits",
  "serde_json",
+ "smallvec",
+ "sys_regex",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]

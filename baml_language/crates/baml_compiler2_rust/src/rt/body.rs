@@ -1,7 +1,13 @@
 use super::*;
 
 impl Emitter<'_, '_> {
-    pub(super) fn function(&mut self, arity: usize, inline: bool, stack_leaf: bool) -> Gen<String> {
+    pub(super) fn function(
+        &mut self,
+        arity: usize,
+        inline: bool,
+        stack_leaf: bool,
+        recursive: bool,
+    ) -> Gen<String> {
         let cfg = Cfg {
             entry: self.body.entry.0,
             unwinds: self
@@ -18,6 +24,8 @@ impl Emitter<'_, '_> {
                     Terminator::Goto { target }
                     | Terminator::Call { target, .. }
                     | Terminator::VirtualCall { target, .. }
+                    | Terminator::Await { target, .. }
+                    | Terminator::AwaitAny { target, .. }
                     | Terminator::SysOp { target, .. } => Ok(Flow::Goto(target.0)),
                     Terminator::Switch {
                         arms, otherwise, ..
@@ -34,6 +42,7 @@ impl Emitter<'_, '_> {
                         else_block: else_block.0,
                     }),
                     Terminator::Unreachable => Ok(Flow::Exit),
+                    Terminator::Spawn { resume, .. } => Ok(Flow::Goto(resume.0)),
                     Terminator::Branch {
                         then_block,
                         else_block,
@@ -78,12 +87,7 @@ impl Emitter<'_, '_> {
         }
         let environment = self.plan.captures.contains_key(&self.object);
         let params = (1..=arity)
-            .map(|i| {
-                Ok(format!(
-                    "mut l{i}:{}",
-                    self.plan.local_repr(self.body, i, 0)?.rust()
-                ))
-            })
+            .map(|i| Ok(format!("mut l{i}:{}", self.argument_repr(i)?.rust())))
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let params = if environment {
@@ -112,7 +116,7 @@ impl Emitter<'_, '_> {
             arguments
         };
         let captured_args = (1..=arity)
-            .map(|i| self.capture_value(format!("l{i}"), self.plan.local_repr(self.body, i, 0)?))
+            .map(|i| self.capture_value(format!("l{i}"), self.argument_repr(i)?))
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
@@ -139,12 +143,12 @@ impl Emitter<'_, '_> {
         let mut code = call_cost::prologue(
             object, &params, &arguments, returned, &captures, attribute, &guard,
         );
+        if recursive {
+            code.push_str(&format!("{};\n", self.fallible("cx.poll()")));
+        }
         for i in 1..=arity {
             if self.body.locals[i].is_captured {
-                let value = self.coerce(
-                    (format!("l{i}"), self.plan.local_repr(self.body, i, 0)?),
-                    Repr::Tagged,
-                )?;
+                let value = self.coerce((format!("l{i}"), self.argument_repr(i)?), Repr::Tagged)?;
                 writeln!(
                     &mut code,
                     "let mut l{i}=rt::closures::cell({},{value}).map_err(|e|e.at(&S{object},0))?;",
@@ -159,6 +163,17 @@ impl Emitter<'_, '_> {
             }
             let t = self.local(i)?;
             writeln!(&mut code, "let mut l{i}:{}={};", t.rust(), t.zero()).unwrap();
+        }
+        for block in &self.body.blocks {
+            if let Some(term) = &block.terminator
+                && let Some(local) = super::tasks::ephemeral_plan(self, term)
+            {
+                writeln!(
+                    &mut code,
+                    "let mut fast_plan_body{local}=0usize;let mut fast_plan_name{local}=0usize;"
+                )
+                .unwrap();
+            }
         }
         for iter in &self.iters {
             writeln!(&mut code, "let mut iter_index{iter}=0i64;").unwrap();
@@ -191,7 +206,9 @@ impl Emitter<'_, '_> {
         for h in cfg.loop_headers() {
             writeln!(&mut code, "let mut poll{h}=0u32;").unwrap();
         }
-        code.push_str(&self.stmts(&structured.stmts, &cfg.loop_headers())?);
+        let body = self.stmts(&structured.stmts, &cfg.loop_headers())?;
+        code.push_str(&self.string_literal_locals());
+        code.push_str(&body);
         code.push_str("}}\n");
         let lines = self
             .sites
@@ -212,7 +229,7 @@ impl Emitter<'_, '_> {
             self.object,
             self.object,
             self.plan.index.info(self.object).source_file,
-            self.plan.index.name(self.object)
+            self.plan.index.display(self.object)
         ))
     }
     pub(super) fn stmts(&mut self, stmts: &[Stmt], headers: &BTreeSet<usize>) -> Gen<String> {

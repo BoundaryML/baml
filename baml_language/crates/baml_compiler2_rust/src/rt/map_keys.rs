@@ -282,7 +282,7 @@ impl registry::Feature for Feature {
                     let bytes = e.coerce(values[1 - *self_arg].clone(), Repr::Bytes)?;
                     (
                         format!(
-                            "{{rt::maps::callbacks::write({state},&rt::native::bytes_owned({bytes}));0usize}}"
+                            "{{rt::maps::callbacks::write({state},&rt::bytes::data({bytes}));0usize}}"
                         ),
                         Repr::Null,
                     )
@@ -319,7 +319,7 @@ impl Emitter<'_, '_> {
                 _ => self.tag(repr)?.to_string(),
             };
             if let Some(&callee) = methods.get("hash") {
-                let MirFunctionKind::Bytecode(body) = self.all[&callee].kind.as_ref() else {
+                let MirFunctionKind::Bytecode(body) = &self.all[&callee].kind else {
                     return Err(no("custom hash body"));
                 };
                 let arg = self.coerce(
@@ -333,7 +333,7 @@ impl Emitter<'_, '_> {
                 write!(hash,"{tag}=>{{f{callee}::<OBSERVE>(rt::calls::Context::current(),{},{arg},{state})?;Ok(true)}},",self.telemetry_site(callee)).unwrap();
             }
             if let Some(&callee) = methods.get("eq") {
-                let MirFunctionKind::Bytecode(body) = self.all[&callee].kind.as_ref() else {
+                let MirFunctionKind::Bytecode(body) = &self.all[&callee].kind else {
                     return Err(no("custom equality body"));
                 };
                 let a = self.coerce(

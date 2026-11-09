@@ -16,6 +16,7 @@ pub(super) fn collect<'db>(
     root: SourceRoot,
     opt: OptLevel,
     entry: usize,
+    benchmark: Option<(usize, usize)>,
     plan: &mut Plan<'_>,
 ) -> Gen<Admitted<'db>> {
     let mut all = BTreeMap::new();
@@ -34,17 +35,19 @@ pub(super) fn collect<'db>(
         }
     }
     let mut queue = VecDeque::from([entry]);
+    if let Some((setup, run)) = benchmark {
+        queue.extend([setup, run]);
+    }
     queue.extend(initializer_roots);
     queue.extend(registry::prepare(db, root, plan, &mut all)?);
     super::generics::expand(db, plan, &mut all, queue.iter().copied().collect())?;
-    // Expansion can move owned MIR records inside the map. Bind capture
-    // inference to final body addresses after registering every specialization.
     plan.lambda_bodies.clear();
-    for (&object, mir) in &all {
-        if let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() {
-            plan.lambda_bodies.insert(body as *const _ as usize, object);
+    for (&id, mir) in &all {
+        if let MirFunctionKind::Bytecode(body) = &mir.kind {
+            plan.lambda_bodies.insert(body as *const _ as usize, id);
         }
     }
+    queue.extend(plan.string_overrides.values().copied());
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -56,16 +59,29 @@ pub(super) fn collect<'db>(
         let mir = all
             .get(&object)
             .ok_or_else(|| no(format!("missing MIR for {}", plan.index.display(object))))?;
-        let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
-            return Err(no(plan.index.display(object)));
+        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+            let name = plan.index.display(object);
+            if !baml_builtins2_codegen::supports_rt(name) && !super::callbacks::native(name) {
+                return Err(no(name));
+            }
+            if !super::callbacks::native(name) {
+                builtins.insert(name.to_owned());
+            }
+            let frame = plan.linked_function_frame(object)?;
+            let info = plan.index.info(object);
+            let types = info
+                .param_types
+                .iter()
+                .chain([&info.return_type])
+                .map(|t| t.substitute_symbolic(&frame))
+                .collect::<Vec<_>>();
+            for ty in types {
+                let repr = plan.field_repr(&ty)?;
+                plan.record(repr)?;
+            }
+            continue;
         };
         registry::admit(registry::Admission::Function(mir))?;
-        if let Some(targets) = plan.key_edges.get(&object) {
-            for &target in targets {
-                calls.entry(object).or_default().insert(target);
-                queue.push_back(target);
-            }
-        }
         for target in super::closures::discover(db, plan, object, mir)? {
             calls.entry(object).or_default().insert(target);
             queue.push_back(target);
@@ -75,8 +91,6 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
-            super::builtin_classes::record_test(db, plan, &statement.kind)?;
-
             if let StatementKind::Assign {
                 value:
                     Rvalue::Aggregate {
@@ -101,6 +115,68 @@ pub(super) fn collect<'db>(
                     .map_err(|e| format!("{e} (constructor in {})", plan.index.display(object)))?;
             }
         }
+        // Type-test declarations may occur only in a catch arm, including
+        // native-produced errors which have no constructor in reachable MIR.
+        for block in &body.blocks {
+            if let Some(Terminator::NarrowBind { test, .. }) = &block.terminator {
+                super::switches::record_test(plan, &test.template(db))?;
+            }
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    value: Rvalue::IsType { test, .. },
+                    ..
+                } = &statement.kind
+                {
+                    super::switches::record_test(plan, &test.template(db))?;
+                }
+            }
+        }
+        // A generic type argument is not a JSON schema request. In particular
+        // generic class heads may occur as type values without field bindings.
+        // Plan schemas only for the concrete argument to decode itself.
+        for block in &body.blocks {
+            if let Some(Terminator::Call {
+                callee: super::Operand::Constant(super::Constant::Function(f)),
+                args,
+                ..
+            }) = &block.terminator
+            {
+                if plan.index.function(db, *f).is_some_and(|(id, _)| {
+                    matches!(plan.index.display(id), "baml.json._to" | "baml.json.to")
+                }) {
+                    super::json_tree::register_to(plan, body, args)?;
+                }
+                if plan
+                    .index
+                    .function(db, *f)
+                    .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
+                {
+                    let ty = super::generics::type_operand(body, &args[0])?;
+                    let template = baml_compiler2_mir::TyTemplate::from(
+                        baml_compiler2_mir::RealizedTy::try_from(ty)
+                            .map_err(|_| no("non-concrete JSON argument"))?,
+                    );
+                    super::json_lists::record_schema(plan, &template)?;
+                    if matches!(template, baml_compiler2_mir::TyTemplate::Map { .. }) {
+                        continue;
+                    }
+                    if let Ok(classes) = plan.json_class_types(&template) {
+                        for &c in &classes {
+                            plan.add(c)?;
+                        }
+                        if !plan.json_types.contains(&classes) {
+                            plan.json_types.push(classes);
+                        }
+                    } else {
+                        let repr = plan.template_repr(&template)?;
+                        plan.record(repr)?;
+                        if !plan.json_list_types.contains(&template) {
+                            plan.json_list_types.push(template);
+                        }
+                    }
+                }
+            }
+        }
         super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
@@ -121,6 +197,10 @@ pub(super) fn collect<'db>(
             }
             plan.record(repr)?;
         }
+        if let Some(edges) = plan.key_edges.get(&object) {
+            calls.entry(object).or_default().extend(edges);
+            queue.extend(edges.iter().copied());
+        }
         for block in &body.blocks {
             registry::admit(registry::Admission::ShieldedBlock(block.shielded))?;
             if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
@@ -134,6 +214,11 @@ pub(super) fn collect<'db>(
             if let Some(&target) = plan.specialized_calls.get(&(object, block.id.0)) {
                 calls.entry(object).or_default().insert(target);
                 queue.push_back(target);
+                continue;
+            }
+            if let Some(term) = &block.terminator
+                && super::tasks::resource_concat(db, plan, body, term)
+            {
                 continue;
             }
             if let Some(term) = &block.terminator
@@ -155,7 +240,13 @@ pub(super) fn collect<'db>(
                     let Some(result) = registry::reach(db, plan, other.as_ref()) else {
                         return Err(no(format!("terminator {other:?}")));
                     };
-                    let reach = result?;
+                    let reach = result.map_err(|error| {
+                        format!(
+                            "{error} (reaching {} block {})",
+                            plan.index.display(object),
+                            block.id.0
+                        )
+                    })?;
                     if let Some(name) = reach.builtin {
                         builtins.insert(name);
                     }
@@ -191,16 +282,14 @@ pub(super) fn collect<'db>(
     // Dynamic call cycles need real native frames and the stack guard too.
     // Every materialized callable has already been reached by discover().
     for &object in &reached {
-        if let MirFunctionKind::Bytecode(body) = all[&object].kind.as_ref()
+        if let MirFunctionKind::Bytecode(body) = &all[&object].kind
             && body.blocks.iter().any(|b| {
                 matches!(
                     b.terminator,
                     Some(Terminator::Call {
                         callee: baml_compiler2_mir::Operand::Copy(_)
                             | baml_compiler2_mir::Operand::Move(_)
-                            | baml_compiler2_mir::Operand::Constant(
-                                baml_compiler2_mir::Constant::GlobalItem(_)
-                            ),
+                            | baml_compiler2_mir::Operand::Constant(super::Constant::GlobalItem(_)),
                         ..
                     })
                 )
@@ -209,8 +298,16 @@ pub(super) fn collect<'db>(
             calls.entry(object).or_default().extend(&plan.callables);
         }
     }
+    for (&object, edges) in &plan.key_edges {
+        calls.entry(object).or_default().extend(edges);
+    }
     let mir = &all[&entry];
-    super::host::admit(plan, mir)?;
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        unreachable!()
+    };
+    if mir.arity != 0 || !matches!(plan.repr(&body.locals[0].ty)?, Repr::Int | Repr::Str) {
+        return Err(no("entry must have no parameters and return int or string"));
+    }
     Ok(Admitted {
         all,
         reached,
