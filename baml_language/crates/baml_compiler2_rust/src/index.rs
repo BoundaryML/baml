@@ -364,7 +364,7 @@ impl<'p> ProgramIndex<'p> {
     }
 
     pub(crate) fn name(&self, object: usize) -> &str {
-        &self.names[object].0
+        &self.names[self.rt_origin(object)].0
     }
 
     /// Every method and interface body named `method`, whichever class or

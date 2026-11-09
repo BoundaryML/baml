@@ -265,7 +265,9 @@ impl registry::Feature for Feature {
         matches!(
             term,
             Some(Terminator::Call {
-                callee: Operand::Copy(_) | Operand::Move(_),
+                callee: Operand::Copy(_)
+                    | Operand::Move(_)
+                    | Operand::Constant(super::Constant::GlobalItem(_)),
                 ntypeargs: 0,
                 has_trace: false,
                 ..
@@ -489,7 +491,10 @@ impl registry::Feature for Feature {
         term: &Terminator<'_>,
     ) -> Option<Gen<String>> {
         let Terminator::Call {
-            callee: callee @ (Operand::Copy(_) | Operand::Move(_)),
+            callee:
+                callee @ (Operand::Copy(_)
+                | Operand::Move(_)
+                | Operand::Constant(super::Constant::GlobalItem(_))),
             args,
             ntypeargs: 0,
             destination,

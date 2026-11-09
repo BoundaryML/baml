@@ -37,6 +37,9 @@ impl Emitter<'_, '_> {
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
+            r @ (Repr::Enum(_) | Repr::Naming) => {
+                Ok(layout::enum_tag(self.plan, r, self.descriptors, self.lists))
+            }
             Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
             Repr::Opaque => Ok(18),
@@ -82,6 +85,17 @@ impl Emitter<'_, '_> {
             || (source == Repr::Tagged && matches!(target, Repr::Dyn(_)))
         {
             return Ok(value);
+        }
+        if source.growing()
+            && target.growing()
+            && self.plan.element(source)? == self.plan.element(target)?
+            && capture_codegen::capture_repr(self.plan, source)?
+                == capture_codegen::capture_repr(self.plan, target)?
+        {
+            return Ok(value);
+        }
+        if source == Repr::Int && target == Repr::Float {
+            return Ok(format!("({value} as f64)"));
         }
         if matches!(source, Repr::Dyn(_)) && matches!(target, Repr::Tagged | Repr::Dyn(_))
             || source == Repr::Tagged && matches!(target, Repr::Dyn(_))

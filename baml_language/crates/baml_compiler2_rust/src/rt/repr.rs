@@ -74,9 +74,10 @@ impl Repr {
     pub(super) fn slot(self) -> Gen<&'static str> {
         Ok(match self {
             Self::Int => "i64",
+            Self::Enum(_) | Self::Naming => "usize",
+            Self::Null => "rt::maps::Null",
             Self::Float => "f64",
             Self::Bool => "bool",
-            Self::Enum(_) => "usize",
             Self::Str => "rt::lists::Ptr",
             Self::Closure => "rt::closures::Closure",
             Self::Future => "rt::tasks::FutureSlot",

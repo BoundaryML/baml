@@ -211,6 +211,10 @@ pub(super) fn collect<'db>(
             }
             plan.record(repr)?;
         }
+        if let Some(edges) = plan.key_edges.get(&object) {
+            calls.entry(object).or_default().extend(edges);
+            queue.extend(edges.iter().copied());
+        }
         for block in &body.blocks {
             registry::admit(registry::Admission::ShieldedBlock(block.shielded))?;
             if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
@@ -280,7 +284,8 @@ pub(super) fn collect<'db>(
                     b.terminator,
                     Some(Terminator::Call {
                         callee: baml_compiler2_mir::Operand::Copy(_)
-                            | baml_compiler2_mir::Operand::Move(_),
+                            | baml_compiler2_mir::Operand::Move(_)
+                            | baml_compiler2_mir::Operand::Constant(super::Constant::GlobalItem(_)),
                         ..
                     })
                 ) || matches!(&b.terminator,Some(Terminator::Call {callee:baml_compiler2_mir::Operand::Constant(baml_compiler2_mir::Constant::Function(f)),..}) if plan.index.function(db,*f).is_some_and(|(id,_)| super::list_callbacks::handles(plan.index.display(id))))
@@ -288,6 +293,9 @@ pub(super) fn collect<'db>(
         {
             calls.entry(object).or_default().extend(&plan.callables);
         }
+    }
+    for (&object, edges) in &plan.key_edges {
+        calls.entry(object).or_default().extend(edges);
     }
     let mir = &all[&entry];
     let MirFunctionKind::Bytecode(body) = &mir.kind else {

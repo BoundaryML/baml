@@ -81,6 +81,7 @@ const FEATURES: &[&dyn Feature] = &[
     &super::list_callbacks::Feature,
     &super::list_scalars::Feature,
     &lists::Feature,
+    &super::map_keys::Feature,
     &maps::Feature,
     &super::callbacks::Feature,
     &super::string_defaults::Feature,

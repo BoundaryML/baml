@@ -98,12 +98,17 @@ impl Plan<'_> {
                     return Ok(());
                 }
                 let (key, value) = self.map_parts(repr)?;
+                if maps::callback_key(key) {
+                    self.add(maps::panic_class(self)?)?;
+                }
                 self.record(key)?;
                 self.record(value)?;
-                for element in [key, value] {
-                    self.record(self.list_repr(element))?;
+                for keys in [true, false] {
+                    let snapshot = self.map_snapshot_repr(repr, keys)?;
+                    self.record(snapshot)?;
                 }
             }
+
             Repr::MapStrPtr(c) => {
                 self.lists.insert(repr);
                 self.record(Repr::ListPtr(c))?;
@@ -148,11 +153,6 @@ impl Plan<'_> {
                     && self.repr(value).is_ok_and(|r| matches!(r, Repr::Ptr(c) if Some(c) == super::strings::builtin_class(self,"baml.regex.Group").ok())) =>
             { let Repr::Ptr(c)=self.repr(value)? else {return Err(no("regex group map"))}; Repr::MapStrPtr(c) }
             RuntimeTy::Map { key, value } => {
-                if matches!(key.as_ref(), RuntimeTy::Union(m) if !m.iter().all(scalar_key))
-                    || matches!(key.as_ref(), RuntimeTy::Unknown)
-                {
-                    return Err(no("map key callbacks"));
-                }
                 self.map_repr(
                     if matches!(key.as_ref(), RuntimeTy::Union(_)) {
                         Repr::Tagged
@@ -163,6 +163,8 @@ impl Plan<'_> {
                     capture_codegen::declared_type(self, key)?,
                     capture_codegen::declared_type(self, value)?,
                     scalar_json_value(value),
+                    capture_codegen::type_identity(self,key)?,
+                    capture_codegen::type_identity(self,value)?,
                 )
             }
             RuntimeTy::Null => Repr::Null,
@@ -295,11 +297,6 @@ impl Plan<'_> {
                     && self.field_repr(value).is_ok_and(|r| matches!(r, Repr::Ptr(c) if Some(c) == super::strings::builtin_class(self,"baml.regex.Group").ok())) =>
             { let Repr::Ptr(c)=self.field_repr(value)? else {return Err(no("regex group map"))}; Repr::MapStrPtr(c) }
             T::Map { key, value } => {
-                if matches!(key.as_ref(), T::Union(m) if !m.iter().all(scalar_field_key))
-                    || matches!(key.as_ref(), T::Unknown)
-                {
-                    return Err(no("map key callbacks"));
-                }
                 self.map_repr(
                     if matches!(key.as_ref(), T::Union(_)) {
                         Repr::Tagged
@@ -310,6 +307,8 @@ impl Plan<'_> {
                     capture_codegen::declared_field_type(self, key)?,
                     capture_codegen::declared_field_type(self, value)?,
                     scalar_json_field_value(value),
+                    capture_codegen::field_type_identity(self,key)?,
+                    capture_codegen::field_type_identity(self,value)?,
                 )
             }
             T::List(element) => {
@@ -344,15 +343,16 @@ impl Plan<'_> {
                     })
                     .ok_or_else(|| no("interface field"))?,
             ),
-            T::Class(head, args) if !args.is_empty() => Repr::Ptr(
-                self.class_instances
+            T::Class(head, args) if !args.is_empty() => {
+                let args = args.iter().map(super::generics::canonical_type).collect::<Vec<_>>();
+                Repr::Ptr(self.class_instances
                     .iter()
                     .find(|(c, a, _)| {
-                        self.class(*c).type_tag == head.tag() && a.as_slice() == args.as_ref()
+                        self.class(*c).type_tag == head.tag() && *a == args
                     })
                     .map(|(_, _, c)| *c)
-                    .ok_or_else(|| no("unregistered generic class"))?,
-            ),
+                    .ok_or_else(|| no("unregistered generic class"))?)
+            },
             T::Class(head, args) if args.is_empty() => {
                 let object = self
                     .program
@@ -686,6 +686,9 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         )
         .unwrap();
     }
+    if let Some(future) = plan.future_descriptor() {
+        writeln!(out, "const FUTURE_TAG:u64={};", future + 3).unwrap();
+    }
     out.push_str(&capture_codegen::emit(
         plan,
         &descriptors,
@@ -829,4 +832,25 @@ impl Plan<'_> {
             + usize::from(self.closure_descriptors().is_some()) * 2
             + usize::from(self.task_support)
     }
+}
+
+pub(super) fn enum_tag(
+    plan: &Plan<'_>,
+    repr: Repr,
+    _descriptors: &BTreeMap<usize, usize>,
+    _lists: &BTreeMap<Repr, usize>,
+) -> usize {
+    let end = plan.bigint_descriptor() + usize::from(plan.bigints);
+    end + 3
+        + match repr {
+            Repr::Naming => 0,
+            Repr::Enum(e) => {
+                1 + plan
+                    .enums
+                    .iter()
+                    .position(|id| *id == e)
+                    .expect("registered enum")
+            }
+            _ => unreachable!(),
+        }
 }

@@ -55,3 +55,21 @@ pub unsafe fn decode(cx: &mut Cx, value: usize, error_desc: u32) -> R<Str> {
         )),
     }
 }
+
+/// # Safety
+/// `value` is a live, growing integer list in the current instance.
+pub unsafe fn from_array(cx: &mut Cx, value: usize, error_desc: u32) -> R<usize> {
+    let list = unsafe { crate::lists::List::<i64>::from_raw(value) };
+    let mut values = Vec::with_capacity(list.len(cx) as usize);
+    for i in 0..list.len(cx) {
+        values.push(list.get(cx, i)?);
+    }
+    let bytes = bex_vm_types::bytes::from_array(&values).map_err(|error| match error {
+        bex_vm_types::errors::VmRustFnError::Panic(panic) => crate::language::from_panic(panic),
+        bex_vm_types::errors::VmRustFnError::BamlError(
+            bex_vm_types::errors::VmBamlError::InvalidArgument { message },
+        ) => crate::language::panic_value(error_desc, "baml.errors.InvalidArgument", message),
+        error => crate::Error::internal(error.to_string()),
+    })?;
+    new(cx, &bytes)
+}

@@ -28,6 +28,7 @@ pub mod relink;
 mod roots;
 pub mod runtime_compile;
 pub mod rust_data;
+pub mod scalar;
 pub mod trace;
 pub mod type_head;
 pub mod types;
@@ -418,3 +419,7 @@ mod tests {
         let _: fn(&mut EarlyYieldCheck) = EarlyYieldCheck::reset;
     }
 }
+
+pub mod bigint;
+
+pub mod bytes;

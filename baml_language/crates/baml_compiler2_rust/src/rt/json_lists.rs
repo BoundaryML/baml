@@ -114,30 +114,21 @@ impl SchemaEmitter<'_, '_> {
             slot(self.plan.element(repr)?)
         ))
     }
-    fn map(&mut self, repr: Repr, value: String) -> Gen<String> {
-        let (key, element) = self.plan.map_parts(repr)?;
-        if key != Repr::Str {
-            return Err(no("JSON list map key type"));
-        }
-        let desc = self.lists[&repr];
-        let element_slot = maps::slot_type(element, self.descriptors, self.lists)?;
-        let convert = match element {
-            Repr::Tagged | Repr::Dyn(_) => "value".into(),
-            Repr::Int => "value.payload as i64".into(),
-            Repr::Float => "f64::from_bits(value.payload)".into(),
-            Repr::Bool => "value.payload!=0".into(),
-            Repr::Null => "rt::maps::Null".into(),
-            r if r.pointer() => format!("<{element_slot}>::from_raw(value.payload as usize)"),
-            _ => return Err(no("JSON list map value type")),
-        };
-        let map = format!("rt::maps::Map::<rt::strings::Str,{element_slot}>");
-        Ok(format!(
-            "rt::json_lists::Ty::Map{{desc:{desc},value:&{value},new:|cx|unsafe{{{map}::new(cx,{desc}).map(|m|m.as_raw())}},insert:|cx,p,key,value|unsafe{{let key=cx.string(key)?;{map}::from_raw(p).set(cx,key,{convert}).map(|_|())}}}}"
-        ))
-    }
     fn template(&mut self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
         use baml_compiler2_mir::TyTemplate as T;
         Ok(match ty {
+            T::Enum(_) | T::EnumVariant(..) => map_json::enum_schema(
+                self.plan,
+                self.plan.template_repr(ty)?,
+                if let T::EnumVariant(_, name) = ty {
+                    Some(name)
+                } else {
+                    None
+                },
+                self.aliased,
+                self.descriptors,
+                self.lists,
+            )?,
             T::TypeAlias(_) => {
                 let Some(bex_vm_types::TyTemplate::TypeAlias(head)) = self.plan.index.anchor(ty)
                 else {
@@ -169,13 +160,14 @@ impl SchemaEmitter<'_, '_> {
                     .map_err(|_| no("JSON float literal"))?
                     .to_bits()
             ),
+            T::Map { value, .. } => {
+                let repr = self.plan.template_repr(ty)?;
+                let value = self.template(value)?;
+                map_json::schema(self.plan, repr, &value, self.descriptors, self.lists)?
+            }
             T::List(t) => {
                 let element = self.template(t)?;
                 self.list(self.plan.template_repr(ty)?, element)?
-            }
-            T::Map { value, .. } => {
-                let value = self.template(value)?;
-                self.map(self.plan.template_repr(ty)?, value)?
             }
             T::Class(_, _) => {
                 let Repr::Ptr(class) = self.plan.template_repr(ty)? else {
@@ -202,6 +194,18 @@ impl SchemaEmitter<'_, '_> {
     fn field(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
+            T::Enum(_) | T::EnumVariant(..) => map_json::enum_schema(
+                self.plan,
+                self.plan.field_repr(ty)?,
+                if let T::EnumVariant(_, name) = ty {
+                    Some(name)
+                } else {
+                    None
+                },
+                self.aliased,
+                self.descriptors,
+                self.lists,
+            )?,
             T::TypeAlias(head) => self.alias(head.tag())?,
             T::Int => "rt::json_lists::Ty::Int".into(),
             T::Bigint => format!(
@@ -227,13 +231,14 @@ impl SchemaEmitter<'_, '_> {
                     .map_err(|_| no("JSON float literal"))?
                     .to_bits()
             ),
+            T::Map { value, .. } => {
+                let repr = self.plan.field_repr(ty)?;
+                let value = self.field(value)?;
+                map_json::schema(self.plan, repr, &value, self.descriptors, self.lists)?
+            }
             T::List(t) => {
                 let element = self.field(t)?;
                 self.list(self.plan.field_repr(ty)?, element)?
-            }
-            T::Map { value, .. } => {
-                let value = self.field(value)?;
-                self.map(self.plan.field_repr(ty)?, value)?
             }
             T::Class(_, _) => {
                 let Repr::Ptr(c) = self.plan.field_repr(ty)? else {
@@ -319,6 +324,8 @@ pub(super) fn capture_template(
         match ty {
             T::TypeAlias(_) =>
                 return capture_codegen::capture_type(plan, &ty.substitute_symbolic(&[])),
+            T::Enum(_) | T::EnumVariant(..) =>
+                return capture_codegen::capture_type(plan, &ty.substitute_symbolic(&[])),
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => "Int".into(),
             T::Bigint => "Bigint".into(),
             T::Float | T::Literal(baml_type::Literal::Float(_), _) => "Float".into(),
@@ -350,6 +357,19 @@ pub(super) fn capture_template(
 fn template_name(plan: &Plan<'_>, ty: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
     use baml_compiler2_mir::TyTemplate as T;
     Ok(match ty {
+        T::Enum(_) | T::EnumVariant(..) => {
+            let id = map_json::enum_id(plan, plan.template_repr(ty)?)?;
+            let Object::Enum(definition) =
+                &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(id)]
+            else {
+                unreachable!()
+            };
+            if let T::EnumVariant(_, name) = ty {
+                format!("{}.{name}", definition.path)
+            } else {
+                definition.path.to_string()
+            }
+        }
         T::Int => "int".into(),
         T::Bigint => "bigint".into(),
         T::Float => "float".into(),
@@ -397,6 +417,11 @@ pub(super) fn emit_shapes(
             Repr::Bool => 1,
             Repr::Null => 2,
             Repr::Str => 3,
+            Repr::Bytes => 19,
+            Repr::Opaque => 18,
+            Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
+            Repr::Future => plan.future_descriptor().unwrap() + 3,
+            r @ (Repr::Enum(_) | Repr::Naming) => layout::enum_tag(plan, r, descriptors, lists),
             Repr::Bigint => plan.bigint_descriptor() + 3,
             Repr::Float => (u32::MAX - 1) as usize,
             Repr::Ptr(c) => descriptors[&c] + 3,
@@ -416,28 +441,7 @@ pub(super) fn emit_shapes(
             }
         }
     }
-    let last = lists
-        .iter()
-        .map(|(r, id)| {
-            id + if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
-                4
-            } else {
-                2
-            }
-        })
-        .max()
-        .unwrap_or_else(|| {
-            descriptors
-                .values()
-                .copied()
-                .max()
-                .map_or(rt_descriptors(), |id| (id + 1).max(rt_descriptors()))
-        });
-    let last = if plan.bigints {
-        last.max(plan.bigint_descriptor() + 1)
-    } else {
-        last
-    };
+    let last = plan.bigint_descriptor() + usize::from(plan.bigints);
     for (&class, layout) in &plan.layouts {
         let definition = plan.class(class);
         writeln!(out,"unsafe fn json_encode_class_{class}(encoder:&mut rt::json_lists::Encoder<'_>,p:usize,depth:usize)->R<()>{{unsafe{{encoder.begin_class();let mut first=true;").unwrap();
@@ -481,9 +485,14 @@ pub(super) fn emit_shapes(
                 let (key, value) = plan.map_parts(repr)?;
                 let k = maps::slot_type(key, descriptors, lists)?;
                 let v = maps::slot_type(value, descriptors, lists)?;
+                let key_ty = if let Repr::Map(id) = repr {
+                    plan.map_types.borrow()[id].key_type.clone()
+                } else {
+                    "rt::telemetry::capture::Type::String".into()
+                };
                 let kd = capture_codegen::capture_dyn(key, "key", descriptors, lists)?;
                 let vd = capture_codegen::capture_dyn(value, "value", descriptors, lists)?;
-                writeln!(out,"rt::json_lists::Shape::Map{{string_keys:{},len:|p|unsafe{{rt::maps::Map::<{k},{v}>::from_raw(p).len()}},entry:|p,i|unsafe{{let(key,value)=rt::maps::Map::<{k},{v}>::from_raw(p).entry(i).unwrap();({kd},{vd})}}}},", key == Repr::Str).unwrap();
+                writeln!(out,"rt::json_lists::Shape::Map{{key:&{key_ty},len:|p|unsafe{{rt::maps::Map::<{k},{v}>::from_raw(p).len()}},entry:|p,i|unsafe{{let(key,value)=rt::maps::Map::<{k},{v}>::from_raw(p).entry(i).unwrap();({kd},{vd})}}}},").unwrap();
                 continue;
             }
             let element = plan.element(repr)?;
@@ -494,9 +503,56 @@ pub(super) fn emit_shapes(
                 matches!(element, Repr::Tagged | Repr::Dyn(_))
             )
             .unwrap();
+        } else if desc == 16 {
+            out.push_str("rt::json_lists::Shape::Bytes,\n");
+        } else if plan.closure_descriptors().is_some_and(|(_, c)| c == desc) {
+            out.push_str("rt::json_lists::Shape::Function,\n");
+        } else if plan.future_descriptor() == Some(desc) {
+            out.push_str("rt::json_lists::Shape::Future,\n");
         } else {
             out.push_str("rt::json_lists::Shape::Unsupported,\n");
         }
+    }
+    let naming = plan
+        .program
+        .packages
+        .iter()
+        .find_map(|p| {
+            p.enums.iter().find_map(|(path, id)| {
+                (path.under(&p.name).to_string() == "baml.json.Naming").then_some(id.raw())
+            })
+        })
+        .ok_or_else(|| no("JSON naming enum"))?;
+    for id in std::iter::once(naming).chain(plan.enums.iter().copied()) {
+        let Object::Enum(e) = &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(id)] else {
+            unreachable!()
+        };
+        let name = plan
+            .program
+            .packages
+            .iter()
+            .find_map(|p| {
+                p.enums
+                    .iter()
+                    .find_map(|(path, i)| (i.raw() == id).then(|| path.under(&p.name).to_string()))
+            })
+            .unwrap();
+        write!(
+            out,
+            "rt::json_lists::Shape::Enum{{name:{name:?},variants:&["
+        )
+        .unwrap();
+        for v in &e.variants {
+            write!(
+                out,
+                "rt::json_lists::EnumVariant{{name:{:?},alias:{:?},skip:{}}},",
+                v.name,
+                v.alias.as_ref().unwrap_or(&v.name),
+                v.skip
+            )
+            .unwrap();
+        }
+        out.push_str("]},\n");
     }
     out.push_str("];\n");
     Ok(())

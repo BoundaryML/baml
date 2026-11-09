@@ -1,12 +1,41 @@
 //! Map storage, literals, indexing and builtin lowering. Lists stay in containers.
 use super::*;
-#[derive(PartialEq, Eq)]
 pub(super) struct MapType {
     pub key: Repr,
     pub value: Repr,
     pub key_type: String,
     pub value_type: String,
     pub scalar_json_value: bool,
+    key_identity: String,
+    value_identity: String,
+}
+impl PartialEq for MapType {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+            && self.value == other.value
+            && self.key_identity == other.key_identity
+            && self.value_identity == other.value_identity
+    }
+}
+impl Eq for MapType {}
+pub(super) fn callback_key(key: Repr) -> bool {
+    !matches!(
+        key,
+        Repr::Str | Repr::Int | Repr::Float | Repr::Bool | Repr::Null
+    )
+}
+pub(super) fn panic_class(plan: &Plan<'_>) -> Gen<usize> {
+    plan.program
+        .packages
+        .iter()
+        .find(|p| p.name == "baml")
+        .and_then(|p| {
+            p.classes
+                .iter()
+                .find(|(path, _)| path.to_string() == "panics.UserPanic")
+                .map(|(_, id)| id.raw())
+        })
+        .ok_or_else(|| no("map key panic declaration"))
 }
 impl Plan<'_> {
     pub(super) fn map_repr(
@@ -16,6 +45,8 @@ impl Plan<'_> {
         key_ty: String,
         value_ty: String,
         scalar_json_value: bool,
+        key_identity: String,
+        value_identity: String,
     ) -> Repr {
         if key == Repr::Str
             && value == Repr::Int
@@ -27,8 +58,10 @@ impl Plan<'_> {
         let ty = MapType {
             key,
             value,
-            key_type: key_ty,
-            value_type: value_ty,
+            key_type: key_ty.clone(),
+            value_type: value_ty.clone(),
+            key_identity,
+            value_identity,
             scalar_json_value,
         };
         let mut types = self.map_types.borrow_mut();
@@ -37,6 +70,48 @@ impl Plan<'_> {
             types.len() - 1
         });
         Repr::Map(id)
+    }
+    pub(super) fn map_snapshot_repr(&self, map: Repr, keys: bool) -> Gen<Repr> {
+        let (key, value) = self.map_parts(map)?;
+        let element = if keys { key } else { value };
+        let (key_type, value_type) = if let Repr::Map(id) = map {
+            let types = self.map_types.borrow();
+            (types[id].key_type.clone(), types[id].value_type.clone())
+        } else {
+            (
+                capture_codegen::capture_repr(self, key)?,
+                capture_codegen::capture_repr(self, value)?,
+            )
+        };
+        let declared = if keys { key_type } else { value_type };
+        let default = if element == Repr::Null {
+            self.list_union_repr(Repr::Tagged, vec![Repr::Null])
+        } else {
+            self.list_repr(element)
+        };
+        let expected = format!("rt::telemetry::capture::Type::List(&{declared})");
+        if capture_codegen::capture_repr(self, default).ok().as_ref() == Some(&expected) {
+            return Ok(default);
+        }
+        let storage = if element == Repr::Null {
+            Repr::Tagged
+        } else {
+            element
+        };
+        let list = ListElement {
+            repr: storage,
+            members: Vec::new(),
+            declared: Some(declared),
+        };
+        let mut types = self.list_elements.borrow_mut();
+        let id = types
+            .iter()
+            .position(|old| *old == list)
+            .unwrap_or_else(|| {
+                types.push(list);
+                types.len() - 1
+            });
+        Ok(Repr::List(id))
     }
     pub(super) fn map_parts(&self, repr: Repr) -> Gen<(Repr, Repr)> {
         match repr {
@@ -61,7 +136,12 @@ pub(super) fn slot_type(
         Repr::Bool => "bool".into(),
         Repr::Tagged | Repr::Dyn(_) => "rt::Dyn".into(),
         Repr::Str => "rt::strings::Str".into(),
+        Repr::Closure => "rt::closures::Closure".into(),
+        Repr::Future => "rt::maps::Pointer<FUTURE_TAG>".into(),
         Repr::Bigint => "rt::maps::Pointer<BIGINT_TAG>".into(),
+        Repr::Bytes => "rt::maps::Pointer<19>".into(),
+        Repr::Opaque => "rt::maps::Pointer<18>".into(),
+        Repr::Enum(_) | Repr::Naming => "usize".into(),
         Repr::Ptr(c) => format!("rt::maps::Pointer<{}>", descriptors[&c] + 3),
         r if r.pointer() => format!("rt::maps::Pointer<{}>", lists[&r] + 3),
         _ => return Err(no("map slot representation")),
@@ -86,7 +166,7 @@ impl registry::Feature for Feature {
         let (callee, _) = plan.index.function(db, *f)?;
         let name = plan.index.display(callee).to_owned();
         if name == "baml.json.stringify" {
-            plan.map_stringify = true;
+            plan.list_stringify = true;
             return Some((|| {
                 let error = map_json::serialization_error_class(plan)?;
                 plan.add(error)?;
@@ -113,13 +193,6 @@ impl registry::Feature for Feature {
             plan.record(Repr::ListStr)?;
             Ok(registry::Reach::default())
         })
-    }
-    fn terminator(
-        &self,
-        emitter: &mut Emitter<'_, '_>,
-        term: &Terminator<'_>,
-    ) -> Option<Gen<String>> {
-        super::map_json::terminator(emitter, term)
     }
     fn call(
         &self,
@@ -174,8 +247,15 @@ impl Emitter<'_, '_> {
     fn map_in(&self, value: &str, repr: Repr) -> Gen<String> {
         Ok(match repr {
             Repr::Str => format!("rt::strings::Str::from_raw({value})"),
+            Repr::Closure => format!("rt::closures::Closure::from_raw({value})"),
             Repr::Null => format!("{{let _={value};rt::maps::Null}}"),
-            Repr::Int | Repr::Float | Repr::Bool | Repr::Tagged | Repr::Dyn(_) => value.to_owned(),
+            Repr::Int
+            | Repr::Float
+            | Repr::Bool
+            | Repr::Tagged
+            | Repr::Dyn(_)
+            | Repr::Enum(_)
+            | Repr::Naming => value.to_owned(),
             r if r.pointer() => format!("rt::maps::Pointer::<{}>::from_raw({value})", self.tag(r)?),
             _ => return Err(no("map input representation")),
         })
@@ -195,14 +275,65 @@ impl Emitter<'_, '_> {
         ))
     }
     fn check_map_key(&self, repr: Repr) -> Gen<()> {
-        if matches!(
-            repr,
-            Repr::Str | Repr::Int | Repr::Float | Repr::Bool | Repr::Null | Repr::Tagged
-        ) {
+        fn check(plan: &Plan<'_>, repr: Repr, seen: &mut BTreeSet<Repr>) -> Gen<()> {
+            if !seen.insert(repr) {
+                return Ok(());
+            }
+            if plan
+                .key_callbacks
+                .get(&repr)
+                .is_some_and(|m| m.contains_key("hash"))
+            {
+                return Ok(());
+            }
+            if let Repr::Ptr(c) = repr {
+                for &field in &plan.layouts[&c].fields {
+                    check(plan, field, seen)?;
+                }
+            } else if let Repr::Map(_) | Repr::MapStrInt = repr {
+                let (k, v) = plan.map_parts(repr)?;
+                check(plan, k, seen)?;
+                check(plan, v, seen)?;
+            } else if matches!(
+                repr,
+                Repr::ListInt | Repr::ListStr | Repr::ListListStr | Repr::ListPtr(_)
+            ) {
+                check(plan, plan.element(repr)?, seen)?;
+            } else if matches!(repr, Repr::Closure | Repr::Cell | Repr::ListClosure(_)) {
+                return Err(no("unhashable map key"));
+            }
             Ok(())
-        } else {
-            Err(no("map key callbacks"))
         }
+        check(self.plan, repr, &mut BTreeSet::new())
+    }
+    fn map_operation(
+        &self,
+        map: &str,
+        key: Repr,
+        method: &str,
+        k: &str,
+        value: Option<&str>,
+    ) -> Gen<String> {
+        if !callback_key(key) && !self.plan.key_callbacks.contains_key(&key) {
+            let v = value.map(|v| format!(",{v}")).unwrap_or_default();
+            return Ok(format!(
+                "{map}.{method}(&mut rt::strings::Cx::current(),{k}{v})"
+            ));
+        }
+        let desc = self.descriptors[&panic_class(self.plan)?];
+        let dyn_key = capture_codegen::capture_dyn(key, "key", self.descriptors, self.lists)?;
+        let a = capture_codegen::capture_dyn(key, "a", self.descriptors, self.lists)?;
+        let b = capture_codegen::capture_dyn(key, "b", self.descriptors, self.lists)?;
+        let v = value.map(|v| format!(",{v}")).unwrap_or_default();
+        if self.plan.key_hasher.is_some() {
+            let hooks = self.key_hooks()?;
+            return Ok(format!(
+                "{{let key={k};let mut key_cx=rt::strings::Cx::current();let hooks={hooks};rt::maps::callbacks::hash(&mut key_cx,{dyn_key},&hooks).and_then(|hash|{map}.{method}_with(&mut key_cx,key{v},hash,|cx,a,b|rt::maps::callbacks::equals(cx,{a},{b},&hooks)))}}"
+            ));
+        }
+        Ok(format!(
+            "{{let key={k};let mut key_cx=rt::strings::Cx::current();rt::maps::keys::hash(&mut key_cx,{dyn_key},CAPTURE_SHAPES,|cx,message|rt::maps::keys::panic(cx,{desc},message)).and_then(|hash|{map}.{method}_with(&mut key_cx,key{v},hash,|cx,a,b|rt::maps::keys::equals(cx,{a},{b},CAPTURE_SHAPES)))}}"
+        ))
     }
     fn map_literal(
         &self,
@@ -220,11 +351,13 @@ impl Emitter<'_, '_> {
         for (k, v) in entries {
             let k = self.coerce(self.operand(k)?, key)?;
             let v = self.coerce(self.operand(v)?, value)?;
-            let set = self.fallible(&format!(
-                "map.set(&mut rt::strings::Cx::current(),{}, {})",
-                self.map_in(&k, key)?,
-                self.map_in(&v, value)?
-            ));
+            let set = self.fallible(&self.map_operation(
+                "map",
+                key,
+                "set",
+                &self.map_in(&k, key)?,
+                Some(&self.map_in(&v, value)?),
+            )?);
             write!(out, "{set};").unwrap();
         }
         out.push_str("map.as_raw()}");
@@ -241,47 +374,38 @@ impl Emitter<'_, '_> {
             "clear" => Ok((format!("{{{map}.clear();0usize}}"), Repr::Null)),
             "keys" | "values" => {
                 let element = if method == "keys" { key } else { value };
-                // Until the list feature carries union element metadata, do
-                // not publish a nullable-class snapshot as a non-null list.
-                if let Repr::Map(id) = repr {
-                    let declared = {
-                        let types = self.plan.map_types.borrow();
-                        if method == "keys" {
-                            types[*id].key_type.clone()
-                        } else {
-                            types[*id].value_type.clone()
-                        }
-                    };
-                    if declared != capture_codegen::capture_repr(self.plan, element)? {
-                        return Err(no("map snapshot declared list element type"));
-                    }
-                }
-                self.map_snapshot(&map, element, method == "keys")
+                let snapshot = self.plan.map_snapshot_repr(*repr, method == "keys")?;
+                self.map_snapshot(&map, element, method == "keys", snapshot)
             }
             _ => {
                 self.check_map_key(key)?;
                 let k = values.get(1).ok_or_else(|| no("map key argument"))?;
                 let k = self.coerce(k.clone(), key)?;
                 let k = self.map_in(&k, key)?;
-                let mut arguments = format!("&mut rt::strings::Cx::current(),{k}");
-                if method == "set" || method == "get_or_insert" {
+                let v = if method == "set" || method == "get_or_insert" {
                     let v = values.get(2).ok_or_else(|| no("map value argument"))?;
                     let v = self.coerce(v.clone(), value)?;
-                    write!(arguments, ",{}", self.map_in(&v, value)?).unwrap();
-                }
+                    Some(self.map_in(&v, value)?)
+                } else {
+                    None
+                };
+                let operation = self.map_operation(
+                    &map,
+                    key,
+                    if method == "index" { "get" } else { method },
+                    &k,
+                    v.as_deref(),
+                )?;
                 if method == "has" {
-                    return Ok((
-                        self.fallible(&format!("{map}.has({arguments})")),
-                        Repr::Bool,
-                    ));
+                    return Ok((self.fallible(&operation), Repr::Bool));
                 }
                 if method == "index" {
                     let expr = self.fallible(&format!(
-                        "{map}.get({arguments}).and_then(|v|v.ok_or_else(rt::map_key_not_found))"
+                        "{operation}.and_then(|v|v.ok_or_else(rt::map_key_not_found))"
                     ));
                     return Ok((self.map_out(&expr, value), value));
                 }
-                let expr = format!("{map}.{method}({arguments})");
+                let expr = operation;
                 if method == "get_or_insert" {
                     let expr = self.fallible(&expr);
                     return Ok((self.map_out(&expr, value), value));
@@ -293,8 +417,13 @@ impl Emitter<'_, '_> {
             }
         }
     }
-    fn map_snapshot(&self, map: &str, element: Repr, keys: bool) -> Gen<(String, Repr)> {
-        let repr = self.plan.list_repr(element);
+    fn map_snapshot(
+        &self,
+        map: &str,
+        element: Repr,
+        keys: bool,
+        repr: Repr,
+    ) -> Gen<(String, Repr)> {
         let desc = *self
             .lists
             .get(&repr)
@@ -302,12 +431,13 @@ impl Emitter<'_, '_> {
         let select = if keys { 0 } else { 1 };
         let mut out = format!("{{let map={map};let len=map.len();");
         if repr.growing() {
-            let slot = element.slot()?;
+            let list_element = self.plan.element(repr)?;
+            let slot = list_element.slot()?;
             let new = self.fallible(&format!(
                 "rt::lists::List::<{slot}>::with_capacity(&mut rt::strings::Cx::current(),{desc},len)"
             ));
-            let item = element
-                .to_slot(&self.map_out(&format!("map.entry(i).unwrap().{select}"), element))?;
+            let raw = self.map_out(&format!("map.entry(i).unwrap().{select}"), element);
+            let item = list_element.to_slot(&self.coerce((raw, element), list_element)?)?;
             let push = self.fallible(&format!(
                 "list.push(&mut rt::strings::Cx::current(),{item})"
             ));

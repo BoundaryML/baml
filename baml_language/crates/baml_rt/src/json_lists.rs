@@ -12,6 +12,13 @@ mod stream;
 
 #[derive(Clone, Copy)]
 pub enum Ty {
+    Enumeration(&'static crate::maps::json::enums::Schema),
+    InvalidMap,
+    Map {
+        key: &'static crate::telemetry::capture::Type,
+        value: &'static Ty,
+        adapter: &'static crate::maps::json::Adapter,
+    },
     Int,
     Bigint {
         desc: u32,
@@ -35,12 +42,6 @@ pub enum Ty {
         bytes: usize,
         name: &'static str,
         fields: &'static [Field],
-    },
-    Map {
-        desc: u32,
-        value: &'static Ty,
-        new: unsafe fn(&mut Cx) -> R<usize>,
-        insert: unsafe fn(&mut Cx, usize, &str, Dyn) -> R<()>,
     },
     Union(&'static [Member]),
 }
@@ -76,6 +77,14 @@ impl Ty {
     }
     fn score(&self, value: &Value) -> usize {
         match self {
+            Self::Enumeration(schema) => {
+                if schema.variant.is_some() {
+                    3
+                } else {
+                    2
+                }
+            }
+            Self::Literal(_) => 3,
             Self::Class { fields, .. } => value
                 .as_object()
                 .map(|o| {
@@ -87,6 +96,7 @@ impl Ty {
                         .len()
                 })
                 .unwrap_or(0),
+            Self::Map { .. } => value.as_object().map_or(0, |m| m.len()),
             Self::Int if value.as_i64().is_some() => 1,
             _ => 0,
         }
@@ -145,6 +155,30 @@ impl Ty {
 
     fn check(&self, value: &Value, path: &str) -> Result<(), Report> {
         let message = match self {
+            Self::Enumeration(schema) => return schema.check(value).map_err(|e| fail(e, path)),
+            Self::InvalidMap => Some("JSON requires maps with string keys"),
+            Self::Map {
+                key,
+                value: element,
+                ..
+            } => {
+                if !crate::maps::json::string_key_type(key) {
+                    return Err(fail("JSON requires maps with string keys", path));
+                }
+                let Some(values) = value.as_object() else {
+                    return Err(fail("expected JSON object", path));
+                };
+                if values
+                    .keys()
+                    .any(|name| !crate::maps::json::key_fits(key, name))
+                {
+                    return Err(fail("map key does not match declared key type", path));
+                }
+                for (key, v) in values {
+                    element.check(v, &format!("{path}[{key:?}]"))?;
+                }
+                None
+            }
             Self::Json(_) => None,
             Self::Int => {
                 if !value.is_number() {
@@ -249,15 +283,6 @@ impl Ty {
                 }
                 None
             }
-            Self::Map { value: element, .. } => {
-                let Some(values) = value.as_object() else {
-                    return Err(fail("expected object", path));
-                };
-                for (key, value) in values {
-                    element.check(value, &format!("{path}[{key:?}]"))?;
-                }
-                None
-            }
             Self::Class { name, fields, .. } => {
                 let Some(object) = value.as_object() else {
                     return Err(fail(
@@ -267,6 +292,16 @@ impl Ty {
                 };
                 for field in *fields {
                     if field.skip {
+                        if matches!(field.ty,Self::Enumeration(schema) if schema.empty().is_none())
+                        {
+                            return Err(fail(
+                                format!(
+                                    "field `{name}.{}` is `@skip`, so JSON leaves it out, and its type has no empty value to hold",
+                                    field.name
+                                ),
+                                path,
+                            ));
+                        }
                         continue;
                     }
                     match object.get(field.name) {
@@ -291,6 +326,8 @@ impl Ty {
     }
     fn empty(&self) -> Value {
         match self {
+            Self::Enumeration(schema) => schema.empty().expect("validated enum default"),
+            Self::Map { .. } | Self::InvalidMap => Value::Object(Default::default()),
             Self::Json(_) => Value::Null,
             Self::Int | Self::Bigint { .. } => Value::from(0),
             Self::Float => Value::from(0.0),
@@ -302,7 +339,6 @@ impl Ty {
             Self::LiteralFloat(n) => Value::from(*n),
             Self::LiteralBool(b) => Value::from(*b),
             Self::List { .. } => Value::Array(vec![]),
-            Self::Map { .. } => Value::Object(serde_json::Map::new()),
             Self::Class { fields, .. } => Value::Object(
                 fields
                     .iter()
@@ -320,6 +356,24 @@ impl Ty {
     }
     unsafe fn build(&self, cx: &mut Cx, value: &Value) -> R<Dyn> {
         Ok(match self {
+            Self::Enumeration(schema) => schema.build(value),
+            Self::InvalidMap => unreachable!("invalid map schema"),
+            Self::Map {
+                value: element,
+                adapter,
+                ..
+            } => {
+                let map = unsafe { (adapter.new)(cx)? };
+                for (key, value) in value.as_object().unwrap() {
+                    let value = unsafe { element.build(cx, value)? };
+                    let key = cx.string(key)?;
+                    unsafe { (adapter.insert)(cx, map, key, value)? };
+                }
+                Dyn {
+                    tag: adapter.tag,
+                    payload: map as u64,
+                }
+            }
             Self::Json(config) => unsafe { config.build(cx, value) }?,
             Self::Bigint { desc } => {
                 let text = value
@@ -354,22 +408,6 @@ impl Ty {
                     .expect("validated union")
                     .build(cx, value)
             }?,
-            Self::Map {
-                desc,
-                value: element,
-                new,
-                insert,
-            } => {
-                let pointer = unsafe { new(cx) }?;
-                for (key, value) in value.as_object().unwrap() {
-                    let value = unsafe { element.build(cx, value) }?;
-                    unsafe { insert(cx, pointer, key, value) }?;
-                }
-                Dyn {
-                    tag: *desc as u64 + 3,
-                    payload: pointer as u64,
-                }
-            }
             Self::Class {
                 desc,
                 bytes,
@@ -482,7 +520,19 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
     unsafe { ty.build(cx, &value) }
 }
 
+pub struct EnumVariant {
+    pub name: &'static str,
+    pub alias: &'static str,
+    pub skip: bool,
+}
 pub enum Shape {
+    Enum {
+        name: &'static str,
+        variants: &'static [EnumVariant],
+    },
+    Bytes,
+    Function,
+    Future,
     Unsupported,
     ClassEncoded(unsafe fn(&mut Encoder<'_>, usize, usize) -> R<()>),
     Bigint,
@@ -492,7 +542,7 @@ pub enum Shape {
     },
     Class(&'static [EncodeField]),
     Map {
-        string_keys: bool,
+        key: &'static crate::telemetry::capture::Type,
         len: unsafe fn(usize) -> usize,
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
@@ -594,7 +644,13 @@ impl Encoder<'_> {
             return Ok(());
         }
         let null = value.tag == 2
-            || (value.tag >= 3 && value.tag != crate::FLOAT_TAG && value.payload == 0);
+            || (value.tag >= 3
+                && value.tag != crate::FLOAT_TAG
+                && value.payload == 0
+                && !matches!(
+                    self.shapes.get((value.tag - 3) as usize),
+                    Some(Shape::Enum { .. })
+                ));
         if self.omit_nulls && null {
             return Ok(());
         }
@@ -645,6 +701,23 @@ impl Encoder<'_> {
         }
     }
     unsafe fn value(&mut self, value: Dyn, depth: usize) -> R<()> {
+        if value.tag >= 3 && value.tag != crate::FLOAT_TAG {
+            if let Some(Shape::Enum { name, variants }) = self.shapes.get((value.tag - 3) as usize)
+            {
+                let v = &variants[value.payload as usize];
+                if self.aliased && v.skip {
+                    return Err(self.error(
+                        format!(
+                            "enum variant `{name}.{}` is `@skip`, so JSON has no name for it",
+                            v.name
+                        ),
+                        "enum",
+                    ));
+                }
+                self.quoted(if self.aliased { v.alias } else { v.name });
+                return Ok(());
+            }
+        }
         let value = if value.payload == 0 && value.tag >= 3 && value.tag != (u32::MAX - 1) as u64 {
             Dyn { tag: 2, payload: 0 }
         } else {
@@ -773,12 +846,8 @@ impl Encoder<'_> {
                         }
                         self.out.push('}');
                     }
-                    Shape::Map {
-                        string_keys,
-                        len,
-                        entry,
-                    } => {
-                        if !string_keys {
+                    Shape::Map { key, len, entry } => {
+                        if !crate::maps::json::string_key_type(key) {
                             return Err(
                                 self.error("JSON requires maps with string keys".into(), "map_key")
                             );
@@ -815,6 +884,23 @@ impl Encoder<'_> {
                             self.newline(depth);
                         }
                         self.out.push('}');
+                    }
+                    Shape::Enum { .. } => unreachable!("enum handled before null"),
+                    Shape::Bytes => {
+                        return Err(self.error(
+                            "uint8array requires explicit encoding (use to_base64() or to_hex())"
+                                .into(),
+                            "uint8array",
+                        ));
+                    }
+                    Shape::Function => {
+                        return Err(self.error("a function has no JSON form".into(), "function"));
+                    }
+                    Shape::Future => {
+                        return Err(self.error(
+                            "a future has no JSON form (await it first)".into(),
+                            "future",
+                        ));
                     }
                     Shape::Unsupported => {
                         return Err(self.error("value has no JSON form".into(), "unserializable"));
