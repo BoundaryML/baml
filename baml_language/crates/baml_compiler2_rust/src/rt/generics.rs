@@ -31,6 +31,23 @@ mod tests {
         assert_eq!(canonical_type(&ty), expected);
         assert_eq!(canonical_type(&expected), expected);
     }
+    #[test]
+    fn full_and_dense_callback_frames_share_a_key_without_erasing_real_never() {
+        use baml_type::{Name, ParamTy, RuntimeTy as T, SCOPED_PARAM_BIT};
+        let params = [
+            ParamTy::new(0, Name::new("T")),
+            ParamTy::new(1, Name::new("__effect_param_0")),
+            ParamTy::new(SCOPED_PARAM_BIT | 2, Name::new("__effect_param_0")),
+        ];
+        let full = vec![
+            T::Union(vec![T::Int, T::Union(vec![T::Int].into())].into()),
+            T::Never,
+            T::Never,
+        ];
+        let dense = vec![T::Int, T::Never];
+        assert_eq!(super::runtime_frame(&params, full), dense);
+        assert_eq!(super::runtime_frame(&params, dense.clone()), dense);
+    }
 }
 
 pub(super) fn expand<'db>(
@@ -1044,6 +1061,33 @@ impl Plan<'_> {
     }
 }
 
+pub(super) fn runtime_frame(
+    params: &[baml_type::ParamTy],
+    frame: Vec<RuntimeTy>,
+) -> Vec<RuntimeTy> {
+    let layout = baml_type::RuntimeGenericLayout::new(params);
+    let full = frame.len() == params.len();
+    frame
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, ty)| {
+            if full && layout.slot(&params[i]).is_none() {
+                None
+            } else {
+                Some(canonical_type(&ty))
+            }
+        })
+        .collect()
+}
+
+pub(super) fn callable_frame(
+    db: &dyn Db,
+    function: baml_compiler2_hir_ty::extern_loc::FunctionRef<'_>,
+    frame: Vec<RuntimeTy>,
+) -> Vec<RuntimeTy> {
+    runtime_frame(&callable_generic_frame(db, function).params, frame)
+}
+
 pub(super) fn instance<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
@@ -1065,20 +1109,18 @@ pub(super) fn instance<'db>(
         _ => return Err(no("synthetic generic interface body")),
     };
     let runtime_params = baml_type::RuntimeGenericLayout::new(&params);
-    // MIR calls may retain compiler-only callback effect arguments. They have
-    // no slot in a native frame, just as in the VM function metadata.
-    let frame = if frame.len() == params.len() && params.len() != runtime_params.params().len() {
-        params
-            .iter()
-            .zip(frame)
-            .filter_map(|(p, t)| runtime_params.slot(p).map(|_| t))
-            .collect()
-    } else {
-        frame
-    };
-    let frame = frame.iter().map(canonical_type).collect::<Vec<_>>();
+    // Calls and materialized callable values must use the same dense frame key.
+    let frame = runtime_frame(&params, frame);
     if frame.is_empty() {
         return Ok(callee);
+    }
+    if runtime_params.params().len() != frame.len() {
+        return Err(no(format!(
+            "specialization frame arity (emitting {}: expected {}, got {})",
+            plan.index.display(callee),
+            runtime_params.params().len(),
+            frame.len()
+        )));
     }
     if frame
         .iter()
@@ -1100,13 +1142,6 @@ pub(super) fn instance<'db>(
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
     let mut specialized = specialize(source, &params, &frame, &runtime)?;
     fold_primitive_sort_guards(db, plan, &mut specialized);
-    if runtime_params.params().len() != frame.len() {
-        return Err(no(format!(
-            "specialization frame arity: {} expects {:?}, got {frame:?}",
-            plan.index.display(callee),
-            runtime_params.params()
-        )));
-    }
     let captures = runtime_params
         .params()
         .iter()

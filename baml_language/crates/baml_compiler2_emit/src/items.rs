@@ -538,16 +538,18 @@ pub(crate) struct ImplRuleTarget<'db> {
 /// The exact symbolic key and frame used when baking a linked implementation.
 /// Native dispatch uses this rather than reconstructing the checker's pattern,
 /// which can retain different alias spelling and owner parameter identities.
-pub fn impl_runtime_pattern(
-    db: &dyn baml_compiler2_mir::Db,
-    implementation: ImplLoc<'_>,
-    lowering: &RuntimeLowering<'_>,
+#[salsa::tracked]
+pub fn impl_runtime_pattern<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    implementation: ImplLoc<'db>,
+    root: SourceRoot,
 ) -> Option<(
     Vec<ParamTy>,
     baml_compiler2_mir::TyTemplate,
     Vec<baml_compiler2_mir::TyTemplate>,
 )> {
-    let target = impl_rule_target(db, implementation, lowering)?;
+    let lowering = RuntimeLowering::of(db, root);
+    let target = impl_rule_target(db, implementation, &lowering)?;
     Some((
         target.impl_params,
         target.for_ty_pattern,

@@ -71,6 +71,16 @@ implement AliasDispatch for PinnedOwner {
   function amount(self) -> int throws never { self.left }
 }
 function alias_dispatch(value: AliasDispatch) -> int { value.amount() }
+class JsonOverride {
+  value: int
+  implements baml.ToJson {
+    function to_json(self) -> json throws baml.json.SerializationError { "custom" }
+  }
+}
+function explicit_json_override() -> int {
+  let value = JsonOverride { value: 1 }.to_json();
+  match (value) { string => value.length(), _ => 0 }
+}
 class EffectCalculator {
   base: int
   function add(self, n: int) -> int { self.base + n }
@@ -85,7 +95,8 @@ function bottom_result() -> int {
 function effect_result() -> int {
   let calc = EffectCalculator { base: 89 };
   let holder = EffectHolder { callback: calc.add };
-  apply_effect(holder.callback, 1) + apply_generic_effect<int>(holder.callback, 2)
+  let applied = apply_generic_effect<int>;
+  applied(holder.callback, 3) + apply_effect(holder.callback, 1) + apply_generic_effect<int>(holder.callback, 2)
 }
 function main() -> int {
   let a = Box<int> { value: 29 };
@@ -108,7 +119,7 @@ function main() -> int {
   total += scalar(AliasField { value: null }.value) + scalar(1) + scalar("x");
   total += phantom(Phantom<MetadataOnly> { number: 79 });
   total += phantom_enum(Phantom<MetadataEnum> { number: 83 });
-  total += effect_result() + bottom_result();
+  total += effect_result() + bottom_result() + explicit_json_override();
   total += alias_dispatch(AliasOwner<string> { left: 101, right: "alias" });
   total
 }

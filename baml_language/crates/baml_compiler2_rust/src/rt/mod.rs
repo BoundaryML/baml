@@ -183,3 +183,5 @@ mod generics;
 mod interface_fields;
 
 mod callbacks;
+
+mod structural;

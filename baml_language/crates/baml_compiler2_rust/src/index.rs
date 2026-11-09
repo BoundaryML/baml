@@ -1,6 +1,7 @@
 //! Linked program metadata for Rust emission.
 
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
+use std::rc::Rc;
 
 use baml_base::SourceRoot;
 use baml_compiler2_emit::function_identity;
@@ -26,19 +27,19 @@ use crate::coords::{
 pub(crate) struct ProgramIndex<'p> {
     program: &'p Program,
     rt_origins: HashMap<usize, usize>,
-    names: Vec<(String, String)>,
+    names: Rc<Vec<(String, String)>>,
     /// Package ordinals derived from the linked dependency edges.
     packages: HashMap<SourceRoot, u32>,
     let_helpers: HashMap<(u32, DeclPath), usize>,
     /// Lambda (closure body) object by identity; `None` for an identity
     /// more than one object claims, which then stays bytecode.
-    lambdas: HashMap<(u32, FunctionIdentity), Option<usize>>,
+    lambdas: Rc<HashMap<(u32, FunctionIdentity), Option<usize>>>,
     /// Method names conservatively resolve all possible dispatch targets.
     methods: HashMap<String, Vec<usize>>,
     /// The methods and interface bodies of every non-stdlib package.
     pub(crate) user_methods: Vec<usize>,
     /// String literal → the compile-time string object bytecode loads it from.
-    pub(crate) strings: HashMap<String, usize>,
+    pub(crate) strings: Rc<HashMap<String, usize>>,
     /// Global slot used by pooled generic function values.
     pub(crate) globals: HashMap<usize, usize>,
     /// Find a pooled generic function with the program's anchored type arguments.
@@ -58,13 +59,13 @@ impl<'p> ProgramIndex<'p> {
         let mut index = Self {
             program,
             rt_origins: HashMap::new(),
-            names: vec![(String::new(), String::new()); program.objects.len()],
+            names: Rc::new(vec![(String::new(), String::new()); program.objects.len()]),
             packages: package_ordinals(db, root, program),
             let_helpers: HashMap::new(),
-            lambdas: HashMap::new(),
+            lambdas: Rc::new(HashMap::new()),
             methods: HashMap::new(),
             user_methods: Vec::new(),
-            strings: HashMap::new(),
+            strings: Rc::new(HashMap::new()),
             globals: HashMap::new(),
             generic_functions: Vec::new(),
             bigints: HashMap::new(),
@@ -98,7 +99,7 @@ impl<'p> ProgramIndex<'p> {
                         (&function.identity, &placing)
                     {
                         let key = (*package, function.identity.clone());
-                        match self.lambdas.entry(key) {
+                        match Rc::make_mut(&mut self.lambdas).entry(key) {
                             Entry::Vacant(vacant) => {
                                 vacant.insert(Some(object));
                             }
@@ -129,10 +130,12 @@ impl<'p> ProgramIndex<'p> {
                             self.user_methods.push(object);
                         }
                     }
-                    self.names[object] = (name, display);
+                    Rc::make_mut(&mut self.names)[object] = (name, display);
                 }
                 Object::String(text) => {
-                    self.strings.entry(text.to_string()).or_insert(object);
+                    Rc::make_mut(&mut self.strings)
+                        .entry(text.to_string())
+                        .or_insert(object);
                 }
                 Object::GenericFunction(generic) => {
                     self.generic_functions.push((

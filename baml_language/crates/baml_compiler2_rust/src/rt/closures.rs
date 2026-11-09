@@ -640,13 +640,16 @@ pub(super) fn discover<'db>(
                         .iter()
                         .map(|t| super::RuntimeTy::from(t.clone()))
                         .collect::<Vec<_>>();
-                    if let Some((_, _, target)) = plan
+                    let frame = super::generics::callable_frame(db, *func, frame);
+                    if let Some(target) = plan
                         .generic_functions
                         .iter()
                         .find(|(c, t, _)| *c == base && *t == frame)
+                        .map(|(_, _, target)| *target)
+                        .or_else(|| frame.is_empty().then_some(base))
                     {
-                        plan.callables.insert(*target);
-                        targets.push(*target);
+                        plan.callables.insert(target);
+                        targets.push(target);
                     }
                 }
             }
@@ -674,11 +677,13 @@ pub(super) fn discover<'db>(
                     .iter()
                     .map(|t| super::RuntimeTy::from(t.clone()))
                     .collect::<Vec<_>>();
+                let frame = super::generics::callable_frame(db, *func, frame);
                 let target = plan
                     .generic_functions
                     .iter()
                     .find(|(c, t, _)| *c == base && *t == frame)
                     .map(|(_, _, id)| *id)
+                    .or_else(|| frame.is_empty().then_some(base))
                     .ok_or_else(|| no("generic callback instance"))?;
                 plan.callables.insert(target);
                 targets.push(target);

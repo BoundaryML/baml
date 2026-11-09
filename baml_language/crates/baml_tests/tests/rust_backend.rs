@@ -1886,3 +1886,24 @@ function main() -> int {
     );
     assert!(result.is_ok(), "{result:?}");
 }
+
+#[test]
+fn rt_corpus_structural_defaults_reach_their_native_implementation() {
+    for (body, native) in [
+        (
+            "let value = Record { value: 7 }.to_json(); 7",
+            "baml._to_json_default",
+        ),
+        (
+            r#"let value = Record.from_json({ "value": 7 }); value.value"#,
+            "baml._from_json_structural_default",
+        ),
+    ] {
+        let source = format!("class Record {{ value: int }} function main() -> int {{ {body} }}");
+        let result = rt_admission_probe(&source);
+        assert!(
+            result.is_ok() || result.as_ref().is_err_and(|e| e.contains(native)),
+            "{result:?}"
+        );
+    }
+}

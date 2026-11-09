@@ -17,7 +17,7 @@ pub(super) fn resolve(
         return Ok(Some(target));
     }
     let Some(w) = witness(db, plan, concrete, iface)? else {
-        return super::formatting::structural_fallback(plan, concrete, iface, method);
+        return super::structural::fallback(db, plan, concrete, iface, method);
     };
     let Witness {
         rule,
@@ -123,7 +123,8 @@ fn witness<'p>(
     };
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
     let (params, pattern, iface_args) =
-        baml_compiler2_emit::impl_runtime_pattern(db, resolved.impl_loc, &runtime)
+        baml_compiler2_emit::impl_runtime_pattern(db, resolved.impl_loc, plan.root)
+            .as_ref()
             .ok_or_else(|| no("checked implementation target"))?;
     let pattern = plan
         .index
