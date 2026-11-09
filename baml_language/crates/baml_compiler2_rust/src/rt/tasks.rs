@@ -531,3 +531,84 @@ impl registry::Feature for Feature {
         }
     }
 }
+
+// A compiler temporary with one definition and one consuming instruction has no
+// observable identity outside that instruction. Count MIR places as well as
+// operands: awaiting and projections can carry reads that operand walking omits.
+fn private_once(body: &MirFunctionBody<'_>, local: usize) -> bool {
+    use crate::operands::{walk_statement_operands, walk_terminator_operands};
+    use baml_compiler2_mir::memory::{
+        Resources, place_reads, walk_operand_places, walk_rvalue_places,
+    };
+    if local == 0 || body.locals[local].name.is_some() || body.locals[local].is_captured {
+        return false;
+    }
+    let mut definitions = 0;
+    let mut uses = 0;
+    for block in &body.blocks {
+        for statement in &block.statements {
+            let mut reads = Resources::default();
+            match &statement.kind {
+                StatementKind::Assign { destination, value } => {
+                    if matches!(destination, Place::Local(l) if l.0 == local) {
+                        definitions += 1;
+                    } else {
+                        place_reads(destination, &mut reads);
+                    }
+                    walk_rvalue_places(value, &mut |p| place_reads(p, &mut reads));
+                }
+                // Environment release has no user destructor; captures use shared cells.
+                StatementKind::Drop(_) => {}
+                StatementKind::FreshCell { local: l, .. } if l.0 == local => return false,
+                other => walk_statement_operands(other, &mut |operand| {
+                    walk_operand_places(operand, &mut |p| place_reads(p, &mut reads));
+                }),
+            }
+            uses += usize::from(reads.locals.iter().any(|l| l.0 == local));
+        }
+        if let Some(term) = &block.terminator {
+            if let Some((Place::Local(l), _)) = crate::analysis::continuation(term)
+                && l.0 == local
+            {
+                definitions += 1;
+            }
+            if matches!(term, Terminator::NarrowBind { destination, .. } if destination.0 == local)
+            {
+                definitions += 1;
+            }
+            let mut reads = Resources::default();
+            walk_terminator_operands(term, &mut |operand| {
+                walk_operand_places(operand, &mut |p| place_reads(p, &mut reads));
+            });
+            if let Terminator::Await { future, .. } = term {
+                place_reads(future, &mut reads);
+            }
+            uses += usize::from(reads.locals.iter().any(|l| l.0 == local));
+        }
+    }
+    definitions == 1 && uses == 1
+}
+
+// Only the environment is shared. The body can allocate, throw, defer, spawn or
+// suspend: the future and task are created and executed by the ordinary loop.
+pub(super) fn private_environment(e: &Emitter<'_, '_>) -> bool {
+    private_environment_at(e, e.block, e.statement)
+}
+pub(super) fn private_environment_at(e: &Emitter<'_, '_>, block: usize, statement: usize) -> bool {
+    let StatementKind::Assign {
+        destination: Place::Local(local),
+        ..
+    } = &e.body.blocks[block].statements[statement].kind
+    else {
+        return false;
+    };
+    if !private_once(e.body, local.0) {
+        return false;
+    }
+    e.body.blocks.iter().filter_map(|b| b.terminator.as_ref()).any(|term| {
+        let Some(plan) = ephemeral_plan(e, term) else { return false; };
+        let Terminator::Call { args, ntypeargs, .. } = term else { return false; };
+        private_once(e.body, plan) && matches!(args.get(*ntypeargs),
+            Some(Operand::Copy(Place::Local(body)) | Operand::Move(Place::Local(body))) if body == local)
+    })
+}

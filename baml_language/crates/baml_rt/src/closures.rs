@@ -49,6 +49,69 @@ struct Environment {
     name: Option<&'static str>,
     kind: u64,
 }
+/// Immutable declaration data for a private task environment. Capture cells
+/// remain per evaluation; only declaration identity and code are shared.
+pub struct PrivateMetadata {
+    object: usize,
+    code: Code,
+    captures: usize,
+}
+impl PrivateMetadata {
+    pub const fn new(object: usize, code: Code, captures: usize) -> Self {
+        Self {
+            object,
+            code,
+            captures,
+        }
+    }
+}
+/// Temporary storage consumed exclusively by spawn before this frame can exit.
+/// A tagged scalar holds the static metadata, followed by traced capture cells.
+#[repr(C)]
+pub struct PrivateEnvironment<const N: usize> {
+    metadata: Dyn,
+    cells: [Dyn; N],
+    _owner: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+impl<const N: usize> PrivateEnvironment<N> {
+    pub const fn empty() -> Self {
+        Self {
+            metadata: Dyn { tag: 0, payload: 0 },
+            cells: [Dyn { tag: 0, payload: 0 }; N],
+            _owner: std::marker::PhantomData,
+        }
+    }
+    pub fn new(metadata: &'static PrivateMetadata, cell_tag: u64, cells: [usize; N]) -> Self {
+        assert_eq!(metadata.captures, N);
+        Self {
+            metadata: Dyn {
+                tag: 0,
+                payload: metadata as *const _ as u64,
+            },
+            cells: cells.map(|p| Dyn {
+                tag: cell_tag,
+                payload: p as u64,
+            }),
+            _owner: std::marker::PhantomData,
+        }
+    }
+    pub fn as_raw(&self) -> usize {
+        (self as *const Self as usize) | 1
+    }
+}
+#[inline(always)]
+pub(crate) fn is_private(env: usize) -> bool {
+    env & 1 != 0
+}
+#[inline(always)]
+unsafe fn private_metadata(env: usize) -> &'static PrivateMetadata {
+    unsafe { &*((*((env & !1) as *const Dyn)).payload as *const PrivateMetadata) }
+}
+/// # Safety
+/// `env` is a live compiler-private environment.
+pub(crate) unsafe fn private_slots(env: usize) -> usize {
+    unsafe { private_metadata(env).captures + 1 }
+}
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct Closure {
@@ -141,6 +204,10 @@ unsafe fn create(
 #[inline(always)]
 pub unsafe fn capture(env: usize, index: usize) -> usize {
     unsafe {
+        if is_private(env) {
+            debug_assert!(index < private_metadata(env).captures);
+            return (*((env & !1) as *const Dyn).add(index + 1)).payload as usize;
+        }
         debug_assert!(index < (*(env as *const Environment)).len);
         *((env + 56 + index * 8) as *const usize)
     }
@@ -152,7 +219,12 @@ pub unsafe fn capture(env: usize, index: usize) -> usize {
 pub unsafe fn call(env: usize, site: usize, args: &[Dyn]) -> R<Dyn> {
     unsafe {
         object(env)?;
-        ((*(env as *const Environment)).code)(env, site, args)
+        let code = if is_private(env) {
+            private_metadata(env).code
+        } else {
+            (*(env as *const Environment)).code
+        };
+        code(env, site, args)
     }
 }
 
@@ -174,7 +246,13 @@ pub unsafe fn object(env: usize) -> R<usize> {
             .to_string(),
         ));
     }
-    Ok(unsafe { (*(env as *const Environment)).object })
+    Ok(unsafe {
+        if is_private(env) {
+            private_metadata(env).object
+        } else {
+            (*(env as *const Environment)).object
+        }
+    })
 }
 
 #[cfg(test)]
@@ -304,7 +382,13 @@ mod tests {
 /// # Safety
 /// `env` is a rooted, live environment in the active instance.
 pub unsafe fn name(env: usize) -> Option<&'static str> {
-    unsafe { (*(env as *const Environment)).name }
+    unsafe {
+        if is_private(env) {
+            None
+        } else {
+            (*(env as *const Environment)).name
+        }
+    }
 }
 
 /// # Safety
@@ -325,10 +409,7 @@ pub unsafe fn bind(
 /// # Safety
 /// `env` is a live closure environment.
 pub unsafe fn is_bound(env: usize) -> bool {
-    unsafe {
-        let env = &*(env as *const Environment);
-        env.kind == 2
-    }
+    unsafe { !is_private(env) && (*(env as *const Environment)).kind == 2 }
 }
 
 /// # Safety
@@ -353,7 +434,7 @@ pub unsafe fn bind_generic(
 /// # Safety
 /// `env` names a live managed closure environment.
 pub unsafe fn is_generic(env: usize) -> bool {
-    unsafe { (*(env as *const Environment)).kind == 3 }
+    unsafe { !is_private(env) && (*(env as *const Environment)).kind == 3 }
 }
 
 /// # Safety

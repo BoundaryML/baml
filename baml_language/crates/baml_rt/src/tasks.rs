@@ -1,6 +1,6 @@
 //! Managed futures and owner-thread bindings for compiled task entry points.
 use crate::{Dyn, Error, R};
-use baml_rt_gc::{Descriptor, Header, Kind};
+use baml_rt_gc::{Descriptor, ElementLayout, Elements, Header, Kind};
 pub use baml_rt_tasks::SpawnOptions;
 use baml_rt_tasks::{FutureHandle, SwitchHook, TaskCx, Value};
 use std::{cell::Cell, mem::size_of, ptr};
@@ -16,13 +16,19 @@ struct Future {
     registration: usize,
     telemetry: Option<Box<crate::telemetry::Task>>,
 }
+// Preserve the ordinary future's 16-byte rounded footprint. Optional trailing
+// tagged slots coallocate a private closure environment with its future.
+const FUTURE_BYTES: usize = (size_of::<Future>() + 15) & !15;
 pub const fn future_descriptor(type_id: u32) -> Descriptor {
     Descriptor {
         kind: Kind::Future,
-        size: size_of::<Future>(),
+        size: size_of::<Dyn>(),
         ptr_slots: (8, 1),
         tagged_slots: (16, 1),
-        elem: None,
+        elem: Some(Elements {
+            offset: FUTURE_BYTES,
+            layout: ElementLayout::Tagged,
+        }),
         type_id,
         fields: &[],
         finalizer: Some(FUTURE_FINALIZER),
@@ -247,7 +253,23 @@ pub unsafe fn spawn(
     name: Option<String>,
 ) -> R<usize> {
     unsafe {
-        let pointer = crate::try_alloc(desc, size_of::<Future>())?.cast::<Future>();
+        let slots = if crate::closures::is_private(environment) {
+            crate::closures::private_slots(environment)
+        } else {
+            0
+        };
+        let pointer =
+            crate::try_alloc(desc, FUTURE_BYTES + slots * size_of::<Dyn>())?.cast::<Future>();
+        let environment = if slots != 0 {
+            let target = pointer.cast::<u8>().add(FUTURE_BYTES).cast::<Dyn>();
+            let source = (environment & !1) as *const Dyn;
+            for i in 0..slots {
+                crate::write_dyn(pointer.cast(), target.add(i), source.add(i).read());
+            }
+            (target as usize) | 1
+        } else {
+            environment
+        };
         baml_rt_gc::write_ptr(pointer.cast(), &mut (*pointer).environment, environment);
         (*pointer).result = Dyn {
             tag: u64::MAX,
@@ -293,6 +315,16 @@ unsafe fn execute(cx: &mut TaskCx<'_>, data: [usize; 4]) -> baml_rt_tasks::Outco
         }
         if let Some(task) = &telemetry {
             task.finish(&result);
+        }
+        if crate::closures::is_private((*f).environment) {
+            // Capture cells must not stay rooted merely because a settled
+            // future remains live after its producer's environment is dead.
+            let env = (*f).environment;
+            let slots = crate::closures::private_slots(env);
+            let tail = (env & !1) as *mut Dyn;
+            for i in 0..slots {
+                crate::write_dyn(f.cast(), tail.add(i), Dyn { tag: 0, payload: 0 });
+            }
         }
         baml_rt_gc::write_ptr(f.cast(), &mut (*f).environment, 0);
         let outcome = match result {
@@ -523,6 +555,54 @@ mod tests {
             Ok(42)
         }
     }
+    #[test]
+    fn private_environment_is_copied_traced_and_released_after_settlement() {
+        struct OnlyFuture(std::cell::UnsafeCell<usize>);
+        impl baml_rt_gc::RootSource for OnlyFuture {
+            fn conservative_ranges(&self, _: &mut dyn FnMut(*const usize, *const usize)) {}
+            fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+                visit(self.0.get());
+            }
+        }
+        fn entry() -> R<i64> {
+            static META: crate::closures::PrivateMetadata =
+                crate::closures::PrivateMetadata::new(123, child, 1);
+            unsafe {
+                let cell = crate::closures::cell(10, Dyn { tag: 0, payload: 1 })?;
+                let mut env = crate::closures::PrivateEnvironment::new(&META, 13, [cell]);
+                let future = spawn(12, env.as_raw(), 0, 0, SpawnOptions::default(), None)?;
+                env = crate::closures::PrivateEnvironment::empty();
+                std::hint::black_box(&env);
+                let copied = (*(future as *const Future)).environment;
+                assert!(crate::closures::is_private(copied));
+                assert_eq!(crate::closures::capture(copied, 0), cell);
+                // Ignore all stacks: only the future's precise trailing slots
+                // can keep the captured cell alive during this collection.
+                (&mut *crate::HEAP.get()).collect(&OnlyFuture(std::cell::UnsafeCell::new(future)));
+                // A dead object can retain its start bit until lazy sweeping.
+                // Verify the cell's mark from that collection without adding
+                // it to the collection's roots.
+                (&*crate::HEAP.get()).verify(&OnlyFuture(std::cell::UnsafeCell::new(cell)));
+                assert_eq!((&*crate::HEAP.get()).object_start(cell), Some(cell));
+                crate::closures::store(
+                    cell,
+                    Dyn {
+                        tag: 0,
+                        payload: 41,
+                    },
+                );
+                assert_eq!(await_future(future)?.payload, 42);
+                let tail = (future + FUTURE_BYTES) as *const Dyn;
+                assert_eq!((*tail).payload, 0);
+                assert_eq!((*tail.add(1)).payload, 0);
+                Ok(42)
+            }
+        }
+        let mut instance = crate::Instance::new(DESCRIPTORS, POINTERS);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 42);
+    }
+
     #[test]
     fn managed_await_restores_fiber_bindings_and_roots_across_gc_and_sleeps() {
         let mut instance = crate::Instance::new(DESCRIPTORS, POINTERS);

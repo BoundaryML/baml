@@ -430,6 +430,7 @@ impl registry::Feature for Feature {
         Some((|| {
             let _ = type_arg_templates;
             let object = emitter.plan.lambda_targets[&(emitter.object, *lambda_idx)];
+            let capture_count = captures.len();
             let captures = captures
                 .iter()
                 .map(|cell| emitter.operand(cell).map(|v| v.0))
@@ -439,7 +440,19 @@ impl registry::Feature for Feature {
                 "rt::closures::new({}, {object},closure{object},&[{captures}])",
                 emitter.plan.closure_descriptors().unwrap().1
             ));
-            Ok((ordinary, Repr::Closure))
+            let environment = if capture_count <= 6 && super::tasks::private_environment(emitter) {
+                format!(
+                    "if OBSERVE{{{ordinary}}}else{{static META:rt::closures::PrivateMetadata=rt::closures::PrivateMetadata::new({object},closure{object},{capture_count});private_env_{}_{}=rt::closures::PrivateEnvironment::new(&META,{},[{captures}]);private_env_{}_{}.as_raw()}}",
+                    emitter.block,
+                    emitter.statement,
+                    emitter.plan.closure_descriptors().unwrap().0 + 3,
+                    emitter.block,
+                    emitter.statement
+                )
+            } else {
+                ordinary
+            };
+            Ok((environment, Repr::Closure))
         })())
     }
     fn statement(
