@@ -50,6 +50,7 @@ struct ListElement {
     declared: Option<String>,
 }
 struct Plan<'a> {
+    db: &'a dyn Db,
     root: SourceRoot,
     lang: baml_base::LangRoots,
     index: std::rc::Rc<ProgramIndex<'a>>,

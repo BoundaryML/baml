@@ -81,6 +81,45 @@ function explicit_json_override() -> int {
   let value = JsonOverride { value: 1 }.to_json();
   match (value) { string => value.length(), _ => 0 }
 }
+interface ProjectionSource { type Value }
+class ProjectionInt { implements ProjectionSource { type Value = int } }
+class ProjectionBool { implements ProjectionSource { type Value = bool } }
+class ProjectionField<T extends ProjectionSource> { value T.Value }
+function projection_flag(p: ProjectionField<ProjectionBool>) -> int {
+  match (p) {
+    ProjectionField<ProjectionBool> { value: true } => 1,
+    ProjectionField<ProjectionBool> { value: false } => 0,
+  }
+}
+function projection_fields() -> int {
+  let p: ProjectionField<ProjectionInt> = ProjectionField { value: 127 };
+  let yes: ProjectionField<ProjectionBool> = ProjectionField { value: true };
+  let no: ProjectionField<ProjectionBool> = ProjectionField { value: false };
+  p.value + projection_flag(yes) + projection_flag(no)
+}
+interface HasProjectedError {
+  type E
+  function read(self) -> int throws Self.E
+}
+interface ReadMany {
+  type E
+  function read_many(self) -> int throws Self.E
+}
+implement<T extends HasProjectedError> ReadMany for T[] {
+  type E = T.E
+  function read_many(self) -> int throws T.E { self[0].read() }
+}
+class NonThrow {
+  amount: int
+  implements HasProjectedError {
+    type E = never
+    function read(self) -> int throws never { self.amount }
+  }
+}
+function projection_error() -> int throws never {
+  let xs = [NonThrow { amount: 131 }];
+  xs.read_many()
+}
 class EffectCalculator {
   base: int
   function add(self, n: int) -> int { self.base + n }
@@ -120,6 +159,7 @@ function main() -> int {
   total += phantom(Phantom<MetadataOnly> { number: 79 });
   total += phantom_enum(Phantom<MetadataEnum> { number: 83 });
   total += effect_result() + bottom_result() + explicit_json_override();
+  total += projection_fields() + projection_error();
   total += alias_dispatch(AliasOwner<string> { left: 101, right: "alias" });
   total
 }

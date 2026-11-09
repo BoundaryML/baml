@@ -90,7 +90,17 @@ fn witness<'p>(
     concrete: &RuntimeTy,
     iface: &TyTemplateInterface,
 ) -> Gen<Option<Witness<'p>>> {
-    let requested = iface.to_template().substitute_symbolic(&[]);
+    let mut requested = iface.to_template().substitute_symbolic(&[]);
+    if super::generics::has_projection(&requested) {
+        let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
+        requested = runtime.convert(
+            &baml_compiler2_hir_ty::package_interface::reduce_ground_projections(
+                db,
+                &baml_type::Ty::from(requested),
+                64,
+            ),
+        );
+    }
     // The checker resolver requires deeply realized types, including interface
     // arguments and associated bindings. Dynamic requests remain unsupported.
     baml_compiler2_mir::RealizedTy::try_from(concrete.clone())
@@ -111,19 +121,20 @@ fn witness<'p>(
     // Reuse the checker's resolver for bound/coherence/alias semantics. The
     // linked rule supplies the exact body and its frame, rather than re-deriving
     // method identities from rendered names.
-    let aliases = baml_compiler2_hir_ty::interfaces::package_resolved_aliases(db, plan.root);
-    let Some(resolved) = baml_compiler2_hir_ty::interfaces::get_implements_block(
-        db,
-        plan.root,
-        &baml_type::Ty::from(concrete.clone()),
-        &interface,
-        aliases,
-    ) else {
+    let concrete_goal =
+        baml_compiler2_hir_ty::impls::interned_ty(&baml_type::Ty::from(concrete.clone()));
+    let requested_goal = baml_type::interned::InferInterface::from_constraint(&interface);
+    let Some(resolved) =
+        baml_compiler2_hir_ty::impls::resolve_impl(db, &concrete_goal, &requested_goal)
+    else {
         return Ok(None);
+    };
+    let baml_compiler2_hir::loc::DeclRef::Source(implementation) = resolved.block() else {
+        return Err(no("external implementation rule"));
     };
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
     let (params, pattern, iface_args) =
-        baml_compiler2_emit::impl_runtime_pattern(db, resolved.impl_loc, plan.root)
+        baml_compiler2_emit::impl_runtime_pattern(db, implementation, plan.root)
             .as_ref()
             .ok_or_else(|| no("checked implementation target"))?;
     let pattern = plan
@@ -145,7 +156,10 @@ fn witness<'p>(
                 .bindings
                 .get(p)
                 .ok_or_else(|| no("unbound checked implementation parameter"))?;
-            let concrete = baml_compiler2_mir::RealizedTy::try_from(runtime.convert(ty))
+            let ty = baml_type::interned::ClosedTy::try_from(ty)
+                .map_err(|_| no("symbolic implementation binding"))?
+                .to_plain();
+            let concrete = baml_compiler2_mir::RealizedTy::try_from(runtime.convert(&ty))
                 .map_err(|_| no("symbolic implementation binding"))?;
             Ok(plan
                 .index

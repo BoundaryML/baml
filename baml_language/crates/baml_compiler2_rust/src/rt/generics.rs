@@ -12,6 +12,12 @@ pub(super) fn canonical_type<N: Clone + PartialEq>(
     ty.map_children(&mut canonical_type).flatten_union()
 }
 
+pub(super) fn has_projection<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool {
+    let mut found = matches!(ty, baml_type::RuntimeTy::AssociatedTypeProjection { .. });
+    ty.visit_children(&mut |child| found |= has_projection(child));
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::canonical_type;
@@ -945,6 +951,17 @@ impl registry::Feature for Feature {
 }
 
 impl Plan<'_> {
+    pub(super) fn resolve_type(&self, ty: &RuntimeTy) -> RuntimeTy {
+        if !has_projection(ty) {
+            return ty.clone();
+        }
+        let reduced = baml_compiler2_hir_ty::package_interface::reduce_ground_projections(
+            self.db,
+            &baml_type::Ty::from(ty.clone()),
+            64,
+        );
+        baml_compiler2_mir::RuntimeLowering::of(self.db, self.root).convert(&reduced)
+    }
     pub(super) fn class_origin(&self, c: usize) -> usize {
         self.class_instances
             .iter()
@@ -962,15 +979,45 @@ impl Plan<'_> {
     }
     pub(super) fn class_field_types(&self, c: usize) -> Vec<bex_vm_types::RuntimeTy> {
         let class = self.class(c);
-        if let Some((_, args, _)) = self.class_instances.iter().find(|(_, _, id)| *id == c) {
-            class
-                .fields
-                .iter()
-                .map(|f| f.field_template.substitute_symbolic(args))
-                .collect()
-        } else {
-            class.fields.iter().map(|f| f.field_type.clone()).collect()
+        let types =
+            if let Some((_, args, _)) = self.class_instances.iter().find(|(_, _, id)| *id == c) {
+                class
+                    .fields
+                    .iter()
+                    .map(|f| f.field_template.substitute_symbolic(args))
+                    .collect::<Vec<_>>()
+            } else {
+                class
+                    .fields
+                    .iter()
+                    .map(|f| f.field_type.clone())
+                    .collect::<Vec<_>>()
+            };
+        types.iter().map(|ty| self.resolve_field_type(ty)).collect()
+    }
+
+    fn resolve_field_type(&self, ty: &bex_vm_types::RuntimeTy) -> bex_vm_types::RuntimeTy {
+        if !has_projection(ty) {
+            return ty.clone();
         }
+        let Ok(named) = ty.try_map_heads(&mut |head| self.index.declaration(head.tag()).ok_or(()))
+        else {
+            return ty.clone();
+        };
+        let reduced = baml_compiler2_hir_ty::package_interface::reduce_ground_projections(
+            self.db,
+            &baml_type::Ty::from(named),
+            64,
+        );
+        let runtime = baml_compiler2_mir::RuntimeLowering::of(self.db, self.root);
+        let Ok(realized) = baml_compiler2_mir::RealizedTy::try_from(runtime.convert(&reduced))
+        else {
+            return ty.clone();
+        };
+        self.index
+            .anchor(&TyTemplate::from(realized))
+            .map(|t| t.substitute_symbolic(&[]))
+            .unwrap_or_else(|| ty.clone())
     }
     pub(super) fn register_class_type(&mut self, ty: &RuntimeTy) -> Gen<()> {
         let Ok(realized) = baml_compiler2_mir::RealizedTy::try_from(ty.clone()) else {
@@ -996,6 +1043,7 @@ impl Plan<'_> {
                 ancestry.pop();
                 continue;
             };
+            let ty = self.resolve_field_type(&ty);
             match ty {
                 T::Class(head, args) if !args.is_empty() => {
                     let origin = self.class_tag(head.tag())?;

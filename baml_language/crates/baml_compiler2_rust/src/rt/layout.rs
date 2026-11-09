@@ -133,6 +133,12 @@ impl Plan<'_> {
     }
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
+        if super::generics::has_projection(ty) {
+            let reduced = self.resolve_type(ty);
+            if reduced != *ty {
+                return self.repr(&reduced);
+            }
+        }
         Ok(match ty {
             RuntimeTy::Bigint | RuntimeTy::Literal(baml_type::Literal::Bigint(_), _) => {
                 Repr::Bigint

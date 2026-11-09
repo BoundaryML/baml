@@ -1907,3 +1907,10 @@ fn rt_corpus_structural_defaults_reach_their_native_implementation() {
         );
     }
 }
+
+#[test]
+fn rt_corpus_json_scalar_to_without_an_alias_typed_local() {
+    let generated = rt_admission_probe("function main() -> int { baml.json.to<int>(7) }")
+        .expect("the standard JSON alias must be available to scalar conversions");
+    syn::parse_file(&generated).unwrap();
+}
