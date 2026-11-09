@@ -44,6 +44,12 @@ scalar_slot!(i64, |v| v as i64, |v: i64| v as u64);
 scalar_slot!(f64, f64::from_bits, f64::to_bits);
 scalar_slot!(bool, |v| v != 0, |v: bool| v as u64);
 scalar_slot!(usize, |v| v as usize, |v: usize| v as u64);
+// A list whose only element type is null stores no payload bits.
+scalar_slot!(
+    crate::maps::Null,
+    |_| crate::maps::Null,
+    |_: crate::maps::Null| 0u64
+);
 /// An opaque heap pointer slot, also used for classes, maps and nested lists.
 #[repr(transparent)]
 #[derive(Clone, Copy)]

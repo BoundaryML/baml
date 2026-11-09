@@ -17,11 +17,12 @@ pub fn perform(
     make: impl FnOnce() -> SysOpResult,
     on_error: impl FnOnce(OpError, bool) -> Box<Error>,
 ) -> R<BexExternalValue> {
-    let started = crate::telemetry::sysop_started();
+    let mut started = crate::telemetry::sysop_started();
     let mut asynchronous = false;
     let result: Result<Result<BexExternalValue, OpError>, Box<Error>> = match make() {
         SysOpResult::Ready(result) => Ok(result),
         SysOpResult::Async(future) => {
+            started = crate::telemetry::sysop_wait_started();
             asynchronous = true;
             let (sender, mut receiver) = tokio::sync::oneshot::channel();
             crate::telemetry::before_yield();

@@ -854,6 +854,14 @@ impl Plan<'_> {
         self.task_support
             .then(|| self.descriptor_tail() + usize::from(self.closure_descriptors().is_some()) * 2)
     }
+    /// One past the last generated descriptor (classes, lists, closures,
+    /// futures and reflection follow the fixed runtime prefix).
+    pub(super) fn descriptor_end(&self) -> usize {
+        self.descriptor_tail()
+            + usize::from(self.closure_descriptors().is_some()) * 2
+            + usize::from(self.task_support)
+            + usize::from(self.reflected)
+    }
     pub(super) fn reflection_descriptor(&self) -> Option<usize> {
         self.reflected.then(|| {
             self.descriptor_tail()
@@ -936,11 +944,8 @@ pub(super) fn enum_tag(
     _descriptors: &BTreeMap<usize, usize>,
     _lists: &BTreeMap<Repr, usize>,
 ) -> usize {
-    let end = plan.descriptor_tail()
-        + usize::from(plan.closure_descriptors().is_some()) * 2
-        + usize::from(plan.task_support)
-        + usize::from(plan.reflected);
-    end + 3
+    plan.descriptor_end()
+        + 3
         + match repr {
             Repr::Naming => 0,
             Repr::Enum(e) => {

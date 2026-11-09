@@ -54,6 +54,9 @@ struct Key {
 type Span = SpanRecord<Snapshot, Snapshot>;
 type Pool = ChunkPool<TimingRecord, Span>;
 thread_local! { static CURRENT: Cell<*mut State> = const { Cell::new(std::ptr::null_mut()) }; }
+// Call-site positions are program metadata, needed by error frames even when
+// telemetry is off and no recording state is installed.
+thread_local! { static SITES: Cell<&'static [Site]> = const { Cell::new(&[]) }; }
 
 pub(crate) fn current_raw() -> *mut () {
     CURRENT.get().cast()
@@ -461,11 +464,7 @@ pub fn active() -> bool {
 }
 
 pub(crate) fn caller_pc(site: usize) -> u32 {
-    let state = CURRENT.get();
-    if state.is_null() {
-        return 0;
-    }
-    unsafe { (&*state).sites[site].pc }
+    SITES.get().get(site).map_or(0, |site| site.pc)
 }
 /// # Safety
 /// A session must own the current task, and the caller must finish this frame
@@ -1015,6 +1014,7 @@ pub struct Session {
 }
 impl Session {
     pub fn new(functions: &'static [Function], sites: &'static [Site]) -> R<Self> {
+        SITES.set(sites);
         let level = btel_settings::mode::from_env().map_err(|e| Error::internal(e.to_string()))?;
         let evidence = level.is_some() && recording_root().is_some();
         let words = functions
@@ -1922,6 +1922,14 @@ pub(crate) fn sysop_started() -> Option<ClockInstant> {
     } else {
         Some(unsafe { &*ptr }.clock.read())
     }
+}
+pub(crate) fn sysop_wait_started() -> Option<ClockInstant> {
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        return None;
+    }
+    let state = unsafe { &*ptr };
+    evidence::observes_wait(state).then(|| state.clock.read())
 }
 pub(crate) fn sysop_finished(started: Option<ClockInstant>) {
     let Some(started) = started else { return };

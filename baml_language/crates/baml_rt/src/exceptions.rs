@@ -26,14 +26,13 @@ pub struct ContextSchema {
 /// The compiler supplies the standard library's pointer-first class layouts.
 pub unsafe fn context(error: &Error, schema: ContextSchema) -> crate::R<usize> {
     let trace = error.trace.as_ref().unwrap_or(&error.frames);
-    let frames = unsafe { crate::try_alloc(schema.frames, 16 + trace.len() * 8) }?;
+    let mut cx = unsafe { crate::strings::Cx::current() };
+    let frames = unsafe {
+        crate::lists::List::<crate::lists::Ptr>::with_capacity(&mut cx, schema.frames, trace.len())
+    }?;
     let roots = unsafe { &*crate::ROOTS.get() };
-    let _frames = unsafe { roots.root(frames as usize) };
-    unsafe {
-        frames.add(8).cast::<usize>().write(trace.len());
-    }
-    let cx = unsafe { crate::strings::Cx::current() };
-    for (i, frame) in trace.iter().rev().enumerate() {
+    let _frames = unsafe { roots.root(frames.as_raw()) };
+    for frame in trace.iter().rev() {
         let file = cx.string(frame.file)?.as_raw();
         let _file = unsafe { roots.root(file) };
         let name = cx.string(frame.function)?.as_raw();
@@ -43,12 +42,12 @@ pub unsafe fn context(error: &Error, schema: ContextSchema) -> crate::R<usize> {
             baml_rt_gc::write_ptr(object, object.add(8).cast(), file);
             baml_rt_gc::write_ptr(object, object.add(16).cast(), name);
             object.add(24).cast::<i64>().write(frame.line as i64);
-            baml_rt_gc::write_ptr(frames, frames.add(16 + i * 8).cast(), object as usize);
+            frames.push(&mut cx, crate::lists::Ptr::from_raw(object as usize))?;
         }
     }
     let stack = unsafe { crate::try_alloc(schema.trace, 16) }?;
     unsafe {
-        baml_rt_gc::write_ptr(stack, stack.add(8).cast(), frames as usize);
+        baml_rt_gc::write_ptr(stack, stack.add(8).cast(), frames.as_raw());
     }
     let _stack = unsafe { roots.root(stack as usize) };
     let context = unsafe { crate::try_alloc(schema.context, 40) }?;
@@ -62,10 +61,11 @@ pub unsafe fn context(error: &Error, schema: ContextSchema) -> crate::R<usize> {
 
 unsafe fn trace_text(stack: usize) -> String {
     let frames = unsafe { ((stack + 8) as *const usize).read() };
-    let len = unsafe { ((frames + 8) as *const usize).read() };
-    let frames = (0..len)
+    let cx = unsafe { crate::strings::Cx::current() };
+    let frames = unsafe { crate::lists::List::<crate::lists::Ptr>::from_raw(frames) };
+    let frames = (0..frames.len(&cx))
         .map(|i| unsafe {
-            let frame = ((frames + 16 + i * 8) as *const usize).read();
+            let frame = frames.get(&cx, i).expect("stack frame index").as_raw();
             let file =
                 crate::strings::Str::from_raw(((frame + 8) as *const usize).read()).to_owned();
             let name =

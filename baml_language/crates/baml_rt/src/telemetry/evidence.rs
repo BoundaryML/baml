@@ -44,6 +44,20 @@ pub(super) struct EvidenceFrame {
     mode: u8,
     native: bool,
 }
+// The VM accounts an async sysop wait only when its bytecode caller owns an
+// observation receipt. Native adapters do not change that caller.
+pub(super) fn observes_wait(state: &State) -> bool {
+    let mut frame = state.evidence_frame;
+    while !frame.is_null() {
+        let current = unsafe { &*frame };
+        if !current.native {
+            return current.mode != 0;
+        }
+        frame = current.parent;
+    }
+    state.active_function.is_some()
+}
+
 #[derive(Debug, Clone)]
 pub struct Raise {
     id: TelemetryId,

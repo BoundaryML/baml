@@ -462,6 +462,7 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
             error.telemetry_at = None;
             if error.class == "baml.panics.Cancelled" {
                 error.telemetry_caught = None;
+                error.telemetry_history = Default::default();
             }
             return Err(error);
         }

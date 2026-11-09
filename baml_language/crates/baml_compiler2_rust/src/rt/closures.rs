@@ -775,8 +775,9 @@ impl super::Emitter<'_, '_> {
             (format!("value"), self.plan.local_repr(self.body, 0, 0)?),
             Repr::Tagged,
         )?;
+        let cxt = super::exceptions::context_type(self.plan.error_contexts);
         Ok(format!(
-            "unsafe fn closure{object}(env:usize,site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let cx=rt::calls::Context::current();let value=if rt::telemetry::active(){{f{object}::<true>(cx,site,{env}{arguments})}}else{{f{object}::<false>(cx,site,{env}{arguments})}}?;Ok({value})}}}}\n"
+            "unsafe fn closure{object}(env:usize,site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let cx={cxt}::current();let value=if rt::telemetry::active(){{f{object}::<true>(cx,site,{env}{arguments})}}else{{f{object}::<false>(cx,site,{env}{arguments})}}?;Ok({value})}}}}\n"
         ))
     }
 }

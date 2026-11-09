@@ -330,7 +330,13 @@ impl Emitter<'_, '_> {
                     ("state".into(), Repr::Ptr(c)),
                     self.plan.repr(&body.locals[2].ty)?,
                 )?;
-                write!(hash,"{tag}=>{{f{callee}::<OBSERVE>(rt::calls::Context::current(),{},{arg},{state})?;Ok(true)}},",self.telemetry_site(callee)).unwrap();
+                let cxt = super::exceptions::context_type(self.plan.error_contexts);
+                write!(
+                    hash,
+                    "{tag}=>{{f{callee}::<OBSERVE>({cxt}::current(),{},{arg},{state})?;Ok(true)}},",
+                    self.telemetry_site(callee)
+                )
+                .unwrap();
             }
             if let Some(&callee) = methods.get("eq") {
                 let MirFunctionKind::Bytecode(body) = &self.all[&callee].kind else {
@@ -344,7 +350,13 @@ impl Emitter<'_, '_> {
                     ("b".into(), Repr::Tagged),
                     self.plan.repr(&body.locals[2].ty)?,
                 )?;
-                write!(equals,"({tag},{tag})=>f{callee}::<OBSERVE>(rt::calls::Context::current(),{},{a},{b}).map(Some),",self.telemetry_site(callee)).unwrap();
+                let cxt = super::exceptions::context_type(self.plan.error_contexts);
+                write!(
+                    equals,
+                    "({tag},{tag})=>f{callee}::<OBSERVE>({cxt}::current(),{},{a},{b}).map(Some),",
+                    self.telemetry_site(callee)
+                )
+                .unwrap();
             }
         }
         hash.push_str("_=>Ok(false)}}");

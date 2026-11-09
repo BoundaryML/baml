@@ -285,7 +285,8 @@ fn compile_entry<'db>(
         for (&class, &method) in &plan.cleanup_methods {
             let site = telemetry_sites.borrow().len();
             telemetry_sites.borrow_mut().push((None, 0, method));
-            out.push_str(&format!("{class}=>rt::tasks::run_cleanup({site},object,move ||{{let cx=rt::calls::Context::current();if rt::telemetry::active(){{f{method}::<true>(cx,{site},object)?;}}else{{f{method}::<false>(cx,{site},object)?;}}Ok(())}}),"));
+            let cxt = super::exceptions::context_type(plan.error_contexts);
+            out.push_str(&format!("{class}=>rt::tasks::run_cleanup({site},object,move ||{{let cx={cxt}::current();if rt::telemetry::active(){{f{method}::<true>(cx,{site},object)?;}}else{{f{method}::<false>(cx,{site},object)?;}}Ok(())}}),"));
         }
         out.push_str("_=>unreachable!(),}}}\n");
     }

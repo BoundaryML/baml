@@ -98,10 +98,11 @@ pub fn perform_at(output: Output, call_site: Option<usize>) -> R<Owned> {
 
 /// Run a direct sysop whose generated source table supplies its error site.
 pub fn perform(output: Output) -> R<Owned> {
-    let started = crate::telemetry::sysop_started();
+    let mut started = crate::telemetry::sysop_started();
     let result = match output {
         Output::Ready(result) => result.map_err(failure),
         Output::Async(future) => {
+            started = crate::telemetry::sysop_wait_started();
             crate::telemetry::before_yield();
             let result = unsafe { &mut *crate::TASK.get() }.io(move |_| async move {
                 let value = match future.await {

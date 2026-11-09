@@ -152,7 +152,9 @@ impl Emitter<'_, '_> {
             self.plan.error_contexts,
         );
         if recursive {
-            code.push_str(&format!("{};\n", self.fallible("cx.poll()")));
+            // Entry polling precedes every handler region in the body.
+            let error = self.error_at("e");
+            code.push_str(&format!("cx.poll().map_err(|e|{error})?;\n"));
         }
         for i in 1..=arity {
             if self.body.locals[i].is_captured {
