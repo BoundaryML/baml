@@ -135,6 +135,12 @@ impl Plan<'_> {
     }
 
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
+        if super::generics::has_projection(ty) {
+            let reduced = self.resolve_type(ty);
+            if reduced != *ty {
+                return self.repr(&reduced);
+            }
+        }
         Ok(match ty {
             RuntimeTy::Bigint | RuntimeTy::Literal(baml_type::Literal::Bigint(_), _) => {
                 Repr::Bigint
@@ -144,6 +150,7 @@ impl Plan<'_> {
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
+            RuntimeTy::Never => Repr::Null,
             RuntimeTy::Future(..) => Repr::Future,
             RuntimeTy::Uint8Array => Repr::Bytes,
             RuntimeTy::RustType => Repr::Opaque,
@@ -263,7 +270,7 @@ impl Plan<'_> {
     pub(super) fn field_repr(&self, ty: &bex_vm_types::RuntimeTy) -> Gen<Repr> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
-            T::Null => Repr::Null,
+            T::Null | T::Never => Repr::Null,
             T::Function { .. } => Repr::Closure,
             T::Future(..) => Repr::Future,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
@@ -396,7 +403,10 @@ impl Plan<'_> {
                     .contains(&u32::try_from(object).expect("object index"))
         }) && self.list_error_descriptor(object).is_none()
             && ((class.path.to_string().starts_with("panics.")
-                && class.path.to_string() != "panics.UserPanic")
+                && !matches!(
+                    class.path.to_string().as_str(),
+                    "panics.UserPanic" | "panics.AssertionFailed"
+                ))
                 || matches!(
                     class.path.to_string().as_str(),
                     "json.ParseError" | "json.DecodeError"
@@ -411,6 +421,12 @@ impl Plan<'_> {
         let opaque_task = super::tasks::class_is(self, object, "spawn.Limit")
             || super::tasks::class_is(self, object, "spawn.CancelToken");
         let field_types = self.class_field_types(object);
+        // A non-generic owner can introduce concrete generic field layouts
+        // without any constructor or local of those instantiated types.
+        for ty in &field_types {
+            self.register_field_class_type(ty)?;
+        }
+        let class = self.class(object);
         let fields = field_types
             .iter()
             .map(|t| {

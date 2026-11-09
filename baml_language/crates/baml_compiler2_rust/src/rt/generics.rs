@@ -12,6 +12,12 @@ pub(super) fn canonical_type<N: Clone + PartialEq>(
     ty.map_children(&mut canonical_type).flatten_union()
 }
 
+pub(super) fn has_projection<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool {
+    let mut found = matches!(ty, baml_type::RuntimeTy::AssociatedTypeProjection { .. });
+    ty.visit_children(&mut |child| found |= has_projection(child));
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::canonical_type;
@@ -30,6 +36,23 @@ mod tests {
         let expected = T::List(Box::new(T::Class(head, vec![T::Never].into())));
         assert_eq!(canonical_type(&ty), expected);
         assert_eq!(canonical_type(&expected), expected);
+    }
+    #[test]
+    fn full_and_dense_callback_frames_share_a_key_without_erasing_real_never() {
+        use baml_type::{Name, ParamTy, RuntimeTy as T, SCOPED_PARAM_BIT};
+        let params = [
+            ParamTy::new(0, Name::new("T")),
+            ParamTy::new(1, Name::new("__effect_param_0")),
+            ParamTy::new(SCOPED_PARAM_BIT | 2, Name::new("__effect_param_0")),
+        ];
+        let full = vec![
+            T::Union(vec![T::Int, T::Union(vec![T::Int].into())].into()),
+            T::Never,
+            T::Never,
+        ];
+        let dense = vec![T::Int, T::Never];
+        assert_eq!(super::runtime_frame(&params, full), dense);
+        assert_eq!(super::runtime_frame(&params, dense.clone()), dense);
     }
 }
 
@@ -968,6 +991,17 @@ impl registry::Feature for Feature {
 }
 
 impl Plan<'_> {
+    pub(super) fn resolve_type(&self, ty: &RuntimeTy) -> RuntimeTy {
+        if !has_projection(ty) {
+            return ty.clone();
+        }
+        let reduced = baml_compiler2_hir_ty::package_interface::reduce_ground_projections(
+            self.db,
+            &baml_type::Ty::from(ty.clone()),
+            64,
+        );
+        baml_compiler2_mir::RuntimeLowering::of(self.db, self.root).convert(&reduced)
+    }
     pub(super) fn class_origin(&self, c: usize) -> usize {
         self.class_instances
             .iter()
@@ -985,15 +1019,45 @@ impl Plan<'_> {
     }
     pub(super) fn class_field_types(&self, c: usize) -> Vec<bex_vm_types::RuntimeTy> {
         let class = self.class(c);
-        if let Some((_, args, _)) = self.class_instances.iter().find(|(_, _, id)| *id == c) {
-            class
-                .fields
-                .iter()
-                .map(|f| f.field_template.substitute_symbolic(args))
-                .collect()
-        } else {
-            class.fields.iter().map(|f| f.field_type.clone()).collect()
+        let types =
+            if let Some((_, args, _)) = self.class_instances.iter().find(|(_, _, id)| *id == c) {
+                class
+                    .fields
+                    .iter()
+                    .map(|f| f.field_template.substitute_symbolic(args))
+                    .collect::<Vec<_>>()
+            } else {
+                class
+                    .fields
+                    .iter()
+                    .map(|f| f.field_type.clone())
+                    .collect::<Vec<_>>()
+            };
+        types.iter().map(|ty| self.resolve_field_type(ty)).collect()
+    }
+
+    fn resolve_field_type(&self, ty: &bex_vm_types::RuntimeTy) -> bex_vm_types::RuntimeTy {
+        if !has_projection(ty) {
+            return ty.clone();
         }
+        let Ok(named) = ty.try_map_heads(&mut |head| self.index.declaration(head.tag()).ok_or(()))
+        else {
+            return ty.clone();
+        };
+        let reduced = baml_compiler2_hir_ty::package_interface::reduce_ground_projections(
+            self.db,
+            &baml_type::Ty::from(named),
+            64,
+        );
+        let runtime = baml_compiler2_mir::RuntimeLowering::of(self.db, self.root);
+        let Ok(realized) = baml_compiler2_mir::RealizedTy::try_from(runtime.convert(&reduced))
+        else {
+            return ty.clone();
+        };
+        self.index
+            .anchor(&TyTemplate::from(realized))
+            .map(|t| t.substitute_symbolic(&[]))
+            .unwrap_or_else(|| ty.clone())
     }
     pub(super) fn register_class_type(&mut self, ty: &RuntimeTy) -> Gen<()> {
         let Ok(realized) = baml_compiler2_mir::RealizedTy::try_from(ty.clone()) else {
@@ -1004,7 +1068,7 @@ impl Plan<'_> {
         };
         self.register_field_class_type(&anchored.substitute_symbolic(&[]))
     }
-    fn register_field_class_type(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
+    pub(super) fn register_field_class_type(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
         use bex_vm_types::RuntimeTy as T;
         type Origins = baml_type::template::TyTemplateOrigins<bex_vm_types::TypeHead>;
         enum Work {
@@ -1019,6 +1083,7 @@ impl Plan<'_> {
                 ancestry.pop();
                 continue;
             };
+            let ty = self.resolve_field_type(&ty);
             match ty {
                 T::Class(head, args) if !args.is_empty() => {
                     let origin = self.class_tag(head.tag())?;
@@ -1084,6 +1149,33 @@ impl Plan<'_> {
     }
 }
 
+pub(super) fn runtime_frame(
+    params: &[baml_type::ParamTy],
+    frame: Vec<RuntimeTy>,
+) -> Vec<RuntimeTy> {
+    let layout = baml_type::RuntimeGenericLayout::new(params);
+    let full = frame.len() == params.len();
+    frame
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, ty)| {
+            if full && layout.slot(&params[i]).is_none() {
+                None
+            } else {
+                Some(canonical_type(&ty))
+            }
+        })
+        .collect()
+}
+
+pub(super) fn callable_frame(
+    db: &dyn Db,
+    function: baml_compiler2_hir_ty::extern_loc::FunctionRef<'_>,
+    frame: Vec<RuntimeTy>,
+) -> Vec<RuntimeTy> {
+    runtime_frame(&callable_generic_frame(db, function).params, frame)
+}
+
 pub(super) fn instance<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
@@ -1092,9 +1184,31 @@ pub(super) fn instance<'db>(
     callee: usize,
     frame: Vec<RuntimeTy>,
 ) -> Gen<usize> {
-    let frame = frame.iter().map(canonical_type).collect::<Vec<_>>();
+    let source = all
+        .get(&callee)
+        .ok_or_else(|| no("interface method MIR missing"))?;
+    let params = match source.identity {
+        Some(baml_compiler2_mir::MirFunctionId::Declared(f)) => {
+            callable_generic_frame(db, baml_compiler2_hir::loc::DeclRef::Source(f))
+                .params
+                .into_owned()
+        }
+        _ if frame.is_empty() => return Ok(callee),
+        _ => return Err(no("synthetic generic interface body")),
+    };
+    let runtime_params = baml_type::RuntimeGenericLayout::new(&params);
+    // Calls and materialized callable values must use the same dense frame key.
+    let frame = runtime_frame(&params, frame);
     if frame.is_empty() {
         return Ok(callee);
+    }
+    if runtime_params.params().len() != frame.len() {
+        return Err(no(format!(
+            "specialization frame arity (emitting {}: expected {}, got {})",
+            plan.index.display(callee),
+            runtime_params.params().len(),
+            frame.len()
+        )));
     }
     if frame
         .iter()
@@ -1111,21 +1225,11 @@ pub(super) fn instance<'db>(
     if instances.len() > 4096 {
         return Err(no("unbounded interface specialization"));
     }
-    let source = all
-        .get(&callee)
-        .ok_or_else(|| no("interface method MIR missing"))?;
-    let Some(baml_compiler2_mir::MirFunctionId::Declared(f)) = source.identity else {
-        return Err(no("synthetic generic interface body"));
-    };
-    let params = callable_generic_frame(db, baml_compiler2_hir::loc::DeclRef::Source(f)).params;
-    // The pack root also knows caller aliases passed into stdlib generics.
+    let source = &all[&callee];
+    // Include aliases declared in the user pack when specializing stdlib MIR.
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
     let mut specialized = specialize(source, &params, &frame, &runtime)?;
     fold_primitive_sort_guards(db, plan, &mut specialized);
-    let runtime_params = baml_type::RuntimeGenericLayout::new(&params);
-    if runtime_params.params().len() != frame.len() {
-        return Err(no("specialization frame arity"));
-    }
     let captures = runtime_params
         .params()
         .iter()

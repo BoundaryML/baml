@@ -64,6 +64,106 @@ class AliasField { value Scalar }
 function scalar(value: Scalar) -> int {
   match(value) { int => 59, string => 61, null => 67 }
 }
+interface AliasDispatch { function amount(self) -> int throws never }
+class AliasOwner<T> { left: int, right: T }
+type PinnedOwner = AliasOwner<string>
+implement AliasDispatch for PinnedOwner {
+  function amount(self) -> int throws never { self.left }
+}
+function alias_dispatch(value: AliasDispatch) -> int { value.amount() }
+class JsonOverride {
+  value: int
+  implements baml.ToJson {
+    function to_json(self) -> json throws baml.json.SerializationError { "custom" }
+  }
+}
+function explicit_json_override() -> int {
+  let value = JsonOverride { value: 1 }.to_json();
+  match (value) { string => value.length(), _ => 0 }
+}
+interface ProjectionSource { type Value }
+class ProjectionInt { implements ProjectionSource { type Value = int } }
+class ProjectionBool { implements ProjectionSource { type Value = bool } }
+class ProjectionField<T extends ProjectionSource> { value T.Value }
+function projection_flag(p: ProjectionField<ProjectionBool>) -> int {
+  match (p) {
+    ProjectionField<ProjectionBool> { value: true } => 1,
+    ProjectionField<ProjectionBool> { value: false } => 0,
+  }
+}
+function projection_fields() -> int {
+  let p: ProjectionField<ProjectionInt> = ProjectionField { value: 127 };
+  let yes: ProjectionField<ProjectionBool> = ProjectionField { value: true };
+  let no: ProjectionField<ProjectionBool> = ProjectionField { value: false };
+  p.value + projection_flag(yes) + projection_flag(no)
+}
+interface HasProjectedError {
+  type E
+  function read(self) -> int throws Self.E
+}
+interface ReadMany {
+  type E
+  function read_many(self) -> int throws Self.E
+}
+implement<T extends HasProjectedError> ReadMany for T[] {
+  type E = T.E
+  function read_many(self) -> int throws T.E { self[0].read() }
+}
+class NonThrow {
+  amount: int
+  implements HasProjectedError {
+    type E = never
+    function read(self) -> int throws never { self.amount }
+  }
+}
+function projection_error() -> int throws never {
+  let xs = [NonThrow { amount: 131 }];
+  xs.read_many()
+}
+class ProjectedFailure { amount: int }
+class ThrowingRead {
+  implements HasProjectedError {
+    type E = ProjectedFailure
+    function read(self) -> int throws ProjectedFailure {
+      throw ProjectedFailure { amount: 137 }
+    }
+  }
+}
+function projection_catch() -> int {
+  let xs = [ThrowingRead {}];
+  xs.read_many() catch (e) { ProjectedFailure => e.amount }
+}
+class DecodedBox<T> { value: T }
+class DecodedPair { ints: DecodedBox<int>, texts: DecodedBox<string> }
+type DecodedAlias = DecodedBox<int> | DecodedAlias[]
+function decoded_generics() -> int {
+  let pair = baml.json.decode<DecodedPair>(`{"ints":{"value":139},"texts":{"value":"generic"}}`);
+  let decoded = baml.json.decode<DecodedBox<int>>(`{"value":149}`);
+  let list = baml.json.decode<DecodedBox<int>[]>(`[{"value":151}]`);
+  let alias = baml.json.decode<DecodedAlias>(`[{"value":157}]`);
+  let from_alias = match (alias) {
+    let value: DecodedBox<int> => value.value,
+    let values: DecodedAlias[] => match (values[0]) { let item: DecodedBox<int> => item.value, _ => 0 },
+  };
+  pair.ints.value + pair.texts.value.length() + decoded.value + list[0].value + from_alias
+}
+class EffectCalculator {
+  base: int
+  function add(self, n: int) -> int { self.base + n }
+}
+class EffectHolder { callback: (int) -> int throws never }
+function apply_effect(f: (int) -> int, n: int) -> int { f(n) }
+function apply_generic_effect<T>(f: (T) -> T, n: T) -> T { f(n) }
+function fail_bottom() -> never { baml.sys.panic("bottom") }
+function bottom_result() -> int {
+  { fail_bottom(); 0 } catch (e) { baml.panics.UserPanic => 97 }
+}
+function effect_result() -> int {
+  let calc = EffectCalculator { base: 89 };
+  let holder = EffectHolder { callback: calc.add };
+  let applied = apply_generic_effect<int>;
+  applied(holder.callback, 3) + apply_effect(holder.callback, 1) + apply_generic_effect<int>(holder.callback, 2)
+}
 function main() -> int {
   let a = Box<int> { value: 29 };
   let b = Box<string> { value: "hello" };
@@ -85,5 +185,9 @@ function main() -> int {
   total += scalar(AliasField { value: null }.value) + scalar(1) + scalar("x");
   total += phantom(Phantom<MetadataOnly> { number: 79 });
   total += phantom_enum(Phantom<MetadataEnum> { number: 83 });
+  total += effect_result() + bottom_result() + explicit_json_override();
+  total += projection_fields() + projection_error();
+  total += projection_catch() + decoded_generics();
+  total += alias_dispatch(AliasOwner<string> { left: 101, right: "alias" });
   total
 }

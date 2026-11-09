@@ -22,6 +22,16 @@ impl Plan<'_> {
             })
             .cloned()
             .map(RuntimeTy::TypeAlias)
+            .or_else(|| {
+                let root = self.lang.get(baml_base::LangPackage::Baml)?;
+                let head = baml_type::DeclName::qualified(
+                    root,
+                    vec![baml_type::Name::new("json")],
+                    baml_type::Name::new("json"),
+                );
+                self.index.anchor(&TyTemplate::TypeAlias(head.clone()))?;
+                Some(RuntimeTy::TypeAlias(head))
+            })
             .ok_or_else(|| no("JSON alias head"))
     }
     fn tree_reprs(&self) -> Gen<(Repr, Repr)> {

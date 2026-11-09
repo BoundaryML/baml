@@ -26,18 +26,10 @@ impl Plan<'_> {
                 super::map_json::code(repr).or_else(|_| fallback())
             }
             T::String => Ok(1),
-            T::List(_) | T::Union(_) | T::TypeAlias(_) => {
+            T::Class(..) | T::List(_) | T::Union(_) | T::TypeAlias(_) => {
                 if let Some(i) = self.json_list_types.iter().position(|t| t == ty) {
                     return Ok(i + json_lists::TYPE_BASE);
                 }
-                if let Ok(classes) = self.json_class_types(ty) {
-                    if let Some(i) = self.json_types.iter().position(|c| *c == classes) {
-                        return Ok(i + 3);
-                    }
-                }
-                fallback()
-            }
-            T::Class(..) => {
                 if let Ok(classes) = self.json_class_types(ty) {
                     if let Some(i) = self.json_types.iter().position(|c| *c == classes) {
                         return Ok(i + 3);

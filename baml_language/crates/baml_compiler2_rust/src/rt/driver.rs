@@ -40,6 +40,7 @@ fn compile_entry<'db>(
     prepared: Option<&RtTestCompiler<'db, '_>>,
 ) -> Gen<String> {
     let mut plan = Plan {
+        db,
         root,
         lang: baml_compiler2_hir::package::lang_roots(db),
         index: prepared.map_or_else(

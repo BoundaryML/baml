@@ -405,6 +405,9 @@ def main():
     corpus = workspace / "crates/baml_tests/baml_src"
     command = [cli, "--agent-skill-check", "off", "test", "--from", corpus, "--corpus-report", "--max-concurrency", "1", "--log", "trace", "--color", "never", "--no-progress"]
     selectors = [] if args.select is None else ["-i", args.select]
+    env.pop("BAML_RT_CORPUS_SELECT", None)
+    if args.select is not None:
+        env["BAML_RT_CORPUS_SELECT"] = args.select
     exclusions = dict(EXCLUSIONS)
     if args.baseline.exists():
         exclusions.update({name: row["signature"] for name, row in json.loads(args.baseline.read_text())["tests"].items()

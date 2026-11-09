@@ -85,8 +85,8 @@ mod tests {
     fn error(class: &'static str) -> crate::Error {
         crate::Error {
             telemetry_raise: None,
-            telemetry_at: None,
             telemetry_caught: None,
+            telemetry_at: None,
             value: 1,
             class,
             message: "boom".into(),

@@ -169,9 +169,9 @@ impl SchemaEmitter<'_, '_> {
                 let element = self.template(t)?;
                 self.list(self.plan.template_repr(ty)?, element)?
             }
-            T::Class(_, _) => {
+            T::Class(..) => {
                 let Repr::Ptr(class) = self.plan.template_repr(ty)? else {
-                    return Err(no("JSON list class layout"));
+                    return Err(no("JSON class representation"));
                 };
                 self.class(class)?
             }
@@ -240,11 +240,11 @@ impl SchemaEmitter<'_, '_> {
                 let element = self.field(t)?;
                 self.list(self.plan.field_repr(ty)?, element)?
             }
-            T::Class(_, _) => {
-                let Repr::Ptr(c) = self.plan.field_repr(ty)? else {
-                    unreachable!()
+            T::Class(..) => {
+                let Repr::Ptr(class) = self.plan.field_repr(ty)? else {
+                    return Err(no("JSON class representation"));
                 };
-                self.class(c)?
+                self.class(class)?
             }
             T::Union(m) => {
                 let members = m
@@ -345,10 +345,8 @@ pub(super) fn capture_template(
                     .collect::<Gen<Vec<_>>>()?
                     .join(",")
             ),
-            T::Class(_, _) => capture_codegen::capture_repr(plan, plan.template_repr(ty)?)?
-                .strip_prefix("rt::telemetry::capture::Type::")
-                .unwrap()
-                .to_owned(),
+            T::Class(..) =>
+                return capture_codegen::capture_type(plan, &ty.substitute_symbolic(&[])),
             _ => return Err(no("JSON list capture type")),
         }
     ))
@@ -568,6 +566,7 @@ pub(super) fn record_schema(plan: &mut Plan<'_>, ty: &baml_compiler2_mir::TyTemp
         classes: &mut BTreeSet<usize>,
     ) -> Gen<()> {
         use bex_vm_types::RuntimeTy as T;
+        plan.register_field_class_type(ty)?;
         plan.record_field_ty(ty)?;
         match ty {
             T::TypeAlias(head) if aliases.insert(head.tag()) => {

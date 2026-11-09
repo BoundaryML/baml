@@ -18,8 +18,15 @@ pub(super) fn compile(
     root: baml_db::SourceRoot,
     program: &Program,
     engine: Arc<BexEngine>,
-    selection: TestSelection,
+    mut selection: TestSelection,
 ) -> Result<String> {
+    if baml_env::os_var("BAML_RT_CORPUS_ADMISSION_CACHE").is_some()
+        && let Some(filter) = baml_env::os_var("BAML_RT_CORPUS_SELECT")
+    {
+        selection
+            .cli_include
+            .push(filter.to_string_lossy().into_owned());
+    }
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()

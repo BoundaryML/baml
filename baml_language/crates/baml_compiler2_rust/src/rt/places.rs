@@ -309,12 +309,14 @@ impl Emitter<'_, '_> {
                     .iter()
                     .map(|t| RuntimeTy::from(t.clone()))
                     .collect::<Vec<_>>();
+                let frame = super::generics::callable_frame(self.db, *func, frame);
                 let object = self
                     .plan
                     .generic_functions
                     .iter()
                     .find(|(c, t, _)| *c == base && *t == frame)
                     .map(|(_, _, id)| *id)
+                    .or_else(|| frame.is_empty().then_some(base))
                     .ok_or_else(|| no("generic function instance"))?;
                 Ok((
                     self.fallible(&format!(
