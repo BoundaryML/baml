@@ -1,7 +1,6 @@
 ---
 source: crates/baml_fmt/tests/cases.rs
 ---
-@@internal
 interface I {
     @@internal
     function f(self) -> int throws never;

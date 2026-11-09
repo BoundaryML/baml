@@ -146,19 +146,11 @@ impl FormatArgs {
                         num_failures += 1;
                     }
                 }
-                Err(err) => {
-                    match err {
-                        baml_fmt::FormatterError::ParseErrors(err) => {
-                            crate::reporter::print_error(format_args!(
-                                "formatting {}: {err:?}",
-                                path.display()
-                            ));
-                        }
-                        baml_fmt::FormatterError::StrongAstError(err) => {
-                            let err = err.print_with_file_context(path, &source);
-                            crate::reporter::print_error(format_args!("while formatting: {err}"));
-                        }
-                    }
+                Err(baml_fmt::FormatterError::ParseErrors(err)) => {
+                    crate::reporter::print_error(format_args!(
+                        "formatting {}: {err:?}",
+                        path.display()
+                    ));
                     num_failures += 1;
                 }
             }

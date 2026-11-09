@@ -2,5 +2,5 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function example() -> int {
-    a -/* comment */b
+    a - /* comment */b
 }

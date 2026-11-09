@@ -10,7 +10,7 @@
 
 use crate::{
     token::{KindSet, TokenIdx, TokenKind, TokenSet, Tokens},
-    tree::{Visitor, Walk},
+    tree::{TokenRange, Visitor, Walk},
 };
 
 /// `is`: same precedence as the comparisons.
@@ -270,6 +270,15 @@ impl<O: Operator> OpTok<O> {
 
     pub fn tokens(self) -> impl Iterator<Item = TokenIdx> {
         (self.first.0..).take(self.op.token_len()).map(TokenIdx)
+    }
+
+    /// The tokens spelling the operator, as a range.
+    pub fn range(self) -> TokenRange {
+        let end = self
+            .tokens()
+            .last()
+            .map_or(self.first, |last| TokenIdx(last.0 + 1));
+        TokenRange::new(self.first, end)
     }
 }
 

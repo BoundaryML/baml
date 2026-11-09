@@ -3,9 +3,9 @@ mod newline_style;
 pub mod printer;
 mod trivia_classifier;
 
-use ast::FromCST as _;
-use baml_compiler_syntax::{SyntaxElement, SyntaxNode};
-use baml_db::{ProjectDatabase, SourceRootSpec, baml_compiler_diagnostics::ParseError};
+use baml_db::{ProjectDatabase, SourceRootSpec};
+use baml_parser::ParseError;
+use baml_syntax::{nodes::FileTree, token::TokenKind};
 use newline_style::apply_newline_style;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
@@ -74,9 +74,7 @@ pub fn format_salsa(
     file: baml_db::SourceFile,
     options: FormatOptions,
 ) -> Result<Formatted, FormatterError> {
-    let tokens = baml_compiler_lexer::lex_file(db, file);
-    let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
-    let cst = SyntaxNode::new_root(parsed);
+    let tree = baml_parser::typed_tree(db, file);
 
     // Honor the documented escape hatch at the shared library boundary so
     // CLI and LSP behavior cannot diverge. Inspect parser-classified comment
@@ -84,20 +82,20 @@ pub fn format_salsa(
     // must not disable formatting. This check intentionally precedes the parse
     // error gate so the directive can protect an incomplete or intentionally
     // non-canonical file.
-    if has_ignore_directive(&cst) {
+    if has_ignore_directive(&tree) {
         return Ok(Formatted { output: None });
     }
 
+    let errors = baml_parser::typed_parse_errors(db, file);
     if !errors.is_empty() {
-        return Err(FormatterError::ParseErrors(errors));
+        return Err(FormatterError::ParseErrors(errors.to_vec()));
     }
 
-    let trivia = TriviaInfo::classify_trivia(&cst);
-    let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
+    let trivia = TriviaInfo::classify(tree.tokens());
 
-    let mut printer = Printer::new_empty(file.text(db), &options, &trivia);
+    let mut printer = Printer::new_empty(&tree, &options, &trivia);
     printer.print(
-        &strong_ast,
+        tree.root(),
         Shape {
             width: options.line_width,
             indent: 0,
@@ -109,16 +107,14 @@ pub fn format_salsa(
     })
 }
 
-fn has_ignore_directive(cst: &SyntaxNode) -> bool {
-    cst.descendants_with_tokens().any(|element| {
-        let SyntaxElement::Token(token) = element else {
-            return false;
-        };
+/// Whether a plain comment anywhere in the file carries `baml-format: ignore`.
+fn has_ignore_directive(tree: &FileTree) -> bool {
+    let tokens = tree.tokens();
+    tokens.iter().any(|idx| {
         matches!(
-            token.kind(),
-            baml_compiler_syntax::SyntaxKind::LINE_COMMENT
-                | baml_compiler_syntax::SyntaxKind::BLOCK_COMMENT
-        ) && comment_contains_ignore_directive(token.text())
+            tokens.kind(idx),
+            TokenKind::LineComment | TokenKind::BlockComment | TokenKind::UnclosedBlockComment
+        ) && comment_contains_ignore_directive(tree.token_text(idx))
     })
 }
 
@@ -156,8 +152,6 @@ pub const CANONICAL_INDENT_WIDTH: usize = 4;
 pub enum FormatterError {
     #[error("{0:?}")]
     ParseErrors(Vec<ParseError>),
-    #[error("{0}")]
-    StrongAstError(#[from] ast::StrongAstError),
 }
 
 #[cfg(test)]
@@ -196,6 +190,19 @@ mod ignore_directive_tests {
         assert_eq!(formatted, source);
     }
 
+    /// A `///` line is a doc comment on the declaration after it, never the
+    /// ignore directive.
+    #[test]
+    fn doc_comment_is_not_an_ignore_directive() {
+        let source = "/// baml-format: ignore\nfunction f() -> int {1}\n";
+        let formatted =
+            format(source, &FormatOptions::default()).expect("a documented function formats");
+        assert_eq!(
+            formatted,
+            "/// baml-format: ignore\nfunction f() -> int {\n    1\n}\n"
+        );
+    }
+
     #[test]
     fn directive_text_inside_a_string_does_not_disable_formatting() {
         let source = "function main() -> string {\n  let marker = \"// baml-format: ignore\";\n  marker\n}\n";
@@ -226,19 +233,32 @@ mod rejection_tests {
         }
     }
 
-    /// `//#` header comments are statement-level syntax; anywhere else they
-    /// are a parse error the formatter surfaces instead of moving them.
+    /// A `//#` line directly above a function is its title and stays there.
+    #[test]
+    fn function_titles_are_kept() {
+        let source = "//# generated text\nfunction generate() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `hello`\n}\n";
+        let formatted =
+            format(source, &FormatOptions::default()).expect("a titled function formats");
+        assert_eq!(formatted, source);
+    }
+
+    /// `//#` header comments are statement-level syntax, or a function's
+    /// title; anywhere else they are a parse error the formatter surfaces
+    /// instead of moving them.
     #[test]
     fn header_comments_in_declarations_are_rejected() {
         for source in [
             "interface Animal {\n    //# methods\n    function name(self) -> string\n}\n",
-            "//# generated text\nfunction generate() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `hello`\n}\n",
+            "//# generated text\nclass Generated {\n    text: string,\n}\n",
         ] {
             let error = format(source, &FormatOptions::default())
-                .expect_err("formatter should reject headers outside expression functions");
+                .expect_err("formatter should reject headers outside blocks");
+            // A header outside a block is a parse error, so the formatter
+            // refuses the file as it refuses any other.
             assert!(
-                format!("{error:?}")
-                    .contains("header comments (`//#`) are only allowed in expression functions")
+                matches!(&error, FormatterError::ParseErrors(errors)
+                    if errors.iter().any(|error| error.to_string().contains("`//#` header"))),
+                "{error:?}"
             );
         }
     }

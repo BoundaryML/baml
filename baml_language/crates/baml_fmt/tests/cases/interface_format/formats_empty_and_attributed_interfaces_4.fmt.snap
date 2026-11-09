@@ -1,5 +1,6 @@
 ---
 source: crates/baml_fmt/tests/cases.rs
 ---
-@@internal
-interface Marker {}
+interface Marker {
+    @@internal
+}

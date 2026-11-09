@@ -1,1 +1,1 @@
-@@internal interface Marker {}
+interface Marker {@@internal}

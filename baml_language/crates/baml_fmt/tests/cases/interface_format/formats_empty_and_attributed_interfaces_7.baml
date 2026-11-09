@@ -1,1 +1,1 @@
-@@internal interface  I{@@internal function f(self)->int throws never}
+interface  I{@@internal function f(self)->int throws never}

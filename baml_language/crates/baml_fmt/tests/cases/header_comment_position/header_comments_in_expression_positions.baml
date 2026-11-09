@@ -1,10 +1,9 @@
-//# classify values
 function classify(n: int) -> string {
     //# statements
-    match (n) {
-        //# leading header
+    let label = match (n) {
         0 => "zero",
-        //# between arms
         _ => "big",
-    }
+    };
+    //# result
+    label
 }

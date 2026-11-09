@@ -373,20 +373,6 @@ struct DiagnosticErrorHirSnapshot {
 /// error recovery. Diagnostics already exercise HIR construction for every
 /// project, so keep textual HIR snapshots only where each entry adds a
 /// distinct recovery contract.
-struct FormatterTierSkip {
-    project: &'static str,
-    #[allow(dead_code)]
-    rationale: &'static str,
-}
-
-/// `diagnostic_errors/` projects the formatter tier does not run on: their
-/// syntax parses, but the formatter's own parser still rejects it. The
-/// formatter rework retires this list.
-const FORMATTER_TIER_SKIPS: [FormatterTierSkip; 1] = [FormatterTierSkip {
-    project: "test_invalid_contexts",
-    rationale: "a `test` block in a function body is a lowering diagnostic for the compiler; the formatter's parser reports it as a parse error",
-}];
-
 const DIAGNOSTIC_ERROR_HIR_SNAPSHOTS: [DiagnosticErrorHirSnapshot; 7] = [
     DiagnosticErrorHirSnapshot {
         project: "attribute_validation",
@@ -556,16 +542,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
                 .map_or_else(TokenStream::new, |rationale| {
                     generate_hir_test(project, rationale)
                 });
-            let fmt: TokenStream = project
-                .files
-                .iter()
-                .filter(|_| {
-                    !FORMATTER_TIER_SKIPS
-                        .iter()
-                        .any(|skip| skip.project == project.name)
-                })
-                .map(generate_formatter_test)
-                .collect();
+            let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
             (hir, fmt)
         }
     };
@@ -934,10 +911,6 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                     let output = match e {
                         baml_fmt::FormatterError::ParseErrors(e) => {
                             format!("=== PARSER ERROR ===\n{:?}", e)
-                        }
-                        baml_fmt::FormatterError::StrongAstError(e) => {
-                            let e = e.print_with_file_context(#relative_path, &content);
-                            format!("=== STRONG AST ERROR ===\n{}", e)
                         }
                     };
                     panic!(
