@@ -36,6 +36,19 @@ function main() -> int {
 function uncaught() -> int { fail() }
 function assertion_failure() -> int { assert.equal("one", "two"); 0 }
 
+function exit() -> int { baml.sys.exit(7); 0 }
+function exit_zero() -> int { baml.sys.exit(0); 0 }
+function exit_large() -> int { baml.sys.exit(2147483648); 0 }
+function exit_negative() -> int { baml.sys.exit(-2147483649); 0 }
+
+function handles() -> int {
+  let first = baml.regex.new("a");
+  let alias = first;
+  assert.equal(first, alias);
+  assert.is_true(first != baml.regex.new("a"));
+  1
+}
+
 function context_leaf() -> int { fail() }
 function context_middle() -> int {
   context_leaf() catch (e, ctx) {
@@ -79,3 +92,23 @@ function scalar_middle() -> int {
   } }
 }
 function scalars() -> int { scalar_middle() }
+
+function throw_caught() -> int {
+  fail() catch (e) { let f: Failure => {
+    f.message = "changed";
+    f.count = 23;
+    throw f
+  } }
+}
+
+enum Marker { One, Two }
+enum OtherMarker { One }
+function enums() -> int {
+  assert.is_true(Marker.One == Marker.One);
+  assert.is_true(Marker.One != Marker.Two);
+  assert.equal(Marker.One, Marker.One);
+  let erased: unknown = Marker.One;
+  assert.is_true(erased != OtherMarker.One);
+  { throw Marker.One; 0 } catch (e) { Marker => 1 }
+}
+function enum_throw() -> int { throw Marker.Two }

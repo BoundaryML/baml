@@ -65,6 +65,11 @@ pub(super) fn expand<'db>(
             }
             for t in constants {
                 plan.candidate(&t);
+                // Erased assertion equality and thrown enum values need capture
+                // tags even when a literal never occupies an enum-typed local.
+                if matches!(t, RuntimeTy::Enum(_)) {
+                    plan.record_ty(&t)?;
+                }
             }
             for b in &body.blocks {
                 for s in &b.statements {

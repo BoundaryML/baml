@@ -1,6 +1,7 @@
-BAML runtime coverage (normal AND GC stress): 25 pass, 123 unsupported, 0 fail
+BAML runtime coverage (normal AND GC stress): 26 pass, 123 unsupported, 0 fail
 Telemetry off: required
 String probes: off/low/medium/high/default required
+Exception probe: off/low/medium/high/default required
 Telemetry low/medium/high/default for other probes: not yet supported
 
 First unsupported constructs (fixtures blocked):
@@ -154,6 +155,7 @@ process::startup	pass
 programs::agent loop 300	pass
 programs::json parser 15	unsupported: list field element (layout JArray, object 4180, types [List(Union([Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4279) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4280) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4281) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4282) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(4283) }, [])]))]) (user.main local 8: Union([Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JArray" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JLiteral" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JNumber" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JObject" }, []), Class(QualifiedTypeName { pkg: SourceRoot(Id(20e)), namespace: [], name: "JString" }, [])]))
 programs::richards 50	pass
+rt_exception_semantics_at_every_telemetry_level	pass
 rt_setup_state_benchmark	pass
 rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass

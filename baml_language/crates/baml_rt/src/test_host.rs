@@ -108,6 +108,7 @@ mod tests {
                 line: 2,
             }],
             thrown_value: None,
+            exit_code: None,
             context: 0,
             cause: 0,
             trace: None,

@@ -117,6 +117,7 @@ fn build_error(cx: &mut Cx, pattern: Str, error: &BuildError, schema: &Schema) -
         message: error.message.clone(),
         frames: vec![],
         thrown_value: None,
+        exit_code: None,
         context: 0,
         cause: 0,
         trace: None,

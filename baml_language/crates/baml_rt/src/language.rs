@@ -114,6 +114,8 @@ pub struct Error {
     pub frames: Vec<Frame>,
     pub display_value: Option<String>,
     pub thrown_value: Option<Dyn>,
+    /// Snapshot before leaving the fiber, where the Exit object is still rooted.
+    pub exit_code: Option<i64>,
     pub context: usize,
     pub cause: usize,
     pub trace: Option<Vec<Frame>>,
@@ -195,6 +197,7 @@ impl Error {
             message,
             frames: Vec::new(),
             thrown_value: None,
+            exit_code: None,
             context: 0,
             cause: 0,
             trace: None,
@@ -237,6 +240,7 @@ pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Bo
             message,
             frames: Vec::new(),
             thrown_value: None,
+            exit_code: None,
             context: 0,
             cause: 0,
             trace: None,
@@ -389,10 +393,22 @@ fn driver_configured(
         }
     };
     let result = driver_inner(descriptors, entry, benchmark, &mut session, format_site);
-    session.finish(&result);
+    let clean_exit = Ok(());
+    session.finish(
+        if matches!(&result, Err(error) if error.exit_code == Some(0)) {
+            &clean_exit
+        } else {
+            &result
+        },
+    );
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
+            if let Some(code) = error.exit_code {
+                let code =
+                    i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX });
+                std::process::exit(code);
+            }
             let traceback = bex_vm_types::errors::format_traceback(
                 error
                     .frames
@@ -602,6 +618,7 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
             message,
             frames: Vec::new(),
             thrown_value: None,
+            exit_code: None,
             context: 0,
             cause: 0,
             trace: None,
@@ -704,6 +721,7 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
             message,
             frames: Vec::new(),
             thrown_value: None,
+            exit_code: None,
             context: 0,
             cause: 0,
             trace: None,
@@ -1089,6 +1107,7 @@ fn division_zero(left: i64) -> Box<Error> {
         message: format!("division by zero: {left} / 0"),
         frames: vec![],
         thrown_value: None,
+        exit_code: None,
         context: 0,
         cause: 0,
         trace: None,

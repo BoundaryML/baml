@@ -212,6 +212,12 @@ pub unsafe fn thrown(value: Dyn, class: &'static str, shapes: &[Shape]) -> Box<E
         message,
         frames: vec![],
         thrown_value: (!is_class).then_some(value),
+        exit_code: if class == "baml.panics.Exit" {
+            // The builtin Exit has one scalar field, after its header.
+            Some(unsafe { (value.payload as *const u8).add(8).cast::<i64>().read() })
+        } else {
+            None
+        },
         context: 0,
         cause: 0,
         trace: None,
@@ -247,20 +253,8 @@ unsafe fn render(value: Dyn, shapes: &[Shape], debug: bool) -> String {
             let s = unsafe { crate::strings::Str::from_raw(value.payload as usize) }.to_owned();
             return if nested || debug { format!("{s:?}") } else { s };
         }
-        if let Shape::Enum {
-            declaration,
-            variants,
-        } = shape
-        {
-            return if debug {
-                format!(
-                    "{}.{}",
-                    declaration().name,
-                    variants[value.payload as usize]
-                )
-            } else {
-                variants[value.payload as usize].into()
-            };
+        if let Shape::Enum { variants, .. } = shape {
+            return variants[value.payload as usize].into();
         }
         if !active.insert(value.payload) {
             return "…".into();

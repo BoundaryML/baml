@@ -49,6 +49,11 @@ pub unsafe fn type_string<const OBSERVE: bool>(
 /// # Safety
 /// The operands and shape table belong to the active heap.
 pub unsafe fn equal(a: Dyn, b: Dyn, shapes: &[Shape]) -> R<bool> {
+    // Default-argument prologues compare the omitted singleton before resolving
+    // it to the declared type. It has no heap descriptor or pointer payload.
+    if a.tag == u64::MAX || b.tag == u64::MAX {
+        return Ok(a.tag == b.tag);
+    }
     let roots = unsafe { &*crate::ROOTS.get() };
     let root = |v: Dyn| unsafe {
         roots.root(
@@ -144,7 +149,9 @@ pub unsafe fn equal(a: Dyn, b: Dyn, shapes: &[Shape]) -> R<bool> {
                     return Ok(false);
                 }
             }
-            Shape::Enum { .. } => return Ok(false),
+            // Identical pointers were handled above. Distinct opaque regex
+            // handles compare by identity, like the VM's RustData objects.
+            Shape::Enum { .. } | Shape::RustType => return Ok(false),
             Shape::Class { .. } | Shape::GenericClass { .. } | Shape::List { .. } => {
                 let left = unsafe { crate::format::children(shapes, a) };
                 let right = unsafe { crate::format::children(shapes, b) };
