@@ -1,10 +1,8 @@
 //! Compare the two heap traversals using the existing VM capture as oracle.
 use super::*;
 use baml_rt_gc::{Field, SlotKind, TaggedSlot as Dyn};
-// Compile the actual traversal in this test, without linking two fiber runtimes.
-#[allow(dead_code, unreachable_pub)]
-#[path = "../../../baml_rt/src/telemetry/capture.rs"]
-mod rt;
+// baml_rt is a dev-dependency: the parity check links the real rt traversal.
+use baml_rt::telemetry::capture as rt;
 use std::sync::OnceLock;
 static CLASS: OnceLock<rt::Declaration> = OnceLock::new();
 static ENUM: OnceLock<rt::Declaration> = OnceLock::new();
@@ -36,6 +34,15 @@ fn oracle(input: Input<'_>) -> Snapshot {
         )
     }
 }
+const RT_MAP: [baml_rt_gc::Descriptor; 4] = baml_rt::maps::descriptors(1);
+static RT_DESCRIPTORS: [baml_rt_gc::Descriptor; 5] = [
+    baml_rt::STRING_DESC,
+    RT_MAP[0],
+    RT_MAP[1],
+    RT_MAP[2],
+    RT_MAP[3],
+];
+static RT_POINTERS: [bool; 8] = [false, false, false, true, true, true, true, true];
 #[test]
 fn rt_captures_match_vm_content_ids_and_definition_blobs() {
     let mut vm = crate::vm::tests::test_vm(Vec::new());
@@ -54,6 +61,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
                 docstring: None,
                 other: indexmap::IndexMap::default(),
                 skip: false,
+                redact: false,
                 runtime_type: None,
             },
             bex_vm_types::ClassField {
@@ -67,6 +75,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
                 docstring: None,
                 other: indexmap::IndexMap::default(),
                 skip: false,
+                redact: false,
                 runtime_type: None,
             },
         ],
@@ -76,6 +85,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
         other: indexmap::IndexMap::default(),
         type_tag: baml_type::typetag::TypeTag::from_i64(100),
         stream_done: false,
+        redact: false,
         cleanup: None,
         methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
@@ -168,10 +178,25 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
         indexmap::IndexMap::from([("hello".into(), Value::int(12))]),
     );
     let record = [0u64, 10, 20];
-    let text = [0u64, 5, u64::from_le_bytes(*b"hello\0\0\0")];
     let array = [0u64, 2, (-9i64).cast_unsigned(), 8];
-    let buffer = [0u64, 1, text.as_ptr() as u64, 12];
-    let mapping = [0u64, buffer.as_ptr() as u64, 1, 1];
+    // Strings and maps use the rt heap layouts: allocate them in an rt
+    // instance. Nothing collects after the root returns, so they stay readable
+    // while the instance lives.
+    let mut rt_instance = baml_rt::Instance::new(&RT_DESCRIPTORS, &RT_POINTERS);
+    let allocated = std::rc::Rc::new(std::cell::Cell::new((0usize, 0usize)));
+    let out = allocated.clone();
+    let root = unsafe {
+        rt_instance.run_baml(move || {
+            let mut cx = baml_rt::strings::Cx::current();
+            let text = cx.string("hello")?;
+            let map = baml_rt::maps::StringIntMap::new(&mut cx, 1)?;
+            map.set(&mut cx, text, 12)?;
+            out.set((text.as_raw(), map.as_raw()));
+            Ok(0)
+        })
+    };
+    assert!(root.is_ok());
+    let (text, mapping) = allocated.get();
     let values = [
         Value::int(-7),
         Value::bool(true),
@@ -206,7 +231,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
         Dyn { tag: 5, payload: 1 },
         Dyn {
             tag: 3,
-            payload: text.as_ptr() as u64,
+            payload: text as u64,
         },
         Dyn {
             tag: 6,
@@ -214,7 +239,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
         },
         Dyn {
             tag: 7,
-            payload: mapping.as_ptr() as u64,
+            payload: mapping as u64,
         },
     ];
     let expected = oracle(Input::FunctionArgs(&values));

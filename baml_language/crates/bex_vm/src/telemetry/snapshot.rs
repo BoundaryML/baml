@@ -1497,9 +1497,6 @@ mod tests {
     }
 }
 
-// Disabled: baml_rt's capture.rs now depends on rt-only modules (reflection,
-// strings, closures, tasks), so it can no longer be compiled inside bex_vm by
-// path. The capture-parity check needs a home that links both runtimes.
-#[cfg(any())]
+#[cfg(test)]
 #[path = "snapshot_rt_tests.rs"]
 mod rt_tests;

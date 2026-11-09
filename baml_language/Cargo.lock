@@ -1474,6 +1474,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_env",
  "baml_linker_types",
+ "baml_rt",
  "baml_rt_gc",
  "baml_test_support",
  "baml_type",

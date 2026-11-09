@@ -88,6 +88,7 @@ wasm-bindgen-futures = { workspace = true }
 baml_builtins2_codegen = { workspace = true }
 
 [dev-dependencies]
+baml_rt = { path = "../baml_rt" }
 borsh = { workspace = true }
 baml_rt_gc = { path = "../baml_rt_gc" }
 baml_test_support = { workspace = true }
