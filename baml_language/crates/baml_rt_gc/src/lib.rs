@@ -228,14 +228,22 @@ impl Block {
         let mut word = slot / 64;
         let mut bits = self.starts[word] & (u64::MAX >> (63 - slot % 64));
         if bits == 0 {
-            // A second-level bitmap bounds predecessor lookup to two words,
-            // even for an interior root thousands of bytes after its header.
-            let preceding = self.start_words & ((1u32 << word) - 1);
-            if preceding == 0 {
-                return None;
+            // A second-level bitmap bounds predecessor lookup, even for an
+            // interior root thousands of bytes after its header. It is exact
+            // after sweep; an allocation run marks all of its words up front,
+            // so words of the unfilled run tail may still be empty.
+            let mut preceding = self.start_words & ((1u32 << word) - 1);
+            loop {
+                if preceding == 0 {
+                    return None;
+                }
+                word = 31 - preceding.leading_zeros() as usize;
+                bits = self.starts[word];
+                if bits != 0 {
+                    break;
+                }
+                preceding &= !(1u32 << word);
             }
-            word = 31 - preceding.leading_zeros() as usize;
-            bits = self.starts[word];
         }
         let i = word * 64 + 63 - bits.leading_zeros() as usize;
         if self.needs_sweep && !bit(&self.marks, i) {
@@ -258,6 +266,10 @@ impl Block {
             if (high - low) * LINE_BYTES >= bytes {
                 self.next_line = high;
                 self.lines[low..high].fill(1);
+                // Summarize the whole run once instead of on every bump.
+                const LINES_PER_WORD: usize = 64 * 16 / LINE_BYTES;
+                let (first, last) = (low / LINES_PER_WORD, (high - 1) / LINES_PER_WORD);
+                self.start_words |= ((2u64 << last) - (1u64 << first)) as u32;
                 // Checked allocations need zeroed runs. Generated classes write
                 // every field before another collecting operation.
                 if zero {
@@ -400,7 +412,11 @@ impl Heap {
             weak: vec![],
             native: HashMap::new(),
             stats: Stats {
-                budget: MIN_BUDGET,
+                // An empty heap uses the small-heap policy too: short jobs in a
+                // fresh instance recycle cache-sized regions instead of first
+                // faulting in 32 MiB. Growing heaps reach MIN_BUDGET after one
+                // cheap early collection.
+                budget: SMALL_HEAP_BUDGET,
                 ..Stats::default()
             },
             collection_observer: None,
@@ -677,11 +693,8 @@ impl Heap {
         // Run bounds establish both indices, avoiding repeated bounds branches.
         debug_assert!(slot < SLOTS);
         unsafe {
-            let starts = b.starts.get_unchecked_mut(slot / 64);
-            if *starts == 0 {
-                b.start_words |= 1 << (slot / 64);
-            }
-            *starts |= 1 << (slot % 64);
+            // The run already set this word's start_words summary bit.
+            *b.starts.get_unchecked_mut(slot / 64) |= 1 << (slot % 64);
             *b.sizes.get_unchecked_mut(slot) = bytes as u16;
         }
         unsafe {

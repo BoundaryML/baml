@@ -50,6 +50,25 @@ impl RootSource for Roots<'_> {
     }
 }
 
+/// Roots of the installed invocation, read only when the heap needs them.
+/// Bump allocations never trace, so the fast path does not load the root TLS.
+pub(crate) struct CurrentRoots;
+impl RootSource for CurrentRoots {
+    fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize)) {
+        unsafe { Roots(current_roots()).conservative_ranges(visit) }
+    }
+    fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+        unsafe { Roots(current_roots()).precise_roots(visit) }
+    }
+}
+/// # Safety
+/// The returned reference is valid only for the installed invocation.
+unsafe fn current_roots() -> &'static baml_rt_tasks::IntegrationRoots {
+    let roots = ROOTS.get();
+    assert!(!roots.is_null(), "rt allocation outside a root task");
+    unsafe { &*roots }
+}
+
 thread_local! {
     pub(crate) static ADMISSION_CANCELLED:Cell<bool>=const {Cell::new(false)};
     pub(crate) static ENTRY_ERROR:Cell<*mut Error>=const {Cell::new(std::ptr::null_mut())};
@@ -93,12 +112,8 @@ pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
     // Keep the TLS getters small: a closure containing the whole allocation
     // path prevents LLVM from inlining LocalKey::with into string concat loops.
     let heap = HEAP.get();
-    let roots = ROOTS.get();
-    assert!(
-        !heap.is_null() && !roots.is_null(),
-        "rt allocation outside a root task"
-    );
-    let result = unsafe { (&mut *heap).try_alloc(desc, bytes, &Roots(&*roots)) };
+    assert!(!heap.is_null(), "rt allocation outside a root task");
+    let result = unsafe { (&mut *heap).try_alloc(desc, bytes, &CurrentRoots) };
     result.map_err(|failure| language::allocation_failure(failure.bytes))
 }
 
@@ -110,12 +125,8 @@ pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
 #[inline(always)]
 pub unsafe fn try_alloc_class(desc: u32, bytes: usize) -> R<*mut u8> {
     let heap = HEAP.get();
-    let roots = ROOTS.get();
-    assert!(
-        !heap.is_null() && !roots.is_null(),
-        "rt allocation outside a root task"
-    );
-    let result = unsafe { (&mut *heap).try_alloc_class(desc, bytes, &Roots(&*roots)) };
+    assert!(!heap.is_null(), "rt allocation outside a root task");
+    let result = unsafe { (&mut *heap).try_alloc_class(desc, bytes, &CurrentRoots) };
     result.map_err(|failure| language::allocation_failure(failure.bytes))
 }
 

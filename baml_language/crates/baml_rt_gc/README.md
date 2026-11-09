@@ -14,7 +14,8 @@ Heap edges are traced precisely using immutable descriptors and pointer-type tag
 Use `write_ptr` for pointer stores; descriptor IDs must not change after allocation.
 Unsafe APIs require complete roots and prohibit use after reclamation.
 
-Collection budget is max(32 MiB, four times live bytes). `try_alloc` performs a
+Collection budget is four times live bytes, at least 32 MiB; an empty or
+nearly empty heap (live bytes up to one block) uses 1 MiB. `try_alloc` performs a
 full collection/retry before failure. Capacity limits govern usable managed
 storage, not RSS; backing batches and host bookkeeping are separate.
 Finalizers retain their reachable graph until draining. External payload memory

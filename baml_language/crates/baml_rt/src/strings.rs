@@ -90,7 +90,6 @@ const ASCII: usize = 72;
 
 pub struct Cx {
     heap: *mut baml_rt_gc::Heap,
-    roots: *const baml_rt_tasks::IntegrationRoots,
     compact: bool,
     _owner: PhantomData<Rc<()>>,
 }
@@ -100,14 +99,9 @@ impl Cx {
     #[inline(always)]
     pub unsafe fn current() -> Self {
         let heap = crate::HEAP.get();
-        let roots = crate::ROOTS.get();
-        assert!(
-            !heap.is_null() && !roots.is_null(),
-            "builtin outside a root task"
-        );
+        assert!(!heap.is_null(), "builtin outside a root task");
         Self {
             heap,
-            roots,
             compact: COMPACT_STRINGS.get(),
             _owner: PhantomData,
         }
@@ -118,13 +112,13 @@ impl Cx {
         // Construct mutable heap access only for the synchronous allocation.
         // Builtin strings, byte buffers, lists and regex records never have
         // language cleanup methods. User class allocation uses try_alloc.
-        unsafe { (&mut *self.heap).try_alloc_unfinalized(desc, bytes, &crate::Roots(&*self.roots)) }
+        unsafe { (&mut *self.heap).try_alloc_unfinalized(desc, bytes, &crate::CurrentRoots) }
             .map_err(|failure| allocation_failure(failure.bytes))
     }
     /// The caller initializes all traced slots before any subsequent allocation.
     #[inline(always)]
     pub(crate) unsafe fn alloc_uninit(&self, desc: u32, bytes: usize) -> R<*mut u8> {
-        unsafe { (&mut *self.heap).try_alloc_uninit(desc, bytes, &crate::Roots(&*self.roots)) }
+        unsafe { (&mut *self.heap).try_alloc_uninit(desc, bytes, &crate::CurrentRoots) }
             .map_err(|failure| allocation_failure(failure.bytes))
     }
     pub fn poll(&mut self) -> R<()> {

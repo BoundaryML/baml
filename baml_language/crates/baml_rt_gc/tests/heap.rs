@@ -774,6 +774,29 @@ fn sparse_start_words_and_cached_blocks_preserve_interior_bounds_after_sweep() {
 }
 
 #[test]
+fn run_summary_words_skip_empty_tail_words_in_the_active_run() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        // A fresh run covers the block and summarizes every word before any
+        // object reaches them. Lookups past the cursor find no object.
+        let p = h.alloc(2, 3000, &roots) as usize;
+        roots.precise.borrow_mut().push(p);
+        assert_eq!(h.object_start(p + 2999), Some(p));
+        for offset in [3008, 4096, 9000, 20000, 32000] {
+            assert_eq!(h.object_start(p + offset), None);
+        }
+        let q = h.alloc(2, 24, &roots) as usize;
+        roots.precise.borrow_mut().push(q);
+        assert_eq!(h.object_start(q + 23), Some(q));
+        assert_eq!(h.object_start(q + 4000), None);
+        h.collect(&roots);
+        assert_eq!(h.object_start(p + 2999), Some(p));
+        assert_eq!(h.object_start(q + 4000), None);
+    }
+}
+
+#[test]
 fn direct_mark_stack_traces_deep_cycles_without_recursive_frames() {
     unsafe {
         let mut h = heap();
