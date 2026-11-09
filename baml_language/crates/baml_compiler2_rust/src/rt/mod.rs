@@ -93,6 +93,7 @@ struct Plan<'a> {
     json_maps: BTreeMap<Repr, RuntimeTy>,
     map_stringify: bool,
     globals: BTreeMap<usize, Repr>,
+    literal_ids: std::cell::RefCell<BTreeMap<String, usize>>,
     init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
 }
 struct Emitter<'a, 'db> {

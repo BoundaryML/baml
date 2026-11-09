@@ -658,7 +658,11 @@ pub fn slice(cx: &mut Cx, value: Str, start: i64, end: i64) -> R<Str> {
     byte_slice(cx, value, first, last)
 }
 pub fn integer_to_string(cx: &mut Cx, value: i64) -> R<Str> {
-    cx.string(itoa::Buffer::new().format(value))
+    let pointer = crate::globals::integer_string(value, || {
+        cx.string(itoa::Buffer::new().format(value))
+            .map(|text| text.as_raw())
+    })?;
+    Ok(unsafe { Str::from_raw(pointer) })
 }
 pub fn code_points(cx: &Cx, value: Str) -> R<Vec<i64>> {
     Ok(value
@@ -1031,6 +1035,47 @@ mod tests {
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 4);
         assert!(instance.stats().collections >= 81);
+    }
+    #[test]
+    fn repeated_integer_formatting_reuses_one_root_and_preserves_evicted_aliases() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let first = integer_to_string(&mut cx, 123456789)?;
+            let allocated = unsafe { (&*crate::HEAP.get()).stats().allocated_since_gc };
+            for _ in 0..16 {
+                assert_eq!(
+                    integer_to_string(&mut cx, 123456789)?.as_raw(),
+                    first.as_raw()
+                );
+            }
+            assert_eq!(
+                unsafe { (&*crate::HEAP.get()).stats().allocated_since_gc },
+                allocated
+            );
+            let second = integer_to_string(&mut cx, -987654321)?;
+            for _ in 0..64 {
+                cx.string("churn")?;
+                cx.poll()?;
+            }
+            assert_eq!(first.as_str(&cx), "123456789");
+            assert_eq!(second.as_str(&cx), "-987654321");
+            assert_eq!(
+                integer_to_string(&mut cx, -987654321)?.as_raw(),
+                second.as_raw()
+            );
+            Ok(1)
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[
+                false, false, false, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true,
+            ],
+        );
+        instance.set_stress(true);
+        for _ in 0..3 {
+            assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+        }
     }
     #[test]
     fn integer_spelling_survives_reused_uninitialized_regions() {

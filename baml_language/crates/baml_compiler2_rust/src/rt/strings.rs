@@ -269,11 +269,13 @@ impl Emitter<'_, '_> {
         let mut literals = self.string_literals.borrow_mut();
         let next = literals.len();
         let index = *literals.entry(text.to_owned()).or_insert(next);
-        let value = self.fallible(&format!(
-            "rt::strings::Cx::current().string({text:?}).map(|s|s.as_raw())"
-        ));
-        // The local is a conservative stack root. Initialize at the first use,
-        // retaining the original allocation-error source site and unwind edge.
+        let mut ids = self.plan.literal_ids.borrow_mut();
+        let next_id = ids.len();
+        let id = *ids.entry(text.to_owned()).or_insert(next_id);
+        let value = self.fallible(&format!("rt::globals::string_literal({id},{text:?})"));
+        // Initialize lazily at the original error site. The per-function local
+        // avoids repeated pool access inside loops; the instance-owned pool
+        // shares the immutable value across calls and traces it precisely.
         Ok((
             format!(
                 "{{if string_literal{index}==0{{string_literal{index}={value};}}string_literal{index}}}"
