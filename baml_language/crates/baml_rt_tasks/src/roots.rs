@@ -50,7 +50,7 @@ impl IntegrationRoots {
 
     /// Stack bound for a task owned by this loop, for generated-code guards.
     pub fn stack_limit(&self, task: usize) -> usize {
-        self.0.borrow().tasks[&task].stack_limit
+        self.0.borrow().tasks[&task].executor().limit
     }
 
     pub fn with_roots<R>(&self, visit: impl FnOnce(&dyn RootSource) -> R) -> R {
@@ -74,8 +74,11 @@ impl RootSource for Core {
                 registers.as_ptr().wrapping_add(registers.len()),
             );
             for task in self.tasks.values() {
-                if let Some(sp) = task.parked_sp {
-                    visit(sp as *const usize, task.base as *const usize);
+                if task.parked_sp != 0 {
+                    visit(
+                        task.parked_sp as *const usize,
+                        task.executor().base as *const usize,
+                    );
                 }
             }
         });

@@ -173,7 +173,7 @@ impl<'a> FiberBinding<'a> {
         unsafe {
             Self {
                 cx,
-                limit: (&*crate::ROOTS.get()).stack_limit(cx.id()),
+                limit: cx.stack_limit(),
                 telemetry: crate::telemetry::Fiber::current(telemetry),
                 previous_entry_error: crate::ENTRY_ERROR.replace(ptr::null_mut()),
                 previous_task: crate::TASK.get(),
@@ -284,7 +284,7 @@ pub unsafe fn spawn(
         (*pointer).registration = (&mut *FINALIZERS.get()).register(pointer as usize);
         options.managed_roots = [pointer as usize, 0];
         let handle = (&mut *crate::TASK.get()).spawn_managed(
-            options,
+            &mut options,
             execute,
             [pointer as usize, site, entry_site, 0],
         );
@@ -379,12 +379,17 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
                 .expect("pending producer")
                 .clone();
             crate::telemetry::before_yield();
-            let result = (&mut *crate::TASK.get()).await_future(&handle);
+            let result = (&mut *crate::TASK.get()).await_settled_future(&handle);
             // Admission errors still pass through the managed entry wrapper.
-            if let Err(error) = result {
-                if (*pointer).error.is_null() {
-                    return Err(loop_error(error));
+            match result {
+                Err(error) if (*pointer).error.is_null() => return Err(loop_error(error)),
+                // Settled without the managed epilogue (a native panic).
+                Ok(()) if (*pointer).error.is_null() && (*pointer).result.tag == u64::MAX => {
+                    if let Some(Err(error)) = handle.result() {
+                        return Err(loop_error(error));
+                    }
                 }
+                _ => {}
             }
         }
         if let Some(handle) = (*pointer).handle.take() {
