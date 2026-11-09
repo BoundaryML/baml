@@ -41,6 +41,30 @@ fn is_map(shape: Option<&Shape>) -> bool {
     )
 }
 
+/// Equality of two map keys when both are scalars or strings; `None` when
+/// either needs the structural walk.
+fn scalar_key(cx: &Cx, shapes: &[Shape], a: Dyn, b: Dyn) -> R<Option<bool>> {
+    let (a, b) = (normalize(shapes, a), normalize(shapes, b));
+    let scalar = |v: Dyn| {
+        matches!(v.tag, 0..=3 | FLOAT_TAG)
+            || matches!(shape(shapes, v), Some(Shape::String | Shape::Enum { .. }))
+    };
+    if !scalar(a) || !scalar(b) {
+        return Ok(None);
+    }
+    if a.tag == b.tag && a.payload == b.payload {
+        return Ok(Some(true));
+    }
+    let string = |v: Dyn| v.tag == 3 || matches!(shape(shapes, v), Some(Shape::String));
+    Ok(Some(if string(a) && string(b) {
+        crate::strings::equals_raw(cx, a.payload as usize, b.payload as usize)?
+    } else if a.tag == FLOAT_TAG && b.tag == FLOAT_TAG {
+        bex_vm_types::float_order::eq(f64::from_bits(a.payload), f64::from_bits(b.payload))
+    } else {
+        false
+    }))
+}
+
 /// # Safety
 /// Both operands and every value reachable from them are live values of the
 /// active program, described by `shapes`.
@@ -160,7 +184,11 @@ unsafe fn walk(
                 }
             }
             Shape::Reflected(program) => unsafe {
-                if !crate::reflection::same_identity(program, a.payload as usize, b.payload as usize) {
+                if !crate::reflection::same_identity(
+                    program,
+                    a.payload as usize,
+                    b.payload as usize,
+                ) {
                     return Ok(false);
                 }
             },
@@ -210,6 +238,16 @@ unsafe fn walk(
                 for entry in xs.chunks_exact(2) {
                     let mut matched = None;
                     for candidate in ys.chunks_exact(2) {
+                        // Scalar and string keys decide without recursion, so
+                        // deeply nested maps never deepen the native stack.
+                        if let Some(equal) = scalar_key(cx, shapes, entry[0], candidate[0])? {
+                            if equal {
+                                matched = Some(candidate[1]);
+                                break;
+                            }
+                            continue;
+                        }
+                        crate::check_stack()?;
                         let mut scratch = visited.clone();
                         if unsafe {
                             walk(

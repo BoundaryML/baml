@@ -213,6 +213,25 @@ impl registry::Feature for Feature {
         value: &Rvalue<'_>,
         _expected: Repr,
     ) -> Option<Gen<(String, Repr)>> {
+        if let Rvalue::CurrentPackage = value {
+            // The pack is closed-world: the enclosing package is the program's
+            // root, identified by its package index.
+            return Some((|| {
+                let class = kind_class(e.plan, "Package")?;
+                let root = e.plan.program.root;
+                Ok((
+                    e.fallible(&format!(
+                        "(||->R<usize>{{unsafe{{Ok({})}}}})()",
+                        build(
+                            e,
+                            class,
+                            &[("_inner", format!("rt::Dyn{{tag:0,payload:{root}}}"))]
+                        )?
+                    )),
+                    Repr::Ptr(class),
+                ))
+            })());
+        }
         if !e.plan.reflected {
             return None;
         }

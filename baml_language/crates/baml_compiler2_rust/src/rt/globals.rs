@@ -138,7 +138,11 @@ pub(super) fn emit(
                 Repr::Null => 2,
                 Repr::Str => 3,
                 Repr::Ptr(c) => descriptors[&c] + 3,
-                r if r.pointer() => lists[&r] + 3,
+                Repr::Reflected => plan
+                    .reflection_descriptor()
+                    .ok_or_else(|| no("reflected global descriptor"))?
+                    + 3,
+                r if r.pointer() => *lists.get(&r).ok_or_else(|| no("global representation"))? + 3,
                 Repr::Tagged | Repr::Dyn(_) => 0,
                 _ => return Err(no("global representation")),
             };

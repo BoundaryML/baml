@@ -322,3 +322,17 @@ function RtNativeReflectionMeta() -> int {
     }
     total
 }
+
+const GLOBAL_INT_TYPE = reflect.Type.of<int>();
+const GLOBAL_PACKAGE = reflect.Package.current();
+const GLOBAL_TYPES = [reflect.Type.of<string>(), reflect.Type.of<ReflectRecord>()];
+
+function RtNativeReflectionGlobals() -> int {
+    let package = GLOBAL_PACKAGE;
+    log.info(GLOBAL_INT_TYPE);
+    log.info(GLOBAL_TYPES[1].to_string());
+    if (GLOBAL_INT_TYPE != reflect.Type.of<int>() || GLOBAL_TYPES[0] != reflect.Type.of<string>()) {
+        throw "global type";
+    }
+    3
+}
