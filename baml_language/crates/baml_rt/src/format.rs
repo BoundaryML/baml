@@ -17,15 +17,28 @@ pub(crate) unsafe fn field(pointer: usize, field: &Field) -> Dyn {
     }
 }
 pub(crate) unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
+    unsafe { children_prefix(shapes, value, usize::MAX).0 }
+}
+// Diagnostic rendering snapshots only the children its node budget permits.
+// For maps the limit counts entries (each entry contains a key and a value).
+pub(crate) unsafe fn children_prefix(
+    shapes: &[Shape],
+    value: Dyn,
+    limit: usize,
+) -> (Vec<Dyn>, bool) {
     if value.tag < 3 || value.tag == 4294967294 || value.payload == 0 {
-        return vec![];
+        return (vec![], false);
     }
     let pointer = value.payload as usize;
     match &shapes[(value.tag - 3) as usize] {
-        Shape::Class { fields, .. } | Shape::GenericClass { fields, .. } => fields
-            .iter()
-            .map(|f| unsafe { field(pointer, f) })
-            .collect(),
+        Shape::Class { fields, .. } | Shape::GenericClass { fields, .. } => (
+            fields
+                .iter()
+                .take(limit)
+                .map(|f| unsafe { field(pointer, f) })
+                .collect(),
+            fields.len() > limit,
+        ),
         Shape::List { growing, tag, .. } => {
             let p = pointer as *const usize;
             let (data, len) = if *growing {
@@ -35,18 +48,19 @@ pub(crate) unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
             } else {
                 (p, unsafe { p.add(1).read() })
             };
-            (0..len)
+            let values = (0..len.min(limit))
                 .map(|i| Dyn {
                     tag: *tag,
                     payload: unsafe { data.add(i + 2).read() } as u64,
                 })
-                .collect()
+                .collect();
+            (values, len > limit)
         }
         Shape::MapStringInt | Shape::MapStringPtr { .. } => {
             let p = pointer as *const usize;
             let data = (unsafe { p.add(1).read() } + 16) as *const u64;
             let len = unsafe { p.add(2).read() };
-            (0..len)
+            let values = (0..len.min(limit))
                 .flat_map(|i| {
                     [
                         Dyn {
@@ -65,9 +79,10 @@ pub(crate) unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
                         },
                     ]
                 })
-                .collect()
+                .collect();
+            (values, len > limit)
         }
-        _ => vec![],
+        _ => (vec![], false),
     }
 }
 unsafe fn collect(shapes: &[Shape], value: Dyn, tags: &[u64], pending: &mut Vec<Dyn>) {

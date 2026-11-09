@@ -30,7 +30,7 @@ pub unsafe fn context(error: &Error, schema: ContextSchema) -> crate::R<usize> {
     unsafe {
         frames.add(8).cast::<usize>().write(trace.len());
     }
-    let mut cx = unsafe { crate::strings::Cx::current() };
+    let cx = unsafe { crate::strings::Cx::current() };
     for (i, frame) in trace.iter().rev().enumerate() {
         let file = cx.string(frame.file)?.as_raw();
         let _file = unsafe { roots.root(file) };
@@ -229,98 +229,161 @@ pub unsafe fn thrown(value: Dyn, class: &'static str, shapes: &[Shape]) -> Box<E
 /// The VM uses compact debug fields for an escaping throw and a bounded,
 /// qualified structural rendering for errors.Context.to_string.
 unsafe fn render(value: Dyn, shapes: &[Shape], debug: bool) -> String {
-    unsafe fn visit(
-        value: Dyn,
-        shapes: &[Shape],
+    struct Renderer<'a> {
+        shapes: &'a [Shape],
         debug: bool,
-        nested: bool,
-        depth: usize,
-        budget: &mut usize,
-        active: &mut std::collections::BTreeSet<u64>,
-    ) -> String {
-        if depth > 32 || *budget == 0 {
-            return "…".into();
+        remaining: usize,
+        active: std::collections::BTreeSet<u64>,
+    }
+    impl Renderer<'_> {
+        fn can_render(&self, depth: usize) -> bool {
+            self.debug || self.remaining != 0 && depth <= 32
         }
-        *budget -= 1;
-        if value.tag < 3 || value.tag == 4294967294 {
-            return unsafe { crate::format::structural(value, shapes) };
-        }
-        if value.payload == 0 && !matches!(shapes[(value.tag - 3) as usize], Shape::Enum { .. }) {
-            return "null".into();
-        }
-        let shape = &shapes[(value.tag - 3) as usize];
-        if matches!(shape, Shape::String) {
-            let s = unsafe { crate::strings::Str::from_raw(value.payload as usize) }.to_owned();
-            return if nested || debug { format!("{s:?}") } else { s };
-        }
-        if let Shape::Enum { variants, .. } = shape {
-            return variants[value.payload as usize].into();
-        }
-        if !active.insert(value.payload) {
-            return "…".into();
-        }
-        let mut recur = |v| unsafe { visit(v, shapes, debug, true, depth + 1, budget, active) };
-        let rendered = match shape {
-            Shape::Class {
-                declaration,
-                fields,
+        fn child_limit(&self) -> usize {
+            if self.debug {
+                usize::MAX
+            } else {
+                self.remaining
             }
-            | Shape::GenericClass {
-                declaration,
-                fields,
-                ..
-            } => {
-                let name = declaration().name.to_string();
-                let fields = fields
-                    .iter()
-                    .map(|f| {
-                        format!(
-                            "{}: {}",
-                            f.name,
-                            recur(unsafe { crate::format::field(value.payload as usize, f) })
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                if debug {
-                    format!("{name} {{{fields}}}")
-                } else if fields.is_empty() {
-                    name
-                } else {
-                    format!("{name} {{ {fields} }}")
+        }
+        unsafe fn value(&mut self, value: Dyn, nested: bool, depth: usize) -> String {
+            if !self.debug {
+                let available = self.remaining != 0;
+                self.remaining = self.remaining.saturating_sub(1);
+                if !available || depth > 32 {
+                    return "…".into();
                 }
             }
-            Shape::List { .. } => format!(
-                "[{}]",
-                unsafe { crate::format::children(shapes, value) }
-                    .into_iter()
-                    .map(&mut recur)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Shape::MapStringInt | Shape::MapStringPtr { .. } => {
-                let children = unsafe { crate::format::children(shapes, value) };
-                let entries = children
-                    .chunks_exact(2)
-                    .map(|p| format!("{}: {}", recur(p[0]), recur(p[1])))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{{{entries}}}")
+            let shapes = self.shapes;
+            if self.debug && value.tag == 4294967294 {
+                // BexExternalValue::render_readable keeps Rust's non-finite
+                // spellings (inf, -inf, NaN) rather than format_float's.
+                let f = f64::from_bits(value.payload);
+                return if f.is_finite() {
+                    bex_vm_types::format_float(f)
+                } else {
+                    f.to_string()
+                };
             }
-            _ => unsafe { crate::format::structural(value, shapes) },
-        };
-        active.remove(&value.payload);
-        rendered
+            if value.tag < 3 || value.tag == 4294967294 {
+                return unsafe { crate::format::structural(value, shapes) };
+            }
+            let shape = &shapes[(value.tag - 3) as usize];
+            if value.payload == 0 && !matches!(shape, Shape::Enum { .. }) {
+                return "null".into();
+            }
+            if matches!(shape, Shape::String) {
+                let text =
+                    unsafe { crate::strings::Str::from_raw(value.payload as usize) }.to_owned();
+                return if nested || self.debug {
+                    format!("{text:?}")
+                } else {
+                    text
+                };
+            }
+            if let Shape::Enum { variants, .. } = shape {
+                return variants[value.payload as usize].into();
+            }
+            if !self.active.insert(value.payload) {
+                return "…".into();
+            }
+            let rendered = match shape {
+                Shape::Class {
+                    declaration,
+                    fields,
+                }
+                | Shape::GenericClass {
+                    declaration,
+                    fields,
+                    ..
+                } => {
+                    let name = declaration().name.to_string();
+                    let mut parts = Vec::new();
+                    for field in *fields {
+                        if !self.can_render(depth + 1) {
+                            parts.push("…".into());
+                            break;
+                        }
+                        let value = unsafe { crate::format::field(value.payload as usize, field) };
+                        parts.push(format!("{}: {}", field.name, unsafe {
+                            self.value(value, true, depth + 1)
+                        }));
+                    }
+                    let fields = parts.join(", ");
+                    if self.debug {
+                        format!("{name} {{{fields}}}")
+                    } else if parts.is_empty() {
+                        name
+                    } else {
+                        format!("{name} {{ {fields} }}")
+                    }
+                }
+                Shape::List { .. } => {
+                    let (children, mut truncated) = unsafe {
+                        crate::format::children_prefix(shapes, value, self.child_limit())
+                    };
+                    let mut parts = Vec::new();
+                    for child in children {
+                        if !self.can_render(depth + 1) {
+                            truncated = true;
+                            break;
+                        }
+                        parts.push(unsafe { self.value(child, true, depth + 1) });
+                    }
+                    if truncated {
+                        parts.push("…".into());
+                    }
+                    format!("[{}]", parts.join(", "))
+                }
+                Shape::MapStringInt | Shape::MapStringPtr { .. } => {
+                    let (children, mut truncated) = unsafe {
+                        crate::format::children_prefix(shapes, value, self.child_limit())
+                    };
+                    let mut parts = Vec::new();
+                    for pair in children.chunks_exact(2) {
+                        if !self.can_render(depth + 1) {
+                            truncated = true;
+                            break;
+                        }
+                        let key = unsafe { self.value(pair[0], true, depth + 1) };
+                        let value = unsafe { self.value(pair[1], true, depth + 1) };
+                        parts.push(format!("{key}: {value}"));
+                    }
+                    if truncated {
+                        parts.push("…".into());
+                    }
+                    format!("{{{}}}", parts.join(", "))
+                }
+                Shape::Uint8Array => {
+                    let bytes = unsafe { crate::bytes::data(value.payload as usize) };
+                    if self.debug {
+                        format!("<bytes:{}>", bytes.len())
+                    } else {
+                        let limit = self.child_limit().min(bytes.len());
+                        let mut parts =
+                            bytes[..limit].iter().map(u8::to_string).collect::<Vec<_>>();
+                        self.remaining = self.remaining.saturating_sub(limit);
+                        if limit != bytes.len() {
+                            parts.push("…".into());
+                        }
+                        format!("[{}]", parts.join(", "))
+                    }
+                }
+                _ => unsafe { crate::format::structural(value, shapes) },
+            };
+            self.active.remove(&value.payload);
+            rendered
+        }
     }
+    // Context diagnostics are bounded; the VM's escaping-value formatter renders
+    // complete acyclic values and uses a compact byte-buffer summary.
     unsafe {
-        visit(
-            value,
+        Renderer {
             shapes,
             debug,
-            false,
-            0,
-            &mut 256,
-            &mut std::collections::BTreeSet::new(),
-        )
+            remaining: 256,
+            active: Default::default(),
+        }
+        .value(value, false, 0)
     }
 }

@@ -1037,7 +1037,7 @@ fn rt_setup_state_benchmark() {
 #[ignore = "builds generated Rust crates with cargo"]
 fn rt_exception_semantics_at_every_telemetry_level() {
     let selected = std::env::var("BAML_RT_EXCEPTION_ENTRIES")
-        .unwrap_or_else(|_| "main,uncaught,assertion_failure,contexts,chains,scalars,exit,exit_zero,exit_large,exit_negative,handles,throw_caught,enums,enum_throw".into());
+        .unwrap_or_else(|_| "main,uncaught,assertion_failure,contexts,chains,scalars,exit,exit_zero,exit_large,exit_negative,handles,throw_caught,enums,enum_throw,diagnostics,wide_throw,selectors,float_throw,bytes_throw,null_throw,positive_infinity_throw,negative_infinity_throw,nan_throw,approx_nan_epsilon,approx_nan_delta".into());
     let entries = selected.split(',').collect::<Vec<_>>();
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
@@ -1087,7 +1087,17 @@ fn rt_exception_semantics_at_every_telemetry_level() {
         assert!(
             entry.starts_with("exit")
                 || output.status.success()
-                    == matches!(entry, "main" | "contexts" | "chains" | "scalars" | "handles" | "enums"),
+                    == matches!(
+                        entry,
+                        "main"
+                            | "contexts"
+                            | "chains"
+                            | "scalars"
+                            | "handles"
+                            | "enums"
+                            | "diagnostics"
+                            | "selectors"
+                    ),
             "{level}/{is_rt}/{stress}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
