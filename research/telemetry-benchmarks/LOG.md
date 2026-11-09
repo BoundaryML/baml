@@ -384,4 +384,21 @@ One conversation:
 
 **Spans check against hosted BCS** (`experiments/bcs_check.py`, `results/bcs-check.json`): for each of the 96 hosted BAML runs since 2026-11-06, the spans `baml query` finds under the run's process IDs equal the spans the replay counted: 6,161 predicted, 6,161 stored, 96 of 96 exact. The project held 10,025 spans in all. The Billing page read 9,932 spans and 410 MB with "20 recording files awaiting measurement" shortly after the agent runs.
 
-**Site:** new "What BCS can and can't cache" explainer (rules table and a one-call diagram), a per-call chart for the two big conversations (solid = uploaded, hatched = billed but already uploaded), token sizes on every chat chart, and a final "Learnings" section. Its projection applies five runtime-level changes to the measured conversations (store pieces once; record history as deltas; derive the request from a receipt; reference content stored once per project; compress). All five together bring BCS's bill 174–4,334× below today's and 50–200× below Datadog, and 2.6–2.7× below Logfire's list price on three of the four conversations; the long chat stays 1.7× above Logfire because its messages are all new text.
+**Site:** new "What BCS can and can't cache" explainer (rules table and a one-call diagram), a per-call chart for the two big conversations (solid = uploaded, hatched = billed but already uploaded), token sizes on every chat chart, and a final "Learnings" section. Its projection applies four runtime-level changes to the measured conversations (store pieces once; record history as deltas; derive the request from a receipt; reference content stored once per project). Together they bring BCS's bill 70–1,734× below today's and 20–80× below Datadog, and about level with Logfire's list price on three of the four conversations; the long chat stays 4.4× above Logfire because its messages are all new text. Compression was dropped from the projection at the user's point that queries read decompressed values, so it saves bandwidth and storage but not billed bytes.
+
+## 2026-11-09: E18 how fast traces leave the process (`chat.py --variant files`, `results/chat-files-timed.json`)
+
+Question (from the user): why do runs take so long, and how good is BAML's flushing? `chat.py` now records a timestamp for every mock-model reply, every telemetry request and process exit, and the BCS relay times each PUT to hosted storage. One 48-turn coding-agent conversation per stack (96 model calls, 1 s model delay). BAML uploaded to the real BCS over this laptop's connection; the Python stacks sent to the local relay.
+
+| stack | telemetry | sent after the last model call | exit after the last call | each call's trace arrives |
+|---|---:|---:|---:|---|
+| BAML → BCS | 113.4 MB | 4.6 MB (4%) | 1.75 s | 0.57 s median, 0.74 s max after the model's reply |
+| Logfire | 126.4 MB | 1.4 MB (1%) | 0.35 s | within its 0.5 s export interval |
+| OpenTelemetry | 31.5 MB | 3.8 MB (12%) | 0.43 s | within its 5 s batch interval |
+| Datadog | 202.2 MB | 202.2 MB (100%) | 1.28 s | at exit |
+
+- BAML streamed each call's trace to BCS about 0.6 s after the model answered, including the PUT to storage, and lost nothing (0 missing sizes, all statuses 200/204). Large PUTs ran at about 12 Mbit/s; in the long-chat runs the night before they averaged 3.2 Mbit/s, so the runs' length was mostly the 1 s mock model (96 calls ≈ 100 s per conversation) plus, for BAML, this connection's upload speed.
+- Datadog's LLM Observability writer sent nothing until exit: all 202 MB went after the last call.
+- Logfire's process made its 96 calls 13 s slower than the others, most likely the time spent encoding and exporting 126 MB of spans in-process.
+
+**Spans check:** with this run, 97 of 97 hosted BAML runs have exactly the spans the replay predicts (6,469). Predicted billing for Nov 9 UTC (the three long-chat runs and this run): **255.24 MB and 857 spans**, to compare with the Billing page's daily breakdown.

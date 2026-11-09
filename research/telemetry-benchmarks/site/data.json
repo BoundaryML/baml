@@ -9693,5 +9693,51 @@
   "longchat": 3899,
   "photo": 203899,
   "files": 2085000
- }
+ },
+ "flush": [
+  {
+   "stack": "otel",
+   "hosted": false,
+   "calls": 96,
+   "bytes": 31537966,
+   "after_last": 3846234,
+   "exit_after_last_s": 0.42864298820495605,
+   "wall_s": 99.36761021614075,
+   "last_call_s": 98.93896722793579
+  },
+  {
+   "stack": "baml",
+   "hosted": true,
+   "calls": 96,
+   "bytes": 113417461,
+   "after_last": 4588269,
+   "exit_after_last_s": 1.7539489269256592,
+   "wall_s": 99.68234705924988,
+   "last_call_s": 97.92839813232422,
+   "lag_median_s": 0.5700500011444092,
+   "lag_max_s": 0.741642951965332,
+   "upload_mbit_s": 12.084092423285815,
+   "missing": 0
+  },
+  {
+   "stack": "datadog",
+   "hosted": false,
+   "calls": 96,
+   "bytes": 202189781,
+   "after_last": 202189781,
+   "exit_after_last_s": 1.275663137435913,
+   "wall_s": 100.86516213417053,
+   "last_call_s": 99.58949899673462
+  },
+  {
+   "stack": "logfire",
+   "hosted": false,
+   "calls": 96,
+   "bytes": 126377941,
+   "after_last": 1381501,
+   "exit_after_last_s": 0.3545379638671875,
+   "wall_s": 111.35138201713562,
+   "last_call_s": 110.99684405326843
+  }
+ ]
 }

@@ -188,12 +188,40 @@ def lever_known():
             "files": sum(FILE_KB[t % len(FILE_KB)] * 1000 for t in range(files_turns))}
 
 
+def flush():
+    """How fast each stack gets a call's trace out, from the timed 48-turn agent run."""
+    out = []
+    for r in load("chat-files-timed.json"):
+        tm = r.get("timing")
+        if r.get("error") or not tm:
+            continue
+        mt = tm["model_t"]
+        row = {"stack": r["stack"], "hosted": bool(r.get("hosted")), "calls": len(mt),
+               "bytes": r["telemetry"]["telemetry_bytes"], "after_last": tm["bytes_after_last_call"],
+               "exit_after_last_s": tm["exit_after_last_call_s"], "wall_s": tm["wall_s"],
+               "last_call_s": mt[-1] - tm["start"]}
+        if r["stack"] == "baml":
+            billing = r["telemetry"]["billing"]
+            lags, k = [], 0
+            for e, put in zip(billing["timeline"], tm["puts"]):
+                for _ in range(e["network_announcements"]):
+                    if k < len(mt):
+                        lags.append(put[0] + put[1] - mt[k])
+                        k += 1
+            big = [x for x in tm["puts"] if x[2] > 500_000]
+            row.update(lag_median_s=statistics.median(lags), lag_max_s=max(lags),
+                       upload_mbit_s=sum(x[2] for x in big) * 8 / 1e6 / sum(x[1] for x in big),
+                       missing=billing["missing_sizes"])
+        out.append(row)
+    return out
+
+
 def main():
     data = {
         "wire": wire(), "overhead": overhead(), "crash": crash(), "searchable": searchable(),
         "loc": load("loc.json"), "scrub": load("scrub.json"), "pipeline": load("pipeline.json"),
         "anatomy": anatomy(), "wire_english": wire_english(), "chat": chat(), "chat_variants": chat_variants(),
-        "chat_big": chat_big(), "lever_known": lever_known(),
+        "chat_big": chat_big(), "lever_known": lever_known(), "flush": flush(),
     }
     out = ROOT / "site" / "data.json"
     out.parent.mkdir(exist_ok=True)

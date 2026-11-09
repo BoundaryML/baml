@@ -1,5 +1,5 @@
 {
- "project_spans": 10025,
+ "project_spans": 10333,
  "runs": [
   {
    "file": "chat-baml.json",
@@ -120,6 +120,14 @@
    "predicted_spans": 106,
    "stored_spans": 106,
    "predicted_bytes": 2091795
+  },
+  {
+   "file": "chat-files-timed.json",
+   "turns": 48,
+   "utc": "2026-11-09T22:37:39.142420+00:00",
+   "predicted_spans": 308,
+   "stored_spans": 308,
+   "predicted_bytes": 198179305
   },
   {
    "file": "chat-files.json",

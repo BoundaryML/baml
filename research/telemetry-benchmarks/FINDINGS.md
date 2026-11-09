@@ -16,7 +16,8 @@ All runs use a local fake OpenAI server, so the numbers measure tracing, not the
 6. **Retries are visible.** BAML recorded all 30 HTTP attempts in the agent runs, including the 10 503 failures. Logfire and Datadog recorded 20 model spans, because the OpenAI SDK's internal retry happens inside one instrumented call.
 7. **Full fidelity, no silent edits.** BCS stores the raw HTTP request and response plus inputs and outputs and never redacts unless asked (`@trace.redact`). Logfire's default scrubbing replaced 8 of 10 ordinary support tickets with `[Scrubbed due to '…']`, triggered by words like password, session, cookie, secret santa and authentication (`results/scrub.json`).
 8. **Fastest to search.** A finished BAML CLI run appeared in `baml query` after a median of 5.8 s (1.8–6.7 s, 6 trials), against 15.2 s for Logfire's SQL API and 37.8 s for Datadog span search (`results/searchable.json`).
-9. **Dedup on the wire.** Ten identical 100 KiB calls upload 328 KB, against 2.19 MB for ten different ones.
+9. **Traces leave the process as it runs.** In a 96-call agent conversation, each call's trace reached the real BCS a median 0.57 s after the model replied (max 0.74 s), only 4% of 113 MB was sent after the last call, and nothing was lost. Datadog's LLM Observability writer sent all 202 MB at exit (LOG.md, "E18").
+10. **Dedup on the wire.** Ten identical 100 KiB calls upload 328 KB, against 2.19 MB for ten different ones.
 
 ## Weaknesses and surprises
 
@@ -43,7 +44,7 @@ All runs use a local fake OpenAI server, so the numbers measure tracing, not the
 
 ## The biggest opportunity
 
-LLM traces are mostly repeats, and BCS bills bytes, so BCS bills the repeats. Because BAML owns the runtime, it can record each new piece of information once: store pieces once and bill them once; record history as "previous list + new message" (the VM knows it is the same list); store the raw request as a receipt (template, input references, settings, hash) and re-render it on read; reference content stored once per project (files read with `baml.fs.read`, images, system prompts); compress the rest. Applied to the measured conversations, this cuts BCS's bill 174–4,334×, to 50–200× below Datadog and 2.6–2.7× below Logfire's list price on three of four conversations (the 100-turn chat of new text stays 1.7× above Logfire). SDK-based tools can't do this, because they see each call as an opaque string. The site's "Learnings" section has the projection and the full list.
+LLM traces are mostly repeats, and BCS bills bytes, so BCS bills the repeats. Because BAML owns the runtime, it can record each new piece of information once: store pieces once and bill them once; record history as "previous list + new message" (the VM knows it is the same list); store the raw request as a receipt (template, input references, settings, hash) and re-render it on read; and reference content stored once per project (files read with `baml.fs.read`, images, system prompts). Applied to the measured conversations, this cuts BCS's bill 70–1,734×, to 20–80× below Datadog and about level with Logfire's list price on three of four conversations (the 100-turn chat of new text stays 4.4× above Logfire). Compression is not counted: queries read decompressed values, so it saves bandwidth and storage, not billed bytes. SDK-based tools can't do this, because they see each call as an opaque string. The site's "Learnings" section has the projection and the full list.
 
 ## Notes on the other stacks
 

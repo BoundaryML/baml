@@ -353,6 +353,10 @@ logfire.instrument_openai()
     <h3>Retries</h3>
     <p>In the agent app, every first model attempt fails with a 503 and is retried. BAML recorded all 30 HTTP attempts in 10 runs, failures included. Logfire and Datadog recorded 20 model spans for the same 30 requests, because the OpenAI SDK retries inside a single instrumented call.</p>
   </div>
+  <h3 id="flushing">How fast traces leave the process</h3>
+  <p class="col">The 48-turn coding agent again, with timestamps on every model reply, every telemetry request and process exit. BAML uploaded to the real BCS over this laptop's internet connection; the Python stacks sent to a local relay, so their numbers leave out the internet upload.</p>
+  <div class="tablewrap"><table id="flushTable"></table></div>
+  <p class="muted col" id="flushNote"></p>
 </section>
 
 <section id="scrubbing">
@@ -406,23 +410,22 @@ logfire.instrument_openai()
     <li><strong>Record history as deltas.</strong> The VM knows that call 40's <code>history</code> is the same list as call 39's plus one <code>push</code>. It can record "previous list + this message" without hashing or copying the history again, and give every value that has already been captured a reference, whatever its size. No 16 KiB threshold, and capture cost grows with the new turn, not the conversation.</li>
     <li><strong>Derive the request instead of storing it.</strong> The raw HTTP request is a pure function of the prompt template, the inputs and the client settings, all of which BCS already has. Store a receipt instead: template ID, input references, settings and a hash of the exact bytes sent. BCS re-renders the request on read and checks the hash; if rendering ever disagrees, the client falls back to sending the raw bytes. The parsed output is likewise derived from the raw response.</li>
     <li><strong>Reference content BCS already has.</strong> The runtime sees where data enters the program. A file read with <code>baml.fs.read</code>, an image, a system prompt or a RAG document is the same in thousands of conversations, so it is stored once per project, keyed by its hash, and every conversation points to it. A coding agent reading a repository then pays for each file version once, not once per call.</li>
-    <li><strong>Compress what is left.</strong> Conversations are prose and JSON. gzip shrank English prompts to 31–50% of their size in our Logfire runs; zstd with a per-project dictionary does better.</li>
   </ol>
   <p class="col">The chart applies these steps to the conversations we measured. Steps 2 and 3 only pay off together: deltas alone leave a full-size raw request every call, and a request receipt alone points at history that is new every call.</p>
   <div class="tabs" role="group" aria-label="Conversation" id="leverTabs"></div>
   <div class="chart" id="lever"></div>
   <p class="muted col" id="leverNote"></p>
   <div class="tablewrap"><table id="leverTable"></table></div>
-  <p class="muted col">Projections from measured sizes, not measurements of a built system. Step 1: the bytes BAML actually uploaded (each stored piece once, cut as today), or today's bill if lower. Step 2: every raw request at full size plus one copy of the conversation (its final request). Step 3: one copy of the conversation plus 200 bytes of references per call. Step 4: step 3 minus content stored once per project and reused across conversations (the 3.9 KB system prompt, the 200 KB photo, and the 2.1 MB of files the agent read), counted as free per conversation. Step 5: step 4 at 40% of its size, the middle of the gzip ratios we measured on English text. Logfire: one record per conversation, two per model call and one per tool call, at $2 per million. Datadog LLM Observability: $3.50 per 10,000 LLM spans.</p>
+  <p class="muted col">Projections from measured sizes, not measurements of a built system. Step 1: the bytes BAML actually uploaded (each stored piece once, cut as today), or today's bill if lower. Step 2: every raw request at full size plus one copy of the conversation (its final request). Step 3: one copy of the conversation plus 200 bytes of references per call. Step 4: step 3 minus content stored once per project and reused across conversations (the 3.9 KB system prompt, the 200 KB photo, and the 2.1 MB of files the agent read), counted as free per conversation. Compression is left out: BCS has to decompress to answer queries, so it saves storage and bandwidth but not the bytes BCS processes. Logfire: one record per conversation, two per model call and one per tool call, at $2 per million. Datadog LLM Observability: $3.50 per 10,000 LLM spans.</p>
 
   <h3>Why this beats the competition, not just today's BCS</h3>
   <p class="col">Logfire and Datadog can't follow, because they don't own the program. An SDK hook sees a request string, not the list it was rendered from, and can't know that a tool result came from a file the platform already holds. So they will keep shipping every repeat, and their customers keep paying for the bandwidth even when the bill counts records instead of bytes. The same knowledge makes BCS better, not just cheaper: a call can be shown as what changed since the last one, any call can be replayed exactly from its receipt, and a production conversation can be forked at turn 23 with a different prompt to make an eval.</p>
-  <p class="col">Price is the other half. Logfire charges $2 per million records whatever their size, and asks for spans near 5 KB on average; the agent's spans are megabytes, so its list price may not hold for this workload. With steps 1–3, BCS at $4/GB is already 4–77× cheaper than Datadog on these conversations and about even with Logfire on the support chat, but up to 18× above Logfire on the others. Steps 4 and 5, which need the runtime, bring it 2.6–2.7× below Logfire's list price on three of the four conversations, while keeping the whole conversation rather than a scrubbed summary. The long chat stays 1.7× above, because its 2.5 KB messages are all new text: a per-byte price at $4/GB still charges for genuinely new information, which is the trade-off to weigh when setting the price.</p>
+  <p class="col">Price is the other half. Logfire charges $2 per million records whatever their size, and asks for spans near 5 KB on average; the agent's spans are megabytes, so its list price may not hold for this workload. With steps 1–3, BCS at $4/GB is already 4–77× cheaper than Datadog on these conversations and about even with Logfire on the support chat, but up to 18× above Logfire on the others. Step 4, which needs the runtime, brings it level with Logfire's list price on three of the four conversations (about 1.1× below), while keeping the whole conversation rather than a scrubbed summary. The long chat stays 4.4× above, because its 2.5 KB messages are all new text: a per-byte price at $4/GB still charges for genuinely new information. To pull clearly ahead of Logfire on cost, the per-GB price has to come down as well, which bytes stored once make easier to afford.</p>
 
   <h3>More improvements, by impact</h3>
   <ol class="col steps">
     <li><strong>Share pieces across processes.</strong> A support bot's system prompt, a product photo or a RAG document is the same in a million conversations. Let the server answer "already stored" for pieces of any process in the project, and bill them once. A 20 KB system prompt over a million conversations would go from 20 GB to 20 KB. Today a second process re-uploads the identical photo, and BCS reported 0 objects already stored.</li>
-    <li><strong>Compress uploads.</strong> BAML sends uncompressed bytes. gzip shrank English prompts by about 60% for Logfire and OpenTelemetry; zstd with a per-project dictionary would do better. On a laptop this matters: the 48-turn agent pushed 113 MB of uploads through the developer's own connection.</li>
+    <li><strong>Compress uploads.</strong> BAML sends uncompressed bytes. gzip shrank English prompts by about 60% for Logfire and OpenTelemetry; zstd with a per-project dictionary would do better. This cuts upload time and storage, not the billed bytes, since queries read the decompressed values. On a laptop it matters: the 48-turn agent pushed 113 MB of uploads through the developer's own connection.</li>
     <li><strong>Make definitions free after the first upload.</strong> The 55 KB of program definitions are already content-addressed. If the server confirms it has them, a one-call process uploads about 1 KB instead of 55 KB, which is what serverless functions and CLI tools pay today.</li>
     <li><strong>Lose nothing at exit.</strong> Honor <code>--shutdown-timeout</code> (or wait until the queue drains), spool unsent uploads to disk so kill -9 and network failures lose nothing, and resend on the next start. BAML already loses the least of any stack; this would make it zero.</li>
     <li><strong>Fix the settings gaps.</strong> Make the Python bridge read <code>BAML_TELEMETRY</code>, and make <code>http_bodies</code> a run-time setting.</li>
@@ -1027,9 +1030,9 @@ const kib = s => s >= 1024 ? (s / 1024) + " KiB" : s + " B";
   tabs.innerHTML = sc.map((x, i) => `<button type="button" aria-pressed="${i === sc.length - 1}" data-k="${x.key}">${x.label}${x.key === "photo" ? "" : ` · ~${tokens(x.b.last_call)} tokens`}</button>`).join("");
   const steps = x => {
     const b = x.b, today = b.billed, s1 = Math.min(b.upload, today), s2 = Math.min(s1, b.prompt_bytes + b.last_call),
-      s3 = Math.min(s2, b.last_call + 200 * b.model_calls), s4 = Math.max(s3 - (D.lever_known[x.key] || 0), 200 * b.model_calls), s5 = s4 * 0.4;
+      s3 = Math.min(s2, b.last_call + 200 * b.model_calls), s4 = Math.max(s3 - (D.lever_known[x.key] || 0), 200 * b.model_calls);
     return [["BCS today", today], ["1. Store each piece once", s1], ["2. + history as deltas", s2], ["3. + derive the request", s3],
-            ["4. + reference known content", s4], ["5. + compress", s5]];
+            ["4. + reference known content", s4]];
   };
   const usd = bytes => bytes / 1e9 * 4 * 1e6;
   function draw(k) {
@@ -1038,9 +1041,9 @@ const kib = s => s >= 1024 ? (s / 1024) + " KiB" : s + " B";
     const rows = st.map(([l, v], i) => ({label: l, value: usd(v), color: "--s-baml", text: fmt$(usd(v)), tip: `${l}: ${fmtB(v)} billed per conversation, ${fmt$(usd(v))} per million conversations`}));
     rows.push({label: "Logfire", value: lf, color: "--s-logfire", text: fmt$(lf)}, {label: "Datadog LLM Obs", value: dd, color: "--s-datadog", text: fmt$(dd)});
     hbars(document.getElementById("lever"), rows, {labelW: 200, valW: 90, rowH: 28, log: true});
-    const s3 = st[3][1], s5 = st[5][1];
+    const s3 = st[3][1], s4 = st[4][1];
     document.getElementById("leverNote").textContent = `Cost per million conversations at $4/GB, log scale. ${x.label}: ${calls} model calls, ${fmtB(b.prompt_bytes)} sent to the model, and a final request of ${fmtB(b.last_call)}. ` +
-      `Today BCS bills ${fmtB(b.billed)} per conversation. Steps 1–3 bring it to ${fmtB(s3)} (${Math.round(b.billed / s3)}× less); all five to ${fmtB(s5)} (${Math.round(b.billed / s5).toLocaleString("en-US")}× less).`;
+      `Today BCS bills ${fmtB(b.billed)} per conversation. Steps 1–3 bring it to ${fmtB(s3)} (${Math.round(b.billed / s3)}× less); all four to ${fmtB(s4)} (${Math.round(b.billed / s4).toLocaleString("en-US")}× less).`;
     let t = `<thead><tr><th>Step</th><th class="n">Billed / conversation</th><th class="n">Cost / 1M conversations</th><th class="n">vs Logfire</th><th class="n">vs Datadog</th></tr></thead><tbody>`;
     for (const [l, v] of st) { const c = usd(v); t += `<tr><td>${l}</td><td class="n">${fmtB(v)}</td><td class="n">${fmt$(c)}</td><td class="n">${c >= lf ? (c / lf).toFixed(1) + "× more" : (lf / c).toFixed(1) + "× less"}</td><td class="n">${c >= dd ? (c / dd).toFixed(1) + "× more" : (dd / c).toFixed(1) + "× less"}</td></tr>`; }
     document.getElementById("leverTable").innerHTML = t + "</tbody>";
@@ -1048,6 +1051,25 @@ const kib = s => s >= 1024 ? (s / 1024) + " KiB" : s + " B";
   tabs.addEventListener("click", e => { const y = e.target.closest("button"); if (!y) return;
     tabs.querySelectorAll("button").forEach(z => z.setAttribute("aria-pressed", z === y)); draw(y.dataset.k); });
   if (sc.length) draw(sc[sc.length - 1].key);
+})();
+
+(function flushTable() {
+  const F = D.flush || [];
+  if (!F.length) return;
+  const name = {baml: "BAML → BCS", logfire: "Logfire", datadog: "Datadog", otel: "OpenTelemetry"};
+  const order = ["baml", "logfire", "otel", "datadog"];
+  let t = `<thead><tr><th>Stack</th><th class="n">Telemetry sent</th><th class="n">Sent after the last model call</th><th class="n">Exit after the last call</th><th class="n">Each call's trace arrives</th></tr></thead><tbody>`;
+  for (const k of order) {
+    const r = F.find(x => x.stack === k);
+    if (!r) continue;
+    t += `<tr><td>${name[k]}${r.hosted ? "" : " (local relay)"}</td><td class="n">${fmtB(r.bytes)}</td><td class="n">${fmtB(r.after_last)} (${Math.round(r.after_last / r.bytes * 100)}%)</td><td class="n">${r.exit_after_last_s.toFixed(2)} s</td><td class="n">${r.lag_median_s != null ? `${r.lag_median_s.toFixed(2)} s median, ${r.lag_max_s.toFixed(2)} s max` : k === "datadog" ? "at exit" : k === "otel" ? "within 5 s (batch interval)" : "within 0.5 s (export interval)"}</td></tr>`;
+  }
+  document.getElementById("flushTable").innerHTML = t + "</tbody>";
+  const b = F.find(x => x.stack === "baml"), dd = F.find(x => x.stack === "datadog"), lf = F.find(x => x.stack === "logfire");
+  document.getElementById("flushNote").textContent =
+    (b ? `BAML streamed each call's trace to BCS about ${b.lag_median_s.toFixed(1)} s after the model answered, keeping pace with ${fmtB(b.bytes)} of uploads at about ${b.upload_mbit_s.toFixed(0)} Mbit/s, and lost nothing (${b.missing} missing). ` : "") +
+    (dd ? `Datadog's LLM Observability writer held all ${fmtB(dd.bytes)} until the process exited. Over this connection that would be minutes of upload at exit, and anything that ends the process before then risks it. ` : "") +
+    (lf ? `Logfire exported as it went but its process took ${(lf.last_call_s - b.last_call_s).toFixed(0)} s longer to make the same 96 calls, most likely the time spent encoding and exporting 126 MB of spans inside the program's own process.` : "");
 })();
 
 // ---- section links: a contents row, a copy-link button on every section, and #name deep links
