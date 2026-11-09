@@ -175,6 +175,13 @@ implement baml.ops.Equals for EqLoose {
     function eq(self, other: Self) -> bool throws never { true }
 }
 
+class EqBox<T> { v: T, note: string }
+implement<T> baml.ops.Equals for EqBox<T> {
+    function eq(self, other: Self) -> bool throws never {
+        baml.ops.equals_equals(self.v, other.v)
+    }
+}
+
 function RtNativeEqualityOverrides() -> int {
     let a = EqTag { id: 1, note: "a" };
     let b = EqTag { id: 1, note: "b" };
@@ -187,6 +194,10 @@ function RtNativeEqualityOverrides() -> int {
         EqSame(a, b), EqSame(w1, w2), EqSame(w1, w3), w1 == w2,
         EqSame(EqLoose.A, EqLoose.B), EqLoose.A == EqLoose.B,
         EqSame([a], [b]), EqSame({ "k": a }, { "k": c }),
+        EqSame(EqBox<int> { v: 1, note: "x" }, EqBox<int> { v: 1, note: "y" }),
+        EqSame(EqBox<int> { v: 1, note: "x" }, EqBox<int> { v: 2, note: "x" }),
+        EqSame(EqBox<string> { v: "s", note: "x" }, EqBox<string> { v: "s", note: "z" }),
+        EqSame(EqBox<int> { v: 1, note: "x" }, EqBox<string> { v: "1", note: "x" }),
     ];
     let count = 0;
     for (let r in results) {

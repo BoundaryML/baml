@@ -587,3 +587,20 @@ pub(super) fn resolve_string_override(
         super::formatting::primitive_override(plan, concrete, iface)
     }
 }
+
+/// Resolve `method` only when the selected implementation declares it, never
+/// an interface default. Generic implementations are bound by the checker's
+/// resolver and monomorphized like other generic impl bodies.
+pub(super) fn resolve_explicit(
+    db: &dyn Db,
+    plan: &Plan<'_>,
+    concrete: &RuntimeTy,
+    iface: &TyTemplateInterface,
+    method: &str,
+) -> Gen<Option<(usize, Vec<RuntimeTy>)>> {
+    if witness(db, plan, concrete, iface)?.is_some_and(|w| w.rule.methods.contains_key(method)) {
+        resolve(db, plan, concrete, iface, method, &[])
+    } else {
+        Ok(None)
+    }
+}

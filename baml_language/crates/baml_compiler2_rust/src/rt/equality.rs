@@ -74,32 +74,16 @@ pub(super) fn register<'db>(
         let Some(tag) = declaration_tag(plan, repr) else {
             continue;
         };
-        let mut found = None;
-        for rule in rules(plan, interface, tag) {
-            let Some(method) = rule.methods.get("eq") else {
-                continue;
-            };
-            let generic = !rule.generic_param_bounds.is_empty()
-                || matches!(&rule.for_ty_pattern,
-                    bex_vm_types::TyTemplate::Class(_, args) if !args.is_empty());
-            if generic {
-                return Err(no("generic Equals implementation"));
-            }
-            let frame = method
-                .frame
-                .iter()
-                .map(|t| {
-                    t.substitute_symbolic(&[]).try_map_heads(&mut |h| {
-                        plan.heads
-                            .get(&h.tag())
-                            .cloned()
-                            .ok_or_else(|| no("Equals implementation frame"))
-                    })
-                })
-                .collect::<Gen<Vec<_>>>()?;
-            found = Some((method.fqn.raw(), frame));
-            break;
+        let iface = baml_compiler2_mir::TyTemplateInterface {
+            name: baml_type::DeclName::of_lang_item(plan.lang, bex_vm::lang_items::BAML_OPS_EQUALS)
+                .ok_or_else(|| no("Equals interface declaration"))?,
+            generics: Box::new([]),
+            associated_types: Box::new([]),
+        };
+        if rules(plan, interface, tag).all(|rule| !rule.methods.contains_key("eq")) {
+            continue;
         }
+        let found = super::dispatch::resolve_explicit(db, plan, &ty, &iface, "eq")?;
         if let Some((callee, frame)) = found {
             let target = super::generics::instance(db, plan, all, instances, callee, frame)?;
             plan.equals_overrides.insert(repr, target);
