@@ -123,7 +123,7 @@ impl Cx {
     }
     /// The caller initializes all traced slots before any subsequent allocation.
     #[inline(always)]
-    unsafe fn alloc_uninit(&self, desc: u32, bytes: usize) -> R<*mut u8> {
+    pub(crate) unsafe fn alloc_uninit(&self, desc: u32, bytes: usize) -> R<*mut u8> {
         unsafe { (&mut *self.heap).try_alloc_uninit(desc, bytes, &crate::Roots(&*self.roots)) }
             .map_err(|failure| allocation_failure(failure.bytes))
     }
