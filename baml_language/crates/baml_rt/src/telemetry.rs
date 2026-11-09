@@ -20,7 +20,7 @@ use std::{
 
 pub mod capture;
 pub mod evidence;
-pub use btel_records::RaiseKind;
+pub use btel_records::{LogLevel, RaiseKind};
 pub use btel_types as types;
 pub type Policy = btel_settings::policy::TelemetryPolicy<std::time::Duration>;
 pub struct Function {
@@ -29,6 +29,7 @@ pub struct Function {
     pub word: &'static AtomicU8,
     pub hidden: bool,
     pub policy: Policy,
+    pub hook_mode: Option<btel_types::InvocationMode>,
 }
 #[derive(Clone, Copy)]
 pub struct Site {
@@ -1880,4 +1881,59 @@ pub(crate) fn sysop<T>(call: impl FnOnce() -> R<T>) -> R<T> {
         });
     }
     result
+}
+/// Record a log with its actual statement PC, independently of call-frame state.
+/// # Safety
+/// Both values must be rooted in the running owner-thread task.
+pub unsafe fn log(
+    word: &AtomicU8,
+    pc: u32,
+    level: LogLevel,
+    name: Option<crate::strings::Str>,
+    data: crate::Dyn,
+) {
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        return;
+    }
+    let captured_data = unsafe { capture_value(data) };
+    let state = unsafe { &mut *ptr };
+    let function = state
+        .words
+        .iter()
+        .position(|w| std::ptr::eq(*w, word))
+        .expect("registered log function");
+    let event_name = name.map(|s| Arc::<str>::from(s.to_owned()));
+    state.span(SpanRecord::Log {
+        parent_id: state.active_span.unwrap_or(state.thread),
+        function: state.functions[function],
+        pc,
+        at: state.clock.read(),
+        level,
+        event_name,
+        captured_data,
+    });
+}
+
+pub(crate) fn sysop_started() -> Option<ClockInstant> {
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { &*ptr }.clock.read())
+    }
+}
+pub(crate) fn sysop_finished(started: Option<ClockInstant>) {
+    let Some(started) = started else { return };
+    let state = unsafe { &mut *CURRENT.get() };
+    let elapsed = started.elapsed_until(state.clock.read());
+    if state.active != CallPathId::ROOT {
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
+        state.producer.write_timing(TimingRecord::SysOpTime {
+            call_path: state.active,
+            elapsed,
+        });
+    }
 }

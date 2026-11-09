@@ -793,13 +793,14 @@ fn rt_trees_and_fail_closed_admission() {
         )
     }
     assert!(emit("/// baml:$trace=trace.hidden\nfunction main() -> int { 1 }").is_ok());
-    for hook in ["trace.timing", "trace.span", "trace.empty_span"] {
+    for (hook, mode) in [
+        ("trace.timing", "Timing"),
+        ("trace.span", "Span"),
+        ("trace.empty_span", "Span"),
+    ] {
         let source = format!("/// baml:$trace={hook}\nfunction main() -> int {{ 1 }}");
-        assert!(
-            emit(&source)
-                .unwrap_err()
-                .contains("unsupported in baml_rt")
-        );
+        let generated = emit(&source).unwrap();
+        assert!(generated.contains(&format!("InvocationMode::{mode}")));
     }
     let trees = emit(include_str!(
         "../../../tools/speedtest/workloads/memory/binary-trees-14/main.baml"
@@ -821,12 +822,9 @@ fn rt_trees_and_fail_closed_admission() {
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
     assert!(emit("function main() -> string { \"hello\" }").is_ok());
     assert!(emit("function main() -> int { \"x\".trim().length() }").is_ok());
-    for source in ["function main(value:int) -> int { value }"] {
-        assert!(
-            emit(source).unwrap_err().contains("unsupported in baml_rt"),
-            "{source}"
-        );
-    }
+    let host = emit("function main(value:int) -> int { value }").unwrap();
+    assert!(host.contains("rt::host::driver_initialized"));
+    assert!(host.contains(".hydrate(&args[0])"));
 }
 
 #[test]
@@ -1004,12 +1002,22 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "a4f32b6577ac59fdf3a27977786bb488811ca34a6d484ba1bf8207b0654852d6",
-            "richards" => "41950d33fefc3be62f2909cd6e8dd0c9d32ae85562392156dbf7ebfb2de10440",
-            "agent" => "635db66ac40c94230fa38838c7657c24785ed7d5897ad843e721dbc6297eee17",
-            "initializer" => "e615a5401434c92f6660c1be2143813d88be30db2246f40ea5e6d7229d13a17a",
+            "trees" => "65bde92ea98505aed528a94f162710ea667efa3f572d89644fa6dbc16f80c2eb",
+            "richards" => "ded440e60b9667005e3935afe7fd208d78a3f3053ffd9953d602c6124c4c624a",
+            "agent" => "3676c097dba71c6f9d74d264e0cc34c9f151b473458a0f2205be18ee7f1c7714",
+            "initializer" => "2f3e5538e399b1edd98d56c837fa7ef0047c93b0d285002d6311cb4b4c52af6e",
             _ => "",
         };
+        if matches!(name, "entry" | "hook") {
+            let source = result.unwrap();
+            if name == "entry" {
+                assert!(source.contains("rt::host::driver"));
+                assert!(source.contains(".copy_out("));
+            } else {
+                assert!(source.contains("InvocationMode::Span"));
+            }
+            continue;
+        }
         if expected.is_empty() {
             let expected = match name {
                 "entry" => {
@@ -1614,6 +1622,99 @@ fn rt_generated_terminal_cancelled_error() {
 }
 
 #[test]
+fn rt_static_type_values_and_kind_views_preserve_bytecode() {
+    let source = include_str!("../rt_fixtures/reflection/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("reflection.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, function)| function.name() == "RtNativeReflection")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    assert!(source.contains("rt::reflection::StaticType"));
+    assert!(source.contains("rt::reflection::descriptor("));
+    assert!(source.contains("Shape::Reflected(&REFLECT_PROGRAM)"));
+    assert!(!source.contains("BexVm"));
+    assert_eq!(before, fingerprint(&program));
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-reflection.rs"),
+        source,
+    )
+    .unwrap();
+}
+
+#[test]
+fn rt_host_scalars_io_and_statement_log_sites() {
+    for source in [
+        include_str!("../../../tools/speedtest/workloads/compute/nbody-20k/main.baml"),
+        r#"class Reply { text:string, ok:bool, count:int, score:float } function main(value:Reply)->Reply { value }"#,
+        r#"function main(n:int, label:string, yes:bool, x:float) -> string { if(yes) { `${label}:${n}:${x}` } else { label } }"#,
+        r#"class Body { mass:float } function main()->int { let b=Body{mass:4.0}; b.mass.sqrt().itrunc()+int.parse("3") }"#,
+        r#"function main()->void { log.info("one"); log.warn("two"); baml.io.println("logged"); }"#,
+        r#"function main()->string? { baml.env.get("BAML_RT_MISSING_TEST_VARIABLE") }"#,
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("rt_host.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        assert!(!source.contains("BexVm"));
+        if source.contains("rt::telemetry::log(") {
+            let sites = source
+                .lines()
+                .filter(|l| l.contains("rt::telemetry::log("))
+                .collect::<Vec<_>>();
+            assert_eq!(sites.len(), 2);
+            assert_ne!(sites[0].split("u32").next(), sites[1].split("u32").next());
+        }
+    }
+}
+
+#[test]
+fn rt_owned_native_admission_preserves_bytecode() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "native.baml",
+        include_str!("../rt_fixtures/native/baml_src/main.baml"),
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    for name in [
+        "RtNativeFiles",
+        "RtNativeProcess",
+        "RtNativeCalendar",
+        "RtNativeIoValues",
+    ] {
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == name)
+            .unwrap();
+        baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
+    }
+    assert_eq!(fingerprint(&program), before);
+}
+
+#[test]
 fn rt_test_admission_does_not_reach_sibling_tests_or_unrelated_initializers() {
     let db = baml_test_support::setup_multi_file_db(&[(
         "tests.baml",
@@ -2076,7 +2177,7 @@ class Resource {
 }
 test "admitted" { let scalar = INITIAL.length(); }
 test "cleanup admitted" { let resource = Resource { value: 1 }; resource.value += 1; }
-test "unsupported sibling" { let value = baml.Float.nan(); }
+test "unsupported sibling" { let response = baml.http.fetch("http://127.0.0.1:1"); }
 "#,
     )]);
     let program = lower(&db, OptLevel::Two);
@@ -2133,7 +2234,7 @@ test "unsupported sibling" { let value = baml.Float.nan(); }
         }
         if result
             .as_ref()
-            .is_err_and(|error| error.contains("unsupported in baml_rt: baml.Float.nan"))
+            .is_err_and(|error| error.contains("unsupported in baml_rt: sysop baml.http._fetch"))
         {
             rejected += 1;
         }

@@ -177,6 +177,17 @@ impl registry::Feature for Feature {
             {
                 classes.insert(desc + 4, (*name).to_owned());
             }
+            for (desc, name) in [
+                (layout::USER_PANIC_DESCRIPTOR, "baml.panics.UserPanic"),
+                (layout::SCALAR_PARSE_DESCRIPTOR, "baml.errors.ParseError"),
+                (
+                    layout::HOST_UNAVAILABLE_DESCRIPTOR,
+                    "baml.panics.HostUnavailable",
+                ),
+                (layout::IO_DESCRIPTOR, "baml.errors.Io"),
+            ] {
+                classes.insert(desc + 3, name.to_owned());
+            }
             for (&c, &desc) in e.descriptors {
                 classes.insert(desc + 3, class_name(e.plan, c)?);
             }

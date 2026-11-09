@@ -14,6 +14,51 @@ fn rt_host_boundary() {
     let mut exercised = std::collections::BTreeSet::new();
     for (name, source, json) in [
         (
+            "fs_chmod_invalid",
+            r#"function main()->int { baml.fs.chmod("missing",-1);1 }"#,
+            None,
+        ),
+        (
+            "fs_seek_negative",
+            r#"function main()->int { let f=baml.fs.open("seek","w+");f.seek_from("start",-1) }"#,
+            None,
+        ),
+        (
+            "fs_closed_handle",
+            r#"function main()->int { let f=baml.fs.open("closed","w+");f.close();f.as<baml.io.Read>.read(1);1 }"#,
+            None,
+        ),
+        (
+            "process_timeout",
+            r#"function main()->int { baml.sys._shell("sleep 1",baml.sys._ProcessOptions {cwd:null,env:null,inherit_env:true,timeout:baml.time.Duration.from_milliseconds(1),input:null,stdin:"ignore",stdout:"ignore",stderr:"ignore",detached:false}).exit_code }"#,
+            None,
+        ),
+        (
+            "random_seed",
+            r#"function main()->string { baml.random.ChaCha20._new(b"small"); "unexpected" }"#,
+            None,
+        ),
+        (
+            "random_negative",
+            r#"function main()->string { let r=baml.random.Xoshiro256PlusPlus._new(uint8array.zeroes(32)); {r.random(-1); "unexpected"} catch(e) { baml.panics.UserPanic {message} => message } }"#,
+            None,
+        ),
+        (
+            "random_system_negative",
+            r#"function main()->string { { baml.random.SystemRandom.get().random(-1); "unexpected" } catch(e) {baml.panics.UserPanic {message} => message} }"#,
+            None,
+        ),
+        (
+            "random_alloc",
+            r#"function main()->int { baml.random.ChaCha20._new(uint8array.zeroes(32)).random(int.max_value()).length() }"#,
+            None,
+        ),
+        (
+            "clock_error",
+            r#"function main()->string { { baml.time._tz_to_instant("UTC",1n << 200n,"compatible"); "unexpected" } catch(e) { baml.errors.Io {message} => message } }"#,
+            None,
+        ),
+        (
             "bytes",
             r#"function main()->int {
                 let a=uint8array.from_hex("ff00017f"); let alias=a;
@@ -205,6 +250,10 @@ function main()->int { 7 }"#,
                 | "fs"
                 | "fs_error"
                 | "fs_utf8"
+                | "fs_chmod_invalid"
+                | "fs_seek_negative"
+                | "fs_closed_handle"
+                | "process_timeout"
         ) {
             &["off", "low", "medium", "high"]
         } else {
@@ -263,6 +312,12 @@ function main()->int { 7 }"#,
                         | "fs_error"
                         | "fs_utf8"
                         | "bigint_cap"
+                        | "random_seed"
+                        | "random_alloc"
+                        | "fs_chmod_invalid"
+                        | "fs_seek_negative"
+                        | "fs_closed_handle"
+                        | "process_timeout"
                 );
                 assert_eq!(
                     expected.status.success(),

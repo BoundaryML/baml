@@ -175,8 +175,16 @@ RtEmptyClosures	pass
 RtGenericClosures	pass
 RtGenericMethods	pass
 RtLinkedCancelledFailure	pass
+RtNativeBytes	pass
+RtNativeCalendar	pass
 RtNativeCallback	pass
+RtNativeClock	pass
+RtNativeFiles	pass
 RtNativeHigherOrderValue	pass
+RtNativeIoValues	pass
+RtNativeMath	pass
+RtNativeProcess	pass
+RtNativeRandom	pass
 RtScalarTaskOrder	pass
 RtSpawnAwait	pass
 RtTaskControls	pass
@@ -227,7 +235,7 @@ interfaces::polymorphic dispatch 100k	pass
 memory::binary trees 14	pass
 memory::cycles into live	unsupported: list element
 memory::cyclic churn	unsupported: list field element
-memory::heap calls	unsupported: list element
+memory::heap calls	pass
 memory::live heap	unsupported: list element
 memory::live walk	unsupported: list field element
 memory::splay 2k	unsupported: list element

@@ -3,6 +3,34 @@ use super::*;
 
 pub(super) struct Feature;
 impl registry::Feature for Feature {
+    fn reach(
+        &self,
+        db: &dyn Db,
+        plan: &mut Plan<'_>,
+        term: Option<&Terminator<'_>>,
+    ) -> Option<Gen<registry::Reach>> {
+        let Some(Terminator::Call {
+            callee: Operand::Constant(Constant::Function(function)),
+            has_trace: false,
+            ..
+        }) = term
+        else {
+            return None;
+        };
+        let (id, _) = plan.index.function(db, *function)?;
+        let name = plan.index.builtin_path(id);
+        // Parse admission also prepares its language error layout.
+        if !matches!(name.rsplit_once('.'), Some(("baml.Int" | "baml.Float", method)) if method != "parse")
+            || !baml_builtins2_codegen::supports_rt(name)
+        {
+            return None;
+        }
+        Some(Ok(registry::Reach {
+            builtin: Some(name.to_owned()),
+            ..Default::default()
+        }))
+    }
+
     fn call(
         &self,
         e: &Emitter<'_, '_>,
@@ -28,8 +56,12 @@ impl registry::Feature for Feature {
         if !matches!(class, "baml.Int" | "baml.Float") {
             return None;
         }
+        // Source-defined scalar helpers compile as ordinary BAML bodies.
+        if !baml_builtins2_codegen::supports_rt(name) {
+            return None;
+        }
         Some((|| {
-            if !baml_builtins2_codegen::supports_rt(name) || !types.is_empty() {
+            if !types.is_empty() {
                 return Err(no(format!("builtin {name}")));
             }
             let (declarations, _, _) =

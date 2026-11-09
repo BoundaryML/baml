@@ -5,12 +5,18 @@
 pub mod assertions;
 pub mod bigint;
 pub mod bytes;
+pub mod calendar;
 pub mod callbacks;
 pub mod calls;
 pub mod closures;
+pub mod equality;
 pub mod exceptions;
+pub mod external;
 pub mod format;
 pub mod globals;
+pub mod hashing;
+pub mod host;
+pub mod io;
 pub mod json;
 pub mod json_lists;
 pub mod json_scalars;
@@ -21,11 +27,18 @@ pub mod list_scalars;
 pub mod lists;
 pub mod maps;
 pub mod native;
+pub mod opaque;
+pub mod operators;
+pub mod provider;
+pub mod random;
+pub mod reflection;
 pub mod regex;
 pub mod regex_map;
+pub mod scalars;
 pub mod strings;
 pub mod tasks;
 pub mod telemetry;
+pub mod trace;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
 use baml_rt_tasks::{Config, TaskCx, TaskLoop, Value};
 pub use bex_vm_types::float_order::{cmp as float_cmp, eq as float_eq};
@@ -205,6 +218,7 @@ impl Instance {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
         let io = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
+            .enable_all()
             .build()
             .unwrap();
         let mut heap = Heap::new(descriptors, pointer_types);
@@ -254,6 +268,9 @@ impl Instance {
     /// The entry must uphold the same rooting contract as `run`. A returned
     /// error's managed `value` is unrooted: inspect it only while this instance
     /// remains alive and before any further managed allocation.
+    pub unsafe fn run_owned<T: 'static>(&mut self, entry: impl FnOnce() -> R<T> + 'static) -> R<T> {
+        unsafe { self.run_baml_value(entry) }
+    }
     pub unsafe fn run_baml(&mut self, entry: impl FnOnce() -> R<i64> + 'static) -> R<i64> {
         unsafe { self.run_baml_value(entry) }
     }

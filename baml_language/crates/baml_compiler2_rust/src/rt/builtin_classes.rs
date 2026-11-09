@@ -27,30 +27,5 @@ pub(super) fn record_test(
 }
 
 pub(super) fn reserved(plan: &Plan<'_>, object: usize) -> Option<usize> {
-    let Object::Class(class) = plan.program.objects.get(object)? else {
-        return None;
-    };
-    let package = plan
-        .program
-        .packages
-        .iter()
-        .find(|p| p.objects.contains(&(object as u32)))?;
-    let name = format!("{}.{}", package.name, class.path);
-    Some(match name.as_str() {
-        "baml.panics.IntegerOverflow" => 1,
-        "baml.panics.NegativeBitShift" => 2,
-        "baml.panics.Cancelled" => 3,
-        "baml.panics.StackOverflow" => 4,
-        "baml.panics.AllocFailure" => 5,
-        "baml.panics.IndexOutOfBounds" => 6,
-        "baml.json.ParseError" => 7,
-        "baml.json.DecodeError" => 8,
-        "baml.panics.DivisionByZero" => 9,
-        "baml.errors.InvalidArgument" => 10,
-        "baml.errors.ParseError" => 11,
-        "baml.panics.HostUnavailable" => 12,
-        "baml.errors.Io" => 13,
-        "baml.panics.MapKeyNotFound" => 14,
-        _ => return None,
-    })
+    plan.list_error_descriptor(object)
 }

@@ -17,6 +17,10 @@ impl Plan<'_> {
             return None;
         };
         match class.path.to_string().as_str() {
+            "panics.UserPanic" => Some(layout::USER_PANIC_DESCRIPTOR),
+            "errors.ParseError" => Some(layout::SCALAR_PARSE_DESCRIPTOR),
+            "panics.HostUnavailable" => Some(layout::HOST_UNAVAILABLE_DESCRIPTOR),
+            "errors.Io" => Some(layout::IO_DESCRIPTOR),
             "panics.IntegerOverflow" => Some(1),
             "panics.NegativeBitShift" => Some(2),
             "panics.Cancelled" => Some(3),

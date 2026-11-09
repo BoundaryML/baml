@@ -63,7 +63,7 @@ pub(crate) fn generate(d: &NativeBuiltin) -> Result<String, String> {
         .map(|(i, t)| match t {
             T::Bigint => format!("rt::native::bigint_owned(a{i})"),
             T::Uint8Array => format!("&rt::native::bytes_owned(a{i})"),
-            _ => format!("a{i}.as_str(&rt::strings::Cx::current())"),
+            _ => format!("a{i}.try_as_str(&rt::strings::Cx::current())?"),
         })
         .collect::<Vec<_>>()
         .join(",");

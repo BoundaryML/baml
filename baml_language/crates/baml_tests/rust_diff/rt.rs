@@ -9,6 +9,24 @@ const TELEMETRY_SUPPORTED: bool = false;
 // The standalone probes exercise closures without the shared project's global
 // initializer dependency. Their admission is a required coverage baseline.
 const REQUIRED_PROBES: &[&str] = &[
+    "RtNativeMath",
+    "RtNativeBytes",
+    "RtNativeClock",
+    "RtNativeRandom",
+    "RtNativeFiles",
+    "RtNativeProcess",
+    "RtNativeCalendar",
+    "RtNativeIoValues",
+    "RtNativeReflection",
+    "RtNativeEquality",
+    "RtNativeEqualityOverrides",
+    "RtNativeReflectionRuntime",
+    "RtNativeReflectionMeta",
+    "RtNativeReflectionGlobals",
+    "RtNativeOperators",
+    "RtNativeHashing",
+    "RtNativeCallAny",
+    "RtNativeTraceOptions",
     "RtClosures",
     "RtEmptyClosures",
     "RtGenericClosures",
@@ -43,6 +61,8 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
         || TELEMETRY_SUPPORTED
         || probe.starts_with("strings::")
         || probe.starts_with("RuntimeListJoin")
+        || probe.starts_with("RtNative")
+        || matches!(probe, "Logs" | "LogsDeep")
         || matches!(
             probe,
             "RtClosures"
@@ -218,7 +238,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         let result = pack_result(
             build,
             workspace,
-            &source,
+            &super::standalone_source(manifest, probe).unwrap_or(source),
             &executable,
             [if super::initializer_probes::collects_tests(probe) {
                 "InitializerTestSummary"

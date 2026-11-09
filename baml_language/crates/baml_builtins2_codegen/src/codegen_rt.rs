@@ -4,12 +4,21 @@
 use crate::{BamlType, BuiltinPipeline, NativeBuiltin, ReceiverType};
 
 pub fn supports_rt(path: &str) -> bool {
-    crate::codegen_rt_regex::supports(path)
+    crate::supports_rt_calendar(path)
+        || crate::codegen_rt_provider::supports(path)
+        || crate::codegen_rt_random::supports(path)
+        || crate::codegen_rt_clock::supports(path)
+        || crate::codegen_rt_bigint::supports(path)
+        || crate::codegen_rt_scalar::supports(path)
+        || crate::codegen_rt_io::supports(path)
+        || crate::codegen_rt_string_bytes::supports(path)
+        || crate::codegen_rt_regex::supports(path)
         || crate::codegen_rt_bytes::supports(path)
         || crate::codegen_rt_strings::supports(path)
         || matches!(
             path,
-            "baml._to_string_default"
+            "baml._to_string_primitive"
+                | "baml._to_string_default"
                 | "baml.String.to_code_points"
                 | "baml.Map.set"
                 | "baml.Map.values"
@@ -36,6 +45,54 @@ pub fn generate_rt(
             .iter()
             .find(|d| d.path == *path)
             .ok_or_else(|| format!("baml_rt builtin declaration missing: {path}"))?;
+        if crate::supports_rt_calendar(path) {
+            crate::codegen_rt_calendar::validate(declaration)?;
+            continue;
+        }
+        if crate::codegen_rt_provider::supports(path) {
+            crate::codegen_rt_provider::validate(declaration)?;
+            continue;
+        }
+        if crate::codegen_rt_random::supports(path) {
+            output.push_str(&crate::codegen_rt_random::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_clock::supports(path) {
+            output.push_str(&crate::codegen_rt_clock::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_bigint::supports(path) {
+            output.push_str(&crate::codegen_rt_bigint::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_scalar::supports(path) {
+            output.push_str(&crate::codegen_rt_scalar::generate(declaration)?);
+            if crate::codegen_rt_strings::supports(path) {
+                output.push_str(&crate::codegen_rt_strings::generate(declaration)?);
+            }
+            continue;
+        }
+        if crate::codegen_rt_io::supports(path) {
+            output.push_str(&crate::codegen_rt_io::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_string_bytes::supports(path) {
+            output.push_str(&crate::codegen_rt_string_bytes::generate(declaration)?);
+            continue;
+        }
+        if path == "baml._to_string_primitive" {
+            if declaration.pipeline != BuiltinPipeline::Vm
+                || declaration.params.len() != 1
+                || declaration.return_type != BamlType::String
+                || !declaration.generics.is_empty()
+                || declaration.may_yield
+            {
+                return Err(format!(
+                    "unsupported in baml_rt: changed builtin signature {path}"
+                ));
+            }
+            continue;
+        }
         if crate::codegen_rt_regex::supports(path) {
             output.push_str(&crate::codegen_rt_regex::generate(declaration)?);
             continue;
@@ -209,25 +266,27 @@ pub fn generate_rt(
             output.push_str("#[inline(always)] fn rt_string_slice(cx: &mut rt::strings::Cx, value: rt::strings::Str, start:i64, end:i64) -> rt::R<rt::strings::Str> { rt::strings::slice(cx,value,start,end) }\n");
         }
     }
-    let mut syntax = syn::parse_file(&output).map_err(|e| e.to_string())?;
-    let mut init = Vec::new();
-    let mut words = Vec::new();
-    for item in &mut syntax.items {
-        if let syn::Item::Fn(function) = item {
-            let word =
-                quote::format_ident!("OBS_{}", function.sig.ident.to_string().to_uppercase());
-            function
-                .block
-                .stmts
-                .insert(0, syn::parse_quote!(rt::observe(&#word);));
-            words.push(quote::quote!(static #word:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);));
-            init.push(quote::quote!(#word.store(std::hint::black_box(0),std::sync::atomic::Ordering::Relaxed);));
-        }
+    let providers: std::collections::BTreeSet<String> = requested
+        .iter()
+        .filter(|p| crate::codegen_rt_provider::supports(p))
+        .cloned()
+        .collect();
+    let io = declarations
+        .iter()
+        .filter(|d| d.pipeline == BuiltinPipeline::Io)
+        .cloned()
+        .collect::<Vec<_>>();
+    if !providers.is_empty() {
+        let (_, _, classes) = crate::extract_native_builtins().map_err(|e| e.to_string())?;
+        output.push_str(&crate::codegen_io::generate_rt_provider(
+            &io, &classes, &providers,
+        )?);
     }
-    Ok(prettyplease::unparse(
-        &syn::parse2(quote::quote!(#(#words)* #syntax fn init_builtin_observation(){#(#init)*}))
-            .map_err(|e| e.to_string())?,
-    ))
+    // Native adapters are hidden. They have no observation state or atomic
+    // loads on the owner thread; observed BAML wrappers own their telemetry.
+    output.push_str("fn init_builtin_observation(){}\n");
+    let syntax = syn::parse_file(&output).map_err(|e| e.to_string())?;
+    Ok(prettyplease::unparse(&syntax))
 }
 
 #[cfg(test)]

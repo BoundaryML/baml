@@ -79,19 +79,26 @@ struct Plan<'a> {
     enums: BTreeSet<usize>,
     specialized_calls: BTreeMap<(usize, usize), usize>,
     type_codes: Vec<baml_compiler2_mir::TyTemplate>,
+    reflected: bool,
+    reflect_meta: bool,
+    /// Static class entry, class object and its substituted field types.
+    reflection_fields: Vec<(usize, usize, Vec<bex_vm_types::RuntimeTy>)>,
+    /// Callables `reflect.signature` can describe: parameter, return and
+    /// throws types in order.
+    reflection_signatures: Option<Vec<(usize, Vec<bex_vm_types::RuntimeTy>)>>,
+    reflection_types: Vec<RuntimeTy>,
     next_object: usize,
     class_instances: Vec<(usize, Vec<bex_vm_types::RuntimeTy>, usize)>,
     concrete_types: Vec<RuntimeTy>,
     heads: BTreeMap<baml_type::typetag::TypeTag, baml_type::DeclName>,
     dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
     function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
-    frozen_types: BTreeMap<String, RuntimeTy>,
-    frozen_strings: BTreeSet<usize>,
-    type_renderer: Option<usize>,
     error_contexts: bool,
     structural_strings: bool,
     structural_string_calls: BTreeSet<(usize, usize, Repr)>,
     string_overrides: BTreeMap<Repr, usize>,
+    structural_equals: bool,
+    equals_overrides: BTreeMap<Repr, usize>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
     list_stringify: bool,
     list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
@@ -151,9 +158,11 @@ mod containers;
 mod diagnostics;
 mod dispatch;
 mod driver;
+mod equality;
 mod errors;
 mod exceptions;
 mod expressions;
+mod hashing;
 mod host;
 mod json;
 mod json_flat_lists;
@@ -166,11 +175,14 @@ mod list_narrowing;
 mod list_scalars;
 mod lists;
 mod loop_ranges;
+mod operators;
 mod places;
+mod reflection;
 mod repr;
 mod stack;
 mod statements;
 mod telemetry;
+mod trace;
 
 use body::recursive;
 use diagnostics::no;
@@ -202,3 +214,14 @@ mod interface_fields;
 mod callbacks;
 
 mod structural;
+
+mod builtin_classes;
+mod calendar;
+mod io;
+mod io_clock;
+mod logging;
+mod native;
+mod provider;
+mod provider_schema;
+mod random;
+mod scalars;

@@ -467,6 +467,12 @@ pub(super) fn expand<'db>(
                                 plan.structural_strings = true;
                             }
                         }
+                        if matches!(
+                            plan.index.display(callee),
+                            "baml._equals_structural_default" | "baml.ops.equals_equals"
+                        ) {
+                            plan.structural_equals = true;
+                        }
                         if plan.index.display(callee) == "baml._to_string_default" {
                             let ty = operand_ty(plan, object, body, &args[*ntypeargs]);
                             if !matches!(
@@ -499,6 +505,7 @@ pub(super) fn expand<'db>(
                             || plan.index.display(callee) == "baml.json.decode"
                             || super::tasks::native(plan.index.display(callee))
                             || super::callbacks::native(plan.index.display(callee))
+                            || super::reflection::native(plan.index.display(callee))
                         {
                             continue;
                         }
@@ -580,6 +587,7 @@ pub(super) fn expand<'db>(
             }
         }
         super::formatting::register(db, plan, all, &mut instances, &mut queue)?;
+        super::equality::register(db, plan, all, &mut instances, &mut queue)?;
         if !queue.is_empty() {
             continue;
         }
@@ -1235,7 +1243,6 @@ pub(super) fn instance<'db>(
     // Include aliases declared in the user pack when specializing stdlib MIR.
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
     let mut specialized = specialize(source, &params, &frame, &runtime)?;
-    super::assertions::specialize(plan, callee, &frame, &mut specialized)?;
     fold_primitive_sort_guards(db, plan, &mut specialized);
     let captures = runtime_params
         .params()
@@ -1245,10 +1252,6 @@ pub(super) fn instance<'db>(
         .collect();
     let id = plan.next_object;
     plan.next_object += 1;
-    if plan.index.display(callee) == "baml.String.from" && frame == [RuntimeTy::Type] {
-        plan.frozen_strings.insert(id);
-        plan.type_renderer = Some(super::assertions::renderer(plan)?);
-    }
     plan.function_frames.insert(id, captures);
     all.insert(id, std::rc::Rc::new(specialized));
     std::rc::Rc::make_mut(&mut plan.index).rt_alias(id, callee);
@@ -1334,6 +1337,11 @@ impl Plan<'_> {
             self.candidate(&RuntimeTy::Uint8Array);
             return;
         }
+        if matches!(ty, RuntimeTy::Class(head, args) if args.is_empty() && head.is_lang_root_type(self.lang, baml_base::LangPackage::Reflect, "Type"))
+        {
+            self.candidate(&RuntimeTy::Type);
+            return;
+        }
         self.remember_heads(ty);
         // Dynamic/local type bindings are not closed-world witness candidates.
         if baml_compiler2_mir::RealizedTy::try_from(ty.clone()).is_err() {
@@ -1377,8 +1385,8 @@ impl Plan<'_> {
                     self.concrete_types.push(ty.clone());
                 }
             }
-            RuntimeTy::Int
-            | RuntimeTy::Bigint
+            RuntimeTy::Type
+            | RuntimeTy::Int
             | RuntimeTy::Bool
             | RuntimeTy::String
             | RuntimeTy::Null

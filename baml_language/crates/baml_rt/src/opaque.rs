@@ -1,11 +1,7 @@
 //! Owner-thread native values with GC lifetime, without shared heap locks.
 use crate::R;
 use baml_rt_gc::{Descriptor, Kind};
-use std::{any::Any, cell::Cell, collections::HashMap, marker::PhantomData, rc::Rc};
-
-pub(crate) const FINALIZER: u32 = u32::MAX;
-pub(crate) type Store = HashMap<usize, Rc<dyn Any>>;
-thread_local! { pub(crate) static CURRENT: Cell<*mut Store> = const { Cell::new(std::ptr::null_mut()) }; }
+use std::{marker::PhantomData, rc::Rc};
 
 pub const fn descriptor(type_id: u32) -> Descriptor {
     Descriptor {
@@ -16,7 +12,7 @@ pub const fn descriptor(type_id: u32) -> Descriptor {
         elem: None,
         type_id,
         fields: &[],
-        finalizer: Some(FINALIZER),
+        finalizer: None,
     }
 }
 /// Native values must contain no managed pointers. Use typed GC fields for
@@ -34,10 +30,8 @@ impl<T> Clone for Opaque<T> {
 impl<T: 'static> Opaque<T> {
     pub fn new(desc: u32, value: T) -> R<Self> {
         let raw = unsafe { crate::try_alloc(desc, 8)? } as usize;
-        let current = CURRENT.get();
-        assert!(!current.is_null(), "opaque value outside instance");
         unsafe {
-            (&mut *current).insert(raw, Rc::new(value));
+            (&mut *crate::HEAP.get()).attach_native(raw, Rc::new(value));
         }
         Ok(Self {
             raw,
@@ -57,30 +51,8 @@ impl<T: 'static> Opaque<T> {
     }
     pub fn with<R>(self, call: impl FnOnce(&T) -> R) -> R {
         // Release the store borrow before callbacks can allocate or collect.
-        let owned = unsafe {
-            (&*CURRENT.get())
-                .get(&self.raw)
-                .expect("collected opaque handle")
-                .clone()
-        };
-        call(owned.downcast_ref().expect("opaque native type mismatch"))
-    }
-}
-
-/// Called after collector operations while the owner thread is installed.
-pub(crate) unsafe fn drain() {
-    let heap = crate::HEAP.get();
-    let store = CURRENT.get();
-    if heap.is_null() || store.is_null() {
-        return;
-    }
-    for token in unsafe { (&mut *heap).take_pending_finalizers() } {
-        assert_eq!(token.cleanup, FINALIZER, "unimplemented language finalizer");
-        let value = unsafe { (&mut *store).remove(&(token.object() as usize)) };
-        drop(value);
-        unsafe {
-            (&mut *heap).complete_finalizer(token);
-        }
+        let owned = unsafe { (&*crate::HEAP.get()).native::<T>(self.raw) };
+        call(&owned)
     }
 }
 
@@ -120,6 +92,6 @@ mod tests {
         .unwrap();
         drop(instance);
         assert_eq!(drops.get(), 65);
-        assert!(CURRENT.get().is_null());
+        assert!(crate::HEAP.get().is_null());
     }
 }

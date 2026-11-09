@@ -140,7 +140,12 @@ pub(super) fn emit(
                 Repr::Bigint => plan.bigint_descriptor() + 3,
                 Repr::Bytes => 19,
                 Repr::Opaque => 18,
-                r if r.pointer() => lists[&r] + 3,
+                Repr::Reflected => {
+                    plan.reflection_descriptor()
+                        .ok_or_else(|| no("reflected global descriptor"))?
+                        + 3
+                }
+                r if r.pointer() => *lists.get(&r).ok_or_else(|| no("global representation"))? + 3,
                 Repr::Tagged | Repr::Dyn(_) => 0,
                 _ => return Err(no("global representation")),
             };

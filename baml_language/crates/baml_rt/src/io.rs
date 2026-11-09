@@ -4,6 +4,7 @@ use baml_rt_tasks::{OwnedValue, Value};
 use serde_json::Value as Owned;
 use std::{future::Future, pin::Pin};
 
+pub mod clock;
 pub mod fs;
 
 pub struct Failure {
@@ -26,18 +27,30 @@ impl Failure {
 }
 fn failure(error: Failure) -> Box<Error> {
     match error.class {
-        "ParseError" => crate::language::panic_value(11, "baml.errors.ParseError", error.message),
-        "Io" => crate::language::panic_value(13, "baml.errors.Io", error.message),
+        "UserPanic" => crate::language::panic_value(
+            crate::USER_PANIC_ID,
+            "baml.panics.UserPanic",
+            error.message,
+        ),
+        "AllocFailure" => {
+            crate::language::panic_value(5, "baml.panics.AllocFailure", error.message)
+        }
+        "ParseError" => crate::language::panic_value(
+            crate::SCALAR_PARSE_ID,
+            "baml.errors.ParseError",
+            error.message,
+        ),
+        "Io" => crate::language::panic_value(crate::IO_ID, "baml.errors.Io", error.message),
         "HostUnavailable" => host_unavailable(error.resource, error.message),
         _ => Error::internal(error.message),
     }
 }
-fn host_unavailable(resource: String, message: String) -> Box<Error> {
+pub(crate) fn host_unavailable(resource: String, message: String) -> Box<Error> {
     let mut cx = unsafe { crate::strings::Cx::current() };
     let result = (|| -> R<usize> {
         let resource = cx.string(&resource)?;
         let message = cx.string(&message)?;
-        let object = unsafe { crate::try_alloc(12, 24) }?;
+        let object = unsafe { crate::try_alloc(crate::HOST_UNAVAILABLE_ID, 24) }?;
         unsafe {
             baml_rt_gc::write_ptr(object, object.add(8).cast(), resource.as_raw());
             baml_rt_gc::write_ptr(object, object.add(16).cast(), message.as_raw());
@@ -69,6 +82,21 @@ fn host_unavailable(resource: String, message: String) -> Box<Error> {
 }
 
 /// Run a heap-free sysop, then hydrate its owned result on the owner thread.
+pub fn perform_at(output: Output, call_site: Option<usize>) -> R<Owned> {
+    let asynchronous = matches!(&output, Output::Async(_));
+    perform(output).map_err(|mut error| {
+        if asynchronous && let Some(site) = call_site {
+            crate::telemetry::evidence::raised_at_call_site(
+                &mut error,
+                site,
+                crate::telemetry::RaiseKind::HostBoundary,
+            );
+        }
+        error
+    })
+}
+
+/// Run a direct sysop whose generated source table supplies its error site.
 pub fn perform(output: Output) -> R<Owned> {
     let started = crate::telemetry::sysop_started();
     let result = match output {
@@ -89,6 +117,8 @@ pub fn perform(output: Output) -> R<Owned> {
                     if let Some(class) = value["error"].as_str() {
                         let class = match class {
                             "Io" => "Io",
+                            "UserPanic" => "UserPanic",
+                            "AllocFailure" => "AllocFailure",
                             "ParseError" => "ParseError",
                             "HostUnavailable" => "HostUnavailable",
                             _ => "InternalError",
@@ -203,4 +233,8 @@ fn write(mut text: String, stderr: bool, newline: bool) -> Output {
         }
         Ok(Owned::Null)
     }))
+}
+
+pub fn host_target() -> Output {
+    Output::Ready(Ok(Owned::from(env!("BAML_HOST_TARGET"))))
 }

@@ -44,6 +44,7 @@ impl Emitter<'_, '_> {
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
             Repr::Opaque => Ok(18),
             Repr::Bytes => Ok(19),
+            Repr::Reflected => Ok(self.plan.reflection_descriptor().unwrap() + 3),
             Repr::Future => Ok(self.plan.future_descriptor().unwrap() + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::List(_)
@@ -78,6 +79,9 @@ impl Emitter<'_, '_> {
             && self.plan.element(source)? == self.plan.element(target)?
         {
             return Ok(value);
+        }
+        if matches!(source, Repr::Type(_)) && matches!(target, Repr::Reflected | Repr::Tagged) {
+            return self.coerce((value, Repr::Reflected), target);
         }
         if source == target
             || (source == Repr::Null && target.pointer())
@@ -198,6 +202,12 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (base, repr) = self.place(base)?;
+                if repr == Repr::Bytes {
+                    return Ok((
+                        self.fallible(&format!("rt::native::byte_index({base},l{})", index.0)),
+                        Repr::Int,
+                    ));
+                }
                 let element = self.plan.element(repr)?;
                 if self.local(index.0)? != Repr::Int {
                     return Err(no("non-int list index"));
@@ -376,6 +386,11 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (obj, container) = self.place(base)?;
+                if container == Repr::Bytes {
+                    let store =
+                        self.fallible(&format!("rt::native::byte_set(object,l{},value)", index.0));
+                    return Ok(format!("{{let value={src};let object={obj};{store};}}\n"));
+                }
                 if container.growing() {
                     let slot = repr.slot()?;
                     let value = repr.to_slot(&src)?;

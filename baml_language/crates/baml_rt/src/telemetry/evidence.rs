@@ -2,6 +2,41 @@
 use super::*;
 use btel_records::{ErrorFrame, RaiseKind, RaiseStack, UnwindResult};
 
+/// Marks a native builtin's frame that stays on the stack while its callee
+/// runs (`reflect.call_any`): the interpreter reports it between the frames.
+const NATIVE_FRAME: u8 = u8::MAX;
+
+/// Run `call` beneath a native frame for `function` (a telemetry function
+/// index) when error evidence is being recorded frame by frame.
+///
+/// # Safety
+/// Called from generated code on the owner thread with a live session, if any.
+pub unsafe fn native_frame<T>(function: usize, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
+    let ptr = CURRENT.get();
+    if ptr.is_null() || unsafe { (*ptr).evidence_frame.is_null() } {
+        return call();
+    }
+    let parent = unsafe { (*ptr).evidence_frame };
+    // The caller's frame reports the native call site.
+    unsafe { (*parent).pc = (*ptr).sites[site].pc };
+    let mut frame = EvidenceFrame {
+        parent,
+        function,
+        pc: 0,
+        mode: NATIVE_FRAME,
+        native: true,
+    };
+    unsafe { (*ptr).evidence_frame = &mut frame };
+    struct Restore(*mut State, *mut EvidenceFrame);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            unsafe { (*self.0).evidence_frame = self.1 };
+        }
+    }
+    let _restore = Restore(ptr, parent);
+    call()
+}
+
 pub(super) struct EvidenceFrame {
     parent: *mut EvidenceFrame,
     function: usize,
@@ -184,6 +219,37 @@ fn propagated_origin(
 /// Called before the first frame completion; all unwound frames share its clock.
 #[cold]
 pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Option<usize>) {
+    raised_with_kind(error, source, site, native, None);
+}
+
+/// An erased native adapter receives its caller's immutable telemetry site.
+/// Its async completion has no native bytecode source table of its own.
+pub fn raised_at_call_site(error: &mut Error, site: usize, kind: RaiseKind) {
+    let state = CURRENT.get();
+    if state.is_null() {
+        return;
+    }
+    let sites: &'static [super::Site] = unsafe { (*state).sites };
+    let Some(site) = sites.get(site) else {
+        return;
+    };
+    let source = crate::Source {
+        file: "",
+        function: "",
+        lines: &[],
+        pcs: std::slice::from_ref(&site.pc),
+        kinds: &[],
+    };
+    raised_with_kind(error, &source, 0, None, Some(kind));
+}
+
+pub fn raised_with_kind(
+    error: &mut Error,
+    source: &crate::Source,
+    site: usize,
+    native: Option<usize>,
+    kind_override: Option<RaiseKind>,
+) {
     if crate::ADMISSION_CANCELLED.replace(false) {
         return;
     }
@@ -197,18 +263,20 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
         return;
     }
     if frame.is_null() {
-        raised_on_path(state, error, source, site);
+        raised_on_path(state, error, source, site, kind_override);
         return;
     }
     let pc = source.pcs.get(site).copied().unwrap_or(0);
     unsafe {
         (*frame).pc = pc;
     }
-    let kind = source
-        .kinds
-        .get(site)
-        .copied()
-        .unwrap_or(RaiseKind::Runtime);
+    let kind = kind_override.unwrap_or_else(|| {
+        source
+            .kinds
+            .get(site)
+            .copied()
+            .unwrap_or(RaiseKind::Runtime)
+    });
     let kind = if kind == RaiseKind::Await && error.class == "baml.panics.Cancelled" {
         RaiseKind::AwaitCancelled
     } else {
@@ -228,12 +296,13 @@ pub fn raised(error: &mut Error, source: &crate::Source, site: usize, native: Op
     while !cursor.is_null() {
         let current = unsafe { &*cursor };
         frame_count += 1;
+        let native = current.native;
         observed &= current.mode != 0;
         if frames.len() < btel_records::MAX_ERROR_FRAMES {
             frames.push(ErrorFrame {
                 function: Some(state.functions[current.function]),
-                pc: (!current.native).then_some(current.pc),
-                native: current.native,
+                pc: (!native).then_some(current.pc),
+                native,
             });
         }
         cursor = current.parent;
@@ -313,7 +382,13 @@ pub(super) fn end(error: &mut Error, result: UnwindResult, handler_pc: Option<u3
 // On fully observed stacks no extra per-call frame or cold helper is needed:
 // the active path carries caller PCs, and one depth counter preserves recursion.
 #[cold]
-fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, site: usize) {
+fn raised_on_path(
+    state: &mut State,
+    error: &mut Error,
+    source: &crate::Source,
+    site: usize,
+    kind_override: Option<RaiseKind>,
+) {
     let Some(function) = state.active_function else {
         return;
     };
@@ -321,11 +396,13 @@ fn raised_on_path(state: &mut State, error: &mut Error, source: &crate::Source, 
     origin(state, error, raise_id);
     let mode = super::mode(state.words[function]) & 3;
     let raised_at = *error.telemetry_at.get_or_insert_with(|| state.read());
-    let kind = source
-        .kinds
-        .get(site)
-        .copied()
-        .unwrap_or(RaiseKind::Runtime);
+    let kind = kind_override.unwrap_or_else(|| {
+        source
+            .kinds
+            .get(site)
+            .copied()
+            .unwrap_or(RaiseKind::Runtime)
+    });
     let kind = if kind == RaiseKind::Await && error.class == "baml.panics.Cancelled" {
         RaiseKind::AwaitCancelled
     } else {

@@ -52,7 +52,7 @@ impl Emitter<'_, '_> {
                     .index
                     .function(self.db, *f)
                     .ok_or_else(|| no("call"))?;
-                if self.plan.index.display(c) == "baml.json.decode" {
+                if self.plan.index.builtin_path(c) == "baml.json.decode" {
                     let ordered;
                     let args = if let Some(layout) = argument_layout {
                         let mapping = layout.map_to(&info.argument_layout()).map_err(no)?;
@@ -119,7 +119,7 @@ impl Emitter<'_, '_> {
                         })
                         .collect::<Gen<_>>()?;
                 }
-                let name = self.plan.index.display(c);
+                let name = self.plan.index.builtin_path(c);
                 let expression = if let Some(result) = registry::call(self, name, &types, &values) {
                     result?
                 } else if name == "baml._to_string_default"
@@ -160,7 +160,9 @@ impl Emitter<'_, '_> {
                     if values.len() != 2 {
                         return Err(no("equality arity"));
                     }
-                    if let Some(other) = values.iter().find(|v| v.1 != Repr::Null)
+                    if values.iter().all(|v| v.1 == Repr::Null) {
+                        ("true".into(), Repr::Bool)
+                    } else if let Some(other) = values.iter().find(|v| v.1 != Repr::Null)
                         && values.iter().any(|v| v.1 == Repr::Null)
                     {
                         (Self::null_test(other), Repr::Bool)
@@ -233,7 +235,7 @@ fn admit_call(db: &dyn Db, plan: &Plan<'_>, term: Option<&Terminator<'_>>) -> Ge
                 .index
                 .function(db, *f)
                 .ok_or_else(|| no("unlinked call"))?;
-            let name = plan.index.display(callee);
+            let name = plan.index.builtin_path(callee);
             if name == "baml.json.decode" {
                 reach.json_decode = Some(callee);
             } else if baml_builtins2_codegen::supports_rt(name) {

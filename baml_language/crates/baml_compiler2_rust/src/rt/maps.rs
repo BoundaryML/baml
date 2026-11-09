@@ -142,6 +142,7 @@ pub(super) fn slot_type(
         Repr::Bytes => "rt::maps::Pointer<19>".into(),
         Repr::Opaque => "rt::maps::Pointer<18>".into(),
         Repr::Enum(_) | Repr::Naming => "usize".into(),
+        Repr::Reflected => "rt::maps::Pointer<REFLECT_TAG>".into(),
         Repr::Ptr(c) => format!("rt::maps::Pointer<{}>", descriptors[&c] + 3),
         r if r.pointer() => format!("rt::maps::Pointer<{}>", lists[&r] + 3),
         _ => return Err(no("map slot representation")),
@@ -236,7 +237,7 @@ impl registry::Feature for Feature {
     }
 }
 impl Emitter<'_, '_> {
-    fn map_type(&self, repr: Repr) -> Gen<String> {
+    pub(super) fn map_type(&self, repr: Repr) -> Gen<String> {
         let (key, value) = self.plan.map_parts(repr)?;
         Ok(format!(
             "rt::maps::Map::<{},{}>",

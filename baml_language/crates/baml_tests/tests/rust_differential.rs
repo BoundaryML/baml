@@ -44,6 +44,25 @@ const PROBES: &[&str] = &[
     "RuntimeListInvalidCodePoint",
     "RuntimeListFloatTruncationError",
     "RuntimeListStringEntry",
+    "RtNativeMath",
+    "RtNativeBytes",
+    "RtNativeClock",
+    "RtNativeRandom",
+    "RtNativeFiles",
+    "RtNativeProcess",
+    "RtNativeCalendar",
+    "RtNativeIoValues",
+    "RtNativeReflection",
+    "RtNativeEquality",
+    "RtNativeEqualityOverrides",
+    "RtNativeReflectionRuntime",
+    "RtNativeReflectionMeta",
+    "RtNativeReflectionGlobals",
+    "RtNativeOperators",
+    "RtNativeHashing",
+    "RtNativeCallAny",
+    "RtNativeTraceOptions",
+    "StackAllocation",
     "RuntimeListFloatConstants",
     "RuntimeListStructuralJoin",
     "RuntimeListFloatSpecials",
@@ -66,7 +85,6 @@ const PROBES: &[&str] = &[
     "RuntimeListJson",
     "RuntimeListJsonField",
     "RuntimeListJsonError",
-    "StackAllocation",
     "RtClosures",
     "RtEmptyClosures",
     "RtGenericClosures",
@@ -359,6 +377,20 @@ fn is_list_probe(probe: &str) -> bool {
 
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
+        "RtNativeOperators" | "RtNativeHashing" | "RtNativeTraceOptions" => {
+            Some(manifest.join("rt_fixtures/operators"))
+        }
+        "RtNativeReflection"
+        | "RtNativeEquality"
+        | "RtNativeEqualityOverrides"
+        | "RtNativeReflectionRuntime"
+        | "RtNativeReflectionMeta"
+        | "RtNativeReflectionGlobals"
+        | "RtNativeCallAny" => Some(manifest.join("rt_fixtures/reflection")),
+        "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" | "RtNativeFiles"
+        | "RtNativeProcess" | "RtNativeCalendar" | "RtNativeIoValues" => {
+            Some(manifest.join("rt_fixtures/native"))
+        }
         "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
             Some(manifest.join("rt_fixtures/task_terminal"))
         }
@@ -469,6 +501,24 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         }
     }
     for probe in [
+        "RtNativeMath",
+        "RtNativeBytes",
+        "RtNativeClock",
+        "RtNativeRandom",
+        "RtNativeFiles",
+        "RtNativeProcess",
+        "RtNativeCalendar",
+        "RtNativeIoValues",
+        "RtNativeReflection",
+        "RtNativeEquality",
+        "RtNativeEqualityOverrides",
+        "RtNativeReflectionRuntime",
+        "RtNativeReflectionMeta",
+        "RtNativeReflectionGlobals",
+        "RtNativeOperators",
+        "RtNativeHashing",
+        "RtNativeCallAny",
+        "RtNativeTraceOptions",
         "RtClosures",
         "RtEmptyClosures",
         "RtGenericClosures",
@@ -868,6 +918,24 @@ fn rust_differential() {
                                 | "RtEmptyClosures"
                                 | "RtGenericClosures"
                                 | "RtGenericMethods"
+                                | "RtNativeMath"
+                                | "RtNativeBytes"
+                                | "RtNativeClock"
+                                | "RtNativeRandom"
+                                | "RtNativeFiles"
+                                | "RtNativeProcess"
+                                | "RtNativeCalendar"
+                                | "RtNativeIoValues"
+                                | "RtNativeReflection"
+                                | "RtNativeEquality"
+                                | "RtNativeEqualityOverrides"
+                                | "RtNativeReflectionRuntime"
+                                | "RtNativeReflectionMeta"
+                                | "RtNativeReflectionGlobals"
+                                | "RtNativeOperators"
+                                | "RtNativeHashing"
+                                | "RtNativeCallAny"
+                                | "RtNativeTraceOptions"
                                 | "RtNativeCallback"
                                 | "RtBuiltinCallbacks"
                                 | "RtSpawnAwait"
@@ -1194,6 +1262,14 @@ fn report_known(build: &Path, probe: &str, mode: &str, reason: &str, detail: &st
     file.write_all(report.as_bytes()).unwrap();
 }
 
+/// Characters shown per telemetry diff row (`BAML_RUST_DIFF_WIDTH`).
+fn diff_width() -> usize {
+    std::env::var("BAML_RUST_DIFF_WIDTH")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(800)
+}
+
 fn diff(expected: &str, actual: &str, mode: &str) -> String {
     // Telemetry is sorted by its JSON row, with the multiplicity prefixed.
     // Avoid an edit-distance matrix or constructing an unbounded unified diff
@@ -1236,7 +1312,7 @@ fn diff(expected: &str, actual: &str, mode: &str) -> String {
         .to_string()
         .lines()
         .take(24)
-        .map(|line| line.chars().take(800).collect::<String>())
+        .map(|line| line.chars().take(diff_width()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
 }

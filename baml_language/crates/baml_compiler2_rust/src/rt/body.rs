@@ -120,11 +120,7 @@ impl Emitter<'_, '_> {
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
-        let input_captures = if self.plan.frozen_strings.contains(&self.object) {
-            "rt::telemetry::capture_frozen_arguments(&[l1],ASSERT_FROZEN_TYPES)".to_owned()
-        } else {
-            format!("rt::telemetry::capture_arguments(&[{captured_args}])")
-        };
+        let input_captures = format!("rt::telemetry::capture_arguments(&[{captured_args}])");
         let capture_arguments = if let Some(frame) = self.plan.function_frames.get(&self.object) {
             let types = frame
                 .iter()

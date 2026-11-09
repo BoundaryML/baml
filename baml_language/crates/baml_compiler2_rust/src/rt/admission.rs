@@ -55,11 +55,10 @@ pub(super) fn collect<'db>(
         }
     }
     queue.extend(plan.string_overrides.values().copied());
+    queue.extend(plan.equals_overrides.values().copied());
     // Automatic finalizers are host callbacks, so they have no ordinary call
-    // edge from a test body. Admit their bodies and telemetry like other roots.
-    if test_entry {
-        queue.extend(plan.cleanup_methods.values().copied());
-    }
+    // edge from an entry body. Admit their bodies and telemetry like other roots.
+    queue.extend(plan.cleanup_methods.values().copied());
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -68,16 +67,34 @@ pub(super) fn collect<'db>(
         if !reached.insert(object) {
             continue;
         }
-        let mir = all
-            .get(&object)
-            .ok_or_else(|| no(format!("missing MIR for {}", plan.index.display(object))))?;
+        let mir = all.get(&object).ok_or_else(|| {
+            no(format!(
+                "missing MIR for {}",
+                plan.index.builtin_path(object)
+            ))
+        })?;
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
-            let name = plan.index.display(object);
-            if !baml_builtins2_codegen::supports_rt(name) && !super::callbacks::native(name) {
+            let name = plan.index.builtin_path(object);
+            if !baml_builtins2_codegen::supports_rt(name)
+                && !super::callbacks::native(name)
+                && !super::reflection::native(name)
+                && !super::operators::native(name)
+                && !super::hashing::native(name)
+                && !super::trace::native(name)
+            {
                 return Err(no(name));
             }
-            if !super::callbacks::native(name) {
-                builtins.insert(name.to_owned());
+            if super::operators::native(name)
+                || super::hashing::native(name)
+                || super::trace::native(name)
+            {
+            } else if super::reflection::native(name) {
+                let name = name.to_owned();
+                super::reflection::prepare_native(plan, &name)?;
+            } else if !super::callbacks::native(name) {
+                let name = name.to_owned();
+                super::provider::prepare_types(plan, &name)?;
+                builtins.insert(name);
             }
             let frame = plan.linked_function_frame(object)?;
             let info = plan.index.info(object);
@@ -107,6 +124,7 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
+            super::builtin_classes::record_test(db, plan, &statement.kind)?;
             if let StatementKind::Assign {
                 value: Rvalue::IsType { test, .. },
                 ..
@@ -135,8 +153,9 @@ pub(super) fn collect<'db>(
                         .map(|t| t.substitute_symbolic(&[]))
                         .collect(),
                 );
-                plan.record_ty(&ty)
-                    .map_err(|e| format!("{e} (constructor in {})", plan.index.display(object)))?;
+                plan.record_ty(&ty).map_err(|e| {
+                    format!("{e} (constructor in {})", plan.index.builtin_path(object))
+                })?;
             }
         }
         // Type-test declarations may occur only in a catch arm, including
@@ -166,14 +185,17 @@ pub(super) fn collect<'db>(
             }) = &block.terminator
             {
                 if plan.index.function(db, *f).is_some_and(|(id, _)| {
-                    matches!(plan.index.display(id), "baml.json._to" | "baml.json.to")
+                    matches!(
+                        plan.index.builtin_path(id),
+                        "baml.json._to" | "baml.json.to"
+                    )
                 }) {
                     super::json_tree::register_to(plan, body, args)?;
                 }
                 if plan
                     .index
                     .function(db, *f)
-                    .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
+                    .is_some_and(|(id, _)| plan.index.builtin_path(id) == "baml.json.decode")
                 {
                     let ty = super::generics::type_operand(body, &args[0])?;
                     let template = baml_compiler2_mir::TyTemplate::from(
@@ -214,7 +236,7 @@ pub(super) fn collect<'db>(
                 plan.record_ty(&local.ty).map_err(|e| {
                     format!(
                         "{e} ({} local {i}: {:?})",
-                        plan.index.display(object),
+                        plan.index.builtin_path(object),
                         local.ty
                     )
                 })?;
@@ -270,7 +292,7 @@ pub(super) fn collect<'db>(
                     let reach = result.map_err(|error| {
                         format!(
                             "{error} (reaching {} block {})",
-                            plan.index.display(object),
+                            plan.index.builtin_path(object),
                             block.id.0
                         )
                     })?;
@@ -315,18 +337,12 @@ pub(super) fn collect<'db>(
         unreachable!()
     };
     let result = plan.repr(&body.locals[0].ty)?;
-    if mir.arity != 0
-        || if test_entry {
-            result != Repr::Null
-        } else {
-            !matches!(result, Repr::Int | Repr::Str)
+    if test_entry {
+        if mir.arity != 0 || result != Repr::Null {
+            return Err(no("test entry must have no parameters and return null"));
         }
-    {
-        return Err(no(if test_entry {
-            "test entry must have no parameters and return null"
-        } else {
-            "entry must have no parameters and return int or string"
-        }));
+    } else if mir.arity != 0 || !matches!(result, Repr::Int | Repr::Str) {
+        super::host::admit(plan, mir)?;
     }
     Ok(Admitted {
         all,

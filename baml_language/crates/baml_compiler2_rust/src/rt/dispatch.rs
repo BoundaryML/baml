@@ -187,7 +187,11 @@ fn witness<'p>(
             continue;
         };
         for rule in rules {
-            if rule.for_ty_pattern != pattern || rule.interface_args != iface_args {
+            if !(rule.for_ty_pattern == pattern
+                || super::reflection::type_value_pattern(plan, &rule.for_ty_pattern)
+                    && super::reflection::type_value_pattern(plan, &pattern))
+                || rule.interface_args != iface_args
+            {
                 continue;
             }
             return Ok(Some(Witness {
@@ -324,7 +328,7 @@ impl registry::Feature for Feature {
                     return Err(no("interface call arity"));
                 }
                 let MirFunctionKind::Bytecode(body) = &e.all[&callee].kind else {
-                    let name = e.plan.index.display(callee);
+                    let name = e.plan.index.builtin_path(callee);
                     let (value, repr) = registry::call(e, name, &[], &call_values)
                         .ok_or_else(|| no("interface builtin implementation"))??;
                     let result = e.coerce((value, repr), returned)?;
@@ -598,5 +602,22 @@ pub(super) fn resolve_string_override(
         resolve(db, plan, concrete, iface, "to_string", &[])
     } else {
         super::formatting::primitive_override(plan, concrete, iface)
+    }
+}
+
+/// Resolve `method` only when the selected implementation declares it, never
+/// an interface default. Generic implementations are bound by the checker's
+/// resolver and monomorphized like other generic impl bodies.
+pub(super) fn resolve_explicit(
+    db: &dyn Db,
+    plan: &Plan<'_>,
+    concrete: &RuntimeTy,
+    iface: &TyTemplateInterface,
+    method: &str,
+) -> Gen<Option<(usize, Vec<RuntimeTy>)>> {
+    if witness(db, plan, concrete, iface)?.is_some_and(|w| w.rule.methods.contains_key(method)) {
+        resolve(db, plan, concrete, iface, method, &[])
+    } else {
+        Ok(None)
     }
 }

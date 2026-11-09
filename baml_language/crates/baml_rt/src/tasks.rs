@@ -851,38 +851,23 @@ pub const fn bigint_descriptor(type_id: u32) -> Descriptor {
 /// # Safety
 /// `desc` is an opaque bigint descriptor in the active heap.
 pub unsafe fn bigint(desc: u32, value: &num_bigint::BigInt) -> R<usize> {
-    let (sign, limbs) = value.to_u32_digits();
-    let bytes = 24 + (limbs.len() * 4).next_multiple_of(8);
-    let p = unsafe { crate::try_alloc(desc, bytes)? };
+    let (sign, bytes) = value.to_bytes_le();
+    let p = unsafe { crate::try_alloc(desc, 24 + bytes.len().next_multiple_of(8))? };
     unsafe {
-        p.add(8).cast::<i64>().write(match sign {
+        p.add(8).cast::<usize>().write(bytes.len());
+        p.add(16).cast::<i64>().write(match sign {
             num_bigint::Sign::Minus => -1,
             num_bigint::Sign::NoSign => 0,
             num_bigint::Sign::Plus => 1,
         });
-        p.add(16).cast::<usize>().write(limbs.len());
-        std::ptr::copy_nonoverlapping(limbs.as_ptr(), p.add(24).cast(), limbs.len());
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), p.add(24), bytes.len());
     }
     Ok(p as usize)
 }
-/// # Safety
 /// The pointer names a live managed bigint.
 pub unsafe fn bigint_value(pointer: usize) -> num_bigint::BigInt {
-    unsafe {
-        let p = pointer as *const u8;
-        let sign = match p.add(8).cast::<i64>().read() {
-            -1 => num_bigint::Sign::Minus,
-            0 => num_bigint::Sign::NoSign,
-            _ => num_bigint::Sign::Plus,
-        };
-        let len = p.add(16).cast::<usize>().read();
-        num_bigint::BigInt::new(
-            sign,
-            std::slice::from_raw_parts(p.add(24).cast(), len).to_vec(),
-        )
-    }
+    unsafe { crate::native::bigint_owned(pointer) }
 }
-/// # Safety
 /// The pointer names a live managed bigint; roots follow the task ABI.
 pub unsafe fn sleep(nanos: usize) -> R<()> {
     use num_traits::ToPrimitive;

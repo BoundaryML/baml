@@ -42,6 +42,14 @@ pub(super) fn emit(
     .collect::<Gen<Vec<_>>>()?;
     let naming = named("baml.json.Naming")?;
     let mut extra = BTreeSet::new();
+    for name in [
+        "baml.panics.UserPanic",
+        "baml.errors.ParseError",
+        "baml.panics.HostUnavailable",
+        "baml.errors.Io",
+    ] {
+        extra.insert(named(name)?);
+    }
     for frame in plan.function_frames.values() {
         for (_, ty) in frame {
             ty.visit_heads(&mut |h| {
@@ -76,6 +84,46 @@ pub(super) fn emit(
                 }
             });
         }
+    }
+    for types in plan
+        .reflection_fields
+        .iter()
+        .map(|(_, _, types)| types)
+        .chain(
+            plan.reflection_signatures
+                .iter()
+                .flatten()
+                .map(|(_, types)| types),
+        )
+    {
+        for ty in types {
+            ty.visit_heads(&mut |head| {
+                for (object, declaration) in plan.program.objects.iter().enumerate() {
+                    if matches!(declaration,Object::Class(class) if class.type_tag == head.tag())
+                        || matches!(declaration,Object::Enum(enumeration) if enumeration.type_tag == head.tag())
+                    {
+                        extra.insert(object);
+                    }
+                }
+            });
+        }
+    }
+    for ty in &plan.reflection_types {
+        let realized = baml_compiler2_mir::RealizedTy::try_from(ty.clone())
+            .map_err(|_| no("reflected capture declaration"))?;
+        let anchored = plan
+            .index
+            .anchor(&baml_compiler2_mir::TyTemplate::from(realized))
+            .ok_or_else(|| no("reflected capture identity"))?;
+        anchored.substitute_symbolic(&[]).visit_heads(&mut |head| {
+            for (object, declaration) in plan.program.objects.iter().enumerate() {
+                if matches!(declaration,Object::Class(class) if class.type_tag == head.tag())
+                    || matches!(declaration,Object::Enum(enumeration) if enumeration.type_tag == head.tag())
+                {
+                    extra.insert(object);
+                }
+            }
+        });
     }
     // Empty callable lists can mention classes never allocated by the entry.
     // Their type captures still require the declaration, without a heap layout.
@@ -127,8 +175,24 @@ pub(super) fn emit(
             });
             continue;
         }
+        if desc == layout::BYTES_BUFFER_DESCRIPTOR {
+            out.push_str("rt::telemetry::capture::Shape::Unsupported,\n");
+            continue;
+        }
+        if desc == layout::BIGINT_DESCRIPTOR {
+            out.push_str("rt::telemetry::capture::Shape::Bigint,\n");
+            continue;
+        }
         let class = if desc < 13 {
             Some(runtime[desc - 1])
+        } else if let Some(name) = match desc {
+            layout::USER_PANIC_DESCRIPTOR => Some("baml.panics.UserPanic"),
+            layout::SCALAR_PARSE_DESCRIPTOR => Some("baml.errors.ParseError"),
+            layout::HOST_UNAVAILABLE_DESCRIPTOR => Some("baml.panics.HostUnavailable"),
+            layout::IO_DESCRIPTOR => Some("baml.errors.Io"),
+            _ => None,
+        } {
+            Some(named(name)?)
         } else {
             descriptors
                 .iter()
@@ -136,6 +200,8 @@ pub(super) fn emit(
         };
         let shape = if plan.bigints && desc == plan.bigint_descriptor() {
             "Bigint".to_owned()
+        } else if plan.reflection_descriptor() == Some(desc) {
+            "Reflected(&REFLECT_PROGRAM)".to_owned()
         } else if plan.future_descriptor() == Some(desc) {
             "Future".to_owned()
         } else if plan
@@ -423,10 +489,11 @@ fn capture_element(
 ) -> Gen<(String, String)> {
     let (tag, ty) = match repr {
         Repr::Int => (0, "Int".into()),
+        Repr::Reflected => (plan.reflection_descriptor().unwrap() + 3, "Type".into()),
+        Repr::Bigint => (plan.bigint_descriptor() + 3, "Bigint".into()),
         Repr::Bool => (1, "Bool".into()),
         Repr::Float => (u32::MAX as usize - 1, "Float".into()),
         Repr::Str => (3, "String".into()),
-        Repr::Bigint => (plan.bigint_descriptor() + 3, "Bigint".into()),
         Repr::Bytes => (19, "Uint8Array".into()),
         Repr::Opaque => (18, "RustType".into()),
         Repr::Enum(e) => {
@@ -544,6 +611,7 @@ pub(super) fn capture_repr(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
         Repr::Bigint => format!("{prefix}Bigint"),
         Repr::Bytes => format!("{prefix}Uint8Array"),
         Repr::Opaque => format!("{prefix}RustType"),
+        Repr::Reflected => format!("{prefix}Type"),
         Repr::Int => format!("{prefix}Int"),
         Repr::Float => format!("{prefix}Float"),
         Repr::Bool => format!("{prefix}Bool"),
@@ -627,6 +695,11 @@ pub(super) fn capture_dyn(
         return Ok(value.to_owned());
     }
     let (tag, raw) = match repr {
+        Repr::Reflected => {
+            return Ok(format!(
+                "rt::Dyn{{tag:REFLECT_TAG,payload:({value}).as_raw() as u64}}"
+            ));
+        }
         Repr::Float => {
             return Ok(format!(
                 "rt::Dyn{{tag:rt::FLOAT_TAG,payload:({value}).to_bits()}}"

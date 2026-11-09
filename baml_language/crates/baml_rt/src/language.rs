@@ -35,6 +35,46 @@ pub fn map_key_not_found() -> Box<Error> {
     error.display_value = Some(r#"baml.panics.MapKeyNotFound {key: "(unknown)"}"#.into());
     error
 }
+pub const USER_PANIC_ID: u32 = 20;
+pub const SCALAR_PARSE_ID: u32 = 21;
+pub const HOST_UNAVAILABLE_ID: u32 = 22;
+pub const IO_ID: u32 = 23;
+pub const SCALAR_PARSE_DESC: Descriptor = Descriptor {
+    type_id: SCALAR_PARSE_ID + 3,
+    ..OVERFLOW_DESC
+};
+pub const USER_PANIC_DESC: Descriptor = Descriptor {
+    type_id: USER_PANIC_ID + 3,
+    ..OVERFLOW_DESC
+};
+pub const IO_DESC: Descriptor = Descriptor {
+    type_id: IO_ID + 3,
+    ..OVERFLOW_DESC
+};
+pub const HOST_UNAVAILABLE_DESC: Descriptor = Descriptor {
+    kind: Kind::Class,
+    size: 24,
+    ptr_slots: (8, 2),
+    tagged_slots: (0, 0),
+    elem: None,
+    type_id: HOST_UNAVAILABLE_ID + 3,
+    fields: &[
+        Field {
+            name: "resource",
+            offset: 8,
+            slot: SlotKind::Pointer,
+            type_id: 3,
+        },
+        Field {
+            name: "message",
+            offset: 16,
+            slot: SlotKind::Pointer,
+            type_id: 3,
+        },
+    ],
+    finalizer: None,
+};
+
 const MESSAGE_FIELDS: &[Field] = &[Field {
     name: "message",
     offset: 8,
@@ -514,6 +554,10 @@ pub fn driver_configured<T: DriverValue>(
         }
     }
 }
+pub(crate) fn print_error(error: Box<Error>) {
+    render_error(error, None);
+}
+
 fn render_error(error: Box<Error>, background: Option<bool>) {
     let traceback = bex_vm_types::errors::format_traceback(
         error
@@ -712,6 +756,13 @@ pub(crate) fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
         VmPanic::NegativeBitShift { message } => {
             panic_value(2, "baml.panics.NegativeBitShift", message)
         }
+        VmPanic::HostUnavailable { resource, message } => {
+            crate::io::host_unavailable(resource, message)
+        }
+        VmPanic::UserPanic { message } => {
+            panic_value(USER_PANIC_ID, "baml.panics.UserPanic", message)
+        }
+        VmPanic::AllocFailure { message } => panic_value(5, "baml.panics.AllocFailure", message),
         VmPanic::StackOverflow => {
             panic_value(4, "baml.panics.StackOverflow", "stack overflow".into())
         }

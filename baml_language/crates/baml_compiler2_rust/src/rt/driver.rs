@@ -72,19 +72,23 @@ fn compile_entry<'db>(
         enums: BTreeSet::new(),
         specialized_calls: BTreeMap::new(),
         type_codes: Vec::new(),
+        reflected: false,
+        reflect_meta: false,
+        reflection_fields: Vec::new(),
+        reflection_signatures: None,
+        reflection_types: Vec::new(),
         next_object: program.objects.len(),
         class_instances: Vec::new(),
         concrete_types: Vec::new(),
         heads: BTreeMap::new(),
         dispatches: BTreeMap::new(),
         function_frames: BTreeMap::new(),
-        frozen_types: BTreeMap::new(),
-        frozen_strings: BTreeSet::new(),
-        type_renderer: None,
         error_contexts: false,
         structural_strings: false,
         structural_string_calls: BTreeSet::new(),
         string_overrides: BTreeMap::new(),
+        structural_equals: false,
+        equals_overrides: BTreeMap::new(),
         alias_tests: std::cell::RefCell::new(BTreeSet::new()),
         list_stringify: false,
         list_render_roots: std::cell::RefCell::new(BTreeSet::new()),
@@ -118,13 +122,13 @@ fn compile_entry<'db>(
             .map(|p| p.all.as_ref().map_err(Clone::clone))
             .transpose()?,
     )?;
-    super::assertions::validate(&plan, &builtins)?;
+    super::reflection::collect(&mut plan, &all, &reached)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
     builtins::emit(&mut out, &builtins)?;
     let layout::LayoutIds { descriptors, lists } = layout::emit(&mut out, &plan)?;
-    super::assertions::emit(&mut out, &plan)?;
+    super::reflection::emit(&mut out, db, &plan)?;
     super::regex::emit(&mut out, &plan, &descriptors, &lists, &builtins)?;
     let host_function = |name: &str| {
         program
@@ -379,6 +383,19 @@ fn compile_entry<'db>(
             !plan.cleanup_methods.is_empty(),
             plan.error_contexts,
         );
+    } else if all[&entry].arity != 0
+        || !matches!(&all[&entry].kind,MirFunctionKind::Bytecode(body) if matches!(plan.repr(&body.locals[0].ty),Ok(super::Repr::Int|super::Repr::Str)))
+    {
+        host::emit_owned(
+            &mut out,
+            &plan,
+            &all[&entry],
+            &lists,
+            &descriptors,
+            entry,
+            &builtins,
+            format_site,
+        )?;
     } else {
         host::emit(
             &mut out,

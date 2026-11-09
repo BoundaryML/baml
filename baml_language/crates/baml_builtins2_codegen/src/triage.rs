@@ -33,6 +33,116 @@ pub enum RtDisposition {
     Unsupported(&'static str),
 }
 
+/// Compiler-emitted reflection adapters do not need a generated native body.
+pub fn supports_rt_reflection(path: &str) -> bool {
+    const KINDS: &[&str] = &[
+        "Class",
+        "Enum",
+        "Union",
+        "Literal",
+        "Array",
+        "Map",
+        "Interface",
+        "Primitive",
+        "Function",
+    ];
+    matches!(
+        path,
+        "reflect.Type._to_string_impl"
+            | "reflect.Type.kind"
+            | "reflect.Array.element_type"
+            | "reflect.Map.key_type"
+            | "reflect.Map.value_type"
+            | "reflect.Function.return_type"
+            | "reflect.Type.as_class"
+            | "reflect.Type.as_enum"
+            | "reflect.Type.as_union"
+            | "reflect.Type.as_literal"
+            | "reflect.Type.as_array"
+            | "reflect.Type.as_map"
+            | "reflect.Type.as_interface"
+            | "reflect.Type.as_primitive"
+            | "reflect.Type.as_function"
+            | "reflect.Type.array"
+            | "reflect.Type.optional"
+            | "reflect.Type.of_value"
+            | "reflect.Union.member_types"
+            | "reflect.Function.params"
+            | "reflect.Map._new"
+            | "reflect.Literal.new"
+            | "reflect.Literal.value"
+            | "reflect.Type._implements"
+            | "reflect.Type.to_baml"
+            | "reflect.Class.fields"
+            | "reflect.Class.metadata"
+            | "reflect.Enum.values"
+            | "reflect.Enum.metadata"
+            | "reflect.call_any"
+            | "reflect.signature"
+    ) || path
+        .strip_prefix("reflect.reflect.TypeView$for$")
+        .and_then(|path| path.strip_suffix(".as_type"))
+        .is_some_and(|kind| KINDS.contains(&kind))
+}
+
+/// Primitive operator implementations and erased operator drivers lower to
+/// the operations the operator syntax uses.
+pub fn supports_rt_operator(path: &str) -> bool {
+    path.strip_prefix("baml.ops.__union_")
+        .is_some_and(|op| matches!(op, "add" | "sub" | "mul" | "div" | "rem" | "neg"))
+        || path.strip_prefix("baml.ops.").is_some_and(|rest| {
+            rest.contains("$for$")
+                && rest.rsplit_once('.').is_some_and(|(_, m)| {
+                    matches!(
+                        m,
+                        "add"
+                            | "sub"
+                            | "mul"
+                            | "div"
+                            | "rem"
+                            | "shl"
+                            | "shr"
+                            | "bit_and"
+                            | "bit_or"
+                            | "bit_xor"
+                            | "eq"
+                            | "neg"
+                    )
+                })
+        })
+}
+
+fn typed_list_lowering(path: &str) -> bool {
+    matches!(
+        path,
+        "baml.Array.at"
+            | "baml.Array.pop"
+            | "baml.Array.remove_at"
+            | "baml.Array.concat"
+            | "baml.Array.reverse"
+            | "baml.Array.slice"
+            | "baml.Array.clear"
+            | "baml.Array.shift"
+            | "baml.Array.unshift"
+            | "baml.Array.insert"
+            | "baml.Array.splice"
+            | "baml.Array.includes"
+            | "baml.Array.index_of"
+            | "baml.Array.last_index_of"
+            | "baml.Array.filled"
+            | "baml.Array.map"
+            | "baml.Array.filter"
+            | "baml.Array.some"
+            | "baml.Array.every"
+            | "baml.Array.reduce"
+            | "baml._sum_int"
+            | "baml._sum_float"
+            | "baml._median_float"
+            | "baml._rust_sort"
+            | "baml._is_primitive_array"
+    )
+}
+
 /// Where a declaration belongs in rt, independently of whether its adapter is
 /// implemented. Container bodies stay typed Rust; no interpreter continuation
 /// or local-twin entry point is retained.
@@ -106,7 +216,33 @@ pub fn classify_builtin(d: &NativeBuiltin) -> (BuiltinGroup, RtDisposition) {
     } else {
         ContainerClass
     };
-    let disposition = if matches!(
+    let disposition = if supports_rt_reflection(path)
+        || supports_rt_operator(path)
+        || matches!(
+            path,
+            "baml.hash.DefaultHasher.new"
+                | "baml.hash.Hasher$for$DefaultHasher.write"
+                | "baml.hash.Hasher$for$DefaultHasher.finish"
+                | "trace._options"
+                | "trace.hidden"
+                | "trace.timing"
+                | "trace._span"
+                | "trace.context"
+                | "trace.Options.context"
+                | "trace.Options.mode"
+                | "trace.Options._span"
+                | "trace.Options.inspect"
+        ) {
+        CompilerIntrinsic
+    } else if typed_list_lowering(path) {
+        Partial("typed list lowering; element and erased-callback specializations are limited")
+    } else if path.starts_with("baml.future.Future.")
+        || path.starts_with("baml.spawn.CancelToken.")
+        || path.starts_with("baml.spawn.Limit.")
+        || path == "baml._cleanup_begin"
+    {
+        Partial("direct runtime task service; erased native method values are not admitted")
+    } else if matches!(
         path,
         "baml._to_string_default"
             | "baml.Array.push"
@@ -123,14 +259,21 @@ pub fn classify_builtin(d: &NativeBuiltin) -> (BuiltinGroup, RtDisposition) {
             | "baml.Map.keys"
             | "baml.Map.values"
             | "baml.ops.equals_equals"
+            | "baml._equals_structural_default"
+            | "baml._hash_structural_default"
     ) {
         Partial(match path {
             "baml._to_string_default" => "int and bigint specializations",
             name if name.starts_with("baml.Map.") => {
                 "typed primitive-key maps; class hash/equality callbacks are not lowered"
             }
-            "baml.ops.equals_equals" => "primitive string/null tests and bigint/byte equality",
-            _ => "string and nested-string list specializations",
+            "baml._hash_structural_default" => {
+                "native DefaultHasher walk; user Hash/Hasher implementations are rejected"
+            }
+            "baml.ops.equals_equals" | "baml._equals_structural_default" => {
+                "shared structural walk with closed-world (including generic) Equals.eq witnesses"
+            }
+            _ => "typed list lowering; element and erased-callback specializations are limited",
         })
     } else if crate::supports_rt(path) {
         TypedAdapter
@@ -184,6 +327,18 @@ mod tests {
                     | RtDisposition::CompilerIntrinsic
                     | RtDisposition::RuntimeService
             ));
+            if crate::codegen_rt_provider::supports(&d.path) {
+                crate::codegen_rt_provider::validate(d).unwrap_or_else(|e| panic!("{e}"));
+            }
+            if crate::supports_rt_calendar(&d.path) {
+                crate::codegen_rt_calendar::validate(d).unwrap_or_else(|e| panic!("{e}"));
+            }
+            if crate::codegen_rt_random::supports(&d.path) {
+                crate::codegen_rt_random::generate(d).unwrap_or_else(|e| panic!("{e}"));
+            }
+            if crate::codegen_rt_clock::supports(&d.path) {
+                crate::codegen_rt_clock::generate(d).unwrap_or_else(|e| panic!("{e}"));
+            }
             if crate::codegen_rt_bytes::supports(&d.path) {
                 crate::codegen_rt_bytes::generate(d).unwrap_or_else(|e| panic!("{e}"));
             }
