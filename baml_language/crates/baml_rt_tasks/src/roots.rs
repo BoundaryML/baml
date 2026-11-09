@@ -161,5 +161,6 @@ pub(super) fn with_registers(f: impl FnOnce(usize, &[usize])) {
     // The parked range must include this still-live spill buffer.
     debug_assert!(sp <= regs.as_ptr() as usize);
     f(sp, &regs);
-    std::hint::black_box(regs);
+    // Keep the spill buffer live until here without copying it.
+    std::hint::black_box(&regs);
 }

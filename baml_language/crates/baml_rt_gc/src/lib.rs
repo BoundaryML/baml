@@ -1145,6 +1145,25 @@ impl Heap {
         }
         true
     }
+    /// Arm a finalizer for an object whose descriptor has none, once it
+    /// acquires native state. The object keeps any run-once latch.
+    ///
+    /// # Safety
+    /// `object` is a live object of this heap with no armed finalizer.
+    pub unsafe fn attach_finalizer(&mut self, object: usize, cleanup: FinalizerId) {
+        let index = u32::try_from(self.finalizable.len() + 1).expect("finalizer table exhausted");
+        assert!(index <= u32::MAX / 2, "finalizer table exhausted");
+        debug_assert!(self.finalizer_record(object).is_none());
+        unsafe {
+            let header = &mut *(object as *mut Header);
+            header.aux = (index << 1) | (header.aux & 1);
+        }
+        self.finalizable.push(Finalizable {
+            object,
+            cleanup,
+            state: 0,
+        });
+    }
     /// Suppress after native resources were released by an explicit observer.
     pub fn suppress_finalizer(&mut self, object: usize) {
         if let Some(record) = self.finalizer_record(object) {

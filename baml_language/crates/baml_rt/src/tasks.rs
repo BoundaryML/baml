@@ -2,23 +2,42 @@
 use crate::{Dyn, Error, R};
 use baml_rt_gc::{Descriptor, ElementLayout, Elements, Header, Kind};
 pub use baml_rt_tasks::SpawnOptions;
-use baml_rt_tasks::{FutureHandle, SwitchHook, TaskCx, Value};
+use baml_rt_tasks::{SwitchHook, TaskCx, Value};
 use std::{cell::Cell, mem::size_of, ptr};
 
 pub const FUTURE_FINALIZER: u32 = u32::MAX;
+// The managed future is the producer's only future record: the loop keeps
+// just the live task (waiters, cancellation) and the producer settles here.
+// Native state exists only while telemetry is pending or after an error, so
+// only those futures are registered for finalization.
 #[repr(C)]
 struct Future {
     header: Header,
     environment: usize,
     result: Dyn,
     error: *mut Error,
-    handle: Option<FutureHandle>,
-    registration: usize,
+    // Loop task id; meaningful only while the producer has not settled.
+    task: usize,
     telemetry: Option<Box<crate::telemetry::Task>>,
+    // Index into the native finalizer table, or NO_REGISTRATION.
+    registration: u32,
+    flags: u32,
+}
+const NO_REGISTRATION: u32 = u32::MAX;
+const OBSERVED: u32 = 1;
+const CANCEL_REQUESTED: u32 = 2;
+// The producer unwound without its epilogue (a native panic).
+const PANICKED: u32 = 4;
+impl Future {
+    fn settled(&self) -> bool {
+        self.result.tag != u64::MAX || !self.error.is_null() || self.flags & PANICKED != 0
+    }
 }
 // Preserve the ordinary future's 16-byte rounded footprint. Optional trailing
 // tagged slots coallocate a private closure environment with its future.
 const FUTURE_BYTES: usize = (size_of::<Future>() + 15) & !15;
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(size_of::<Future>() == 64);
 pub const fn future_descriptor(type_id: u32) -> Descriptor {
     Descriptor {
         kind: Kind::Future,
@@ -31,7 +50,8 @@ pub const fn future_descriptor(type_id: u32) -> Descriptor {
         }),
         type_id,
         fields: &[],
-        finalizer: Some(FUTURE_FINALIZER),
+        // Attached on demand, when an error is stored.
+        finalizer: None,
     }
 }
 
@@ -49,23 +69,23 @@ pub(crate) struct NativeFinalizers {
     unhandled: Vec<(crate::CaughtError, bool)>,
 }
 impl NativeFinalizers {
-    unsafe fn save_unhandled(&mut self, f: &Future) {
+    unsafe fn save_unhandled(&mut self, f: &mut Future) {
         if !f.error.is_null()
             && unsafe { &*f.error }.class != "baml.panics.Cancelled"
-            && f.handle.as_ref().is_some_and(|h| !h.is_observed())
+            && f.flags & OBSERVED == 0
         {
             let error = Box::new(unsafe { &*f.error }.clone());
             self.unhandled.push((
                 unsafe { crate::CaughtError::new(error) },
-                f.handle.as_ref().unwrap().was_cancel_requested(),
+                f.flags & CANCEL_REQUESTED != 0,
             ));
-            let _ = f.handle.as_ref().unwrap().result();
+            f.flags |= OBSERVED;
         }
     }
     pub(crate) unsafe fn finish_invocation(&mut self) {
         for pointer in self.entries.clone().into_iter().filter(|p| *p != 0) {
             unsafe {
-                self.save_unhandled(&*(pointer as *const Future));
+                self.save_unhandled(&mut *(pointer as *mut Future));
             }
         }
     }
@@ -104,7 +124,6 @@ impl NativeFinalizers {
         for pointer in self.entries.drain(..).filter(|p| *p != 0) {
             unsafe {
                 let f = &mut *(pointer as *mut Future);
-                f.handle.take();
                 f.telemetry.take();
                 if !f.error.is_null() {
                     drop(Box::from_raw(f.error));
@@ -118,19 +137,25 @@ impl NativeFinalizers {
 }
 thread_local! { pub(crate) static FINALIZERS: Cell<*mut NativeFinalizers> = const { Cell::new(ptr::null_mut()) }; }
 
+unsafe fn register(pointer: usize) -> u32 {
+    let index = unsafe { (&mut *FINALIZERS.get()).register(pointer) };
+    u32::try_from(index)
+        .ok()
+        .filter(|&i| i != NO_REGISTRATION)
+        .expect("future registrations exhausted")
+}
 unsafe fn release_registration(f: &mut Future) {
-    if f.registration != usize::MAX {
+    if f.registration != NO_REGISTRATION {
         unsafe {
-            (&mut *FINALIZERS.get()).release(f.registration);
+            (&mut *FINALIZERS.get()).release(f.registration as usize);
         }
-        f.registration = usize::MAX;
+        f.registration = NO_REGISTRATION;
     }
 }
 pub(crate) unsafe fn finalize(pointer: usize) {
     unsafe {
         let f = &mut *(pointer as *mut Future);
         (&mut *FINALIZERS.get()).save_unhandled(f);
-        f.handle.take();
         f.telemetry.take();
         if !f.error.is_null() {
             drop(Box::from_raw(f.error));
@@ -276,19 +301,22 @@ pub unsafe fn spawn(
             payload: 0,
         };
         (*pointer).error = ptr::null_mut();
-        ptr::write(&mut (*pointer).handle, None);
-        ptr::write(
-            &mut (*pointer).telemetry,
-            crate::telemetry::Task::spawn(site, name),
-        );
-        (*pointer).registration = (&mut *FINALIZERS.get()).register(pointer as usize);
+        (*pointer).flags = 0;
+        let telemetry = crate::telemetry::Task::spawn(site, name);
+        // Until execution takes it, a telemetry record is native state that
+        // shutdown must release; plain futures own nothing native.
+        (*pointer).registration = if telemetry.is_some() {
+            register(pointer as usize)
+        } else {
+            NO_REGISTRATION
+        };
+        ptr::write(&mut (*pointer).telemetry, telemetry);
         options.managed_roots = [pointer as usize, 0];
-        let handle = (&mut *crate::TASK.get()).spawn_managed(
+        (*pointer).task = (&mut *crate::TASK.get()).spawn_managed(
             &mut options,
             execute,
             [pointer as usize, site, entry_site, 0],
         );
-        (*pointer).handle = Some(handle);
         Ok(pointer as usize)
     }
 }
@@ -296,6 +324,15 @@ unsafe fn execute(cx: &mut TaskCx<'_>, data: [usize; 4]) -> baml_rt_tasks::Outco
     unsafe {
         let f = data[0] as *mut Future;
         let telemetry = (*f).telemetry.take();
+        release_registration(&mut *f);
+        // A native panic unwinds through here without the epilogue below.
+        struct Unwind(*mut Future);
+        impl Drop for Unwind {
+            fn drop(&mut self) {
+                unsafe { (*self.0).flags |= PANICKED };
+            }
+        }
+        let unwind = Unwind(f);
         let mut binding = FiberBinding::new(cx, ptr::null_mut());
         binding.telemetry = telemetry.as_ref().map(|task| task.fiber.clone());
         binding.install();
@@ -357,9 +394,19 @@ unsafe fn execute(cx: &mut TaskCx<'_>, data: [usize; 4]) -> baml_rt_tasks::Outco
                     }
                 };
                 (*f).error = Box::into_raw(error);
+                // Preserve cancellation from ancestors, linked tokens and
+                // deadlines, exactly as a loop-side future records it.
+                if cx.cancellation_requested() {
+                    (*f).flags |= CANCEL_REQUESTED;
+                }
+                // The error box is native state: register it for unhandled
+                // reporting and release when the future dies.
+                (*f).registration = register(f as usize);
+                (&mut *crate::HEAP.get()).attach_finalizer(f as usize, FUTURE_FINALIZER);
                 Err(outcome)
             }
         };
+        std::mem::forget(unwind);
         outcome
     }
 }
@@ -372,29 +419,22 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
         (&mut *crate::TASK.get())
             .check_cancel()
             .map_err(loop_error)?;
-        if (*pointer).result.tag == u64::MAX && (*pointer).error.is_null() {
-            let handle = (*pointer)
-                .handle
-                .as_ref()
-                .expect("pending producer")
-                .clone();
+        if !(*pointer).settled() {
             crate::telemetry::before_yield();
-            let result = (&mut *crate::TASK.get()).await_settled_future(&handle);
+            let result = (&mut *crate::TASK.get()).await_task((*pointer).task);
             // Admission errors still pass through the managed entry wrapper.
-            match result {
-                Err(error) if (*pointer).error.is_null() => return Err(loop_error(error)),
-                // Settled without the managed epilogue (a native panic).
-                Ok(()) if (*pointer).error.is_null() && (*pointer).result.tag == u64::MAX => {
-                    if let Some(Err(error)) = handle.result() {
-                        return Err(loop_error(error));
-                    }
-                }
-                _ => {}
+            if let Err(error) = result
+                && (*pointer).error.is_null()
+            {
+                return Err(loop_error(error));
             }
         }
-        if let Some(handle) = (*pointer).handle.take() {
-            handle.observe();
+        if (*pointer).flags & PANICKED != 0 && (*pointer).error.is_null() {
+            return Err(loop_error(baml_rt_tasks::Err::InternalError(
+                "task panicked".into(),
+            )));
         }
+        (*pointer).flags |= OBSERVED;
         if !(*pointer).error.is_null() {
             let mut error = Box::new((*(*pointer).error).clone());
             // A cancelled await is a fresh raise in the awaiting task.
@@ -405,10 +445,6 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
             }
             return Err(error);
         }
-        if (*pointer).registration != usize::MAX {
-            release_registration(&mut *pointer);
-            (&mut *crate::HEAP.get()).suppress_finalizer(pointer as usize);
-        }
         Ok((*pointer).result)
     }
 }
@@ -417,8 +453,14 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
 /// The argument names a live future in the current heap.
 pub unsafe fn cancel(pointer: usize) -> bool {
     unsafe {
-        let f = &*(pointer as *const Future);
-        f.handle.as_ref().is_some_and(FutureHandle::try_cancel)
+        let f = &mut *(pointer as *mut Future);
+        let previous = f.flags & CANCEL_REQUESTED != 0;
+        f.flags |= CANCEL_REQUESTED;
+        if previous || f.settled() {
+            return false;
+        }
+        (&*crate::TASK.get()).cancel_task(f.task);
+        true
     }
 }
 
@@ -692,21 +734,23 @@ pub unsafe fn await_any(pointers: &[usize]) -> R<i64> {
                 return Ok(i as i64);
             }
         }
-        let handles = pointers
+        let tasks = pointers
             .iter()
-            .map(|&p| {
-                (*(p as *const Future))
-                    .handle
-                    .as_ref()
-                    .expect("pending future")
-                    .clone()
-            })
+            .map(|&p| (*(p as *const Future)).task)
             .collect::<Vec<_>>();
         crate::telemetry::before_yield();
-        (&mut *crate::TASK.get())
-            .await_settled(&handles)
-            .map(|i| i as i64)
-            .map_err(loop_error)
+        // The first settled input in input order, including a panicked one.
+        loop {
+            if let Some(i) = pointers
+                .iter()
+                .position(|&p| (*(p as *const Future)).settled())
+            {
+                return Ok(i as i64);
+            }
+            (&mut *crate::TASK.get())
+                .await_any_task(&tasks)
+                .map_err(loop_error)?;
+        }
     }
 }
 
