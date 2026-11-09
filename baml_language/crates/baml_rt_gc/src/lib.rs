@@ -544,6 +544,32 @@ impl Heap {
                 && d.size == bytes
                 && d.finalizer.is_none()
         });
+        unsafe { self.try_alloc_uninit(desc, bytes, roots) }
+    }
+    /// Allocate a header-initialized object without clearing its fields.
+    ///
+    /// # Safety
+    /// The descriptor has no finalizer and must describe exactly `bytes` bytes.
+    /// Initialize every traced slot before any collecting operation, and every
+    /// other field before reading it. As with `try_alloc`, all live pointers
+    /// must be rooted. This permits fully initialized builtins, as well as
+    /// compiler-known classes, to share the same inlined bump path.
+    #[inline(always)]
+    pub unsafe fn try_alloc_uninit(
+        &mut self,
+        desc: DescId,
+        bytes: usize,
+        roots: &dyn RootSource,
+    ) -> Result<*mut u8, AllocFailure> {
+        debug_assert!({
+            let d = &self.descriptors[desc as usize];
+            bytes >= 8
+                && !matches!(d.kind, Kind::InlineElement)
+                && d.finalizer.is_none()
+                && d.elem.map_or(bytes == d.size, |e| {
+                    bytes >= e.offset && (bytes - e.offset).is_multiple_of(d.size)
+                })
+        });
         let aligned = bytes.checked_add(15).ok_or(AllocFailure { bytes })? & !15;
         if bytes > LARGE_THRESHOLD || self.fast_limit - self.cursor < aligned {
             return unsafe { self.alloc_slow(desc, bytes, aligned, roots, false) };
@@ -1586,6 +1612,40 @@ mod allocation_tests {
                     .iter()
                     .all(|&v| v == 0)
             );
+        }
+    }
+    #[test]
+    fn initialized_variable_objects_preserve_budget_refusal_and_checked_zeroing() {
+        unsafe {
+            let mut h = heap(80);
+            let a = h.try_alloc_uninit(1, 24, &NoRoots).unwrap();
+            a.add(8).write_bytes(0xab, 16);
+            let b = h.try_alloc_uninit(1, 40, &NoRoots).unwrap();
+            b.add(8).write_bytes(0xcd, 32);
+            assert_eq!(b as usize, a as usize + 32);
+            assert_eq!(h.stats().allocated_since_gc, 80);
+            let c = h.try_alloc_uninit(1, 56, &NoRoots).unwrap();
+            c.add(8).write_bytes(0xef, 48);
+            assert_eq!(h.stats().collections, 1);
+            assert_eq!(h.stats().allocated_since_gc, 64);
+            let checked = h.alloc(1, 40, &NoRoots);
+            assert!(
+                std::slice::from_raw_parts(checked.add(8), 32)
+                    .iter()
+                    .all(|&v| v == 0)
+            );
+            assert!(
+                std::slice::from_raw_parts(c.add(8), 48)
+                    .iter()
+                    .all(|&v| v == 0xef)
+            );
+            let mut h = heap(MIN_BUDGET);
+            h.set_capacity_limit(0);
+            assert_eq!(
+                h.try_alloc_uninit(1, 24, &NoRoots),
+                Err(AllocFailure { bytes: 24 })
+            );
+            assert!(h.stats().collections > 0);
         }
     }
     #[test]
