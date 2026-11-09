@@ -17,7 +17,23 @@ pub(super) fn resolve(
         return Ok(Some(target));
     }
     let Some(w) = witness(db, plan, concrete, iface)? else {
-        return super::formatting::structural_fallback(plan, concrete, iface, method);
+        if let Some(target) = super::formatting::structural_fallback(plan, concrete, iface, method)?
+        {
+            return Ok(Some(target));
+        }
+        // The implicit implementation: a structural interface's primary
+        // method is its shared native default.
+        let Some(i) = plan.index.interface_at(&iface.name) else {
+            return Ok(None);
+        };
+        let Object::Interface(def) = &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(i)]
+        else {
+            return Ok(None);
+        };
+        return Ok(def.structural_default.as_ref().and_then(|d| {
+            (d.kind == baml_type::StructuralInterface::Hash && method == d.kind.primary_method())
+                .then(|| (d.function.raw(), Vec::new()))
+        }));
     };
     let Witness {
         rule,

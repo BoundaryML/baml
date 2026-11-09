@@ -29,6 +29,9 @@ const PROBES: &[&str] = &[
     "RtNativeEqualityOverrides",
     "RtNativeReflectionRuntime",
     "RtNativeReflectionMeta",
+    "RtNativeReflectionGlobals",
+    "RtNativeOperators",
+    "RtNativeHashing",
     "StackAllocation",
     "RuntimeListFloatConstants",
     "RuntimeListStructuralJoin",
@@ -343,7 +346,8 @@ fn is_list_probe(probe: &str) -> bool {
 
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
-        "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides" | "RtNativeReflectionRuntime" | "RtNativeReflectionMeta" | "RtNativeReflectionRuntime" | "RtNativeReflectionMeta" => Some(manifest.join("rt_fixtures/reflection")),
+        "RtNativeOperators" | "RtNativeHashing" => Some(manifest.join("rt_fixtures/operators")),
+        "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides" | "RtNativeReflectionRuntime" | "RtNativeReflectionMeta" | "RtNativeReflectionGlobals" => Some(manifest.join("rt_fixtures/reflection")),
         "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" | "RtNativeFiles"
         | "RtNativeProcess" | "RtNativeCalendar" | "RtNativeIoValues" => Some(manifest.join("rt_fixtures/native")),
         "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
@@ -470,6 +474,9 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
     "RtNativeEqualityOverrides",
     "RtNativeReflectionRuntime",
     "RtNativeReflectionMeta",
+    "RtNativeReflectionGlobals",
+    "RtNativeOperators",
+    "RtNativeHashing",
         "RtClosures",
         "RtEmptyClosures",
         "RtGenericClosures",
@@ -846,7 +853,7 @@ fn rust_differential() {
                                 | "RtNativeRandom"
                                 | "RtNativeFiles"
                                 | "RtNativeProcess"
-                                | "RtNativeCalendar" | "RtNativeIoValues" | "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides" | "RtNativeReflectionRuntime" | "RtNativeReflectionMeta" | "RtNativeReflectionRuntime"
+                                | "RtNativeCalendar" | "RtNativeIoValues" | "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides" | "RtNativeReflectionRuntime" | "RtNativeReflectionMeta" | "RtNativeReflectionGlobals" | "RtNativeOperators" | "RtNativeHashing"
                                 | "RtNativeCallback"
                                 | "RtBuiltinCallbacks"
                                 | "RtSpawnAwait"

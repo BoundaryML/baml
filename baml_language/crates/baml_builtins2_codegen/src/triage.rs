@@ -52,6 +52,23 @@ pub fn supports_rt_reflection(path: &str) -> bool {
             .is_some_and(|kind| KINDS.contains(&kind))
 }
 
+/// Primitive operator implementations and erased operator drivers lower to
+/// the operations the operator syntax uses.
+pub fn supports_rt_operator(path: &str) -> bool {
+    path.strip_prefix("baml.ops.__union_")
+        .is_some_and(|op| matches!(op, "add" | "sub" | "mul" | "div" | "rem" | "neg"))
+        || path.strip_prefix("baml.ops.").is_some_and(|rest| {
+            rest.contains("$for$")
+                && rest.rsplit_once('.').is_some_and(|(_, m)| {
+                    matches!(
+                        m,
+                        "add" | "sub" | "mul" | "div" | "rem" | "shl" | "shr" | "bit_and"
+                            | "bit_or" | "bit_xor" | "eq" | "neg"
+                    )
+                })
+        })
+}
+
 fn typed_list_lowering(path: &str) -> bool {
     matches!(path,
         "baml.Array.at" | "baml.Array.pop" | "baml.Array.remove_at" | "baml.Array.concat"
@@ -135,7 +152,15 @@ pub fn classify_builtin(d: &NativeBuiltin) -> (BuiltinGroup, RtDisposition) {
     } else {
         ContainerClass
     };
-    let disposition = if supports_rt_reflection(path) {
+    let disposition = if supports_rt_reflection(path)
+        || supports_rt_operator(path)
+        || matches!(
+            path,
+            "baml.hash.DefaultHasher.new"
+                | "baml.hash.Hasher$for$DefaultHasher.write"
+                | "baml.hash.Hasher$for$DefaultHasher.finish"
+        )
+    {
         CompilerIntrinsic
     } else if typed_list_lowering(path) {
         Partial("typed list lowering; element and erased-callback specializations are limited")
@@ -161,11 +186,15 @@ pub fn classify_builtin(d: &NativeBuiltin) -> (BuiltinGroup, RtDisposition) {
             | "baml.Map.values"
             | "baml.ops.equals_equals"
             | "baml._equals_structural_default"
+            | "baml._hash_structural_default"
     ) {
         Partial(match path {
             "baml._to_string_default" => "int and bigint specializations",
             name if name.starts_with("baml.Map.") => {
                 "typed primitive-key maps; class hash/equality callbacks are not lowered"
+            }
+            "baml._hash_structural_default" => {
+                "native DefaultHasher walk; user Hash/Hasher implementations are rejected"
             }
             "baml.ops.equals_equals" | "baml._equals_structural_default" => {
                 "shared structural walk with closed-world (including generic) Equals.eq witnesses"

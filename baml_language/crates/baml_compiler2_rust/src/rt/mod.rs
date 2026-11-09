@@ -157,6 +157,8 @@ mod json_tree;
 mod layout;
 mod lists;
 mod equality;
+mod operators;
+mod hashing;
 mod loop_ranges;
 mod places;
 mod repr;

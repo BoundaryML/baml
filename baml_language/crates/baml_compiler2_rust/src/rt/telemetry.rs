@@ -230,6 +230,13 @@ pub(super) fn emit(
         .enumerate()
         .map(|(i, &id)| (id, i))
         .collect();
+    // Native frames name their function by its table position.
+    for (id, i) in &function_ids {
+        let name = plan.index.builtin_path(*id);
+        if super::operators::native(name) || super::hashing::native(name) {
+            writeln!(&mut out, "const TELEMETRY_INDEX_{id}:usize={i};").unwrap();
+        }
+    }
     out.push_str("static TELEMETRY_FUNCTIONS:&[rt::telemetry::Function]=&[\n");
     let allocator = btel_types::FunctionIdAllocator::default();
     for &id in &observed {

@@ -104,6 +104,8 @@ const FEATURES: &[&dyn Feature] = &[
     &super::json_tree::Feature,
     &super::generics::Feature,
     &loop_ranges::Feature,
+    &super::operators::Feature,
+    &super::hashing::Feature,
     &super::equality::Feature,
     &calls::Feature,
 ];

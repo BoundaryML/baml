@@ -77,10 +77,13 @@ pub(super) fn collect<'db>(
             if !baml_builtins2_codegen::supports_rt(name)
                 && !super::callbacks::native(name)
                 && !super::reflection::native(name)
+                && !super::operators::native(name)
+                && !super::hashing::native(name)
             {
                 return Err(no(name));
             }
-            if super::reflection::native(name) {
+            if super::operators::native(name) || super::hashing::native(name) {
+            } else if super::reflection::native(name) {
                 let name = name.to_owned();
                 super::reflection::prepare_native(plan, &name)?;
             } else if !super::callbacks::native(name) {
