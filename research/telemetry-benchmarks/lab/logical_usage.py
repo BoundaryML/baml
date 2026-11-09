@@ -28,6 +28,8 @@ class Meter:
         self.roots = []
         self.files = set()
         self.uploads = set()
+        # One entry per new upload envelope, in arrival order: what it carried and what it billed.
+        self.timeline = []
 
     def ref(self, message, field):
         if message.HasField(field):
@@ -39,10 +41,14 @@ class Meter:
         if envelope.upload_id in self.uploads:
             return
         self.uploads.add(envelope.upload_id)
+        entry = {"cas_bytes": sum(len(o.blob) for o in envelope.cas_objects), "cas_objects": len(envelope.cas_objects),
+                 "body": len(body), "roots": [], "events": {}}
+        self.timeline.append(entry)
         for obj in envelope.cas_objects:
             self.sizes[obj.snapshot_id] = obj.logical_bytes_approx_v1 if obj.HasField("logical_bytes_approx_v1") else len(obj.blob)
         if not envelope.HasField("recording_file"):
             return
+        first_root = len(self.roots)
         file = RecordingFile.FromString(envelope.recording_file)
         identity = (file.header.recording_id, file.sequence)
         if identity in self.files:
@@ -55,8 +61,10 @@ class Meter:
             for event in section.events:
                 kind = event.WhichOneof("event")
                 self.names[kind] += 1
+                entry["events"][kind] = entry["events"].get(kind, 0) + 1
                 if kind in FIELDS:
                     self.ref(getattr(event, kind), FIELDS[kind])
+        entry["roots"] = self.roots[first_root:]
 
     def summary(self):
         missing = sum(key not in self.sizes for key in self.roots)
@@ -65,4 +73,8 @@ class Meter:
             "logical_bytes": None if missing else sum(self.sizes[key] for key in self.roots),
             "capture_references": len(self.roots), "missing_sizes": missing,
             "process_ids": sorted(self.processes), "events": dict(self.names),
+            "timeline": [{"cas_bytes": e["cas_bytes"], "cas_objects": e["cas_objects"], "body": e["body"],
+                          "billed": sum(self.sizes.get(k, 0) for k in e["roots"]),
+                          "network_announcements": e["events"].get("network_announcement", 0)}
+                         for e in self.timeline],
         }

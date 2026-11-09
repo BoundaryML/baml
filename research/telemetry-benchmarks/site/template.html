@@ -112,6 +112,8 @@ section h3 { margin-top: 0.8rem; }
 section[id] { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 1rem); }
 .anchor { font: 600 0.72rem/1 var(--f-mono); color: var(--ink-3); text-decoration: none; border: 1px solid var(--rule); border-radius: 6px; padding: 0.25rem 0.45rem; background: var(--panel); cursor: pointer; vertical-align: middle; margin-left: 0.5rem; white-space: nowrap; letter-spacing: 0; }
 .anchor:hover, .anchor:focus-visible { color: var(--accent); border-color: var(--accent); }
+.steps { display: grid; gap: 0.6rem; padding-left: 1.4rem; margin: 0; }
+.steps li { padding-left: 0.2rem; }
 .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; font: 600 0.78rem/1.4 var(--f-mono); }
 .toc a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); }
 .toc a:hover, .toc a:focus-visible { color: var(--accent); border-color: var(--accent); }
@@ -276,12 +278,42 @@ logfire.instrument_openai()
     </div>
   </div>
 
+  <h3 id="cache-rules">What BCS can and can't cache</h3>
+  <p class="col">BCS stores what it captures as content-addressed pieces: a piece's ID is a hash of its bytes, so the same bytes always get the same ID, and the BAML client skips uploading a piece it already uploaded in the same process. Whether a value gets its own piece depends on its kind and size. Anything smaller is written inside its parent and is uploaded again with every new copy of the parent.</p>
+  <div class="chart" id="cacheRules"></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Captured value</th><th>Gets its own piece when</th><th>Reused on a later call?</th></tr></thead>
+    <tbody>
+      <tr><td>Text: a string, image data, a byte array</td><td>it is 16 KiB or more (16,384 bytes)</td><td>Yes, when the same text is captured again in the same process. A 20 KB file the agent read, a big system prompt or a photo is uploaded once.</td></tr>
+      <tr><td>An object: one message, a list of messages</td><td>it encodes to 64 KiB or more, not counting text already cut out</td><td>Only if it is unchanged. A message list that gains a turn is different bytes, so the whole list is a new piece every call.</td></tr>
+      <tr><td>The raw HTTP request sent to the model</td><td>always, as one string (once it reaches 16 KiB)</td><td>No. It holds the whole conversation as one JSON text, so it is new every call. Messages inside it are not separate pieces.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout col">
+    <h3>What this means for a chat</h3>
+    <ul class="plain">
+      <li><strong>1,000 small messages: no cache hits.</strong> No message reaches 16 KiB, so each call uploads the full history again as one new piece. Our 100-turn long chat, about 100k tokens, shows this below.</li>
+      <li><strong>A few big messages: those are cached.</strong> Each message of 16 KiB or more is uploaded once; later calls only reference it. The small messages around it are still uploaded every call.</li>
+      <li><strong>The HTTP request is never cached.</strong> BCS keeps the raw request so you can see exactly what was sent, and that copy costs a full upload every call.</li>
+      <li><strong>Only within one process.</strong> A second process uploads the same photo again, and BCS's server didn't report it as already stored.</li>
+      <li><strong>Caching saves upload bandwidth, not money.</strong> Billing counts each call's input and request at full size, cached pieces included.</li>
+    </ul>
+  </div>
+
   <h3>When BCS's cache does help: images and big prompts</h3>
   <p class="col">BCS's cache works on large pieces. A string of 16 KiB or more, such as an image's data or a long document, becomes its own stored piece, and the BAML client uploads each piece only once per process. We reran the 20-turn chat twice more: once with a 150 KB photo attached before the first message, which stays in the conversation, and once with a 20 KB system prompt.</p>
   <div class="chart" id="chatPieces"></div>
   <div class="tabs" role="group" aria-label="Chat variant" id="chatVarTabs"></div>
   <div class="chart" id="chatVar"></div>
   <p class="muted col" id="chatVarNote"></p>
+  <h3 id="bigger">Bigger conversations: 100k and 500k tokens</h3>
+  <p class="col">Two longer conversations, sized in tokens at about 4 characters per token. <strong>The coding agent</strong> reads one source file per turn, cycling through ten sizes from 3 KB to 150 KB, and keeps every file in the conversation. <strong>The long chat</strong> has 1.5 KB customer messages, 2.5 KB answers and no tools. Each bar below is one model call: the solid part is what BAML uploaded to BCS for that call, and the hatched part is what BCS billed but the client didn't upload because it already had the piece. A hatched part means a cache hit.</p>
+  <div class="tabs" role="group" aria-label="Conversation" id="bigTabs"></div>
+  <div class="chart" id="bigCalls"></div>
+  <div class="legend" id="bigLegend"></div>
+  <p class="muted col" id="bigCallsNote"></p>
+  <div class="chart" id="bigBars"></div>
+  <p class="muted col" id="bigBarsNote"></p>
   <div class="callout col">
     <h3>A fast process can exit before its traces are uploaded</h3>
     <p>Our first run used a model that answered instantly, so a 50-turn conversation finished in about a second with megabytes still queued. The BAML CLI waits only 5 seconds for uploads at exit (<code>btel_bcs</code>'s delivery <code>shutdown_timeout</code>, not changed by <code>--shutdown-timeout</code>). It printed <code>ShutdownTimeout</code>, and 15 of 44 uploads never reached BCS. With a realistic 1-second model, uploads kept pace and nothing was lost. Batch jobs, replays and tests that make many fast calls are the ones at risk.</p>
@@ -339,6 +371,65 @@ logfire.instrument_openai()
   <p class="muted col">Each vendor is polled through its own query API: <code>baml query</code> for BCS (about every second, counting each query's own time), Logfire's SQL API every 0.5 s and Datadog's span search every 2 s, which is rate-limited.</p>
 </section>
 
+<section id="learnings">
+  <span class="eyebrow">Learnings and next steps</span>
+  <h2>Where BCS wins, where it loses, and how it could pull far ahead</h2>
+  <div class="grid2">
+    <div class="panel">
+      <h3>BCS already leads on</h3>
+      <ul class="plain">
+        <li><strong>Setup:</strong> 0 lines of tracing code, against 10 for Logfire and Datadog and 28 for OpenTelemetry.</li>
+        <li><strong>Speed:</strong> a whole BAML process (start, 51 calls, upload, exit) takes 150 ms and 61 MB. Python with no tracing takes 744 ms; with Datadog, 1.9 s.</li>
+        <li><strong>Losses:</strong> 0% of traces lost on SIGTERM and 2.8% on kill -9, where OpenTelemetry lost about 40%. No spans dropped in a burst where OpenTelemetry and Logfire dropped 69%.</li>
+        <li><strong>Spans are free:</strong> 8,200 spans billed 445 bytes.</li>
+        <li><strong>Search:</strong> a trace is searchable 5.8 s after exit, against 15 s for Logfire and 38 s for Datadog.</li>
+        <li><strong>Fidelity:</strong> the raw HTTP request and every retry are kept, and nothing is scrubbed unless you ask.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>BCS loses on</h3>
+      <ul class="plain">
+        <li><strong>Big prompts:</strong> each call is billed about twice its prompt, once as the function input and once as the raw request.</li>
+        <li><strong>Long conversations:</strong> bytes grow with the square of the turns. A 50-turn chat costs $22,728 per million conversations, against $352 on Logfire.</li>
+        <li><strong>Caching:</strong> only pieces of 16 KiB or more, only within one process, and never on the bill.</li>
+        <li><strong>Short processes:</strong> about 55 KB of program definitions are uploaded by every process.</li>
+        <li><strong>Exit:</strong> uploads still queued 5 s after shutdown starts are dropped, whatever <code>--shutdown-timeout</code> says.</li>
+        <li><strong>Settings:</strong> the Python bridge ignores <code>BAML_TELEMETRY</code>, and <code>http_bodies = false</code> can't be set at run time.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>The big lever: BAML owns the runtime, so it can record what happened instead of copying bytes</h3>
+  <p class="col">LLM traces are mostly repeats. In the 48-turn coding agent the model received about 100 MB, but everything in the conversation fits in its last request, about 2 MB, and most of that is files the agent read from disk. Logfire and Datadog sit outside the program: they patch an SDK and see each call as an opaque blob of text, so all they can do is ship it. BAML is the language and the VM. It knows where every value came from, so it can record each new piece of information once and describe everything else as a reference or a recipe.</p>
+  <ol class="col steps">
+    <li><strong>Store each piece once, and bill it once.</strong> BCS already stores content by hash. Billing stored pieces instead of captured bytes passes the cache on to the customer. On its own this helps only when large pieces repeat.</li>
+    <li><strong>Record history as deltas.</strong> The VM knows that call 40's <code>history</code> is the same list as call 39's plus one <code>push</code>. It can record "previous list + this message" without hashing or copying the history again, and give every value that has already been captured a reference, whatever its size. No 16 KiB threshold, and capture cost grows with the new turn, not the conversation.</li>
+    <li><strong>Derive the request instead of storing it.</strong> The raw HTTP request is a pure function of the prompt template, the inputs and the client settings, all of which BCS already has. Store a receipt instead: template ID, input references, settings and a hash of the exact bytes sent. BCS re-renders the request on read and checks the hash; if rendering ever disagrees, the client falls back to sending the raw bytes. The parsed output is likewise derived from the raw response.</li>
+    <li><strong>Reference content BCS already has.</strong> The runtime sees where data enters the program. A file read with <code>baml.fs.read</code>, an image, a system prompt or a RAG document is the same in thousands of conversations, so it is stored once per project, keyed by its hash, and every conversation points to it. A coding agent reading a repository then pays for each file version once, not once per call.</li>
+    <li><strong>Compress what is left.</strong> Conversations are prose and JSON. gzip shrank English prompts to 31–50% of their size in our Logfire runs; zstd with a per-project dictionary does better.</li>
+  </ol>
+  <p class="col">The chart applies these steps to the conversations we measured. Steps 2 and 3 only pay off together: deltas alone leave a full-size raw request every call, and a request receipt alone points at history that is new every call.</p>
+  <div class="tabs" role="group" aria-label="Conversation" id="leverTabs"></div>
+  <div class="chart" id="lever"></div>
+  <p class="muted col" id="leverNote"></p>
+  <div class="tablewrap"><table id="leverTable"></table></div>
+  <p class="muted col">Projections from measured sizes, not measurements of a built system. Step 1: the bytes BAML actually uploaded (each stored piece once, cut as today), or today's bill if lower. Step 2: every raw request at full size plus one copy of the conversation (its final request). Step 3: one copy of the conversation plus 200 bytes of references per call. Step 4: step 3 minus content stored once per project and reused across conversations (the 3.9 KB system prompt, the 200 KB photo, and the 2.1 MB of files the agent read), counted as free per conversation. Step 5: step 4 at 40% of its size, the middle of the gzip ratios we measured on English text. Logfire: one record per conversation, two per model call and one per tool call, at $2 per million. Datadog LLM Observability: $3.50 per 10,000 LLM spans.</p>
+
+  <h3>Why this beats the competition, not just today's BCS</h3>
+  <p class="col">Logfire and Datadog can't follow, because they don't own the program. An SDK hook sees a request string, not the list it was rendered from, and can't know that a tool result came from a file the platform already holds. So they will keep shipping every repeat, and their customers keep paying for the bandwidth even when the bill counts records instead of bytes. The same knowledge makes BCS better, not just cheaper: a call can be shown as what changed since the last one, any call can be replayed exactly from its receipt, and a production conversation can be forked at turn 23 with a different prompt to make an eval.</p>
+  <p class="col">Price is the other half. Logfire charges $2 per million records whatever their size, and asks for spans near 5 KB on average; the agent's spans are megabytes, so its list price may not hold for this workload. With steps 1–3, BCS at $4/GB is already 4–77× cheaper than Datadog on these conversations and about even with Logfire on the support chat, but up to 18× above Logfire on the others. Steps 4 and 5, which need the runtime, bring it 2.6–2.7× below Logfire's list price on three of the four conversations, while keeping the whole conversation rather than a scrubbed summary. The long chat stays 1.7× above, because its 2.5 KB messages are all new text: a per-byte price at $4/GB still charges for genuinely new information, which is the trade-off to weigh when setting the price.</p>
+
+  <h3>More improvements, by impact</h3>
+  <ol class="col steps">
+    <li><strong>Share pieces across processes.</strong> A support bot's system prompt, a product photo or a RAG document is the same in a million conversations. Let the server answer "already stored" for pieces of any process in the project, and bill them once. A 20 KB system prompt over a million conversations would go from 20 GB to 20 KB. Today a second process re-uploads the identical photo, and BCS reported 0 objects already stored.</li>
+    <li><strong>Compress uploads.</strong> BAML sends uncompressed bytes. gzip shrank English prompts by about 60% for Logfire and OpenTelemetry; zstd with a per-project dictionary would do better. On a laptop this matters: the 48-turn agent pushed 113 MB of uploads through the developer's own connection.</li>
+    <li><strong>Make definitions free after the first upload.</strong> The 55 KB of program definitions are already content-addressed. If the server confirms it has them, a one-call process uploads about 1 KB instead of 55 KB, which is what serverless functions and CLI tools pay today.</li>
+    <li><strong>Lose nothing at exit.</strong> Honor <code>--shutdown-timeout</code> (or wait until the queue drains), spool unsent uploads to disk so kill -9 and network failures lose nothing, and resend on the next start. BAML already loses the least of any stack; this would make it zero.</li>
+    <li><strong>Fix the settings gaps.</strong> Make the Python bridge read <code>BAML_TELEMETRY</code>, and make <code>http_bodies</code> a run-time setting.</li>
+    <li><strong>Show what's new in each call.</strong> Once BCS knows that call 40's history is call 39's history plus one turn, the UI can show each call as a diff: the new message, the new tool result, the model's answer. No other platform can do this, because they ship each call as an opaque copy.</li>
+  </ol>
+</section>
+
 <section id="method">
   <span class="eyebrow">Method</span>
   <h2>How we measured</h2>
@@ -367,6 +458,7 @@ const STACKS = {
 };
 const css = v => `var(${v})`;
 const fmtB = b => b >= 1e6 ? (b / 1e6).toFixed(2) + " MB" : b >= 1e3 ? (b / 1e3).toFixed(1) + " KB" : Math.round(b) + " B";
+const tokens = b => { const t = b / 4; return t >= 1e5 ? `${Math.round(t / 1e4) * 10}k` : t >= 1e3 ? `${Math.round(t / 1e3)}k` : `${Math.round(t)}`; };
 const fmt$ = v => v >= 1000 ? "$" + Math.round(v).toLocaleString("en-US") : v >= 10 ? "$" + v.toFixed(0) : "$" + v.toFixed(2);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]);
 const tip = document.getElementById("tip");
@@ -625,7 +717,7 @@ const BCS_CHAT = "baml";
   const p50 = chatAt(BCS_CHAT, 50), lf20 = chatAt("logfire", 20), lf30 = chatAt("logfire", 30);
   const lfi = chatAt("logfire-instant", 50), lf50 = chatAt("logfire", 50);
   if (lfi) document.getElementById("chatBatchNote").textContent = `Same 50-turn conversation with an instant model, where Logfire batches many calls per export: ${fmtB(lfi.bytes)}, against ${fmtB(lf50.bytes)} with a 1-second model.`;
-  document.getElementById("chatLinesNote").textContent = `At 50 turns the bot made ${p50.model_calls} model calls carrying ${fmtB(p50.prompt_bytes)} of prompts. BCS billed ${fmtB(p50.billed)}, about twice the prompts, because each call's history is captured as the function's input and again inside the HTTP request. OpenTelemetry's network bytes jump from ${fmtB(chatAt("otel", 20).bytes)} at 20 turns to ${fmtB(chatAt("otel", 30).bytes)} at 30, when the conversation outgrows gzip's window.`;
+  document.getElementById("chatLinesNote").textContent = `At 50 turns the conversation is about ${tokens(p50.per_call_sent[p50.per_call_sent.length - 1])} tokens long, and the bot made ${p50.model_calls} model calls carrying ${fmtB(p50.prompt_bytes)} of prompts. BCS billed ${fmtB(p50.billed)}, about twice the prompts, because each call's history is captured as the function's input and again inside the HTTP request. OpenTelemetry's network bytes jump from ${fmtB(chatAt("otel", 20).bytes)} at 20 turns to ${fmtB(chatAt("otel", 30).bytes)} at 30, when the conversation outgrows gzip's window.`;
 })();
 
 (function chatCache() {
@@ -653,11 +745,39 @@ const BCS_CHAT = "baml";
     let t = `<thead><tr><th>Platform</th><th class="n">Network / conversation</th><th class="n">Network / 1M conversations</th><th>Billed on</th><th class="n">Cost / conversation</th><th class="n">Cost / 1M conversations</th><th class="n">Billed units / 1M</th></tr></thead><tbody>`;
     for (const [name, net, unit, cost, units] of rows) t += `<tr><td>${name}</td><td class="n">${fmtB(net)}</td><td class="n">${(net / 1e3).toLocaleString("en-US", {maximumFractionDigits: 0})} GB</td><td>${unit}</td><td class="n">${cost == null ? "—" : "$" + cost.toFixed(4)}</td><td class="n">${cost == null ? "—" : fmt$(cost * 1e6)}</td><td class="n">${units}</td></tr>`;
     document.getElementById("chatTable").innerHTML = t + "</tbody>";
-    document.getElementById("chatTableNote").textContent = `${turns} turns = ${calls} model calls and ${tools} order lookups. List prices after free tiers: BCS $4/GB, Logfire $2 per million records, Datadog LLM Observability $3.50 per 10,000 LLM spans (plus a $160/month minimum). Logfire records: one per conversation, two per model call (function and model span), one per lookup.`;
+    const ctx = b.per_call_sent ? b.per_call_sent[b.per_call_sent.length - 1] : null;
+    document.getElementById("chatTableNote").textContent = `${turns} turns = ${calls} model calls and ${tools} order lookups${ctx ? `; the conversation ends at ${fmtB(ctx)}, about ${tokens(ctx)} tokens` : ""}. List prices after free tiers: BCS $4/GB, Logfire $2 per million records, Datadog LLM Observability $3.50 per 10,000 LLM spans (plus a $160/month minimum). Logfire records: one per conversation, two per model call (function and model span), one per lookup.`;
   }
   tabs.addEventListener("click", e => { const x = e.target.closest("button"); if (!x) return;
     tabs.querySelectorAll("button").forEach(y => y.setAttribute("aria-pressed", y === x)); draw(+x.dataset.t); });
   draw(50);
+})();
+
+(function cacheRules() {
+  // One call of a chat: the function input (a list of messages) and the raw HTTP request.
+  const W = 720, H = 300, c = css("--s-baml"), bg = css("--bg"), ink3 = css("--ink-3"), rule = css("--rule");
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="How one model call is cut into stored pieces: small messages stay inside the history piece, a large tool result becomes a shared piece, the HTTP request is one piece">`;
+  s += `<defs><pattern id="crHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="${bg}"/><rect width="2.5" height="6" fill="${c}"/></pattern></defs>`;
+  s += `<text x="20" y="18" class="val">Function input: history (a list of messages)</text><text x="20" y="33">a new piece every call</text>`;
+  s += `<rect x="20" y="44" width="330" height="200" rx="6" fill="none" stroke="${c}" stroke-width="2"/>`;
+  const msgs = [["user · 300 B", 0], ["assistant · 600 B", 0], ["user · 300 B", 0], ["tool result · 40 KB", 1], ["assistant · 600 B", 0], ["user · 300 B", 0]];
+  msgs.forEach(([label, big], i) => {
+    const y = 56 + i * 30;
+    if (big) {
+      s += `<rect x="36" y="${y}" width="200" height="22" rx="3" fill="none" stroke="${c}" stroke-dasharray="4 3"/><text x="46" y="${y + 15}">${label} →</text>`;
+      s += `<path d="M236 ${y + 11} C 320 ${y + 11}, 320 232, 390 232" fill="none" stroke="${c}" stroke-width="1.5"/>`;
+    } else {
+      s += `<rect x="36" y="${y}" width="200" height="22" rx="3" fill="${c}" opacity="0.85"/><text x="46" y="${y + 15}" style="fill:${bg}">${label}</text>`;
+    }
+  });
+  s += `<text x="246" y="${56 + 15}" style="fill:${ink3}">under 16 KiB:</text><text x="246" y="${56 + 29}" style="fill:${ink3}">written inline,</text><text x="246" y="${56 + 43}" style="fill:${ink3}">uploaded again</text>`;
+  s += `<text x="390" y="18" class="val">Raw HTTP request (one JSON string)</text><text x="390" y="33">a new piece every call, never shared</text>`;
+  s += `<rect x="390" y="44" width="310" height="150" rx="6" fill="${c}" opacity="0.55"/>`;
+  ["{\"model\": \"gpt-4.1-mini\", \"messages\": [", "  {system …}, {user …}, {assistant …},", "  {user …}, {tool result, all 40 KB again …},", "  {assistant …}, {user …}", "]}"].forEach((line, i) =>
+    s += `<text x="404" y="${68 + i * 22}" style="fill:${bg};font-family:var(--f-mono, monospace);font-size:11px">${esc(line)}</text>`);
+  s += `<rect x="390" y="216" width="190" height="32" rx="4" fill="url(#crHatch)" stroke="${c}" stroke-width="1.5"/><text x="592" y="229" class="val">40 KB shared piece</text><text x="592" y="244">uploaded once</text>`;
+  s += `<text x="20" y="${H - 22}" style="fill:${ink3}">One call's capture. On the next call, history and request are new pieces again;</text><text x="20" y="${H - 6}" style="fill:${ink3}">only the 40 KB tool result is reused.</text>`;
+  document.getElementById("cacheRules").innerHTML = s + "</svg>";
 })();
 
 (function chatVariants() {
@@ -697,13 +817,81 @@ const BCS_CHAT = "baml";
     ];
     hbars(document.getElementById("chatVar"), rows, {labelW: 220, valW: 90, rowH: 28});
     const cp = V.crossprocess;
-    document.getElementById("chatVarNote").textContent = `One 20-turn conversation (30 model calls). BCS uploaded ${Math.round(b.upload / b.billed * 100)}% of what it billed here. ` +
+    document.getElementById("chatVarNote").textContent = `One 20-turn conversation (30 model calls, ${fmtB(b.prompt_bytes)} of prompts in all). BCS uploaded ${Math.round(b.upload / b.billed * 100)}% of what it billed here. ` +
       (v === "photo" ? `The cache saves upload bandwidth, not money: billing counts the photo in every call. Logfire sent the most, because the photo is in the function's arguments, the model span and pending placeholders. ` : v === "bigsystem" ? `The 20 KB system prompt is one shared piece, uploaded once and billed 30 times. ` : `Without large pieces nothing is shared, and the upload exceeds the bill by its encoding overhead. `) +
       (cp.length === 2 ? `The cache does not reach across processes: a second process with the identical photo uploaded ${fmtB(cp[1].upload)} again, and BCS reported ${cp[1].already_available} objects already stored.` : "");
   }
   tabs.addEventListener("click", e => { const x = e.target.closest("button"); if (!x) return;
     tabs.querySelectorAll("button").forEach(y => y.setAttribute("aria-pressed", y === x)); draw(x.dataset.v); });
   draw("photo");
+})();
+
+(function chatBig() {
+  const B = D.chat_big;
+  if (!B || !Object.keys(B.timelines).length) return;
+  const at = (v, st, t) => B.rows.find(r => r.variant === v && r.stack === st && r.turns === t);
+  const vs = [["files", "Coding agent"], ["longchat", "Long chat"]].filter(([v]) => B.timelines[v]);
+  const tabs = document.getElementById("bigTabs");
+  tabs.innerHTML = vs.map(([v, l], i) => {
+    const tl = B.timelines[v];
+    return `<button type="button" aria-pressed="${i === 0}" data-v="${v}">${l} · ${tl.turns} turns · ~${tokens(tl.prompt_per_call[tl.prompt_per_call.length - 1])} tokens</button>`;
+  }).join("");
+  const pid = "bigHatch";
+  function draw(v) {
+    const tl = B.timelines[v], per = tl.per_call, prompts = tl.prompt_per_call, n = per.length;
+    const W = 720, L = 70, R = 20, T = 14, Bm = 56, H = 320, pw = W - L - R, ph = H - T - Bm;
+    const top = Math.max(...per.map(p => Math.max(p.billed, p.uploaded)), ...prompts);
+    const step = top > 4e6 ? 1e6 : top > 2e6 ? 5e5 : top > 1e6 ? 2.5e5 : 1e5;
+    const ymax = Math.ceil(top / step) * step, sy = y => T + ph - y / ymax * ph, bw = pw / n;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bytes BCS billed and uploaded for each model call">`;
+    s += `<defs><pattern id="${pid}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="${css("--bg")}"/><rect width="2.5" height="6" fill="${css("--s-baml")}"/></pattern></defs>`;
+    for (let y = 0; y <= ymax + 1; y += step) s += `<line class="gl" x1="${L}" x2="${W - R}" y1="${sy(y)}" y2="${sy(y)}"/><text x="${L - 8}" y="${sy(y) + 4}" text-anchor="end">${y ? fmtB(y) : "0"}</text>`;
+    per.forEach((p, i) => {
+      const x = L + i * bw, w = Math.max(bw - (bw > 4 ? 1.5 : 0.5), 0.8), hit = Math.max(p.billed - p.uploaded, 0), prompt = prompts[i] || 0;
+      s += `<rect x="${x}" y="${sy(p.uploaded)}" width="${w}" height="${T + ph - sy(p.uploaded)}" fill="${css("--s-baml")}" pointer-events="none"/>`;
+      if (hit > 0) s += `<rect x="${x}" y="${sy(p.uploaded + hit)}" width="${w}" height="${sy(p.uploaded) - sy(p.uploaded + hit)}" fill="url(#${pid})" stroke="${css("--s-baml")}" stroke-width="0.6" pointer-events="none"/>`;
+      s += `<rect x="${x}" y="${T}" width="${bw}" height="${ph}" fill="transparent" data-tip="Call ${p.call}: context ${fmtB(prompt)} (~${tokens(prompt)} tokens). BCS billed ${fmtB(p.billed)}, uploaded ${fmtB(p.uploaded)}${hit > 0 ? `, ${fmtB(hit)} already uploaded earlier (cache hit)` : ", no cache hit"}."/>`;
+    });
+    s += `<polyline fill="none" stroke="${css("--ink-3")}" stroke-width="2" stroke-dasharray="5 4" pointer-events="none" points="${prompts.map((b, i) => (L + (i + 0.5) * bw) + "," + sy(b)).join(" ")}"/>`;
+    const ticks = [1, ...[0.25, 0.5, 0.75].map(f => Math.round(n * f)), n];
+    for (const k of ticks) {
+      const x = L + (k - 0.5) * bw;
+      const anchor = k === n ? "end" : k === 1 ? "start" : "middle", tx = k === n ? L + pw : k === 1 ? L : x;
+      s += `<text x="${tx}" y="${H - Bm + 16}" text-anchor="${anchor}">${k}</text><text x="${tx}" y="${H - Bm + 30}" text-anchor="${anchor}" style="fill:${css("--ink-3")}">~${tokens(prompts[k - 1])} tokens</text>`;
+    }
+    s += `<text x="${L + pw / 2}" y="${H - 4}" text-anchor="middle">model call (and the conversation's size in tokens at that call)</text>`;
+    const el = document.getElementById("bigCalls"); el.innerHTML = s + "</svg>"; bindTips(el);
+
+    const sum = k => per.reduce((a, p) => a + p[k], 0), billed = sum("billed"), uploaded = sum("uploaded");
+    const hits = per.filter(p => p.billed - p.uploaded > 1024).length, saved = per.reduce((a, p) => a + Math.max(p.billed - p.uploaded, 0), 0);
+    const last = prompts[prompts.length - 1];
+    document.getElementById("bigCallsNote").textContent = v === "files"
+      ? `${n} model calls; the last one sends ${fmtB(last)}, about ${tokens(last)} tokens. ${hits} of ${n} calls reused pieces uploaded earlier, saving ${fmtB(saved)} of upload. Every file of 16 KiB or more (16,384 characters) became a shared piece the first time it was captured, so later calls only reference it. Files under that size were uploaded again inside every call's new history. The raw HTTP request, which holds the whole conversation, is new every call and is always uploaded. BCS billed ${fmtB(billed)} in all; the client uploaded ${fmtB(uploaded)}.`
+      : `${n} model calls; the last one sends ${fmtB(last)}, about ${tokens(last)} tokens. No message reaches 16 KiB, so each call's history is one new piece: ${hits} of ${n} calls had a cache hit. BCS billed ${fmtB(billed)}; the client uploaded ${fmtB(uploaded)}, slightly more, because uploads carry encoding and recording overhead that isn't billed.`;
+    document.getElementById("bigLegend").innerHTML =
+      `<span class="chip"><span class="dot" style="background:${css("--s-baml")}"></span>BCS, uploaded</span>` +
+      `<span class="chip"><span class="dot" style="border:2px solid ${css("--s-baml")};background-image:repeating-linear-gradient(45deg, ${css("--s-baml")} 0 2px, transparent 2px 5px)"></span>BCS, billed but already uploaded (cache hit)</span>` +
+      `<span class="chip"><span class="dot" style="background:transparent;border:2px dashed ${css("--ink-3")}"></span>Context sent to the model</span>`;
+
+    const t = tl.turns, b = at(v, "baml", t), dd = at(v, "datadog", t), lf = at(v, "logfire", t), ot = at(v, "otel", t);
+    if (!b) return;
+    const rows = [
+      {label: "Prompts sent to the model", value: b.prompt_bytes, color: "--rule", text: fmtB(b.prompt_bytes)},
+      {label: "BCS, billed", value: b.billed, color: "--s-baml", text: fmtB(b.billed)},
+      {label: "BCS, uploaded", value: b.upload, color: "--s-baml", text: fmtB(b.upload)},
+      dd && {label: "Datadog, network", value: dd.bytes, color: "--s-datadog", text: fmtB(dd.bytes)},
+      lf && {label: "Logfire, network", value: lf.bytes, color: "--s-logfire", text: fmtB(lf.bytes)},
+      ot && {label: "OpenTelemetry, network", value: ot.bytes, color: "--s-otel", text: fmtB(ot.bytes)},
+    ].filter(Boolean);
+    hbars(document.getElementById("bigBars"), rows, {labelW: 220, valW: 90, rowH: 28});
+    const calls = b.model_calls, tools = calls - t, records = 1 + 2 * calls + tools;
+    document.getElementById("bigBarsNote").textContent = `One whole conversation, ${t} turns and ${calls} model calls, ${fmtB(b.prompt_bytes)} of prompts in total. ` +
+      `Per million such conversations at list prices: BCS ${fmt$(b.billed / 1e9 * 4 * 1e6)} (${Math.round(b.billed / 1e3).toLocaleString("en-US")} GB billed), Logfire ${fmt$(records * 2)} (${records}M records), Datadog LLM Observability ${fmt$(calls / 1e4 * 3.5 * 1e6)} (${calls}M LLM spans). ` +
+      (b.hosted ? `BAML uploaded to the real BCS. ` : "") + `The other platforms sent to a local relay, so we don't know whether their services would store, truncate or reject spans this large.`;
+  }
+  tabs.addEventListener("click", e => { const x = e.target.closest("button"); if (!x) return;
+    tabs.querySelectorAll("button").forEach(y => y.setAttribute("aria-pressed", y === x)); draw(x.dataset.v); });
+  draw(vs[0][0]);
 })();
 
 // ---- Logfire deep dive
@@ -822,6 +1010,44 @@ const kib = s => s >= 1024 ? (s / 1024) + " KiB" : s + " B";
   const rows = [["bcs", "BCS", "baml"], ["logfire", "Logfire", "logfire"], ["datadog", "Datadog APM", "datadog"]].filter(([k]) => S[k]).map(([k, l, c]) => ({label: l, value: S[k].median, color: STACKS[c].c,
     text: `${S[k].median.toFixed(1)} s`, tip: `${l}: median ${S[k].median.toFixed(1)} s, range ${S[k].min.toFixed(1)}–${S[k].max.toFixed(1)} s over ${S[k].n} trials`}));
   hbars(document.getElementById("search"), rows, {labelW: 160});
+})();
+
+(function lever() {
+  const big = (v, t) => (D.chat_big.rows || []).find(r => r.variant === v && r.stack === "baml" && r.turns === t);
+  const bigOther = (v, st, t) => (D.chat_big.rows || []).find(r => r.variant === v && r.stack === st && r.turns === t);
+  const base = chatAt(BCS_CHAT, 50), photo = D.chat_variants.rows.find(r => r.variant === "photo" && r.stack === "baml" && r.turns === 20);
+  const tlTurns = v => D.chat_big.timelines[v] && D.chat_big.timelines[v].turns;
+  const sc = [
+    base && {key: "chat", label: "Support chat, 50 turns", b: {...base, last_call: base.per_call_sent[base.per_call_sent.length - 1]}, tools: base.model_calls - 50},
+    photo && {key: "photo", label: "Chat with a photo, 20 turns", b: photo, tools: photo.model_calls - 20},
+    tlTurns("longchat") && {key: "longchat", label: `Long chat, ${tlTurns("longchat")} turns`, b: big("longchat", tlTurns("longchat")), tools: 0},
+    tlTurns("files") && {key: "files", label: `Coding agent, ${tlTurns("files")} turns`, b: big("files", tlTurns("files")), tools: big("files", tlTurns("files")).model_calls - tlTurns("files")},
+  ].filter(x => x && x.b);
+  const tabs = document.getElementById("leverTabs");
+  tabs.innerHTML = sc.map((x, i) => `<button type="button" aria-pressed="${i === sc.length - 1}" data-k="${x.key}">${x.label}${x.key === "photo" ? "" : ` · ~${tokens(x.b.last_call)} tokens`}</button>`).join("");
+  const steps = x => {
+    const b = x.b, today = b.billed, s1 = Math.min(b.upload, today), s2 = Math.min(s1, b.prompt_bytes + b.last_call),
+      s3 = Math.min(s2, b.last_call + 200 * b.model_calls), s4 = Math.max(s3 - (D.lever_known[x.key] || 0), 200 * b.model_calls), s5 = s4 * 0.4;
+    return [["BCS today", today], ["1. Store each piece once", s1], ["2. + history as deltas", s2], ["3. + derive the request", s3],
+            ["4. + reference known content", s4], ["5. + compress", s5]];
+  };
+  const usd = bytes => bytes / 1e9 * 4 * 1e6;
+  function draw(k) {
+    const x = sc.find(y => y.key === k), b = x.b, st = steps(x), calls = b.model_calls, records = 1 + 2 * calls + x.tools;
+    const lf = records * 2, dd = calls / 1e4 * 3.5 * 1e6;
+    const rows = st.map(([l, v], i) => ({label: l, value: usd(v), color: "--s-baml", text: fmt$(usd(v)), tip: `${l}: ${fmtB(v)} billed per conversation, ${fmt$(usd(v))} per million conversations`}));
+    rows.push({label: "Logfire", value: lf, color: "--s-logfire", text: fmt$(lf)}, {label: "Datadog LLM Obs", value: dd, color: "--s-datadog", text: fmt$(dd)});
+    hbars(document.getElementById("lever"), rows, {labelW: 200, valW: 90, rowH: 28, log: true});
+    const s3 = st[3][1], s5 = st[5][1];
+    document.getElementById("leverNote").textContent = `Cost per million conversations at $4/GB, log scale. ${x.label}: ${calls} model calls, ${fmtB(b.prompt_bytes)} sent to the model, and a final request of ${fmtB(b.last_call)}. ` +
+      `Today BCS bills ${fmtB(b.billed)} per conversation. Steps 1–3 bring it to ${fmtB(s3)} (${Math.round(b.billed / s3)}× less); all five to ${fmtB(s5)} (${Math.round(b.billed / s5).toLocaleString("en-US")}× less).`;
+    let t = `<thead><tr><th>Step</th><th class="n">Billed / conversation</th><th class="n">Cost / 1M conversations</th><th class="n">vs Logfire</th><th class="n">vs Datadog</th></tr></thead><tbody>`;
+    for (const [l, v] of st) { const c = usd(v); t += `<tr><td>${l}</td><td class="n">${fmtB(v)}</td><td class="n">${fmt$(c)}</td><td class="n">${c >= lf ? (c / lf).toFixed(1) + "× more" : (lf / c).toFixed(1) + "× less"}</td><td class="n">${c >= dd ? (c / dd).toFixed(1) + "× more" : (dd / c).toFixed(1) + "× less"}</td></tr>`; }
+    document.getElementById("leverTable").innerHTML = t + "</tbody>";
+  }
+  tabs.addEventListener("click", e => { const y = e.target.closest("button"); if (!y) return;
+    tabs.querySelectorAll("button").forEach(z => z.setAttribute("aria-pressed", z === y)); draw(y.dataset.k); });
+  if (sc.length) draw(sc[sc.length - 1].key);
 })();
 
 // ---- section links: a contents row, a copy-link button on every section, and #name deep links

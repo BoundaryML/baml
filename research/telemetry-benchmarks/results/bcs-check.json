@@ -1,0 +1,773 @@
+{
+ "project_spans": 10025,
+ "runs": [
+  {
+   "file": "chat-baml.json",
+   "turns": 5,
+   "utc": "2026-11-08T22:50:50.966482+00:00",
+   "predicted_spans": 33,
+   "stored_spans": 33,
+   "predicted_bytes": 137137
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 30,
+   "utc": "2026-11-08T22:51:00.467498+00:00",
+   "predicted_spans": 156,
+   "stored_spans": 156,
+   "predicted_bytes": 2227002
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 2,
+   "utc": "2026-11-08T22:51:47.169138+00:00",
+   "predicted_spans": 16,
+   "stored_spans": 16,
+   "predicted_bytes": 38654
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 15,
+   "utc": "2026-11-08T22:51:51.302152+00:00",
+   "predicted_spans": 83,
+   "stored_spans": 83,
+   "predicted_bytes": 695761
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 50,
+   "utc": "2026-11-08T22:52:16.301358+00:00",
+   "predicted_spans": 257,
+   "stored_spans": 257,
+   "predicted_bytes": 5682107
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 3,
+   "utc": "2026-11-08T22:53:33.336721+00:00",
+   "predicted_spans": 23,
+   "stored_spans": 23,
+   "predicted_bytes": 72726
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 8,
+   "utc": "2026-11-08T22:53:39.780121+00:00",
+   "predicted_spans": 46,
+   "stored_spans": 46,
+   "predicted_bytes": 247743
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 40,
+   "utc": "2026-11-08T22:53:53.332794+00:00",
+   "predicted_spans": 207,
+   "stored_spans": 207,
+   "predicted_bytes": 3758078
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 20,
+   "utc": "2026-11-08T22:54:55.130229+00:00",
+   "predicted_spans": 106,
+   "stored_spans": 106,
+   "predicted_bytes": 1090875
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 1,
+   "utc": "2026-11-08T22:55:27.144074+00:00",
+   "predicted_spans": 13,
+   "stored_spans": 13,
+   "predicted_bytes": 23990
+  },
+  {
+   "file": "chat-baml.json",
+   "turns": 10,
+   "utc": "2026-11-08T22:55:30.286619+00:00",
+   "predicted_spans": 56,
+   "stored_spans": 56,
+   "predicted_bytes": 348746
+  },
+  {
+   "file": "chat-bigsystem-baml.json",
+   "turns": 1,
+   "utc": "2026-11-08T23:34:14.836103+00:00",
+   "predicted_spans": 13,
+   "stored_spans": 13,
+   "predicted_bytes": 90616
+  },
+  {
+   "file": "chat-bigsystem-baml.json",
+   "turns": 10,
+   "utc": "2026-11-08T23:34:18.277494+00:00",
+   "predicted_spans": 56,
+   "stored_spans": 56,
+   "predicted_bytes": 848663
+  },
+  {
+   "file": "chat-bigsystem-baml.json",
+   "turns": 5,
+   "utc": "2026-11-08T23:34:34.807102+00:00",
+   "predicted_spans": 33,
+   "stored_spans": 33,
+   "predicted_bytes": 403726
+  },
+  {
+   "file": "chat-bigsystem-baml.json",
+   "turns": 20,
+   "utc": "2026-11-08T23:34:44.279439+00:00",
+   "predicted_spans": 106,
+   "stored_spans": 106,
+   "predicted_bytes": 2091795
+  },
+  {
+   "file": "chat-files.json",
+   "turns": 24,
+   "utc": "2026-11-08T23:48:39.967070+00:00",
+   "predicted_spans": 154,
+   "stored_spans": 154,
+   "predicted_bytes": 48301163
+  },
+  {
+   "file": "chat-files.json",
+   "turns": 48,
+   "utc": "2026-11-08T23:54:50.228290+00:00",
+   "predicted_spans": 308,
+   "stored_spans": 308,
+   "predicted_bytes": 197944151
+  },
+  {
+   "file": "chat-files.json",
+   "turns": 12,
+   "utc": "2026-11-08T23:58:16.788768+00:00",
+   "predicted_spans": 79,
+   "stored_spans": 79,
+   "predicted_bytes": 11567982
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 2,
+   "utc": "2026-11-08T22:47:04.416449+00:00",
+   "predicted_spans": 16,
+   "stored_spans": 16,
+   "predicted_bytes": 38385
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 1,
+   "utc": "2026-11-08T22:47:06.389115+00:00",
+   "predicted_spans": 13,
+   "stored_spans": 13,
+   "predicted_bytes": 23808
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 8,
+   "utc": "2026-11-08T22:47:08.075796+00:00",
+   "predicted_spans": 46,
+   "stored_spans": 46,
+   "predicted_bytes": 246836
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 40,
+   "utc": "2026-11-08T22:47:10.295982+00:00",
+   "predicted_spans": 207,
+   "stored_spans": 207,
+   "predicted_bytes": null
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 3,
+   "utc": "2026-11-08T22:47:15.937329+00:00",
+   "predicted_spans": 23,
+   "stored_spans": 23,
+   "predicted_bytes": 72315
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 5,
+   "utc": "2026-11-08T22:47:17.585284+00:00",
+   "predicted_spans": 33,
+   "stored_spans": 33,
+   "predicted_bytes": 136530
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 30,
+   "utc": "2026-11-08T22:47:19.217434+00:00",
+   "predicted_spans": 156,
+   "stored_spans": 156,
+   "predicted_bytes": 2223761
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 15,
+   "utc": "2026-11-08T22:47:23.853164+00:00",
+   "predicted_spans": 83,
+   "stored_spans": 83,
+   "predicted_bytes": 693828
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 20,
+   "utc": "2026-11-08T22:47:26.523988+00:00",
+   "predicted_spans": 106,
+   "stored_spans": 106,
+   "predicted_bytes": 1089133
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 50,
+   "utc": "2026-11-08T22:47:29.665552+00:00",
+   "predicted_spans": 257,
+   "stored_spans": 257,
+   "predicted_bytes": null
+  },
+  {
+   "file": "chat-instant-hosted.json",
+   "turns": 10,
+   "utc": "2026-11-08T22:47:35.323804+00:00",
+   "predicted_spans": 56,
+   "stored_spans": 56,
+   "predicted_bytes": 347756
+  },
+  {
+   "file": "chat-longchat.json",
+   "turns": 50,
+   "utc": "2026-11-09T00:03:38.328356+00:00",
+   "predicted_spans": 157,
+   "stored_spans": 157,
+   "predicted_bytes": 11099448
+  },
+  {
+   "file": "chat-longchat.json",
+   "turns": 100,
+   "utc": "2026-11-09T00:07:38.182158+00:00",
+   "predicted_spans": 311,
+   "stored_spans": 311,
+   "predicted_bytes": 43015152
+  },
+  {
+   "file": "chat-longchat.json",
+   "turns": 25,
+   "utc": "2026-11-09T00:09:20.685040+00:00",
+   "predicted_spans": 81,
+   "stored_spans": 81,
+   "predicted_bytes": 2944896
+  },
+  {
+   "file": "chat-photo-baml.json",
+   "turns": 1,
+   "utc": "2026-11-08T23:34:14.836092+00:00",
+   "predicted_spans": 14,
+   "stored_spans": 14,
+   "predicted_bytes": 724368
+  },
+  {
+   "file": "chat-photo-baml.json",
+   "turns": 10,
+   "utc": "2026-11-08T23:34:18.811079+00:00",
+   "predicted_spans": 57,
+   "stored_spans": 57,
+   "predicted_bytes": 5601803
+  },
+  {
+   "file": "chat-photo-baml.json",
+   "turns": 5,
+   "utc": "2026-11-08T23:34:35.768797+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 2938734
+  },
+  {
+   "file": "chat-photo-baml.json",
+   "turns": 20,
+   "utc": "2026-11-08T23:34:45.691333+00:00",
+   "predicted_spans": 108,
+   "stored_spans": 108,
+   "predicted_bytes": 11598416
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:24:51.502043+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 34915
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:24:53.589459+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 219406
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:14.329376+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 35066
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:17.163165+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 37245
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:19.967850+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 219255
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:28.545702+00:00",
+   "predicted_spans": 124,
+   "stored_spans": 124,
+   "predicted_bytes": 244731
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:32.225462+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 2062475
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:33.877141+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 221585
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:38.342867+00:00",
+   "predicted_spans": 4,
+   "stored_spans": 4,
+   "predicted_bytes": 445
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:39.405441+00:00",
+   "predicted_spans": 12,
+   "stored_spans": 12,
+   "predicted_bytes": 445
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:41.587473+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 34915
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:44.290366+00:00",
+   "predicted_spans": 124,
+   "stored_spans": 124,
+   "predicted_bytes": 244791
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:49.742133+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 2062475
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:52.511931+00:00",
+   "predicted_spans": 6,
+   "stored_spans": 6,
+   "predicted_bytes": 3892
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:25:55.223223+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 2064805
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:05.028971+00:00",
+   "predicted_spans": 16,
+   "stored_spans": 16,
+   "predicted_bytes": 24936
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:06.715807+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 221736
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:23.560355+00:00",
+   "predicted_spans": 124,
+   "stored_spans": 124,
+   "predicted_bytes": 2088102
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:28.529008+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 2062626
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:32.228629+00:00",
+   "predicted_spans": 132,
+   "stored_spans": 132,
+   "predicted_bytes": 244791
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:38.319366+00:00",
+   "predicted_spans": 7,
+   "stored_spans": 7,
+   "predicted_bytes": 22559
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:39.497036+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 2062626
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:44.321415+00:00",
+   "predicted_spans": 132,
+   "stored_spans": 132,
+   "predicted_bytes": 60391
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:49.593870+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 37396
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:55.670243+00:00",
+   "predicted_spans": 7,
+   "stored_spans": 7,
+   "predicted_bytes": 206881
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:26:57.309587+00:00",
+   "predicted_spans": 4,
+   "stored_spans": 4,
+   "predicted_bytes": 445
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:03.563406+00:00",
+   "predicted_spans": 42,
+   "stored_spans": 42,
+   "predicted_bytes": 2064956
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:11.735208+00:00",
+   "predicted_spans": 6,
+   "stored_spans": 6,
+   "predicted_bytes": 22559
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:14.537301+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 2064805
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:20.684157+00:00",
+   "predicted_spans": 4,
+   "stored_spans": 4,
+   "predicted_bytes": 445
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:22.977170+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 37245
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:39.957862+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 37396
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:47.784503+00:00",
+   "predicted_spans": 132,
+   "stored_spans": 132,
+   "predicted_bytes": 2087951
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:53.045712+00:00",
+   "predicted_spans": 7,
+   "stored_spans": 7,
+   "predicted_bytes": 4125
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:27:55.107999+00:00",
+   "predicted_spans": 132,
+   "stored_spans": 132,
+   "predicted_bytes": 60451
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:28:00.404438+00:00",
+   "predicted_spans": 132,
+   "stored_spans": 132,
+   "predicted_bytes": 2088011
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:28:22.920461+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 221736
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:28:24.631115+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 221585
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:28:30.363871+00:00",
+   "predicted_spans": 15,
+   "stored_spans": 15,
+   "predicted_bytes": 209258
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:28:32.711957+00:00",
+   "predicted_spans": 7,
+   "stored_spans": 7,
+   "predicted_bytes": 22326
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:28:41.497289+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 219406
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:28:50.903507+00:00",
+   "predicted_spans": 124,
+   "stored_spans": 124,
+   "predicted_bytes": 2087951
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:06.389136+00:00",
+   "predicted_spans": 7,
+   "stored_spans": 7,
+   "predicted_bytes": 3892
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:19.278076+00:00",
+   "predicted_spans": 15,
+   "stored_spans": 15,
+   "predicted_bytes": 24936
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:21.557035+00:00",
+   "predicted_spans": 124,
+   "stored_spans": 124,
+   "predicted_bytes": 60451
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:30.406614+00:00",
+   "predicted_spans": 3,
+   "stored_spans": 3,
+   "predicted_bytes": 445
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:34.405572+00:00",
+   "predicted_spans": 16,
+   "stored_spans": 16,
+   "predicted_bytes": 6502
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:35.556487+00:00",
+   "predicted_spans": 6,
+   "stored_spans": 6,
+   "predicted_bytes": 4125
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:38.258063+00:00",
+   "predicted_spans": 124,
+   "stored_spans": 124,
+   "predicted_bytes": 60391
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:41.916429+00:00",
+   "predicted_spans": 6,
+   "stored_spans": 6,
+   "predicted_bytes": 22326
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:29:48.048767+00:00",
+   "predicted_spans": 15,
+   "stored_spans": 15,
+   "predicted_bytes": 6502
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:00.819430+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 219255
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:07.547761+00:00",
+   "predicted_spans": 7,
+   "stored_spans": 7,
+   "predicted_bytes": 206648
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:14.937701+00:00",
+   "predicted_spans": 16,
+   "stored_spans": 16,
+   "predicted_bytes": 209258
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:16.587381+00:00",
+   "predicted_spans": 12,
+   "stored_spans": 12,
+   "predicted_bytes": 445
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:18.742573+00:00",
+   "predicted_spans": 6,
+   "stored_spans": 6,
+   "predicted_bytes": 206648
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:25.454197+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 2064956
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:29.192202+00:00",
+   "predicted_spans": 34,
+   "stored_spans": 34,
+   "predicted_bytes": 35066
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:33.171053+00:00",
+   "predicted_spans": 132,
+   "stored_spans": 132,
+   "predicted_bytes": 244731
+  },
+  {
+   "file": "wire-hosted.json",
+   "turns": null,
+   "utc": "2026-11-07T03:30:38.494099+00:00",
+   "predicted_spans": 6,
+   "stored_spans": 6,
+   "predicted_bytes": 206881
+  }
+ ]
+}

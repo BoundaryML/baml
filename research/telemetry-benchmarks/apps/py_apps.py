@@ -156,13 +156,20 @@ def respond(system, history, photo=None):
 
 
 @trace_app
-def converse(system, users, photo=None):
+def converse(system, users, photo=None, files=None):
     history, calls = [], 0
     for u in users:
         history.append({"role": "user", "content": u})
         action = respond(system, list(history), photo)
         calls += 1
-        if action["kind"] == "tool":
+        if action["kind"] == "tool" and files:
+            # The agent variant: the tool reads a file from disk, as a coding agent does.
+            history.append({"role": "assistant", "content": f"Reading {action['text']}."})
+            with open(os.path.join(files, action["text"])) as f:
+                history.append({"role": "user", "content": f"Tool read_file returned:\n{f.read()}"})
+            action = respond(system, list(history), photo)
+            calls += 1
+        elif action["kind"] == "tool":
             history.append({"role": "assistant", "content": f"Looking up order {action['text']}."})
             history.append({"role": "user", "content": f"Tool lookup_order returned: {json.dumps(lookup_order(action['text']))}"})
             action = respond(system, list(history), photo)

@@ -3,6 +3,7 @@
     python experiments/summarize.py
 """
 import json
+import sys
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -130,7 +131,8 @@ def chat_variants():
                     continue
                 t = r["telemetry"]
                 rows.append({"variant": v, "stack": st, "turns": r["turns"], "model_calls": r["model_http"]["requests"],
-                             "prompt_bytes": r["model_http"]["sent"], "bytes": t["telemetry_bytes"],
+                             "prompt_bytes": r["model_http"]["sent"], "last_call": r["model_http"]["per_call_sent"][-1],
+                             "bytes": t["telemetry_bytes"],
                              "upload": (t.get("by_operation") or {}).get("upload"),
                              "billed": (t.get("billing") or {}).get("logical_bytes")})
     for r in chat():
@@ -139,11 +141,59 @@ def chat_variants():
     return {"rows": rows, "crossprocess": load("chat-photo-crossprocess.json")}
 
 
+def chat_big():
+    """Bigger conversations: a coding agent that reads files (to ~500k tokens) and a long chat of
+    small messages (to ~100k tokens). Totals per stack, plus BCS's per-call timeline for the longest run."""
+    rows, timelines = [], {}
+    for v in ("files", "longchat"):
+        for r in load(f"chat-{v}.json"):
+            if r.get("error"):
+                continue
+            t, m = r["telemetry"], r["model_http"]
+            billing = t.get("billing") or {}
+            rows.append({"variant": v, "stack": r["stack"], "turns": r["turns"], "model_calls": m["requests"],
+                         "prompt_bytes": m["sent"], "last_call": m["per_call_sent"][-1], "bytes": t["telemetry_bytes"],
+                         "upload": (t.get("by_operation") or {}).get("upload"), "billed": billing.get("logical_bytes"),
+                         "hosted": r.get("hosted"), "already_available": t.get("already_available")})
+            if r["stack"] != "baml" or not billing.get("timeline"):
+                continue
+            if v in timelines and timelines[v]["turns"] >= r["turns"]:
+                continue
+            # Cumulative upload bodies and billed bytes, closed at each model call (network announcement).
+            points, up, bill, calls = [], 0, 0, 0
+            for e in billing["timeline"]:
+                up += e["body"]
+                bill += e["billed"]
+                if e["network_announcements"]:
+                    calls += e["network_announcements"]
+                    points.append([calls, up, bill])
+            if points:
+                points[-1][1:] = [up, bill]  # uploads after the last call (the closing batch) count toward it
+            per_call = []
+            prev_up = prev_bill = 0
+            for (k, u, b) in points:
+                per_call.append({"call": k, "uploaded": u - prev_up, "billed": b - prev_bill})
+                prev_up, prev_bill = u, b
+            timelines[v] = {"turns": r["turns"], "prompt_per_call": m["per_call_sent"], "per_call": per_call}
+    return {"rows": rows, "timelines": timelines}
+
+
+def lever_known():
+    """Bytes of each conversation that are content BCS could reference instead of storing again:
+    the system prompt (same in every conversation), the photo, and the files the agent read."""
+    sys.path.insert(0, str(ROOT / "lab"))
+    from chat_script import FILE_KB, SYSTEM, photo_b64
+    files_turns = max((r["turns"] for r in load("chat-files.json") if r.get("stack") == "baml" and not r.get("error")), default=0)
+    return {"chat": len(SYSTEM), "longchat": len(SYSTEM), "photo": len(SYSTEM) + len(photo_b64(1)),
+            "files": sum(FILE_KB[t % len(FILE_KB)] * 1000 for t in range(files_turns))}
+
+
 def main():
     data = {
         "wire": wire(), "overhead": overhead(), "crash": crash(), "searchable": searchable(),
         "loc": load("loc.json"), "scrub": load("scrub.json"), "pipeline": load("pipeline.json"),
         "anatomy": anatomy(), "wire_english": wire_english(), "chat": chat(), "chat_variants": chat_variants(),
+        "chat_big": chat_big(), "lever_known": lever_known(),
     }
     out = ROOT / "site" / "data.json"
     out.parent.mkdir(exist_ok=True)

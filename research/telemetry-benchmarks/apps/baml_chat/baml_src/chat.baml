@@ -135,3 +135,24 @@ function ConversePhoto(system: string, photo_b64: string, users: string[]) -> in
     }
     calls
 }
+
+// A coding agent: each turn the user asks about a file, the model asks to read
+// it, and the file's text joins the conversation for every later call.
+function ConverseFiles(system: string, dir: string, users: string[]) -> int {
+    let history: Msg[] = [];
+    let calls = 0;
+    for (let u in users) {
+        history.push(Msg { role: "user", content: u });
+        let action = Respond(system, history);
+        calls += 1;
+        if (action.kind == "tool") {
+            history.push(Msg { role: "assistant", content: `Reading ${action.text}.` });
+            let text = baml.fs.read(`${dir}/${action.text}`);
+            history.push(Msg { role: "user", content: `Tool read_file returned:\n${text}` });
+            action = Respond(system, history);
+            calls += 1;
+        }
+        history.push(Msg { role: "assistant", content: action.text });
+    }
+    calls
+}

@@ -355,3 +355,33 @@ One 20-turn conversation (30 model calls):
 - **No reuse across processes.** Two separate processes sent the identical photo (`results/chat-photo-crossprocess.json`): both uploaded 706 KB, and BCS reported 0 objects already stored. All blobs went as `inline_with_recording` or `member_of_batch`; none were offered for server-side reuse.
 - **Other platforms with the photo:** Datadog sends it uncompressed on the workflow and LLM spans (2.0× prompts). Logfire sends it about 3 times (function argument, model span, pending placeholders) and base64 of compressed data barely gzips: 19.3 MB for one conversation, far past its 5 KB-per-span guideline. These went to the local relay, so we don't know whether Logfire or Datadog would store, truncate or reject spans this large. OTel sends one gzipped copy (0.75×).
 - Per million 20-turn conversations with a photo, list prices: BCS 11,600 GB = $46,394; Logfire 71M records = $142; Datadog 30M LLM spans = $10,500.
+
+## 2026-11-09: E17 bigger conversations: a coding agent to ~540k tokens and a long chat to ~110k tokens (`chat.py --variant files|longchat`, `results/chat-files.json`, `results/chat-longchat.json`)
+
+Question (from the user): what happens with 100k- and 500k-token conversations, and when does BCS's cache actually hit? Two new variants, 1 s model delay, BAML on the real BCS:
+
+- `files`: a coding agent. Each turn the user asks about a file, the model asks for `read_file`, and the tool's result (the file's text) joins the conversation. BAML reads with `baml.fs.read` (`ConverseFiles` in `apps/baml_chat`), Python with `open()`. File sizes cycle through 6, 40, 12, 90, 3, 64, 20, 150, 10 and 30 KB, so some are under BCS's 16 KiB string threshold and some over. Files are consecutive slices of the English corpus, fresh per run. 48 turns = 96 model calls; the last request is 2.18 MB, about 545k tokens at 4 characters per token.
+- `longchat`: 1.5 KB user messages and 2.5 KB answers, no tools. 100 turns = 100 calls; the last request is 423 KB, about 106k tokens.
+
+`lab/logical_usage.py` now keeps a per-upload timeline (upload body size, billed bytes of the roots it references, network announcements), so each model call's billed and uploaded bytes can be separated. Each call's large raw HTTP body arrives as its own upload just before the recording that references it, so a call's bytes are the uploads up to and including its recording.
+
+One conversation:
+
+| conversation | stack | model calls | prompts | network | BCS billed | cost / 1M conversations |
+|---|---|---:|---:|---:|---:|---:|
+| agent, 48 turns | BCS | 96 | 99.8 MB | 113.2 MB | 197.9 MB | $791,777 |
+| | Datadog | 96 | 99.6 MB | 201.4 MB | | $33,600 |
+| | Logfire | 96 | 99.6 MB | 126.1 MB | | $482 (241 records) |
+| | OTel | 96 | 99.6 MB | 31.4 MB | | |
+| long chat, 100 turns | BCS | 100 | 21.4 MB | 44.1 MB | 43.0 MB | $172,061 |
+| | Datadog | 100 | 21.2 MB | 43.8 MB | | $35,000 |
+| | Logfire | 100 | 21.2 MB | 28.5 MB | | $402 (201 records) |
+| | OTel | 100 | 21.2 MB | 7.2 MB | | |
+
+- **Cache hits follow message size, not conversation size.** In the agent, 91 of 96 calls reused pieces uploaded earlier, saving 85 MB of upload (113.1 MB uploaded for 197.9 MB billed). Every file of 16 KiB or more became a shared piece the first time it was captured; smaller files were uploaded again inside every call's new history. In the 100-turn long chat, 1 of 100 calls had a hit, and uploads (44.0 MB) exceeded billed bytes (43.0 MB) because uploads carry encoding and recording overhead.
+- **The raw HTTP request is never shared.** It is captured as one string holding the whole conversation, so it is a new piece every call: about 2.2 MB per call by the agent's last turn. Messages inside it are not separate pieces.
+- Two PUTs to BCS storage in the 24-turn agent run failed with `ConnectionResetError` at the relay; BAML's retries succeeded and no billed sizes are missing. Uploads to storage averaged about 3.2 Mbit/s on this connection (E18).
+
+**Spans check against hosted BCS** (`experiments/bcs_check.py`, `results/bcs-check.json`): for each of the 96 hosted BAML runs since 2026-11-06, the spans `baml query` finds under the run's process IDs equal the spans the replay counted: 6,161 predicted, 6,161 stored, 96 of 96 exact. The project held 10,025 spans in all. The Billing page read 9,932 spans and 410 MB with "20 recording files awaiting measurement" shortly after the agent runs.
+
+**Site:** new "What BCS can and can't cache" explainer (rules table and a one-call diagram), a per-call chart for the two big conversations (solid = uploaded, hatched = billed but already uploaded), token sizes on every chat chart, and a final "Learnings" section. Its projection applies five runtime-level changes to the measured conversations (store pieces once; record history as deltas; derive the request from a receipt; reference content stored once per project; compress). All five together bring BCS's bill 174–4,334× below today's and 50–200× below Datadog, and 2.6–2.7× below Logfire's list price on three of the four conversations; the long chat stays 1.7× above Logfire because its messages are all new text.

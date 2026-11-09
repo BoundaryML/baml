@@ -7562,6 +7562,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 409976,
+    "last_call": 205335,
     "bytes": 709789,
     "upload": 706160,
     "billed": 724368
@@ -7572,6 +7573,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 3161917,
+    "last_call": 217046,
     "bytes": 3748547,
     "upload": 3731854,
     "billed": 5601803
@@ -7582,6 +7584,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 1661374,
+    "last_call": 210703,
     "bytes": 2070241,
     "upload": 2060564,
     "billed": 2938734
@@ -7592,6 +7595,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 6526078,
+    "last_call": 230510,
     "bytes": 7640656,
     "upload": 7608732,
     "billed": 11598416
@@ -7602,6 +7606,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 409929,
+    "last_call": 205310,
     "bytes": 1548318,
     "upload": null,
     "billed": null
@@ -7612,6 +7617,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 3158274,
+    "last_call": 216569,
     "bytes": 9700256,
     "upload": null,
     "billed": null
@@ -7622,6 +7628,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 1660380,
+    "last_call": 210477,
     "bytes": 5291503,
     "upload": null,
     "billed": null
@@ -7632,6 +7639,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 6511386,
+    "last_call": 229545,
     "bytes": 19278376,
     "upload": null,
     "billed": null
@@ -7642,6 +7650,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 409929,
+    "last_call": 205310,
     "bytes": 1031817,
     "upload": null,
     "billed": null
@@ -7652,6 +7661,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 3158274,
+    "last_call": 216569,
     "bytes": 6581725,
     "upload": null,
     "billed": null
@@ -7662,6 +7672,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 1660380,
+    "last_call": 210477,
     "bytes": 3555615,
     "upload": null,
     "billed": null
@@ -7672,6 +7683,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 6511386,
+    "last_call": 229545,
     "bytes": 13369992,
     "upload": null,
     "billed": null
@@ -7682,6 +7694,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 409929,
+    "last_call": 205310,
     "bytes": 463610,
     "upload": null,
     "billed": null
@@ -7692,6 +7705,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 3158274,
+    "last_call": 216569,
     "bytes": 2504882,
     "upload": null,
     "billed": null
@@ -7702,6 +7716,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 1660380,
+    "last_call": 210477,
     "bytes": 1399503,
     "upload": null,
     "billed": null
@@ -7712,6 +7727,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 6511386,
+    "last_call": 229545,
     "bytes": 4915906,
     "upload": null,
     "billed": null
@@ -7722,6 +7738,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 6524827,
+    "last_call": 230442,
     "bytes": 7627956,
     "upload": 7606690,
     "billed": 11594965
@@ -7732,6 +7749,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 409978,
+    "last_call": 205336,
     "bytes": 696743,
     "upload": 693910,
     "billed": 724188
@@ -7742,6 +7760,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 1661330,
+    "last_call": 210689,
     "bytes": 2060914,
     "upload": 2054268,
     "billed": 2938021
@@ -7752,6 +7771,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 3161929,
+    "last_call": 217047,
     "bytes": 3735157,
     "upload": 3723583,
     "billed": 5600729
@@ -7762,6 +7782,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 43288,
+    "last_call": 21991,
     "bytes": 150747,
     "upload": 147264,
     "billed": 90616
@@ -7772,6 +7793,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 411757,
+    "last_call": 33702,
     "bytes": 750553,
     "upload": 734006,
     "billed": 848663
@@ -7782,6 +7804,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 194622,
+    "last_call": 27359,
     "bytes": 385589,
     "upload": 376058,
     "billed": 403726
@@ -7792,6 +7815,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 1025758,
+    "last_call": 47166,
     "bytes": 1828095,
     "upload": 1796398,
     "billed": 2091795
@@ -7802,6 +7826,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 43185,
+    "last_call": 21938,
     "bytes": 40371,
     "upload": null,
     "billed": null
@@ -7812,6 +7837,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 407694,
+    "last_call": 33197,
     "bytes": 284534,
     "upload": null,
     "billed": null
@@ -7822,6 +7848,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 193404,
+    "last_call": 27105,
     "bytes": 119715,
     "upload": null,
     "billed": null
@@ -7832,6 +7859,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 1010226,
+    "last_call": 46173,
     "bytes": 1050554,
     "upload": null,
     "billed": null
@@ -7842,6 +7870,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 43185,
+    "last_call": 21938,
     "bytes": 116384,
     "upload": null,
     "billed": null
@@ -7852,6 +7881,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 407694,
+    "last_call": 33197,
     "bytes": 904993,
     "upload": null,
     "billed": null
@@ -7862,6 +7892,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 193404,
+    "last_call": 27105,
     "bytes": 442653,
     "upload": null,
     "billed": null
@@ -7872,6 +7903,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 1010226,
+    "last_call": 46173,
     "bytes": 2199366,
     "upload": null,
     "billed": null
@@ -7882,6 +7914,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 43185,
+    "last_call": 21938,
     "bytes": 9513,
     "upload": null,
     "billed": null
@@ -7892,6 +7925,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 407694,
+    "last_call": 33197,
     "bytes": 55425,
     "upload": null,
     "billed": null
@@ -7902,6 +7936,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 193404,
+    "last_call": 27105,
     "bytes": 22349,
     "upload": null,
     "billed": null
@@ -7912,6 +7947,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 1010226,
+    "last_call": 46173,
     "bytes": 243643,
     "upload": null,
     "billed": null
@@ -7922,6 +7958,7 @@
     "turns": 10,
     "model_calls": 15,
     "prompt_bytes": 411908,
+    "last_call": 33729,
     "bytes": 748561,
     "upload": 738000,
     "billed": 847801
@@ -7932,6 +7969,7 @@
     "turns": 1,
     "model_calls": 2,
     "prompt_bytes": 43290,
+    "last_call": 21992,
     "bytes": 137716,
     "upload": 135093,
     "billed": 90436
@@ -7942,6 +7980,7 @@
     "turns": 5,
     "model_calls": 8,
     "prompt_bytes": 194551,
+    "last_call": 27341,
     "bytes": 375997,
     "upload": 369799,
     "billed": 402984
@@ -7952,6 +7991,7 @@
     "turns": 20,
     "model_calls": 30,
     "prompt_bytes": 1024580,
+    "last_call": 47114,
     "bytes": 1798245,
     "upload": 1778406,
     "billed": 2088399
@@ -8139,5 +8179,1519 @@
     "billed": 724372
    }
   ]
+ },
+ "chat_big": {
+  "rows": [
+   {
+    "variant": "files",
+    "stack": "baml",
+    "turns": 24,
+    "model_calls": 48,
+    "prompt_bytes": 24332471,
+    "last_call": 1047888,
+    "bytes": 28557878,
+    "upload": 28505070,
+    "billed": 48301163,
+    "hosted": true,
+    "already_available": 0
+   },
+   {
+    "variant": "files",
+    "stack": "logfire",
+    "turns": 48,
+    "model_calls": 96,
+    "prompt_bytes": 99564041,
+    "last_call": 2175227,
+    "bytes": 126125096,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "files",
+    "stack": "otel",
+    "turns": 12,
+    "model_calls": 24,
+    "prompt_bytes": 5797131,
+    "last_call": 495578,
+    "bytes": 1740164,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "files",
+    "stack": "logfire",
+    "turns": 12,
+    "model_calls": 24,
+    "prompt_bytes": 5796757,
+    "last_call": 495592,
+    "bytes": 7012907,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "files",
+    "stack": "otel",
+    "turns": 48,
+    "model_calls": 96,
+    "prompt_bytes": 99557585,
+    "last_call": 2175111,
+    "bytes": 31406044,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "files",
+    "stack": "datadog",
+    "turns": 24,
+    "model_calls": 48,
+    "prompt_bytes": 24283258,
+    "last_call": 1045629,
+    "bytes": 49223743,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "files",
+    "stack": "baml",
+    "turns": 48,
+    "model_calls": 96,
+    "prompt_bytes": 99790189,
+    "last_call": 2179974,
+    "bytes": 113182634,
+    "upload": 113073641,
+    "billed": 197944151,
+    "hosted": true,
+    "already_available": 0
+   },
+   {
+    "variant": "files",
+    "stack": "logfire",
+    "turns": 24,
+    "model_calls": 48,
+    "prompt_bytes": 24315637,
+    "last_call": 1046608,
+    "bytes": 30406963,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "files",
+    "stack": "otel",
+    "turns": 24,
+    "model_calls": 48,
+    "prompt_bytes": 24315365,
+    "last_call": 1046567,
+    "bytes": 7562795,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "files",
+    "stack": "baml",
+    "turns": 12,
+    "model_calls": 24,
+    "prompt_bytes": 5815925,
+    "last_call": 497074,
+    "bytes": 7307133,
+    "upload": 7281682,
+    "billed": 11567982,
+    "hosted": true,
+    "already_available": 0
+   },
+   {
+    "variant": "files",
+    "stack": "datadog",
+    "turns": 48,
+    "model_calls": 96,
+    "prompt_bytes": 99551248,
+    "last_call": 2175427,
+    "bytes": 201392172,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "files",
+    "stack": "datadog",
+    "turns": 12,
+    "model_calls": 24,
+    "prompt_bytes": 5801866,
+    "last_call": 495924,
+    "bytes": 11796178,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "datadog",
+    "turns": 25,
+    "model_calls": 25,
+    "prompt_bytes": 1391060,
+    "last_call": 105535,
+    "bytes": 3040529,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "logfire",
+    "turns": 25,
+    "model_calls": 25,
+    "prompt_bytes": 1390966,
+    "last_call": 105607,
+    "bytes": 1993095,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "logfire",
+    "turns": 100,
+    "model_calls": 100,
+    "prompt_bytes": 21179351,
+    "last_call": 417779,
+    "bytes": 28456218,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "baml",
+    "turns": 50,
+    "model_calls": 50,
+    "prompt_bytes": 5451002,
+    "last_call": 212168,
+    "bytes": 11622387,
+    "upload": 11569626,
+    "billed": 11099448,
+    "hosted": true,
+    "already_available": 0
+   },
+   {
+    "variant": "longchat",
+    "stack": "otel",
+    "turns": 25,
+    "model_calls": 25,
+    "prompt_bytes": 1392793,
+    "last_call": 105615,
+    "bytes": 475147,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "datadog",
+    "turns": 100,
+    "model_calls": 100,
+    "prompt_bytes": 21169148,
+    "last_call": 417553,
+    "bytes": 43779050,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "datadog",
+    "turns": 50,
+    "model_calls": 50,
+    "prompt_bytes": 5383361,
+    "last_call": 209548,
+    "bytes": 11349570,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "baml",
+    "turns": 100,
+    "model_calls": 100,
+    "prompt_bytes": 21417308,
+    "last_call": 422646,
+    "bytes": 44096264,
+    "upload": 43986614,
+    "billed": 43015152,
+    "hosted": true,
+    "already_available": 0
+   },
+   {
+    "variant": "longchat",
+    "stack": "baml",
+    "turns": 25,
+    "model_calls": 25,
+    "prompt_bytes": 1407923,
+    "last_call": 106919,
+    "bytes": 3219910,
+    "upload": 3194371,
+    "billed": 2944896,
+    "hosted": true,
+    "already_available": 0
+   },
+   {
+    "variant": "longchat",
+    "stack": "otel",
+    "turns": 100,
+    "model_calls": 100,
+    "prompt_bytes": 21191816,
+    "last_call": 418087,
+    "bytes": 7189733,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "logfire",
+    "turns": 50,
+    "model_calls": 50,
+    "prompt_bytes": 5386375,
+    "last_call": 209840,
+    "bytes": 7665493,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   },
+   {
+    "variant": "longchat",
+    "stack": "otel",
+    "turns": 50,
+    "model_calls": 50,
+    "prompt_bytes": 5392928,
+    "last_call": 209899,
+    "bytes": 1912835,
+    "upload": null,
+    "billed": null,
+    "hosted": false,
+    "already_available": null
+   }
+  ],
+  "timelines": {
+   "files": {
+    "turns": 48,
+    "prompt_per_call": [
+     4281,
+     10586,
+     11561,
+     52566,
+     53544,
+     65937,
+     66912,
+     159066,
+     160046,
+     163269,
+     164242,
+     229662,
+     230636,
+     251214,
+     252188,
+     405159,
+     406138,
+     416435,
+     417412,
+     448021,
+     448996,
+     455236,
+     456212,
+     496970,
+     497949,
+     510331,
+     511307,
+     602916,
+     603896,
+     607092,
+     608069,
+     673262,
+     674241,
+     694726,
+     695705,
+     848197,
+     849178,
+     859492,
+     860466,
+     891083,
+     892059,
+     898309,
+     899284,
+     940098,
+     941080,
+     953445,
+     954426,
+     1045978,
+     1046956,
+     1050165,
+     1051149,
+     1116353,
+     1117331,
+     1137940,
+     1138919,
+     1291664,
+     1292645,
+     1302969,
+     1303947,
+     1334604,
+     1335585,
+     1341848,
+     1342835,
+     1383783,
+     1384764,
+     1397092,
+     1398071,
+     1489855,
+     1490832,
+     1494044,
+     1495022,
+     1560212,
+     1561195,
+     1581712,
+     1582688,
+     1735576,
+     1736554,
+     1746889,
+     1747867,
+     1778551,
+     1779531,
+     1785847,
+     1786831,
+     1827878,
+     1828851,
+     1841219,
+     1842200,
+     1933969,
+     1934946,
+     1938167,
+     1939149,
+     2004532,
+     2005511,
+     2026057,
+     2027032,
+     2179974
+    ],
+    "per_call": [
+     {
+      "call": 1,
+      "uploaded": 53792,
+      "billed": 9128
+     },
+     {
+      "call": 2,
+      "uploaded": 40582,
+      "billed": 22203
+     },
+     {
+      "call": 3,
+      "uploaded": 31241,
+      "billed": 25319
+     },
+     {
+      "call": 4,
+      "uploaded": 19192,
+      "billed": 105266
+     },
+     {
+      "call": 5,
+      "uploaded": 115179,
+      "billed": 108391
+     },
+     {
+      "call": 6,
+      "uploaded": 61759,
+      "billed": 131722
+     },
+     {
+      "call": 7,
+      "uploaded": 100565,
+      "billed": 134836
+     },
+     {
+      "call": 8,
+      "uploaded": 101341,
+      "billed": 315934
+     },
+     {
+      "call": 9,
+      "uploaded": 285061,
+      "billed": 319065
+     },
+     {
+      "call": 10,
+      "uploaded": 195600,
+      "billed": 324220
+     },
+     {
+      "call": 11,
+      "uploaded": 203194,
+      "billed": 327334
+     },
+     {
+      "call": 12,
+      "uploaded": 203949,
+      "billed": 455697
+     },
+     {
+      "call": 13,
+      "uploaded": 334912,
+      "billed": 458808
+     },
+     {
+      "call": 14,
+      "uploaded": 271556,
+      "billed": 498332
+     },
+     {
+      "call": 15,
+      "uploaded": 313600,
+      "billed": 501445
+     },
+     {
+      "call": 16,
+      "uploaded": 294233,
+      "billed": 803360
+     },
+     {
+      "call": 17,
+      "uploaded": 598689,
+      "billed": 806488
+     },
+     {
+      "call": 18,
+      "uploaded": 449319,
+      "billed": 825721
+     },
+     {
+      "call": 19,
+      "uploaded": 470969,
+      "billed": 828839
+     },
+     {
+      "call": 20,
+      "uploaded": 471736,
+      "billed": 888390
+     },
+     {
+      "call": 21,
+      "uploaded": 533829,
+      "billed": 891504
+     },
+     {
+      "call": 22,
+      "uploaded": 504454,
+      "billed": 902688
+     },
+     {
+      "call": 23,
+      "uploaded": 518051,
+      "billed": 905809
+     },
+     {
+      "call": 24,
+      "uploaded": 518813,
+      "billed": 985505
+     },
+     {
+      "call": 25,
+      "uploaded": 601045,
+      "billed": 988631
+     },
+     {
+      "call": 26,
+      "uploaded": 562432,
+      "billed": 1012304
+     },
+     {
+      "call": 27,
+      "uploaded": 587417,
+      "billed": 1015064
+     },
+     {
+      "call": 28,
+      "uploaded": 588176,
+      "billed": 1195617
+     },
+     {
+      "call": 29,
+      "uploaded": 771290,
+      "billed": 1198748
+     },
+     {
+      "call": 30,
+      "uploaded": 686332,
+      "billed": 1203876
+     },
+     {
+      "call": 31,
+      "uploaded": 689595,
+      "billed": 1206996
+     },
+     {
+      "call": 32,
+      "uploaded": 690368,
+      "billed": 1335129
+     },
+     {
+      "call": 33,
+      "uploaded": 821055,
+      "billed": 1338255
+     },
+     {
+      "call": 34,
+      "uploaded": 757676,
+      "billed": 1377676
+     },
+     {
+      "call": 35,
+      "uploaded": 799649,
+      "billed": 1380798
+     },
+     {
+      "call": 36,
+      "uploaded": 780274,
+      "billed": 1682230
+     },
+     {
+      "call": 37,
+      "uploaded": 1084973,
+      "billed": 1685711
+     },
+     {
+      "call": 38,
+      "uploaded": 934881,
+      "billed": 1704608
+     },
+     {
+      "call": 39,
+      "uploaded": 956540,
+      "billed": 1707715
+     },
+     {
+      "call": 40,
+      "uploaded": 957321,
+      "billed": 1767282
+     },
+     {
+      "call": 41,
+      "uploaded": 1019413,
+      "billed": 1770397
+     },
+     {
+      "call": 42,
+      "uploaded": 990048,
+      "billed": 1781591
+     },
+     {
+      "call": 43,
+      "uploaded": 1003651,
+      "billed": 1784707
+     },
+     {
+      "call": 44,
+      "uploaded": 1004416,
+      "billed": 1864463
+     },
+     {
+      "call": 45,
+      "uploaded": 1087427,
+      "billed": 1867953
+     },
+     {
+      "call": 46,
+      "uploaded": 1047346,
+      "billed": 1890893
+     },
+     {
+      "call": 47,
+      "uploaded": 1073065,
+      "billed": 1894025
+     },
+     {
+      "call": 48,
+      "uploaded": 1073835,
+      "billed": 2074509
+     },
+     {
+      "call": 49,
+      "uploaded": 1256866,
+      "billed": 2077630
+     },
+     {
+      "call": 50,
+      "uploaded": 1167490,
+      "billed": 2082779
+     },
+     {
+      "call": 51,
+      "uploaded": 1175068,
+      "billed": 2085920
+     },
+     {
+      "call": 52,
+      "uploaded": 1176543,
+      "billed": 2214405
+     },
+     {
+      "call": 53,
+      "uploaded": 1306522,
+      "billed": 2217175
+     },
+     {
+      "call": 54,
+      "uploaded": 1243142,
+      "billed": 2256720
+     },
+     {
+      "call": 55,
+      "uploaded": 1285247,
+      "billed": 2259850
+     },
+     {
+      "call": 56,
+      "uploaded": 1265873,
+      "billed": 2561527
+     },
+     {
+      "call": 57,
+      "uploaded": 1570173,
+      "billed": 2564657
+     },
+     {
+      "call": 58,
+      "uploaded": 1421450,
+      "billed": 2584270
+     },
+     {
+      "call": 59,
+      "uploaded": 1442408,
+      "billed": 2587032
+     },
+     {
+      "call": 60,
+      "uploaded": 1443182,
+      "billed": 2646633
+     },
+     {
+      "call": 61,
+      "uploaded": 1505473,
+      "billed": 2649771
+     },
+     {
+      "call": 62,
+      "uploaded": 1476094,
+      "billed": 2660960
+     },
+     {
+      "call": 63,
+      "uploaded": 1489730,
+      "billed": 2664108
+     },
+     {
+      "call": 64,
+      "uploaded": 1491217,
+      "billed": 2744333
+     },
+     {
+      "call": 65,
+      "uploaded": 1572945,
+      "billed": 2747110
+     },
+     {
+      "call": 66,
+      "uploaded": 1533564,
+      "billed": 2770370
+     },
+     {
+      "call": 67,
+      "uploaded": 1559258,
+      "billed": 2773494
+     },
+     {
+      "call": 68,
+      "uploaded": 1560014,
+      "billed": 2954216
+     },
+     {
+      "call": 69,
+      "uploaded": 1743994,
+      "billed": 2957691
+     },
+     {
+      "call": 70,
+      "uploaded": 1653918,
+      "billed": 2962488
+     },
+     {
+      "call": 71,
+      "uploaded": 1661485,
+      "billed": 2965609
+     },
+     {
+      "call": 72,
+      "uploaded": 1662251,
+      "billed": 3093739
+     },
+     {
+      "call": 73,
+      "uploaded": 1793649,
+      "billed": 3097232
+     },
+     {
+      "call": 74,
+      "uploaded": 1729549,
+      "billed": 3136322
+     },
+     {
+      "call": 75,
+      "uploaded": 1771547,
+      "billed": 3139443
+     },
+     {
+      "call": 76,
+      "uploaded": 1752176,
+      "billed": 3441269
+     },
+     {
+      "call": 77,
+      "uploaded": 2056621,
+      "billed": 3444398
+     },
+     {
+      "call": 78,
+      "uploaded": 1907893,
+      "billed": 3464020
+     },
+     {
+      "call": 79,
+      "uploaded": 1928870,
+      "billed": 3466790
+     },
+     {
+      "call": 80,
+      "uploaded": 1929641,
+      "billed": 3526410
+     },
+     {
+      "call": 81,
+      "uploaded": 1991795,
+      "billed": 3529533
+     },
+     {
+      "call": 82,
+      "uploaded": 1963156,
+      "billed": 3541144
+     },
+     {
+      "call": 83,
+      "uploaded": 1976114,
+      "billed": 3543920
+     },
+     {
+      "call": 84,
+      "uploaded": 1976873,
+      "billed": 3623903
+     },
+     {
+      "call": 85,
+      "uploaded": 2059393,
+      "billed": 3627013
+     },
+     {
+      "call": 86,
+      "uploaded": 2020744,
+      "billed": 3650682
+     },
+     {
+      "call": 87,
+      "uploaded": 2045756,
+      "billed": 3653457
+     },
+     {
+      "call": 88,
+      "uploaded": 2046528,
+      "billed": 3834160
+     },
+     {
+      "call": 89,
+      "uploaded": 2229844,
+      "billed": 3837278
+     },
+     {
+      "call": 90,
+      "uploaded": 2141125,
+      "billed": 3842796
+     },
+     {
+      "call": 91,
+      "uploaded": 2147986,
+      "billed": 3845568
+     },
+     {
+      "call": 92,
+      "uploaded": 2148745,
+      "billed": 3973889
+     },
+     {
+      "call": 93,
+      "uploaded": 2279620,
+      "billed": 3977015
+     },
+     {
+      "call": 94,
+      "uploaded": 2216967,
+      "billed": 4016852
+     },
+     {
+      "call": 95,
+      "uploaded": 2258262,
+      "billed": 4019611
+     },
+     {
+      "call": 96,
+      "uploaded": 4777039,
+      "billed": 4323777
+     }
+    ]
+   },
+   "longchat": {
+    "turns": 100,
+    "prompt_per_call": [
+     5773,
+     9980,
+     14179,
+     18389,
+     22606,
+     26817,
+     31034,
+     35228,
+     39444,
+     43651,
+     47866,
+     52080,
+     56274,
+     60475,
+     64681,
+     68870,
+     73077,
+     77289,
+     81527,
+     85725,
+     89949,
+     94152,
+     98333,
+     102535,
+     106743,
+     110946,
+     115158,
+     119356,
+     123561,
+     127776,
+     131985,
+     136188,
+     140406,
+     144635,
+     148820,
+     153007,
+     157219,
+     161431,
+     165646,
+     169857,
+     174070,
+     178294,
+     182521,
+     186725,
+     190933,
+     195161,
+     199374,
+     203596,
+     207832,
+     212040,
+     216262,
+     220481,
+     224703,
+     228912,
+     233134,
+     237338,
+     241535,
+     245743,
+     249954,
+     254153,
+     258361,
+     262621,
+     266830,
+     271056,
+     275251,
+     279459,
+     283666,
+     287870,
+     292090,
+     296301,
+     300513,
+     304722,
+     308999,
+     313201,
+     317396,
+     321617,
+     325826,
+     330041,
+     334242,
+     338469,
+     342670,
+     346884,
+     351083,
+     355303,
+     359513,
+     363716,
+     367928,
+     372128,
+     376359,
+     380598,
+     384808,
+     389007,
+     393198,
+     397400,
+     401599,
+     405808,
+     410019,
+     414238,
+     418443,
+     422646
+    ],
+    "per_call": [
+     {
+      "call": 1,
+      "uploaded": 56335,
+      "billed": 12075
+     },
+     {
+      "call": 2,
+      "uploaded": 41914,
+      "billed": 26105
+     },
+     {
+      "call": 3,
+      "uploaded": 12684,
+      "billed": 34406
+     },
+     {
+      "call": 4,
+      "uploaded": 42218,
+      "billed": 42736
+     },
+     {
+      "call": 5,
+      "uploaded": 50361,
+      "billed": 51093
+     },
+     {
+      "call": 6,
+      "uploaded": 58729,
+      "billed": 59434
+     },
+     {
+      "call": 7,
+      "uploaded": 67118,
+      "billed": 67799
+     },
+     {
+      "call": 8,
+      "uploaded": 75438,
+      "billed": 76057
+     },
+     {
+      "call": 9,
+      "uploaded": 83812,
+      "billed": 84423
+     },
+     {
+      "call": 10,
+      "uploaded": 92163,
+      "billed": 92735
+     },
+     {
+      "call": 11,
+      "uploaded": 100544,
+      "billed": 101103
+     },
+     {
+      "call": 12,
+      "uploaded": 108900,
+      "billed": 109410
+     },
+     {
+      "call": 13,
+      "uploaded": 117234,
+      "billed": 117694
+     },
+     {
+      "call": 14,
+      "uploaded": 125591,
+      "billed": 126037
+     },
+     {
+      "call": 15,
+      "uploaded": 133953,
+      "billed": 134383
+     },
+     {
+      "call": 16,
+      "uploaded": 142294,
+      "billed": 142668
+     },
+     {
+      "call": 17,
+      "uploaded": 155243,
+      "billed": 151001
+     },
+     {
+      "call": 18,
+      "uploaded": 159142,
+      "billed": 159347
+     },
+     {
+      "call": 19,
+      "uploaded": 167595,
+      "billed": 167796
+     },
+     {
+      "call": 20,
+      "uploaded": 175864,
+      "billed": 175995
+     },
+     {
+      "call": 21,
+      "uploaded": 184265,
+      "billed": 184401
+     },
+     {
+      "call": 22,
+      "uploaded": 192614,
+      "billed": 192690
+     },
+     {
+      "call": 23,
+      "uploaded": 200918,
+      "billed": 200951
+     },
+     {
+      "call": 24,
+      "uploaded": 209277,
+      "billed": 209301
+     },
+     {
+      "call": 25,
+      "uploaded": 217614,
+      "billed": 217623
+     },
+     {
+      "call": 26,
+      "uploaded": 225974,
+      "billed": 225948
+     },
+     {
+      "call": 27,
+      "uploaded": 234356,
+      "billed": 234300
+     },
+     {
+      "call": 28,
+      "uploaded": 242682,
+      "billed": 242582
+     },
+     {
+      "call": 29,
+      "uploaded": 251059,
+      "billed": 250927
+     },
+     {
+      "call": 30,
+      "uploaded": 259440,
+      "billed": 259288
+     },
+     {
+      "call": 31,
+      "uploaded": 267779,
+      "billed": 267599
+     },
+     {
+      "call": 32,
+      "uploaded": 276161,
+      "billed": 275916
+     },
+     {
+      "call": 33,
+      "uploaded": 284639,
+      "billed": 284306
+     },
+     {
+      "call": 34,
+      "uploaded": 292986,
+      "billed": 292643
+     },
+     {
+      "call": 35,
+      "uploaded": 301305,
+      "billed": 300888
+     },
+     {
+      "call": 36,
+      "uploaded": 309643,
+      "billed": 309189
+     },
+     {
+      "call": 37,
+      "uploaded": 318018,
+      "billed": 317559
+     },
+     {
+      "call": 38,
+      "uploaded": 326370,
+      "billed": 325881
+     },
+     {
+      "call": 39,
+      "uploaded": 334731,
+      "billed": 334224
+     },
+     {
+      "call": 40,
+      "uploaded": 343085,
+      "billed": 342553
+     },
+     {
+      "call": 41,
+      "uploaded": 351459,
+      "billed": 350890
+     },
+     {
+      "call": 42,
+      "uploaded": 359812,
+      "billed": 359224
+     },
+     {
+      "call": 43,
+      "uploaded": 368962,
+      "billed": 367950
+     },
+     {
+      "call": 44,
+      "uploaded": 376556,
+      "billed": 375879
+     },
+     {
+      "call": 45,
+      "uploaded": 384917,
+      "billed": 384223
+     },
+     {
+      "call": 46,
+      "uploaded": 393311,
+      "billed": 392607
+     },
+     {
+      "call": 47,
+      "uploaded": 401659,
+      "billed": 400910
+     },
+     {
+      "call": 48,
+      "uploaded": 410042,
+      "billed": 409263
+     },
+     {
+      "call": 49,
+      "uploaded": 418462,
+      "billed": 417676
+     },
+     {
+      "call": 50,
+      "uploaded": 426775,
+      "billed": 425922
+     },
+     {
+      "call": 51,
+      "uploaded": 435166,
+      "billed": 434306
+     },
+     {
+      "call": 52,
+      "uploaded": 443530,
+      "billed": 442637
+     },
+     {
+      "call": 53,
+      "uploaded": 451897,
+      "billed": 450977
+     },
+     {
+      "call": 54,
+      "uploaded": 460237,
+      "billed": 459274
+     },
+     {
+      "call": 55,
+      "uploaded": 468612,
+      "billed": 467632
+     },
+     {
+      "call": 56,
+      "uploaded": 476960,
+      "billed": 475932
+     },
+     {
+      "call": 57,
+      "uploaded": 485311,
+      "billed": 484237
+     },
+     {
+      "call": 58,
+      "uploaded": 493665,
+      "billed": 492581
+     },
+     {
+      "call": 59,
+      "uploaded": 502048,
+      "billed": 500928
+     },
+     {
+      "call": 60,
+      "uploaded": 510390,
+      "billed": 509229
+     },
+     {
+      "call": 61,
+      "uploaded": 518889,
+      "billed": 517565
+     },
+     {
+      "call": 62,
+      "uploaded": 527388,
+      "billed": 526083
+     },
+     {
+      "call": 63,
+      "uploaded": 536373,
+      "billed": 534625
+     },
+     {
+      "call": 64,
+      "uploaded": 544068,
+      "billed": 542656
+     },
+     {
+      "call": 65,
+      "uploaded": 552392,
+      "billed": 550909
+     },
+     {
+      "call": 66,
+      "uploaded": 560757,
+      "billed": 559257
+     },
+     {
+      "call": 67,
+      "uploaded": 569111,
+      "billed": 567580
+     },
+     {
+      "call": 68,
+      "uploaded": 577466,
+      "billed": 575902
+     },
+     {
+      "call": 69,
+      "uploaded": 585869,
+      "billed": 584291
+     },
+     {
+      "call": 70,
+      "uploaded": 594193,
+      "billed": 592585
+     },
+     {
+      "call": 71,
+      "uploaded": 602569,
+      "billed": 600923
+     },
+     {
+      "call": 72,
+      "uploaded": 610929,
+      "billed": 609250
+     },
+     {
+      "call": 73,
+      "uploaded": 619483,
+      "billed": 617851
+     },
+     {
+      "call": 74,
+      "uploaded": 627703,
+      "billed": 625957
+     },
+     {
+      "call": 75,
+      "uploaded": 636024,
+      "billed": 634250
+     },
+     {
+      "call": 76,
+      "uploaded": 641724,
+      "billed": 642658
+     },
+     {
+      "call": 77,
+      "uploaded": 653491,
+      "billed": 651309
+     },
+     {
+      "call": 78,
+      "uploaded": 661144,
+      "billed": 659309
+     },
+     {
+      "call": 79,
+      "uploaded": 669490,
+      "billed": 667602
+     },
+     {
+      "call": 80,
+      "uploaded": 677883,
+      "billed": 676009
+     },
+     {
+      "call": 81,
+      "uploaded": 686214,
+      "billed": 684266
+     },
+     {
+      "call": 82,
+      "uploaded": 694590,
+      "billed": 692625
+     },
+     {
+      "call": 83,
+      "uploaded": 702921,
+      "billed": 700911
+     },
+     {
+      "call": 84,
+      "uploaded": 711307,
+      "billed": 709297
+     },
+     {
+      "call": 85,
+      "uploaded": 719657,
+      "billed": 717607
+     },
+     {
+      "call": 86,
+      "uploaded": 728025,
+      "billed": 725920
+     },
+     {
+      "call": 87,
+      "uploaded": 736370,
+      "billed": 734262
+     },
+     {
+      "call": 88,
+      "uploaded": 744708,
+      "billed": 742558
+     },
+     {
+      "call": 89,
+      "uploaded": 753876,
+      "billed": 751347
+     },
+     {
+      "call": 90,
+      "uploaded": 761556,
+      "billed": 759376
+     },
+     {
+      "call": 91,
+      "uploaded": 769865,
+      "billed": 767617
+     },
+     {
+      "call": 92,
+      "uploaded": 778204,
+      "billed": 775915
+     },
+     {
+      "call": 93,
+      "uploaded": 786537,
+      "billed": 784210
+     },
+     {
+      "call": 94,
+      "uploaded": 792168,
+      "billed": 792552
+     },
+     {
+      "call": 95,
+      "uploaded": 803241,
+      "billed": 800871
+     },
+     {
+      "call": 96,
+      "uploaded": 811603,
+      "billed": 809204
+     },
+     {
+      "call": 97,
+      "uploaded": 819959,
+      "billed": 817541
+     },
+     {
+      "call": 98,
+      "uploaded": 828354,
+      "billed": 825914
+     },
+     {
+      "call": 99,
+      "uploaded": 836692,
+      "billed": 834217
+     },
+     {
+      "call": 100,
+      "uploaded": 1694002,
+      "billed": 849028
+     }
+    ]
+   }
+  }
+ },
+ "lever_known": {
+  "chat": 3899,
+  "longchat": 3899,
+  "photo": 203899,
+  "files": 2085000
  }
 }

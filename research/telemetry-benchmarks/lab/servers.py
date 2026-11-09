@@ -113,7 +113,8 @@ class MockLLM(_Quiet):
             }, separators=(",", ":")).encode()
             status = 200
         with self.server.lock:
-            self.server.requests.append({"path": self.path, "sent": len(raw), "received": len(data), "status": status})
+            self.server.requests.append({"path": self.path, "sent": len(raw), "received": len(data), "status": status,
+                                         "t": time.time()})
         self.reply(status, data)
 
 
@@ -291,6 +292,7 @@ class BcsRelay(_Quiet):
             return self.reply(404)
         url, headers, recording = target
         body = self.body()
+        t0 = time.time()
         if self.server.key:
             status, reply, ctype = upstream(url, "PUT", body, headers)
         else:
@@ -298,8 +300,9 @@ class BcsRelay(_Quiet):
         if 200 <= status < 300 and self.server.meter is not None:
             self.server.meter.observe(body)
         with self.server.lock:
+            # dur: how long the PUT to hosted storage took, which measures this machine's upload bandwidth.
             self.server.events.append(dict(recording=recording, operation="upload", sent=len(body),
-                                           received=len(reply), status=status, t=time.time()))
+                                           received=len(reply), status=status, t=time.time(), t0=t0, dur=time.time() - t0))
         self.reply(status, reply, ctype)
 
 

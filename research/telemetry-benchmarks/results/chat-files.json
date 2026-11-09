@@ -1,0 +1,5112 @@
+[
+ {
+  "stack": "baml",
+  "turns": 24,
+  "hosted": true,
+  "utc": "2026-11-08T23:48:39.967070+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 184,
+   "telemetry_bytes": 28557878,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 52694,
+    "upload": 28505070
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "dispositions": {
+    "inline_with_recording": 225,
+    "member_of_batch": 71,
+    "separate_object": 33
+   },
+   "planned_uploads": 134,
+   "puts": 134,
+   "billing": {
+    "spans": 154,
+    "logical_bytes": 48301163,
+    "capture_references": 293,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1bd9067bf7002b6fb49db6769be23"
+    ],
+    "events": {
+     "thread_announcement": 10,
+     "thread_completion": 10,
+     "function_announcement": 96,
+     "network_announcement": 48,
+     "network_event": 144,
+     "network_completion": 48,
+     "function_completion": 96
+    },
+    "timeline": [
+     {
+      "cas_bytes": 15640,
+      "cas_objects": 8,
+      "body": 53791,
+      "billed": 9127,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 10835,
+      "cas_objects": 1,
+      "body": 10968,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 11805,
+      "cas_objects": 5,
+      "body": 27032,
+      "billed": 22158,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 11808,
+      "cas_objects": 1,
+      "body": 11941,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 13839,
+      "cas_objects": 4,
+      "body": 20780,
+      "billed": 25274,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 13110,
+      "cas_objects": 5,
+      "body": 20120,
+      "billed": 104966,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 92375,
+      "cas_objects": 2,
+      "body": 92577,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 15329,
+      "cas_objects": 5,
+      "body": 22344,
+      "billed": 108146,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 53299,
+      "cas_objects": 1,
+      "body": 53435,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8037,
+      "billed": 131419,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 90858,
+      "cas_objects": 2,
+      "body": 91060,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2274,
+      "cas_objects": 4,
+      "body": 9216,
+      "billed": 134541,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 92809,
+      "cas_objects": 2,
+      "body": 93011,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8020,
+      "billed": 315325,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 158499,
+      "cas_objects": 1,
+      "body": 158635,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 116383,
+      "cas_objects": 2,
+      "body": 116585,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2268,
+      "cas_objects": 4,
+      "body": 9211,
+      "billed": 318440,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 186765,
+      "cas_objects": 2,
+      "body": 186967,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8029,
+      "billed": 323577,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 193127,
+      "cas_objects": 2,
+      "body": 193329,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2264,
+      "cas_objects": 4,
+      "body": 9216,
+      "billed": 326685,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 195074,
+      "cas_objects": 2,
+      "body": 195276,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8021,
+      "billed": 454900,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 95660,
+      "cas_objects": 2,
+      "body": 95862,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 228907,
+      "cas_objects": 1,
+      "body": 229043,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2287,
+      "cas_objects": 4,
+      "body": 9239,
+      "billed": 458039,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 32567,
+      "cas_objects": 1,
+      "body": 32703,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 229889,
+      "cas_objects": 1,
+      "body": 230025,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8030,
+      "billed": 497468,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 52794,
+      "cas_objects": 2,
+      "body": 52996,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 250392,
+      "cas_objects": 1,
+      "body": 250528,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2271,
+      "cas_objects": 4,
+      "body": 9196,
+      "billed": 500585,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 33701,
+      "cas_objects": 1,
+      "body": 33837,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 251368,
+      "cas_objects": 1,
+      "body": 251504,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8021,
+      "billed": 802565,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 183928,
+      "cas_objects": 2,
+      "body": 184130,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 404406,
+      "cas_objects": 1,
+      "body": 404542,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2277,
+      "cas_objects": 4,
+      "body": 9229,
+      "billed": 805692,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 34835,
+      "cas_objects": 1,
+      "body": 34971,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 405386,
+      "cas_objects": 1,
+      "body": 405522,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 824955,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 45004,
+      "cas_objects": 1,
+      "body": 45140,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 415711,
+      "cas_objects": 1,
+      "body": 415847,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2277,
+      "cas_objects": 4,
+      "body": 9220,
+      "billed": 828078,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 45978,
+      "cas_objects": 1,
+      "body": 46114,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 416689,
+      "cas_objects": 1,
+      "body": 416825,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8041,
+      "billed": 887685,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 76205,
+      "cas_objects": 2,
+      "body": 76407,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 447358,
+      "cas_objects": 1,
+      "body": 447494,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2281,
+      "cas_objects": 4,
+      "body": 9224,
+      "billed": 890813,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 47112,
+      "cas_objects": 1,
+      "body": 47248,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 448337,
+      "cas_objects": 1,
+      "body": 448473,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8023,
+      "billed": 901985,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 53281,
+      "cas_objects": 1,
+      "body": 53417,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 454575,
+      "cas_objects": 1,
+      "body": 454711,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2279,
+      "cas_objects": 4,
+      "body": 9222,
+      "billed": 905111,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 54255,
+      "cas_objects": 1,
+      "body": 54391,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 455554,
+      "cas_objects": 1,
+      "body": 455690,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 984795,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 94482,
+      "cas_objects": 2,
+      "body": 94684,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 496302,
+      "cas_objects": 1,
+      "body": 496438,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2285,
+      "cas_objects": 4,
+      "body": 9228,
+      "billed": 987929,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 55389,
+      "cas_objects": 1,
+      "body": 55525,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 497283,
+      "cas_objects": 1,
+      "body": 497419,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1385,
+      "cas_objects": 5,
+      "body": 8771,
+      "billed": 1011592,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 67558,
+      "cas_objects": 1,
+      "body": 67694,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 509661,
+      "cas_objects": 1,
+      "body": 509797,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2275,
+      "cas_objects": 4,
+      "body": 9218,
+      "billed": 1014359,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 68532,
+      "cas_objects": 1,
+      "body": 68668,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 510640,
+      "cas_objects": 1,
+      "body": 510776,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 1194924,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 158759,
+      "cas_objects": 2,
+      "body": 158961,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 602265,
+      "cas_objects": 1,
+      "body": 602401,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2281,
+      "cas_objects": 4,
+      "body": 9224,
+      "billed": 1198054,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 69666,
+      "cas_objects": 1,
+      "body": 69802,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 603246,
+      "cas_objects": 1,
+      "body": 603382,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12447,
+      "billed": 1203202,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 68542,
+      "cas_objects": 1,
+      "body": 68678,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 606460,
+      "cas_objects": 1,
+      "body": 606596,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6622,
+      "cas_objects": 5,
+      "body": 13634,
+      "billed": 1206316,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 69516,
+      "cas_objects": 1,
+      "body": 69652,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 607435,
+      "cas_objects": 1,
+      "body": 607571,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12469,
+      "billed": 1334812,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 133743,
+      "cas_objects": 2,
+      "body": 133945,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 672987,
+      "cas_objects": 1,
+      "body": 673123,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6624,
+      "cas_objects": 5,
+      "body": 13655,
+      "billed": 1337930,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 70650,
+      "cas_objects": 1,
+      "body": 70786,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 673964,
+      "cas_objects": 1,
+      "body": 674100,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 1377480,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 90877,
+      "cas_objects": 2,
+      "body": 91079,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 694572,
+      "cas_objects": 1,
+      "body": 694708,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6656,
+      "cas_objects": 5,
+      "body": 13696,
+      "billed": 1380641,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 71784,
+      "cas_objects": 1,
+      "body": 71920,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 695560,
+      "cas_objects": 1,
+      "body": 695696,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 1682920,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 222011,
+      "cas_objects": 2,
+      "body": 222213,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 848929,
+      "cas_objects": 1,
+      "body": 849065,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6935,
+      "cas_objects": 6,
+      "body": 14374,
+      "billed": 1686394,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 72918,
+      "cas_objects": 1,
+      "body": 73054,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 849905,
+      "cas_objects": 1,
+      "body": 850041,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 1705401,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 83087,
+      "cas_objects": 1,
+      "body": 83223,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 860327,
+      "cas_objects": 1,
+      "body": 860463,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6636,
+      "cas_objects": 5,
+      "body": 13676,
+      "billed": 1708537,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 861310,
+      "cas_objects": 1,
+      "body": 861446,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 84061,
+      "cas_objects": 1,
+      "body": 84197,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 1768217,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 114288,
+      "cas_objects": 2,
+      "body": 114490,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 892060,
+      "cas_objects": 1,
+      "body": 892196,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6626,
+      "cas_objects": 5,
+      "body": 13666,
+      "billed": 1771339,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 85195,
+      "cas_objects": 1,
+      "body": 85331,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 893039,
+      "cas_objects": 1,
+      "body": 893175,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12480,
+      "billed": 1782567,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 899327,
+      "cas_objects": 1,
+      "body": 899463,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 91364,
+      "cas_objects": 1,
+      "body": 91500,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6626,
+      "cas_objects": 5,
+      "body": 13666,
+      "billed": 1785692,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 92338,
+      "cas_objects": 1,
+      "body": 92474,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 900309,
+      "cas_objects": 1,
+      "body": 900445,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12480,
+      "billed": 1865576,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 132565,
+      "cas_objects": 2,
+      "body": 132767,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 941253,
+      "cas_objects": 1,
+      "body": 941389,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6941,
+      "cas_objects": 6,
+      "body": 14362,
+      "billed": 1869062,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 93472,
+      "cas_objects": 1,
+      "body": 93608,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 942235,
+      "cas_objects": 1,
+      "body": 942371,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12453,
+      "billed": 1892037,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 105641,
+      "cas_objects": 1,
+      "body": 105777,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 954631,
+      "cas_objects": 1,
+      "body": 954767,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6624,
+      "cas_objects": 5,
+      "body": 13664,
+      "billed": 1895152,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 106615,
+      "cas_objects": 1,
+      "body": 106751,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 955605,
+      "cas_objects": 1,
+      "body": 955741,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2275,
+      "cas_objects": 4,
+      "body": 8532,
+      "billed": 2282,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 2076419,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 196842,
+      "cas_objects": 2,
+      "body": 197044,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1047930,
+      "cas_objects": 1,
+      "body": 1048066,
+      "billed": 0,
+      "network_announcements": 0
+     }
+    ]
+   },
+   "spans": 154
+  },
+  "model_http": {
+   "requests": 48,
+   "sent": 24332471,
+   "per_call_sent": [
+    4280,
+    10541,
+    11514,
+    52266,
+    53257,
+    65634,
+    66611,
+    158457,
+    159433,
+    162626,
+    163599,
+    228865,
+    229847,
+    250350,
+    251326,
+    404364,
+    405344,
+    415669,
+    416647,
+    447316,
+    448295,
+    454533,
+    455512,
+    496260,
+    497241,
+    509619,
+    510598,
+    602223,
+    603204,
+    606418,
+    607393,
+    672945,
+    673922,
+    694530,
+    695518,
+    848887,
+    849863,
+    860285,
+    861268,
+    892018,
+    892997,
+    899285,
+    900267,
+    941211,
+    942193,
+    954589,
+    955563,
+    1047888
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": 48
+ },
+ {
+  "stack": "logfire",
+  "turns": 48,
+  "hosted": false,
+  "utc": "2026-11-08T23:49:30.347266+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 175,
+   "telemetry_bytes": 126125096,
+   "decoded_bytes": 399210009,
+   "spans": 386,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 96,
+   "sent": 99564041,
+   "per_call_sent": [
+    4231,
+    10449,
+    11376,
+    52263,
+    53198,
+    65557,
+    66487,
+    158411,
+    159336,
+    162492,
+    163421,
+    229083,
+    230013,
+    250510,
+    251447,
+    404514,
+    405449,
+    415723,
+    416651,
+    447213,
+    448141,
+    454332,
+    455259,
+    495959,
+    496886,
+    509163,
+    510086,
+    601636,
+    602565,
+    605721,
+    606654,
+    671792,
+    672724,
+    693153,
+    694079,
+    846459,
+    847393,
+    857743,
+    858676,
+    889274,
+    890203,
+    896399,
+    897328,
+    938052,
+    938975,
+    951268,
+    952194,
+    1043666,
+    1044595,
+    1047758,
+    1048686,
+    1113907,
+    1114837,
+    1135257,
+    1136184,
+    1288938,
+    1289872,
+    1300169,
+    1301098,
+    1331736,
+    1332663,
+    1338877,
+    1339805,
+    1380579,
+    1381510,
+    1393858,
+    1394787,
+    1486498,
+    1487430,
+    1490602,
+    1491532,
+    1556748,
+    1557684,
+    1578161,
+    1579088,
+    1731802,
+    1732729,
+    1743058,
+    1743988,
+    1774663,
+    1775594,
+    1781811,
+    1782738,
+    1823585,
+    1824513,
+    1836979,
+    1837909,
+    1929583,
+    1930513,
+    1933665,
+    1934597,
+    1999987,
+    2000920,
+    2021394,
+    2022323,
+    2175227
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "otel",
+  "turns": 12,
+  "hosted": false,
+  "utc": "2026-11-08T23:51:22.863103+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 5,
+   "telemetry_bytes": 1740164,
+   "decoded_bytes": 5824749,
+   "spans": 49,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 24,
+   "sent": 5797131,
+   "per_call_sent": [
+    4234,
+    10442,
+    11368,
+    52088,
+    53014,
+    65317,
+    66252,
+    157783,
+    158717,
+    161880,
+    162813,
+    227964,
+    228899,
+    249334,
+    250260,
+    403657,
+    404591,
+    414881,
+    415827,
+    446515,
+    447440,
+    453674,
+    454603,
+    495578
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "logfire",
+  "turns": 12,
+  "hosted": false,
+  "utc": "2026-11-08T23:51:49.205007+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 34,
+   "telemetry_bytes": 7012907,
+   "decoded_bytes": 23335408,
+   "spans": 98,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 24,
+   "sent": 5796757,
+   "per_call_sent": [
+    4229,
+    10419,
+    11345,
+    52076,
+    53006,
+    65300,
+    66229,
+    157783,
+    158708,
+    161884,
+    162809,
+    227945,
+    228872,
+    249308,
+    250238,
+    403640,
+    404563,
+    414887,
+    415809,
+    446483,
+    447411,
+    453646,
+    454575,
+    495592
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "otel",
+  "turns": 48,
+  "hosted": false,
+  "utc": "2026-11-08T23:52:16.044635+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 19,
+   "telemetry_bytes": 31406044,
+   "decoded_bytes": 99683426,
+   "spans": 193,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 96,
+   "sent": 99557585,
+   "per_call_sent": [
+    4230,
+    10441,
+    11370,
+    52301,
+    53230,
+    65618,
+    66545,
+    158525,
+    159456,
+    162631,
+    163559,
+    229090,
+    230016,
+    250461,
+    251387,
+    404436,
+    405362,
+    415604,
+    416528,
+    447078,
+    448003,
+    454206,
+    455133,
+    495810,
+    496736,
+    509049,
+    509982,
+    601547,
+    602468,
+    605620,
+    606544,
+    671688,
+    672615,
+    693063,
+    693990,
+    846458,
+    847387,
+    857638,
+    858570,
+    889129,
+    890055,
+    896251,
+    897176,
+    937923,
+    938858,
+    951174,
+    952099,
+    1043593,
+    1044519,
+    1047689,
+    1048615,
+    1113782,
+    1114718,
+    1135189,
+    1136117,
+    1288902,
+    1289830,
+    1300087,
+    1301015,
+    1331620,
+    1332552,
+    1338758,
+    1339685,
+    1380515,
+    1381443,
+    1393823,
+    1394749,
+    1486406,
+    1487335,
+    1490500,
+    1491441,
+    1556666,
+    1557591,
+    1578016,
+    1578943,
+    1731774,
+    1732710,
+    1742988,
+    1743918,
+    1774529,
+    1775454,
+    1781707,
+    1782635,
+    1823683,
+    1824610,
+    1836942,
+    1837870,
+    1929530,
+    1930461,
+    1933626,
+    1934556,
+    1999909,
+    2000835,
+    2021336,
+    2022262,
+    2175111
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "datadog",
+  "turns": 24,
+  "hosted": false,
+  "utc": "2026-11-08T23:53:56.990299+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 11,
+   "telemetry_bytes": 49223743,
+   "decoded_bytes": 49223743,
+   "spans": 97,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 48,
+   "sent": 24283258,
+   "per_call_sent": [
+    4232,
+    10435,
+    11366,
+    52294,
+    53218,
+    65554,
+    66485,
+    158151,
+    159088,
+    162245,
+    163182,
+    228539,
+    229473,
+    250045,
+    250980,
+    403672,
+    404609,
+    414855,
+    415781,
+    446319,
+    447245,
+    453458,
+    454384,
+    495221,
+    496152,
+    508449,
+    509374,
+    601049,
+    601977,
+    605145,
+    606072,
+    671687,
+    672613,
+    693178,
+    694105,
+    847354,
+    848289,
+    858604,
+    859532,
+    890234,
+    891163,
+    897388,
+    898317,
+    939409,
+    940333,
+    952722,
+    953652,
+    1045629
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "baml",
+  "turns": 48,
+  "hosted": true,
+  "utc": "2026-11-08T23:54:50.228290+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 380,
+   "telemetry_bytes": 113182634,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 108879,
+    "upload": 113073641
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "dispositions": {
+    "inline_with_recording": 475,
+    "member_of_batch": 134,
+    "separate_object": 81
+   },
+   "planned_uploads": 282,
+   "puts": 282,
+   "billing": {
+    "spans": 308,
+    "logical_bytes": 197944151,
+    "capture_references": 591,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1bd960e4a73089fe9ceb0c0f01e39"
+    ],
+    "events": {
+     "thread_announcement": 20,
+     "thread_completion": 20,
+     "function_announcement": 192,
+     "network_announcement": 96,
+     "network_event": 288,
+     "network_completion": 96,
+     "function_completion": 192
+    },
+    "timeline": [
+     {
+      "cas_bytes": 15641,
+      "cas_objects": 8,
+      "body": 53792,
+      "billed": 9128,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 10880,
+      "cas_objects": 1,
+      "body": 11013,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 11805,
+      "cas_objects": 5,
+      "body": 29569,
+      "billed": 22203,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 11855,
+      "cas_objects": 1,
+      "body": 11988,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 13837,
+      "cas_objects": 4,
+      "body": 19253,
+      "billed": 25319,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 13110,
+      "cas_objects": 5,
+      "body": 19192,
+      "billed": 105266,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 92675,
+      "cas_objects": 2,
+      "body": 92877,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 15287,
+      "cas_objects": 5,
+      "body": 22302,
+      "billed": 108391,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 53586,
+      "cas_objects": 1,
+      "body": 53722,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8037,
+      "billed": 131722,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 91161,
+      "cas_objects": 2,
+      "body": 91363,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2268,
+      "cas_objects": 4,
+      "body": 9202,
+      "billed": 134836,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 93110,
+      "cas_objects": 2,
+      "body": 93312,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8029,
+      "billed": 315934,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 116383,
+      "cas_objects": 2,
+      "body": 116585,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 159108,
+      "cas_objects": 1,
+      "body": 159244,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2280,
+      "cas_objects": 4,
+      "body": 9232,
+      "billed": 319065,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 187378,
+      "cas_objects": 2,
+      "body": 187580,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8020,
+      "billed": 324220,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 193770,
+      "cas_objects": 2,
+      "body": 193972,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2270,
+      "cas_objects": 4,
+      "body": 9222,
+      "billed": 327334,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 195717,
+      "cas_objects": 2,
+      "body": 195919,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8030,
+      "billed": 455697,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 95660,
+      "cas_objects": 2,
+      "body": 95862,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 229704,
+      "cas_objects": 1,
+      "body": 229840,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2267,
+      "cas_objects": 4,
+      "body": 9210,
+      "billed": 458808,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 32567,
+      "cas_objects": 1,
+      "body": 32703,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 230678,
+      "cas_objects": 1,
+      "body": 230814,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8039,
+      "billed": 498332,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 52794,
+      "cas_objects": 2,
+      "body": 52996,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 251256,
+      "cas_objects": 1,
+      "body": 251392,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2269,
+      "cas_objects": 4,
+      "body": 9212,
+      "billed": 501445,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 33701,
+      "cas_objects": 1,
+      "body": 33837,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 252230,
+      "cas_objects": 1,
+      "body": 252366,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8030,
+      "billed": 803360,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 183928,
+      "cas_objects": 2,
+      "body": 184130,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 405201,
+      "cas_objects": 1,
+      "body": 405337,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2279,
+      "cas_objects": 4,
+      "body": 9222,
+      "billed": 806488,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 34835,
+      "cas_objects": 1,
+      "body": 34971,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 406180,
+      "cas_objects": 1,
+      "body": 406316,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 825721,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 45004,
+      "cas_objects": 1,
+      "body": 45140,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 416477,
+      "cas_objects": 1,
+      "body": 416613,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2273,
+      "cas_objects": 4,
+      "body": 9216,
+      "billed": 828839,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 45978,
+      "cas_objects": 1,
+      "body": 46114,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 417454,
+      "cas_objects": 1,
+      "body": 417590,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 888390,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 76205,
+      "cas_objects": 2,
+      "body": 76407,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 448063,
+      "cas_objects": 1,
+      "body": 448199,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2271,
+      "cas_objects": 4,
+      "body": 9223,
+      "billed": 891504,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 47112,
+      "cas_objects": 1,
+      "body": 47248,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 449038,
+      "cas_objects": 1,
+      "body": 449174,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 902688,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 53281,
+      "cas_objects": 1,
+      "body": 53417,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 455278,
+      "cas_objects": 1,
+      "body": 455414,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2277,
+      "cas_objects": 4,
+      "body": 9220,
+      "billed": 905809,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 54255,
+      "cas_objects": 1,
+      "body": 54391,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 456254,
+      "cas_objects": 1,
+      "body": 456390,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 985505,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 94482,
+      "cas_objects": 2,
+      "body": 94684,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 497012,
+      "cas_objects": 1,
+      "body": 497148,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2279,
+      "cas_objects": 4,
+      "body": 9213,
+      "billed": 988631,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 55389,
+      "cas_objects": 1,
+      "body": 55525,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 497991,
+      "cas_objects": 1,
+      "body": 498127,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1385,
+      "cas_objects": 5,
+      "body": 8780,
+      "billed": 1012304,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 67558,
+      "cas_objects": 1,
+      "body": 67694,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 510373,
+      "cas_objects": 1,
+      "body": 510509,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2271,
+      "cas_objects": 4,
+      "body": 9214,
+      "billed": 1015064,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 68532,
+      "cas_objects": 1,
+      "body": 68668,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 511349,
+      "cas_objects": 1,
+      "body": 511485,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8023,
+      "billed": 1195617,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 158759,
+      "cas_objects": 2,
+      "body": 158961,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 602958,
+      "cas_objects": 1,
+      "body": 603094,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2283,
+      "cas_objects": 4,
+      "body": 9235,
+      "billed": 1198748,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 69666,
+      "cas_objects": 1,
+      "body": 69802,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 603938,
+      "cas_objects": 1,
+      "body": 604074,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12456,
+      "billed": 1203876,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 68542,
+      "cas_objects": 1,
+      "body": 68678,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 607134,
+      "cas_objects": 1,
+      "body": 607270,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6626,
+      "cas_objects": 5,
+      "body": 13647,
+      "billed": 1206996,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 69516,
+      "cas_objects": 1,
+      "body": 69652,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 608111,
+      "cas_objects": 1,
+      "body": 608247,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12469,
+      "billed": 1335129,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 133743,
+      "cas_objects": 2,
+      "body": 133945,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 673304,
+      "cas_objects": 1,
+      "body": 673440,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6630,
+      "cas_objects": 5,
+      "body": 13670,
+      "billed": 1338255,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 70650,
+      "cas_objects": 1,
+      "body": 70786,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 674283,
+      "cas_objects": 1,
+      "body": 674419,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 1377676,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 90877,
+      "cas_objects": 2,
+      "body": 91079,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 694768,
+      "cas_objects": 1,
+      "body": 694904,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6626,
+      "cas_objects": 5,
+      "body": 13666,
+      "billed": 1380798,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 71784,
+      "cas_objects": 1,
+      "body": 71920,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 695747,
+      "cas_objects": 1,
+      "body": 695883,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 1682230,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 222011,
+      "cas_objects": 2,
+      "body": 222213,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 848239,
+      "cas_objects": 1,
+      "body": 848375,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6937,
+      "cas_objects": 6,
+      "body": 14385,
+      "billed": 1685711,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 72918,
+      "cas_objects": 1,
+      "body": 73054,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 849220,
+      "cas_objects": 1,
+      "body": 849356,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 1704608,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 83087,
+      "cas_objects": 1,
+      "body": 83223,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 859534,
+      "cas_objects": 1,
+      "body": 859670,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6616,
+      "cas_objects": 5,
+      "body": 13647,
+      "billed": 1707715,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 84061,
+      "cas_objects": 1,
+      "body": 84197,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 860508,
+      "cas_objects": 1,
+      "body": 860644,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12480,
+      "billed": 1767282,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 114288,
+      "cas_objects": 2,
+      "body": 114490,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 891125,
+      "cas_objects": 1,
+      "body": 891261,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6622,
+      "cas_objects": 5,
+      "body": 13662,
+      "billed": 1770397,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 85195,
+      "cas_objects": 1,
+      "body": 85331,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 892101,
+      "cas_objects": 1,
+      "body": 892237,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12480,
+      "billed": 1781591,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 91364,
+      "cas_objects": 1,
+      "body": 91500,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 898351,
+      "cas_objects": 1,
+      "body": 898487,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6624,
+      "cas_objects": 5,
+      "body": 13664,
+      "billed": 1784707,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 92338,
+      "cas_objects": 1,
+      "body": 92474,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 899326,
+      "cas_objects": 1,
+      "body": 899462,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12480,
+      "billed": 1864463,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 132565,
+      "cas_objects": 2,
+      "body": 132767,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 940140,
+      "cas_objects": 1,
+      "body": 940276,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6945,
+      "cas_objects": 6,
+      "body": 14384,
+      "billed": 1867953,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 93472,
+      "cas_objects": 1,
+      "body": 93608,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 941122,
+      "cas_objects": 1,
+      "body": 941258,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12480,
+      "billed": 1890893,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 105641,
+      "cas_objects": 1,
+      "body": 105777,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 953487,
+      "cas_objects": 1,
+      "body": 953623,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6634,
+      "cas_objects": 5,
+      "body": 13665,
+      "billed": 1894025,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 106615,
+      "cas_objects": 1,
+      "body": 106751,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 954468,
+      "cas_objects": 1,
+      "body": 954604,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12480,
+      "billed": 2074509,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 196842,
+      "cas_objects": 2,
+      "body": 197044,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1046020,
+      "cas_objects": 1,
+      "body": 1046156,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6626,
+      "cas_objects": 5,
+      "body": 13666,
+      "billed": 2077630,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 107749,
+      "cas_objects": 1,
+      "body": 107885,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1046998,
+      "cas_objects": 1,
+      "body": 1047134,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 2082779,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 110918,
+      "cas_objects": 1,
+      "body": 111054,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1050207,
+      "cas_objects": 1,
+      "body": 1050343,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6640,
+      "cas_objects": 5,
+      "body": 13671,
+      "billed": 2085920,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 111892,
+      "cas_objects": 1,
+      "body": 112028,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1051191,
+      "cas_objects": 1,
+      "body": 1051327,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5736,
+      "cas_objects": 6,
+      "body": 13188,
+      "billed": 2214405,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 176119,
+      "cas_objects": 2,
+      "body": 176321,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1116395,
+      "cas_objects": 1,
+      "body": 1116531,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6630,
+      "cas_objects": 5,
+      "body": 13670,
+      "billed": 2217175,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 113026,
+      "cas_objects": 1,
+      "body": 113162,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1117373,
+      "cas_objects": 1,
+      "body": 1117509,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12471,
+      "billed": 2256720,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 133253,
+      "cas_objects": 2,
+      "body": 133455,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1137982,
+      "cas_objects": 1,
+      "body": 1138118,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6634,
+      "cas_objects": 5,
+      "body": 13674,
+      "billed": 2259850,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 114160,
+      "cas_objects": 1,
+      "body": 114296,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1138961,
+      "cas_objects": 1,
+      "body": 1139097,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12480,
+      "billed": 2561527,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 150067,
+      "cas_objects": 1,
+      "body": 150203,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 114320,
+      "cas_objects": 1,
+      "body": 114456,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1291706,
+      "cas_objects": 1,
+      "body": 1291842,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6632,
+      "cas_objects": 5,
+      "body": 13672,
+      "billed": 2564657,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 115294,
+      "cas_objects": 1,
+      "body": 115430,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1292687,
+      "cas_objects": 1,
+      "body": 1292823,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5736,
+      "cas_objects": 6,
+      "body": 13197,
+      "billed": 2584270,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 125463,
+      "cas_objects": 1,
+      "body": 125599,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1303011,
+      "cas_objects": 1,
+      "body": 1303147,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6622,
+      "cas_objects": 5,
+      "body": 13662,
+      "billed": 2587032,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 126437,
+      "cas_objects": 1,
+      "body": 126573,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1303989,
+      "cas_objects": 1,
+      "body": 1304125,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12484,
+      "billed": 2646633,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 156664,
+      "cas_objects": 2,
+      "body": 156866,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1334646,
+      "cas_objects": 1,
+      "body": 1334782,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6640,
+      "cas_objects": 5,
+      "body": 13825,
+      "billed": 2649771,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 127571,
+      "cas_objects": 1,
+      "body": 127707,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1335627,
+      "cas_objects": 1,
+      "body": 1335763,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12624,
+      "billed": 2660960,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 133740,
+      "cas_objects": 1,
+      "body": 133876,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1341890,
+      "cas_objects": 1,
+      "body": 1342026,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6644,
+      "cas_objects": 5,
+      "body": 13828,
+      "billed": 2664108,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 134714,
+      "cas_objects": 1,
+      "body": 134850,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1342877,
+      "cas_objects": 1,
+      "body": 1343013,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5736,
+      "cas_objects": 6,
+      "body": 13354,
+      "billed": 2744333,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 174941,
+      "cas_objects": 2,
+      "body": 175143,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1383825,
+      "cas_objects": 1,
+      "body": 1383961,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6634,
+      "cas_objects": 5,
+      "body": 13841,
+      "billed": 2747110,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 135848,
+      "cas_objects": 1,
+      "body": 135984,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1384806,
+      "cas_objects": 1,
+      "body": 1384942,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12638,
+      "billed": 2770370,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 148017,
+      "cas_objects": 1,
+      "body": 148153,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1397134,
+      "cas_objects": 1,
+      "body": 1397270,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6628,
+      "cas_objects": 5,
+      "body": 13835,
+      "billed": 2773494,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 148991,
+      "cas_objects": 1,
+      "body": 149127,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1398113,
+      "cas_objects": 1,
+      "body": 1398249,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12638,
+      "billed": 2954216,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 239218,
+      "cas_objects": 2,
+      "body": 239420,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1489897,
+      "cas_objects": 1,
+      "body": 1490033,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6935,
+      "cas_objects": 6,
+      "body": 14541,
+      "billed": 2957691,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 150125,
+      "cas_objects": 1,
+      "body": 150261,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1490874,
+      "cas_objects": 1,
+      "body": 1491010,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12647,
+      "billed": 2962488,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 153294,
+      "cas_objects": 1,
+      "body": 153430,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1494086,
+      "cas_objects": 1,
+      "body": 1494222,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6626,
+      "cas_objects": 5,
+      "body": 13833,
+      "billed": 2965609,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 154268,
+      "cas_objects": 1,
+      "body": 154404,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1495064,
+      "cas_objects": 1,
+      "body": 1495200,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12647,
+      "billed": 3093739,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 218495,
+      "cas_objects": 2,
+      "body": 218697,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1560254,
+      "cas_objects": 1,
+      "body": 1560390,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6947,
+      "cas_objects": 6,
+      "body": 14562,
+      "billed": 3097232,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 155402,
+      "cas_objects": 1,
+      "body": 155538,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1561237,
+      "cas_objects": 1,
+      "body": 1561373,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12638,
+      "billed": 3136322,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 175629,
+      "cas_objects": 2,
+      "body": 175831,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1581754,
+      "cas_objects": 1,
+      "body": 1581890,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6628,
+      "cas_objects": 5,
+      "body": 13826,
+      "billed": 3139443,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 156536,
+      "cas_objects": 1,
+      "body": 156672,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1582730,
+      "cas_objects": 1,
+      "body": 1582866,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12638,
+      "billed": 3441269,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 156696,
+      "cas_objects": 1,
+      "body": 156832,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 150067,
+      "cas_objects": 1,
+      "body": 150203,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1735618,
+      "cas_objects": 1,
+      "body": 1735754,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6634,
+      "cas_objects": 5,
+      "body": 13832,
+      "billed": 3444398,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 157670,
+      "cas_objects": 1,
+      "body": 157806,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1736596,
+      "cas_objects": 1,
+      "body": 1736732,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5736,
+      "cas_objects": 6,
+      "body": 13355,
+      "billed": 3464020,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 167839,
+      "cas_objects": 1,
+      "body": 167975,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1746931,
+      "cas_objects": 1,
+      "body": 1747067,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6630,
+      "cas_objects": 5,
+      "body": 13828,
+      "billed": 3466790,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 168813,
+      "cas_objects": 1,
+      "body": 168949,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1747909,
+      "cas_objects": 1,
+      "body": 1748045,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12647,
+      "billed": 3526410,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 199040,
+      "cas_objects": 2,
+      "body": 199242,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1778593,
+      "cas_objects": 1,
+      "body": 1778729,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6626,
+      "cas_objects": 5,
+      "body": 13824,
+      "billed": 3529533,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 169947,
+      "cas_objects": 1,
+      "body": 170083,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1779573,
+      "cas_objects": 1,
+      "body": 1779709,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5736,
+      "cas_objects": 6,
+      "body": 13364,
+      "billed": 3541144,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 176116,
+      "cas_objects": 1,
+      "body": 176252,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1785889,
+      "cas_objects": 1,
+      "body": 1786025,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6630,
+      "cas_objects": 5,
+      "body": 13837,
+      "billed": 3543920,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 177090,
+      "cas_objects": 1,
+      "body": 177226,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1786873,
+      "cas_objects": 1,
+      "body": 1787009,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12638,
+      "billed": 3623903,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 217317,
+      "cas_objects": 2,
+      "body": 217519,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1827920,
+      "cas_objects": 1,
+      "body": 1828056,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6620,
+      "cas_objects": 5,
+      "body": 13818,
+      "billed": 3627013,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 178224,
+      "cas_objects": 1,
+      "body": 178360,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1828893,
+      "cas_objects": 1,
+      "body": 1829029,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5736,
+      "cas_objects": 6,
+      "body": 13355,
+      "billed": 3650682,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 190393,
+      "cas_objects": 1,
+      "body": 190529,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1841261,
+      "cas_objects": 1,
+      "body": 1841397,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6632,
+      "cas_objects": 5,
+      "body": 13830,
+      "billed": 3653457,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 191367,
+      "cas_objects": 1,
+      "body": 191503,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1842242,
+      "cas_objects": 1,
+      "body": 1842378,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12647,
+      "billed": 3834160,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 90067,
+      "cas_objects": 1,
+      "body": 90203,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 191527,
+      "cas_objects": 1,
+      "body": 191663,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1934011,
+      "cas_objects": 1,
+      "body": 1934147,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6624,
+      "cas_objects": 5,
+      "body": 13831,
+      "billed": 3837278,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 192501,
+      "cas_objects": 1,
+      "body": 192637,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1934988,
+      "cas_objects": 1,
+      "body": 1935124,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5736,
+      "cas_objects": 6,
+      "body": 13364,
+      "billed": 3842796,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 195670,
+      "cas_objects": 1,
+      "body": 195806,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1938209,
+      "cas_objects": 1,
+      "body": 1938345,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6628,
+      "cas_objects": 5,
+      "body": 13835,
+      "billed": 3845568,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 196644,
+      "cas_objects": 1,
+      "body": 196780,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1939191,
+      "cas_objects": 1,
+      "body": 1939327,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12638,
+      "billed": 3973889,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 260871,
+      "cas_objects": 2,
+      "body": 261073,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2004574,
+      "cas_objects": 1,
+      "body": 2004710,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6630,
+      "cas_objects": 5,
+      "body": 13837,
+      "billed": 3977015,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 197778,
+      "cas_objects": 1,
+      "body": 197914,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2005553,
+      "cas_objects": 1,
+      "body": 2005689,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5736,
+      "cas_objects": 6,
+      "body": 13364,
+      "billed": 4016852,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 218005,
+      "cas_objects": 2,
+      "body": 218207,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2026099,
+      "cas_objects": 1,
+      "body": 2026235,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 6622,
+      "cas_objects": 5,
+      "body": 13820,
+      "billed": 4019611,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 198912,
+      "cas_objects": 1,
+      "body": 199048,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2027074,
+      "cas_objects": 1,
+      "body": 2027210,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 5427,
+      "cas_objects": 5,
+      "body": 12631,
+      "billed": 4321497,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 2273,
+      "cas_objects": 4,
+      "body": 8583,
+      "billed": 2280,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 150067,
+      "cas_objects": 1,
+      "body": 150203,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 199072,
+      "cas_objects": 1,
+      "body": 199209,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2180016,
+      "cas_objects": 1,
+      "body": 2180155,
+      "billed": 0,
+      "network_announcements": 0
+     }
+    ]
+   },
+   "spans": 308
+  },
+  "model_http": {
+   "requests": 96,
+   "sent": 99790189,
+   "per_call_sent": [
+    4281,
+    10586,
+    11561,
+    52566,
+    53544,
+    65937,
+    66912,
+    159066,
+    160046,
+    163269,
+    164242,
+    229662,
+    230636,
+    251214,
+    252188,
+    405159,
+    406138,
+    416435,
+    417412,
+    448021,
+    448996,
+    455236,
+    456212,
+    496970,
+    497949,
+    510331,
+    511307,
+    602916,
+    603896,
+    607092,
+    608069,
+    673262,
+    674241,
+    694726,
+    695705,
+    848197,
+    849178,
+    859492,
+    860466,
+    891083,
+    892059,
+    898309,
+    899284,
+    940098,
+    941080,
+    953445,
+    954426,
+    1045978,
+    1046956,
+    1050165,
+    1051149,
+    1116353,
+    1117331,
+    1137940,
+    1138919,
+    1291664,
+    1292645,
+    1302969,
+    1303947,
+    1334604,
+    1335585,
+    1341848,
+    1342835,
+    1383783,
+    1384764,
+    1397092,
+    1398071,
+    1489855,
+    1490832,
+    1494044,
+    1495022,
+    1560212,
+    1561195,
+    1581712,
+    1582688,
+    1735576,
+    1736554,
+    1746889,
+    1747867,
+    1778551,
+    1779531,
+    1785847,
+    1786831,
+    1827878,
+    1828851,
+    1841219,
+    1842200,
+    1933969,
+    1934946,
+    1938167,
+    1939149,
+    2004532,
+    2005511,
+    2026057,
+    2027032,
+    2179974
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": 96
+ },
+ {
+  "stack": "logfire",
+  "turns": 24,
+  "hosted": false,
+  "utc": "2026-11-08T23:56:30.720241+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 58,
+   "telemetry_bytes": 30406963,
+   "decoded_bytes": 97604016,
+   "spans": 194,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 48,
+   "sent": 24315637,
+   "per_call_sent": [
+    4231,
+    10453,
+    11380,
+    52296,
+    53224,
+    65594,
+    66520,
+    158362,
+    159289,
+    162460,
+    163412,
+    228739,
+    229676,
+    250178,
+    251106,
+    404340,
+    405268,
+    415553,
+    416480,
+    447130,
+    448056,
+    454275,
+    455201,
+    496024,
+    496953,
+    509289,
+    510217,
+    602287,
+    603218,
+    606392,
+    607321,
+    672713,
+    673641,
+    694125,
+    695071,
+    848276,
+    849203,
+    859513,
+    860441,
+    891189,
+    892114,
+    898333,
+    899259,
+    940457,
+    941389,
+    953717,
+    954664,
+    1046608
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "otel",
+  "turns": 24,
+  "hosted": false,
+  "utc": "2026-11-08T23:57:25.677246+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 10,
+   "telemetry_bytes": 7562795,
+   "decoded_bytes": 24371218,
+   "spans": 97,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 48,
+   "sent": 24315365,
+   "per_call_sent": [
+    4230,
+    10478,
+    11410,
+    52328,
+    53259,
+    65607,
+    66536,
+    158376,
+    159302,
+    162471,
+    163398,
+    228730,
+    229669,
+    250165,
+    251091,
+    404317,
+    405243,
+    415522,
+    416450,
+    447110,
+    448039,
+    454219,
+    455147,
+    496016,
+    496944,
+    509315,
+    510243,
+    602286,
+    603218,
+    606384,
+    607316,
+    672709,
+    673636,
+    694125,
+    695049,
+    848256,
+    849181,
+    859552,
+    860480,
+    891151,
+    892099,
+    898328,
+    899254,
+    940444,
+    941372,
+    953709,
+    954634,
+    1046567
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "baml",
+  "turns": 12,
+  "hosted": true,
+  "utc": "2026-11-08T23:58:16.788768+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 88,
+   "telemetry_bytes": 7307133,
+   "by_operation": {
+    "heartbeat": 114,
+    "uploads:prepare": 25337,
+    "upload": 7281682
+   },
+   "statuses": [
+    200,
+    204
+   ],
+   "already_available": 0,
+   "dispositions": {
+    "inline_with_recording": 107,
+    "member_of_batch": 40,
+    "separate_object": 9
+   },
+   "planned_uploads": 62,
+   "puts": 62,
+   "billing": {
+    "spans": 79,
+    "logical_bytes": 11567982,
+    "capture_references": 146,
+    "missing_sizes": 0,
+    "process_ids": [
+     "01a1bd9935037bed97118ea16c618b25"
+    ],
+    "events": {
+     "thread_announcement": 7,
+     "thread_completion": 7,
+     "function_announcement": 48,
+     "network_announcement": 24,
+     "network_event": 72,
+     "network_completion": 24,
+     "function_completion": 48
+    },
+    "timeline": [
+     {
+      "cas_bytes": 15641,
+      "cas_objects": 8,
+      "body": 53810,
+      "billed": 9128,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 10834,
+      "cas_objects": 1,
+      "body": 10967,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 11805,
+      "cas_objects": 5,
+      "body": 27023,
+      "billed": 22157,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 11814,
+      "cas_objects": 1,
+      "body": 11947,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 13843,
+      "cas_objects": 4,
+      "body": 20793,
+      "billed": 25284,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 13110,
+      "cas_objects": 5,
+      "body": 20129,
+      "billed": 105024,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 92433,
+      "cas_objects": 2,
+      "body": 92635,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 15297,
+      "cas_objects": 5,
+      "body": 22312,
+      "billed": 108163,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 53348,
+      "cas_objects": 1,
+      "body": 53484,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8028,
+      "billed": 131423,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 90862,
+      "cas_objects": 2,
+      "body": 91064,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2270,
+      "cas_objects": 4,
+      "body": 9221,
+      "billed": 134540,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 92812,
+      "cas_objects": 2,
+      "body": 93014,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8029,
+      "billed": 315121,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 116383,
+      "cas_objects": 2,
+      "body": 116585,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 158295,
+      "cas_objects": 1,
+      "body": 158431,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2290,
+      "cas_objects": 4,
+      "body": 9233,
+      "billed": 318266,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 186569,
+      "cas_objects": 2,
+      "body": 186771,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1073,
+      "cas_objects": 4,
+      "body": 8020,
+      "billed": 323385,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 192935,
+      "cas_objects": 2,
+      "body": 193137,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2274,
+      "cas_objects": 4,
+      "body": 9226,
+      "billed": 326506,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 194885,
+      "cas_objects": 2,
+      "body": 195087,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8030,
+      "billed": 454731,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 95660,
+      "cas_objects": 2,
+      "body": 95862,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 228738,
+      "cas_objects": 1,
+      "body": 228874,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2283,
+      "cas_objects": 4,
+      "body": 9235,
+      "billed": 457864,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 32567,
+      "cas_objects": 1,
+      "body": 32703,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 229718,
+      "cas_objects": 1,
+      "body": 229854,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8030,
+      "billed": 497400,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 52794,
+      "cas_objects": 2,
+      "body": 52996,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 250324,
+      "cas_objects": 1,
+      "body": 250460,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2281,
+      "cas_objects": 4,
+      "body": 9233,
+      "billed": 500530,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 33701,
+      "cas_objects": 1,
+      "body": 33837,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 251303,
+      "cas_objects": 1,
+      "body": 251439,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1074,
+      "cas_objects": 4,
+      "body": 8039,
+      "billed": 802865,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 183928,
+      "cas_objects": 2,
+      "body": 184130,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 404706,
+      "cas_objects": 1,
+      "body": 404842,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2281,
+      "cas_objects": 4,
+      "body": 9224,
+      "billed": 805995,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 34835,
+      "cas_objects": 1,
+      "body": 34971,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 405685,
+      "cas_objects": 1,
+      "body": 405821,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 825358,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 45004,
+      "cas_objects": 1,
+      "body": 45140,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 416114,
+      "cas_objects": 1,
+      "body": 416250,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2269,
+      "cas_objects": 4,
+      "body": 9212,
+      "billed": 828467,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 45978,
+      "cas_objects": 1,
+      "body": 46114,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 417086,
+      "cas_objects": 1,
+      "body": 417222,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8041,
+      "billed": 888225,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 76205,
+      "cas_objects": 2,
+      "body": 76407,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 447898,
+      "cas_objects": 1,
+      "body": 448034,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2277,
+      "cas_objects": 4,
+      "body": 9229,
+      "billed": 891347,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 47112,
+      "cas_objects": 1,
+      "body": 47248,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 448875,
+      "cas_objects": 1,
+      "body": 449011,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8041,
+      "billed": 902597,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 53281,
+      "cas_objects": 1,
+      "body": 53417,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 455187,
+      "cas_objects": 1,
+      "body": 455323,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 2273,
+      "cas_objects": 4,
+      "body": 9225,
+      "billed": 905715,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 54255,
+      "cas_objects": 1,
+      "body": 54391,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 456164,
+      "cas_objects": 1,
+      "body": 456300,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 1076,
+      "cas_objects": 4,
+      "body": 8032,
+      "billed": 985609,
+      "network_announcements": 1
+     },
+     {
+      "cas_bytes": 2275,
+      "cas_objects": 4,
+      "body": 8551,
+      "billed": 2282,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 94482,
+      "cas_objects": 2,
+      "body": 94684,
+      "billed": 0,
+      "network_announcements": 0
+     },
+     {
+      "cas_bytes": 497116,
+      "cas_objects": 1,
+      "body": 497252,
+      "billed": 0,
+      "network_announcements": 0
+     }
+    ]
+   },
+   "spans": 79
+  },
+  "model_http": {
+   "requests": 24,
+   "sent": 5815925,
+   "per_call_sent": [
+    4281,
+    10540,
+    11520,
+    52324,
+    53306,
+    65638,
+    66614,
+    158253,
+    159237,
+    162434,
+    163410,
+    228696,
+    229676,
+    250282,
+    251261,
+    404664,
+    405643,
+    416072,
+    417044,
+    447856,
+    448833,
+    455145,
+    456122,
+    497074
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": 24
+ },
+ {
+  "stack": "datadog",
+  "turns": 48,
+  "hosted": false,
+  "utc": "2026-11-08T23:58:42.940762+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 48,
+   "telemetry_bytes": 201392172,
+   "decoded_bytes": 201392172,
+   "spans": 193,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 96,
+   "sent": 99551248,
+   "per_call_sent": [
+    4230,
+    10460,
+    11389,
+    52335,
+    53268,
+    65631,
+    66558,
+    158687,
+    159613,
+    162779,
+    163709,
+    229050,
+    229980,
+    250500,
+    251431,
+    404183,
+    405113,
+    415367,
+    416303,
+    446836,
+    447763,
+    453988,
+    454919,
+    495675,
+    496600,
+    508900,
+    509826,
+    601364,
+    602307,
+    605470,
+    606398,
+    671540,
+    672470,
+    692907,
+    693836,
+    846261,
+    847190,
+    857462,
+    858395,
+    888980,
+    889904,
+    896099,
+    897026,
+    937789,
+    938716,
+    950977,
+    951902,
+    1043493,
+    1044419,
+    1047572,
+    1048496,
+    1113754,
+    1114684,
+    1135154,
+    1136080,
+    1288756,
+    1289683,
+    1299968,
+    1300900,
+    1331548,
+    1332474,
+    1338713,
+    1339641,
+    1380473,
+    1381412,
+    1393706,
+    1394651,
+    1486342,
+    1487272,
+    1490432,
+    1491363,
+    1556559,
+    1557486,
+    1577920,
+    1578843,
+    1731723,
+    1732650,
+    1742927,
+    1743857,
+    1774739,
+    1775665,
+    1781888,
+    1782816,
+    1823652,
+    1824582,
+    1836893,
+    1837828,
+    1929575,
+    1930502,
+    1933665,
+    1934595,
+    1999933,
+    2000862,
+    2021329,
+    2022260,
+    2175427
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ },
+ {
+  "stack": "datadog",
+  "turns": 12,
+  "hosted": false,
+  "utc": "2026-11-09T00:00:26.152677+00:00",
+  "model_delay": 1.0,
+  "variant": "files",
+  "telemetry": {
+   "requests": 3,
+   "telemetry_bytes": 11796178,
+   "decoded_bytes": 11796178,
+   "spans": 49,
+   "statuses": [
+    200
+   ],
+   "rejections": []
+  },
+  "model_http": {
+   "requests": 24,
+   "sent": 5801866,
+   "per_call_sent": [
+    4230,
+    10431,
+    11356,
+    52094,
+    53022,
+    65307,
+    66234,
+    157834,
+    158760,
+    161923,
+    162848,
+    228183,
+    229114,
+    249711,
+    250641,
+    403990,
+    404918,
+    415217,
+    416143,
+    446952,
+    447885,
+    454112,
+    455037,
+    495924
+   ],
+   "statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+   ]
+  },
+  "baml_calls": null
+ }
+]
