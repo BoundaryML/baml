@@ -687,3 +687,83 @@ fn pack_child_survives_cleanup_and_runtime_shutdown() {
     }
     assert_eq!(std::fs::read_to_string(marker).unwrap(), "completed");
 }
+
+/// `--tests` packs the project's test registry. The binary selects under
+/// the manifest's default profile (`::live::` excluded here), narrowed by
+/// its own `-x`/positional selectors, and prints the byte-stable report:
+/// leaves in name order, then the failure messages, then the counts — no
+/// timings, so two runs compare verbatim. Exit codes are `baml test`'s.
+#[test]
+fn pack_e2e_tests_binary_prints_stable_report() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        r#"[package]
+name = "pack_tests_e2e"
+
+[test]
+default = "offline"
+
+[test.profiles.offline]
+args = ["-x", "::live::"]
+"#,
+    )
+    .unwrap();
+    let src = tmp.path().join("baml_src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(
+        src.join("main.baml"),
+        r#"testset "unit" {
+  test "passes" { assert.is_true(true) }
+  test "also_passes" { assert.is_true(true) }
+  test "fails" { assert.equal(1, 2) }
+}
+
+testset "live" {
+  test "excluded_by_profile" { assert.is_true(false) }
+}
+"#,
+    )
+    .unwrap();
+    let bin = pack(built, tmp.path(), &["--tests"]);
+
+    let out = run(&bin, &[]);
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "PASS root::unit::also_passes\n\
+         FAIL root::unit::fails\n\
+         PASS root::unit::passes\n\
+         \x20 => assertion failed: left = 1, right = 2\n\
+         AGGREGATE FAIL [outcome=fail] 2 passed, 1 failed, 0 tolerated, 3 total\n",
+        "stderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.status.code(), Some(2));
+
+    // The binary's own exclude narrows the profile's selection.
+    let out = run(&bin, &["-x", "fails"]);
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "PASS root::unit::also_passes\n\
+         PASS root::unit::passes\n\
+         AGGREGATE PASS [outcome=pass] 2 passed, 0 failed, 0 tolerated, 2 total\n",
+        "stderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.status.code(), Some(0));
+
+    // A positional selector is an include; the profile's exclude still wins
+    // over an include that reaches into `::live::`.
+    let out = run(&bin, &["::unit::passes"]);
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "PASS root::unit::passes\n\
+         AGGREGATE PASS [outcome=pass] 1 passed, 0 failed, 0 tolerated, 1 total\n"
+    );
+    assert_eq!(out.status.code(), Some(0));
+    let out = run(&bin, &["-i", "::live::"]);
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "");
+    assert_eq!(String::from_utf8_lossy(&out.stderr), "no tests selected\n");
+    assert_eq!(out.status.code(), Some(5));
+}

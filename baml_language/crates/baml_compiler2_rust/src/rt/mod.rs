@@ -16,6 +16,8 @@ use bex_vm_types::{Object, Program};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
 
+type TestMir<'db> = std::rc::Rc<MirFunction<'db>>;
+
 type Gen<T> = Result<T, String>;
 #[derive(Clone)]
 struct MirFunction<'db> {
@@ -50,7 +52,7 @@ struct ListElement {
 struct Plan<'a> {
     root: SourceRoot,
     lang: baml_base::LangRoots,
-    index: ProgramIndex<'a>,
+    index: std::rc::Rc<ProgramIndex<'a>>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     bigints: bool,
@@ -104,7 +106,7 @@ struct Emitter<'a, 'db> {
     object: usize,
     descriptors: &'a BTreeMap<usize, usize>,
     lists: &'a BTreeMap<Repr, usize>,
-    all: &'a BTreeMap<usize, MirFunction<'db>>,
+    all: &'a BTreeMap<usize, TestMir<'db>>,
     iters: BTreeSet<usize>,
     iter_arrays: BTreeMap<usize, usize>,
     arity: usize,
@@ -125,7 +127,7 @@ struct Emitter<'a, 'db> {
 struct ProgramEmission<'a, 'db> {
     db: &'db dyn Db,
     plan: &'a Plan<'a>,
-    all: &'a BTreeMap<usize, MirFunction<'db>>,
+    all: &'a BTreeMap<usize, TestMir<'db>>,
     descriptors: &'a BTreeMap<usize, usize>,
 }
 
@@ -162,7 +164,7 @@ use body::recursive;
 use diagnostics::no;
 use repr::Repr;
 
-pub use driver::{compile_rt, compile_rt_benchmark};
+pub use driver::{RtTestCompiler, compile_rt, compile_rt_benchmark, compile_rt_test};
 
 mod calls;
 mod formatting;

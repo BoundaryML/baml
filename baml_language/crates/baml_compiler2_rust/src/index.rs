@@ -22,6 +22,7 @@ use crate::coords::{
     enum_head_coords, function_coords, interface_head_coords, item_path, let_coords,
 };
 
+#[derive(Clone)]
 pub(crate) struct ProgramIndex<'p> {
     program: &'p Program,
     rt_origins: HashMap<usize, usize>,

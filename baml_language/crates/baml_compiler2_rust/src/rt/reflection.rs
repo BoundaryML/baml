@@ -263,7 +263,7 @@ fn equal(e: &Emitter<'_, '_>, values: &[(String, Repr)]) -> Gen<(String, Repr)> 
 /// fields, named locals, comparisons and logs require a managed carrier.
 pub(super) fn collect(
     plan: &mut Plan<'_>,
-    all: &BTreeMap<usize, MirFunction<'_>>,
+    all: &BTreeMap<usize, super::TestMir<'_>>,
     reached: &BTreeSet<usize>,
 ) -> Gen<()> {
     for object in reached {

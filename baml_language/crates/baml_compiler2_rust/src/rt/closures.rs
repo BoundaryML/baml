@@ -171,12 +171,12 @@ impl registry::Feature for Feature {
         db: &'db dyn super::Db,
         _root: super::SourceRoot,
         plan: &mut Plan<'_>,
-        all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
+        all: &mut super::BTreeMap<usize, super::TestMir<'db>>,
     ) -> Gen<Vec<usize>> {
         fn register<'db>(
             db: &'db dyn super::Db,
             plan: &mut Plan<'_>,
-            all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
+            all: &mut super::BTreeMap<usize, super::TestMir<'db>>,
             mir: &super::MirFunction<'db>,
         ) -> Gen<()> {
             for lambda in &mir.lambdas {
@@ -190,7 +190,10 @@ impl registry::Feature for Feature {
                             .ok_or_else(|| no("lambda identity"))?,
                     )
                     .ok_or_else(|| no("unlinked lambda"))?;
-                all.insert(object, lambda.clone());
+                // Prepared tests already register borrowed lambda MIR. Keep it
+                // shared instead of cloning every corpus lambda for each leaf.
+                all.entry(object)
+                    .or_insert_with(|| std::rc::Rc::new(lambda.clone()));
                 if let super::MirFunctionKind::Bytecode(body) = &lambda.kind {
                     plan.lambda_bodies.insert(body as *const _ as usize, object);
                 }

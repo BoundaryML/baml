@@ -4,7 +4,7 @@ use super::*;
 pub(super) fn register<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
     instances: &mut Vec<(usize, Vec<RuntimeTy>, usize)>,
     queue: &mut VecDeque<usize>,
 ) -> Gen<()> {

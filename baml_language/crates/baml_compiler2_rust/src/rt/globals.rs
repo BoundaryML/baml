@@ -9,7 +9,7 @@ pub(super) fn prepare<'db>(
     root: SourceRoot,
     opt: OptLevel,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
 ) -> Gen<Vec<usize>> {
     for &file in world_files(db, root) {
         for &binding in file_lets(db, file) {
@@ -27,12 +27,12 @@ pub(super) fn prepare<'db>(
             };
             all.insert(
                 object,
-                MirFunction {
+                std::rc::Rc::new(MirFunction {
                     identity: None,
                     arity: 0,
                     kind: MirFunctionKind::Bytecode(body),
                     lambdas: lambdas.iter().map(MirFunction::from).collect(),
-                },
+                }),
             );
         }
     }
