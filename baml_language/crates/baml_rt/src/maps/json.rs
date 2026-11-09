@@ -7,6 +7,7 @@ use crate::{
 };
 pub use bex_vm_types::json_text::Reader;
 use std::collections::HashMap;
+pub mod enums;
 
 /// Decode a map once JSON syntax has been validated. `decode` consumes one
 /// value at the reader cursor, with the VM's jq-style path for diagnostics.
@@ -41,7 +42,7 @@ pub unsafe fn decode_at<V: Slot>(
     if reader.open_object().is_err() {
         return Err(crate::json::error(
             cx,
-            "expected object".into(),
+            "expected JSON object".into(),
             Some(path.into()),
         ));
     }

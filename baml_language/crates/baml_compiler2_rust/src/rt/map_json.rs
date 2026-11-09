@@ -174,6 +174,7 @@ pub(super) fn schema(
         Repr::Int => "value.payload as i64".into(),
         Repr::Float => "f64::from_bits(value.payload)".into(),
         Repr::Bool => "value.payload!=0".into(),
+        Repr::Enum(_) | Repr::Naming => "value.payload as usize".into(),
         Repr::Null => "rt::maps::Null".into(),
         Repr::Tagged | Repr::Dyn(_) => "value".into(),
         _ if element.pointer() => format!("<{slot}>::from_raw(value.payload as usize)"),
@@ -195,7 +196,11 @@ pub(super) fn schema(
 }
 fn recursive_value(ty: &RuntimeTy) -> bool {
     match ty {
-        RuntimeTy::Literal(..) | RuntimeTy::Class(..) | RuntimeTy::List(_) => true,
+        RuntimeTy::Literal(..)
+        | RuntimeTy::Class(..)
+        | RuntimeTy::List(_)
+        | RuntimeTy::Enum(_)
+        | RuntimeTy::EnumVariant(..) => true,
         RuntimeTy::Map { value, .. } => recursive_value(value),
         RuntimeTy::Union(m) => {
             m.iter().any(recursive_value)
@@ -203,5 +208,74 @@ fn recursive_value(ty: &RuntimeTy) -> bool {
                 || !m.iter().any(|m| matches!(m, RuntimeTy::Null))
         }
         _ => false,
+    }
+}
+
+pub(super) fn enum_schema(
+    plan: &Plan<'_>,
+    repr: Repr,
+    variant: Option<&baml_base::Name>,
+    aliased: bool,
+    descriptors: &BTreeMap<usize, usize>,
+    lists: &BTreeMap<Repr, usize>,
+) -> Gen<String> {
+    let id = enum_id(plan, repr)?;
+    let Object::Enum(definition) = &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(id)]
+    else {
+        unreachable!()
+    };
+    for package in &plan.program.packages {
+        for rule in package.impl_rules.values().flatten() {
+            if rule.methods.contains_key("from_json")
+                && matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Enum(head) if head.tag()==definition.type_tag)
+            {
+                return Err(no("JSON enum with custom interface implementations"));
+            }
+        }
+    }
+    let variant = variant
+        .map(|name| {
+            definition
+                .variants
+                .iter()
+                .position(|v| v.name == name.as_str())
+                .ok_or_else(|| no("JSON enum variant"))
+        })
+        .transpose()?;
+    let variants = definition
+        .variants
+        .iter()
+        .map(|v| {
+            format!(
+                "rt::json_lists::EnumVariant{{name:{:?},alias:{:?},skip:{}}}",
+                v.name,
+                v.alias.as_ref().unwrap_or(&v.name),
+                v.skip
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let tag = layout::enum_tag(plan, repr, descriptors, lists);
+    Ok(format!(
+        "rt::json_lists::Ty::Enumeration(&rt::maps::json::enums::Schema{{tag:{tag},name:{:?},variants:&[{variants}],aliased:{aliased},variant:{variant:?}}})",
+        definition.path.to_string()
+    ))
+}
+
+pub(super) fn enum_id(plan: &Plan<'_>, repr: Repr) -> Gen<usize> {
+    match repr {
+        Repr::Enum(id) => Ok(id),
+        Repr::Naming => plan
+            .program
+            .packages
+            .iter()
+            .find(|p| p.name == "baml")
+            .and_then(|p| {
+                p.enums
+                    .iter()
+                    .find_map(|(path, id)| (path.to_string() == "json.Naming").then_some(id.raw()))
+            })
+            .ok_or_else(|| no("JSON naming enum")),
+        _ => Err(no("JSON enum representation")),
     }
 }

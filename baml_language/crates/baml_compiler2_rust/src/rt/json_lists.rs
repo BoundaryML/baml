@@ -11,6 +11,7 @@ impl Plan<'_> {
             T::Null => Repr::Null,
             T::String => Repr::Str,
             T::Bigint => Repr::Bigint,
+            T::Enum(_) | T::EnumVariant(..) => self.repr(&ty.substitute_symbolic(&[]))?,
             T::Map { .. } => self.repr(&RuntimeTy::from(
                 baml_compiler2_mir::RealizedTy::try_from(ty).map_err(|_| no("JSON map type"))?,
             ))?,
@@ -161,6 +162,18 @@ impl SchemaEmitter<'_, '_> {
     fn template(&mut self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
         use baml_compiler2_mir::TyTemplate as T;
         Ok(match ty {
+            T::Enum(_) | T::EnumVariant(..) => map_json::enum_schema(
+                self.plan,
+                self.plan.template_repr(ty)?,
+                if let T::EnumVariant(_, name) = ty {
+                    Some(name)
+                } else {
+                    None
+                },
+                self.aliased,
+                self.descriptors,
+                self.lists,
+            )?,
             T::TypeAlias(_) => {
                 let Some(bex_vm_types::TyTemplate::TypeAlias(head)) = self.plan.index.anchor(ty)
                 else {
@@ -227,6 +240,18 @@ impl SchemaEmitter<'_, '_> {
     fn field(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
+            T::Enum(_) | T::EnumVariant(..) => map_json::enum_schema(
+                self.plan,
+                self.plan.field_repr(ty)?,
+                if let T::EnumVariant(_, name) = ty {
+                    Some(name)
+                } else {
+                    None
+                },
+                self.aliased,
+                self.descriptors,
+                self.lists,
+            )?,
             T::TypeAlias(head) => self.alias(head.tag())?,
             T::Int => "rt::json_lists::Ty::Int".into(),
             T::Bigint => format!(
@@ -346,6 +371,8 @@ pub(super) fn capture_template(
         match ty {
             T::TypeAlias(_) =>
                 return capture_codegen::capture_type(plan, &ty.substitute_symbolic(&[])),
+            T::Enum(_) | T::EnumVariant(..) =>
+                return capture_codegen::capture_type(plan, &ty.substitute_symbolic(&[])),
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => "Int".into(),
             T::Bigint => "Bigint".into(),
             T::Float | T::Literal(baml_type::Literal::Float(_), _) => "Float".into(),
@@ -375,6 +402,19 @@ pub(super) fn capture_template(
 fn template_name(plan: &Plan<'_>, ty: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
     use baml_compiler2_mir::TyTemplate as T;
     Ok(match ty {
+        T::Enum(_) | T::EnumVariant(..) => {
+            let id = map_json::enum_id(plan, plan.template_repr(ty)?)?;
+            let Object::Enum(definition) =
+                &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(id)]
+            else {
+                unreachable!()
+            };
+            if let T::EnumVariant(_, name) = ty {
+                format!("{}.{name}", definition.path)
+            } else {
+                definition.path.to_string()
+            }
+        }
         T::Int => "int".into(),
         T::Bigint => "bigint".into(),
         T::Float => "float".into(),

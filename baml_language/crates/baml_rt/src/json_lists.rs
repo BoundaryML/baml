@@ -12,6 +12,7 @@ mod stream;
 
 #[derive(Clone, Copy)]
 pub enum Ty {
+    Enumeration(&'static crate::maps::json::enums::Schema),
     InvalidMap,
     Map {
         key: &'static crate::telemetry::capture::Type,
@@ -76,6 +77,14 @@ impl Ty {
     }
     fn score(&self, value: &Value) -> usize {
         match self {
+            Self::Enumeration(schema) => {
+                if schema.variant.is_some() {
+                    3
+                } else {
+                    2
+                }
+            }
+            Self::Literal(_) => 3,
             Self::Class { fields, .. } => value
                 .as_object()
                 .map(|o| {
@@ -87,7 +96,7 @@ impl Ty {
                         .len()
                 })
                 .unwrap_or(0),
-            Self::Map{..}=>value.as_object().map_or(0,|m|m.len()),
+            Self::Map { .. } => value.as_object().map_or(0, |m| m.len()),
             Self::Int if value.as_i64().is_some() => 1,
             _ => 0,
         }
@@ -146,6 +155,7 @@ impl Ty {
 
     fn check(&self, value: &Value, path: &str) -> Result<(), Report> {
         let message = match self {
+            Self::Enumeration(schema) => return schema.check(value).map_err(|e| fail(e, path)),
             Self::InvalidMap => Some("JSON requires maps with string keys"),
             Self::Map {
                 key,
@@ -282,6 +292,16 @@ impl Ty {
                 };
                 for field in *fields {
                     if field.skip {
+                        if matches!(field.ty,Self::Enumeration(schema) if schema.empty().is_none())
+                        {
+                            return Err(fail(
+                                format!(
+                                    "field `{name}.{}` is `@skip`, so JSON leaves it out, and its type has no empty value to hold",
+                                    field.name
+                                ),
+                                path,
+                            ));
+                        }
                         continue;
                     }
                     match object.get(field.name) {
@@ -306,6 +326,7 @@ impl Ty {
     }
     fn empty(&self) -> Value {
         match self {
+            Self::Enumeration(schema) => schema.empty().expect("validated enum default"),
             Self::Map { .. } | Self::InvalidMap => Value::Object(Default::default()),
             Self::Json(_) => Value::Null,
             Self::Int | Self::Bigint { .. } => Value::from(0),
@@ -335,6 +356,7 @@ impl Ty {
     }
     unsafe fn build(&self, cx: &mut Cx, value: &Value) -> R<Dyn> {
         Ok(match self {
+            Self::Enumeration(schema) => schema.build(value),
             Self::InvalidMap => unreachable!("invalid map schema"),
             Self::Map {
                 value: element,

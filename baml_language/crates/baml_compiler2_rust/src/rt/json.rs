@@ -111,7 +111,18 @@ pub(super) fn emit(
                 let compound = list_type.is_some()
                     || json_classes.iter().any(|c| {
                         plan.layouts[c].fields.iter().any(|r| {
-                            r.growing() || matches!(r, Repr::Float | Repr::Bool | Repr::Ptr(_))
+                            r.growing()
+                                || matches!(
+                                    r,
+                                    Repr::Float
+                                        | Repr::Bool
+                                        | Repr::Ptr(_)
+                                        | Repr::Map(_)
+                                        | Repr::MapStrInt
+                                        | Repr::MapStrPtr(_)
+                                        | Repr::Enum(_)
+                                        | Repr::Naming
+                                )
                         })
                     });
                 if compound {
