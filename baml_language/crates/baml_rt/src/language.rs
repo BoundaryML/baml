@@ -345,7 +345,12 @@ fn render_error(error: Box<Error>, background: Option<bool>) {
             .filter(|f| error.value == 0 || !f.file.starts_with("<builtin>/"))
             .map(|f| {
                 let function = if background.is_some() {
-                    f.function.strip_prefix("user").unwrap_or(f.function)
+                    // The VM spells closures without a package segment
+                    // (`.<lambda(parent, i)>`); named functions keep theirs.
+                    f.function
+                        .strip_prefix("user")
+                        .filter(|rest| rest.starts_with(".<lambda("))
+                        .unwrap_or(f.function)
                 } else {
                     f.function
                 };

@@ -63,10 +63,12 @@ pub struct UnhandledTaskError {
 // the GC callback clears its entry, including cycles of settled future values.
 #[derive(Default)]
 pub(crate) struct NativeFinalizers {
-    entries: Vec<usize>,
+    // Registered futures with their spawn sequence numbers.
+    entries: Vec<(usize, u64)>,
     free: Vec<usize>,
     resources: std::collections::HashMap<usize, Resource>,
-    unhandled: Vec<(crate::CaughtError, bool)>,
+    unhandled: Vec<(crate::CaughtError, bool, u64)>,
+    next_sequence: u64,
 }
 impl NativeFinalizers {
     unsafe fn save_unhandled(&mut self, f: &mut Future) {
@@ -75,24 +77,39 @@ impl NativeFinalizers {
             && f.flags & OBSERVED == 0
         {
             let error = Box::new(unsafe { &*f.error }.clone());
+            let sequence = self.entries[f.registration as usize].1;
             self.unhandled.push((
                 unsafe { crate::CaughtError::new(error) },
                 f.flags & CANCEL_REQUESTED != 0,
+                sequence,
             ));
             f.flags |= OBSERVED;
         }
     }
+    // Reports found together (one collection, or the end of an invocation)
+    // follow the VM: dead futures in allocation order, i.e. spawn order,
+    // whatever order their producers settled in.
+    fn order_reports_since(&mut self, start: usize) {
+        self.unhandled[start..].sort_by_key(|report| report.2);
+    }
     pub(crate) unsafe fn finish_invocation(&mut self) {
-        for pointer in self.entries.clone().into_iter().filter(|p| *p != 0) {
+        let start = self.unhandled.len();
+        for (pointer, _) in self.entries.clone().into_iter().filter(|e| e.0 != 0) {
             unsafe {
                 self.save_unhandled(&mut *(pointer as *mut Future));
             }
         }
+        self.order_reports_since(start);
+    }
+    fn next_sequence(&mut self) -> u64 {
+        let sequence = self.next_sequence;
+        self.next_sequence += 1;
+        sequence
     }
     pub(crate) fn take_reports(&mut self) -> Vec<UnhandledTaskError> {
         std::mem::take(&mut self.unhandled)
             .into_iter()
-            .map(|(error, cancelled)| UnhandledTaskError {
+            .map(|(error, cancelled, _)| UnhandledTaskError {
                 error: error.rethrow(),
                 cancelled,
             })
@@ -104,24 +121,24 @@ impl NativeFinalizers {
             .find(|r| !r.cancelled)
             .map(|r| r.error)
     }
-    fn register(&mut self, pointer: usize) -> usize {
+    fn register(&mut self, pointer: usize, sequence: u64) -> usize {
         if let Some(i) = self.free.pop() {
-            self.entries[i] = pointer;
+            self.entries[i] = (pointer, sequence);
             i
         } else {
             let i = self.entries.len();
-            self.entries.push(pointer);
+            self.entries.push((pointer, sequence));
             i
         }
     }
     fn release(&mut self, i: usize) {
-        if self.entries[i] != 0 {
-            self.entries[i] = 0;
+        if self.entries[i].0 != 0 {
+            self.entries[i].0 = 0;
             self.free.push(i);
         }
     }
     pub(crate) unsafe fn destroy(&mut self) {
-        for pointer in self.entries.drain(..).filter(|p| *p != 0) {
+        for (pointer, _) in self.entries.drain(..).filter(|e| e.0 != 0) {
             unsafe {
                 let f = &mut *(pointer as *mut Future);
                 f.telemetry.take();
@@ -137,8 +154,8 @@ impl NativeFinalizers {
 }
 thread_local! { pub(crate) static FINALIZERS: Cell<*mut NativeFinalizers> = const { Cell::new(ptr::null_mut()) }; }
 
-unsafe fn register(pointer: usize) -> u32 {
-    let index = unsafe { (&mut *FINALIZERS.get()).register(pointer) };
+unsafe fn register(pointer: usize, sequence: u64) -> u32 {
+    let index = unsafe { (&mut *FINALIZERS.get()).register(pointer, sequence) };
     u32::try_from(index)
         .ok()
         .filter(|&i| i != NO_REGISTRATION)
@@ -166,6 +183,7 @@ pub(crate) unsafe fn finalize(pointer: usize) {
 }
 pub(crate) unsafe fn drain_finalizers() {
     let pending = unsafe { (&mut *crate::HEAP.get()).take_pending_finalizers() };
+    let start = unsafe { (&*FINALIZERS.get()).unhandled.len() };
     for token in pending {
         unsafe {
             if token.cleanup == FUTURE_FINALIZER {
@@ -182,6 +200,7 @@ pub(crate) unsafe fn drain_finalizers() {
             (&mut *crate::HEAP.get()).complete_finalizer(token);
         }
     }
+    unsafe { (&mut *FINALIZERS.get()).order_reports_since(start) };
 }
 
 pub(crate) struct FiberBinding<'a> {
@@ -302,11 +321,12 @@ pub unsafe fn spawn(
         };
         (*pointer).error = ptr::null_mut();
         (*pointer).flags = 0;
+        let sequence = (&mut *FINALIZERS.get()).next_sequence();
         let telemetry = crate::telemetry::Task::spawn(site, name);
         // Until execution takes it, a telemetry record is native state that
         // shutdown must release; plain futures own nothing native.
         (*pointer).registration = if telemetry.is_some() {
-            register(pointer as usize)
+            register(pointer as usize, sequence)
         } else {
             NO_REGISTRATION
         };
@@ -315,7 +335,7 @@ pub unsafe fn spawn(
         (*pointer).task = (&mut *crate::TASK.get()).spawn_managed(
             &mut options,
             execute,
-            [pointer as usize, site, entry_site, 0],
+            [pointer as usize, site, entry_site, sequence as usize],
         );
         Ok(pointer as usize)
     }
@@ -401,7 +421,7 @@ unsafe fn execute(cx: &mut TaskCx<'_>, data: [usize; 4]) -> baml_rt_tasks::Outco
                 }
                 // The error box is native state: register it for unhandled
                 // reporting and release when the future dies.
-                (*f).registration = register(f as usize);
+                (*f).registration = register(f as usize, data[3] as u64);
                 (&mut *crate::HEAP.get()).attach_finalizer(f as usize, FUTURE_FINALIZER);
                 Err(outcome)
             }

@@ -131,6 +131,7 @@ RtTaskModifiers	pass
 RtTaskSleep	pass
 RtTaskTimeout	pass
 RtTokenComposition	pass
+RtUnhandledOrder	pass
 RtVirtualGenericClosures	pass
 RtVirtualOwnGenericClosure	pass
 RuntimeClass	unsupported: top-level initializers

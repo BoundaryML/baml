@@ -35,3 +35,37 @@ function RtTokenComposition()->int {
     if(mut_token.is_cancelled()) {return -2;}
     1
 }
+function fail_after(code:int, millis:int)->int throws TaskFailure {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(millis));
+    throw TaskFailure {code:code};
+}
+function fail_now(code:int)->int throws TaskFailure {throw TaskFailure {code:code};}
+function overflow_after(millis:int)->int {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(millis));
+    let n=4611686018427387903;
+    n+1
+}
+// Several producers fail unawaited, in an order unrelated to their spawn
+// order: late, immediate and panicking failures, interleaved with awaited
+// failures, successes, nested producers and spawns after earlier settlement.
+function RtUnhandledOrder()->int {
+    let late=spawn {fail_after(1,30)};
+    let first=spawn {fail_now(2)};
+    let ok=spawn {3};
+    let panicking=spawn {let n=4611686018427387903; n+1};
+    let late_panic=spawn {overflow_after(15)};
+    let observed=spawn {fail_now(4)};
+    let w=await ok;
+    let x=(await observed) catch(e) {let e:TaskFailure=>e.code};
+    let nested=spawn {
+        let inner=spawn {fail_now(5)};
+        let sibling=spawn {fail_after(6,5)};
+        11
+    };
+    let n=await nested;
+    let after=spawn {fail_now(7)};
+    let middle=spawn {fail_after(8,10)};
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(60));
+    let last=spawn {fail_now(9)};
+    w+x+n
+}
