@@ -9,6 +9,7 @@ baml_env.workspace = true
 baml_type.workspace = true
 bex_str.workspace = true
 xxhash-rust.workspace = true
+rustc-hash.workspace = true
 bex_vm_types.workspace = true
 borsh.workspace = true
 num-bigint.workspace = true

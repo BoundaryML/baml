@@ -11,7 +11,6 @@ use btel_types::{
 };
 use std::{
     cell::Cell,
-    collections::HashMap,
     num::NonZeroUsize,
     sync::{
         Arc,
@@ -101,7 +100,8 @@ struct State {
     name: Option<btel_records::ThreadName>,
     sites: &'static [Site],
     caches: Vec<Cache>,
-    paths: HashMap<Key, (CallPathId, *mut AggregateDelta)>,
+    // Keys are small loop-local integers; no untrusted input reaches this map.
+    paths: rustc_hash::FxHashMap<Key, (CallPathId, *mut AggregateDelta)>,
     histories: Vec<Vec<Cache>>,
     // Stable addresses let on-stack frames update their slot after nested calls
     // grow the table. These pointers never address the managed heap.
@@ -1123,7 +1123,7 @@ impl Session {
             name: None,
             sites,
             caches: vec![Cache::default(); sites.len()],
-            paths: HashMap::new(),
+            paths: Default::default(),
             histories: vec![Vec::new(); sites.len()],
             reader: DeltaClock::for_epoch(&clock),
             slots: Vec::new(),
@@ -1478,7 +1478,7 @@ mod tests {
             name: None,
             sites: SITES,
             caches: vec![Cache::default(); 3],
-            paths: HashMap::new(),
+            paths: Default::default(),
             histories: vec![Vec::new(); SITES.len()],
             reader: DeltaClock::Epoch,
             slots: Vec::new(),

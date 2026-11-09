@@ -1014,6 +1014,7 @@ dependencies = [
  "libc",
  "num-bigint",
  "num-traits",
+ "rustc-hash 2.1.2",
  "serde_json",
  "sys_regex",
  "tokio",

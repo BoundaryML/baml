@@ -325,7 +325,17 @@ impl Drop for FutureHandle {
                 f.errors.borrow_mut().push((f.id, e));
             }
             f.observed = true;
-            f.state = FutureState::Pending;
+            if matches!(
+                f.state,
+                FutureState::Ready(Value::Owned(OwnedValue::Int(_) | OwnedValue::Unit))
+                    | FutureState::Ready(Value::Pointer { .. })
+                    | FutureState::Cancelled
+            ) {
+                // These states own nothing: overwrite without drop glue.
+                unsafe { std::ptr::write(&mut f.state, FutureState::Pending) };
+            } else {
+                f.state = FutureState::Pending;
+            }
             f.waiters.clear();
             // Only detach ancestry when no live descendants/cancel handles can
             // observe it. Otherwise a fresh node is allocated on reuse.
@@ -540,6 +550,9 @@ struct Task {
     shield: u32,
     state: TaskState,
     needs_service: bool,
+    // No deadline and plain ancestry: while the loop's cancellation domain is
+    // pristine this task cannot be cancelled, so no node needs inspecting.
+    quiet_cancel: bool,
     managed_roots: [UnsafeCell<usize>; 2],
     auxiliary: Option<Box<TaskAuxiliary>>,
 }
@@ -987,23 +1000,25 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
         c.metrics.resumes += 1;
         c.metrics.switches += 2;
     }
-    let previous = core.borrow_mut().active_hook.take();
-    if let Some(hook) = previous {
-        unsafe { (hook.leave)(hook.data) };
-    }
-    let hook = core.borrow().tasks[&id].hook;
-    core.borrow_mut().active_hook = hook;
-    if let Some(hook) = hook {
-        unsafe { (hook.enter)(hook.data) };
-    }
-    let executor: *mut Executor = {
+    // Hook callbacks only update thread-local bindings and never reenter the
+    // loop, so they may run while this single borrow is held.
+    let (previous, executor) = {
         let mut c = core.borrow_mut();
+        let previous = c.active_hook.take();
+        if let Some(hook) = previous {
+            unsafe { (hook.leave)(hook.data) };
+        }
         refresh_poll_word(&c, id);
         let t = c.tasks.get_mut(&id).unwrap();
         t.state = TaskState::Running;
-        let executor = &raw mut **t.fiber.as_mut().expect("task executor");
+        let hook = t.hook;
+        let executor: *mut Executor = &raw mut **t.fiber.as_mut().expect("task executor");
+        c.active_hook = hook;
+        if let Some(hook) = hook {
+            unsafe { (hook.enter)(hook.data) };
+        }
         c.running_base = Some(unsafe { (*executor).base });
-        executor
+        (previous, executor)
     };
     // No Core borrow survives a context switch: TaskCx may freely access it.
     // The boxed executor stays owned by the task record until settlement
@@ -1015,15 +1030,14 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
             .expect("live executor")
             .resume(())
     }));
-    let current = core.borrow_mut().active_hook.take();
-    if let Some(hook) = current {
+    let mut c = core.borrow_mut();
+    if let Some(hook) = c.active_hook.take() {
         unsafe { (hook.leave)(hook.data) };
     }
-    core.borrow_mut().active_hook = previous;
+    c.active_hook = previous;
     if let Some(hook) = previous {
         unsafe { (hook.enter)(hook.data) };
     }
-    let mut c = core.borrow_mut();
     c.running_base = None;
     match result {
         Ok(CoroutineResult::Yield(false)) => {}
@@ -1056,7 +1070,13 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
             };
             {
                 let mut f = task.future.0.borrow_mut();
-                f.state = state;
+                if matches!(f.state, FutureState::Pending) {
+                    // A producer settles its pending future exactly once;
+                    // Pending owns nothing, so skip its drop glue.
+                    unsafe { std::ptr::write(&mut f.state, state) };
+                } else {
+                    f.state = state;
+                }
                 for waiter in f.waiters.drain(..) {
                     wake(&mut c, waiter);
                 }
@@ -1296,6 +1316,7 @@ fn spawn(
             cancel,
             shield: 0,
             needs_service,
+            quiet_cancel: deadline.is_none() && plain,
             managed_roots: options.managed_roots.map(UnsafeCell::new),
             auxiliary: if ticket.is_some() || !options.roots.is_empty() {
                 Some(Box::new(TaskAuxiliary {
@@ -1883,11 +1904,11 @@ fn service(core: &Rc<RefCell<Core>>) {
 
 // Bit zero is loop work. Other bits belong to the heap/runtime integration.
 fn refresh_poll_word(c: &Core, running: usize) {
-    let required = !c.ready.is_empty()
-        || c.slow_tasks != 0
-        || c.io_pending != 0
-        || c.host_enabled
-        || c.tasks[&running].cancel.is_cancelled();
+    let required =
+        !c.ready.is_empty() || c.slow_tasks != 0 || c.io_pending != 0 || c.host_enabled || {
+            let t = &c.tasks[&running];
+            !(t.quiet_cancel && c.cancel_epoch.pristine.get()) && t.cancel.is_cancelled()
+        };
     c.poll_word
         .set((c.poll_word.get() & !1) | u8::from(required));
 }
