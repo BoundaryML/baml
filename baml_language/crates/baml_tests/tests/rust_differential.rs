@@ -1012,6 +1012,18 @@ fn rt_type_dispatch_semantics() {
 #[path = "../rust_diff/setup_state.rs"]
 mod setup_state;
 
+#[path = "../rust_diff/testing.rs"]
+mod testing;
+
+#[test]
+#[ignore = "builds standalone packed tests with cargo"]
+fn rt_testing_stdlib_and_test_host() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    testing::run();
+}
+
 #[test]
 #[ignore = "builds generated Rust crates with cargo"]
 fn rt_setup_state_benchmark() {
