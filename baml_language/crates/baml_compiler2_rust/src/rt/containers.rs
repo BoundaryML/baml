@@ -11,12 +11,13 @@ impl Plan<'_> {
                 let mut elements = self.list_elements.borrow_mut();
                 let id = elements
                     .iter()
-                    .position(|r| r.repr == element && r.members.is_empty())
+                    .position(|r| r.repr == element && r.members.is_empty() && r.declared.is_none())
                     .unwrap_or_else(|| {
                         let id = elements.len();
                         elements.push(ListElement {
                             repr: element,
                             members: Vec::new(),
+                            declared: None,
                         });
                         id
                     });
@@ -25,12 +26,17 @@ impl Plan<'_> {
         }
     }
     pub(super) fn list_union_repr(&self, repr: Repr, members: Vec<Repr>) -> Repr {
-        let key = ListElement { repr, members };
+        let key = ListElement {
+            repr,
+            members,
+            declared: None,
+        };
         let mut elements = self.list_elements.borrow_mut();
         let id = elements
             .iter()
             .position(|r| {
                 r.repr == key.repr
+                    && r.declared == key.declared
                     && r.members.len() == key.members.len()
                     && r.members.iter().all(|m| key.members.contains(m))
             })
@@ -45,6 +51,8 @@ impl Plan<'_> {
         match repr {
             Repr::ListInt => Ok(Repr::Int),
             Repr::ListStr => Ok(Repr::Str),
+            Repr::ListClosure(_) => Ok(Repr::Closure),
+            Repr::ListFuture(_) => Ok(Repr::Future),
             Repr::ListListStr => Ok(Repr::ListStr),
             Repr::ListPtr(c) => Ok(Repr::Ptr(c)),
             Repr::List(id) => Ok(self.list_elements.borrow()[id].repr),
@@ -64,11 +72,7 @@ impl registry::Feature for Feature {
     ) -> Option<Gen<(String, Repr)>> {
         matches!(
             name,
-            "baml.Array.push"
-                | "baml.Array.join"
-                | "baml.Array.length"
-                | "baml.Map.set"
-                | "baml.Map.values"
+            "baml.Array.push" | "baml.Array.join" | "baml.Array.length"
         )
         .then(|| emitter.container_call(name, types, values))
     }
@@ -96,29 +100,21 @@ impl registry::Feature for Feature {
         value: &Rvalue<'_>,
         expected: Repr,
     ) -> Option<Gen<(String, Repr)>> {
-        (matches!(value, Rvalue::Map(..) if expected == Repr::MapStrInt)
-            || matches!(
-                value,
-                Rvalue::Len(_)
-                    | Rvalue::Aggregate {
-                        kind: AggregateKind::Array,
-                        ..
-                    }
-                    | Rvalue::Array(..)
-            ))
+        (matches!(
+            value,
+            Rvalue::Len(_)
+                | Rvalue::Aggregate {
+                    kind: AggregateKind::Array,
+                    ..
+                }
+                | Rvalue::Array(..)
+        ))
         .then(|| emitter.containers_value(value, expected))
     }
 }
 impl Emitter<'_, '_> {
     fn containers_value(&self, r: &Rvalue<'_>, expected: Repr) -> Gen<(String, Repr)> {
         match r {
-            Rvalue::Map(_, _, entries) if expected == Repr::MapStrInt => {
-                if !entries.is_empty() {
-                    return Err(no("nonempty map literal"));
-                }
-                let desc = self.lists[&Repr::MapStrInt];
-                Ok((self.fallible(&format!("rt::maps::StringIntMap::new(&mut rt::strings::Cx::current(),{desc}).map(|m|m.as_raw())")),Repr::MapStrInt))
-            }
             Rvalue::Len(place) => {
                 let (value, repr) = self.place(place)?;
                 let element = self.plan.element(repr)?;
@@ -174,6 +170,10 @@ impl Emitter<'_, '_> {
                     fields.len()
                 )
                 .unwrap();
+                if matches!(r,Rvalue::Array(t,_) if matches!(t.substitute_symbolic(&[]),RuntimeTy::Union(ref m) if m.iter().any(|t|matches!(t,RuntimeTy::Null))))
+                {
+                    code.push_str("(*(p as *mut baml_rt_gc::Header)).aux=rt::telemetry::capture::OPTIONAL_ELEMENT_TYPE;");
+                }
                 for i in 0..fields.len() {
                     if element.pointer() {
                         write!(
@@ -271,34 +271,29 @@ impl Emitter<'_, '_> {
                         "baml.Array.join" if values.len() == 2 && element == Repr::Str && values[1].1 == Repr::Str => (self.fallible(&format!("rt_array_join(&mut rt::strings::Cx::current(),{list},rt::strings::Str::from_raw({})).map(|s|s.as_raw())",values[1].0)), Repr::Str),
                         _ => return Err(no("list builtin arguments")),
                     }
-            } else if matches!(name, "baml.Map.set" | "baml.Map.values") {
-                if !(types == [Repr::Type(1), Repr::Type(0)]
-                    || (types.is_empty() && name == "baml.Map.set"))
-                    || values.first().is_none_or(|v| v.1 != Repr::MapStrInt)
-                {
-                    return Err(no("map builtin arguments"));
-                }
-                let map = format!("rt::maps::StringIntMap::from_raw({})", values[0].0);
-                if name == "baml.Map.set"
-                    && values.len() == 3
-                    && values[1].1 == Repr::Str
-                    && values[2].1 == Repr::Int
-                {
-                    (self.fallible(&format!("rt_map_set(&mut rt::strings::Cx::current(),{map},rt::strings::Str::from_raw({}),{})",values[1].0,values[2].0)),Repr::Tagged)
-                } else if name == "baml.Map.values" && values.len() == 1 {
-                    (
-                        self.fallible(&format!(
-                            "rt_map_values(&mut rt::strings::Cx::current(),{map},{})",
-                            self.lists[&Repr::ListInt]
-                        )),
-                        Repr::ListInt,
-                    )
-                } else {
-                    return Err(no("map builtin signature"));
-                }
             } else {
                 unreachable!("container call guard")
             },
         )
+    }
+}
+
+impl Plan<'_> {
+    pub(super) fn alias_list_repr(&self, declared: String) -> Repr {
+        let key = ListElement {
+            repr: Repr::Tagged,
+            members: Vec::new(),
+            declared: Some(declared),
+        };
+        let mut elements = self.list_elements.borrow_mut();
+        let id = elements
+            .iter()
+            .position(|old| *old == key)
+            .unwrap_or_else(|| {
+                let id = elements.len();
+                elements.push(key);
+                id
+            });
+        Repr::List(id)
     }
 }

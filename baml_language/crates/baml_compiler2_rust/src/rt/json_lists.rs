@@ -10,9 +10,13 @@ impl Plan<'_> {
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             T::Null => Repr::Null,
             T::String => Repr::Str,
+            T::Bigint => Repr::Bigint,
+            T::TypeAlias(_) => Repr::Tagged,
             T::Literal(baml_type::Literal::String(_), _) => Repr::Str,
             T::List(t) => {
-                if let T::Union(members) = t.as_ref() {
+                if matches!(t.as_ref(), T::TypeAlias(_)) {
+                    self.alias_list_repr(capture_template(self, t)?)
+                } else if let T::Union(members) = t.as_ref() {
                     self.list_union_repr(
                         self.template_repr(t)?,
                         members
@@ -60,19 +64,57 @@ struct SchemaEmitter<'a, 'p> {
     aliased: bool,
     code: usize,
     classes: BTreeSet<usize>,
+    aliases: BTreeSet<baml_type::typetag::TypeTag>,
     output: String,
 }
 impl SchemaEmitter<'_, '_> {
+    fn alias(&mut self, tag: baml_type::typetag::TypeTag) -> Gen<String> {
+        let (id, alias) = self
+            .plan
+            .program
+            .objects
+            .iter()
+            .enumerate()
+            .find_map(|(i, o)| match o {
+                Object::TypeAlias(a) if a.type_tag == tag => Some((i, a.clone())),
+                _ => None,
+            })
+            .ok_or_else(|| no("unlinked JSON alias"))?;
+        if self
+            .plan
+            .program
+            .packages
+            .iter()
+            .any(|p| p.name == "baml" && p.objects.contains(&(id as u32)))
+            && alias.path.to_string() == "json.json"
+        {
+            if !self.plan.json_tree {
+                return Err(no("JSON alias decoder configuration"));
+            }
+            return Ok("rt::json_lists::Ty::Json(&JSON_CONFIG)".into());
+        }
+        let name = format!(
+            "JSON_LIST_ALIAS_{}_{}_{}",
+            self.code,
+            tag.as_i64() as u64,
+            usize::from(self.aliased)
+        );
+        if self.aliases.insert(tag) {
+            let definition = self.field(&bex_vm_types::RuntimeTy::from(alias.definition))?;
+            writeln!(
+                self.output,
+                "static {name}:rt::json_lists::Ty={definition};"
+            )
+            .unwrap();
+        }
+        Ok(name)
+    }
     fn class(&mut self, c: usize) -> Gen<String> {
         let symbol = format!("JSON_LIST_{}_C{c}_{}", self.code, usize::from(self.aliased));
         if !self.classes.insert(c) {
             return Ok(symbol);
         }
-        let Object::Class(class) =
-            &self.plan.program.objects[bex_vm_types::ObjectIndex::from_raw(c)]
-        else {
-            unreachable!()
-        };
+        let class = self.plan.class(c);
         // Preserve the existing closed-world decoder's admission for custom overrides.
         for package in &self.plan.program.packages {
             for rules in package.impl_rules.values() {
@@ -88,7 +130,7 @@ impl SchemaEmitter<'_, '_> {
         let layout = &self.plan.layouts[&c];
         let mut fields = String::new();
         for (i, f) in class.fields.iter().enumerate() {
-            let ty = self.field(&f.field_type)?;
+            let ty = self.field(&self.plan.class_field_types(c)[i])?;
             write!(
                 &mut fields,
                 "rt::json_lists::Field{{name:{:?},offset:{},ty:&{ty},slot:SlotKind::{},skip:{}}},",
@@ -116,7 +158,18 @@ impl SchemaEmitter<'_, '_> {
     fn template(&mut self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
         use baml_compiler2_mir::TyTemplate as T;
         Ok(match ty {
+            T::TypeAlias(_) => {
+                let Some(bex_vm_types::TyTemplate::TypeAlias(head)) = self.plan.index.anchor(ty)
+                else {
+                    return Err(no("unlinked JSON alias"));
+                };
+                self.alias(head.tag())?
+            }
             T::Int => "rt::json_lists::Ty::Int".into(),
+            T::Bigint => format!(
+                "rt::json_lists::Ty::Bigint{{desc:{}}}",
+                self.plan.bigint_descriptor()
+            ),
             T::Float => "rt::json_lists::Ty::Float".into(),
             T::Bool => "rt::json_lists::Ty::Bool".into(),
             T::Null => "rt::json_lists::Ty::Null".into(),
@@ -166,7 +219,12 @@ impl SchemaEmitter<'_, '_> {
     fn field(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
+            T::TypeAlias(head) => self.alias(head.tag())?,
             T::Int => "rt::json_lists::Ty::Int".into(),
+            T::Bigint => format!(
+                "rt::json_lists::Ty::Bigint{{desc:{}}}",
+                self.plan.bigint_descriptor()
+            ),
             T::Float => "rt::json_lists::Ty::Float".into(),
             T::Bool => "rt::json_lists::Ty::Bool".into(),
             T::Null => "rt::json_lists::Ty::Null".into(),
@@ -227,6 +285,7 @@ pub(super) fn emit(
         aliased,
         code,
         classes: BTreeSet::new(),
+        aliases: BTreeSet::new(),
         output: String::new(),
     };
     let root = if let Some(ty) = ty {
@@ -253,7 +312,14 @@ pub(super) fn emit(
     };
     out.push_str(&e.output);
     let mode = usize::from(aliased);
-    writeln!(out,"static JSON_LIST_ROOT_{code}_{mode}:rt::json_lists::Ty={root};\nunsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{unsafe{{rt::json_lists::decode(cx,rt::strings::Str::from_raw(s),&JSON_LIST_ROOT_{code}_{mode})}}}}").unwrap();
+    writeln!(
+        out,
+        "static JSON_LIST_ROOT_{code}_{mode}:rt::json_lists::Ty={root};"
+    )
+    .unwrap();
+    if !super::json_flat_lists::emit(out, plan, descriptors, lists, ty, code, aliased)? {
+        writeln!(out,"unsafe fn json_specialized_{code}_{mode}(cx:&mut rt::strings::Cx,s:usize)->R<rt::Dyn>{{unsafe{{rt::json_lists::decode(cx,rt::strings::Str::from_raw(s),&JSON_LIST_ROOT_{code}_{mode})}}}}").unwrap();
+    }
     Ok(())
 }
 
@@ -265,7 +331,10 @@ pub(super) fn capture_template(
     Ok(format!(
         "rt::telemetry::capture::Type::{}",
         match ty {
+            T::TypeAlias(_) =>
+                return capture_codegen::capture_type(plan, &ty.substitute_symbolic(&[])),
             T::Int | T::Literal(baml_type::Literal::Int(_), _) => "Int".into(),
+            T::Bigint => "Bigint".into(),
             T::Float | T::Literal(baml_type::Literal::Float(_), _) => "Float".into(),
             T::Bool | T::Literal(baml_type::Literal::Bool(_), _) => "Bool".into(),
             T::Null => "Null".into(),
@@ -294,6 +363,7 @@ fn template_name(plan: &Plan<'_>, ty: &baml_compiler2_mir::TyTemplate) -> Gen<St
     use baml_compiler2_mir::TyTemplate as T;
     Ok(match ty {
         T::Int => "int".into(),
+        T::Bigint => "bigint".into(),
         T::Float => "float".into(),
         T::Bool => "bool".into(),
         T::Null => "null".into(),
@@ -324,6 +394,7 @@ pub(super) fn emit_shapes(
     lists: &BTreeMap<Repr, usize>,
 ) -> Gen<()> {
     fn tag(
+        plan: &Plan<'_>,
         repr: Repr,
         descriptors: &BTreeMap<usize, usize>,
         lists: &BTreeMap<Repr, usize>,
@@ -333,9 +404,10 @@ pub(super) fn emit_shapes(
             Repr::Bool => 1,
             Repr::Null => 2,
             Repr::Str => 3,
-            Repr::Float => u32::MAX as usize,
+            Repr::Bigint => plan.bigint_descriptor() + 3,
+            Repr::Float => (u32::MAX - 1) as usize,
             Repr::Ptr(c) => descriptors[&c] + 3,
-            r if r.growing() || r == Repr::MapStrInt => lists[&r] + 3,
+            r if r.growing() || matches!(r, Repr::MapStrInt | Repr::Map(_)) => lists[&r] + 3,
             Repr::Tagged | Repr::Dyn(_) => 0,
             _ => return Err(no("list JSON scalar tag")),
         })
@@ -344,19 +416,22 @@ pub(super) fn emit_shapes(
         for rules in package.impl_rules.values() {
             for rule in rules {
                 if rule.methods.contains_key("to_json")
-                    && matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if plan.layouts.keys().any(|c|matches!(&plan.program.objects[bex_vm_types::ObjectIndex::from_raw(*c)],Object::Class(class) if class.type_tag==head.tag())))
+                    && matches!(&rule.for_ty_pattern,bex_vm_types::TyTemplate::Class(head,_) if plan.layouts.keys().any(|c|plan.class(*c).type_tag==head.tag()))
                 {
                     return Err(no("list JSON ToJson override"));
                 }
             }
         }
     }
-    if plan.lists.contains(&Repr::MapStrInt) {
-        return Err(no("list JSON map serialization"));
-    }
     let last = lists
         .iter()
-        .map(|(r, id)| id + if *r == Repr::MapStrInt { 3 } else { 2 })
+        .map(|(r, id)| {
+            id + if matches!(r, Repr::MapStrInt | Repr::Map(_)) {
+                4
+            } else {
+                2
+            }
+        })
         .max()
         .unwrap_or_else(|| {
             descriptors
@@ -365,31 +440,64 @@ pub(super) fn emit_shapes(
                 .max()
                 .map_or(rt_descriptors(), |id| (id + 1).max(rt_descriptors()))
         });
+    let last = if plan.bigints {
+        last.max(plan.bigint_descriptor() + 1)
+    } else {
+        last
+    };
+    for (&class, layout) in &plan.layouts {
+        let definition = plan.class(class);
+        writeln!(out,"unsafe fn json_encode_class_{class}(encoder:&mut rt::json_lists::Encoder<'_>,p:usize,depth:usize)->R<()>{{unsafe{{encoder.begin_class();let mut first=true;").unwrap();
+        for (i, field) in definition.fields.iter().enumerate() {
+            let repr = layout.fields[i];
+            let value = if matches!(repr, Repr::Tagged | Repr::Dyn(_)) {
+                format!("*((p+{}) as *const rt::Dyn)", layout.offsets[i])
+            } else {
+                format!(
+                    "rt::Dyn{{tag:{},payload:*((p+{}) as *const u64)}}",
+                    tag(plan, repr, descriptors, lists)?,
+                    layout.offsets[i]
+                )
+            };
+            let alias = field.alias.as_ref().unwrap_or(&field.name);
+            writeln!(
+                out,
+                "encoder.class_field({:?},{:?},{:?},{:?},{},{value},&mut first,depth)?;",
+                field.name,
+                alias,
+                serde_json::to_string(&field.name).unwrap(),
+                serde_json::to_string(alias).unwrap(),
+                field.skip
+            )
+            .unwrap();
+        }
+        out.push_str("encoder.finish_class(first,depth);Ok(())}}\n");
+    }
     out.push_str("static JSON_LIST_SHAPES:&[rt::json_lists::Shape]=&[\n");
     for desc in 0..last {
-        if let Some((&class, _)) = descriptors.iter().find(|(_, id)| **id == desc) {
-            let Object::Class(c) =
-                &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(class)]
-            else {
-                unreachable!()
-            };
-            let layout = &plan.layouts[&class];
-            out.push_str("rt::json_lists::Shape::Class(&[");
-            for (i, field) in c.fields.iter().enumerate() {
-                let repr = layout.fields[i];
-                writeln!(out,"rt::json_lists::EncodeField{{name:{:?},alias:{:?},skip:{},offset:{},tag:{},tagged:{}}},",field.name,field.alias.as_ref().unwrap_or(&field.name),field.skip,layout.offsets[i],tag(repr,descriptors,lists)?,matches!(repr,Repr::Tagged|Repr::Dyn(_))).unwrap();
-            }
-            out.push_str("]),\n");
+        if plan.bigints && desc == plan.bigint_descriptor() {
+            out.push_str("rt::json_lists::Shape::Bigint,\n");
+        } else if let Some((&class, _)) = descriptors.iter().find(|(_, id)| **id == desc) {
+            writeln!(
+                out,
+                "rt::json_lists::Shape::ClassEncoded(json_encode_class_{class}),"
+            )
+            .unwrap();
         } else if let Some((&repr, _)) = lists.iter().find(|(_, id)| **id == desc) {
-            if repr == Repr::MapStrInt {
-                out.push_str("rt::json_lists::Shape::Unsupported,\n");
+            if matches!(repr, Repr::MapStrInt | Repr::Map(_)) {
+                let (key, value) = plan.map_parts(repr)?;
+                let k = maps::slot_type(key, descriptors, lists)?;
+                let v = maps::slot_type(value, descriptors, lists)?;
+                let kd = capture_codegen::capture_dyn(key, "key", descriptors, lists)?;
+                let vd = capture_codegen::capture_dyn(value, "value", descriptors, lists)?;
+                writeln!(out,"rt::json_lists::Shape::Map{{len:|p|unsafe{{rt::maps::Map::<{k},{v}>::from_raw(p).len()}},entry:|p,i|unsafe{{let(key,value)=rt::maps::Map::<{k},{v}>::from_raw(p).entry(i).unwrap();({kd},{vd})}}}},").unwrap();
                 continue;
             }
             let element = plan.element(repr)?;
             writeln!(
                 out,
                 "rt::json_lists::Shape::List{{tag:{},tagged:{}}},",
-                tag(element, descriptors, lists)?,
+                tag(plan, element, descriptors, lists)?,
                 matches!(element, Repr::Tagged | Repr::Dyn(_))
             )
             .unwrap();
@@ -399,4 +507,75 @@ pub(super) fn emit_shapes(
     }
     out.push_str("];\n");
     Ok(())
+}
+
+// A recursive alias can hide containers which do not appear in a MIR local.
+// Instantiate their descriptors before layout emission, once per declaration.
+pub(super) fn record_schema(plan: &mut Plan<'_>, ty: &baml_compiler2_mir::TyTemplate) -> Gen<()> {
+    fn walk(
+        plan: &mut Plan<'_>,
+        ty: &bex_vm_types::RuntimeTy,
+        aliases: &mut BTreeSet<baml_type::typetag::TypeTag>,
+        classes: &mut BTreeSet<usize>,
+    ) -> Gen<()> {
+        use bex_vm_types::RuntimeTy as T;
+        plan.record_field_ty(ty)?;
+        match ty {
+            T::TypeAlias(head) if aliases.insert(head.tag()) => {
+                let (id, alias) = plan
+                    .program
+                    .objects
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, o)| match o {
+                        Object::TypeAlias(a) if a.type_tag == head.tag() => Some((i, a.clone())),
+                        _ => None,
+                    })
+                    .ok_or_else(|| no("JSON alias declaration"))?;
+                if alias.path.to_string() == "json.json"
+                    && plan
+                        .program
+                        .packages
+                        .iter()
+                        .any(|p| p.name == "baml" && p.objects.contains(&(id as u32)))
+                {
+                    super::json_tree::prepare(plan)?;
+                } else {
+                    walk(plan, &T::from(alias.definition), aliases, classes)?;
+                }
+            }
+            T::Class(..) => {
+                if let Repr::Ptr(c) = plan.field_repr(ty)? {
+                    if classes.insert(c) {
+                        for field in plan.class_field_types(c) {
+                            walk(plan, &field, aliases, classes)?;
+                        }
+                    }
+                }
+            }
+            T::List(t) => walk(plan, t, aliases, classes)?,
+            T::Map { key, value } => {
+                walk(plan, key, aliases, classes)?;
+                walk(plan, value, aliases, classes)?;
+            }
+            T::Union(m) => {
+                for t in m {
+                    walk(plan, t, aliases, classes)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    plan.register_class_type(&ty.substitute_symbolic(&[]))?;
+    let anchored = plan
+        .index
+        .anchor(ty)
+        .ok_or_else(|| no("JSON schema declarations"))?;
+    walk(
+        plan,
+        &anchored.substitute_symbolic(&[]),
+        &mut BTreeSet::new(),
+        &mut BTreeSet::new(),
+    )
 }

@@ -105,8 +105,9 @@ impl Emitter<'_, '_> {
                     values = mapping
                         .into_iter()
                         .map(|i| {
-                            i.map(|i| values[i].clone())
-                                .ok_or_else(|| no("omitted argument"))
+                            Ok(i.map(|i| values[i].clone()).unwrap_or_else(|| {
+                                ("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged)
+                            }))
                         })
                         .collect::<Gen<_>>()?;
                 }
@@ -158,9 +159,10 @@ impl Emitter<'_, '_> {
                     } else if values.iter().any(|v| v.1 == Repr::Str) {
                         let a = self.coerce(values[0].clone(), Repr::Tagged)?;
                         let b = self.coerce(values[1].clone(), Repr::Tagged)?;
+                        let compare=self.fallible("rt::strings::equals_raw(&rt::strings::Cx::current(),a.payload as usize,b.payload as usize)");
                         (
                             format!(
-                                "{{let a={a};let b={b};a.tag==3 && b.tag==3 && rt::strings::Str::from_raw(a.payload as usize).as_str(&rt::strings::Cx::current())==rt::strings::Str::from_raw(b.payload as usize).as_str(&rt::strings::Cx::current())}}"
+                                "{{let a={a};let b={b};a.tag==b.tag && (a.tag==2 || (a.tag==3 && {compare}))}}"
                             ),
                             Repr::Bool,
                         )
@@ -168,7 +170,7 @@ impl Emitter<'_, '_> {
                         return Err(no("equality other than primitive string or null test"));
                     }
                 } else {
-                    let mir = self.all[&c];
+                    let mir = &self.all[&c];
                     let MirFunctionKind::Bytecode(body) = &mir.kind else {
                         return Err(no("builtin"));
                     };
@@ -176,7 +178,13 @@ impl Emitter<'_, '_> {
                         return Err(no("call arity"));
                     }
                     for (i, value) in values.iter_mut().enumerate() {
-                        let expected = self.plan.repr(&body.locals[i + 1].ty)?;
+                        let expected = if let Some(repr) =
+                            super::string_defaults::parameter(self.plan, c, i + 1)
+                        {
+                            repr
+                        } else {
+                            self.plan.local_repr(body, i + 1, 0)?
+                        };
                         *value = (self.coerce(value.clone(), expected)?, expected);
                     }
                     let arguments = values

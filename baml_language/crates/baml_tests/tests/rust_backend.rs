@@ -815,14 +815,13 @@ fn rt_trees_and_fail_closed_admission() {
         "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
     ))
     .unwrap();
-    assert!(richards.contains("match a0.tag"));
+    assert!(richards.contains("static VTABLE"));
     assert!(richards.contains("rt::write_dyn("));
     assert!(richards.contains("rt::lists::List::<rt::lists::Ptr>::from_raw("));
     assert!(richards.contains("rt::lists::buffer_descriptor::<rt::lists::Ptr>"));
-    for source in [
-        "function main() -> string { \"hello\" }",
-        "const X = 1; function main() -> int { X }",
-    ] {
+    assert!(emit("function main() -> string { \"hello\" }").is_ok());
+    assert!(emit("function main() -> int { \"x\".trim().length() }").is_ok());
+    for source in ["function main(value:int) -> int { value }"] {
         assert!(
             emit(source).unwrap_err().contains("unsupported in baml_rt"),
             "{source}"
@@ -852,7 +851,7 @@ fn allocation_failure_constructor_matches_interpreter_exception() {
 }
 
 #[test]
-fn rt_string_receiver_storage_and_function_value_rejection() {
+fn rt_string_receiver_storage_and_function_values() {
     for (source, accepted) in [
         (
             include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
@@ -860,9 +859,9 @@ fn rt_string_receiver_storage_and_function_value_rejection() {
         ),
         (
             "function length(s: string) -> int { s.length() }\nfunction main() -> int { let f = length; f(\"x\") }",
-            false,
+            true,
         ),
-        ("function main() -> int { \"x\".trim().length() }", false),
+        ("function main() -> int { \"x\".trim().length() }", true),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
         let program = lower(&db, OptLevel::Two);
@@ -879,8 +878,8 @@ fn rt_string_receiver_storage_and_function_value_rejection() {
         );
         if accepted {
             let source = result.unwrap();
-            assert!(source.contains("fn rt_string_slice("));
             assert!(source.contains("fn rt_string_char_count("));
+            syn::parse_file(&source).expect("receiver and function value Rust");
         } else {
             assert!(result.unwrap_err().contains("unsupported in baml_rt"));
         }
@@ -933,15 +932,15 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         ),
         (
             r#"class A { x: int } class B { y: int } function main() -> int { let a = baml.json.decode<A | B>("x") catch(e) { baml.json.ParseError => null }; 0 }"#,
-            false,
+            true,
         ),
         (
             "function main() -> int { let m: map<int,int> = {}; m[1] = 2; 0 }",
-            false,
+            true,
         ),
         (
             "function main() -> int { let m: map<string,string> = {}; m[\"a\"] = \"b\"; 0 }",
-            false,
+            true,
         ),
     ] {
         let db = baml_test_support::setup_multi_file_db(&[("agent.baml", source)]);
@@ -964,6 +963,106 @@ fn rt_agent_maps_iteration_catch_and_json_admission() {
         }
         assert_eq!(before, fingerprint(&program));
     }
+}
+
+#[test]
+// Byte hashes captured from the unsplit rt emitter. Intentional future
+// codegen changes may update these after checking the generated-source diff.
+fn rt_source_bytes_and_diagnostics() {
+    use sha2::{Digest, Sha256};
+    let mut mismatches = Vec::new();
+    for (name, source) in [
+        (
+            "trees",
+            include_str!("../../../tools/speedtest/workloads/memory/binary-trees-14/main.baml"),
+        ),
+        (
+            "richards",
+            include_str!("../../../tools/speedtest/workloads/programs/richards-50/main.baml"),
+        ),
+        (
+            "agent",
+            include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
+        ),
+        ("initializer", "const X = 1; function main() -> int { X }"),
+        ("entry", "function main(value:int) -> int { value }"),
+        (
+            "hook",
+            "/// baml:$trace=trace.span\nfunction main() -> int { 1 }",
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        let expected = match name {
+            "trees" => "4a0e98fe5201b0f6da46c7ee1441edd5527c1055f0d02b6920bad716399caa87",
+            "richards" => "7748c27d7db47682fc8fe6bc4b69f4f9e17209fe697b6f2622ae5ed10f7804e7",
+            "agent" => "d38f1aaaced39a5ebf0b242e9daf7f5225fe930f1576cef8ecc3cd75236eaf3b",
+            "initializer" => "4b26e9226fdeae11c541dc7ad8f6a32ff1a9530b3326f2060e67113cb289b693",
+            _ => "",
+        };
+        if expected.is_empty() {
+            let expected = match name {
+                "entry" => {
+                    "unsupported in baml_rt: entry must have no parameters and return int or string"
+                }
+                "hook" => "unsupported in baml_rt: declaration hooks",
+                _ => unreachable!(),
+            };
+            let actual = result.unwrap_err();
+            if actual != expected {
+                mismatches.push(format!("{name}: {actual:?} != {expected:?}"));
+            }
+        } else {
+            let source = result.unwrap();
+            if name == "initializer" {
+                assert!(source.contains("rt::globals::begin("));
+                assert!(source.contains("rt::globals::load_named("));
+            }
+            std::fs::write(
+                std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rt-{name}.rs")),
+                &source,
+            )
+            .unwrap();
+            let actual = format!("{:x}", Sha256::digest(source.as_bytes()));
+            if actual != expected {
+                mismatches.push(format!("{name}: {actual} != {expected}"));
+            }
+        }
+    }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+#[test]
+fn rt_generics_switch_aliases() {
+    let source = include_str!("../rust_diff/type_dispatch.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-type-program.rs"),
+        source,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -1034,76 +1133,6 @@ fn rt_stack_placement_preserves_lifetimes_and_bytecode() {
             );
         }
     }
-}
-
-#[test]
-// Byte hashes captured from the unsplit rt emitter. Intentional future
-// codegen changes may update these after checking the generated-source diff.
-fn rt_source_bytes_and_diagnostics() {
-    use sha2::{Digest, Sha256};
-    let mut changes = Vec::new();
-    for (name, source) in [
-        (
-            "trees",
-            include_str!("../../../tools/speedtest/workloads/memory/binary-trees-14/main.baml"),
-        ),
-        (
-            "richards",
-            include_str!("../../../tools/speedtest/workloads/programs/richards-50/main.baml"),
-        ),
-        (
-            "agent",
-            include_str!("../../../tools/speedtest/workloads/programs/agent-loop-300/main.baml"),
-        ),
-        ("initializer", "const X = 1; function main() -> int { X }"),
-        ("entry", "function main() -> string { \"hello\" }"),
-        (
-            "hook",
-            "/// baml:$trace=trace.span\nfunction main() -> int { 1 }",
-        ),
-    ] {
-        let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
-        let program = lower(&db, OptLevel::Two);
-        let (entry, _) = user_functions(&program)
-            .find(|(_, f)| f.name() == "main")
-            .unwrap();
-        let result = baml_db::rust_backend::compile_rt(
-            &db,
-            db.workspace_root().unwrap(),
-            &program,
-            OptLevel::Two,
-            entry,
-        );
-        let expected = match name {
-            "trees" => "b595b5d8131c107148c0a0675cdc398037a86d077d7add02ba9c650271f7b6db",
-            "richards" => "b688273bd75c1fac87e6209edb4ecabb92eb30d93495e311f90c9cf23b8c4bf8",
-            "agent" => "c39aab7904a391c369839badb8347ac444012080698897058da55c75caeeee5f",
-            _ => "",
-        };
-        if expected.is_empty() {
-            let expected = match name {
-                "initializer" => "unsupported in baml_rt: top-level initializers",
-                "entry" => "unsupported in baml_rt: entry must have no parameters and return int",
-                "hook" => "unsupported in baml_rt: declaration hooks",
-                _ => unreachable!(),
-            };
-            assert_eq!(result.unwrap_err(), expected, "{name}");
-        } else {
-            let source = result.unwrap();
-            let actual = format!("{:x}", Sha256::digest(source.as_bytes()));
-            if actual != expected {
-                let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
-                    .join(format!("rt-source-{name}.rs"));
-                std::fs::write(&path, &source).unwrap();
-                changes.push(format!("{name}: {actual} ({})", path.display()));
-            }
-        }
-    }
-    assert!(
-        changes.is_empty(),
-        "generated source changed:\n{}",
-        changes.join("\n")
-    );
 }
 
 #[test]
@@ -1178,5 +1207,402 @@ fn rt_loop_range_proofs_cover_every_update_and_preserve_bytecode() {
             original,
             "{name}: rt changed bytecode"
         );
+    }
+}
+
+#[test]
+fn rt_shared_recursive_forwarded_and_stored_closures() {
+    let source = include_str!("../rt_fixtures/closures/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("closures.baml", source)]);
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = lower(&db, opt);
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let emitted = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            opt,
+            entry,
+        )
+        .unwrap();
+        let empty = program.rendered_callables()["user.empty"].object.raw();
+        let empty_source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            opt,
+            empty,
+        )
+        .unwrap();
+        syn::parse_file(&empty_source).expect("empty callable list Rust");
+        assert!(empty_source.contains("rt::closures::closure_descriptor("));
+        if std::env::var_os("BAML_RT_DUMP_SOURCE").is_some() {
+            std::fs::write(format!("/tmp/rt-empty-closures-{opt:?}.rs"), &empty_source).unwrap();
+        }
+        syn::parse_file(&emitted).expect("closures emit valid Rust");
+        assert!(emitted.contains("rt::closures::capture(env,"));
+        assert!(emitted.contains("rt::closures::store("));
+        assert!(!emitted.contains("BexVm"));
+        if std::env::var_os("BAML_RT_DUMP_SOURCE").is_some() {
+            std::fs::write(format!("/tmp/rt-closures-{opt:?}.rs"), &emitted).unwrap();
+        }
+        assert_eq!(
+            runtime
+                .block_on(baml_tests::engine::try_call_by_name(program, "user.main"))
+                .unwrap(),
+            bex_engine::BexExternalValue::Int(38),
+        );
+    }
+}
+
+#[test]
+fn rt_initializer_dependency_order_and_generic_maps() {
+    for source in [
+        "function main()->int { let m:map<string?,int> = {}; m[null]=1; m[\"key\"]=2; m[null]+m[\"key\"] }",
+        "const SECOND = FIRST + 1; const FIRST = 41; function main() -> int { SECOND }",
+        "const M: map<string,int> = {\"a\":1,\"b\":2}; function main() -> int { M.set(\"a\",3); M[\"a\"] + M.length() }",
+        "class Box { m: map<int,string> } function main() -> int { let b=Box{m:{1:\"a\",2:\"b\"}}; b.m[1]=\"c\"; b.m.delete(2); b.m.length() }",
+        "function main() -> int { let m: map<string,int?> = {\"null\":null,\"some\":7}; if(m.has(\"null\")){m.get(\"some\") ?? 0}else{99} }",
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("maps_globals.baml", source)]);
+        for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+            let program = lower(&db, opt);
+            let (entry, _) = user_functions(&program)
+                .find(|(_, f)| f.name() == "main")
+                .unwrap();
+            let emitted = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap_or_else(|e| panic!("{source} at {opt:?}: {e}"));
+            assert!(!emitted.contains("BexVm"));
+            syn::parse_file(&emitted).unwrap_or_else(|e| panic!("{source}: {e}"));
+        }
+    }
+}
+
+#[test]
+fn rt_structural_union_map_keys_fail_closed() {
+    for (source, expected) in [
+        (
+            "class Key { x: int } function main()->int { let m:map<Key?,int> = {}; m[null]=1; m.length() }",
+            "map key callbacks",
+        ),
+        (
+            "class Box { x:int } function main()->int {let m:map<string,Box?> = {\"a\":Box{x:1},\"b\":null}; m.values().length()}",
+            "map snapshot declared list element type (emitting user.main)",
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("admission.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let result = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        assert_eq!(
+            result.unwrap_err(),
+            format!("unsupported in baml_rt: {expected}")
+        );
+    }
+}
+
+#[test]
+fn rt_json_scalar_and_primitive_sort_kpis() {
+    for source in [
+        include_str!("../../../tools/speedtest/workloads/compute/json-tree-path/main.baml"),
+        include_str!("../../../tools/speedtest/workloads/compute/json-request-body/main.baml"),
+        include_str!("../../../tools/speedtest/workloads/compute/generate-sort-8k/main.baml"),
+        include_str!("../../../tools/speedtest/workloads/compute/json-aggregate-2k/main.baml"),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("json-kpi.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        let result = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
+}
+
+#[test]
+fn rt_public_string_surface_is_admitted() {
+    let mut rejected = Vec::new();
+    for (name, source) in [
+        (
+            "formatting",
+            include_str!("../rust_diff/strings/formatting.baml"),
+        ),
+        ("regex", include_str!("../rust_diff/strings/regex.baml")),
+        (
+            "regex error",
+            include_str!("../rust_diff/strings/regex_error.baml"),
+        ),
+        ("utf8", include_str!("../rust_diff/strings/utf8.baml")),
+        (
+            "utf8 error",
+            include_str!("../rust_diff/strings/utf8_error.baml"),
+        ),
+    ] {
+        let db = baml_test_support::setup_multi_file_db(&[("rt.baml", source)]);
+        let program = lower(&db, OptLevel::Two);
+        let (entry, _) = user_functions(&program)
+            .find(|(_, f)| f.name() == "main")
+            .unwrap();
+        if let Err(error) = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        ) {
+            rejected.push(format!("{name}: {error}"));
+        }
+    }
+    assert!(rejected.is_empty(), "{}", rejected.join("\n"));
+}
+#[test]
+fn rt_string_builtins_and_unicode_views_compile_without_changing_bytecode() {
+    let source = include_str!("../rust_diff/strings/semantics.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("strings.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, f)| f.name() == "main")
+        .unwrap();
+    let generated = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    for helper in [
+        "rt_string_split",
+        "rt_string_slice",
+        "rt_string_at",
+        "rt_int_parse",
+        "rt_from_code_points",
+    ] {
+        assert!(generated.contains(helper), "missing {helper}");
+    }
+    assert_eq!(before, fingerprint(&program));
+}
+
+#[test]
+fn rt_generated_spawn_await() {
+    let source =
+        include_str!("../../../tools/speedtest/workloads/concurrency/spawn-await-x10k/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("tasks.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let entry = program.rendered_callables()["user.main"].object.raw();
+    let source = baml_db::rust_backend::compile_rt(
+        &db,
+        db.workspace_root().unwrap(),
+        &program,
+        OptLevel::Two,
+        entry,
+    )
+    .unwrap();
+    syn::parse_file(&source).unwrap();
+    assert!(source.contains("rt::tasks::spawn("));
+    assert!(source.contains("rt::tasks::await_future("));
+    assert!(!source.contains("SCALAR_FUTURE"));
+    assert!(!source.contains("await_scalar"));
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-spawn-await.rs"),
+        source,
+    )
+    .unwrap();
+}
+
+#[test]
+fn rt_generic_closures_and_callbacks() {
+    let source = include_str!("../rt_fixtures/closures/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("closures.baml", source)]);
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = lower(&db, opt);
+        for name in [
+            "RtGenericClosures",
+            "RtNativeCallback",
+            "RtBuiltinCallbacks",
+            "RtGenericMethods",
+        ] {
+            let entry = program.rendered_callables()[&format!("user.{name}")]
+                .object
+                .raw();
+            let source = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap();
+            syn::parse_file(&source).unwrap();
+            std::fs::write(
+                std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                    .join(format!("rt-{name}-{opt:?}.rs")),
+                source,
+            )
+            .unwrap();
+        }
+    }
+}
+
+#[test]
+fn rt_generated_task_controls() {
+    let source = include_str!("../rt_fixtures/tasks/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("tasks.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    for name in [
+        "RtTaskControls",
+        "RtTaskSleep",
+        "RtTaskModifiers",
+        "RtScalarTaskOrder",
+    ] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        syn::parse_file(&source).unwrap();
+        std::fs::write(
+            std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rt-{name}.rs")),
+            source,
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn rt_generated_task_errors_and_background_work() {
+    let source = include_str!("../rt_fixtures/task_edges/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("task_edges.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    for name in [
+        "RtTaskErrors",
+        "RtBackgroundTask",
+        "RtBackgroundError",
+        "RtTokenComposition",
+    ] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        syn::parse_file(&source).unwrap();
+    }
+}
+
+#[test]
+fn rt_generic_interface_and_bound_callable_frames() {
+    let source = include_str!("../rt_fixtures/closure_edges/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("closure_edges.baml", source)]);
+    for opt in [OptLevel::Zero, OptLevel::Two] {
+        let program = lower(&db, opt);
+        for name in [
+            "RtVirtualGenericClosures",
+            "RtBoundGenericClosures",
+            "RtVirtualOwnGenericClosure",
+            "RtNativeHigherOrderValue",
+            "RtDefaultCallbacks",
+        ] {
+            let entry = program.rendered_callables()[&format!("user.{name}")]
+                .object
+                .raw();
+            let source = baml_db::rust_backend::compile_rt(
+                &db,
+                db.workspace_root().unwrap(),
+                &program,
+                opt,
+                entry,
+            )
+            .unwrap();
+            syn::parse_file(&source).unwrap();
+            std::fs::write(
+                std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                    .join(format!("rt-{name}-{opt:?}.rs")),
+                source,
+            )
+            .unwrap();
+        }
+    }
+}
+
+#[test]
+fn rt_generated_timeouts_limits_and_collected_cleanup() {
+    let source = include_str!("../rt_fixtures/task_timeouts/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("task_timeouts.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    for name in ["RtTaskLimits", "RtTaskTimeout", "RtAutomaticCleanup"] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
+        syn::parse_file(&source).unwrap();
+        std::fs::write(
+            std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rt-{name}.rs")),
+            source,
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn rt_generated_terminal_cancelled_error() {
+    let source = include_str!("../rt_fixtures/task_terminal/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("task_terminal.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    for name in ["RtCancelledFailure", "RtLinkedCancelledFailure"] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let source = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        syn::parse_file(&source).unwrap();
     }
 }

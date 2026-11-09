@@ -6,9 +6,70 @@ use super::{Artifacts, PROBES, kpis, pack_result};
 // Enable only when all telemetry matrix cells pass, including non-empty
 // recordings and exact normalized equality.
 const TELEMETRY_SUPPORTED: bool = false;
+// The standalone probes exercise closures without the shared project's global
+// initializer dependency. Their admission is a required coverage baseline.
+const REQUIRED_PROBES: &[&str] = &[
+    "RtClosures",
+    "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
+    "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
+    "concurrency::spawn await x10k",
+];
 
-pub fn supports_level(level: &str) -> bool {
-    level == "off" || TELEMETRY_SUPPORTED
+pub fn supports_level(probe: &str, level: &str) -> bool {
+    level == "off"
+        || TELEMETRY_SUPPORTED
+        || probe.starts_with("strings::")
+        || matches!(
+            probe,
+            "RtClosures"
+                | "RtEmptyClosures"
+                | "RtGenericClosures"
+                | "RtGenericMethods"
+                | "RtNativeCallback"
+                | "RtBuiltinCallbacks"
+                | "RtSpawnAwait"
+                | "RtTaskControls"
+                | "RtTaskSleep"
+                | "RtTaskModifiers"
+                | "RtScalarTaskOrder"
+                | "RtTaskErrors"
+                | "RtBackgroundTask"
+                | "RtBackgroundError"
+                | "RtTokenComposition"
+                | "RtVirtualGenericClosures"
+                | "RtBoundGenericClosures"
+                | "RtVirtualOwnGenericClosure"
+                | "RtNativeHigherOrderValue"
+                | "RtDefaultCallbacks"
+                | "RtTaskLimits"
+                | "RtTaskTimeout"
+                | "RtAutomaticCleanup"
+                | "RtCancelledFailure"
+                | "RtLinkedCancelledFailure"
+                | "concurrency::spawn await x10k"
+        )
 }
 
 // List coverage baseline: each admitted fixture must keep passing both runtime
@@ -43,8 +104,20 @@ const REQUIRED_LIST_COVERAGE: &[&str] = &[
     "memory::live walk",
     "memory::splay 2k",
 ];
+const REQUIRED_JSON_KPIS: &[&str] = &[
+    "compute::generate sort 8k",
+    "compute::json aggregate 2k",
+    "compute::json hello",
+    "compute::json ndjson events",
+    "compute::json request body",
+    "compute::json tree path",
+    "interfaces::polymorphic dispatch 100k",
+];
 fn require_list_coverage<T>(name: &str, result: Result<T, Rejection>) -> Result<T, Rejection> {
     match result {
+        Err(Rejection::Unsupported(reason)) if REQUIRED_JSON_KPIS.contains(&name) => Err(
+            Rejection::Fail(format!("JSON KPI coverage regression: {reason}")),
+        ),
         Err(Rejection::Unsupported(reason)) if REQUIRED_LIST_COVERAGE.contains(&name) => Err(
             Rejection::Fail(format!("list coverage regression: {reason}")),
         ),
@@ -80,7 +153,8 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         // Initializer admission is checked for the whole source project before
         // entry reachability. Rechecking every entry cannot change this result.
         // Standalone fixtures use a different project and must still be packed.
-        if *probe != "StackAllocation"
+        if super::standalone_source(manifest, probe).is_none()
+            && *probe != "StackAllocation"
             && !super::is_list_probe(probe)
             && let Some(rejection) = &initializer_rejection
         {
@@ -105,7 +179,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         } else if super::is_list_probe(probe) {
             manifest.join("rust_diff/list_probes")
         } else {
-            manifest.join("rust_diff")
+            super::standalone_source(manifest, probe).unwrap_or_else(|| manifest.join("rust_diff"))
         };
         let result = pack_result(
             build,
@@ -182,7 +256,16 @@ impl Coverage {
                 .map(|(name, result)| {
                     (
                         name.clone(),
-                        result.as_ref().map(|_| ()).map_err(Clone::clone),
+                        match result {
+                            Err(Rejection::Unsupported(reason))
+                                if REQUIRED_PROBES.contains(&name.as_str()) =>
+                            {
+                                Err(Rejection::Fail(format!(
+                                    "required rt coverage regressed: {reason}"
+                                )))
+                            }
+                            _ => result.as_ref().map(|_| ()).map_err(Clone::clone),
+                        },
                     )
                 })
                 .collect(),
@@ -214,6 +297,13 @@ impl Coverage {
             .iter()
             .filter_map(|(name, result)| match result {
                 Err(Rejection::Fail(reason)) => Some(format!("{name}/rt: {reason}")),
+                Err(Rejection::Unsupported(reason))
+                    if name.starts_with("strings::") || name.starts_with("string::") =>
+                {
+                    Some(format!(
+                        "{name}/rt: required string fixture unsupported: {reason}"
+                    ))
+                }
                 _ => None,
             })
             .collect()
@@ -244,14 +334,14 @@ impl Coverage {
         let mut blockers: Vec<_> = blockers.into_iter().collect();
         blockers.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
         let mut report = format!(
-            "BAML runtime coverage (normal AND GC stress): {} pass, {} unsupported, {} fail\nTelemetry off: required\nTelemetry low/medium/high/default: {}\n\nFirst unsupported constructs (fixtures blocked):\n",
+            "BAML runtime coverage (normal AND GC stress): {} pass, {} unsupported, {} fail\nTelemetry off: required\nString probes: off/low/medium/high/default required\nTelemetry low/medium/high/default for other probes: {}\n\nFirst unsupported constructs (fixtures blocked):\n",
             counts[0],
             counts[1],
             counts[2],
             if TELEMETRY_SUPPORTED {
                 "required"
             } else {
-                "not yet supported"
+                "not yet supported generally; required for standalone closure/task probes and spawn KPI"
             }
         );
         for (construct, count) in blockers {
@@ -315,4 +405,38 @@ fn list_coverage_baseline_rejects_admission_regressions() {
         require_list_coverage::<()>("Closures", Err(Rejection::Unsupported("closures".into()))),
         Err(Rejection::Unsupported(_))
     ));
+}
+
+#[test]
+fn standalone_closure_coverage_cannot_silently_become_unsupported() {
+    let artifacts = BTreeMap::from([(
+        "RtClosures".into(),
+        Err(Rejection::Unsupported("captured local".into())),
+    )]);
+    let coverage = Coverage::new(&artifacts);
+    assert_eq!(coverage.build_failures().len(), 1);
+    assert!(coverage.report().contains("required rt coverage regressed"));
+    for level in ["off", "low", "medium", "high", "default"] {
+        assert!(supports_level("RtClosures", level));
+        assert!(supports_level("RtEmptyClosures", level));
+    }
+}
+
+#[test]
+fn string_admission_regressions_fail_the_gate() {
+    let artifacts = BTreeMap::from([
+        (
+            "strings::semantics".into(),
+            Err(Rejection::Unsupported("builtin".into())),
+        ),
+        (
+            "string::concat loop 10k".into(),
+            Err(Rejection::Unsupported("loop".into())),
+        ),
+        (
+            "other".into(),
+            Err(Rejection::Unsupported("other job".into())),
+        ),
+    ]);
+    assert_eq!(Coverage::new(&artifacts).build_failures().len(), 2);
 }

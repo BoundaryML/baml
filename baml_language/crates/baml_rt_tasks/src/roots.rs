@@ -74,9 +74,7 @@ impl RootSource for Core {
                 registers.as_ptr().wrapping_add(registers.len()),
             );
             for task in self.tasks.values() {
-                if task.fiber.is_some()
-                    && let Some(sp) = task.parked_sp
-                {
+                if let Some(sp) = task.parked_sp {
                     visit(sp as *const usize, task.base as *const usize);
                 }
             }
@@ -89,6 +87,11 @@ impl RootSource for Core {
             }
         }
         for task in self.tasks.values() {
+            for slot in &task.managed_roots {
+                if unsafe { *slot.get() } != 0 {
+                    visit(slot.get());
+                }
+            }
             for value in &task.roots {
                 value.roots(visit);
             }

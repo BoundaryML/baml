@@ -48,6 +48,7 @@ pub(crate) fn invalid_argument(cx: &mut Cx, message: String) -> Box<Error> {
     match build(cx, 11, &[&message]) {
         Err(e) => e,
         Ok(value) => Box::new(Error {
+            telemetry_caught: None,
             telemetry_raise: None,
             telemetry_at: None,
             value,
@@ -62,6 +63,7 @@ pub(crate) fn serialization(cx: &mut Cx, message: String, path: &str, reason: &s
     match build(cx, 10, &[&message, path, reason]) {
         Err(e) => e,
         Ok(value) => Box::new(Error {
+            telemetry_caught: None,
             telemetry_raise: None,
             telemetry_at: None,
             value,
