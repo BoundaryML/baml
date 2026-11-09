@@ -120,6 +120,33 @@ function projection_error() -> int throws never {
   let xs = [NonThrow { amount: 131 }];
   xs.read_many()
 }
+class ProjectedFailure { amount: int }
+class ThrowingRead {
+  implements HasProjectedError {
+    type E = ProjectedFailure
+    function read(self) -> int throws ProjectedFailure {
+      throw ProjectedFailure { amount: 137 }
+    }
+  }
+}
+function projection_catch() -> int {
+  let xs = [ThrowingRead {}];
+  xs.read_many() catch (e) { ProjectedFailure => e.amount }
+}
+class DecodedBox<T> { value: T }
+class DecodedPair { ints: DecodedBox<int>, texts: DecodedBox<string> }
+type DecodedAlias = DecodedBox<int> | DecodedAlias[]
+function decoded_generics() -> int {
+  let pair = baml.json.decode<DecodedPair>(`{"ints":{"value":139},"texts":{"value":"generic"}}`);
+  let decoded = baml.json.decode<DecodedBox<int>>(`{"value":149}`);
+  let list = baml.json.decode<DecodedBox<int>[]>(`[{"value":151}]`);
+  let alias = baml.json.decode<DecodedAlias>(`[{"value":157}]`);
+  let from_alias = match (alias) {
+    let value: DecodedBox<int> => value.value,
+    let values: DecodedAlias[] => match (values[0]) { let item: DecodedBox<int> => item.value, _ => 0 },
+  };
+  pair.ints.value + pair.texts.value.length() + decoded.value + list[0].value + from_alias
+}
 class EffectCalculator {
   base: int
   function add(self, n: int) -> int { self.base + n }
@@ -160,6 +187,7 @@ function main() -> int {
   total += phantom_enum(Phantom<MetadataEnum> { number: 83 });
   total += effect_result() + bottom_result() + explicit_json_override();
   total += projection_fields() + projection_error();
+  total += projection_catch() + decoded_generics();
   total += alias_dispatch(AliasOwner<string> { left: 101, right: "alias" });
   total
 }

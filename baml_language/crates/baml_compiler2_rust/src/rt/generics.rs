@@ -1028,7 +1028,7 @@ impl Plan<'_> {
         };
         self.register_field_class_type(&anchored.substitute_symbolic(&[]))
     }
-    fn register_field_class_type(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
+    pub(super) fn register_field_class_type(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
         use bex_vm_types::RuntimeTy as T;
         type Origins = baml_type::template::TyTemplateOrigins<bex_vm_types::TypeHead>;
         enum Work {

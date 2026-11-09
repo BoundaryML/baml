@@ -425,6 +425,12 @@ impl Plan<'_> {
         let opaque_task = super::tasks::class_is(self, object, "spawn.Limit")
             || super::tasks::class_is(self, object, "spawn.CancelToken");
         let field_types = self.class_field_types(object);
+        // A non-generic owner can introduce concrete generic field layouts
+        // without any constructor or local of those instantiated types.
+        for ty in &field_types {
+            self.register_field_class_type(ty)?;
+        }
+        let class = self.class(object);
         let fields = field_types
             .iter()
             .map(|t| {

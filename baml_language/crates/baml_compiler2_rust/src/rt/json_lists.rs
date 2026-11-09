@@ -32,9 +32,7 @@ impl Plan<'_> {
                     }
                 }
             }
-            T::Class(head, args) if args.is_empty() => {
-                Repr::Ptr(self.index.class_at(head).ok_or_else(|| no("JSON class"))?.0)
-            }
+            T::Class(..) => self.repr(&ty.substitute_symbolic(&[]))?,
             T::Union(m) => {
                 if m.len() == 2 && m.iter().any(|m| matches!(m, T::Null)) {
                     let other =
@@ -193,13 +191,12 @@ impl SchemaEmitter<'_, '_> {
                 let element = self.template(t)?;
                 self.list(self.plan.template_repr(ty)?, element)?
             }
-            T::Class(head, args) if args.is_empty() => self.class(
-                self.plan
-                    .index
-                    .class_at(head)
-                    .ok_or_else(|| no("JSON class"))?
-                    .0,
-            )?,
+            T::Class(..) => {
+                let Repr::Ptr(class) = self.plan.template_repr(ty)? else {
+                    return Err(no("JSON class representation"));
+                };
+                self.class(class)?
+            }
             T::Union(m) => {
                 let members = m
                     .iter()
@@ -248,8 +245,11 @@ impl SchemaEmitter<'_, '_> {
                 let element = self.field(t)?;
                 self.list(self.plan.field_repr(ty)?, element)?
             }
-            T::Class(head, args) if args.is_empty() => {
-                self.class(self.plan.class_tag(head.tag())?)?
+            T::Class(..) => {
+                let Repr::Ptr(class) = self.plan.field_repr(ty)? else {
+                    return Err(no("JSON class representation"));
+                };
+                self.class(class)?
             }
             T::Union(m) => {
                 let members = m
@@ -347,13 +347,8 @@ pub(super) fn capture_template(
                     .collect::<Gen<Vec<_>>>()?
                     .join(",")
             ),
-            T::Class(h, _) => format!(
-                "Class(CAPTURE_D{})",
-                plan.index
-                    .class_at(h)
-                    .ok_or_else(|| no("JSON capture class"))?
-                    .0
-            ),
+            T::Class(..) =>
+                return capture_codegen::capture_type(plan, &ty.substitute_symbolic(&[])),
             _ => return Err(no("JSON list capture type")),
         }
     ))
@@ -519,6 +514,7 @@ pub(super) fn record_schema(plan: &mut Plan<'_>, ty: &baml_compiler2_mir::TyTemp
         classes: &mut BTreeSet<usize>,
     ) -> Gen<()> {
         use bex_vm_types::RuntimeTy as T;
+        plan.register_field_class_type(ty)?;
         plan.record_field_ty(ty)?;
         match ty {
             T::TypeAlias(head) if aliases.insert(head.tag()) => {
