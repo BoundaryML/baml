@@ -92,8 +92,10 @@ impl RootSource for Core {
                     visit(slot.get());
                 }
             }
-            for value in &task.roots {
-                value.roots(visit);
+            if let Some(auxiliary) = &task.auxiliary {
+                for value in &auxiliary.roots {
+                    value.roots(visit);
+                }
             }
         }
         for f in &self.futures {

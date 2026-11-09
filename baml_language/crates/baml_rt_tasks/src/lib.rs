@@ -519,7 +519,7 @@ struct Executor {
 }
 enum PooledFiber {
     Idle {
-        executor: Executor,
+        executor: Box<Executor>,
         base: usize,
         limit: usize,
     },
@@ -527,7 +527,7 @@ enum PooledFiber {
 }
 struct Task {
     hook: Option<SwitchHook>,
-    fiber: Option<Executor>,
+    fiber: Option<Box<Executor>>,
     base: usize,
     parked_sp: Option<usize>,
     stack_limit: usize,
@@ -536,15 +536,41 @@ struct Task {
     future: FutureHandle,
     cancel: TaskCancel,
     shield: usize,
-    io_cancel: Option<CancellationToken>,
     needs_service: bool,
+    managed_roots: [UnsafeCell<usize>; 2],
+    auxiliary: Option<Box<TaskAuxiliary>>,
+}
+// Most tasks never perform I/O, wait on a timer/gate, or own host resources.
+// Keep that state out of the scheduler's frequently moved task records.
+#[derive(Default)]
+struct TaskAuxiliary {
+    io_cancel: Option<CancellationToken>,
     io_epoch: u64,
     completion: Option<Result<OwnedValue, Err>>,
     timer: Option<Instant>,
     ticket: Option<Tickets>,
     roots: Vec<Value>,
-    managed_roots: [UnsafeCell<usize>; 2],
     host: Option<mpsc::Sender<Result<OwnedValue, Err>>>,
+}
+impl Task {
+    fn auxiliary(&mut self) -> &mut TaskAuxiliary {
+        self.auxiliary.get_or_insert_with(Default::default)
+    }
+    fn take_io_cancel(&mut self) -> Option<CancellationToken> {
+        self.auxiliary.as_mut().and_then(|a| a.io_cancel.take())
+    }
+    fn take_host(&mut self) -> Option<mpsc::Sender<Result<OwnedValue, Err>>> {
+        self.auxiliary.as_mut().and_then(|a| a.host.take())
+    }
+    fn admitted(&mut self) -> bool {
+        self.auxiliary
+            .as_mut()
+            .and_then(|a| a.ticket.as_mut())
+            .is_none_or(Tickets::acquire)
+    }
+    fn timer(&self) -> Option<Instant> {
+        self.auxiliary.as_ref().and_then(|a| a.timer)
+    }
 }
 #[cfg(feature = "instrument")]
 #[derive(Clone, Debug, Default)]
@@ -844,7 +870,7 @@ impl TaskLoop {
                 .tasks
                 .values()
                 .filter_map(|t| {
-                    t.timer
+                    t.timer()
                         .into_iter()
                         .chain(t.cancel.deadline.filter(|_| t.shield == 0))
                         .min()
@@ -890,7 +916,7 @@ impl TaskLoop {
         // Drop outside Core borrow: forced unwinding runs arbitrary Rust drops.
         let tasks = self.core.borrow_mut().tasks.drain();
         for (_, mut t) in tasks {
-            if let Some(token) = t.io_cancel.take() {
+            if let Some(token) = t.take_io_cancel() {
                 token.cancel();
             }
             // Forced unwinding executes code on this fiber too. Install its
@@ -915,7 +941,7 @@ impl TaskLoop {
                 unsafe { (hook.enter)(hook.data) };
             }
             t.future.0.borrow_mut().state = FutureState::Cancelled;
-            if let Some(reply) = t.host.take() {
+            if let Some(reply) = t.take_host() {
                 let _ = reply.send(Err(Err::Cancelled));
             }
         }
@@ -1005,11 +1031,11 @@ fn run_one(core: &Rc<RefCell<Core>>, id: usize) {
                 task.future.0.borrow_mut().cancel_requested |= task.cancel.is_cancelled();
                 task.cancel.cancel();
             }
-            if let Some(token) = task.io_cancel.take() {
+            if let Some(token) = task.take_io_cancel() {
                 token.cancel();
             }
             c.slow_tasks -= usize::from(task.needs_service);
-            let reply = task.host.take().map(|reply| (reply, result.clone()));
+            let reply = task.take_host().map(|reply| (reply, result.clone()));
             let state = match result {
                 Ok(v) => FutureState::Ready(v),
                 Err(Err::Cancelled) => FutureState::Cancelled,
@@ -1232,7 +1258,7 @@ fn spawn(
                     yielder.suspend(true);
                 }
             });
-            (Executor { fiber, mailbox }, base, limit)
+            (Box::new(Executor { fiber, mailbox }), base, limit)
         }
     };
     debug_assert!(executor.mailbox.job.is_none() && executor.mailbox.result.is_none());
@@ -1254,15 +1280,17 @@ fn spawn(
             future: future.clone(),
             cancel,
             shield: 0,
-            io_cancel: None,
             needs_service,
-            io_epoch: 0,
-            completion: None,
-            timer: None,
-            ticket,
-            roots: options.roots,
             managed_roots: options.managed_roots.map(UnsafeCell::new),
-            host: None,
+            auxiliary: if ticket.is_some() || !options.roots.is_empty() {
+                Some(Box::new(TaskAuxiliary {
+                    ticket,
+                    roots: options.roots,
+                    ..Default::default()
+                }))
+            } else {
+                None
+            },
         },
     );
     c.ready.push_back(id);
@@ -1386,12 +1414,14 @@ impl TaskCx<'_> {
     fn cancelled_checkpoint(&mut self) -> Result<(), Err> {
         let mut c = self.core.borrow_mut();
         let t = c.tasks.get_mut(&self.id).unwrap();
-        if let Some(token) = t.io_cancel.take() {
+        if let Some(token) = t.take_io_cancel() {
             token.cancel();
         }
-        t.io_epoch += 1;
-        t.completion = None;
-        t.timer = None;
+        if let Some(auxiliary) = &mut t.auxiliary {
+            auxiliary.io_epoch += 1;
+            auxiliary.completion = None;
+            auxiliary.timer = None;
+        }
         Err(Err::Cancelled)
     }
     // Keep the spill frame alive until resume. No Core borrow crosses the switch.
@@ -1437,9 +1467,7 @@ impl TaskCx<'_> {
                 .tasks
                 .get_mut(&self.id)
                 .unwrap()
-                .ticket
-                .as_mut()
-                .is_none_or(Tickets::acquire);
+                .admitted();
             if admitted {
                 return Ok(());
             }
@@ -1609,6 +1637,7 @@ impl TaskCx<'_> {
             .tasks
             .get_mut(&self.id)
             .unwrap()
+            .auxiliary()
             .timer = Some(Instant::now() + duration);
         let result = self.suspend(WaitReason::Timer);
         self.core
@@ -1616,6 +1645,7 @@ impl TaskCx<'_> {
             .tasks
             .get_mut(&self.id)
             .unwrap()
+            .auxiliary()
             .timer = None;
         result
     }
@@ -1628,9 +1658,10 @@ impl TaskCx<'_> {
         let (runtime, tx, token, epoch) = {
             let mut c = self.core.borrow_mut();
             let t = c.tasks.get_mut(&self.id).unwrap();
-            t.io_epoch += 1;
-            let epoch = t.io_epoch;
-            let token = t
+            let auxiliary = t.auxiliary();
+            auxiliary.io_epoch += 1;
+            let epoch = auxiliary.io_epoch;
+            let token = auxiliary
                 .io_cancel
                 .get_or_insert_with(CancellationToken::new)
                 .clone();
@@ -1659,6 +1690,7 @@ impl TaskCx<'_> {
             .tasks
             .get_mut(&self.id)
             .unwrap()
+            .auxiliary()
             .completion
             .take()
             .expect("I/O completion before resume")
@@ -1716,10 +1748,10 @@ fn message(core: &Rc<RefCell<Core>>, msg: Message) {
             let mut c = core.borrow_mut();
             c.io_pending -= 1;
             if let Some(t) = c.tasks.get_mut(&id)
-                && t.io_epoch == epoch
+                && t.auxiliary.as_ref().is_some_and(|a| a.io_epoch == epoch)
                 && t.state == TaskState::Parked(WaitReason::Io)
             {
-                t.completion = Some(result);
+                t.auxiliary().completion = Some(result);
                 wake(&mut c, id);
             }
         }
@@ -1739,7 +1771,12 @@ fn message(core: &Rc<RefCell<Core>>, msg: Message) {
                 opts,
                 Body::Boxed(Box::new(move |cx| body(cx, args))),
             );
-            core.borrow_mut().tasks.get_mut(&f.id()).unwrap().host = Some(reply);
+            core.borrow_mut()
+                .tasks
+                .get_mut(&f.id())
+                .unwrap()
+                .auxiliary()
+                .host = Some(reply);
         }
     }
 }
@@ -1794,9 +1831,8 @@ fn service(core: &Rc<RefCell<Core>>) {
                 return None;
             }
             let cancelled = t.shield == 0 && t.cancel.is_cancelled();
-            let timed = t.timer.is_some_and(|d| now >= d);
-            let admitted = t.state == TaskState::Parked(WaitReason::Admission)
-                && t.ticket.as_mut().is_none_or(Tickets::acquire);
+            let timed = t.timer().is_some_and(|d| now >= d);
+            let admitted = t.state == TaskState::Parked(WaitReason::Admission) && t.admitted();
             (cancelled || timed || admitted).then_some(id)
         })
         .collect();
