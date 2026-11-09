@@ -106,6 +106,7 @@ const FEATURES: &[&dyn Feature] = &[
     &loop_ranges::Feature,
     &super::operators::Feature,
     &super::hashing::Feature,
+    &super::trace::Feature,
     &super::equality::Feature,
     &calls::Feature,
 ];

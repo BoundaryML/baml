@@ -46,7 +46,7 @@ pub fn supports_rt_reflection(path: &str) -> bool {
         | "reflect.Union.member_types" | "reflect.Function.params" | "reflect.Map._new"
         | "reflect.Literal.new" | "reflect.Literal.value" | "reflect.Type._implements"
         | "reflect.Type.to_baml" | "reflect.Class.fields" | "reflect.Class.metadata"
-        | "reflect.Enum.values" | "reflect.Enum.metadata")
+        | "reflect.Enum.values" | "reflect.Enum.metadata" | "reflect.call_any" | "reflect.signature")
         || path.strip_prefix("reflect.reflect.TypeView$for$")
             .and_then(|path|path.strip_suffix(".as_type"))
             .is_some_and(|kind| KINDS.contains(&kind))
@@ -159,6 +159,15 @@ pub fn classify_builtin(d: &NativeBuiltin) -> (BuiltinGroup, RtDisposition) {
             "baml.hash.DefaultHasher.new"
                 | "baml.hash.Hasher$for$DefaultHasher.write"
                 | "baml.hash.Hasher$for$DefaultHasher.finish"
+                | "trace._options"
+                | "trace.hidden"
+                | "trace.timing"
+                | "trace._span"
+                | "trace.context"
+                | "trace.Options.context"
+                | "trace.Options.mode"
+                | "trace.Options._span"
+                | "trace.Options.inspect"
         )
     {
         CompilerIntrinsic

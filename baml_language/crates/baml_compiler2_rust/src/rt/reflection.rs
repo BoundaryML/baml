@@ -44,16 +44,23 @@ pub(super) fn prepare_native(plan: &mut Plan<'_>, name: &str) -> Gen<()> {
     let extra: &[&str] = match name {
         "reflect.Type.array" => &["Array"],
         "reflect.Type.optional" | "reflect.Union.member_types" => &["Union"],
-        "reflect.Type.of_value" | "reflect.Type._implements" | "reflect.Type.to_baml" => &[],
+        "reflect.Type.of_value"
+        | "reflect.Type._implements"
+        | "reflect.Type.to_baml"
+        | "reflect.call_any" => &[],
         "reflect.Function.params" => &["Function", "function.Parameter"],
         "reflect.Map._new" => &["Map"],
         "reflect.Literal.value" | "reflect.Literal.new" => &["Literal"],
         "reflect.Class.fields" => &["Class", "class.Field", "Meta"],
         "reflect.Enum.values" => &["Enum", "enum.Value", "Meta"],
         "reflect.Class.metadata" => &["Class", "Meta"],
+        "reflect.signature" => &["Signature", "Arg"],
         "reflect.Enum.metadata" => &["Enum", "Meta"],
         _ => &[""],
     };
+    if name == "reflect.signature" && plan.reflection_signatures.is_none() {
+        plan.reflection_signatures = Some(Vec::new());
+    }
     plan.reflect_meta |= matches!(
         name,
         "reflect.Class.fields"
@@ -128,7 +135,16 @@ impl registry::Feature for Feature {
                     plan.record(repr)?;
                 }
             }
-            Ok(registry::Reach::default())
+            Ok(registry::Reach {
+                // call_any stays on the stack as a native frame while its
+                // callee runs, so it needs a telemetry identity.
+                targets: if name == "reflect.call_any" {
+                    vec![id]
+                } else {
+                    Vec::new()
+                },
+                ..Default::default()
+            })
         })
     }
 
@@ -146,6 +162,9 @@ impl registry::Feature for Feature {
         }
         if !native(name) {
             return None;
+        }
+        if name == "reflect.call_any" {
+            return Some(call_any(e, values));
         }
         Some((|| {
             if let Some(result) = constructed(e, name, values)? {
@@ -420,6 +439,7 @@ fn constructed(
                 list,
             )
         }
+        "reflect.signature" => signature(e, values)?,
         "reflect.Type.of_value" => {
             let value = e.coerce(values[0].clone(), Repr::Tagged)?;
             (
@@ -513,7 +533,7 @@ fn reflect_head(e: &Emitter<'_, '_>, namespace: &str, name: &str) -> Gen<baml_ty
 /// A block allocating `class` from per-field Rust expressions of the field's
 /// storage representation. Inputs are bound before allocation so they stay
 /// conservatively rooted in Rust locals.
-fn build(e: &Emitter<'_, '_>, class: usize, values: &[(&str, String)]) -> Gen<String> {
+pub(super) fn build(e: &Emitter<'_, '_>, class: usize, values: &[(&str, String)]) -> Gen<String> {
     let layout = &e.plan.layouts[&class];
     let declared = &e.plan.class(class).fields;
     if declared.len() != values.len() {
@@ -741,6 +761,20 @@ pub(super) fn collect(
             plan.reflection_fields.push((entry, object, fields));
         }
     }
+    if plan.reflection_signatures.is_some() {
+        let mut signatures = Vec::new();
+        for &object in &plan.callables {
+            let info = plan.index.info(object);
+            let types = info
+                .param_types
+                .iter()
+                .chain([&info.return_type, &info.throws_type])
+                .map(|t| t.substitute_symbolic(&[]))
+                .collect();
+            signatures.push((object, types));
+        }
+        plan.reflection_signatures = Some(signatures);
+    }
     Ok(())
 }
 
@@ -910,4 +944,186 @@ pub(super) fn emit(out: &mut String, db: &dyn Db, plan: &Plan<'_>) -> Gen<()> {
     }
     out.push_str("]};\n");
     Ok(())
+}
+
+/// `reflect.call_any(f, args)`: a closed-world stub per materialized callable
+/// orders named arguments by its signature, omits absent optionals (the
+/// callee's own default fires) and widens exact ints into float slots, then
+/// calls through the callable's erased entry exactly like an indirect call.
+fn call_any(e: &Emitter<'_, '_>, values: &[(String, Repr)]) -> Gen<(String, Repr)> {
+    let [callable, args] = values else {
+        return Err(no("call_any arity"));
+    };
+    // `call_any` used as a function value has no call site of its own.
+    if !matches!(e.all[&e.object].kind, MirFunctionKind::Bytecode(_)) {
+        return Ok((
+            "{return Err(rt::Error::internal(\"reflect.call_any through a function value\".into()));}".into(),
+            Repr::Tagged,
+        ));
+    }
+    let callable = e.coerce(callable.clone(), Repr::Closure)?;
+    let map = e.map_type(args.1)?;
+    let (key, value) = e.plan.map_parts(args.1)?;
+    if key != Repr::Str || value != Repr::Tagged {
+        return Err(no("call_any argument map"));
+    }
+    let float_slot = |t: &bex_vm_types::TyTemplate| {
+        fn float(t: &bex_vm_types::TyTemplate) -> bool {
+            match t {
+                bex_vm_types::TyTemplate::Float => true,
+                bex_vm_types::TyTemplate::Union(m) => {
+                    m.iter().any(float)
+                        && m.iter()
+                            .all(|t| matches!(t, bex_vm_types::TyTemplate::Null) || float(t))
+                }
+                _ => false,
+            }
+        }
+        float(t)
+    };
+    let native = e
+        .plan
+        .program
+        .objects
+        .iter()
+        .enumerate()
+        .find_map(|(i, o)| {
+            (matches!(o, Object::Function(_)) && e.plan.index.builtin_path(i) == "reflect.call_any")
+                .then_some(i)
+        })
+        .map(|i| format!("TELEMETRY_INDEX_{i}"))
+        .ok_or_else(|| no("reflect.call_any declaration"))?;
+    let mut branches = String::new();
+    for &object in &e.plan.callables {
+        let info = e.plan.index.info(object);
+        let params = (0..info.arity)
+            .map(|i| {
+                format!(
+                    "rt::reflection::CallParam{{name:{:?},optional:{},float:{}}}",
+                    info.param_names.get(i).filter(|n| !n.is_empty()),
+                    info.param_has_default.get(i).copied().unwrap_or(false),
+                    info.param_types.get(i).is_some_and(float_slot)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let site = e.telemetry_site(object);
+        write!(
+            branches,
+            "{object}=>{{let a=rt::reflection::call_any_args(&[{params}],rt::closures::is_bound(env),&provided)?;rt::telemetry::evidence::native_frame({native},{site},||rt::closures::call(env,{site},&a))}},"
+        )
+        .unwrap();
+    }
+    let code = format!(
+        "(||->R<rt::Dyn>{{unsafe{{let m={map}::from_raw(map_raw);let provided=(0..m.len()).map(|i|{{let (k,v)=m.entry(i).unwrap();(k.to_owned(),v)}}).collect::<Vec<_>>();match rt::closures::object(env)?{{{branches}_=>Err(rt::Error::internal(\"call_any on a callable outside the closed world\".into()))}}}}}})()"
+    );
+    return Ok((
+        format!(
+            "{{let env={callable};let map_raw={};{}}}",
+            args.0,
+            e.fallible(&code)
+        ),
+        Repr::Tagged,
+    ));
+}
+
+/// `reflect.signature(f)`: the callable's declared parameters (a bound
+/// method's receiver dropped), return and throws types, name and docstring.
+fn signature(e: &Emitter<'_, '_>, values: &[(String, Repr)]) -> Gen<(String, Repr)> {
+    let desc = e.plan.reflection_descriptor().unwrap();
+    let callable = e.coerce(values[0].clone(), Repr::Closure)?;
+    let signature = kind_class(e.plan, "Signature")?;
+    let arg = kind_class(e.plan, "Arg")?;
+    let field = |class: usize, name: &str| -> Gen<Repr> {
+        let i = e
+            .plan
+            .class(class)
+            .fields
+            .iter()
+            .position(|f| f.name.as_str() == name)
+            .ok_or_else(|| no("reflect.Signature field"))?;
+        Ok(e.plan.layouts[&class].fields[i])
+    };
+    let args = field(signature, "args")?;
+    let opts = field(signature, "opts")?;
+    let args_desc = *e
+        .lists
+        .get(&args)
+        .ok_or_else(|| no("Signature.args layout"))?;
+    let opts_desc = *e
+        .lists
+        .get(&opts)
+        .ok_or_else(|| no("Signature.opts layout"))?;
+    let opts_map = e.map_type(opts)?;
+    let arg_object = build(
+        e,
+        arg,
+        &[
+            ("name", "cx.string(&label)?.as_raw()".into()),
+            (
+                "type",
+                format!("rt::reflection::intern_capture(&REFLECT_PROGRAM,{desc},ty)?"),
+            ),
+        ],
+    )?;
+    let text = |v: &str| format!("match {v}{{Some(s)=>cx.string(s)?.as_raw(),None=>0usize}}");
+    let object = build(
+        e,
+        signature,
+        &[
+            ("name", text("name")),
+            ("args", "args.as_raw()".into()),
+            ("opts", "opts.as_raw()".into()),
+            (
+                "returns",
+                format!("rt::reflection::intern_capture(&REFLECT_PROGRAM,{desc},ret)?"),
+            ),
+            (
+                "errors",
+                format!("rt::reflection::intern_capture(&REFLECT_PROGRAM,{desc},throws)?"),
+            ),
+            ("docstring", text("doc")),
+        ],
+    )?;
+    let mut branches = String::new();
+    for (object_id, types) in e.plan.reflection_signatures.iter().flatten() {
+        let info = e.plan.index.info(*object_id);
+        let captures = types
+            .iter()
+            .map(|t| {
+                Ok(format!(
+                    "&{}",
+                    capture_codegen::capture_wire_type(e.plan, t)?
+                ))
+            })
+            .collect::<Gen<Vec<_>>>()?;
+        let arity = types.len() - 2;
+        let params = (0..arity)
+            .map(|i| {
+                format!(
+                    "({:?},{},{})",
+                    info.param_names.get(i).filter(|n| !n.is_empty()),
+                    info.param_has_default.get(i).copied().unwrap_or(false),
+                    captures[i]
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        write!(
+            branches,
+            "{object_id}=>(&[{params}] as &[(Option<&str>,bool,&rt::telemetry::capture::Type)],{},{},{:?},{:?}),",
+            captures[arity],
+            captures[arity + 1],
+            info.declared_name().map(|n| n.to_string()),
+            info.docstring
+        )
+        .unwrap();
+    }
+    let code = format!(
+        "(||->R<usize>{{unsafe{{let mut cx=rt::strings::Cx::current();let (params,ret,throws,name,doc):(&[(Option<&str>,bool,&rt::telemetry::capture::Type)],&rt::telemetry::capture::Type,&rt::telemetry::capture::Type,Option<&str>,Option<&str>)=match rt::closures::object(env)?{{{branches}_=>return Err(rt::Error::internal(\"signature of a callable outside the closed world\".into()))}};let params=if rt::closures::is_bound(env)&&!params.is_empty(){{&params[1..]}}else{{params}};let args=rt::lists::List::<rt::lists::Ptr>::new(&mut cx,{args_desc})?;let opts={opts_map}::new(&mut cx,{opts_desc})?;let mut positional=0usize;for (pname,optional,ty) in params{{let ty=*ty;if *optional{{let Some(n)=pname else{{continue}};let label=n.to_string();let o={arg_object};let key=cx.string(n)?;opts.set(&mut cx,key,rt::maps::Pointer::from_raw(o))?;}}else{{let label=match pname{{Some(n)=>n.to_string(),None=>format!(\"$arg{{positional}}\")}};let o={arg_object};args.push(&mut cx,rt::lists::Ptr::from_raw(o))?;positional+=1;}}}}Ok({object})}}}})()"
+    );
+    Ok((
+        format!("{{let env={callable};{}}}", e.fallible(&code)),
+        Repr::Ptr(signature),
+    ))
 }

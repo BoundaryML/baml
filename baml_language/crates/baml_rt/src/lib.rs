@@ -35,6 +35,7 @@ pub mod scalars;
 pub mod strings;
 pub mod tasks;
 pub mod telemetry;
+pub mod trace;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
 use baml_rt_tasks::{Config, TaskCx, TaskLoop, Value};
 pub use bex_vm_types::float_order::{cmp as float_cmp, eq as float_eq};

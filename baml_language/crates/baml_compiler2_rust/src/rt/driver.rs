@@ -73,6 +73,7 @@ fn compile_entry<'db>(
         reflected: false,
         reflect_meta: false,
         reflection_fields: Vec::new(),
+        reflection_signatures: None,
         reflection_types: Vec::new(),
         next_object: program.objects.len(),
         class_instances: Vec::new(),

@@ -78,7 +78,12 @@ pub(super) fn emit(
             });
         }
     }
-    for (_, _, types) in &plan.reflection_fields {
+    for types in plan
+        .reflection_fields
+        .iter()
+        .map(|(_, _, types)| types)
+        .chain(plan.reflection_signatures.iter().flatten().map(|(_, types)| types))
+    {
         for ty in types {
             ty.visit_heads(&mut |head| {
                 for (object, declaration) in plan.program.objects.iter().enumerate() {

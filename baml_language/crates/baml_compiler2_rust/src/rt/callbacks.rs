@@ -173,8 +173,8 @@ fn emit(
         code.push_str(&format!(
             "{};",
             e.fallible(&format!(
-                "out.push(&mut rt::strings::Cx::current(),{}::from_raw({selected}))",
-                output.slot()?
+                "out.push(&mut rt::strings::Cx::current(),{})",
+                output.to_slot(&selected)?
             ))
         ));
     } else if output.pointer() {

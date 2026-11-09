@@ -54,3 +54,31 @@ function RtNativeHashing() -> int {
     values.length()
 }
 
+
+function describe_settings(label: string, settings: trace.Settings) -> void {
+    let mode = "-";
+    if (settings.mode != null) {
+        let m = settings.mode ?? trace.Mode.Span;
+        mode = `${m}`;
+    }
+    log.info(`${label} mode=${mode} in=${settings.capture.inputs ?? "-"} out=${settings.capture.output ?? "-"} err=${settings.capture.error ?? "-"} id=${settings.context.distinct_id ?? "-"}`);
+}
+
+function RtNativeTraceOptions() -> int {
+    let metadata: map<string, string | int | float | bool | null> = { "count": 1, "remove": null, "ratio": 1.5, "flag": true, "name": "x" };
+    let options = trace.context(metadata = metadata, distinct_id = "user")
+        .context(metadata = { "flag": false })
+        .mode(trace.Mode.Hidden)
+        .span(inputs = false, output = false, error = false);
+    metadata["count"] = 99;
+    describe_settings("chain", options.inspect());
+    describe_settings("empty", trace.context().inspect());
+    describe_settings("hidden", trace.hidden().inspect());
+    describe_settings("timing", trace.timing().inspect());
+    describe_settings("span", trace.span().inspect());
+    describe_settings("empty_span", trace.empty_span().inspect());
+    describe_settings("options", trace.options(mode = trace.Mode.Timing).inspect());
+    describe_settings("unset", trace.options().inspect());
+    describe_settings("remode", trace.hidden().mode(null).inspect());
+    7
+}

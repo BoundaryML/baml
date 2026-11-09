@@ -735,6 +735,73 @@ pub unsafe fn map(program: &'static Program, desc: u32, key: usize, value: usize
     )
 }
 
+/// One parameter of a callable reached by `reflect.call_any`.
+pub struct CallParam {
+    pub name: Option<&'static str>,
+    pub optional: bool,
+    pub float: bool,
+}
+
+/// Arrange `call_any`'s named arguments in signature order, as the
+/// interpreter does: a nameless required parameter is addressed `$argN`,
+/// an absent optional is omitted so the callee's default fires, and an exact
+/// int widens into a float slot. Ill-typed or extraneous arguments raise the
+/// interpreter's `InvalidArgumentError`, which needs typed native errors.
+pub fn call_any_args(params: &[CallParam], bound: bool, provided: &[(String, Dyn)]) -> R<Vec<Dyn>> {
+    let invalid = || {
+        crate::Error::internal(
+            "call_any argument mismatch (typed InvalidArgumentError pending)".into(),
+        )
+    };
+    let params = if bound && !params.is_empty() {
+        &params[1..]
+    } else {
+        params
+    };
+    let mut args = Vec::with_capacity(params.len());
+    let mut matched = 0;
+    let mut positional = 0;
+    for param in params {
+        let key = match (param.name, param.optional) {
+            (Some(name), _) => Some(name.to_owned()),
+            (None, false) => Some(format!("$arg{positional}")),
+            (None, true) => None,
+        };
+        if !param.optional {
+            positional += 1;
+        }
+        let value = key
+            .as_deref()
+            .and_then(|k| provided.iter().find(|(name, _)| name == k).map(|(_, v)| *v));
+        match value {
+            Some(mut value) => {
+                if param.float && value.tag == 0 {
+                    let n = value.payload as i64;
+                    let widened = n as f64;
+                    if widened as i64 != n {
+                        return Err(invalid());
+                    }
+                    value = Dyn {
+                        tag: crate::FLOAT_TAG,
+                        payload: widened.to_bits(),
+                    };
+                }
+                matched += 1;
+                args.push(value);
+            }
+            None if param.optional => args.push(Dyn {
+                tag: u64::MAX,
+                payload: 0,
+            }),
+            None => return Err(invalid()),
+        }
+    }
+    if matched != provided.len() {
+        return Err(invalid());
+    }
+    Ok(args)
+}
+
 /// `reflect.Literal.new(value)`: the singleton type of a scalar value.
 /// # Safety
 /// `value` is a live string, bigint, int or bool value of this program.

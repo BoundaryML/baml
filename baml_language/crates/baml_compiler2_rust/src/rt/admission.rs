@@ -79,10 +79,14 @@ pub(super) fn collect<'db>(
                 && !super::reflection::native(name)
                 && !super::operators::native(name)
                 && !super::hashing::native(name)
+                && !super::trace::native(name)
             {
                 return Err(no(name));
             }
-            if super::operators::native(name) || super::hashing::native(name) {
+            if super::operators::native(name)
+                || super::hashing::native(name)
+                || super::trace::native(name)
+            {
             } else if super::reflection::native(name) {
                 let name = name.to_owned();
                 super::reflection::prepare_native(plan, &name)?;

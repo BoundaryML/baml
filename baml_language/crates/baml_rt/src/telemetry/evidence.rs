@@ -2,6 +2,40 @@
 use super::*;
 use btel_records::{ErrorFrame, RaiseKind, RaiseStack, UnwindResult};
 
+/// Marks a native builtin's frame that stays on the stack while its callee
+/// runs (`reflect.call_any`): the interpreter reports it between the frames.
+const NATIVE_FRAME: u8 = u8::MAX;
+
+/// Run `call` beneath a native frame for `function` (a telemetry function
+/// index) when error evidence is being recorded frame by frame.
+///
+/// # Safety
+/// Called from generated code on the owner thread with a live session, if any.
+pub unsafe fn native_frame<T>(function: usize, site: usize, call: impl FnOnce() -> R<T>) -> R<T> {
+    let ptr = CURRENT.get();
+    if ptr.is_null() || unsafe { (*ptr).evidence_frame.is_null() } {
+        return call();
+    }
+    let parent = unsafe { (*ptr).evidence_frame };
+    // The caller's frame reports the native call site.
+    unsafe { (*parent).pc = (*ptr).sites[site].pc };
+    let mut frame = EvidenceFrame {
+        parent,
+        function,
+        pc: 0,
+        mode: NATIVE_FRAME,
+    };
+    unsafe { (*ptr).evidence_frame = &mut frame };
+    struct Restore(*mut State, *mut EvidenceFrame);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            unsafe { (*self.0).evidence_frame = self.1 };
+        }
+    }
+    let _restore = Restore(ptr, parent);
+    call()
+}
+
 pub(super) struct EvidenceFrame {
     parent: *mut EvidenceFrame,
     function: usize,
@@ -197,12 +231,13 @@ pub fn raised_with_kind(
     while !cursor.is_null() {
         let current = unsafe { &*cursor };
         frame_count += 1;
+        let native = current.mode == NATIVE_FRAME;
         observed &= current.mode != 0;
         if frames.len() < btel_records::MAX_ERROR_FRAMES {
             frames.push(ErrorFrame {
                 function: Some(state.functions[current.function]),
-                pc: Some(current.pc),
-                native: false,
+                pc: (!native).then_some(current.pc),
+                native,
             });
         }
         cursor = current.parent;

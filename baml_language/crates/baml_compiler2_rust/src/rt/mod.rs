@@ -81,6 +81,9 @@ struct Plan<'a> {
     reflect_meta: bool,
     /// Static class entry, class object and its substituted field types.
     reflection_fields: Vec<(usize, usize, Vec<bex_vm_types::RuntimeTy>)>,
+    /// Callables `reflect.signature` can describe: parameter, return and
+    /// throws types in order.
+    reflection_signatures: Option<Vec<(usize, Vec<bex_vm_types::RuntimeTy>)>>,
     reflection_types: Vec<RuntimeTy>,
     next_object: usize,
     class_instances: Vec<(usize, Vec<bex_vm_types::RuntimeTy>, usize)>,
@@ -159,6 +162,7 @@ mod lists;
 mod equality;
 mod operators;
 mod hashing;
+mod trace;
 mod loop_ranges;
 mod places;
 mod repr;

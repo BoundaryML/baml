@@ -447,6 +447,7 @@ pub(super) fn expand<'db>(
                             || plan.index.display(callee) == "baml.json.decode"
                             || super::tasks::native(plan.index.display(callee))
                             || super::callbacks::native(plan.index.display(callee))
+                            || super::reflection::native(plan.index.display(callee))
                         {
                             continue;
                         }

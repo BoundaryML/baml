@@ -233,7 +233,7 @@ pub(super) fn emit(
     // Native frames name their function by its table position.
     for (id, i) in &function_ids {
         let name = plan.index.builtin_path(*id);
-        if super::operators::native(name) || super::hashing::native(name) {
+        if super::operators::native(name) || super::hashing::native(name) || name == "reflect.call_any" {
             writeln!(&mut out, "const TELEMETRY_INDEX_{id}:usize={i};").unwrap();
         }
     }

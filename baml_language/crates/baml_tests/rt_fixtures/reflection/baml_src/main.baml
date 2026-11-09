@@ -336,3 +336,69 @@ function RtNativeReflectionGlobals() -> int {
     }
     3
 }
+
+/// Scales x.
+function call_scale(x: int, factor: int = x + 1) -> int throws never {
+    x * factor
+}
+function call_mean(a: float, b: float) -> float throws never {
+    (a + b) / 2.0
+}
+class CallToolError {
+    message: string,
+}
+function call_shout(s: string) -> string throws never {
+    s + "!"
+}
+function call_fail(s: string) -> string throws CallToolError {
+    throw CallToolError { message: s }
+}
+class CallCounter {
+    n: int,
+    function bump(self, by: int) -> int throws never {
+        self.n + by
+    }
+}
+
+function call_dispatch(
+    tools: map<string, reflect.AnyFunction<Returns = string, Throws = CallToolError>>,
+    name: string,
+    args: map<string, unknown>,
+) -> string throws never {
+    let f = tools.get(name);
+    if (f is null) {
+        return "no-such-tool";
+    }
+    return reflect.call_any(f, args) catch (e) {
+        CallToolError => "err:" + e.message,
+        _ => "other",
+    };
+}
+
+function describe_signature(sig: reflect.Signature) -> void {
+    let names = sig.args.map((a: reflect.Arg) -> string { `${a.name}:${a.type}` });
+    log.info(`${sig.name ?? "-"} ${names} opts=${sig.opts.length()} -> ${sig.returns} throws ${sig.errors} doc=${sig.docstring ?? "-"}`);
+}
+
+function RtNativeCallAny() -> int {
+    let f: reflect.AnyFunction<Returns = int, Throws = never> = call_scale;
+    let defaulted = reflect.call_any(f, { "x": 5 }) catch (e) { _ => -1 };
+    let supplied = reflect.call_any(f, { "x": 5, "factor": 10 }) catch (e) { _ => -1 };
+    let mean: reflect.AnyFunction<Returns = float, Throws = never> = call_mean;
+    let widened = reflect.call_any(mean, { "a": 1, "b": 2.5 }) catch (e) { _ => -1.0 };
+    let tools: map<string, reflect.AnyFunction<Returns = string, Throws = CallToolError>> = { "shout": call_shout, "fail": call_fail };
+    let text = call_dispatch(tools, "shout", { "s": "hi" }) + "/" + call_dispatch(tools, "fail", { "s": "down" }) + "/" + call_dispatch(tools, "nope", {});
+    let counter = CallCounter { n: 40 };
+    let bump: reflect.AnyFunction<Returns = int, Throws = never> = counter.bump;
+    let bumped = reflect.call_any(bump, { "by": 2 }) catch (e) { _ => -1 };
+    let lambda: reflect.AnyFunction<Returns = string, Throws = never> = (word: string) -> string { word + "?" };
+    let asked = reflect.call_any(lambda, { "word": "ok" }) catch (e) { _ => "x" };
+    log.info(`${defaulted} ${supplied} ${widened} ${text} ${bumped} ${asked}`);
+    describe_signature(reflect.signature(f));
+    describe_signature(reflect.signature(mean));
+    describe_signature(reflect.signature(bump));
+    describe_signature(reflect.signature(lambda));
+    let scale_sig = reflect.signature(f);
+    log.info(scale_sig.opts["factor"].type.to_string());
+    defaulted * 1000 + supplied
+}

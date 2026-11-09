@@ -25,6 +25,8 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtNativeReflectionGlobals",
     "RtNativeOperators",
     "RtNativeHashing",
+    "RtNativeCallAny",
+    "RtNativeTraceOptions",
     "RtClosures",
     "RtEmptyClosures",
     "RtGenericClosures",
