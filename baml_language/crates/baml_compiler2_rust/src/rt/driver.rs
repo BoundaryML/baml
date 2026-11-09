@@ -103,6 +103,7 @@ fn compile_entry<'db>(
         json_maps: BTreeMap::new(),
         map_stringify: false,
         globals: BTreeMap::new(),
+        global_loads: BTreeMap::new(),
         literal_ids: std::cell::RefCell::new(BTreeMap::new()),
         init_chains: Vec::new(),
     };

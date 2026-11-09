@@ -211,8 +211,24 @@ impl Plan<'_> {
                         bex_vm_types::TyTemplate::TypeAlias(h) => self.alias_target(h.tag()),
                         _ => None,
                     }) {
-                    Some(target) => self.field_repr(&target)?,
-                    None => Repr::Tagged,
+                    // Same storage as a local spelled with the definition.
+                    Some(target) => match target
+                        .try_map_heads(&mut |head| self.index.declaration(head.tag()).ok_or(()))
+                    {
+                        Ok(named) => self.repr(&named)?,
+                        Err(()) => self.field_repr(&target)?,
+                    },
+                    // Only recursive aliases are linked objects. Any other
+                    // alias is expanded exactly as MIR expands its own types.
+                    None => {
+                        let expanded = baml_compiler2_mir::RuntimeLowering::of(self.db, self.root)
+                            .convert(&baml_type::Ty::from(ty.clone()));
+                        if matches!(expanded, RuntimeTy::TypeAlias(_)) || expanded == *ty {
+                            Repr::Tagged
+                        } else {
+                            self.repr(&expanded)?
+                        }
+                    }
                 }
             }
             RuntimeTy::Unknown => Repr::Tagged,
@@ -302,6 +318,29 @@ impl Plan<'_> {
                         == Some(baml_type::PrimitiveType::String) =>
             {
                 Repr::Str
+            }
+            // Scalar primitives spelled through their builtin class head (an
+            // implementation's `Self`, a static receiver) use scalar storage.
+            RuntimeTy::Class(head, args)
+                if args.is_empty()
+                    && matches!(
+                        head.builtin_primitive(self.lang),
+                        Some(
+                            baml_type::PrimitiveType::Int
+                                | baml_type::PrimitiveType::Float
+                                | baml_type::PrimitiveType::Bool
+                                | baml_type::PrimitiveType::Bigint
+                                | baml_type::PrimitiveType::Null
+                        )
+                    ) =>
+            {
+                self.repr(&match head.builtin_primitive(self.lang).unwrap() {
+                    baml_type::PrimitiveType::Int => RuntimeTy::Int,
+                    baml_type::PrimitiveType::Float => RuntimeTy::Float,
+                    baml_type::PrimitiveType::Bool => RuntimeTy::Bool,
+                    baml_type::PrimitiveType::Bigint => RuntimeTy::Bigint,
+                    _ => RuntimeTy::Null,
+                })?
             }
             RuntimeTy::Class(head, args) if !args.is_empty() => {
                 let template = baml_compiler2_mir::TyTemplate::from(

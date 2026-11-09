@@ -185,6 +185,21 @@ function optional_dispatch() -> int {
   opt_speak(dog) + opt_speak(null) + never_built(null)
     + hashable(1) * 2 + hashable([1, 2]) * 4 + hashable(HashOnlyEq { value: 1 }) * 8
 }
+type AliasKey = string[];
+type AliasMap = map<string, int>;
+type AliasBox = Box<int>;
+type AliasKeyAgain = AliasKey;
+const ALIAS_GLOBAL: AliasKey = ["g", "h"];
+class AliasHolder { key: AliasKey, count: AliasMap }
+function alias_len(k: AliasKeyAgain) -> int { k.length() }
+function alias_values() -> int {
+  let k: AliasKey = ["a", "bc"];
+  let m: AliasMap = { "x": 3 };
+  let b: AliasBox = Box<int> { value: 5 };
+  let holder = AliasHolder { key: k, count: m };
+  ALIAS_GLOBAL.join(".").length() + k[1].length() + alias_len(k) + m["x"] + b.value
+    + holder.key.length() + holder.count.length()
+}
 function main() -> int {
   let a = Box<int> { value: 29 };
   let b = Box<string> { value: "hello" };
@@ -210,6 +225,6 @@ function main() -> int {
   total += projection_fields() + projection_error();
   total += projection_catch() + decoded_generics();
   total += alias_dispatch(AliasOwner<string> { left: 101, right: "alias" });
-  total += optional_dispatch();
+  total += optional_dispatch() + alias_values();
   total
 }

@@ -261,8 +261,9 @@ impl Emitter<'_, '_> {
                     .ok_or_else(|| no("unlinked global"))?;
                 let repr = *self
                     .plan
-                    .globals
+                    .global_loads
                     .get(&slot)
+                    .or_else(|| self.plan.globals.get(&slot))
                     .ok_or_else(|| no("unplanned global"))?;
                 let name = baml_compiler2_mir::global_display_name(self.db, *binding);
                 let value = self.fallible(&format!("rt::globals::load_named({slot},{name:?})"));
