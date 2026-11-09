@@ -8,8 +8,15 @@ impl Plan<'_> {
                 .iter()
                 .position(|t| t == ty)
                 .map(|i| i + 100000)
-                .ok_or_else(|| no("unregistered type argument"))
+                .ok_or_else(|| no(format!("unregistered type argument (layout {ty:?})")))
         };
+        // Decoded scalar roots use their recursive schema's code; int and
+        // string keep their fixed tokens (see `decode_code`).
+        if !matches!(ty, T::Int | T::String | T::Function { .. })
+            && let Some(i) = self.json_list_types.iter().position(|t| t == ty)
+        {
+            return Ok(i + json_lists::TYPE_BASE);
+        }
         match ty {
             T::Function { .. } => Ok(usize::MAX - 1),
             T::Int => Ok(0),
@@ -39,6 +46,30 @@ impl Plan<'_> {
             }
             _ => fallback(),
         }
+    }
+    /// The generated decoder for a `json.decode` type token: fixed int and
+    /// string tokens resolve to their recursive schemas.
+    pub(super) fn decode_code(&self, code: usize) -> Gen<usize> {
+        use baml_compiler2_mir::TyTemplate as T;
+        let scalar = match code {
+            0 => Some(T::Int),
+            1 => Some(T::String),
+            _ => None,
+        };
+        let code = match scalar {
+            Some(ty) => self
+                .json_list_types
+                .iter()
+                .position(|t| *t == ty)
+                .map(|i| i + json_lists::TYPE_BASE)
+                .ok_or_else(|| no("JSON decode type"))?,
+            None => code,
+        };
+        // Only class, recursive-schema and map codes have generated decoders.
+        if code < 3 || (code >= 3 + self.json_types.len() && code < json_lists::TYPE_BASE) {
+            return Err(no("JSON decode type"));
+        }
+        Ok(code)
     }
     pub(super) fn json_class_types(&self, ty: &baml_compiler2_mir::TyTemplate) -> Gen<Vec<usize>> {
         use baml_compiler2_mir::TyTemplate as T;
@@ -445,7 +476,8 @@ pub(super) fn register_decoders(
             plan.record(repr)?;
             plan.json_maps.insert(repr, runtime);
         }
-        plan.json_decode_codes.insert(plan.type_code(ty)?);
+        let code = plan.decode_code(plan.type_code(ty)?)?;
+        plan.json_decode_codes.insert(code);
     }
     Ok(())
 }

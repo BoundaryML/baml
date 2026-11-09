@@ -159,7 +159,7 @@ pub(crate) fn generate(d: &NativeBuiltin) -> Result<String, String> {
         .enumerate()
         .map(|(i, ty)| {
             if *ty == BamlType::String {
-                format!("a{i}.as_str(&cx)")
+                format!("a{i}.try_as_str(&cx)?")
             } else {
                 format!("a{i}")
             }

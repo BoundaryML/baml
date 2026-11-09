@@ -141,6 +141,50 @@ impl Plan<'_> {
         Ok(())
     }
 
+    /// A non-recursive alias is stored exactly like its definition; recursive
+    /// aliases (and cycles through other aliases) stay dynamically tagged.
+    pub(super) fn alias_target(
+        &self,
+        tag: baml_type::typetag::TypeTag,
+    ) -> Option<bex_vm_types::RuntimeTy> {
+        if let Some(cached) = self.alias_targets.borrow().get(&tag) {
+            return cached.clone();
+        }
+        let definition = |tag: baml_type::typetag::TypeTag| {
+            self.program.objects.iter().find_map(|o| match o {
+                Object::TypeAlias(a) if a.type_tag == tag => {
+                    Some(bex_vm_types::RuntimeTy::from(a.definition.clone()))
+                }
+                _ => None,
+            })
+        };
+        fn aliases(ty: &bex_vm_types::RuntimeTy, out: &mut Vec<baml_type::typetag::TypeTag>) {
+            if let bex_vm_types::RuntimeTy::TypeAlias(head) = ty {
+                out.push(head.tag());
+            }
+            ty.visit_children(&mut |child| aliases(child, out));
+        }
+        let target = definition(tag).filter(|def| {
+            let mut pending = vec![def.clone()];
+            let mut seen = BTreeSet::new();
+            while let Some(ty) = pending.pop() {
+                let mut found = Vec::new();
+                aliases(&ty, &mut found);
+                for next in found {
+                    if next == tag {
+                        return false;
+                    }
+                    if seen.insert(next) {
+                        pending.extend(definition(next));
+                    }
+                }
+            }
+            true
+        });
+        self.alias_targets.borrow_mut().insert(tag, target.clone());
+        target
+    }
+
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         if super::generics::has_projection(ty) {
             let reduced = self.resolve_type(ty);
@@ -159,7 +203,19 @@ impl Plan<'_> {
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
-            RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
+            RuntimeTy::TypeAlias(head) => {
+                match self
+                    .index
+                    .anchor(&baml_compiler2_mir::TyTemplate::TypeAlias(head.clone()))
+                    .and_then(|t| match t {
+                        bex_vm_types::TyTemplate::TypeAlias(h) => self.alias_target(h.tag()),
+                        _ => None,
+                    }) {
+                    Some(target) => self.field_repr(&target)?,
+                    None => Repr::Tagged,
+                }
+            }
+            RuntimeTy::Unknown => Repr::Tagged,
             RuntimeTy::Never => Repr::Null,
             RuntimeTy::Future(..) => Repr::Future,
             RuntimeTy::Uint8Array => Repr::Bytes,
@@ -294,7 +350,11 @@ impl Plan<'_> {
             T::Null | T::Never => Repr::Null,
             T::Function { .. } => Repr::Closure,
             T::Future(..) => Repr::Future,
-            T::Unknown | T::TypeAlias(_) => Repr::Tagged,
+            T::TypeAlias(head) => match self.alias_target(head.tag()) {
+                Some(target) => self.field_repr(&target)?,
+                None => Repr::Tagged,
+            },
+            T::Unknown => Repr::Tagged,
             T::Uint8Array => Repr::Bytes,
             T::Type => Repr::Reflected,
             T::Class(head, args)

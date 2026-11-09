@@ -41,6 +41,7 @@ fn kind_class(plan: &Plan<'_>, kind: &str) -> Gen<usize> {
 
 pub(super) fn prepare_native(plan: &mut Plan<'_>, name: &str) -> Gen<()> {
     plan.reflected = true;
+    plan.reflect_to_baml |= name == "reflect.Type.to_baml";
     let extra: &[&str] = match name {
         "reflect.Type.array" => &["Array"],
         "reflect.Type.optional" | "reflect.Union.member_types" => &["Union"],
@@ -730,6 +731,11 @@ pub(super) fn collect(
         }
         cursor += 1;
     }
+    // Reflected generic classes need instantiated layouts even when no value
+    // of that instantiation is ever constructed (`Pair<int, string[]>.type()`).
+    for ty in plan.reflection_types.clone() {
+        let _ = plan.register_class_type(&ty);
+    }
     if plan.reflect_meta {
         for (entry, ty) in plan.reflection_types.clone().into_iter().enumerate() {
             let RuntimeTy::Class(head, _) = &ty else {
@@ -802,7 +808,12 @@ pub(super) fn emit(out: &mut String, db: &dyn Db, plan: &Plan<'_>) -> Gen<()> {
     let displays =
         bex_vm::telemetry::frozen::type_displays(plan.program, &anchored_types).map_err(no)?;
     let facts_vm =
-        bex_vm::telemetry::frozen::reflection_facts(plan.program, &anchored_types).map_err(no)?;
+        bex_vm::telemetry::frozen::reflection_facts(
+            plan.program,
+            &anchored_types,
+            plan.reflect_to_baml,
+        )
+        .map_err(no)?;
     out.push_str("static REFLECT_TYPES:&[rt::reflection::StaticType]=&[\n");
     for (i, (ty, display)) in plan.reflection_types.iter().zip(&displays).enumerate() {
         let comparable = baml_type::Ty::from(ty.clone());

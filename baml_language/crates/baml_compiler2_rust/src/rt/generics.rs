@@ -365,7 +365,8 @@ pub(super) fn expand<'db>(
                                 )? {
                                     let target =
                                         instance(db, plan, all, &mut instances, callee, frame)?;
-                                    let repr = plan.repr(&concrete)?;
+                                    let _ = plan.register_class_type(&concrete);
+                            let repr = plan.repr(&concrete)?;
                                     if !targets.contains(&(repr, target)) {
                                         targets.push((repr, target));
                                     }
@@ -416,6 +417,11 @@ pub(super) fn expand<'db>(
                     } = &s.kind
                     {
                         plan.remember_heads(&t.substitute_symbolic(&[]));
+                        // Reflected type values of generic classes need their
+                        // instantiated layouts even when never constructed. A
+                        // class that cannot be laid out stays unsupported
+                        // wherever its layout is actually required.
+                        let _ = plan.register_class_type(&t.substitute_symbolic(&[]));
                         if !plan.type_codes.contains(t) {
                             plan.type_codes.push(t.clone());
                         }
@@ -547,6 +553,7 @@ pub(super) fn expand<'db>(
                                 continue;
                             };
                             let target = instance(db, plan, all, &mut instances, callee, frame)?;
+                            let _ = plan.register_class_type(&concrete);
                             let repr = plan.repr(&concrete).map_err(|error| {
                                 format!("{error} (interface receiver {concrete:?})")
                             })?;
@@ -1141,6 +1148,12 @@ impl Plan<'_> {
                     pending.push(Work::Visit(*value, origins.map_value()));
                     pending.push(Work::Visit(*key, origins.map_key()));
                 }
+                // A non-recursive alias is laid out as its definition.
+                T::TypeAlias(head) => {
+                    if let Some(target) = self.alias_target(head.tag()) {
+                        pending.push(Work::Visit(target, Origins::root()));
+                    }
+                }
                 _ => {}
             }
         }
@@ -1273,6 +1286,15 @@ pub(super) fn instance<'db>(
         .zip(&frame)
         .map(|(p, t)| (p.as_str().to_owned(), t.clone()))
         .collect();
+    // Builtins in a specialized body receive their frame as type tokens.
+    for ty in &frame {
+        if let Ok(realized) = baml_compiler2_mir::RealizedTy::try_from(ty.clone()) {
+            let template = TyTemplate::from(realized);
+            if !plan.type_codes.contains(&template) {
+                plan.type_codes.push(template);
+            }
+        }
+    }
     let id = plan.next_object;
     plan.next_object += 1;
     plan.function_frames.insert(id, captures);
@@ -1379,6 +1401,11 @@ impl Plan<'_> {
             RuntimeTy::Class(_, args) => {
                 for t in args {
                     self.candidate(t);
+                }
+                // A closed-world candidate must have a layout to be
+                // represented; register instantiations seen only as types.
+                if !args.is_empty() && self.register_class_type(ty).is_err() {
+                    return;
                 }
                 if !self.concrete_types.contains(ty) {
                     self.concrete_types.push(ty.clone());

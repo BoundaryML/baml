@@ -157,6 +157,20 @@ pub(super) fn collect<'db>(
                     format!("{e} (constructor in {})", plan.index.builtin_path(object))
                 })?;
             }
+            // A list literal stored into alias or unknown storage keeps its
+            // own concrete list layout.
+            if let StatementKind::Assign {
+                value: Rvalue::Array(element, _),
+                ..
+            } = &statement.kind
+            {
+                let ty = RuntimeTy::List(Box::new(element.substitute_symbolic(&[])));
+                if plan.record_ty(&ty).is_ok()
+                    && let Ok(repr) = plan.repr(&ty)
+                {
+                    plan.record(repr)?;
+                }
+            }
         }
         // Type-test declarations may occur only in a catch arm, including
         // native-produced errors which have no constructor in reachable MIR.

@@ -145,9 +145,17 @@ pub(super) fn emit(
                         .ok_or_else(|| no("reflected global descriptor"))?
                         + 3
                 }
-                r if r.pointer() => *lists.get(&r).ok_or_else(|| no("global representation"))? + 3,
+                r if r.pointer() => {
+                    *lists
+                        .get(&r)
+                        .ok_or_else(|| no(format!("global representation (layout {r:?}, global {slot})")))?
+                        + 3
+                }
                 Repr::Tagged | Repr::Dyn(_) => 0,
-                _ => return Err(no("global representation")),
+                r @ (Repr::Enum(_) | Repr::Naming) => {
+                    super::layout::enum_tag(plan, r, descriptors, lists)
+                }
+                r => return Err(no(format!("global representation (layout {r:?})"))),
             };
             let value = if matches!(repr, Repr::Tagged | Repr::Dyn(_)) {
                 "value".to_owned()

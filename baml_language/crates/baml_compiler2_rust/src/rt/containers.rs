@@ -136,6 +136,18 @@ impl Emitter<'_, '_> {
                 fields,
             }
             | Rvalue::Array(_, fields) => {
+                let target = expected;
+                let expected = match r {
+                    Rvalue::Array(t, _) if matches!(target, Repr::Tagged | Repr::Dyn(_)) => self
+                        .plan
+                        .repr(&RuntimeTy::List(Box::new(t.substitute_symbolic(&[]))))?,
+                    _ => target,
+                };
+                if expected != target {
+                    let (value, repr) =
+                        self.containers_value(r, expected)?;
+                    return Ok((self.coerce((value, repr), target)?, target));
+                }
                 let element = self.plan.element(expected)?;
                 let desc = self
                     .lists
