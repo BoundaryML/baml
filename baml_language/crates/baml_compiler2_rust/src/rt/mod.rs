@@ -78,6 +78,9 @@ struct Plan<'a> {
     specialized_calls: BTreeMap<(usize, usize), usize>,
     type_codes: Vec<baml_compiler2_mir::TyTemplate>,
     reflected: bool,
+    reflect_meta: bool,
+    /// Static class entry, class object and its substituted field types.
+    reflection_fields: Vec<(usize, usize, Vec<bex_vm_types::RuntimeTy>)>,
     reflection_types: Vec<RuntimeTy>,
     next_object: usize,
     class_instances: Vec<(usize, Vec<bex_vm_types::RuntimeTy>, usize)>,

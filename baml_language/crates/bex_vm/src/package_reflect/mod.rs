@@ -6,7 +6,7 @@
 mod graft;
 pub(crate) mod reflect;
 pub(crate) mod runtime_class_builder;
-mod type_class;
+pub(crate) mod type_class;
 pub(crate) mod type_kinds;
 
 use bex_heap::TlabHolder;

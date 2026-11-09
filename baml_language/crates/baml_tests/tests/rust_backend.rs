@@ -1619,7 +1619,7 @@ fn rt_static_type_values_and_kind_views_preserve_bytecode() {
     ).unwrap();
     assert!(source.contains("rt::reflection::StaticType"));
     assert!(source.contains("rt::reflection::descriptor("));
-    assert!(source.contains("Shape::Reflected(REFLECT_TYPES)"));
+    assert!(source.contains("Shape::Reflected(&REFLECT_PROGRAM)"));
     assert!(!source.contains("BexVm"));
     assert_eq!(before, fingerprint(&program));
     std::fs::write(

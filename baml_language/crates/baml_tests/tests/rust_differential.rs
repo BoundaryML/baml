@@ -27,6 +27,8 @@ const PROBES: &[&str] = &[
     "RtNativeReflection",
     "RtNativeEquality",
     "RtNativeEqualityOverrides",
+    "RtNativeReflectionRuntime",
+    "RtNativeReflectionMeta",
     "StackAllocation",
     "RuntimeListFloatConstants",
     "RuntimeListStructuralJoin",
@@ -341,7 +343,7 @@ fn is_list_probe(probe: &str) -> bool {
 
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
-        "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides" => Some(manifest.join("rt_fixtures/reflection")),
+        "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides" | "RtNativeReflectionRuntime" | "RtNativeReflectionMeta" | "RtNativeReflectionRuntime" | "RtNativeReflectionMeta" => Some(manifest.join("rt_fixtures/reflection")),
         "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" | "RtNativeFiles"
         | "RtNativeProcess" | "RtNativeCalendar" | "RtNativeIoValues" => Some(manifest.join("rt_fixtures/native")),
         "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
@@ -466,6 +468,8 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
     "RtNativeReflection",
     "RtNativeEquality",
     "RtNativeEqualityOverrides",
+    "RtNativeReflectionRuntime",
+    "RtNativeReflectionMeta",
         "RtClosures",
         "RtEmptyClosures",
         "RtGenericClosures",
@@ -842,7 +846,7 @@ fn rust_differential() {
                                 | "RtNativeRandom"
                                 | "RtNativeFiles"
                                 | "RtNativeProcess"
-                                | "RtNativeCalendar" | "RtNativeIoValues" | "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides"
+                                | "RtNativeCalendar" | "RtNativeIoValues" | "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides" | "RtNativeReflectionRuntime" | "RtNativeReflectionMeta" | "RtNativeReflectionRuntime"
                                 | "RtNativeCallback"
                                 | "RtBuiltinCallbacks"
                                 | "RtSpawnAwait"

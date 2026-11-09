@@ -164,7 +164,7 @@ impl registry::Feature for Feature {
     }
 }
 impl Emitter<'_, '_> {
-    fn map_type(&self, repr: Repr) -> Gen<String> {
+    pub(super) fn map_type(&self, repr: Repr) -> Gen<String> {
         let (key, value) = self.plan.map_parts(repr)?;
         Ok(format!(
             "rt::maps::Map::<{},{}>",

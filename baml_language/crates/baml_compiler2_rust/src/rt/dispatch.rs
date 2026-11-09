@@ -175,7 +175,11 @@ fn witness<'p>(
             continue;
         };
         for rule in rules {
-            if rule.for_ty_pattern != pattern || rule.interface_args != iface_args {
+            if !(rule.for_ty_pattern == pattern
+                || super::reflection::type_value_pattern(plan, &rule.for_ty_pattern)
+                    && super::reflection::type_value_pattern(plan, &pattern))
+                || rule.interface_args != iface_args
+            {
                 continue;
             }
             return Ok(Some(Witness {

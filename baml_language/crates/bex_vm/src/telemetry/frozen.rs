@@ -97,3 +97,70 @@ pub fn type_displays(
         })
         .collect()
 }
+
+/// Interpreter answers the native emitter freezes for reflected types.
+pub struct ReflectionFacts {
+    /// For every type, the indices of the interface types it implements.
+    pub implements: Vec<Vec<usize>>,
+    /// `to_baml()` per type; `None` where the interpreter rejects rendering.
+    pub to_baml: Vec<Option<String>>,
+}
+
+/// Evaluate `implements` and `to_baml` with the interpreter's own resolver and
+/// renderer over a private VM image. Compile-time only: no BAML code runs.
+pub fn reflection_facts(
+    program: &bex_vm_types::Program,
+    types: &[bex_vm_types::RealizedTy],
+) -> Result<ReflectionFacts, String> {
+    program.validate().map_err(|error| error.to_string())?;
+    let vm = crate::BexVm::from_program(
+        program.clone(),
+        #[cfg(not(target_arch = "wasm32"))]
+        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    )
+    .map_err(|error| format!("{error:?}"))?;
+    let bound = types
+        .iter()
+        .map(|ty| {
+            let mut ty = ty.clone();
+            let mut missing = None;
+            ty.visit_heads_mut(&mut |head: &mut bex_vm_types::TypeHead| {
+                match head.tag().static_index() {
+                    Some(index) if index < program.objects.len() => {
+                        let mut bound = bex_vm_types::TypeHead::unresolved(head.tag());
+                        bound.resolve(vm.heap.compile_time_ptr(index));
+                        *head = bound;
+                    }
+                    _ => missing = Some(head.tag()),
+                }
+            });
+            match missing {
+                Some(tag) => Err(format!("type head {} has no declaration", tag.as_i64())),
+                None => Ok(ty),
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let interfaces: Vec<usize> = bound
+        .iter()
+        .enumerate()
+        .filter(|(_, ty)| matches!(ty, bex_vm_types::RealizedTy::Interface(..)))
+        .map(|(i, _)| i)
+        .collect();
+    let type_class = crate::package_reflect::type_class::frozen_implements;
+    Ok(ReflectionFacts {
+        implements: bound
+            .iter()
+            .map(|ty| {
+                interfaces
+                    .iter()
+                    .copied()
+                    .filter(|&j| type_class(&vm, ty, &bound[j]))
+                    .collect()
+            })
+            .collect(),
+        to_baml: bound
+            .iter()
+            .map(|ty| crate::package_reflect::type_class::frozen_to_baml(&vm, ty))
+            .collect(),
+    })
+}

@@ -42,7 +42,7 @@ pub struct Declaration {
 }
 pub enum Shape {
     String,
-    Reflected(&'static [crate::reflection::StaticType]),
+    Reflected(&'static crate::reflection::Program),
     Bigint,
     Uint8Array,
     RustType,
@@ -342,9 +342,9 @@ impl Scratch {
             _ => {}
         }
         let shape = &shapes[usize::try_from(value.tag - 3).expect("descriptor index")];
-        if let Shape::Reflected(types) = shape {
-            let ty = unsafe { types[crate::reflection::index(value.payload as usize)].ty }
-                .owned(leaves, &mut self.carried);
+        if let Shape::Reflected(program) = shape {
+            let index = unsafe { crate::reflection::index(value.payload as usize) };
+            let ty = crate::reflection::capture_type(program, index).owned(leaves, &mut self.carried);
             return SnapshotValue::Type(leaves.ty(ty));
         }
         if let Shape::Enum { variants, .. } = shape {

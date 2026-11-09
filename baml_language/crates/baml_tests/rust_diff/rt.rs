@@ -20,6 +20,8 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtNativeReflection",
     "RtNativeEquality",
     "RtNativeEqualityOverrides",
+    "RtNativeReflectionRuntime",
+    "RtNativeReflectionMeta",
     "RtClosures",
     "RtEmptyClosures",
     "RtGenericClosures",

@@ -159,10 +159,8 @@ unsafe fn walk(
                     return Ok(false);
                 }
             }
-            Shape::Reflected(types) => unsafe {
-                if types[crate::reflection::index(a.payload as usize)].identity
-                    != types[crate::reflection::index(b.payload as usize)].identity
-                {
+            Shape::Reflected(program) => unsafe {
+                if !crate::reflection::same_identity(program, a.payload as usize, b.payload as usize) {
                     return Ok(false);
                 }
             },

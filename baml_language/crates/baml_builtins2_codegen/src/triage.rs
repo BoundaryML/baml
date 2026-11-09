@@ -41,7 +41,12 @@ pub fn supports_rt_reflection(path: &str) -> bool {
         | "reflect.Function.return_type"
         | "reflect.Type.as_class" | "reflect.Type.as_enum" | "reflect.Type.as_union"
         | "reflect.Type.as_literal" | "reflect.Type.as_array" | "reflect.Type.as_map"
-        | "reflect.Type.as_interface" | "reflect.Type.as_primitive" | "reflect.Type.as_function")
+        | "reflect.Type.as_interface" | "reflect.Type.as_primitive" | "reflect.Type.as_function"
+        | "reflect.Type.array" | "reflect.Type.optional" | "reflect.Type.of_value"
+        | "reflect.Union.member_types" | "reflect.Function.params" | "reflect.Map._new"
+        | "reflect.Literal.new" | "reflect.Literal.value" | "reflect.Type._implements"
+        | "reflect.Type.to_baml" | "reflect.Class.fields" | "reflect.Class.metadata"
+        | "reflect.Enum.values" | "reflect.Enum.metadata")
         || path.strip_prefix("reflect.reflect.TypeView$for$")
             .and_then(|path|path.strip_suffix(".as_type"))
             .is_some_and(|kind| KINDS.contains(&kind))

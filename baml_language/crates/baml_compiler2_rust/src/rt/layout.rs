@@ -211,6 +211,13 @@ impl Plan<'_> {
                     .enum_at(head)
                     .ok_or_else(|| no("unlinked enum"))?,
             ),
+            // `reflect.Type`'s own methods receive the `type` value itself.
+            RuntimeTy::Class(head, args)
+                if args.is_empty()
+                    && head.is_lang_root_type(self.lang, baml_base::LangPackage::Reflect, "Type") =>
+            {
+                Repr::Reflected
+            }
             RuntimeTy::Class(head, args)
                 if args.is_empty()
                     && head.builtin_primitive(self.lang)

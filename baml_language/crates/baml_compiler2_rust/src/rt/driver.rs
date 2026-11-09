@@ -71,6 +71,8 @@ fn compile_entry<'db>(
         specialized_calls: BTreeMap::new(),
         type_codes: Vec::new(),
         reflected: false,
+        reflect_meta: false,
+        reflection_fields: Vec::new(),
         reflection_types: Vec::new(),
         next_object: program.objects.len(),
         class_instances: Vec::new(),

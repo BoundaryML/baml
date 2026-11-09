@@ -78,6 +78,19 @@ pub(super) fn emit(
             });
         }
     }
+    for (_, _, types) in &plan.reflection_fields {
+        for ty in types {
+            ty.visit_heads(&mut |head| {
+                for (object, declaration) in plan.program.objects.iter().enumerate() {
+                    if matches!(declaration,Object::Class(class) if class.type_tag == head.tag())
+                        || matches!(declaration,Object::Enum(enumeration) if enumeration.type_tag == head.tag())
+                    {
+                        extra.insert(object);
+                    }
+                }
+            });
+        }
+    }
     for ty in &plan.reflection_types {
         let realized = baml_compiler2_mir::RealizedTy::try_from(ty.clone())
             .map_err(|_| no("reflected capture declaration"))?;
@@ -165,7 +178,7 @@ pub(super) fn emit(
         let shape = if plan.bigints && desc == plan.bigint_descriptor() {
             "Bigint".to_owned()
         } else if plan.reflection_descriptor() == Some(desc) {
-            "Reflected(REFLECT_TYPES)".to_owned()
+            "Reflected(&REFLECT_PROGRAM)".to_owned()
         } else if plan.future_descriptor() == Some(desc) {
             "Future".to_owned()
         } else if plan

@@ -206,3 +206,119 @@ function RtNativeEqualityOverrides() -> int {
     }
     count
 }
+
+class Marked { n: int }
+implement ReflectMarker for Marked {
+    function mark(self) -> int throws never { self.n }
+}
+
+function RtNativeReflectionRuntime() -> int {
+    let ints = reflect.Type.of<int>().array();
+    let opt = reflect.Type.of<int | string>().optional();
+    let already = reflect.Type.of<string?>().optional();
+    let nested = ints.as_type().array().as_type().optional().as_type();
+    let members = reflect.Type.of<int | string | null>().as_union();
+    let callable = (value: int, label: string) -> string { label };
+    let fn_type = ReflectParameterType(callable).as_function();
+    let literal = reflect.Type.of<"hello">().as_literal();
+    let number = reflect.Type.of<42>().as_literal();
+    let made = reflect.Literal.new("hi");
+    if (members == null || fn_type == null || literal == null || number == null) {
+        throw "missing view";
+    }
+    let params = fn_type.params();
+    let types = [
+        ints.as_type(), ints.element_type(), opt.as_type(), already.as_type(), nested,
+        reflect.Type.of_value(1), reflect.Type.of_value("s"), reflect.Type.of_value(2.5),
+        reflect.Type.of_value(ReflectRecord { name: "r" }), reflect.Type.of_value([1, 2]),
+        reflect.Type.of_value(ReflectColor.Red), reflect.Type.of_value({ "a": 1 }),
+        reflect.Type.of_value(null), reflect.Type.of_value(true), made.as_type(),
+        params[0].type, params[1].type,
+    ];
+    for (let t in types) {
+        log.info(t.to_string());
+    }
+    let member_types = members.member_types();
+    let checks = [
+        ints.as_type() == reflect.Type.of<int[]>(),
+        ints.element_type() == reflect.Type.of<int>(),
+        opt.as_type() == reflect.Type.of<int | string | null>(),
+        opt.as_type() == reflect.Type.of<string | int | null>(),
+        already.as_type() == reflect.Type.of<string?>(),
+        nested == reflect.Type.of<int[][]?>(),
+        member_types.length() == 3,
+        member_types[1] == reflect.Type.of<string>(),
+        reflect.Type.of_value(1) == reflect.Type.of<int>(),
+        reflect.Type.of_value(ReflectRecord { name: "r" }) == reflect.Type.of<ReflectRecord>(),
+        reflect.Type.of_value([1, 2]) == reflect.Type.of<int[]>(),
+        reflect.Type.of_value(ReflectColor.Red) == reflect.Type.of<ReflectColor>(),
+        params.length() == 2,
+        params[0].name == "value",
+        params[1].type == reflect.Type.of<string>(),
+        !params[0].optional,
+        made.as_type() == reflect.Type.of<"hi">(),
+        literal.value() == "hello",
+        number.value() == 42,
+        made.value() == "hi",
+        reflect.Type.of<Marked>().implements(reflect.Type.of<ReflectMarker>()),
+        !reflect.Type.of<ReflectRecord>().implements(reflect.Type.of<ReflectMarker>()),
+        reflect.Type.of_value(Marked { n: 1 }).implements(reflect.Type.of<ReflectMarker>()),
+        !reflect.Type.of<ReflectMarker>().implements(reflect.Type.of<ReflectMarker>()),
+    ];
+    log.info(reflect.Type.of<ReflectRecord>().to_baml());
+    log.info(reflect.Type.of<ReflectBox<int>[]>().to_baml());
+    log.info(reflect.Type.of<int | string>().to_baml());
+    let index = 0;
+    let failed = 0;
+    for (let check in checks) {
+        if (!check) {
+            log.warn(`runtime reflection check ${index} failed`);
+            failed = failed + 1;
+        }
+        index = index + 1;
+    }
+    if (failed != 0) { throw "runtime reflection check failed"; }
+    11
+}
+
+/// A described record.
+class MetaRecord {
+    /// The label.
+    name: string @alias("label") @description("display name"),
+    count: int,
+    tags: string[]?,
+    hidden: bool @skip,
+}
+class MetaBox<T> { item: T, items: T[] }
+enum MetaLevel {
+    Low @alias("lo"),
+    High @description("urgent"),
+}
+
+function RtNativeReflectionMeta() -> int {
+    let record = reflect.Type.of<MetaRecord>().as_class();
+    let boxed = reflect.Type.of<MetaBox<MetaRecord>>().as_class();
+    let level = reflect.Type.of<MetaLevel>().as_enum();
+    if (record == null || boxed == null || level == null) { throw "missing view"; }
+    let total = 0;
+    for (let f in record.fields()) {
+        log.info(`${f.name}: ${f.type} alias=${f.meta.alias ?? "-"} desc=${f.meta.description ?? "-"} doc=${f.meta.docstring ?? "-"} skip=${f.meta.skip} other=${f.meta.other.length()}`);
+        total = total + 1;
+    }
+    for (let f in boxed.fields()) {
+        log.info(`${f.name}: ${f.type}`);
+        total = total + 1;
+    }
+    for (let v in level.values()) {
+        log.info(`${v.name} alias=${v.meta.alias ?? "-"} desc=${v.meta.description ?? "-"}`);
+        total = total + 1;
+    }
+    let m = record.metadata();
+    log.info(`class doc=${m.docstring ?? "-"} alias=${m.alias ?? "-"} skip=${m.skip}`);
+    log.info(`enum doc=${level.metadata().docstring ?? "-"}`);
+    let fields = record.fields();
+    if (fields[0].type != reflect.Type.of<string>() || fields[2].type != reflect.Type.of<string[]?>()) {
+        throw "field types";
+    }
+    total
+}
