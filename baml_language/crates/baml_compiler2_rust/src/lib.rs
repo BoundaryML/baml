@@ -15,4 +15,4 @@ mod structure;
 pub use admit::{CompiledFunction, Rejection, RustModule, compile_program};
 
 mod rt;
-pub use rt::{compile_rt, compile_rt_benchmark};
+pub use rt::{RtTestCompiler, compile_rt, compile_rt_benchmark, compile_rt_test};

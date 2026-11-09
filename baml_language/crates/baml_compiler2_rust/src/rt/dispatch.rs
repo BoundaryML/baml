@@ -90,6 +90,12 @@ fn witness<'p>(
     iface: &TyTemplateInterface,
 ) -> Gen<Option<Witness<'p>>> {
     let requested = iface.to_template().substitute_symbolic(&[]);
+    // The checker resolver requires deeply realized types, including interface
+    // arguments and associated bindings. Dynamic requests remain unsupported.
+    baml_compiler2_mir::RealizedTy::try_from(concrete.clone())
+        .map_err(|_| no("non-concrete dispatch receiver"))?;
+    baml_compiler2_mir::RealizedTy::try_from(requested.clone())
+        .map_err(|_| no("non-concrete dispatch interface"))?;
     let RuntimeTy::Interface(name, args, assoc) = requested else {
         unreachable!()
     };
@@ -514,7 +520,7 @@ pub(super) fn implements(
 // 64 KiB runtime reserve cover their bounded locals, including observed entry.
 pub(super) fn inline_leaves(
     plan: &Plan<'_>,
-    all: &BTreeMap<usize, MirFunction<'_>>,
+    all: &BTreeMap<usize, super::TestMir<'_>>,
 ) -> BTreeSet<usize> {
     let mut leaves = plan
         .dispatches
@@ -544,7 +550,8 @@ pub(super) fn inline_leaves(
                 plan.dispatches.get(&(id, b.id.0)).is_some_and(|targets| {
                     !targets.is_empty()
                         && targets.iter().all(|(_, target)| {
-                            all.get(target).is_some_and(super::stack::small_leaf)
+                            all.get(target)
+                                .is_some_and(|mir| super::stack::small_leaf(mir))
                         })
                 })
             }

@@ -38,7 +38,7 @@ use crate::{
 /// the allocation lives for the rest of the process, which mirrors what
 /// a compile-time clap derive does. The leak is bounded by the number of
 /// parameters across all targets the host invokes; that's small.
-fn leak(s: String) -> &'static str {
+pub(crate) fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 

@@ -79,7 +79,7 @@ impl Placement {
         body: &MirFunctionBody<'db>,
         opt: OptLevel,
         plan: &Plan<'_>,
-        all: &BTreeMap<usize, MirFunction<'db>>,
+        all: &BTreeMap<usize, super::TestMir<'db>>,
     ) -> Self {
         if !body.blocks.iter().flat_map(|b| &b.statements).any(|s| {
             matches!(
