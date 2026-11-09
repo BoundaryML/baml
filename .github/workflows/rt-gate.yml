@@ -154,6 +154,7 @@ jobs:
         working-directory: baml_language
         run: cargo test -p baml_compiler2_rust -p baml_rt -p baml_rt_gc -p baml_rt_tasks && cargo test -p baml_tests --test rust_backend
       - name: "Differential suite"
+        if: always()
         working-directory: baml_language
         run: cargo test -p baml_tests --test rust_differential -- --ignored --nocapture 2>&1 | tee ../differential.log
       - uses: actions/upload-artifact@v4

@@ -1002,10 +1002,10 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "c99faeeb5f289d413d098606e7f09fc1f6722cafb253be5db8ce4d423bec19fb",
-            "richards" => "ded440e60b9667005e3935afe7fd208d78a3f3053ffd9953d602c6124c4c624a",
-            "agent" => "3676c097dba71c6f9d74d264e0cc34c9f151b473458a0f2205be18ee7f1c7714",
-            "initializer" => "2f3e5538e399b1edd98d56c837fa7ef0047c93b0d285002d6311cb4b4c52af6e",
+            "trees" => "250ab60b363a7d624ac9bb3650f3e6e5ae4ad3b0d91258c707bd4c3182f51cd9",
+            "richards" => "dd65b87c160f31ff311129a19886fd61959574e28bbcfad23fa9f867193cdea0",
+            "agent" => "fb91f3f071810702c058503c200411abfaa4d9fd57aa1c403927109935b8648f",
+            "initializer" => "87dbd2d3fafe23633ab34413ba09327220e252916581ac7ce126e9b2e61dddc6",
             _ => "",
         };
         if matches!(name, "entry" | "hook") {
