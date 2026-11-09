@@ -102,33 +102,9 @@ impl io::IoClassTimeInstant for NativeSysOps {
         _call_id: CallId,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::time::Instant> {
-        // Wall-clock time as nanoseconds since the UNIX epoch. Per the
-        // `Instant.now()` contract, an unavailable/pre-epoch clock panics.
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_else(|_| unreachable!("system clock is set before the UNIX epoch"))
-            .as_nanos();
         SysOpOutput::ok(owned::time::Instant {
-            _nanoseconds: Arc::new(num_bigint::BigInt::from(nanos)),
+            _nanoseconds: Arc::new(bex_vm_types::clock::now()),
         })
-    }
-}
-
-/// Converts an absolute time (nanoseconds since the Unix epoch, as an
-/// arbitrary-precision integer) into a `jiff::Timestamp`, saturating at
-/// jiff's representable range. Saturation is fine for offset queries: a
-/// timezone's offset is constant beyond the last tzdb transition, so the
-/// boundary instant resolves to the same offset as any farther one.
-fn saturating_timestamp(ns: &num_bigint::BigInt) -> jiff::Timestamp {
-    use num_bigint::Sign;
-    match i128::try_from(ns) {
-        Ok(ns) => jiff::Timestamp::from_nanosecond(ns).unwrap_or(if ns < 0 {
-            jiff::Timestamp::MIN
-        } else {
-            jiff::Timestamp::MAX
-        }),
-        Err(_) if ns.sign() == Sign::Minus => jiff::Timestamp::MIN,
-        Err(_) => jiff::Timestamp::MAX,
     }
 }
 
@@ -139,14 +115,7 @@ impl io::IoNamespaceTime for NativeSysOps {
         _call_id: CallId,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        // The host's timezone database / system configuration, per BEP-021
-        // (Deno-style: no tzdata is bundled on platforms that provide one).
-        match jiff::tz::TimeZone::system().iana_name() {
-            Some(name) => SysOpOutput::ok(name.to_string()),
-            None => SysOpOutput::err(VmBamlError::Io {
-                message: "could not determine the system's IANA timezone".to_string(),
-            }),
-        }
+        SysOpOutput::Ready(bex_vm_types::clock::system_timezone())
     }
 
     fn _tz_offset_at(
@@ -157,13 +126,7 @@ impl io::IoNamespaceTime for NativeSysOps {
         at_ns: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<i64>> {
-        // Unknown identifier → None (the BAML layer turns this into
-        // `UnknownTimezoneError`).
-        let Ok(tz) = jiff::tz::TimeZone::get(&timezone) else {
-            return SysOpOutput::ok(None);
-        };
-        let offset = tz.to_offset(saturating_timestamp(&at_ns));
-        SysOpOutput::ok(Some(i64::from(offset.seconds()) * 1_000_000_000))
+        SysOpOutput::ok(bex_vm_types::clock::offset_at(&timezone, &at_ns))
     }
 
     fn _tz_to_instant(
@@ -175,36 +138,10 @@ impl io::IoNamespaceTime for NativeSysOps {
         disambiguation: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
-        let Ok(tz) = jiff::tz::TimeZone::get(&timezone) else {
-            return SysOpOutput::ok(None);
-        };
-        // The civil reading is encoded as nanoseconds since
-        // 1970-01-01T00:00:00 as if it were UTC; decode it through UTC.
-        let civil = match i128::try_from(&*civil_ns)
-            .ok()
-            .and_then(|ns| jiff::Timestamp::from_nanosecond(ns).ok())
-        {
-            Some(ts) => ts.to_zoned(jiff::tz::TimeZone::UTC).datetime(),
-            None => {
-                return SysOpOutput::err(VmBamlError::Io {
-                    message: "civil time is outside the supported year range".to_string(),
-                });
-            }
-        };
-        let ambiguous = tz.to_ambiguous_timestamp(civil);
-        // TC39 disambiguation semantics, via jiff. "reject" is implemented in
-        // the BAML layer (earlier+later agreement), so it never reaches here.
-        let resolved = match disambiguation.as_str() {
-            "earlier" => ambiguous.earlier(),
-            "later" => ambiguous.later(),
-            _ => ambiguous.compatible(),
-        };
-        match resolved {
-            Ok(ts) => SysOpOutput::ok(Some(Arc::new(num_bigint::BigInt::from(ts.as_nanosecond())))),
-            Err(e) => SysOpOutput::err(VmBamlError::Io {
-                message: format!("cannot resolve civil time in timezone '{timezone}': {e}"),
-            }),
-        }
+        SysOpOutput::Ready(
+            bex_vm_types::clock::to_instant(&timezone, &civil_ns, &disambiguation)
+                .map(|value| value.map(Arc::new)),
+        )
     }
 }
 
@@ -2286,12 +2223,7 @@ impl std::ops::Deref for NetUdpSocketHandle {
 /// maximum. Shared by the net sys-ops and the HTTP server, so it lives here
 /// (always compiled) rather than behind the `bundle-http` feature.
 pub(crate) fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<std::time::Duration> {
-    if nanos.sign() != num_bigint::Sign::Plus {
-        return None;
-    }
-    Some(std::time::Duration::from_nanos(
-        u64::try_from(nanos).unwrap_or(u64::MAX),
-    ))
+    bex_vm_types::clock::timeout_from_nanos(nanos)
 }
 
 fn downcast_tcpstream(
@@ -4265,6 +4197,39 @@ mod tests {
                 "(http://127.0.0.1:1/v1/m:generateContent?key=REDACTED&alt=sse#REDACTED)"
             ),
             "{text}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod heap_free_provider_tests {
+    use super::*;
+    async fn ready<T: std::fmt::Debug>(output: SysOpOutput<T>) -> T {
+        match output {
+            SysOpOutput::Ready(result) => result.expect("native provider ready result"),
+            SysOpOutput::Async(future) => future.await.expect("native provider async result"),
+        }
+    }
+    #[tokio::test]
+    async fn heap_free_provider_uses_owned_values_without_vm_heap() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = NativeSysOps::new(WorkingDir::Fixed(dir.path().to_owned()));
+        let context = SysOpContext::empty();
+        let count = ready(provider.rt_ionamespacefs_write(
+            CallId(0),
+            "probe.txt".into(),
+            "owned".into(),
+            &context,
+        ))
+        .await;
+        assert_eq!(count, 5);
+        assert_eq!(
+            ready(provider.rt_ionamespacefs_read(CallId(0), "probe.txt".into(), &context)).await,
+            "owned"
+        );
+        ready(provider.rt_ionamespacefs_remove(CallId(0), "probe.txt".into(), &context)).await;
+        assert!(
+            !ready(provider.rt_ionamespacefs_exists(CallId(0), "probe.txt".into(), &context)).await
         );
     }
 }

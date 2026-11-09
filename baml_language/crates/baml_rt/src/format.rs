@@ -6,7 +6,7 @@ use crate::{
 };
 use baml_rt_gc::{Field, SlotKind};
 
-unsafe fn field(pointer: usize, field: &Field) -> Dyn {
+pub(crate) unsafe fn field(pointer: usize, field: &Field) -> Dyn {
     let p = unsafe { (pointer as *const u8).add(field.offset) };
     match field.slot {
         SlotKind::Tagged => unsafe { p.cast::<Dyn>().read() },
@@ -16,16 +16,29 @@ unsafe fn field(pointer: usize, field: &Field) -> Dyn {
         },
     }
 }
-unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
+pub(crate) unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
+    unsafe { children_prefix(shapes, value, usize::MAX).0 }
+}
+// Diagnostic rendering snapshots only the children its node budget permits.
+// For maps the limit counts entries (each entry contains a key and a value).
+pub(crate) unsafe fn children_prefix(
+    shapes: &[Shape],
+    value: Dyn,
+    limit: usize,
+) -> (Vec<Dyn>, bool) {
     if value.tag < 3 || value.tag == 4294967294 || value.payload == 0 {
-        return vec![];
+        return (vec![], false);
     }
     let pointer = value.payload as usize;
     match &shapes[(value.tag - 3) as usize] {
-        Shape::Class { fields, .. } | Shape::GenericClass { fields, .. } => fields
-            .iter()
-            .map(|f| unsafe { field(pointer, f) })
-            .collect(),
+        Shape::Class { fields, .. } | Shape::GenericClass { fields, .. } => (
+            fields
+                .iter()
+                .take(limit)
+                .map(|f| unsafe { field(pointer, f) })
+                .collect(),
+            fields.len() > limit,
+        ),
         Shape::List { growing, tag, .. } => {
             let p = pointer as *const usize;
             let (data, len) = if *growing {
@@ -35,7 +48,7 @@ unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
             } else {
                 (p, unsafe { p.add(1).read() })
             };
-            (0..len)
+            let values = (0..len.min(limit))
                 .map(|i| {
                     if *tag == u64::MAX - 1 {
                         unsafe { data.add(2).cast::<Dyn>().add(i).read() }
@@ -46,17 +59,22 @@ unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
                         }
                     }
                 })
-                .collect()
+                .collect();
+            (values, len > limit)
         }
-        Shape::Map { len, entry, .. } => (0..unsafe { len(pointer) })
-            .flat_map(|i| {
-                let (key, value) = unsafe { entry(pointer, i) };
-                [key, value]
-            })
-            .collect(),
+        Shape::Map { len, entry, .. } => {
+            let len = unsafe { len(pointer) };
+            let values = (0..len.min(limit))
+                .flat_map(|i| {
+                    let (key, value) = unsafe { entry(pointer, i) };
+                    [key, value]
+                })
+                .collect();
+            (values, len > limit)
+        }
         Shape::MapStringInt => {
             let map = unsafe { crate::maps::Map::<Str, i64>::from_raw(pointer) };
-            (0..map.len())
+            let values = (0..map.len().min(limit))
                 .flat_map(|i| {
                     let (key, value) = map.entry(i).unwrap();
                     [
@@ -70,13 +88,14 @@ unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
                         },
                     ]
                 })
-                .collect()
+                .collect();
+            (values, map.len() > limit)
         }
         Shape::MapStringPtr { .. } => {
             let p = pointer as *const usize;
             let data = (unsafe { p.add(1).read() } + 16) as *const u64;
             let len = unsafe { p.add(2).read() };
-            (0..len)
+            let values = (0..len.min(limit))
                 .flat_map(|i| {
                     [
                         Dyn {
@@ -95,9 +114,10 @@ unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
                         },
                     ]
                 })
-                .collect()
+                .collect();
+            (values, len > limit)
         }
-        _ => vec![],
+        _ => (vec![], false),
     }
 }
 unsafe fn collect(shapes: &[Shape], value: Dyn, tags: &[u64], pending: &mut Vec<Dyn>) {
@@ -265,4 +285,15 @@ unsafe fn write(
         }
         _ => unreachable!("compiler checked structural formatting shape"),
     }
+}
+
+/// Render declaration-order fields without invoking user ToString methods.
+/// # Safety
+/// Values and metadata must describe the active heap.
+pub unsafe fn structural(value: Dyn, shapes: &[Shape]) -> String {
+    let mut out = String::new();
+    unsafe {
+        write(shapes, value, false, &[], &[], &mut 0, &mut out);
+    }
+    out
 }

@@ -12,6 +12,13 @@ mod stream;
 
 #[derive(Clone, Copy)]
 pub enum Ty {
+    Enumeration(&'static crate::maps::json::enums::Schema),
+    InvalidMap,
+    Map {
+        key: &'static crate::telemetry::capture::Type,
+        value: &'static Ty,
+        adapter: &'static crate::maps::json::Adapter,
+    },
     Int,
     Bigint {
         desc: u32,
@@ -70,6 +77,14 @@ impl Ty {
     }
     fn score(&self, value: &Value) -> usize {
         match self {
+            Self::Enumeration(schema) => {
+                if schema.variant.is_some() {
+                    3
+                } else {
+                    2
+                }
+            }
+            Self::Literal(_) => 3,
             Self::Class { fields, .. } => value
                 .as_object()
                 .map(|o| {
@@ -81,6 +96,7 @@ impl Ty {
                         .len()
                 })
                 .unwrap_or(0),
+            Self::Map { .. } => value.as_object().map_or(0, |m| m.len()),
             Self::Int if value.as_i64().is_some() => 1,
             _ => 0,
         }
@@ -139,6 +155,30 @@ impl Ty {
 
     fn check(&self, value: &Value, path: &str) -> Result<(), Report> {
         let message = match self {
+            Self::Enumeration(schema) => return schema.check(value).map_err(|e| fail(e, path)),
+            Self::InvalidMap => Some("JSON requires maps with string keys"),
+            Self::Map {
+                key,
+                value: element,
+                ..
+            } => {
+                if !crate::maps::json::string_key_type(key) {
+                    return Err(fail("JSON requires maps with string keys", path));
+                }
+                let Some(values) = value.as_object() else {
+                    return Err(fail("expected JSON object", path));
+                };
+                if values
+                    .keys()
+                    .any(|name| !crate::maps::json::key_fits(key, name))
+                {
+                    return Err(fail("map key does not match declared key type", path));
+                }
+                for (key, v) in values {
+                    element.check(v, &format!("{path}[{key:?}]"))?;
+                }
+                None
+            }
             Self::Json(_) => None,
             Self::Int => {
                 if !value.is_number() {
@@ -252,6 +292,16 @@ impl Ty {
                 };
                 for field in *fields {
                     if field.skip {
+                        if matches!(field.ty,Self::Enumeration(schema) if schema.empty().is_none())
+                        {
+                            return Err(fail(
+                                format!(
+                                    "field `{name}.{}` is `@skip`, so JSON leaves it out, and its type has no empty value to hold",
+                                    field.name
+                                ),
+                                path,
+                            ));
+                        }
                         continue;
                     }
                     match object.get(field.name) {
@@ -276,6 +326,8 @@ impl Ty {
     }
     fn empty(&self) -> Value {
         match self {
+            Self::Enumeration(schema) => schema.empty().expect("validated enum default"),
+            Self::Map { .. } | Self::InvalidMap => Value::Object(Default::default()),
             Self::Json(_) => Value::Null,
             Self::Int | Self::Bigint { .. } => Value::from(0),
             Self::Float => Value::from(0.0),
@@ -304,6 +356,24 @@ impl Ty {
     }
     unsafe fn build(&self, cx: &mut Cx, value: &Value) -> R<Dyn> {
         Ok(match self {
+            Self::Enumeration(schema) => schema.build(value),
+            Self::InvalidMap => unreachable!("invalid map schema"),
+            Self::Map {
+                value: element,
+                adapter,
+                ..
+            } => {
+                let map = unsafe { (adapter.new)(cx)? };
+                for (key, value) in value.as_object().unwrap() {
+                    let value = unsafe { element.build(cx, value)? };
+                    let key = cx.string(key)?;
+                    unsafe { (adapter.insert)(cx, map, key, value)? };
+                }
+                Dyn {
+                    tag: adapter.tag,
+                    payload: map as u64,
+                }
+            }
             Self::Json(config) => unsafe { config.build(cx, value) }?,
             Self::Bigint { desc } => {
                 let text = value
@@ -450,7 +520,19 @@ pub unsafe fn decode(cx: &mut Cx, text: Str, ty: &'static Ty) -> R<Dyn> {
     unsafe { ty.build(cx, &value) }
 }
 
+pub struct EnumVariant {
+    pub name: &'static str,
+    pub alias: &'static str,
+    pub skip: bool,
+}
 pub enum Shape {
+    Enum {
+        name: &'static str,
+        variants: &'static [EnumVariant],
+    },
+    Bytes,
+    Function,
+    Future,
     Unsupported,
     ClassEncoded(unsafe fn(&mut Encoder<'_>, usize, usize) -> R<()>),
     Bigint,
@@ -460,8 +542,7 @@ pub enum Shape {
     },
     Class(&'static [EncodeField]),
     Map {
-        /// The declared key type is a string subtype.
-        string_keys: bool,
+        key: &'static crate::telemetry::capture::Type,
         len: unsafe fn(usize) -> usize,
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
@@ -479,6 +560,36 @@ enum PathStep {
     Index(usize),
     Key(Str),
 }
+fn write_string(out: &mut String, text: &str) {
+    out.push('"');
+    let mut start = 0;
+    let bytes = text.as_bytes();
+    while start < bytes.len() {
+        let end = start + bex_vm_types::json_text::plain_run(&bytes[start..]);
+        out.push_str(&text[start..end]);
+        if end == bytes.len() {
+            break;
+        }
+        match bytes[end] {
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            b'\n' => out.push_str("\\n"),
+            b'\r' => out.push_str("\\r"),
+            b'\t' => out.push_str("\\t"),
+            8 => out.push_str("\\b"),
+            12 => out.push_str("\\f"),
+            control => {
+                const HEX: &[u8; 16] = b"0123456789abcdef";
+                out.push_str("\\u00");
+                out.push(HEX[(control >> 4) as usize] as char);
+                out.push(HEX[(control & 15) as usize] as char);
+            }
+        }
+        start = end + 1;
+    }
+    out.push('"');
+}
+
 pub struct Encoder<'a> {
     shapes: &'static [Shape],
     cx: &'a mut Cx,
@@ -504,33 +615,7 @@ impl Encoder<'_> {
         crate::list_errors::serialization(self.cx, message, &path, reason)
     }
     fn quoted(&mut self, text: &str) {
-        self.out.push('"');
-        let mut start = 0;
-        let bytes = text.as_bytes();
-        while start < bytes.len() {
-            let end = start + bex_vm_types::json_text::plain_run(&bytes[start..]);
-            self.out.push_str(&text[start..end]);
-            if end == bytes.len() {
-                break;
-            }
-            match bytes[end] {
-                b'"' => self.out.push_str("\\\""),
-                b'\\' => self.out.push_str("\\\\"),
-                b'\n' => self.out.push_str("\\n"),
-                b'\r' => self.out.push_str("\\r"),
-                b'\t' => self.out.push_str("\\t"),
-                8 => self.out.push_str("\\b"),
-                12 => self.out.push_str("\\f"),
-                control => {
-                    const HEX: &[u8; 16] = b"0123456789abcdef";
-                    self.out.push_str("\\u00");
-                    self.out.push(HEX[(control >> 4) as usize] as char);
-                    self.out.push(HEX[(control & 15) as usize] as char);
-                }
-            }
-            start = end + 1;
-        }
-        self.out.push('"');
+        write_string(&mut self.out, text);
     }
     pub fn begin_class(&mut self) {
         self.out.push('{');
@@ -559,7 +644,13 @@ impl Encoder<'_> {
             return Ok(());
         }
         let null = value.tag == 2
-            || (value.tag >= 3 && value.tag != crate::FLOAT_TAG && value.payload == 0);
+            || (value.tag >= 3
+                && value.tag != crate::FLOAT_TAG
+                && value.payload == 0
+                && !matches!(
+                    self.shapes.get((value.tag - 3) as usize),
+                    Some(Shape::Enum { .. })
+                ));
         if self.omit_nulls && null {
             return Ok(());
         }
@@ -610,6 +701,23 @@ impl Encoder<'_> {
         }
     }
     unsafe fn value(&mut self, value: Dyn, depth: usize) -> R<()> {
+        if value.tag >= 3 && value.tag != crate::FLOAT_TAG {
+            if let Some(Shape::Enum { name, variants }) = self.shapes.get((value.tag - 3) as usize)
+            {
+                let v = &variants[value.payload as usize];
+                if self.aliased && v.skip {
+                    return Err(self.error(
+                        format!(
+                            "enum variant `{name}.{}` is `@skip`, so JSON has no name for it",
+                            v.name
+                        ),
+                        "enum",
+                    ));
+                }
+                self.quoted(if self.aliased { v.alias } else { v.name });
+                return Ok(());
+            }
+        }
         let value = if value.payload == 0 && value.tag >= 3 && value.tag != (u32::MAX - 1) as u64 {
             Dyn { tag: 2, payload: 0 }
         } else {
@@ -637,8 +745,7 @@ impl Encoder<'_> {
                         "non_finite",
                     ));
                 }
-                serde_json::to_writer(unsafe { self.out.as_mut_vec() }, &f)
-                    .expect("finite float JSON");
+                self.out.push_str(zmij::Buffer::new().format_finite(f));
             }
             tag => {
                 let pointer = value.payload as usize;
@@ -739,17 +846,11 @@ impl Encoder<'_> {
                         }
                         self.out.push('}');
                     }
-                    Shape::Map {
-                        string_keys,
-                        len,
-                        entry,
-                    } => {
-                        // The VM rejects by declared key type, even when empty.
-                        if !string_keys {
-                            return Err(self.error(
-                                "JSON requires maps with string keys".into(),
-                                "map_key",
-                            ));
+                    Shape::Map { key, len, entry } => {
+                        if !crate::maps::json::string_key_type(key) {
+                            return Err(
+                                self.error("JSON requires maps with string keys".into(), "map_key")
+                            );
                         }
                         let len = unsafe { len(pointer) };
                         self.out.push('{');
@@ -783,6 +884,23 @@ impl Encoder<'_> {
                             self.newline(depth);
                         }
                         self.out.push('}');
+                    }
+                    Shape::Enum { .. } => unreachable!("enum handled before null"),
+                    Shape::Bytes => {
+                        return Err(self.error(
+                            "uint8array requires explicit encoding (use to_base64() or to_hex())"
+                                .into(),
+                            "uint8array",
+                        ));
+                    }
+                    Shape::Function => {
+                        return Err(self.error("a function has no JSON form".into(), "function"));
+                    }
+                    Shape::Future => {
+                        return Err(self.error(
+                            "a future has no JSON form (await it first)".into(),
+                            "future",
+                        ));
                     }
                     Shape::Unsupported => {
                         return Err(self.error("value has no JSON form".into(), "unserializable"));
@@ -865,6 +983,50 @@ mod tests {
     use super::*;
     use crate::{Instance, language::*, lists};
     use baml_rt_gc::{Descriptor, Field as GcField, Kind, SlotKind};
+
+    #[test]
+    fn string_escaping_matches_serde_json() {
+        let ascii: String = (0..=127).map(char::from).collect();
+        for value in [
+            "",
+            ascii.as_str(),
+            "é🙂\u{2028}\u{2029}中",
+            "a\"b\\c\n🙂\0z",
+        ] {
+            let mut out = String::from("prefix");
+            write_string(&mut out, value);
+            assert_eq!(
+                out,
+                format!("prefix{}", serde_json::to_string(value).unwrap())
+            );
+        }
+    }
+
+    #[test]
+    fn float_format_matches_serde_json() {
+        let mut bits = 0u64;
+        for value in [
+            0.0,
+            -0.0,
+            f64::MIN,
+            f64::MAX,
+            f64::MIN_POSITIVE,
+            f64::from_bits(1),
+        ]
+        .into_iter()
+        .chain((0..10_000).map(|_| {
+            bits = bits.wrapping_mul(6364136223846793005).wrapping_add(1);
+            f64::from_bits(bits)
+        }))
+        .filter(|value| value.is_finite())
+        {
+            assert_eq!(
+                zmij::Buffer::new().format_finite(value),
+                serde_json::to_string(&value).unwrap()
+            );
+        }
+    }
+
     static DESCRIPTORS: &[Descriptor] = &[
         STRING_DESC,
         OVERFLOW_DESC,

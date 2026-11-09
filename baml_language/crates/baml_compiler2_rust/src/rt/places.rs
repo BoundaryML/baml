@@ -37,11 +37,28 @@ impl Emitter<'_, '_> {
             Repr::Bool => Ok(1),
             Repr::Null => Ok(2),
             Repr::Str => Ok(3),
-            Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
-            Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
+            r @ (Repr::Enum(_) | Repr::Naming) => {
+                Ok(layout::enum_tag(self.plan, r, self.descriptors, self.lists))
+            }
+            Repr::Cell | Repr::Closure => {
+                let (cell, closure) = self
+                    .plan
+                    .closure_descriptors()
+                    .ok_or_else(|| no("closure descriptor"))?;
+                Ok(if repr == Repr::Cell { cell } else { closure } + 3)
+            }
             Repr::Opaque => Ok(18),
             Repr::Bytes => Ok(19),
-            Repr::Future => Ok(self.plan.future_descriptor().unwrap() + 3),
+            Repr::Reflected => Ok(self
+                .plan
+                .reflection_descriptor()
+                .ok_or_else(|| no("reflection descriptor"))?
+                + 3),
+            Repr::Future => Ok(self
+                .plan
+                .future_descriptor()
+                .ok_or_else(|| no("future descriptor"))?
+                + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::List(_)
             | Repr::ListInt
@@ -57,7 +74,7 @@ impl Emitter<'_, '_> {
         }
     }
     pub(super) fn null_test(value: &(String, Repr)) -> String {
-        if value.1 == Repr::Tagged {
+        if matches!(value.1, Repr::Tagged | Repr::Dyn(_)) {
             format!("({}).tag==2", value.0)
         } else if value.1.pointer() || value.1 == Repr::Null {
             format!("({})==0", value.0)
@@ -67,12 +84,35 @@ impl Emitter<'_, '_> {
     }
     pub(super) fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
         let (value, source) = value;
+        // Static alias expansion may give an otherwise identical list two
+        // declared element types. Its managed buffer and alias identity stay
+        // intact when both sides use exactly the same element representation.
+        if source.growing()
+            && target.growing()
+            && self.plan.element(source)? == self.plan.element(target)?
+        {
+            return Ok(value);
+        }
+        if matches!(source, Repr::Type(_)) && matches!(target, Repr::Reflected | Repr::Tagged) {
+            return self.coerce((value, Repr::Reflected), target);
+        }
         if source == target
             || (source == Repr::Null && target.pointer())
             || (matches!(source, Repr::Dyn(_)) && target == Repr::Tagged)
             || (source == Repr::Tagged && matches!(target, Repr::Dyn(_)))
         {
             return Ok(value);
+        }
+        if source.growing()
+            && target.growing()
+            && self.plan.element(source)? == self.plan.element(target)?
+            && capture_codegen::capture_repr(self.plan, source)?
+                == capture_codegen::capture_repr(self.plan, target)?
+        {
+            return Ok(value);
+        }
+        if source == Repr::Int && target == Repr::Float {
+            return Ok(format!("({value} as f64)"));
         }
         if matches!(source, Repr::Dyn(_)) && matches!(target, Repr::Tagged | Repr::Dyn(_))
             || source == Repr::Tagged && matches!(target, Repr::Dyn(_))
@@ -128,7 +168,7 @@ impl Emitter<'_, '_> {
                 ))
             }
             Place::Field { base, field } => {
-                let (base, repr) = self.place(base)?;
+                let (base, repr) = self.class_base(base)?;
                 if repr == Repr::Tagged {
                     let mut expression = format!("{{let value={base};match value.tag{{");
                     for (&class, layout) in &self.plan.layouts {
@@ -175,6 +215,12 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (base, repr) = self.place(base)?;
+                if repr == Repr::Bytes {
+                    return Ok((
+                        self.fallible(&format!("rt::native::byte_index({base},l{})", index.0)),
+                        Repr::Int,
+                    ));
+                }
                 let element = self.plan.element(repr)?;
                 if self.local(index.0)? != Repr::Int {
                     return Err(no("non-int list index"));
@@ -223,7 +269,25 @@ impl Emitter<'_, '_> {
                 Ok((self.coerce((value, Repr::Tagged), repr)?, repr))
             }
             Operand::Constant(Constant::Float(f)) => {
-                Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
+                // Bytecode interns equal floats per function, including the
+                // two zero signs. Preserve the first pooled constant's bits.
+                let bits = self
+                    .plan
+                    .index
+                    .positions(self.object)
+                    .constants
+                    .iter()
+                    .find_map(|value| {
+                        if let bex_vm_types::ConstValue::Float(value) = value
+                            && value == f
+                        {
+                            Some(value.to_bits())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| f.to_bits());
+                Ok((format!("f64::from_bits({bits}u64)"), Repr::Float))
             }
             Operand::Constant(Constant::Bigint(i)) => Ok((
                 self.fallible(&format!(
@@ -315,7 +379,7 @@ impl Emitter<'_, '_> {
         match p {
             Place::Local(_) => Ok(format!("{dst}={src};\n")),
             Place::Field { base, field } => {
-                let (obj, Repr::Ptr(c)) = self.place(base)? else {
+                let (obj, Repr::Ptr(c)) = self.class_base(base)? else {
                     return Err(no("field store"));
                 };
                 let obj = self.fallible(&format!("rt::nonnull({obj})"));
@@ -335,6 +399,11 @@ impl Emitter<'_, '_> {
                 kind: baml_compiler2_mir::IndexKind::Array,
             } => {
                 let (obj, container) = self.place(base)?;
+                if container == Repr::Bytes {
+                    let store =
+                        self.fallible(&format!("rt::native::byte_set(object,l{},value)", index.0));
+                    return Ok(format!("{{let value={src};let object={obj};{store};}}\n"));
+                }
                 if container.growing() {
                     let slot = repr.slot()?;
                     let value = repr.to_slot(&src)?;

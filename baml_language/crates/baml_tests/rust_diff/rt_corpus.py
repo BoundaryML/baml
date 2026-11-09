@@ -261,7 +261,7 @@ def normalize_admission_signature(signature):
     # Reachability/emission coordinates identify the caller, not the blocker.
     signature = re.split(r" \((?:constructor in |reaching |emitting |layout |[^\n]*? local \d+:|interface receiver )", signature, maxsplit=1)[0]
     signature = re.sub(r"\b0x[0-9a-fA-F]+\b", "<ptr>", signature)
-    signature = re.sub(r"\b(TypeTag|TypeId|ObjectIndex|FileId|Ptr|ListPtr|MapStrPtr|Dyn|Enum|Type|Local|BlockId)\(\d+\)", r"\1(<id>)", signature)
+    signature = re.sub(r"\b(TypeTag|TypeId|ObjectIndex|FileId|Ptr|ListPtr|MapStrPtr|ListClosure|ListFuture|Dyn|Enum|Type|Local|BlockId)\(\d+\)", r"\1(<id>)", signature)
     signature = re.sub(r"\bSourceRoot\(Id\([0-9a-fA-F]+\)\)", "SourceRoot(<id>)", signature)
     signature = re.sub(r"\b(type_id|type_tag|object_id|object_index)(\s*[:=]\s*)\d+\b", r"\1\2<id>", signature)
     return " ".join(signature.split())
@@ -329,11 +329,14 @@ def oracle_fingerprint(workspace, env):
     an interpreter invocation. All frontend/VM/stdlib/corpus sources stay hashed.
     """
     # Capture-format changes must not reuse observations from a lossy decoder.
-    digest = hashlib.sha256(b"rt-corpus-vm-evidence-v2-lossless-streams")
+    digest = hashlib.sha256(b"rt-corpus-vm-evidence-v3-source-inputs")
     ignored_crates = {"baml_compiler2_rust", "baml_rt", "baml_rt_gc", "baml_rt_tasks", "baml_rt_island"}
     for root in (workspace / "crates", workspace / "sdks", workspace / "forks", workspace / "vendor"):
         for path in sorted(root.rglob("*")):
-            if not path.is_file() or any(part in ("target", "node_modules", ".git", "__pycache__") for part in path.relative_to(root).parts):
+            # Test runs write telemetry and bytecode caches under .baml. Those
+            # outputs cannot affect the oracle's program, and hashing them
+            # invalidates every observation immediately after creating it.
+            if not path.is_file() or any(part in ("target", "node_modules", ".git", ".baml", "__pycache__") for part in path.relative_to(root).parts):
                 continue
             relative = path.relative_to(workspace)
             if len(relative.parts) > 1 and relative.parts[0] == "crates":

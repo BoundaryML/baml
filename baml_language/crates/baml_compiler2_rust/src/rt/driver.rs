@@ -5,7 +5,7 @@ use super::{
 };
 use std::fmt::Write as _;
 
-/// Emit a single parameterless integer entry, including a compatible benchmark host.
+/// Emit a parameterless integer or string entry and its compatible benchmark host.
 /// Layouts and direct call bodies come exclusively from MIR and linked metadata.
 pub fn compile_rt(
     db: &dyn Db,
@@ -55,6 +55,7 @@ fn compile_entry<'db>(
         json_to_types: Vec::new(),
         lists: BTreeSet::new(),
         list_elements: std::cell::RefCell::new(Vec::new()),
+        list_narrowing_facts: BTreeMap::new(),
         json_types: Vec::new(),
         environments: false,
         task_support: false,
@@ -71,24 +72,36 @@ fn compile_entry<'db>(
         enums: BTreeSet::new(),
         specialized_calls: BTreeMap::new(),
         type_codes: Vec::new(),
+        reflected: false,
+        reflect_meta: false,
+        reflection_fields: Vec::new(),
+        reflection_signatures: None,
+        reflection_types: Vec::new(),
         next_object: program.objects.len(),
         class_instances: Vec::new(),
         concrete_types: Vec::new(),
         heads: BTreeMap::new(),
         dispatches: BTreeMap::new(),
         function_frames: BTreeMap::new(),
+        error_contexts: false,
         structural_strings: false,
         structural_string_calls: BTreeSet::new(),
         string_overrides: BTreeMap::new(),
+        structural_equals: false,
+        equals_overrides: BTreeMap::new(),
         alias_tests: std::cell::RefCell::new(BTreeSet::new()),
         list_stringify: false,
         list_render_roots: std::cell::RefCell::new(BTreeSet::new()),
         json_decode_codes: BTreeSet::new(),
         json_list_types: Vec::new(),
         map_types: Default::default(),
+        key_callbacks: Default::default(),
+        key_hasher: None,
+        key_edges: Default::default(),
         json_maps: BTreeMap::new(),
         map_stringify: false,
         globals: BTreeMap::new(),
+        literal_ids: std::cell::RefCell::new(BTreeMap::new()),
         init_chains: Vec::new(),
     };
     let admission::Admitted {
@@ -109,11 +122,13 @@ fn compile_entry<'db>(
             .map(|p| p.all.as_ref().map_err(Clone::clone))
             .transpose()?,
     )?;
+    super::reflection::collect(&mut plan, &all, &reached)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
     builtins::emit(&mut out, &builtins)?;
     let layout::LayoutIds { descriptors, lists } = layout::emit(&mut out, &plan)?;
+    super::reflection::emit(&mut out, db, &plan)?;
     super::regex::emit(&mut out, &plan, &descriptors, &lists, &builtins)?;
     let host_function = |name: &str| {
         program
@@ -233,6 +248,11 @@ fn compile_entry<'db>(
             statement: 0,
             stack: placements.remove(&object).unwrap(),
             proven_arithmetic: BTreeSet::new(),
+            list_narrowings: plan
+                .list_narrowing_facts
+                .get(&(body as *const _ as usize))
+                .cloned()
+                .unwrap_or_default(),
             unwind_jumps: Vec::new(),
             sites: Vec::new(),
             compact_sites: Vec::new(),
@@ -293,6 +313,9 @@ fn compile_entry<'db>(
             let emitter = Emitter {
                 db,
                 plan: &plan,
+                proven_arithmetic: BTreeSet::new(),
+                list_narrowings: BTreeMap::new(),
+                stack: super::stack::Placement::default(),
                 body: match &all[&entry].kind {
                     MirFunctionKind::Bytecode(b) => b,
                     _ => unreachable!(),
@@ -306,8 +329,6 @@ fn compile_entry<'db>(
                 arity: 0,
                 block: 0,
                 statement: 0,
-                stack: super::stack::Placement::default(),
-                proven_arithmetic: BTreeSet::new(),
                 unwind_jumps: Vec::new(),
                 sites: Vec::new(),
                 compact_sites: Vec::new(),
@@ -336,8 +357,19 @@ fn compile_entry<'db>(
         (stringify, aliased),
         &telemetry_sites,
     )?;
+    let cx_type = super::exceptions::context_type(plan.error_contexts);
+    let cleanup_init = if plan.cleanup_methods.is_empty() {
+        ""
+    } else {
+        "rt::tasks::set_cleanup_dispatch(cleanup_dispatch);"
+    };
     if test_entry {
-        write!(&mut out, "fn entry()->R<i64>{{unsafe{{let cx=rt::calls::Context::current();(if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}})?;Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name)}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
+        let initializer = if plan.init_chains.is_empty() {
+            "None"
+        } else {
+            "Some(initialize_program)"
+        };
+        write!(&mut out, "fn entry()->R<i64>{{unsafe{{{cleanup_init}let cx={cx_type}::current();(if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}})?;Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name,{initializer})}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
     } else if let Some((setup, run)) = benchmark {
         host::emit_benchmark(
             &mut out,
@@ -349,7 +381,21 @@ fn compile_entry<'db>(
             !plan.init_chains.is_empty(),
             string_result,
             !plan.cleanup_methods.is_empty(),
+            plan.error_contexts,
         );
+    } else if all[&entry].arity != 0
+        || !matches!(&all[&entry].kind,MirFunctionKind::Bytecode(body) if matches!(plan.repr(&body.locals[0].ty),Ok(super::Repr::Int|super::Repr::Str)))
+    {
+        host::emit_owned(
+            &mut out,
+            &plan,
+            &all[&entry],
+            &lists,
+            &descriptors,
+            entry,
+            &builtins,
+            format_site,
+        )?;
     } else {
         host::emit(
             &mut out,
@@ -359,6 +405,7 @@ fn compile_entry<'db>(
             !plan.init_chains.is_empty(),
             string_result,
             !plan.cleanup_methods.is_empty(),
+            plan.error_contexts,
         );
     }
     Ok(out)

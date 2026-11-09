@@ -74,11 +74,24 @@ pub(super) trait Feature {
 }
 
 const FEATURES: &[&dyn Feature] = &[
+    &super::exceptions::Feature,
+    &super::reflection::Feature,
+    &super::calendar::Feature,
+    &super::random::Feature,
+    &super::native::Feature,
+    &super::scalars::Feature,
+    &super::io_clock::Feature,
+    &super::provider::Feature,
+    &super::io::Feature,
+    &super::logging::Feature,
     &stack::Feature,
     &globals::Feature,
     &closures::Feature,
     &tasks::Feature,
+    &super::list_callbacks::Feature,
+    &super::list_scalars::Feature,
     &lists::Feature,
+    &super::map_keys::Feature,
     &maps::Feature,
     &super::callbacks::Feature,
     &super::string_defaults::Feature,
@@ -95,6 +108,11 @@ const FEATURES: &[&dyn Feature] = &[
     &super::json_tree::Feature,
     &super::generics::Feature,
     &loop_ranges::Feature,
+    &super::operators::Feature,
+    &super::hashing::Feature,
+    &super::trace::Feature,
+    &super::equality::Feature,
+    &super::assertions::Feature,
     &calls::Feature,
 ];
 

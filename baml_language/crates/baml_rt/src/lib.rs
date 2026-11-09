@@ -2,27 +2,43 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod assertions;
 pub mod bigint;
 pub mod bytes;
+pub mod calendar;
 pub mod callbacks;
 pub mod calls;
 pub mod closures;
+pub mod equality;
+pub mod exceptions;
+pub mod external;
 pub mod format;
 pub mod globals;
+pub mod hashing;
+pub mod host;
+pub mod io;
 pub mod json;
 pub mod json_lists;
 pub mod json_scalars;
 pub mod json_tree;
 pub mod language;
 pub mod list_errors;
+pub mod list_scalars;
 pub mod lists;
 pub mod maps;
 pub mod native;
+pub mod opaque;
+pub mod operators;
+pub mod provider;
+pub mod random;
+pub mod reflection;
 pub mod regex;
 pub mod regex_map;
+pub mod scalars;
 pub mod strings;
 pub mod tasks;
 pub mod telemetry;
+pub mod trace;
 use baml_rt_gc::{Descriptor, Heap, RootSource};
 use baml_rt_tasks::{Config, TaskCx, TaskLoop, Value};
 pub use bex_vm_types::float_order::{cmp as float_cmp, eq as float_eq};
@@ -48,6 +64,25 @@ impl RootSource for Roots<'_> {
             }
         });
     }
+}
+
+/// Roots of the installed invocation, read only when the heap needs them.
+/// Bump allocations never trace, so the fast path does not load the root TLS.
+pub(crate) struct CurrentRoots;
+impl RootSource for CurrentRoots {
+    fn conservative_ranges(&self, visit: &mut dyn FnMut(*const usize, *const usize)) {
+        unsafe { Roots(current_roots()).conservative_ranges(visit) }
+    }
+    fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+        unsafe { Roots(current_roots()).precise_roots(visit) }
+    }
+}
+/// # Safety
+/// The returned reference is valid only for the installed invocation.
+unsafe fn current_roots() -> &'static baml_rt_tasks::IntegrationRoots {
+    let roots = ROOTS.get();
+    assert!(!roots.is_null(), "rt allocation outside a root task");
+    unsafe { &*roots }
 }
 
 thread_local! {
@@ -93,12 +128,21 @@ pub unsafe fn try_alloc(desc: u32, bytes: usize) -> R<*mut u8> {
     // Keep the TLS getters small: a closure containing the whole allocation
     // path prevents LLVM from inlining LocalKey::with into string concat loops.
     let heap = HEAP.get();
-    let roots = ROOTS.get();
-    assert!(
-        !heap.is_null() && !roots.is_null(),
-        "rt allocation outside a root task"
-    );
-    let result = unsafe { (&mut *heap).try_alloc(desc, bytes, &Roots(&*roots)) };
+    assert!(!heap.is_null(), "rt allocation outside a root task");
+    let result = unsafe { (&mut *heap).try_alloc(desc, bytes, &CurrentRoots) };
+    result.map_err(|failure| language::allocation_failure(failure.bytes))
+}
+
+/// Allocate a header-initialized class with uninitialized fields.
+/// # Safety
+/// Same rooting contract as `try_alloc`. The descriptor must be a class without
+/// cleanup or variable elements, of exactly `bytes` bytes. Initialize every field
+/// before reading it or performing another collecting operation.
+#[inline(always)]
+pub unsafe fn try_alloc_class(desc: u32, bytes: usize) -> R<*mut u8> {
+    let heap = HEAP.get();
+    assert!(!heap.is_null(), "rt allocation outside a root task");
+    let result = unsafe { (&mut *heap).try_alloc_class(desc, bytes, &CurrentRoots) };
     result.map_err(|failure| language::allocation_failure(failure.bytes))
 }
 
@@ -174,6 +218,7 @@ impl Instance {
     pub fn new(descriptors: &'static [Descriptor], pointer_types: &'static [bool]) -> Self {
         let io = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
+            .enable_all()
             .build()
             .unwrap();
         let mut heap = Heap::new(descriptors, pointer_types);
@@ -223,6 +268,9 @@ impl Instance {
     /// The entry must uphold the same rooting contract as `run`. A returned
     /// error's managed `value` is unrooted: inspect it only while this instance
     /// remains alive and before any further managed allocation.
+    pub unsafe fn run_owned<T: 'static>(&mut self, entry: impl FnOnce() -> R<T> + 'static) -> R<T> {
+        unsafe { self.run_baml_value(entry) }
+    }
     pub unsafe fn run_baml(&mut self, entry: impl FnOnce() -> R<i64> + 'static) -> R<i64> {
         unsafe { self.run_baml_value(entry) }
     }

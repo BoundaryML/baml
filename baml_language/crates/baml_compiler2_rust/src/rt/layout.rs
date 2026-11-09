@@ -13,6 +13,9 @@ impl Plan<'_> {
             .ok_or_else(|| no("unlinked class tag"))
     }
     pub(super) fn record_ty(&mut self, ty: &RuntimeTy) -> Gen<()> {
+        if super::exceptions::dividend(ty) {
+            return Ok(());
+        }
         if let RuntimeTy::List(element) = ty
             && matches!(
                 element.as_ref(),
@@ -41,6 +44,9 @@ impl Plan<'_> {
         Ok(())
     }
     pub(super) fn record_field_ty(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
+        if super::exceptions::dividend(ty) {
+            return Ok(());
+        }
         if let bex_vm_types::RuntimeTy::List(element) = ty
             && matches!(
                 element.as_ref(),
@@ -70,6 +76,7 @@ impl Plan<'_> {
     }
     pub(super) fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
+            Repr::Reflected => self.reflected = true,
             Repr::Bigint => self.bigints = true,
             Repr::Future => self.task_support = true,
             Repr::ListFuture(_) => {
@@ -94,19 +101,21 @@ impl Plan<'_> {
                 self.add(c)?;
             }
             Repr::Map(_) => {
-                self.lists.insert(repr);
+                if !self.lists.insert(repr) {
+                    return Ok(());
+                }
                 let (key, value) = self.map_parts(repr)?;
+                if maps::callback_key(key) {
+                    self.add(maps::panic_class(self)?)?;
+                }
                 self.record(key)?;
                 self.record(value)?;
-                for element in [key, value] {
-                    if let Repr::Ptr(c) = element {
-                        self.record(Repr::ListPtr(c))?;
-                    }
-                    if element == Repr::ListStr {
-                        self.record(Repr::ListListStr)?;
-                    }
+                for keys in [true, false] {
+                    let snapshot = self.map_snapshot_repr(repr, keys)?;
+                    self.record(snapshot)?;
                 }
             }
+
             Repr::MapStrPtr(c) => {
                 self.lists.insert(repr);
                 self.record(Repr::ListPtr(c))?;
@@ -139,6 +148,9 @@ impl Plan<'_> {
                 return self.repr(&reduced);
             }
         }
+        if super::exceptions::dividend(ty) {
+            return Ok(Repr::Tagged);
+        }
         Ok(match ty {
             RuntimeTy::Bigint | RuntimeTy::Literal(baml_type::Literal::Bigint(_), _) => {
                 Repr::Bigint
@@ -151,6 +163,7 @@ impl Plan<'_> {
             RuntimeTy::Never => Repr::Null,
             RuntimeTy::Future(..) => Repr::Future,
             RuntimeTy::Uint8Array => Repr::Bytes,
+            RuntimeTy::Type => Repr::Reflected,
             RuntimeTy::RustType => Repr::Opaque,
             RuntimeTy::Function { .. } => Repr::Closure,
             RuntimeTy::Map { key, value }
@@ -158,11 +171,6 @@ impl Plan<'_> {
                     && self.repr(value).is_ok_and(|r| matches!(r, Repr::Ptr(c) if Some(c) == super::strings::builtin_class(self,"baml.regex.Group").ok())) =>
             { let Repr::Ptr(c)=self.repr(value)? else {return Err(no("regex group map"))}; Repr::MapStrPtr(c) }
             RuntimeTy::Map { key, value } => {
-                if matches!(key.as_ref(), RuntimeTy::Union(m) if !m.iter().all(scalar_key))
-                    || matches!(key.as_ref(), RuntimeTy::Unknown)
-                {
-                    return Err(no("map key callbacks"));
-                }
                 self.map_repr(
                     if matches!(key.as_ref(), RuntimeTy::Union(_)) {
                         Repr::Tagged
@@ -173,7 +181,8 @@ impl Plan<'_> {
                     capture_codegen::declared_type(self, key)?,
                     capture_codegen::declared_type(self, value)?,
                     scalar_json_value(value),
-                    super::maps::string_keys(key),
+                    capture_codegen::type_identity(self,key)?,
+                    capture_codegen::type_identity(self,value)?,
                 )
             }
             RuntimeTy::Null => Repr::Null,
@@ -217,6 +226,13 @@ impl Plan<'_> {
                     .enum_at(head)
                     .ok_or_else(|| no("unlinked enum"))?,
             ),
+            // `reflect.Type`'s own methods receive the `type` value itself.
+            RuntimeTy::Class(head, args)
+                if args.is_empty()
+                    && head.is_lang_root_type(self.lang, baml_base::LangPackage::Reflect, "Type") =>
+            {
+                Repr::Reflected
+            }
             RuntimeTy::Class(head, args)
                 if args.is_empty()
                     && head.builtin_primitive(self.lang)
@@ -270,6 +286,9 @@ impl Plan<'_> {
         })
     }
     pub(super) fn field_repr(&self, ty: &bex_vm_types::RuntimeTy) -> Gen<Repr> {
+        if super::exceptions::dividend(ty) {
+            return Ok(Repr::Tagged);
+        }
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
             T::Null | T::Never => Repr::Null,
@@ -277,6 +296,13 @@ impl Plan<'_> {
             T::Future(..) => Repr::Future,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
             T::Uint8Array => Repr::Bytes,
+            T::Type => Repr::Reflected,
+            T::Class(head, args)
+                if args.is_empty()
+                    && super::reflection::type_value_pattern(self, &bex_vm_types::TyTemplate::Class(*head, Box::new([]))) =>
+            {
+                Repr::Reflected
+            }
             T::RustType => Repr::Opaque,
             T::Enum(head) | T::EnumVariant(head, _)
                 if self.program.packages.iter().any(|p| {
@@ -306,11 +332,6 @@ impl Plan<'_> {
                     && self.field_repr(value).is_ok_and(|r| matches!(r, Repr::Ptr(c) if Some(c) == super::strings::builtin_class(self,"baml.regex.Group").ok())) =>
             { let Repr::Ptr(c)=self.field_repr(value)? else {return Err(no("regex group map"))}; Repr::MapStrPtr(c) }
             T::Map { key, value } => {
-                if matches!(key.as_ref(), T::Union(m) if !m.iter().all(scalar_field_key))
-                    || matches!(key.as_ref(), T::Unknown)
-                {
-                    return Err(no("map key callbacks"));
-                }
                 self.map_repr(
                     if matches!(key.as_ref(), T::Union(_)) {
                         Repr::Tagged
@@ -321,7 +342,8 @@ impl Plan<'_> {
                     capture_codegen::declared_field_type(self, key)?,
                     capture_codegen::declared_field_type(self, value)?,
                     scalar_json_field_value(value),
-                    super::maps::string_keys(key),
+                    capture_codegen::field_type_identity(self,key)?,
+                    capture_codegen::field_type_identity(self,value)?,
                 )
             }
             T::List(element) => {
@@ -399,27 +421,6 @@ impl Plan<'_> {
             return Ok(());
         }
         let class = self.class(object);
-        // Runtime-produced exception descriptors are reserved. The runtime supports
-        // wildcard panic exclusion and user-defined typed catches; never emit a
-        // second, incompatible layout/tag for a builtin exception class.
-        if self.program.packages.iter().any(|package| {
-            package.name == "baml"
-                && package
-                    .objects
-                    .contains(&u32::try_from(object).expect("object index"))
-        }) && self.list_error_descriptor(object).is_none()
-            && ((class.path.to_string().starts_with("panics.")
-                && !matches!(
-                    class.path.to_string().as_str(),
-                    "panics.UserPanic" | "panics.AssertionFailed"
-                ))
-                || matches!(
-                    class.path.to_string().as_str(),
-                    "json.ParseError" | "json.DecodeError"
-                ))
-        {
-            return Err(no("typed builtin exception class"));
-        }
         registry::admit(registry::Admission::Class {
             cleanup: class.cleanup.is_some(),
             generic: false,
@@ -539,14 +540,14 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         .max()
         .unwrap_or(next_class);
     let after_descriptors = after_lists
+        + usize::from(plan.reflected)
         + usize::from(plan.task_support)
-        + usize::from(plan.bigints)
         + if plan.closure_descriptors().is_some() {
             2
         } else {
             0
         };
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::MAP_KEY_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::MAP_KEY_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,rt::exceptions::VALUE_DESC,rt::native::BIGINT_LAYOUT,rt::native::BYTES_BUFFER_LAYOUT,rt::USER_PANIC_DESC,rt::SCALAR_PARSE_DESC,rt::HOST_UNAVAILABLE_DESC,rt::IO_DESC,\n");
     for (&object, layout) in &plan.layouts {
         if plan.list_error_descriptor(object).is_some() {
             continue;
@@ -595,6 +596,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                             Repr::Str => 3,
                             Repr::Opaque => 18,
                             Repr::Bytes => 19,
+                            Repr::Reflected => plan.reflection_descriptor().unwrap() + 3,
                             Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
                             Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
                             Repr::Bigint => plan.bigint_descriptor() + 3,
@@ -691,15 +693,13 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     if let Some(future) = plan.future_descriptor() {
         writeln!(out, "rt::tasks::future_descriptor({}),", future + 3).unwrap();
     }
-    if plan.bigints {
-        writeln!(
-            out,
-            "rt::bigint::descriptor({}),",
-            plan.bigint_descriptor() + 3
-        )
-        .unwrap();
+    if let Some(reflection) = plan.reflection_descriptor() {
+        writeln!(out, "rt::reflection::descriptor({}),", reflection + 3).unwrap();
     }
     out.push_str("];\n");
+    if let Some(reflection) = plan.reflection_descriptor() {
+        writeln!(out, "const REFLECT_TAG:u64={};", reflection + 3).unwrap();
+    }
     if plan.bigints {
         writeln!(
             out,
@@ -707,6 +707,9 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
             plan.bigint_descriptor() + 3
         )
         .unwrap();
+    }
+    if let Some(future) = plan.future_descriptor() {
+        writeln!(out, "const FUTURE_TAG:u64={};", future + 3).unwrap();
     }
     out.push_str(&capture_codegen::emit(
         plan,
@@ -743,8 +746,16 @@ pub(super) struct LayoutIds {
     pub descriptors: BTreeMap<usize, usize>,
     pub lists: BTreeMap<Repr, usize>,
 }
+// The prefix combines language exceptions, rope nodes, native payloads, and
+// the owned I/O/scalar layouts below. Keep its order in sync with DESCRIPTORS.
+pub(super) const BIGINT_DESCRIPTOR: usize = 18;
+pub(super) const BYTES_BUFFER_DESCRIPTOR: usize = 19;
+pub(super) const USER_PANIC_DESCRIPTOR: usize = 20;
+pub(super) const SCALAR_PARSE_DESCRIPTOR: usize = 21;
+pub(super) const HOST_UNAVAILABLE_DESCRIPTOR: usize = 22;
+pub(super) const IO_DESCRIPTOR: usize = 23;
 pub(super) fn rt_descriptors() -> usize {
-    17
+    IO_DESCRIPTOR + 1
 }
 
 impl Plan<'_> {
@@ -782,6 +793,13 @@ impl Plan<'_> {
     pub(super) fn future_descriptor(&self) -> Option<usize> {
         self.task_support
             .then(|| self.descriptor_tail() + usize::from(self.closure_descriptors().is_some()) * 2)
+    }
+    pub(super) fn reflection_descriptor(&self) -> Option<usize> {
+        self.reflected.then(|| {
+            self.descriptor_tail()
+                + usize::from(self.closure_descriptors().is_some()) * 2
+                + usize::from(self.task_support)
+        })
     }
 }
 
@@ -846,9 +864,32 @@ fn scalar_json_field_value(ty: &bex_vm_types::RuntimeTy) -> bool {
 }
 
 impl Plan<'_> {
+    // Task durations and scalar builtins use one serialized bigint layout.
     pub(super) fn bigint_descriptor(&self) -> usize {
-        self.descriptor_tail()
-            + usize::from(self.closure_descriptors().is_some()) * 2
-            + usize::from(self.task_support)
+        BIGINT_DESCRIPTOR
     }
+}
+
+pub(super) fn enum_tag(
+    plan: &Plan<'_>,
+    repr: Repr,
+    _descriptors: &BTreeMap<usize, usize>,
+    _lists: &BTreeMap<Repr, usize>,
+) -> usize {
+    let end = plan.descriptor_tail()
+        + usize::from(plan.closure_descriptors().is_some()) * 2
+        + usize::from(plan.task_support)
+        + usize::from(plan.reflected);
+    end + 3
+        + match repr {
+            Repr::Naming => 0,
+            Repr::Enum(e) => {
+                1 + plan
+                    .enums
+                    .iter()
+                    .position(|id| *id == e)
+                    .expect("registered enum")
+            }
+            _ => unreachable!(),
+        }
 }

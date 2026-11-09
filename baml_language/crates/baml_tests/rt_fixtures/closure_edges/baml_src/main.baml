@@ -28,6 +28,10 @@ function RtNativeHigherOrderValue()->int {
     let map:((int)->int throws never)->int[] throws never=values.map;
     let output=map((n:int)->int {n*2});
     let reduce:((int,int)->int throws never,int)->int throws never=output.reduce;
+    let flags=[true,true,false,true];
+    let map_flags:((bool)->bool throws never)->bool[] throws never=flags.map;
+    let inverted=map_flags((value:bool)->bool {!value});
+    if(inverted[0] || inverted[1] || !inverted[2] || inverted[3]) { return -1; }
     reduce((a:int,b:int)->int {a+b},0)
 }
 

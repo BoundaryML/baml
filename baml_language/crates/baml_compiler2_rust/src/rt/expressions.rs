@@ -81,6 +81,33 @@ impl Emitter<'_, '_> {
                 };
                 let (l, lt) = narrow_integer(self.operand(left)?)?;
                 let (r, rt) = narrow_integer(self.operand(right)?)?;
+                if matches!(op, BinOp::Eq | BinOp::Ne) && (lt == Repr::Null || rt == Repr::Null) {
+                    let test = Self::null_test(&if lt == Repr::Null { (r, rt) } else { (l, lt) });
+                    return Ok((
+                        if *op == BinOp::Ne {
+                            format!("!({test})")
+                        } else {
+                            test
+                        },
+                        Repr::Bool,
+                    ));
+                }
+                if lt == Repr::Str
+                    && rt == Repr::Str
+                    && matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge)
+                {
+                    let method = match op {
+                        BinOp::Lt => "is_lt",
+                        BinOp::Le => "is_le",
+                        BinOp::Gt => "is_gt",
+                        BinOp::Ge => "is_ge",
+                        _ => unreachable!(),
+                    };
+                    let ordering = self.fallible(&format!(
+                        "(||->R<std::cmp::Ordering>{{let cx=rt::strings::Cx::current();Ok(rt::strings::Str::from_raw({l}).try_as_str(&cx)?.cmp(rt::strings::Str::from_raw({r}).try_as_str(&cx)?))}})()"
+                    ));
+                    return Ok((format!("({ordering}).{method}()"), Repr::Bool));
+                }
                 if *op == BinOp::Add && lt == Repr::Str && rt == Repr::Str {
                     return Ok((self.fallible(&format!("rt::strings::concat(&mut rt::strings::Cx::current(),&[rt::strings::Str::from_raw({l}),rt::strings::Str::from_raw({r})]).map(|s|s.as_raw())")), Repr::Str));
                 }
@@ -223,11 +250,19 @@ impl Emitter<'_, '_> {
                     let v = self.coerce(self.operand(v)?, layout.fields[i])?;
                     write!(&mut init, "let a{i}={v};").unwrap();
                 }
+                let allocator = if self.plan.cleanup_methods.contains_key(&c)
+                    || super::tasks::class_is(self.plan, c, "spawn.Limit")
+                    || super::tasks::class_is(self.plan, c, "spawn.CancelToken")
+                {
+                    "try_alloc"
+                } else {
+                    "try_alloc_class"
+                };
                 write!(
                     &mut init,
                     "let p={} as *mut C{c};",
                     self.fallible(&format!(
-                        "rt::try_alloc({}, {})",
+                        "rt::{allocator}({}, {})",
                         self.descriptors[&c], layout.bytes
                     ))
                 )

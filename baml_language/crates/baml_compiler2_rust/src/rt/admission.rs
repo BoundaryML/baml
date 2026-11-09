@@ -11,6 +11,7 @@ pub(super) struct Admitted<'db> {
     pub builtins: BTreeSet<String>,
     pub json_decode: Option<usize>,
 }
+
 pub(super) fn collect<'db>(
     db: &'db dyn Db,
     root: SourceRoot,
@@ -22,11 +23,7 @@ pub(super) fn collect<'db>(
     prepared: Option<&BTreeMap<usize, super::TestMir<'db>>>,
 ) -> Gen<Admitted<'db>> {
     let mut all = prepared.cloned().unwrap_or_default();
-    let initializer_roots = if test_entry {
-        Vec::new()
-    } else {
-        super::globals::prepare(db, root, opt, plan, &mut all)?
-    };
+    let initializer_roots = super::globals::prepare(db, root, opt, plan, &mut all)?;
     if prepared.is_none() {
         for &file in world_files(db, root) {
             for &f in file_functions(db, file) {
@@ -37,7 +34,9 @@ pub(super) fn collect<'db>(
                     .as_ref()
                     .map_err(|e| no(format!("MIR: {e:?}")))?;
                 if let Some(object) = plan.index.declared(db, f) {
-                    all.insert(object, std::rc::Rc::new(MirFunction::from(mir)));
+                    let mir = std::rc::Rc::new(MirFunction::from(mir));
+                    insert_lambdas(db, &plan.index, &mir, &mut all);
+                    all.insert(object, mir);
                 }
             }
         }
@@ -56,6 +55,10 @@ pub(super) fn collect<'db>(
         }
     }
     queue.extend(plan.string_overrides.values().copied());
+    queue.extend(plan.equals_overrides.values().copied());
+    // Automatic finalizers are host callbacks, so they have no ordinary call
+    // edge from an entry body. Admit their bodies and telemetry like other roots.
+    queue.extend(plan.cleanup_methods.values().copied());
     let mut reached = BTreeSet::new();
     let mut calls: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut builtins = BTreeSet::new();
@@ -64,16 +67,34 @@ pub(super) fn collect<'db>(
         if !reached.insert(object) {
             continue;
         }
-        let mir = all
-            .get(&object)
-            .ok_or_else(|| no(format!("missing MIR for {}", plan.index.display(object))))?;
+        let mir = all.get(&object).ok_or_else(|| {
+            no(format!(
+                "missing MIR for {}",
+                plan.index.builtin_path(object)
+            ))
+        })?;
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
-            let name = plan.index.display(object);
-            if !baml_builtins2_codegen::supports_rt(name) && !super::callbacks::native(name) {
+            let name = plan.index.builtin_path(object);
+            if !baml_builtins2_codegen::supports_rt(name)
+                && !super::callbacks::native(name)
+                && !super::reflection::native(name)
+                && !super::operators::native(name)
+                && !super::hashing::native(name)
+                && !super::trace::native(name)
+            {
                 return Err(no(name));
             }
-            if !super::callbacks::native(name) {
-                builtins.insert(name.to_owned());
+            if super::operators::native(name)
+                || super::hashing::native(name)
+                || super::trace::native(name)
+            {
+            } else if super::reflection::native(name) {
+                let name = name.to_owned();
+                super::reflection::prepare_native(plan, &name)?;
+            } else if !super::callbacks::native(name) {
+                let name = name.to_owned();
+                super::provider::prepare_types(plan, &name)?;
+                builtins.insert(name);
             }
             let frame = plan.linked_function_frame(object)?;
             let info = plan.index.info(object);
@@ -90,6 +111,10 @@ pub(super) fn collect<'db>(
             continue;
         };
         registry::admit(registry::Admission::Function(mir))?;
+        let facts = super::list_narrowing::analyze(db, plan, body);
+        plan.list_narrowing_facts
+            .insert(body as *const _ as usize, facts);
+        super::exceptions::prepare_contexts(db, plan, body)?;
         for target in super::closures::discover(db, plan, object, mir)? {
             calls.entry(object).or_default().insert(target);
             queue.push_back(target);
@@ -99,6 +124,15 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
+            super::builtin_classes::record_test(db, plan, &statement.kind)?;
+            if let StatementKind::Assign {
+                value: Rvalue::IsType { test, .. },
+                ..
+            } = &statement.kind
+            {
+                super::exceptions::record_test(db, plan, test)?;
+            }
+
             if let StatementKind::Assign {
                 value:
                     Rvalue::Aggregate {
@@ -119,8 +153,9 @@ pub(super) fn collect<'db>(
                         .map(|t| t.substitute_symbolic(&[]))
                         .collect(),
                 );
-                plan.record_ty(&ty)
-                    .map_err(|e| format!("{e} (constructor in {})", plan.index.display(object)))?;
+                plan.record_ty(&ty).map_err(|e| {
+                    format!("{e} (constructor in {})", plan.index.builtin_path(object))
+                })?;
             }
         }
         // Type-test declarations may occur only in a catch arm, including
@@ -150,14 +185,17 @@ pub(super) fn collect<'db>(
             }) = &block.terminator
             {
                 if plan.index.function(db, *f).is_some_and(|(id, _)| {
-                    matches!(plan.index.display(id), "baml.json._to" | "baml.json.to")
+                    matches!(
+                        plan.index.builtin_path(id),
+                        "baml.json._to" | "baml.json.to"
+                    )
                 }) {
                     super::json_tree::register_to(plan, body, args)?;
                 }
                 if plan
                     .index
                     .function(db, *f)
-                    .is_some_and(|(id, _)| plan.index.display(id) == "baml.json.decode")
+                    .is_some_and(|(id, _)| plan.index.builtin_path(id) == "baml.json.decode")
                 {
                     let ty = super::generics::type_operand(body, &args[0])?;
                     let template = baml_compiler2_mir::TyTemplate::from(
@@ -185,7 +223,6 @@ pub(super) fn collect<'db>(
                 }
             }
         }
-        reject_context_reads(body)?;
         super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
@@ -199,14 +236,21 @@ pub(super) fn collect<'db>(
                 plan.record_ty(&local.ty).map_err(|e| {
                     format!(
                         "{e} ({} local {i}: {:?})",
-                        plan.index.display(object),
+                        plan.index.builtin_path(object),
                         local.ty
                     )
                 })?;
             }
             plan.record(repr)?;
         }
+        if let Some(edges) = plan.key_edges.get(&object) {
+            calls.entry(object).or_default().extend(edges);
+            queue.extend(edges.iter().copied());
+        }
         for block in &body.blocks {
+            if let Some(Terminator::NarrowBind { test, .. }) = &block.terminator {
+                super::exceptions::record_test(db, plan, test)?;
+            }
             registry::admit(registry::Admission::ShieldedBlock(block.shielded))?;
             if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
                 for (repr, target) in targets {
@@ -248,7 +292,7 @@ pub(super) fn collect<'db>(
                     let reach = result.map_err(|error| {
                         format!(
                             "{error} (reaching {} block {})",
-                            plan.index.display(object),
+                            plan.index.builtin_path(object),
                             block.id.0
                         )
                     })?;
@@ -257,32 +301,6 @@ pub(super) fn collect<'db>(
                     }
                     if let Some(callee) = reach.json_decode {
                         json_decode = Some(callee);
-                        let Some(Terminator::Call { args, .. }) = &block.terminator else {
-                            unreachable!()
-                        };
-                        let code = match &args[0] {
-                            baml_compiler2_mir::Operand::Copy(
-                                baml_compiler2_mir::Place::Local(l),
-                            )
-                            | baml_compiler2_mir::Operand::Move(
-                                baml_compiler2_mir::Place::Local(l),
-                            ) => {
-                                let Repr::Type(code) = plan.local_repr(body, l.0, 0)? else {
-                                    return Err(no("JSON type argument"));
-                                };
-                                code
-                            }
-                            _ => return Err(no("JSON type argument storage")),
-                        };
-                        // Only class, list and map codes have generated decoders;
-                        // scalar and fallback type tokens (e.g. bigint) do not.
-                        if code < 3
-                            || (code >= 3 + plan.json_types.len()
-                                && code < super::json_lists::TYPE_BASE)
-                        {
-                            return Err(no("JSON decode type"));
-                        }
-                        plan.json_decode_codes.insert(code);
                     }
                     for target in reach.targets {
                         calls.entry(object).or_default().insert(target);
@@ -301,32 +319,30 @@ pub(super) fn collect<'db>(
                     b.terminator,
                     Some(Terminator::Call {
                         callee: baml_compiler2_mir::Operand::Copy(_)
-                            | baml_compiler2_mir::Operand::Move(_),
+                            | baml_compiler2_mir::Operand::Move(_)
+                            | baml_compiler2_mir::Operand::Constant(super::Constant::GlobalItem(_)),
                         ..
                     })
-                )
+                ) || matches!(&b.terminator,Some(Terminator::Call {callee:baml_compiler2_mir::Operand::Constant(baml_compiler2_mir::Constant::Function(f)),..}) if plan.index.function(db,*f).is_some_and(|(id,_)| super::list_callbacks::handles(plan.index.display(id))))
             })
         {
             calls.entry(object).or_default().extend(&plan.callables);
         }
+    }
+    for (&object, edges) in &plan.key_edges {
+        calls.entry(object).or_default().extend(edges);
     }
     let mir = &all[&entry];
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         unreachable!()
     };
     let result = plan.repr(&body.locals[0].ty)?;
-    if mir.arity != 0
-        || if test_entry {
-            result != Repr::Null
-        } else {
-            !matches!(result, Repr::Int | Repr::Str)
+    if test_entry {
+        if mir.arity != 0 || result != Repr::Null {
+            return Err(no("test entry must have no parameters and return null"));
         }
-    {
-        return Err(no(if test_entry {
-            "test entry must have no parameters and return null"
-        } else {
-            "entry must have no parameters and return int or string"
-        }));
+    } else if mir.arity != 0 || !matches!(result, Repr::Int | Repr::Str) {
+        super::host::admit(plan, mir)?;
     }
     Ok(Admitted {
         all,
@@ -337,40 +353,6 @@ pub(super) fn collect<'db>(
     })
 }
 
-// A handler's `baml.errors.Context` binding is not materialized by rt; only
-// its use as a rethrow context is lowered. Any other read is unsupported.
-fn reject_context_reads(body: &baml_compiler2_mir::MirFunctionBody<'_>) -> super::Gen<()> {
-    use baml_compiler2_mir::{Operand, Place};
-    let contexts = body
-        .blocks
-        .iter()
-        .filter_map(|b| b.landing.map(|l| l.context_local.0))
-        .collect::<BTreeSet<_>>();
-    if contexts.is_empty() {
-        return Ok(());
-    }
-    let mut read = false;
-    let mut visit = |operand: &Operand<'_>| {
-        if let Operand::Copy(place) | Operand::Move(place) = operand {
-            read |= Place::base_local(place).is_some_and(|l| contexts.contains(&l.0));
-        }
-    };
-    for block in &body.blocks {
-        for statement in &block.statements {
-            crate::operands::walk_statement_operands(&statement.kind, &mut visit);
-        }
-        match &block.terminator {
-            Some(Terminator::Rethrow { value, .. }) => visit(value),
-            Some(term) => crate::operands::walk_terminator_operands(term, &mut visit),
-            None => {}
-        }
-    }
-    if read {
-        return Err(no("catch context binding"));
-    }
-    Ok(())
-}
-
 fn insert_lambdas<'db>(
     db: &'db dyn Db,
     index: &crate::index::ProgramIndex<'_>,
@@ -378,7 +360,7 @@ fn insert_lambdas<'db>(
     all: &mut BTreeMap<usize, super::TestMir<'db>>,
 ) {
     for lambda in &mir.lambdas {
-        if let Some(object) = index.lambda(db, &lambda.identity.clone().unwrap()) {
+        if let Some(object) = index.lambda(db, lambda.identity.as_ref().expect("lambda identity")) {
             all.insert(object, std::rc::Rc::new(lambda.clone()));
         }
         insert_lambdas(db, index, lambda, all);
@@ -403,8 +385,9 @@ pub(super) fn prepare_tests<'db>(
                 .as_ref()
                 .map_err(|e| no(format!("MIR: {e:?}")))?;
             if let Some(object) = index.declared(db, function) {
-                all.insert(object, std::rc::Rc::new(MirFunction::from(mir)));
-                insert_lambdas(db, index, &MirFunction::from(mir), &mut all);
+                let mir = std::rc::Rc::new(MirFunction::from(mir));
+                insert_lambdas(db, index, &mir, &mut all);
+                all.insert(object, mir);
             }
         }
     }

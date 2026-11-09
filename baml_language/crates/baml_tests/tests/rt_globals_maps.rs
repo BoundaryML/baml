@@ -128,6 +128,73 @@ function main()->int { GATE }"#,
         r#"function main()->int {let m:map<string,int|string|bool|float|null> = {"a":1,"b":"hello","c":true,"d":1.25,"e":null};let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
         r#"function main()->int {let m:map<string,int[]> = {"a":[1,2,3],"b":[]};let n=0;for(let c in baml.json.stringify(m,indent=2).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
         r#"function main()->int {let m:map<string,string[][]> = {"a":[["one","two"],[]],"b":[]};let n=0;for(let c in baml.json.stringify(m,indent=2).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"function add(n:int)->int {n+1} const CALLBACK=add; const ALIAS=CALLBACK; function main()->int {ALIAS(41)}"#,
+        r#"const CALLBACK={let n=40;(v:int)->int {n+=v;n}}; function main()->int {CALLBACK(1)+CALLBACK(1)}"#,
+        r#"class Box {n:int function add(self,v:int)->int {self.n+v}} const BOX=Box{n:40}; const CALLBACK=BOX.add; function main()->int {CALLBACK(2)}"#,
+        r#"const CALLBACK=(v:int)->int {v+1}; const RESULT=CALLBACK(41); function main()->int {RESULT}"#,
+        r#"const CALLBACK={let text="kept by global";(v:int)->int {text.char_count()+v}}; function main()->int {let i=0;while(i<100){let m:map<string,string> = {"x":"churn"};i+=m.length();}CALLBACK(7)}"#,
+        r#"const CALLBACK=(v:int)->int {v/0}; const RESULT=CALLBACK(41); function main()->int {RESULT}"#,
+        r#"const CALLBACK={let n=40;(v:int)->int {n+=v;n}}; const FUNCTIONS:map<string,(int)->int throws never> = {"f":CALLBACK}; function inspect(m:map<string,(int)->int throws never>)->int {let f=m["f"];f(1)} function main()->int {inspect(FUNCTIONS)+inspect(FUNCTIONS)}"#,
+        r#"class Box {m:map<string,(int)->int throws never>} function main()->int {let b=Box{m:{"f":(n:int)->int {n+1}}};let f=b.m["f"];f(41)}"#,
+        r#"class Key {id:int text:string} function main()->int {let m:map<Key,string> = {Key{id:7,text:"x"}:"first"};m[Key{id:7,text:"x"}]="second";m[Key{id:8,text:"x"}]="third";m[Key{id:7,text:"x"}].char_count()+m.length()}"#,
+        r#"function main()->int {let m:map<int[],int> = {[1,2]:7,[3]:8};m.set([1,2],9);m.get_or_insert([4],10);m.delete([3]);m[[1,2]]+m.length()}"#,
+        r#"function main()->int {let m:map<map<string,int>,int> = {{"a":1,"b":2}:7};m[{"b":2,"a":1}]}"#,
+        r#"class Key {id:int} function main()->int {let m:map<Key|string|null,int> = {Key{id:7}:8,"x":9,null:10};m[Key{id:7}]+m["x"]+m[null]}"#,
+        r#"class Node {next:Node?} function main()->int {let n=Node{next:null};n.next=n;let m:map<Node,int> = {};m[n]=1;m.length()}"#,
+        r#"function ints()->int[] {[]} function strings()->string[] {[]} function main()->int {let m:map<int[]|string[],int> = {};m[ints()]=1;m[strings()]=2;m.length()}"#,
+        r#"function main()->int {let a:map<string,int> = {"a":1};let b:map<string,int?> = {"a":1};let m:map<map<string,int>|map<string,int?>,int> = {};m[a]=1;m[b]=2;m.length()}"#,
+        r#"function main()->int {let m:map<string,bool> = {"a":true,"b":false};let values=m.values();let n=0;for(let v in values){if(v){n+=7;}}n+values.length()}"#,
+        r#"function inspect(v:float[])->int {if(v[0]==1.25){v.length()}else{0}} function main()->int {let m:map<string,float> = {"a":1.25,"b":2.5};inspect(m.values())}"#,
+        r#"function main()->int {let m:map<string,map<string,int>> = {"a":{"x":7}};let values=m.values();m.clear();values[0]["x"]}"#,
+        r#"function inspect(v:null[])->int {v.length()} function main()->int {let m:map<string,null> = {"a":null};inspect(m.values())}"#,
+        r#"class Box{x:int} function inspect(v:Box?[])->int {let b=v[0];if(b==null){0}else{b.x}} function main()->int {let m:map<string,Box?> = {"a":Box{x:7},"b":null};inspect(m.values())}"#,
+        r#"function main()->int {let m:map<string,(int)->int throws never> = {"a":(x:int)->int{x+1}};let values=m.values();m.clear();let f=values[0];f(41)}"#,
+        r#"class Box{x:int} function inspect(v:(int|string|Box)[])->int {v.length()} function main()->int {let m:map<string,int|string|Box> = {"a":1,"b":"kept","c":Box{x:7}};let values=m.values();m.clear();inspect(values)}"#,
+        r#"class Box{x:string} function inspect(v:unknown[])->int {v.length()} function main()->int {let m:map<string,unknown> = {"a":1,"b":"kept","c":Box{x:"held"},"d":["nested"]};let values=m.values();m.clear();let i=0;while(i<64){let churn=["collect"];i+=churn.length();}inspect(values)}"#,
+        r#"class Box{x:int m:map<string,int>} function main()->int {let m=baml.json.decode<map<string,Box>>(`{"a":{"x":7,"m":{"z":3}}}`);let n=0;for(let c in baml.json.stringify(m,indent=2).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"class A{kind:"a" x:int} class B{kind:"b" x:string} function main()->int {let m=baml.json.decode<map<string,A|B>>(`{"first":{"kind":"a","x":7},"last":{"kind":"b","x":"text"}}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"class Box{x:int @alias("v") secret:string @skip optional:int?} function main()->int {let m=baml.json.decode<map<string,Box>>(`{"a":{"v":7,"optional":null}}`,naming=baml.json.Naming.Aliased);let n=0;for(let c in baml.json.stringify(m,naming=baml.json.Naming.Aliased,omit_nulls=true).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"class Box{x:int} function main()->int {let m=baml.json.decode<map<string,Box>>(`{"a":{"x":false}}`);m.length()}"#,
+        r#"class Node{value:int next:Node?} function main()->int {let node=Node{value:7,next:null};node.next=node;let m:map<string,Node> = {"a":node};baml.json.stringify(m).char_count()}"#,
+        r#"function main()->int {let m:map<string,(int)->int throws never> = {"f":(x:int)->int {x+1}};baml.json.stringify(m).char_count()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,int|string|float|bool|null>>(`{"a":1,"b":"text","c":1.25,"d":true,"e":null}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"class Box{x:int} function main()->int {let m=baml.json.decode<map<string,Box>>(`{"a":{"x":false},"b":{"x":2},"a":{"x":7}}`);let n=0;for(let v in m.values()){n=n*10+v.x;}n}"#,
+        r#"class Box{m:map<string,int>} function main()->int {let b=baml.json.decode<Box>(`{"m":{"a":7}}`);b.m["a"]}"#,
+        r#"function main()->int {let m=baml.json.decode<map<"a"|"b",int>>(`{"a":7,"b":2}`);m["a"]+m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<"a"|"b",int>>(`{"bad":7}`);m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,"yes"|"no">>(`{"a":"yes"}`);baml.json.stringify(m).char_count()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,int|string>>(`{"a":1,"b":"two"}`);m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<int,int>>(`{"a":7}`);m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,int>>(`[]`);m.length()}"#,
+        r#"function main()->int {let m=baml.json.decode<map<string,1|2>>(`{"a":3}`);m.length()}"#,
+        r#"function main()->int {let m:map<string,bigint> = {"a":123456789012345678901234567890n};let v=m.values();m.clear();baml.json.stringify({"kept":v[0]}).char_count()}"#,
+        r#"function main()->int {let m:map<bigint,int> = {123456789012345678901234567890n:7};m[123456789012345678901234567890n]}"#,
+        r#"enum Color{Red Blue} function main()->int {let m:map<Color,Color> = {Color.Red:Color.Blue};let k=m.keys();let v=m.values();m[k[0]]=Color.Red;baml.json.stringify(v).char_count()+m.length()}"#,
+        r#"function main()->int {let m:map<string,uint8array> = {"a":uint8array.from_array([1,2,3])};let v=m.values();m.clear();v[0].length()}"#,
+        r#"class Key{id:int label:string implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{baml.sys.collect_garbage();self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{baml.sys.collect_garbage();0.hash(state);}}} function main()->int {let a=Key{id:1,label:"first"};let b=Key{id:1,label:"replacement"};let m:map<Key,string> = {a:"a",Key{id:2,label:"second"}:"b"};m[b]="updated";let n=m.keys()[0].label.char_count()+m[b].char_count()+m.length();m.delete(b);m[b]="again";n+m.keys()[1].label.char_count()}"#,
+        r#"class Mutation{entries:map<Key,int> clear_eq:bool clear_hash:bool} class Key{id:int mutation:Mutation implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{if(self.mutation.clear_eq){self.mutation.clear_eq=false;self.mutation.entries.clear();}baml.sys.collect_garbage();self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{if(self.mutation.clear_hash){self.mutation.clear_hash=false;self.mutation.entries.clear();}0.hash(state);}}} function main()->int {let t=Mutation{entries:{},clear_eq:false,clear_hash:false};let a=Key{id:1,mutation:t};let b=Key{id:1,mutation:t};t.entries[a]=10;t.clear_eq=true;let n=t.entries.get(b) ?? 3;t.entries[a]=20;t.clear_eq=true;t.entries[b]=30;n+=t.entries[b];t.clear_hash=true;n+(t.entries.get(b) ?? 7)}"#,
+        r#"class Key{id:int label:string implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{self.id.hash(state);}}} function main()->int {let m:map<Key[],int> = {[Key{id:1,label:"a"}]:7};m[[Key{id:1,label:"b"}]]}"#,
+        r#"function main()->int {let state=baml.hash.DefaultHasher.new();"hello".hash(state);1.hash(state);let first=state.finish();let other=baml.hash.DefaultHasher.new();"hello".hash(other);1.hash(other);if(first==other.finish()){7}else{9}}"#,
+        r#"function main()->int {let state=baml.hash.DefaultHasher.new();"hello".hash(state);1.hash(state);true.hash(state);1.25.hash(state);123456789012345678901234567890n.hash(state);b"data".hash(state);[1,2].hash(state);{"b":2,"a":1}.hash(state);state.finish()%1000000007}"#,
+        r#"class Key<T>{id:int} implements<T> baml.ops.Equals for Key<T>{function eq(self,other:Self)->bool throws never{self.id==other.id}} implements<T> baml.Hash for Key<T>{function hash(self,state:baml.hash.Hasher)->void throws never{self.id.hash(state);}} function main()->int {let m:map<Key<int>,int> = {Key<int>{id:7}:8};m[Key<int>{id:7}]}"#,
+        r#"enum A{One} enum B{One} function main()->int {let a:A[]=[A.One];let b:B[]=[B.One];let m:map<A[]|B[],int> = {a:1,b:2};m[a]+m[b]+m.length()}"#,
+        r#"class Counter{calls:int} class Key{id:int counter:Counter implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{self.counter.calls+=1;self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{0.hash(state);}}} function main()->int {let counter=Counter{calls:0};let a=Key{id:1,counter};let b=Key{id:1,counter};let m:map<Key[],int> = {[a,a]:7};m[[b,b]]+counter.calls}"#,
+        r#"class Counter{calls:int values:Key[]} class Key{id:int counter:Counter implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{self.counter.calls+=1;self.counter.values.clear();baml.sys.collect_garbage();0.hash(state);}}} function main()->int {let counter=Counter{calls:0,values:[]};counter.values=[Key{id:1,counter},Key{id:2,counter}];let m:map<Key[],int> = {};m[counter.values]=7;counter.calls+m.length()}"#,
+        r#"enum E{A B} class Box{kind:E maybe:int?} function main()->int{let m:map<string,Box> = {"a":Box{kind:E.A,maybe:null}};let text=baml.json.stringify(m,omit_nulls=true);let n=0;for(let c in text.to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"first":"Red","second":"Blue"}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Blue} class Box{items:map<string,Color?>} function main()->int{let b=baml.json.decode<Box>(`{"items":{"red":"Red","none":null}}`);let n=0;for(let c in baml.json.stringify(b.items).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red @alias("r") Blue Hidden @skip} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"a":"r","b":"Blue"}`,naming=baml.json.Naming.Aliased);let n=0;for(let c in baml.json.stringify(m,naming=baml.json.Naming.Aliased).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"a":"Missing"}`);m.length()}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"a":7}`);m.length()}"#,
+        r#"enum Color{Red @alias("r") Blue} function main()->int{let m=baml.json.decode<map<string,Color|string>>(`{"a":"Red","b":"other"}`);let n=0;for(let c in baml.json.stringify(m,naming=baml.json.Naming.Aliased).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color.Red>>(`{"a":"Blue"}`);m.length()}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color.Red>>(`{"a":"Red"}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Hidden @skip} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"a":"Hidden"}`,naming=baml.json.Naming.Aliased);m.length()}"#,
+        r#"enum Color{Red Hidden @skip} function main()->int{let m=baml.json.decode<map<string,Color.Hidden>>(`{"a":"Hidden"}`,naming=baml.json.Naming.Aliased);m.length()}"#,
+        r#"enum Color{Hidden @skip Visible @alias("Hidden")} class Box{kind:Color @skip items:map<string,Color>} function main()->int{let b=baml.json.decode<Box>(`{"items":{"a":"Hidden"}}`,naming=baml.json.Naming.Aliased);let n=0;for(let c in baml.json.stringify(b).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"function main()->int{let m=baml.json.decode<map<string,baml.json.Naming>>(`{"a":"Declared","b":"Aliased"}`);m.length()}"#,
+        r#"enum E{A @skip B @skip} class Box{kind:E @skip} function main()->int{let m=baml.json.decode<map<string,Box>>(`{"a":{}}`,naming=baml.json.Naming.Aliased);m.length()}"#,
+        r#"enum E{A @skip B @skip} class Box{kind:E.B @skip} function main()->int{let m=baml.json.decode<map<string,Box>>(`{"a":{}}`,naming=baml.json.Naming.Aliased);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
     ];
     let selected = std::env::var("BAML_RT_GLOBALS_MAPS_CASES")
         .ok()
@@ -182,8 +249,10 @@ function main()->int { GATE }"#,
         if compare_telemetry {
             // The in-process VM oracle returns the integer to its caller; it
             // does not call the CLI's ToString formatter after the invocation.
-            let marker = ",Some(";
-            let start = emitted.rfind(marker).expect("driver format site");
+            // The initializer argument follows the format site; keep it.
+            let marker = "TELEMETRY_SITES,Some(";
+            let start =
+                emitted.rfind(marker).expect("driver format site") + "TELEMETRY_SITES".len();
             let end = emitted[start..].find(')').unwrap() + start + 1;
             emitted.replace_range(start..end, ",None");
         }
@@ -193,6 +262,11 @@ function main()->int { GATE }"#,
             baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap(),
         )
         .unwrap();
+        if std::env::var_os("BAML_RT_GLOBALS_MAPS_DUMP").is_some() {
+            let dump =
+                PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("globals-maps-case{i}.rs"));
+            std::fs::write(dump, &emitted).unwrap();
+        }
         let src = temp.path().join(format!("case{i}.rs"));
         let bin = temp.path().join(format!("case{i}"));
         std::fs::write(&src, emitted).unwrap();
@@ -293,6 +367,14 @@ function main()->int { GATE }"#,
                         "case {i}, stress {stress}"
                     );
                     continue;
+                }
+                if !output.status.success() {
+                    std::fs::copy(
+                        &src,
+                        Path::new(env!("CARGO_TARGET_TMPDIR"))
+                            .join(format!("rt-globals-maps-case{i}.rs")),
+                    )
+                    .unwrap();
                 }
                 assert!(
                     output.status.success(),

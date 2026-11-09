@@ -11,7 +11,6 @@ use btel_types::{
 };
 use std::{
     cell::Cell,
-    collections::HashMap,
     num::NonZeroUsize,
     sync::{
         Arc,
@@ -21,7 +20,7 @@ use std::{
 
 pub mod capture;
 pub mod evidence;
-pub use btel_records::RaiseKind;
+pub use btel_records::{LogLevel, RaiseKind};
 pub use btel_types as types;
 pub type Policy = btel_settings::policy::TelemetryPolicy<std::time::Duration>;
 pub struct Function {
@@ -30,6 +29,7 @@ pub struct Function {
     pub word: &'static AtomicU8,
     pub hidden: bool,
     pub policy: Policy,
+    pub hook_mode: Option<btel_types::InvocationMode>,
 }
 #[derive(Clone, Copy)]
 pub struct Site {
@@ -101,7 +101,8 @@ struct State {
     name: Option<btel_records::ThreadName>,
     sites: &'static [Site],
     caches: Vec<Cache>,
-    paths: HashMap<Key, (CallPathId, *mut AggregateDelta)>,
+    // Keys are small loop-local integers; no untrusted input reaches this map.
+    paths: rustc_hash::FxHashMap<Key, (CallPathId, *mut AggregateDelta)>,
     histories: Vec<Vec<Cache>>,
     // Stable addresses let on-stack frames update their slot after nested calls
     // grow the table. These pointers never address the managed heap.
@@ -171,6 +172,12 @@ impl State {
             }
         }
         if !batch.is_empty() {
+            // Select only when there is timing data to attribute. A fiber can
+            // enter/leave without completing an observed call; publishing an
+            // otherwise empty selector chunk costs a transport handoff.
+            self.producer.write_timing(TimingRecord::ThreadSelected {
+                thread_id: self.thread,
+            });
             self.producer
                 .write_timing(TimingRecord::AggregateDeltas(batch.into_boxed_slice()));
         }
@@ -291,9 +298,6 @@ impl Fiber {
         state.name = self.name.clone();
         state.started = self.started;
         CURRENT.set(self.state);
-        state.producer.write_timing(TimingRecord::ThreadSelected {
-            thread_id: self.thread,
-        });
     }
     pub(crate) unsafe fn leave(&mut self) {
         *self = unsafe { Self::current(self.state.cast()) }.unwrap();
@@ -455,6 +459,14 @@ pub fn mode(word: &AtomicU8) -> u8 {
 pub fn active() -> bool {
     !CURRENT.get().is_null()
 }
+
+pub(crate) fn caller_pc(site: usize) -> u32 {
+    let state = CURRENT.get();
+    if state.is_null() {
+        return 0;
+    }
+    unsafe { (&*state).sites[site].pc }
+}
 /// # Safety
 /// A session must own the current task, and the caller must finish this frame
 /// before leaving that task. The site must belong to the compiled program.
@@ -569,6 +581,29 @@ pub unsafe fn capture_arguments(values: &[crate::Dyn]) -> InputCaptures {
         types: None,
     }
 }
+
+/// # Safety
+/// Each pointer is a frozen Type spelling produced by the assertion compiler.
+pub unsafe fn capture_frozen_arguments(
+    values: &[usize],
+    schemas: &[(&str, &capture::Type)],
+) -> InputCaptures {
+    let types = values
+        .iter()
+        .map(|p| {
+            let text = unsafe { crate::strings::Str::from_raw(*p) }.to_owned();
+            schemas
+                .iter()
+                .find(|(s, _)| *s == text)
+                .expect("frozen Type capture schema")
+                .1
+        })
+        .collect::<Vec<_>>();
+    InputCaptures {
+        inputs: Some(with_capture(|s, _| s.type_values(&types))),
+        types: None,
+    }
+}
 /// # Safety
 /// The value must be live in the current session throughout capture.
 pub unsafe fn capture_value(value: crate::Dyn) -> Option<btel_snapshot::Snapshot> {
@@ -580,13 +615,7 @@ pub unsafe fn capture_error(error: &Error) -> Option<btel_snapshot::Snapshot> {
     if error.value == 0 {
         return None;
     }
-    let desc = unsafe { (*(error.value as *const baml_rt_gc::Header)).desc };
-    unsafe {
-        capture_value(crate::Dyn {
-            tag: desc as u64 + 3,
-            payload: error.value as u64,
-        })
-    }
+    unsafe { capture_value(error.dynamic_value()) }
 }
 pub fn capture_text(value: &str) -> Option<btel_snapshot::Snapshot> {
     Some(with_capture(|s, _| s.text(value)))
@@ -839,6 +868,9 @@ fn complete_unusual(
     if let Some(sum) = slot.checked_merge(sample) {
         *slot = sum;
     } else {
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
         state.producer.write_timing(TimingRecord::AggregateDeltas(
             vec![*slot].into_boxed_slice(),
         ));
@@ -847,7 +879,7 @@ fn complete_unusual(
 }
 
 fn outcome(error: &Error) -> InvocationOutcome {
-    if error.class == "baml.panics.Cancelled" {
+    if matches!(error.class, "baml.panics.Cancelled" | "baml.panics.Exit") {
         InvocationOutcome::Cancelled
     } else if error.class.starts_with("baml.panics.") {
         InvocationOutcome::Panicked
@@ -1014,10 +1046,25 @@ impl Session {
         if level.is_none() {
             return Ok(session);
         }
-        let pool = Pool::new(bex_chunkedringbuffer::Config::for_producers(
-            NonZeroUsize::new(1).unwrap(),
-        ))
-        .map_err(|e| Error::internal(format!("telemetry transport: {e:?}")))?;
+        // Logical tasks seal sparse chunks at every suspension and completion.
+        // Retain the standard transport's lane sizing even though there is only
+        // one OS producer, so two partial chunks do not force it to wait for
+        // the processor after almost every task.
+        let defaults = bex_chunkedringbuffer::Config::default();
+        let mut transport =
+            bex_chunkedringbuffer::Config::for_producers(NonZeroUsize::new(1).unwrap());
+        // Keep the standard lane record budget, spread across smaller chunks:
+        // task switches seal partial streams, so record capacity per chunk is
+        // rarely the limiting resource for this single producer.
+        transport.chunk_capacity = NonZeroUsize::new(32).unwrap();
+        let scale = defaults
+            .chunk_capacity
+            .get()
+            .div_ceil(transport.chunk_capacity.get());
+        transport.timing_chunks = NonZeroUsize::new(defaults.timing_chunks.get() * scale).unwrap();
+        transport.span_chunks = NonZeroUsize::new(defaults.span_chunks.get() * scale).unwrap();
+        let pool = Pool::new(transport)
+            .map_err(|e| Error::internal(format!("telemetry transport: {e:?}")))?;
         let consumer_pool = pool.clone();
         let allocator = btel_types::FunctionIdAllocator::default();
         let ids: Vec<_> = functions
@@ -1104,7 +1151,7 @@ impl Session {
             name: None,
             sites,
             caches: vec![Cache::default(); sites.len()],
-            paths: HashMap::new(),
+            paths: Default::default(),
             histories: vec![Vec::new(); sites.len()],
             reader: DeltaClock::for_epoch(&clock),
             slots: Vec::new(),
@@ -1537,7 +1584,7 @@ mod tests {
             name: None,
             sites: SITES,
             caches: vec![Cache::default(); 3],
-            paths: HashMap::new(),
+            paths: Default::default(),
             histories: vec![Vec::new(); SITES.len()],
             reader: DeltaClock::Epoch,
             slots: Vec::new(),
@@ -1825,10 +1872,68 @@ pub(crate) fn sysop<T>(call: impl FnOnce() -> R<T>) -> R<T> {
     let result = call();
     let state = unsafe { &mut *pointer };
     if path != CallPathId::ROOT && state.active_function.is_some() {
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
         state.producer.write_timing(TimingRecord::SysOpTime {
             call_path: path,
             elapsed: started.elapsed_until(state.read()),
         });
     }
     result
+}
+/// Record a log with its actual statement PC, independently of call-frame state.
+/// # Safety
+/// Both values must be rooted in the running owner-thread task.
+pub unsafe fn log(
+    word: &AtomicU8,
+    pc: u32,
+    level: LogLevel,
+    name: Option<crate::strings::Str>,
+    data: crate::Dyn,
+) {
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        return;
+    }
+    let captured_data = unsafe { capture_value(data) };
+    let state = unsafe { &mut *ptr };
+    let function = state
+        .words
+        .iter()
+        .position(|w| std::ptr::eq(*w, word))
+        .expect("registered log function");
+    let event_name = name.map(|s| Arc::<str>::from(s.to_owned()));
+    state.span(SpanRecord::Log {
+        parent_id: state.active_span.unwrap_or(state.thread),
+        function: state.functions[function],
+        pc,
+        at: state.clock.read(),
+        level,
+        event_name,
+        captured_data,
+    });
+}
+
+pub(crate) fn sysop_started() -> Option<ClockInstant> {
+    let ptr = CURRENT.get();
+    if ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { &*ptr }.clock.read())
+    }
+}
+pub(crate) fn sysop_finished(started: Option<ClockInstant>) {
+    let Some(started) = started else { return };
+    let state = unsafe { &mut *CURRENT.get() };
+    let elapsed = started.elapsed_until(state.clock.read());
+    if state.active != CallPathId::ROOT {
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
+        state.producer.write_timing(TimingRecord::SysOpTime {
+            call_path: state.active,
+            elapsed,
+        });
+    }
 }

@@ -82,9 +82,12 @@ pub(super) fn telemetry_metadata_source(m: &btel_types::FunctionMetadata) -> Str
             )
         },
     );
-    let kind = &m.kind;
+    let kind = match &m.kind {
+        btel_types::RuntimeFunctionKind::SysOp(name) => format!("SysOp({})", string(name)),
+        other => format!("{other:?}"),
+    };
     format!(
-        "FunctionMetadata{{function_id,fqn:{},display_name:{},source_file:{},source_span:{span},kind:RuntimeFunctionKind::{kind:?},origin:RuntimeFunctionOrigin::{:?},owner_type:{},parent_function:{},lambda_path:{},definition_key:{},package_name:{},namespace:vec![{}],argument_layout:{args},source_map:{map},model_invoke:{}}}",
+        "FunctionMetadata{{function_id,fqn:{},display_name:{},source_file:{},source_span:{span},kind:RuntimeFunctionKind::{kind},origin:RuntimeFunctionOrigin::{:?},owner_type:{},parent_function:{},lambda_path:{},definition_key:{},package_name:{},namespace:vec![{}],argument_layout:{args},source_map:{map},model_invoke:{}}}",
         string(&m.fqn),
         string(&m.display_name),
         optional(m.source_file.as_deref()),
@@ -222,11 +225,32 @@ pub(super) fn emit(
             .unwrap();
         }
     }
+    // Native container continuations need declaration metadata for error
+    // frames even though their bodies are not emitted as managed functions.
+    for &(_, _, callee) in telemetry_sites.borrow().iter() {
+        if observed.insert(callee) {
+            writeln!(
+                out,
+                "static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);"
+            )
+            .unwrap();
+        }
+    }
     let function_ids: BTreeMap<_, _> = observed
         .iter()
         .enumerate()
         .map(|(i, &id)| (id, i))
         .collect();
+    // Native frames name their function by its table position.
+    for (id, i) in &function_ids {
+        let name = plan.index.builtin_path(*id);
+        if super::operators::native(name)
+            || super::hashing::native(name)
+            || name == "reflect.call_any"
+        {
+            writeln!(&mut out, "const TELEMETRY_INDEX_{id}:usize={i};").unwrap();
+        }
+    }
     out.push_str("static TELEMETRY_FUNCTIONS:&[rt::telemetry::Function]=&[\n");
     let allocator = btel_types::FunctionIdAllocator::default();
     for &id in &observed {
@@ -250,7 +274,40 @@ pub(super) fn emit(
             Some(MirFunctionKind::Bytecode(body)) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
                 StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));
 
-        writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:rt::telemetry::Policy::NONE,hidden:{hidden}}},").unwrap();
+        let hook = match all.get(&id).map(|mir| &mir.kind) {
+            Some(MirFunctionKind::Bytecode(body)) => body
+                .blocks
+                .iter()
+                .flat_map(|b| &b.statements)
+                .find_map(|s| match &s.kind {
+                    StatementKind::Intrinsic {
+                        op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(mode),
+                        ..
+                    } => Some(mode),
+                    _ => None,
+                }),
+            _ => None,
+        };
+        use baml_compiler2_mir::BuiltinTraceHook as Hook;
+        let hook_mode = match hook {
+            Some(Hook::Hidden) => "Some(rt::telemetry::types::InvocationMode::Hidden)",
+            Some(Hook::Timing) => "Some(rt::telemetry::types::InvocationMode::Timing)",
+            Some(_) => "Some(rt::telemetry::types::InvocationMode::Span)",
+            None => "None",
+        };
+        let policy = match hook {
+            Some(Hook::Span) => {
+                "rt::telemetry::Policy{span_from_entry:true,capture_output:true,capture_error:true,..rt::telemetry::Policy::NONE}"
+            }
+            Some(Hook::Rich) => {
+                "rt::telemetry::Policy{span_from_entry:true,capture_inputs:true,capture_output:true,capture_error:true,..rt::telemetry::Policy::NONE}"
+            }
+            Some(Hook::EmptySpan) => {
+                "rt::telemetry::Policy{span_from_entry:true,..rt::telemetry::Policy::NONE}"
+            }
+            _ => "rt::telemetry::Policy::NONE",
+        };
+        writeln!(&mut out,"rt::telemetry::Function{{captures:Some(&CAPTURE_METADATA),metadata:|function_id|{{use rt::telemetry::types::*;{metadata}}},word:&O{id},policy:{policy},hidden:{hidden},hook_mode:{hook_mode}}},").unwrap();
     }
     out.push_str("];\nstatic TELEMETRY_SITES:&[rt::telemetry::Site]=&[\n");
     for &(caller, pc, callee) in telemetry_sites.borrow().iter() {
@@ -268,13 +325,27 @@ pub(super) fn emit(
 
 pub(super) struct Feature;
 impl registry::Feature for Feature {
+    fn statement(
+        &self,
+        _e: &mut Emitter<'_, '_>,
+        statement: &StatementKind<'_>,
+    ) -> Option<Gen<String>> {
+        match statement {
+            StatementKind::Intrinsic {
+                op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(_),
+                args,
+            } => Some(if args.is_empty() {
+                Ok(String::new())
+            } else {
+                Err(no("builtin hook arguments"))
+            }),
+            _ => None,
+        }
+    }
+
     fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
         if let registry::Admission::Statement(statement) = event {
             let unsupported_hook = match statement {
-                StatementKind::Intrinsic {
-                    op: baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(mode),
-                    ..
-                } => *mode != baml_compiler2_mir::BuiltinTraceHook::Hidden,
                 StatementKind::Intrinsic {
                     op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook,
                     ..

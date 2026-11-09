@@ -42,6 +42,14 @@ pub(super) fn emit(
     .collect::<Gen<Vec<_>>>()?;
     let naming = named("baml.json.Naming")?;
     let mut extra = BTreeSet::new();
+    for name in [
+        "baml.panics.UserPanic",
+        "baml.errors.ParseError",
+        "baml.panics.HostUnavailable",
+        "baml.errors.Io",
+    ] {
+        extra.insert(named(name)?);
+    }
     for frame in plan.function_frames.values() {
         for (_, ty) in frame {
             ty.visit_heads(&mut |h| {
@@ -77,6 +85,46 @@ pub(super) fn emit(
             });
         }
     }
+    for types in plan
+        .reflection_fields
+        .iter()
+        .map(|(_, _, types)| types)
+        .chain(
+            plan.reflection_signatures
+                .iter()
+                .flatten()
+                .map(|(_, types)| types),
+        )
+    {
+        for ty in types {
+            ty.visit_heads(&mut |head| {
+                for (object, declaration) in plan.program.objects.iter().enumerate() {
+                    if matches!(declaration,Object::Class(class) if class.type_tag == head.tag())
+                        || matches!(declaration,Object::Enum(enumeration) if enumeration.type_tag == head.tag())
+                    {
+                        extra.insert(object);
+                    }
+                }
+            });
+        }
+    }
+    for ty in &plan.reflection_types {
+        let realized = baml_compiler2_mir::RealizedTy::try_from(ty.clone())
+            .map_err(|_| no("reflected capture declaration"))?;
+        let anchored = plan
+            .index
+            .anchor(&baml_compiler2_mir::TyTemplate::from(realized))
+            .ok_or_else(|| no("reflected capture identity"))?;
+        anchored.substitute_symbolic(&[]).visit_heads(&mut |head| {
+            for (object, declaration) in plan.program.objects.iter().enumerate() {
+                if matches!(declaration,Object::Class(class) if class.type_tag == head.tag())
+                    || matches!(declaration,Object::Enum(enumeration) if enumeration.type_tag == head.tag())
+                {
+                    extra.insert(object);
+                }
+            }
+        });
+    }
     // Empty callable lists can mention classes never allocated by the entry.
     // Their type captures still require the declaration, without a heap layout.
     let mut signature_declarations = BTreeSet::new();
@@ -111,6 +159,10 @@ pub(super) fn emit(
     }
     out.push_str("static CAPTURE_SHAPES:&[rt::telemetry::capture::Shape]=&[rt::telemetry::capture::Shape::String,\n");
     for desc in 1..after_lists {
+        if desc == 17 {
+            out.push_str("rt::telemetry::capture::Shape::Unsupported,\n");
+            continue;
+        }
         if matches!(desc, 13 | 14) {
             out.push_str("rt::telemetry::capture::Shape::String,\n");
             continue;
@@ -123,8 +175,24 @@ pub(super) fn emit(
             });
             continue;
         }
+        if desc == layout::BYTES_BUFFER_DESCRIPTOR {
+            out.push_str("rt::telemetry::capture::Shape::Unsupported,\n");
+            continue;
+        }
+        if desc == layout::BIGINT_DESCRIPTOR {
+            out.push_str("rt::telemetry::capture::Shape::Bigint,\n");
+            continue;
+        }
         let class = if desc < 13 {
             Some(runtime[desc - 1])
+        } else if let Some(name) = match desc {
+            layout::USER_PANIC_DESCRIPTOR => Some("baml.panics.UserPanic"),
+            layout::SCALAR_PARSE_DESCRIPTOR => Some("baml.errors.ParseError"),
+            layout::HOST_UNAVAILABLE_DESCRIPTOR => Some("baml.panics.HostUnavailable"),
+            layout::IO_DESCRIPTOR => Some("baml.errors.Io"),
+            _ => None,
+        } {
+            Some(named(name)?)
         } else {
             descriptors
                 .iter()
@@ -132,6 +200,8 @@ pub(super) fn emit(
         };
         let shape = if plan.bigints && desc == plan.bigint_descriptor() {
             "Bigint".to_owned()
+        } else if plan.reflection_descriptor() == Some(desc) {
+            "Reflected(&REFLECT_PROGRAM)".to_owned()
         } else if plan.future_descriptor() == Some(desc) {
             "Future".to_owned()
         } else if plan
@@ -257,7 +327,7 @@ pub(super) fn capture_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
 pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     use bex_vm_types::RuntimeTy as T;
     let member = match ty {
-        T::Bigint => "Bigint".into(),
+        T::Type => "Type".into(),
         T::Int => "Int".into(),
         T::Literal(lit, f) => match lit {
             baml_type::Literal::Int(v) => {
@@ -276,6 +346,7 @@ pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -
             _ => return Err(no("bigint literal capture type")),
         },
         T::Float => "Float".into(),
+        T::Bigint => "Bigint".into(),
         T::Bool => "Bool".into(),
         T::Null => "Null".into(),
         T::Unknown => "Unknown".into(),
@@ -365,6 +436,34 @@ pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -
             format!("Enum(CAPTURE_D{e})")
         }
         T::List(t) => format!("List(&{})", capture_wire_type(plan, t)?),
+        T::Future(value, error) => format!(
+            "Future(&{},&{})",
+            capture_wire_type(plan, value)?,
+            capture_wire_type(plan, error)?
+        ),
+        T::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            let params = params
+                .iter()
+                .map(|p| {
+                    Ok(format!(
+                        "rt::telemetry::capture::Parameter{{name:{:?},optional:{},ty:&{}}}",
+                        p.name.as_ref().map(|n| n.as_str()),
+                        p.mode == baml_type::FunctionParamMode::Optional,
+                        capture_wire_type(plan, &p.ty)?
+                    ))
+                })
+                .collect::<Gen<Vec<_>>>()?
+                .join(",");
+            format!(
+                "Function{{params:&[{params}],ret:&{},throws:&{}}}",
+                capture_wire_type(plan, ret)?,
+                capture_wire_type(plan, throws)?
+            )
+        }
         T::Map { key, value } => format!(
             "Map(&{},&{})",
             capture_wire_type(plan, key)?,
@@ -387,14 +486,47 @@ fn capture_element(
     descriptors: &BTreeMap<usize, usize>,
     lists: &BTreeMap<Repr, usize>,
     repr: Repr,
-) -> Gen<(usize, String)> {
-    Ok(match repr {
+) -> Gen<(String, String)> {
+    let (tag, ty) = match repr {
         Repr::Int => (0, "Int".into()),
+        Repr::Reflected => (plan.reflection_descriptor().unwrap() + 3, "Type".into()),
         Repr::Bigint => (plan.bigint_descriptor() + 3, "Bigint".into()),
         Repr::Bool => (1, "Bool".into()),
-        Repr::Float => ((u32::MAX - 1) as usize, "Float".into()),
+        Repr::Float => (u32::MAX as usize - 1, "Float".into()),
         Repr::Str => (3, "String".into()),
-        Repr::Ptr(c) => (descriptors[&c] + 3, format!("Class(CAPTURE_D{c})")),
+        Repr::Bytes => (19, "Uint8Array".into()),
+        Repr::Opaque => (18, "RustType".into()),
+        Repr::Enum(e) => {
+            return Ok((
+                format!("CAPTURE_ENUM_{e}_TAG"),
+                format!("Enum(CAPTURE_D{e})"),
+            ));
+        }
+        Repr::Naming => {
+            return Ok((
+                "CAPTURE_NAMING_TAG".into(),
+                capture_repr(plan, repr)?
+                    .strip_prefix("rt::telemetry::capture::Type::")
+                    .unwrap()
+                    .to_owned(),
+            ));
+        }
+        Repr::Ptr(c) => (
+            descriptors[&c] + 3,
+            capture_repr(plan, repr)?
+                .strip_prefix("rt::telemetry::capture::Type::")
+                .unwrap()
+                .to_owned(),
+        ),
+        Repr::MapStrPtr(c) => (
+            lists[&repr] + 3,
+            format!(
+                "Map(&rt::telemetry::capture::Type::String,&{})",
+                capture_repr(plan, Repr::Ptr(c))?
+            ),
+        ),
+        Repr::Closure => (plan.closure_descriptors().unwrap().1 + 3, "Unknown".into()),
+        Repr::Future => (plan.future_descriptor().unwrap() + 3, "Unknown".into()),
         r if r.growing() => {
             let (_, element) = capture_list_element(plan, descriptors, lists, r)?;
             (
@@ -402,14 +534,22 @@ fn capture_element(
                 format!("List(&rt::telemetry::capture::Type::{element})"),
             )
         }
+        r @ Repr::Map(_) => (
+            lists[&r] + 3,
+            capture_repr(plan, r)?
+                .strip_prefix("rt::telemetry::capture::Type::")
+                .unwrap()
+                .to_owned(),
+        ),
         Repr::MapStrInt => (
             lists[&Repr::MapStrInt] + 3,
             "Map(&rt::telemetry::capture::Type::String,&rt::telemetry::capture::Type::Int)".into(),
         ),
-        Repr::Tagged => (usize::MAX - 1, "Unknown".into()),
+        Repr::Tagged | Repr::Dyn(_) => (usize::MAX - 1, "Unknown".into()),
         Repr::Null => (2, "Null".into()),
         _ => return Err(no("capture list element")),
-    })
+    };
+    Ok((tag.to_string(), ty))
 }
 
 fn capture_list_element(
@@ -417,15 +557,16 @@ fn capture_list_element(
     descriptors: &BTreeMap<usize, usize>,
     lists: &BTreeMap<Repr, usize>,
     repr: Repr,
-) -> Gen<(usize, String)> {
+) -> Gen<(String, String)> {
     if let Repr::ListClosure(id) | Repr::ListFuture(id) = repr {
         let full = super::closures::capture_type(&plan.closure_lists[&id])?;
         return Ok((
-            (if matches!(repr, Repr::ListFuture(_)) {
+            ((if matches!(repr, Repr::ListFuture(_)) {
                 plan.future_descriptor().unwrap()
             } else {
                 plan.closure_descriptors().unwrap().1
-            }) + 3,
+            }) + 3)
+                .to_string(),
             full.strip_prefix("rt::telemetry::capture::Type::")
                 .unwrap()
                 .to_owned(),
@@ -467,16 +608,76 @@ fn capture_list_element(
 pub(super) fn capture_repr(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
     let prefix = "rt::telemetry::capture::Type::";
     Ok(match repr {
+        Repr::Bigint => format!("{prefix}Bigint"),
+        Repr::Bytes => format!("{prefix}Uint8Array"),
+        Repr::Opaque => format!("{prefix}RustType"),
+        Repr::Reflected => format!("{prefix}Type"),
         Repr::Int => format!("{prefix}Int"),
         Repr::Float => format!("{prefix}Float"),
         Repr::Bool => format!("{prefix}Bool"),
         Repr::Str => format!("{prefix}String"),
         Repr::Null => format!("{prefix}Null"),
+        Repr::Closure => format!("{prefix}Unknown"),
+        Repr::Enum(e) => format!("{prefix}Enum(CAPTURE_D{e})"),
+        Repr::Naming => {
+            let e = plan
+                .program
+                .packages
+                .iter()
+                .find_map(|p| {
+                    p.enums.iter().find_map(|(path, index)| {
+                        (path.under(&p.name).to_string() == "baml.json.Naming")
+                            .then_some(index.raw())
+                    })
+                })
+                .ok_or_else(|| no("naming enum declaration"))?;
+            format!("{prefix}Enum(CAPTURE_D{e})")
+        }
         Repr::Tagged | Repr::Dyn(_) => format!("{prefix}Unknown"),
-        Repr::Ptr(c) => format!("{prefix}Class(CAPTURE_D{c})"),
+        Repr::Ptr(c) => {
+            if let Some((_, args, _)) = plan.class_instances.iter().find(|(_, _, id)| *id == c) {
+                let args = args
+                    .iter()
+                    .map(|t| capture_wire_type(plan, t))
+                    .collect::<Gen<Vec<_>>>()?
+                    .join(",");
+                format!("{prefix}GenericClass(CAPTURE_D{c},&[{args}])")
+            } else {
+                format!("{prefix}Class(CAPTURE_D{c})")
+            }
+        }
+        Repr::MapStrPtr(c) => format!(
+            "{prefix}Map(&{prefix}String,&{})",
+            capture_repr(plan, Repr::Ptr(c))?
+        ),
         Repr::Map(_) | Repr::MapStrInt => {
             let (key, value) = map_types(plan, repr)?;
             format!("{prefix}Map(&{key},&{value})")
+        }
+        Repr::ListClosure(id) | Repr::ListFuture(id) => format!(
+            "{prefix}List(&{})",
+            super::closures::capture_type(&plan.closure_lists[&id])?
+        ),
+        Repr::List(id) => {
+            let types = plan.list_elements.borrow();
+            let element = &types[id];
+            let ty = if let Some(declared) = &element.declared {
+                declared.clone()
+            } else if element.members.is_empty() {
+                capture_repr(plan, element.repr)?
+            } else {
+                let members = element
+                    .members
+                    .iter()
+                    .map(|m| capture_repr(plan, *m))
+                    .collect::<Gen<Vec<_>>>()?;
+                if members.len() == 1 {
+                    members[0].clone()
+                } else {
+                    format!("{prefix}Union(&[{}])", members.join(","))
+                }
+            };
+            format!("{prefix}List(&{ty})")
         }
         other => format!(
             "{prefix}List(&{})",
@@ -494,9 +695,9 @@ pub(super) fn capture_dyn(
         return Ok(value.to_owned());
     }
     let (tag, raw) = match repr {
-        Repr::Bigint => {
+        Repr::Reflected => {
             return Ok(format!(
-                "rt::Dyn{{tag:BIGINT_TAG,payload:({value}).as_raw() as u64}}"
+                "rt::Dyn{{tag:REFLECT_TAG,payload:({value}).as_raw() as u64}}"
             ));
         }
         Repr::Float => {
@@ -508,11 +709,43 @@ pub(super) fn capture_dyn(
         Repr::Bool => (1, value.to_owned()),
         Repr::Null => (2, "0usize".into()),
         Repr::Str => (3, format!("{value}.as_raw()")),
+        Repr::Bigint => {
+            return Ok(format!(
+                "rt::Dyn{{tag:BIGINT_TAG,payload:({value}).as_raw() as u64}}"
+            ));
+        }
+        Repr::Future => {
+            return Ok(format!(
+                "rt::Dyn{{tag:FUTURE_TAG,payload:({value}).as_raw() as u64}}"
+            ));
+        }
+        Repr::Bytes => (19, format!("{value}.as_raw()")),
+        Repr::Opaque => (18, format!("{value}.as_raw()")),
+        Repr::Enum(e) => {
+            return Ok(format!(
+                "rt::Dyn{{tag:CAPTURE_ENUM_{e}_TAG,payload:{value} as u64}}"
+            ));
+        }
+        Repr::Naming => {
+            return Ok(format!(
+                "rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:{value} as u64}}"
+            ));
+        }
+        Repr::Closure => (0, format!("{value}.as_raw()")),
         Repr::Ptr(c) => (descriptors[&c] + 3, format!("{value}.as_raw()")),
         r if r.pointer() => (lists[&r] + 3, format!("{value}.as_raw()")),
         _ => return Err(no("map capture slot")),
     };
-    Ok(format!("rt::Dyn{{tag:{tag},payload:({raw}) as u64}}"))
+    let tag = if repr == Repr::Closure {
+        "if raw==0{2}else{(*(raw as *const baml_rt_gc::Header)).desc as u64+3}".into()
+    } else if repr.pointer() {
+        format!("if raw==0{{2}}else{{{tag}}}")
+    } else {
+        tag.to_string()
+    };
+    Ok(format!(
+        "{{let raw={raw};rt::Dyn{{tag:{tag},payload:raw as u64}}}}"
+    ))
 }
 
 fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
@@ -527,61 +760,52 @@ fn map_types(plan: &Plan<'_>, repr: Repr) -> Gen<(String, String)> {
 /// Preserve declared map types: equal storage layouts can have different
 /// nullable/union element types in the recorder's canonical value encoding.
 pub(super) fn declared_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
-    match ty {
-        RuntimeTy::TypeAlias(_) => capture_type(plan, ty),
-        RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
-        RuntimeTy::Union(members) => {
-            let members = members
-                .iter()
-                .map(|m| declared_type(plan, m))
-                .collect::<Gen<Vec<_>>>()?
-                .join(",");
-            Ok(format!("rt::telemetry::capture::Type::Union(&[{members}])"))
-        }
-        RuntimeTy::List(element) => Ok(format!(
-            "rt::telemetry::capture::Type::List(&{})",
-            declared_type(plan, element)?
-        )),
-        _ => capture_repr(plan, plan.repr(ty)?),
-    }
+    capture_type(plan, ty)
 }
 pub(super) fn declared_field_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
-    match ty {
-        bex_vm_types::RuntimeTy::TypeAlias(_) => capture_wire_type(plan, ty),
-        bex_vm_types::RuntimeTy::Literal(value, freshness) => literal_type(value, *freshness),
-        bex_vm_types::RuntimeTy::Union(members) => {
-            let members = members
-                .iter()
-                .map(|m| declared_field_type(plan, m))
-                .collect::<Gen<Vec<_>>>()?
-                .join(",");
-            Ok(format!("rt::telemetry::capture::Type::Union(&[{members}])"))
-        }
-        bex_vm_types::RuntimeTy::List(element) => Ok(format!(
-            "rt::telemetry::capture::Type::List(&{})",
-            declared_field_type(plan, element)?
-        )),
-        _ => capture_repr(plan, plan.field_repr(ty)?),
-    }
+    capture_wire_type(plan, ty)
 }
 
-fn literal_type(literal: &baml_type::Literal, freshness: baml_type::Freshness) -> Gen<String> {
-    Ok(match literal {
-        baml_type::Literal::Int(value) => {
-            format!(
-                "rt::telemetry::capture::Type::LiteralInt({value},rt::telemetry::capture::Freshness::{freshness:?})"
-            )
+// Unions are sets for storage identity. Keep the first declaration's order
+// separately for canonical type/value captures.
+pub(super) fn type_identity(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
+    Ok(match ty {
+        RuntimeTy::Union(members) => {
+            let mut members = members
+                .iter()
+                .map(|m| type_identity(plan, m))
+                .collect::<Gen<Vec<_>>>()?;
+            members.sort();
+            members.dedup();
+            format!("Union({})", members.join(","))
         }
-        baml_type::Literal::Bool(value) => {
-            format!(
-                "rt::telemetry::capture::Type::LiteralBool({value},rt::telemetry::capture::Freshness::{freshness:?})"
-            )
+        RuntimeTy::List(t) => format!("List({})", type_identity(plan, t)?),
+        RuntimeTy::Map { key, value } => format!(
+            "Map({},{})",
+            type_identity(plan, key)?,
+            type_identity(plan, value)?
+        ),
+        _ => declared_type(plan, ty)?,
+    })
+}
+pub(super) fn field_type_identity(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
+    use bex_vm_types::RuntimeTy as T;
+    Ok(match ty {
+        T::Union(members) => {
+            let mut members = members
+                .iter()
+                .map(|m| field_type_identity(plan, m))
+                .collect::<Gen<Vec<_>>>()?;
+            members.sort();
+            members.dedup();
+            format!("Union({})", members.join(","))
         }
-        baml_type::Literal::String(value) => {
-            format!(
-                "rt::telemetry::capture::Type::LiteralString({value:?},rt::telemetry::capture::Freshness::{freshness:?})"
-            )
-        }
-        _ => return Err(no("map literal type")),
+        T::List(t) => format!("List({})", field_type_identity(plan, t)?),
+        T::Map { key, value } => format!(
+            "Map({},{})",
+            field_type_identity(plan, key)?,
+            field_type_identity(plan, value)?
+        ),
+        _ => declared_field_type(plan, ty)?,
     })
 }

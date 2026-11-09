@@ -2,7 +2,9 @@ use super::{BTreeSet, Gen, no};
 
 pub(super) fn emit(out: &mut String, builtins: &BTreeSet<String>) -> Gen<()> {
     if !builtins.is_empty() {
-        let (declarations, _, _) = baml_builtins2_codegen::extract_native_builtins().map_err(no)?;
+        let (mut declarations, io, _) =
+            baml_builtins2_codegen::extract_native_builtins().map_err(no)?;
+        declarations.extend(io);
         out.push_str(&baml_builtins2_codegen::generate_rt(
             &declarations,
             builtins,
@@ -15,7 +17,7 @@ impl super::Emitter<'_, '_> {
     pub(super) fn native_closure_adapter(&self) -> Gen<String> {
         use super::{Repr, registry};
         let object = self.object;
-        let name = self.plan.index.display(object);
+        let name = self.plan.index.builtin_path(object);
         let info = self.plan.index.info(object);
         let frame = self.plan.linked_function_frame(object)?;
         let mut prelude = String::new();

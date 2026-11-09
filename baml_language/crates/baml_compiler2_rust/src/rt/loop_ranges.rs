@@ -492,9 +492,10 @@ impl registry::Feature for Feature {
         Some((|| {
             let (left, lt) = emitter.operand(left)?;
             let (right, rt) = emitter.operand(right)?;
-            if lt != Repr::Int || rt != Repr::Int {
-                return Err(no("non-integer proven arithmetic"));
-            }
+            // MIR can keep a union of integer literals in a tagged temporary.
+            // The proof bounds the integer value, independent of its storage.
+            let left = emitter.coerce((left, lt), Repr::Int)?;
+            let right = emitter.coerce((right, rt), Repr::Int)?;
             Ok((format!("({left}).{method}({right})"), Repr::Int))
         })())
     }

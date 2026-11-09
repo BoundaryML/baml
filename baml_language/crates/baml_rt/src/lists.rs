@@ -43,6 +43,7 @@ macro_rules! scalar_slot {
 scalar_slot!(i64, |v| v as i64, |v: i64| v as u64);
 scalar_slot!(f64, f64::from_bits, f64::to_bits);
 scalar_slot!(bool, |v| v != 0, |v: bool| v as u64);
+scalar_slot!(usize, |v| v as usize, |v: usize| v as u64);
 /// An opaque heap pointer slot, also used for classes, maps and nested lists.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -106,6 +107,20 @@ impl<T: Slot> Clone for List<T> {
         *self
     }
 }
+impl List<Ptr> {
+    /// Borrow the current pointer buffer without allocating a host snapshot.
+    ///
+    /// # Safety
+    /// The list and buffer must remain rooted, and the list must not be mutated
+    /// or grown, for the lifetime of the returned slice.
+    pub(crate) unsafe fn pointers<'a>(self) -> &'a [usize] {
+        let object = unsafe { &*(self.pointer as *const Object) };
+        if object.len == 0 {
+            return &[];
+        }
+        unsafe { std::slice::from_raw_parts((object.buffer + 16) as *const usize, object.len) }
+    }
+}
 unsafe impl<T: Slot> Slot for List<T> {
     const SIZE: usize = 8;
     const LAYOUT: ElementLayout = ElementLayout::Pointer;
@@ -155,8 +170,8 @@ impl<T: Slot> List<T> {
     /// `desc` and `desc+1` describe this list and its T buffer as above. All
     /// handles obey Cx's root invocation and rooting contract.
     #[inline(always)]
-    pub unsafe fn new(_cx: &mut Cx, desc: u32) -> R<Self> {
-        let pointer = unsafe { crate::try_alloc(desc, 32) }? as usize;
+    pub unsafe fn new(cx: &mut Cx, desc: u32) -> R<Self> {
+        let pointer = unsafe { cx.alloc_uninit(desc, 32) }? as usize;
         unsafe {
             let object = pointer as *mut Object;
             write_ptr(object.cast(), &raw mut (*object).buffer, 0);
@@ -198,15 +213,34 @@ impl<T: Slot> List<T> {
             ))
         }
     }
-    /// Independent snapshot; immutable elements may be shared.
+    /// Independent snapshot of the mutable container; immutable element values
+    /// may be shared. Used by memoized string segmentation.
+    #[inline(always)]
     pub fn copy(self, cx: &mut Cx) -> R<Self> {
-        let desc = unsafe { (*(self.pointer as *const Object)).header.desc };
-        let len = self.len(cx) as usize;
-        let result = unsafe { Self::with_capacity(cx, desc, len) }?;
-        for i in 0..len {
-            result.push(cx, self.get(cx, i as i64)?)?;
+        let old = self.pointer as *const Object;
+        let (len, desc) = unsafe { ((*old).len, (*old).header.desc) };
+        if len == 0 {
+            return unsafe { Self::new(cx, desc) };
         }
-        Ok(result)
+        let bytes = len
+            .checked_mul(T::SIZE)
+            .and_then(|n| n.checked_add(16))
+            .ok_or_else(|| allocation_failure(usize::MAX))?;
+        let buffer = cx.alloc(desc + 1, bytes)?;
+        unsafe {
+            let source = (*old).buffer as *const u8;
+            for i in 0..len {
+                T::read(source.add(16 + i * T::SIZE)).write(buffer, buffer.add(16 + i * T::SIZE));
+            }
+        }
+        let result = cx.alloc(desc, 32)?;
+        unsafe {
+            let object = &mut *result.cast::<Object>();
+            write_ptr(result, &raw mut object.buffer, buffer as usize);
+            object.len = len;
+            object.capacity = len;
+        }
+        Ok(unsafe { Self::from_raw(result as usize) })
     }
     #[inline(always)]
     pub fn set(self, cx: &Cx, index: i64, value: T) -> R<()> {
@@ -240,7 +274,7 @@ impl<T: Slot> List<T> {
     }
     #[cold]
     #[inline(never)]
-    fn grow(self, _cx: &mut Cx, required: usize) -> R<()> {
+    fn grow(self, cx: &mut Cx, required: usize) -> R<()> {
         let object = self.pointer as *mut Object;
         let (len, capacity, desc) =
             unsafe { ((*object).len, (*object).capacity, (*object).header.desc) };
@@ -253,7 +287,15 @@ impl<T: Slot> List<T> {
             .checked_mul(T::SIZE)
             .and_then(|n| n.checked_add(16))
             .ok_or_else(|| allocation_failure(usize::MAX))?;
-        let buffer = unsafe { crate::try_alloc(desc + 1, bytes) }?;
+        let buffer = unsafe { cx.alloc_uninit(desc + 1, bytes) }?;
+        unsafe {
+            buffer.add(8).cast::<usize>().write(0);
+            if !matches!(T::LAYOUT, ElementLayout::Scalar) {
+                // The collector traces buffer capacity, including unused slots.
+                // Scalar tails are unread until a push initializes the slot.
+                buffer.add(16).write_bytes(0, capacity * T::SIZE);
+            }
+        }
         unsafe {
             let old = (*object).buffer as *const u8;
             for i in 0..len {
@@ -283,7 +325,7 @@ impl<T: Slot> List<T> {
             .and_then(|n| n.checked_add(32))
             .filter(|_| capacity <= baml_type::Int63::MAX.get() as usize)
             .ok_or_else(|| allocation_failure(usize::MAX))?;
-        let pointer = unsafe { crate::try_alloc(desc, bytes) }? as usize;
+        let pointer = unsafe { cx.alloc_uninit(desc, bytes) }? as usize;
         unsafe {
             let object = pointer as *mut Object;
             // The buffer ABI addresses elements at buffer+16. This interior
@@ -291,6 +333,13 @@ impl<T: Slot> List<T> {
             write_ptr(object.cast(), &raw mut (*object).buffer, pointer + 16);
             (*object).len = 0;
             (*object).capacity = capacity;
+            if !matches!(T::LAYOUT, ElementLayout::Scalar) {
+                // Embedded pointer/tagged slots participate in tracing even
+                // before the list length reaches them. Clear only this buffer.
+                (pointer as *mut u8)
+                    .add(32)
+                    .write_bytes(0, capacity * T::SIZE);
+            }
             Ok(Self::from_raw(pointer))
         }
     }
@@ -532,17 +581,17 @@ impl<T: Slot> List<T> {
         cx: &Cx,
         item: T,
         last: bool,
-        mut equal: impl FnMut(T, T) -> bool,
-    ) -> Option<i64> {
+        mut equal: impl FnMut(T, T) -> R<bool>,
+    ) -> R<Option<i64>> {
         let len = self.len(cx);
         for offset in 0..len {
             let index = if last { len - offset - 1 } else { offset };
             let value = self.at(cx, index).expect("in-bounds list search");
-            if equal(value, item) {
-                return Some(index);
+            if equal(value, item)? {
+                return Ok(Some(index));
             }
         }
-        None
+        Ok(None)
     }
     /// Callback walks use a traced snapshot: callbacks may allocate, collect,
     /// suspend, or mutate the receiver without invalidating the walk.
@@ -812,24 +861,24 @@ impl List<f64> {
 }
 
 /// The VM's fixed list-search equality, independent of user `Equals` overrides.
-pub fn builtin_eq(cx: &Cx, a: crate::Dyn, b: crate::Dyn) -> bool {
+pub fn builtin_eq(cx: &Cx, a: crate::Dyn, b: crate::Dyn) -> R<bool> {
     if a.tag != b.tag {
-        return false;
+        return Ok(false);
     }
-    match a.tag {
+    Ok(match a.tag {
         3 => {
             if a.payload == 0 || b.payload == 0 {
                 a.payload == b.payload
             } else {
-                unsafe { Str::from_raw(a.payload as usize) }.text(cx)
-                    == unsafe { Str::from_raw(b.payload as usize) }.text(cx)
+                unsafe { Str::from_raw(a.payload as usize) }.try_as_str(cx)?
+                    == unsafe { Str::from_raw(b.payload as usize) }.try_as_str(cx)?
             }
         }
         tag if tag == (u32::MAX - 1) as u64 => {
             bex_vm_types::float_order::eq(f64::from_bits(a.payload), f64::from_bits(b.payload))
         }
         _ => a.payload == b.payload,
-    }
+    })
 }
 pub fn primitive_string(cx: &mut Cx, value: crate::Dyn) -> R<Str> {
     let text = match value.tag {
@@ -1065,6 +1114,26 @@ mod tests {
         true, true, true, true, true, true, true, true,
     ];
     #[test]
+    fn code_point_lists_fill_raw_slots_under_gc_stress() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            for text in [String::new(), "ASCII".repeat(128), "aé🙂\0".repeat(1024)] {
+                let source = cx.string(&text)?;
+                let raw = unsafe { crate::strings::to_code_points(&mut cx, source, 11) }?;
+                let list = unsafe { List::<i64>::from_raw(raw) };
+                cx.poll()?;
+                assert_eq!(list.len(&cx) as usize, text.chars().count());
+                for (i, character) in text.chars().enumerate() {
+                    assert_eq!(list.get(&cx, i as i64)?, character as i64);
+                }
+            }
+            Ok(1)
+        }
+        let mut instance = Instance::new(DESCRIPTORS, POINTER_TYPES);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+    #[test]
     fn scalar_and_tagged_mutation_slice_and_gc() {
         fn entry() -> R<i64> {
             let mut cx = unsafe { Cx::current() };
@@ -1283,10 +1352,18 @@ mod tests {
                 unsafe { Str::from_raw(tail.payload as usize) }.as_str(&cx),
                 "growth"
             );
+            let copied = mixed.copy(&mut cx)?;
             strings.clear(&cx);
             mixed.clear(&cx);
             cx.poll()?;
             assert!(alias.is_empty(&cx));
+            assert_eq!(copied.len(&cx), 5);
+            let copied_tail = copied.get(&cx, -1)?;
+            assert_eq!(copied_tail.tag, 3);
+            assert_eq!(
+                unsafe { Str::from_raw(copied_tail.payload as usize) }.as_str(&cx),
+                "growth"
+            );
             let nullable = unsafe { List::<Ptr>::with_capacity(&mut cx, 7, 3) }?;
             let word = cx.string("present")?;
             nullable.push(&mut cx, unsafe { Ptr::from_raw(word.as_raw()) })?;
@@ -1302,6 +1379,68 @@ mod tests {
         let mut instance = Instance::new(DESCRIPTORS, POINTER_TYPES);
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+    #[test]
+    fn task_modifier_lists_use_embedded_and_grown_typed_buffers() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let empty = unsafe { List::<Ptr>::new(&mut cx, 7) }?;
+            assert!(unsafe { crate::tasks::pointer_list(empty.as_raw()) }.is_empty());
+            let input = unsafe { List::<Ptr>::with_capacity(&mut cx, 7, 4) }?;
+            for i in 0..9 {
+                let text = cx.string(&format!("token{i}"))?;
+                input.push(&mut cx, unsafe { Ptr::from_raw(text.as_raw()) })?;
+                let pointers = unsafe { crate::tasks::pointer_list(input.as_raw()) };
+                assert_eq!(pointers.len(), (i + 1) as usize);
+                assert_eq!(pointers[i as usize], text.as_raw());
+            }
+            let combined =
+                unsafe { crate::tasks::concat_pointers(7, input.as_raw(), input.as_raw()) }?;
+            cx.poll()?;
+            let combined = unsafe { List::<Ptr>::from_raw(combined) };
+            assert_eq!(combined.len(&cx), 18);
+            for i in 0..18 {
+                let value = unsafe { Str::from_raw(combined.get(&cx, i)?.as_raw()) };
+                assert_eq!(value.as_str(&cx), format!("token{}", i % 9));
+            }
+            assert_eq!(input.len(&cx), 9);
+            Ok(1)
+        }
+        let mut instance = Instance::new(DESCRIPTORS, POINTER_TYPES);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+    #[test]
+    fn unfilled_pointer_capacity_stays_traceable_through_growth_and_reuse() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let list = unsafe { List::<Str>::with_capacity(&mut cx, 7, 32) }?;
+            for i in 0..70 {
+                let text = cx.string(&format!("value{i}"))?;
+                list.push(&mut cx, text)?;
+                cx.poll()?;
+                assert_eq!(list.get(&cx, i)?.as_str(&cx), format!("value{i}"));
+            }
+            list.clear(&cx);
+            cx.poll()?;
+            let scalar = unsafe { List::<i64>::with_capacity(&mut cx, 11, 128) }?;
+            cx.poll()?;
+            for i in 0..200 {
+                scalar.push(&mut cx, i)?;
+                if i % 17 == 0 {
+                    cx.poll()?;
+                }
+            }
+            for i in 0..200 {
+                assert_eq!(scalar.get(&cx, i)?, i);
+            }
+            Ok(1)
+        }
+        let mut instance = Instance::new(DESCRIPTORS, POINTER_TYPES);
+        instance.set_stress(true);
+        for _ in 0..3 {
+            assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+        }
     }
     #[test]
     fn failed_growth_preserves_length_and_elements() {
@@ -1361,5 +1500,79 @@ mod tests {
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 65);
         assert!(instance.stats().collections >= 65);
+    }
+}
+
+impl List<crate::Dyn> {
+    pub fn is_primitive(self, cx: &Cx) -> bool {
+        self.len(cx) == 0
+            || self
+                .get(cx, 0)
+                .is_ok_and(|v| matches!(v.tag, 0 | 3 | 4294967294))
+    }
+    pub fn natural_sort(self, cx: &mut Cx, descriptors: &[Descriptor]) -> R<Self> {
+        if self.len(cx) <= 1 {
+            return Ok(self);
+        }
+        let (mut strings, mut integers, mut floats) = (false, false, false);
+        for i in 0..self.len(cx) {
+            let value = self.get(cx, i)?;
+            let unsupported = match value.tag {
+                0 => {
+                    integers = true;
+                    None
+                }
+                3 if value.payload != 0 => {
+                    strings = true;
+                    None
+                }
+                4294967294 => {
+                    floats = true;
+                    None
+                }
+                2 | 3 => Some("null"),
+                1 => Some("bool"),
+                tag => Some(
+                    match tag
+                        .checked_sub(3)
+                        .and_then(|tag| descriptors.get(tag as usize))
+                        .map(|d| d.kind)
+                    {
+                        Some(Kind::List) => "array",
+                        Some(Kind::Map) => "map",
+                        Some(Kind::Class) => "instance",
+                        Some(Kind::Closure) => "closure",
+                        _ => "enum variant",
+                    },
+                ),
+            };
+            if let Some(kind) = unsupported {
+                return Err(crate::Error::internal(format!(
+                    "bridge failure: sort: natural ordering does not support {kind}"
+                )));
+            }
+        }
+        if strings && (integers || floats) {
+            return Err(crate::Error::internal("bridge failure: sort: natural ordering does not support mixing string with numeric values".into()));
+        }
+        let read = unsafe { Cx::current() };
+        self.sort_by(cx, |a, b| {
+            Ok(if strings {
+                unsafe { Str::from_raw(a.payload as usize) }
+                    .try_as_str(&read)?
+                    .cmp(unsafe { Str::from_raw(b.payload as usize) }.try_as_str(&read)?)
+            } else if floats {
+                let number = |v: crate::Dyn| {
+                    if v.tag == 0 {
+                        (v.payload as i64) as f64
+                    } else {
+                        f64::from_bits(v.payload)
+                    }
+                };
+                crate::float_cmp(number(a), number(b))
+            } else {
+                (a.payload as i64).cmp(&(b.payload as i64))
+            })
+        })
     }
 }

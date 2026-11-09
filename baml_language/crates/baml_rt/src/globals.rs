@@ -19,6 +19,9 @@ impl Default for Slot {
 pub(crate) struct Globals {
     slots: RefCell<Vec<Slot>>,
     pointer_slots: RefCell<Vec<usize>>,
+    string_literals: RefCell<Vec<usize>>,
+    integer_value: std::cell::Cell<i64>,
+    integer_text: std::cell::Cell<usize>,
     state: std::cell::Cell<u8>,
     pub(crate) pointer_types: &'static [bool],
 }
@@ -30,6 +33,14 @@ impl Globals {
         }
     }
     pub(crate) fn roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+        for pointer in self.string_literals.borrow_mut().iter_mut() {
+            if *pointer != 0 {
+                visit(pointer);
+            }
+        }
+        if self.integer_text.get() != 0 {
+            visit(self.integer_text.as_ptr());
+        }
         let mut slots = self.slots.borrow_mut();
         for &index in self.pointer_slots.borrow().iter() {
             let slot = &mut slots[index];
@@ -48,6 +59,47 @@ fn with<T>(f: impl FnOnce(&Globals) -> T) -> T {
         unsafe { f(&*current.get()) }
     })
 }
+/// Lazily materialize a compiler-indexed literal, shared for this instance.
+/// Strings are immutable, and the pool contributes precise roots independently
+/// of eager global initialization. No pool borrow crosses a managed allocation.
+pub fn string_literal(index: usize, text: &'static str) -> R<usize> {
+    with(|globals| {
+        let cached = globals
+            .string_literals
+            .borrow()
+            .get(index)
+            .copied()
+            .unwrap_or(0);
+        if cached != 0 {
+            return Ok(cached);
+        }
+        let pointer = unsafe { crate::strings::Cx::current() }
+            .string(text)?
+            .as_raw();
+        let mut literals = globals.string_literals.borrow_mut();
+        if literals.len() <= index {
+            literals.resize(index + 1, 0);
+        }
+        literals[index] = pointer;
+        Ok(pointer)
+    })
+}
+
+/// A bounded cache for the pure primitive conversion. Publish a new entry only
+/// after construction succeeds; no root/cache borrow crosses allocation.
+pub(crate) fn integer_string(value: i64, create: impl FnOnce() -> R<usize>) -> R<usize> {
+    with(|globals| {
+        let cached = globals.integer_text.get();
+        if cached != 0 && globals.integer_value.get() == value {
+            return Ok(cached);
+        }
+        let pointer = create()?;
+        globals.integer_value.set(value);
+        globals.integer_text.set(pointer);
+        Ok(pointer)
+    })
+}
+
 pub fn begin(count: usize) -> R<bool> {
     with(|globals| match globals.state.get() {
         2 => Ok(false),
@@ -110,6 +162,40 @@ mod tests {
         ALLOC_DESC,
         INDEX_DESC,
     ];
+    #[test]
+    fn literals_are_lazy_precise_roots_shared_between_calls_and_owned_by_each_instance() {
+        fn entry() -> R<i64> {
+            let first = string_literal(3, "shared🦀literal")?;
+            let allocated = unsafe { (&*crate::HEAP.get()).stats().allocated_since_gc };
+            let again = string_literal(3, "shared🦀literal")?;
+            assert_eq!(first, again);
+            assert_eq!(
+                unsafe { (&*crate::HEAP.get()).stats().allocated_since_gc },
+                allocated
+            );
+            for _ in 0..100 {
+                let mut cx = unsafe { Cx::current() };
+                cx.string("temporary garbage")?;
+                cx.poll()?;
+            }
+            let value = string_literal(3, "shared🦀literal")?;
+            assert_eq!(
+                unsafe { Str::from_raw(value) }.as_str(&unsafe { Cx::current() }),
+                "shared🦀literal"
+            );
+            Ok(1)
+        }
+        const POINTERS: &[bool] = &[
+            false, false, false, true, true, true, true, true, true, true,
+        ];
+        for _ in 0..2 {
+            let mut instance = Instance::new(DESCRIPTORS, POINTERS);
+            instance.set_stress(true);
+            for _ in 0..3 {
+                assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+            }
+        }
+    }
     #[test]
     fn globals_are_precise_roots_and_initialize_once_per_instance() {
         fn entry() -> R<i64> {

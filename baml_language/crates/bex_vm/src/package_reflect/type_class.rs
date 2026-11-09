@@ -1495,3 +1495,27 @@ mod renderability_tests {
         );
     }
 }
+
+/// Pack-time oracle for the native emitter's closed-world reflection tables:
+/// `t.implements(iface)` exactly as [`_implements`] answers it for a
+/// compile-time type (no runtime package is involved).
+pub(crate) fn frozen_implements(
+    vm: &BexVm,
+    ty: &bex_vm_types::RealizedTy,
+    interface: &bex_vm_types::RealizedTy,
+) -> bool {
+    let bex_vm_types::RealizedTy::Interface(head, args, assoc) = interface else {
+        return false;
+    };
+    resolve::ImplResolver::new(vm).type_implements(ty, *head, args, assoc)
+}
+
+/// Pack-time oracle for `Type.to_baml()`: the rendered source, or `None` when
+/// the interpreter would reject the type with a render-schema diagnostic.
+pub(crate) fn frozen_to_baml(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Option<String> {
+    let type_value = TypeValue::new(ty.clone());
+    if first_type_value_render_schema_error(vm, &type_value).is_some() {
+        return None;
+    }
+    Some(render_type_value_source(vm, &type_value))
+}

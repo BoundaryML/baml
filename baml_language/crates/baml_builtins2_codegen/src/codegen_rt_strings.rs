@@ -71,7 +71,7 @@ pub(super) fn generate(d: &NativeBuiltin) -> Result<String, String> {
                 d.path
             ));
         }
-        return Ok("#[inline(always)] fn rt_primitive_to_string(cx:&mut rt::strings::Cx,value:rt::Dyn)->rt::R<rt::strings::Str>{match value.tag{0=>rt::strings::integer_to_string(cx,value.payload as i64),1=>cx.string(if value.payload!=0{\"true\"}else{\"false\"}),2=>cx.string(\"null\"),4294967294=>rt::strings::float_to_string(cx,f64::from_bits(value.payload)),_=>unreachable!(\"compiler-checked scalar string conversion\")}}\n".into());
+        return Ok("#[inline(always)] fn rt_primitive_to_string(cx:&mut rt::strings::Cx,value:rt::Dyn)->rt::R<rt::strings::Str>{match value.tag{0=>rt::strings::integer_to_string(cx,value.payload as i64),1=>cx.string(if value.payload!=0{\"true\"}else{\"false\"}),2=>cx.string(\"null\"),rt::FLOAT_TAG=>rt::strings::float_to_string(cx,f64::from_bits(value.payload)),_=>unreachable!(\"compiler-checked scalar string conversion\")}}\n".into());
     }
 
     if matches!(

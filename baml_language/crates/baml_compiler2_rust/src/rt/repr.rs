@@ -15,6 +15,7 @@ pub(super) enum Repr {
     ListStr,
     ListListStr,
     Type(usize),
+    Reflected,
     ListPtr(usize),
     Dyn(usize),
     Tagged,
@@ -74,6 +75,8 @@ impl Repr {
     pub(super) fn slot(self) -> Gen<&'static str> {
         Ok(match self {
             Self::Int => "i64",
+            Self::Enum(_) | Self::Naming => "usize",
+            Self::Null => "rt::maps::Null",
             Self::Float => "f64",
             Self::Bool => "bool",
             Self::Str => "rt::lists::Ptr",
@@ -106,6 +109,7 @@ impl Repr {
                 | Self::Bigint
                 | Self::Bytes
                 | Self::Opaque
+                | Self::Reflected
                 | Self::Ptr(_)
                 | Self::List(_)
                 | Self::ListInt

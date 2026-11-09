@@ -21,13 +21,20 @@ impl registry::Feature for Feature {
         if !baml_builtins2_codegen::supports_rt(&name)
             || !matches!(
                 name.as_str(),
-                "baml.String.to_utf8" | "baml.String.from_utf8" | "baml.Uint8Array._to_string_impl"
+                "baml.String.to_utf8"
+                    | "baml.String.from_utf8"
+                    | "baml.Uint8Array._to_string_impl"
+                    | "baml.Uint8Array.from_array"
+                    | "baml.Uint8Array.length"
             )
         {
             return None;
         }
         Some((|| {
-            if name == "baml.String.from_utf8" {
+            if matches!(
+                name.as_str(),
+                "baml.String.from_utf8" | "baml.Uint8Array.from_array"
+            ) {
                 let error = super::strings::builtin_class(plan, "baml.errors.InvalidArgument")?;
                 plan.add(error)?;
             }
@@ -46,7 +53,7 @@ impl registry::Feature for Feature {
         if let Rvalue::Len(place) = value {
             let (value, repr) = e.place(place).ok()?;
             if repr == Repr::Bytes {
-                return Some(Ok((format!("*((({value})+8) as *const i64)"), Repr::Int)));
+                return Some(Ok((format!("*((({value})+16) as *const i64)"), Repr::Int)));
             }
         }
         let Rvalue::Uint8Array(bytes) = value else {
@@ -67,6 +74,8 @@ impl registry::Feature for Feature {
         values: &[(String, Repr)],
     ) -> Option<Gen<(String, Repr)>> {
         let (adapter, input, output) = match name {
+            "baml.Uint8Array.from_array" => ("rt_bytes_from_array", Repr::ListInt, Repr::Bytes),
+            "baml.Uint8Array.length" => ("rt_bytes_length", Repr::Bytes, Repr::Int),
             "baml.String.to_utf8" => ("rt_string_to_utf8", Repr::Str, Repr::Bytes),
             "baml.String.from_utf8" => ("rt_string_from_utf8", Repr::Bytes, Repr::Str),
             "baml.Uint8Array._to_string_impl" => ("rt_bytes_to_string", Repr::Bytes, Repr::Str),
@@ -81,7 +90,7 @@ impl registry::Feature for Feature {
             } else {
                 values[0].0.clone()
             };
-            let error = if name == "baml.String.from_utf8" {
+            let error = if matches!(name, "baml.String.from_utf8" | "baml.Uint8Array.from_array") {
                 format!(
                     ",{}",
                     e.descriptors

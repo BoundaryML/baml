@@ -58,16 +58,25 @@ impl Plan<'_> {
         let definitions: Vec<_> = body
             .blocks
             .iter()
-            .flat_map(|b| &b.statements)
-            .filter_map(|s| match &s.kind {
+            .enumerate()
+            .flat_map(|(block, b)| {
+                b.statements
+                    .iter()
+                    .enumerate()
+                    .map(move |(at, s)| (block, at, s))
+            })
+            .filter_map(|(block, at, s)| match &s.kind {
                 StatementKind::Assign {
                     destination: Place::Local(l),
                     value,
-                } if l.0 == i => Some(value),
+                } if l.0 == i => Some((block, at, value)),
                 _ => None,
             })
             .collect();
-        if definitions.iter().any(|v| matches!(v, Rvalue::LoadType(_))) {
+        if definitions
+            .iter()
+            .any(|(_, _, v)| matches!(v, Rvalue::LoadType(_)))
+        {
             if i == 0
                 || body.locals[i].name.is_some()
                 || body.blocks.iter().any(|b| {
@@ -77,11 +86,11 @@ impl Plan<'_> {
                         .is_some_and(|(p, _)| matches!(p,Place::Local(l) if l.0 == i))
                 })
             {
-                return Err(no("runtime type value"));
+                return Ok(Repr::Reflected);
             }
 
             let mut code = None;
-            for value in definitions {
+            for (_, _, value) in definitions {
                 let Rvalue::LoadType(ty) = value else {
                     return Err(no("dynamic type storage"));
                 };
@@ -101,9 +110,9 @@ impl Plan<'_> {
         // managed environment irrespective of signature.
         if depth < body.locals.len() && i != 0 && body.locals[i].name.is_none() {
             let mut inferred = None;
-            for value in definitions {
+            for (block, at, value) in definitions {
                 if let Rvalue::Use(Operand::Copy(place) | Operand::Move(place)) = value {
-                    if let Ok(repr) = self.storage_repr(body, place, depth + 1) {
+                    if let Ok(repr) = self.list_field_repr(body, place, block, at, depth + 1) {
                         if inferred.is_some_and(|previous| previous != repr) {
                             return Ok(Repr::Closure);
                         }
@@ -190,10 +199,10 @@ impl registry::Feature for Feature {
                             .ok_or_else(|| no("lambda identity"))?,
                     )
                     .ok_or_else(|| no("unlinked lambda"))?;
-                if all.contains_key(&object) {
-                    continue;
-                }
-                all.insert(object, std::rc::Rc::new(lambda.clone()));
+                // Prepared tests already register borrowed lambda MIR. Keep it
+                // shared instead of cloning every corpus lambda for each leaf.
+                all.entry(object)
+                    .or_insert_with(|| std::rc::Rc::new(lambda.clone()));
                 if let super::MirFunctionKind::Bytecode(body) = &lambda.kind {
                     plan.lambda_bodies.insert(body as *const _ as usize, object);
                 }
@@ -205,12 +214,6 @@ impl registry::Feature for Feature {
             register(db, plan, all, &mir)?;
         }
         Ok(Vec::new())
-    }
-    fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
-        match event {
-            registry::Admission::Class { generic: true, .. } => Err(no("generic class or cleanup")),
-            _ => Ok(()),
-        }
     }
     fn call(
         &self,
@@ -262,7 +265,9 @@ impl registry::Feature for Feature {
         matches!(
             term,
             Some(Terminator::Call {
-                callee: Operand::Copy(_) | Operand::Move(_),
+                callee: Operand::Copy(_)
+                    | Operand::Move(_)
+                    | Operand::Constant(super::Constant::GlobalItem(_)),
                 ntypeargs: 0,
                 has_trace: false,
                 ..
@@ -444,6 +449,7 @@ impl registry::Feature for Feature {
         Some((|| {
             let _ = type_arg_templates;
             let object = emitter.plan.lambda_targets[&(emitter.object, *lambda_idx)];
+            let capture_count = captures.len();
             let captures = captures
                 .iter()
                 .map(|cell| emitter.operand(cell).map(|v| v.0))
@@ -453,7 +459,19 @@ impl registry::Feature for Feature {
                 "rt::closures::new({}, {object},closure{object},&[{captures}])",
                 emitter.plan.closure_descriptors().unwrap().1
             ));
-            Ok((ordinary, Repr::Closure))
+            let environment = if capture_count <= 6 && super::tasks::private_environment(emitter) {
+                format!(
+                    "if OBSERVE{{{ordinary}}}else{{static META:rt::closures::PrivateMetadata=rt::closures::PrivateMetadata::new({object},closure{object},{capture_count});private_env_{}_{}=rt::closures::PrivateEnvironment::new(&META,{},[{captures}]);private_env_{}_{}.as_raw()}}",
+                    emitter.block,
+                    emitter.statement,
+                    emitter.plan.closure_descriptors().unwrap().0 + 3,
+                    emitter.block,
+                    emitter.statement
+                )
+            } else {
+                ordinary
+            };
+            Ok((environment, Repr::Closure))
         })())
     }
     fn statement(
@@ -486,7 +504,10 @@ impl registry::Feature for Feature {
         term: &Terminator<'_>,
     ) -> Option<Gen<String>> {
         let Terminator::Call {
-            callee: callee @ (Operand::Copy(_) | Operand::Move(_)),
+            callee:
+                callee @ (Operand::Copy(_)
+                | Operand::Move(_)
+                | Operand::Constant(super::Constant::GlobalItem(_))),
             args,
             ntypeargs: 0,
             destination,
@@ -781,6 +802,7 @@ pub(super) fn capture_type(ty: &baml_type::RuntimeTy<usize>) -> Gen<String> {
         T::Float => "Float".into(),
         T::Enum(id) => format!("Enum(CAPTURE_D{id})"),
         T::Bigint => "Bigint".into(),
+        T::Type => "Type".into(),
         T::Int => "Int".into(),
         T::Bool => "Bool".into(),
         T::String => "String".into(),

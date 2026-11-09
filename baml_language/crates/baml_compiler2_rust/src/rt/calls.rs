@@ -52,7 +52,7 @@ impl Emitter<'_, '_> {
                     .index
                     .function(self.db, *f)
                     .ok_or_else(|| no("call"))?;
-                if self.plan.index.display(c) == "baml.json.decode" {
+                if self.plan.index.builtin_path(c) == "baml.json.decode" {
                     let ordered;
                     let args = if let Some(layout) = argument_layout {
                         let mapping = layout.map_to(&info.argument_layout()).map_err(no)?;
@@ -81,15 +81,23 @@ impl Emitter<'_, '_> {
                     let text = self.coerce(self.operand(&args[1])?, Repr::Str)?;
                     let telemetry_site = self.telemetry_site(c);
                     let (destination, _) = crate::analysis::continuation(term).unwrap();
-                    out.push_str(&self.assign(
-                        destination,
-                        (
-                            self.fallible(&format!(
-                                "f{c}_json{code}({telemetry_site},{text},{naming},{omitted})"
-                            )),
-                            Repr::Tagged,
-                        ),
-                    )?);
+                    let decoded = self.fallible(&format!(
+                        "f{c}_json{code}({telemetry_site},{text},{naming},{omitted})"
+                    ));
+                    let mut value = (decoded, Repr::Tagged);
+                    if let Some(ty) = code
+                        .checked_sub(super::json_lists::TYPE_BASE)
+                        .and_then(|i| self.plan.json_list_types.get(i))
+                    {
+                        let repr = self.plan.template_repr(ty)?;
+                        // Decode validates the explicit type argument. MIR may
+                        // widen literal unions in the destination; first unpack
+                        // the actual schema layout, then apply that static coercion.
+                        if repr.growing() {
+                            value = (self.coerce(value, repr)?, repr);
+                        }
+                    }
+                    out.push_str(&self.assign(destination, value)?);
                     return Ok(out);
                 }
                 let types = args[..*ntypeargs]
@@ -111,7 +119,7 @@ impl Emitter<'_, '_> {
                         })
                         .collect::<Gen<_>>()?;
                 }
-                let name = self.plan.index.display(c);
+                let name = self.plan.index.builtin_path(c);
                 let expression = if let Some(result) = registry::call(self, name, &types, &values) {
                     result?
                 } else if name == "baml._to_string_default"
@@ -152,7 +160,9 @@ impl Emitter<'_, '_> {
                     if values.len() != 2 {
                         return Err(no("equality arity"));
                     }
-                    if let Some(other) = values.iter().find(|v| v.1 != Repr::Null)
+                    if values.iter().all(|v| v.1 == Repr::Null) {
+                        ("true".into(), Repr::Bool)
+                    } else if let Some(other) = values.iter().find(|v| v.1 != Repr::Null)
                         && values.iter().any(|v| v.1 == Repr::Null)
                     {
                         (Self::null_test(other), Repr::Bool)
@@ -225,7 +235,7 @@ fn admit_call(db: &dyn Db, plan: &Plan<'_>, term: Option<&Terminator<'_>>) -> Ge
                 .index
                 .function(db, *f)
                 .ok_or_else(|| no("unlinked call"))?;
-            let name = plan.index.display(callee);
+            let name = plan.index.builtin_path(callee);
             if name == "baml.json.decode" {
                 reach.json_decode = Some(callee);
             } else if baml_builtins2_codegen::supports_rt(name) {

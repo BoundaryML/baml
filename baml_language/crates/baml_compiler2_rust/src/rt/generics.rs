@@ -79,6 +79,13 @@ pub(super) fn expand<'db>(
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
             };
+            // These checks need no specialization. Reject a reachable body
+            // before expanding its (possibly recursive) generic dependencies.
+            registry::admit(registry::Admission::Function(&mir))?;
+            for local in &body.locals {
+                registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;
+            }
+            super::exceptions::prepare_contexts(db, plan, body)?;
             // Materialized lambdas belong to this concrete parent instance.
             // Keep the source identity for positions/telemetry, but never share
             // typed MIR or capture layouts between distinct generic frames.
@@ -268,6 +275,20 @@ pub(super) fn expand<'db>(
             }
             for t in constants {
                 plan.candidate(&t);
+                // Erased assertion equality and thrown enum values need capture
+                // tags even when a literal never occupies an enum-typed local.
+                if matches!(t, RuntimeTy::Enum(_)) {
+                    plan.record_ty(&t)?;
+                }
+            }
+            for (repr, method, callee, frame) in super::map_keys::discover(db, plan, body)? {
+                let target = instance(db, plan, all, &mut instances, callee, frame)?;
+                plan.key_callbacks
+                    .entry(repr)
+                    .or_default()
+                    .insert(method, target);
+                plan.key_edges.entry(object).or_default().insert(target);
+                queue.push_back(target);
             }
             for ty in plan.concrete_types.clone() {
                 let RuntimeTy::Class(_, args) = &ty else {
@@ -325,6 +346,11 @@ pub(super) fn expand<'db>(
                             _ => None,
                         };
                         if let Some((iface, method, receiver, method_args)) = virtual_value {
+                            if super::map_keys::virtual_method(plan, b.terminator.as_ref().unwrap())
+                                .is_some()
+                            {
+                                continue;
+                            }
                             plan.remember_heads(&iface.to_template().substitute_symbolic(&[]));
                             let candidates = dispatch_candidates(plan, receiver.as_ref());
                             let mut targets = Vec::new();
@@ -419,6 +445,25 @@ pub(super) fn expand<'db>(
                         let Some((callee, _)) = plan.index.function(db, *f) else {
                             continue;
                         };
+                        // Join's structural elements use the same nested ToString
+                        // witnesses as string.from. Link overrides before admission.
+                        if plan.index.display(callee) == "baml.Array.join" {
+                            let element = operand_ty(plan, object, body, &args[*ntypeargs])
+                                .and_then(|ty| plan.repr(&ty).ok())
+                                .and_then(|repr| plan.element(repr).ok());
+                            if !matches!(
+                                element,
+                                Some(Repr::Int | Repr::Float | Repr::Bool | Repr::Str)
+                            ) {
+                                plan.structural_strings = true;
+                            }
+                        }
+                        if matches!(
+                            plan.index.display(callee),
+                            "baml._equals_structural_default" | "baml.ops.equals_equals"
+                        ) {
+                            plan.structural_equals = true;
+                        }
                         if plan.index.display(callee) == "baml._to_string_default" {
                             let ty = operand_ty(plan, object, body, &args[*ntypeargs]);
                             if !matches!(
@@ -437,6 +482,8 @@ pub(super) fn expand<'db>(
                         }
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || lists::handles(plan.index.display(callee))
+                            || super::list_callbacks::handles(plan.index.display(callee))
+                            || super::list_scalars::handles(plan.index.display(callee))
                             || plan.index.display(callee).starts_with("baml.Map.")
                             || matches!(
                                 plan.index.display(callee),
@@ -449,6 +496,7 @@ pub(super) fn expand<'db>(
                             || plan.index.display(callee) == "baml.json.decode"
                             || super::tasks::native(plan.index.display(callee))
                             || super::callbacks::native(plan.index.display(callee))
+                            || super::reflection::native(plan.index.display(callee))
                         {
                             continue;
                         }
@@ -472,6 +520,11 @@ pub(super) fn expand<'db>(
                         self_arg,
                         ..
                     }) => {
+                        if super::map_keys::virtual_method(plan, b.terminator.as_ref().unwrap())
+                            .is_some()
+                        {
+                            continue;
+                        }
                         plan.remember_heads(&iface.to_template().substitute_symbolic(&[]));
                         let method_args = args[..*ntypeargs]
                             .iter()
@@ -519,6 +572,7 @@ pub(super) fn expand<'db>(
             }
         }
         super::formatting::register(db, plan, all, &mut instances, &mut queue)?;
+        super::equality::register(db, plan, all, &mut instances, &mut queue)?;
         if !queue.is_empty() {
             continue;
         }
@@ -1293,7 +1347,7 @@ impl Plan<'_> {
             }
         });
     }
-    fn candidate(&mut self, ty: &RuntimeTy) {
+    pub(super) fn candidate(&mut self, ty: &RuntimeTy) {
         let normalized = canonical_type(ty);
         let ty = &normalized;
         if matches!(ty,RuntimeTy::Class(head,args) if args.is_empty() && head.builtin_primitive(self.lang)==Some(baml_type::PrimitiveType::String))
@@ -1304,6 +1358,11 @@ impl Plan<'_> {
         if matches!(ty,RuntimeTy::Class(head,args) if args.is_empty() && head.builtin_primitive(self.lang)==Some(baml_type::PrimitiveType::Uint8Array))
         {
             self.candidate(&RuntimeTy::Uint8Array);
+            return;
+        }
+        if matches!(ty, RuntimeTy::Class(head, args) if args.is_empty() && head.is_lang_root_type(self.lang, baml_base::LangPackage::Reflect, "Type"))
+        {
+            self.candidate(&RuntimeTy::Type);
             return;
         }
         self.remember_heads(ty);
@@ -1349,8 +1408,8 @@ impl Plan<'_> {
                     self.concrete_types.push(ty.clone());
                 }
             }
-            RuntimeTy::Int
-            | RuntimeTy::Bigint
+            RuntimeTy::Type
+            | RuntimeTy::Int
             | RuntimeTy::Bool
             | RuntimeTy::String
             | RuntimeTy::Null

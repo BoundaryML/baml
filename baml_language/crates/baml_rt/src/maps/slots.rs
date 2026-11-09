@@ -16,6 +16,7 @@ pub unsafe trait Slot: Copy {
     }
 }
 unsafe impl Slot for i64 {}
+unsafe impl Slot for usize {}
 unsafe impl Slot for f64 {}
 unsafe impl Slot for bool {}
 unsafe impl Slot for Dyn {
@@ -25,6 +26,12 @@ unsafe impl Slot for Dyn {
     }
 }
 unsafe impl Slot for Str {
+    const POINTER: bool = true;
+    unsafe fn store(owner: *mut u8, target: *mut Self, value: Self) {
+        unsafe { write_ptr(owner, target.cast(), value.as_raw()) };
+    }
+}
+unsafe impl Slot for crate::closures::Closure {
     const POINTER: bool = true;
     unsafe fn store(owner: *mut u8, target: *mut Self, value: Self) {
         unsafe { write_ptr(owner, target.cast(), value.as_raw()) };
@@ -61,27 +68,92 @@ unsafe impl<const TAG: u64> Slot for Pointer<TAG> {
 /// callback-taking map operations so BAML hash/equality can allocate and yield.
 pub trait Key: Slot {
     fn hash(self, cx: &Cx) -> u64;
+    /// A managed immutable string uniquely identifying this key. The default
+    /// disables caching; only builtin string keys use this lookup shortcut.
+    fn cache_pointer(self) -> Option<Str> {
+        None
+    }
     fn equals(self, other: Self, cx: &Cx) -> bool;
 }
-pub(super) fn hash_bytes(bytes: &[u8]) -> u64 {
-    let mut hash = 0xcbf29ce484222325u64;
-    for &byte in bytes {
-        hash = (hash ^ byte as u64).wrapping_mul(0x100000001b3);
+#[inline(always)]
+fn mix(a: u64, b: u64) -> u64 {
+    let product = u128::from(a) * u128::from(b);
+    product as u64 ^ (product >> 64) as u64
+}
+#[inline(always)]
+pub(super) fn hash_bytes(mut bytes: &[u8]) -> u64 {
+    const A: u64 = 0xa0761d6478bd642f;
+    const B: u64 = 0xe7037ed1a0b428db;
+    let mut seed = A ^ (bytes.len() as u64).wrapping_mul(B);
+    while bytes.len() > 16 {
+        let a = u64::from_le_bytes(bytes[..8].try_into().unwrap());
+        let b = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
+        seed = mix(a ^ A, b ^ seed);
+        bytes = &bytes[16..];
     }
-    hash
+    let len = bytes.len();
+    let (a, b) = if len >= 8 {
+        (
+            u64::from_le_bytes(bytes[..8].try_into().unwrap()),
+            u64::from_le_bytes(bytes[len - 8..].try_into().unwrap()),
+        )
+    } else if len >= 4 {
+        (
+            u64::from(u32::from_le_bytes(bytes[..4].try_into().unwrap())),
+            u64::from(u32::from_le_bytes(bytes[len - 4..].try_into().unwrap())),
+        )
+    } else if len > 0 {
+        (
+            (u64::from(bytes[0]) << 16)
+                | (u64::from(bytes[len / 2]) << 8)
+                | u64::from(bytes[len - 1]),
+            0,
+        )
+    } else {
+        (0, 0)
+    };
+    mix(a ^ A, b ^ seed)
 }
 impl Key for Str {
+    #[inline(always)]
+    fn cache_pointer(self) -> Option<Str> {
+        Some(self)
+    }
+    #[inline(always)]
     fn hash(self, cx: &Cx) -> u64 {
         hash_bytes(self.text(cx).as_bytes())
     }
+    #[inline(always)]
     fn equals(self, other: Self, cx: &Cx) -> bool {
-        self.text(cx) == other.text(cx)
+        if self.as_raw() == other.as_raw() {
+            return true;
+        }
+        let a_text = self.text(cx);
+        let a = a_text.as_bytes();
+        let b_text = other.text(cx);
+        let b = b_text.as_bytes();
+        let len = a.len();
+        if len != b.len() {
+            return false;
+        }
+        // Map keys are often only a few bytes. Avoid a libc call and its
+        // register spills for these comparisons; every load stays in bounds.
+        if len >= 8 && len <= 16 {
+            a[..8] == b[..8] && a[len - 8..] == b[len - 8..]
+        } else if len >= 4 && len < 8 {
+            a[..4] == b[..4] && a[len - 4..] == b[len - 4..]
+        } else if len >= 1 && len < 4 {
+            a[0] == b[0] && a[len / 2] == b[len / 2] && a[len - 1] == b[len - 1]
+        } else {
+            a == b
+        }
     }
 }
 impl Key for i64 {
     fn hash(self, _: &Cx) -> u64 {
         hash_bytes(&self.to_ne_bytes())
     }
+    #[inline]
     fn equals(self, other: Self, _: &Cx) -> bool {
         self == other
     }
@@ -90,6 +162,7 @@ impl Key for bool {
     fn hash(self, _: &Cx) -> u64 {
         self as u64
     }
+    #[inline]
     fn equals(self, other: Self, _: &Cx) -> bool {
         self == other
     }
@@ -108,6 +181,7 @@ impl Key for f64 {
             .to_ne_bytes(),
         )
     }
+    #[inline]
     fn equals(self, other: Self, _: &Cx) -> bool {
         bex_vm_types::float_order::eq(self, other)
     }
@@ -120,6 +194,7 @@ impl Key for Null {
     fn hash(self, _: &Cx) -> u64 {
         0
     }
+    #[inline]
     fn equals(self, _: Self, _: &Cx) -> bool {
         true
     }
@@ -128,6 +203,7 @@ impl Key for Null {
 /// Scalar unions keep their discriminants in the entry. In particular, integer
 /// one, float one and boolean true are distinct keys, as in the VM.
 impl Key for Dyn {
+    #[inline]
     fn hash(self, cx: &Cx) -> u64 {
         let hash = match self.tag {
             0 => (self.payload as i64).hash(cx),
@@ -139,6 +215,7 @@ impl Key for Dyn {
         };
         hash.rotate_left(7) ^ self.tag
     }
+    #[inline]
     fn equals(self, other: Self, cx: &Cx) -> bool {
         if self.tag != other.tag {
             return false;

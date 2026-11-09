@@ -175,7 +175,9 @@ they are listed separately from the 6,054 selected leaves and category counts.
 admits each body's reachable closure separately, and packs native entries
 without an interpreter. Captured test environments and custom runners are
 explicitly unsupported until the native test host can reproduce them. An
-unsupported sibling or unrelated initializer does not reject admitted leaves.
+unsupported sibling body does not reject admitted leaves. Each leaf also admits
+and runs the linked program's initializer schedule before its test body, matching
+VM startup. An unsupported initializer therefore blocks every affected leaf.
 
 Each admitted leaf runs in a separate process on VM, RT and `BAML_GC_STRESS=1`.
 Outcomes, failure messages, stdout and stderr are compared; durations are not.
@@ -210,13 +212,19 @@ are identical. The RT emitter/runtime and RT-only builtin generators are exclude
 from that hash because the bytecode oracle never executes them. Native artifacts
 are built once per source snapshot and shared by the two RT modes.
 
-The initial CI-profile baseline has 6,054 selected leaves: **2 match, 6,052
-unsupported, 0 mismatch, 0 crash/timeout** (both native modes). The VM reference
-runs at CI's `medium` telemetry setting: 6,052 pass and two runner-tolerated
+The current CI-profile baseline has 6,054 selected leaves: **0 match, 6,054
+unsupported, 0 mismatch, 0 crash/timeout** (both native modes). Including the
+linked initializer schedule exposes a shared function-valued global blocker for
+6,040 leaves; the other 14 require custom test runners. The four matches in the
+previous baseline omitted initialization and were invalid coverage claims; this
+baseline correction keeps initializers enabled and preserves regression checks.
+These are first errors, so they hide blockers in the individual test bodies.
+The VM reference runs at CI's `medium` telemetry setting: 6,052 pass and two runner-tolerated
 failures. The corpus gate compares outcomes/messages/output at that same setting;
 it does not replace the differential suite's recording comparison. Admission
-is currently the limiting factor, including unknown/type arguments, closures,
-container representations and builtin exception classes.
+is currently limited first by startup and custom runners. A separate packed-test
+regression verifies initializer admission; the test host checks ordering and
+prevents a test body from running after initialization fails.
 
 Each admission also has the per-leaf process deadline. If the compiler stalls or aborts,
 the gate records that leaf as a crash/timeout and restarts the pack, reusing

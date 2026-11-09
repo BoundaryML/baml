@@ -91,13 +91,13 @@ fn emit(
     let element = e.plan.element(input)?;
     let callback = e.coerce(values[1].clone(), Repr::Closure)?;
     let desc = e.lists[&input] + usize::from(input.growing());
-    let value = e.coerce(
-        (
-            format!("*(((snapshot+16) as *const {}).add(i))", element.rust()),
-            element,
-        ),
-        Repr::Tagged,
-    )?;
+    // Managed slots can be wider than their Rust value (bool occupies eight
+    // bytes). Read through Slot so function-valued callbacks share the list ABI.
+    let slot = element.slot()?;
+    let item = format!(
+        "<{slot} as rt::lists::Slot>::read(((snapshot+16) as *const u8).add(i*<{slot} as rt::lists::Slot>::SIZE))"
+    );
+    let value = e.coerce((element.from_slot(&item), element), Repr::Tagged)?;
     let poll = format!("if i&15==0{{{};}}", e.fallible("cx.poll()"));
     let reduce = name == "baml.Array.reduce";
     let arg = if reduce { "acc,value" } else { "value" };
@@ -173,8 +173,8 @@ fn emit(
         code.push_str(&format!(
             "{};",
             e.fallible(&format!(
-                "out.push(&mut rt::strings::Cx::current(),{}::from_raw({selected}))",
-                output.slot()?
+                "out.push(&mut rt::strings::Cx::current(),{})",
+                output.to_slot(&selected)?
             ))
         ));
     } else if output.pointer() {

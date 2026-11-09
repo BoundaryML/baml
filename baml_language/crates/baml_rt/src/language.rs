@@ -35,6 +35,46 @@ pub fn map_key_not_found() -> Box<Error> {
     error.display_value = Some(r#"baml.panics.MapKeyNotFound {key: "(unknown)"}"#.into());
     error
 }
+pub const USER_PANIC_ID: u32 = 20;
+pub const SCALAR_PARSE_ID: u32 = 21;
+pub const HOST_UNAVAILABLE_ID: u32 = 22;
+pub const IO_ID: u32 = 23;
+pub const SCALAR_PARSE_DESC: Descriptor = Descriptor {
+    type_id: SCALAR_PARSE_ID + 3,
+    ..OVERFLOW_DESC
+};
+pub const USER_PANIC_DESC: Descriptor = Descriptor {
+    type_id: USER_PANIC_ID + 3,
+    ..OVERFLOW_DESC
+};
+pub const IO_DESC: Descriptor = Descriptor {
+    type_id: IO_ID + 3,
+    ..OVERFLOW_DESC
+};
+pub const HOST_UNAVAILABLE_DESC: Descriptor = Descriptor {
+    kind: Kind::Class,
+    size: 24,
+    ptr_slots: (8, 2),
+    tagged_slots: (0, 0),
+    elem: None,
+    type_id: HOST_UNAVAILABLE_ID + 3,
+    fields: &[
+        Field {
+            name: "resource",
+            offset: 8,
+            slot: SlotKind::Pointer,
+            type_id: 3,
+        },
+        Field {
+            name: "message",
+            offset: 16,
+            slot: SlotKind::Pointer,
+            type_id: 3,
+        },
+    ],
+    finalizer: None,
+};
+
 const MESSAGE_FIELDS: &[Field] = &[Field {
     name: "message",
     offset: 8,
@@ -127,6 +167,7 @@ pub struct Frame {
 }
 #[derive(Debug, Clone)]
 pub struct Error {
+    pub telemetry_history: crate::telemetry::evidence::History,
     pub telemetry_raise: Option<crate::telemetry::evidence::Raise>,
     pub telemetry_at: Option<btel_types::ClockInstant>,
     pub telemetry_caught: Option<(btel_types::TelemetryId, btel_types::TelemetryId)>,
@@ -136,11 +177,83 @@ pub struct Error {
     pub message: String,
     pub frames: Vec<Frame>,
     pub display_value: Option<String>,
+    pub thrown_value: Option<Dyn>,
+    /// Snapshot before leaving the fiber, where the Exit object is still rooted.
+    pub exit_code: Option<i64>,
+    pub context: usize,
+    pub cause: usize,
+    pub trace: Option<Vec<Frame>>,
+    pub diagnostic_value: Option<String>,
 }
 impl Error {
+    /// # Safety
+    /// The error's heap value must remain live in its owning runtime.
+    pub unsafe fn dynamic_value(&self) -> Dyn {
+        self.thrown_value.unwrap_or_else(|| Dyn {
+            tag: unsafe { (*(self.value as *const Header)).desc as u64 + 3 },
+            payload: self.value as u64,
+        })
+    }
+
+    pub fn chain(mut self: Box<Self>, cause: usize) -> Box<Self> {
+        if self.context == 0 && self.cause == 0 {
+            self.cause = cause;
+        }
+        self
+    }
+
+    /// Read immutable call-site metadata only after a failure leaves a body.
+    /// # Safety
+    /// `cx` and its frame chain still belong to this active call.
+    pub unsafe fn at_cx(
+        mut self: Box<Self>,
+        source: &'static Source,
+        site: usize,
+        cx: crate::calls::ErrorContext,
+    ) -> Box<Self> {
+        if self.trace.is_none() {
+            let mut trace = vec![Frame {
+                file: source.file,
+                function: source.function,
+                line: source.lines[site],
+            }];
+            let mut current = cx.frame;
+            while !current.is_null() {
+                let frame = unsafe { &*current };
+                if frame.parent.is_null() {
+                    break;
+                }
+                let parent = unsafe { &*frame.parent };
+                let index = parent
+                    .source
+                    .pcs
+                    .iter()
+                    .position(|p| *p == frame.caller_pc)
+                    .unwrap_or(0);
+                trace.push(Frame {
+                    file: parent.source.file,
+                    function: parent.source.function,
+                    line: parent.source.lines[index],
+                });
+                current = frame.parent;
+            }
+            trace.retain(|f| !f.file.starts_with("<builtin>/"));
+            self.trace = Some(trace);
+        }
+        self.chain(cx.handling()).at(source, site)
+    }
+    /// Start a new raise while preserving the carried value and original trace.
+    #[cold]
+    pub fn rethrow_at(mut self: Box<Self>, source: &'static Source, site: usize) -> Box<Self> {
+        self.telemetry_at = None;
+        crate::telemetry::evidence::raised(&mut self, source, site, None);
+        self
+    }
+
     #[cold]
     pub fn internal(message: String) -> Box<Self> {
         Box::new(Self {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             telemetry_caught: None,
@@ -148,6 +261,12 @@ impl Error {
             class: "InternalError",
             message,
             frames: Vec::new(),
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             display_value: None,
         })
     }
@@ -178,6 +297,7 @@ pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Bo
         };
         baml_rt_gc::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             telemetry_caught: None,
@@ -185,6 +305,12 @@ pub(crate) fn panic_value(desc: u32, class: &'static str, message: String) -> Bo
             class,
             message,
             frames: Vec::new(),
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             display_value: None,
         })
     }
@@ -396,7 +522,14 @@ pub fn driver_configured<T: DriverValue>(
     {
         session.finish_initialization_failure();
     } else {
-        session.finish(&result);
+        let clean_exit = Ok(Vec::new());
+        session.finish(
+            if matches!(&result, Err(error) if error.exit_code == Some(0)) {
+                &clean_exit
+            } else {
+                &result
+            },
+        );
     }
     match result {
         Ok(reports) => {
@@ -411,11 +544,20 @@ pub fn driver_configured<T: DriverValue>(
             }
         }
         Err(error) => {
+            if let Some(code) = error.exit_code {
+                let code =
+                    i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX });
+                std::process::exit(code);
+            }
             render_error(error, None);
             std::process::ExitCode::FAILURE
         }
     }
 }
+pub(crate) fn print_error(error: Box<Error>) {
+    render_error(error, None);
+}
+
 fn render_error(error: Box<Error>, background: Option<bool>) {
     let traceback = bex_vm_types::errors::format_traceback(
         error
@@ -425,7 +567,12 @@ fn render_error(error: Box<Error>, background: Option<bool>) {
             .filter(|f| error.value == 0 || !f.file.starts_with("<builtin>/"))
             .map(|f| {
                 let function = if background.is_some() {
-                    f.function.strip_prefix("user").unwrap_or(f.function)
+                    // The VM spells closures without a package segment
+                    // (`.<lambda(parent, i)>`); named functions keep theirs.
+                    f.function
+                        .strip_prefix("user")
+                        .filter(|rest| rest.starts_with(".<lambda("))
+                        .unwrap_or(f.function)
                 } else {
                     f.function
                 };
@@ -609,6 +756,13 @@ pub(crate) fn from_panic(panic: bex_vm_types::errors::VmPanic) -> Box<Error> {
         VmPanic::NegativeBitShift { message } => {
             panic_value(2, "baml.panics.NegativeBitShift", message)
         }
+        VmPanic::HostUnavailable { resource, message } => {
+            crate::io::host_unavailable(resource, message)
+        }
+        VmPanic::UserPanic { message } => {
+            panic_value(USER_PANIC_ID, "baml.panics.UserPanic", message)
+        }
+        VmPanic::AllocFailure { message } => panic_value(5, "baml.panics.AllocFailure", message),
         VmPanic::StackOverflow => {
             panic_value(4, "baml.panics.StackOverflow", "stack overflow".into())
         }
@@ -676,6 +830,7 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
             crate::emergency_alloc(5, std::mem::size_of::<MessagePanic>()).cast::<MessagePanic>();
         baml_rt_gc::write_ptr(object.cast(), &raw mut (*object).message, string as usize);
         Box::new(Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             telemetry_caught: None,
@@ -683,6 +838,12 @@ pub(crate) fn allocation_failure(bytes: usize) -> Box<Error> {
             class: "baml.panics.AllocFailure",
             message,
             frames: Vec::new(),
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             display_value: None,
         })
     }
@@ -773,6 +934,7 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
         object.add(8).cast::<i64>().write(index);
         object.add(16).cast::<i64>().write(length as i64);
         Box::new(Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             telemetry_caught: None,
@@ -780,6 +942,12 @@ pub(crate) fn index_error(index: i64, length: usize) -> Box<Error> {
             class: "baml.panics.IndexOutOfBounds",
             message,
             frames: Vec::new(),
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             display_value: Some(format!(
                 "baml.panics.IndexOutOfBounds {{index: {index}, length: {length}}}"
             )),
@@ -924,6 +1092,7 @@ mod list_tests {
 pub struct CaughtError {
     error: Box<Error>,
     root: baml_rt_tasks::IntegrationRoot,
+    context: baml_rt_tasks::IntegrationRoot,
 }
 impl CaughtError {
     /// # Safety
@@ -933,13 +1102,41 @@ impl CaughtError {
         let roots = crate::ROOTS.get();
         assert!(!roots.is_null(), "catch outside a runtime root task");
         let root = unsafe { (&*roots).root(error.value) };
-        Self { error, root }
+        let context = unsafe {
+            (&*roots).root(if error.context != 0 {
+                error.context
+            } else {
+                error.cause
+            })
+        };
+        Self {
+            error,
+            root,
+            context,
+        }
     }
     pub fn value(&self) -> usize {
         self.root.get()
     }
     pub fn error(&self) -> &Error {
         &self.error
+    }
+    pub fn dynamic_value(&self) -> Dyn {
+        unsafe { self.error.dynamic_value() }
+    }
+    pub fn context(&self) -> usize {
+        self.error.context
+    }
+    /// # Safety
+    /// Schema descriptors must match the language's Context/StackTrace layouts.
+    pub unsafe fn materialize(&mut self, schema: crate::exceptions::ContextSchema) -> R<usize> {
+        if self.error.context != 0 {
+            return Ok(self.error.context);
+        }
+        let context = unsafe { crate::exceptions::context(&self.error, schema) }?;
+        self.context = unsafe { (&*crate::ROOTS.get()).root(context) };
+        self.error.context = context;
+        Ok(context)
     }
     /// Transfer the error to its caller. As with any Result error, the caller
     /// must root it before performing another managed allocation.
@@ -1124,6 +1321,7 @@ fn division_zero(left: i64) -> Box<Error> {
         );
     }
     Box::new(Error {
+        telemetry_history: Default::default(),
         telemetry_raise: None,
         telemetry_at: None,
         telemetry_caught: None,
@@ -1131,6 +1329,12 @@ fn division_zero(left: i64) -> Box<Error> {
         class: "baml.panics.DivisionByZero",
         message: format!("division by zero: {left} / 0"),
         frames: vec![],
+        thrown_value: None,
+        exit_code: None,
+        context: 0,
+        cause: 0,
+        trace: None,
+        diagnostic_value: None,
         display_value: Some(format!("baml.panics.DivisionByZero {{dividend: {left}}}")),
     })
 }

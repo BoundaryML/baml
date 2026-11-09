@@ -7,6 +7,7 @@ use crate::{
 };
 pub use bex_vm_types::json_text::Reader;
 use std::collections::HashMap;
+pub mod enums;
 
 /// Decode a map once JSON syntax has been validated. `decode` consumes one
 /// value at the reader cursor, with the VM's jq-style path for diagnostics.
@@ -41,7 +42,7 @@ pub unsafe fn decode_at<V: Slot>(
     if reader.open_object().is_err() {
         return Err(crate::json::error(
             cx,
-            "expected object".into(),
+            "expected JSON object".into(),
             Some(path.into()),
         ));
     }
@@ -253,6 +254,13 @@ pub unsafe fn serialization_error(
     match value {
         Err(error) => error,
         Ok(value) => Box::new(crate::Error {
+            telemetry_history: Default::default(),
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             telemetry_caught: None,
             telemetry_raise: None,
             telemetry_at: None,
@@ -351,13 +359,15 @@ pub unsafe fn write_scalar(
 /// # Safety
 /// `list` is a live fixed integer list in the active instance.
 pub unsafe fn write_int_list(list: usize, out: &mut String) -> R<()> {
-    let len = unsafe { *((list + 8) as *const usize) };
+    let cx = unsafe { Cx::current() };
+    let list = unsafe { crate::lists::List::<i64>::from_raw(list) };
+    let len = list.len(&cx);
     out.push('[');
     for i in 0..len {
         if i != 0 {
             out.push(',');
         }
-        let value = unsafe { *(crate::list_slot(list, i as i64)?.cast::<i64>()) };
+        let value = list.get(&cx, i)?;
         out.push_str(&value.to_string());
     }
     out.push(']');
@@ -444,5 +454,30 @@ mod tests {
         let mut instance = crate::Instance::new(DESCRIPTORS, &[false, false, false, true, true]);
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 0);
+    }
+}
+
+pub struct Adapter {
+    pub tag: u64,
+    pub new: unsafe fn(&mut Cx) -> R<usize>,
+    pub insert: unsafe fn(&mut Cx, usize, Str, crate::Dyn) -> R<()>,
+}
+pub fn string_key_type(ty: &crate::telemetry::capture::Type) -> bool {
+    use crate::telemetry::capture::Type;
+    match ty {
+        Type::String | Type::LiteralString(..) => true,
+        Type::Union(m) => m.iter().all(string_key_type),
+        _ => false,
+    }
+}
+
+/// Whether a JSON property belongs to the declared string-key type.
+pub fn key_fits(ty: &crate::telemetry::capture::Type, key: &str) -> bool {
+    use crate::telemetry::capture::Type;
+    match ty {
+        Type::String => true,
+        Type::LiteralString(value, _) => *value == key,
+        Type::Union(m) => m.iter().any(|ty| key_fits(ty, key)),
+        _ => false,
     }
 }

@@ -103,7 +103,18 @@ pub(super) fn emit(
                 let compound = list_type.is_some()
                     || json_classes.iter().any(|c| {
                         plan.layouts[c].fields.iter().any(|r| {
-                            r.growing() || matches!(r, Repr::Float | Repr::Bool | Repr::Ptr(_))
+                            r.growing()
+                                || matches!(
+                                    r,
+                                    Repr::Float
+                                        | Repr::Bool
+                                        | Repr::Ptr(_)
+                                        | Repr::Map(_)
+                                        | Repr::MapStrInt
+                                        | Repr::MapStrPtr(_)
+                                        | Repr::Enum(_)
+                                        | Repr::Naming
+                                )
                         }) || {
                             let Object::Class(class) =
                                 &program.objects[bex_vm_types::ObjectIndex::from_raw(*c)]
@@ -434,6 +445,7 @@ pub(super) fn register_decoders(
             plan.record(repr)?;
             plan.json_maps.insert(repr, runtime);
         }
+        plan.json_decode_codes.insert(plan.type_code(ty)?);
     }
     Ok(())
 }

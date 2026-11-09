@@ -62,6 +62,7 @@ struct Plan<'a> {
     json_to_types: Vec<baml_compiler2_mir::TyTemplate>,
     lists: BTreeSet<Repr>,
     list_elements: std::cell::RefCell<Vec<ListElement>>,
+    list_narrowing_facts: BTreeMap<usize, BTreeMap<(usize, usize, usize), usize>>,
     json_types: Vec<Vec<usize>>,
     environments: bool,
     task_support: bool,
@@ -78,24 +79,39 @@ struct Plan<'a> {
     enums: BTreeSet<usize>,
     specialized_calls: BTreeMap<(usize, usize), usize>,
     type_codes: Vec<baml_compiler2_mir::TyTemplate>,
+    reflected: bool,
+    reflect_meta: bool,
+    /// Static class entry, class object and its substituted field types.
+    reflection_fields: Vec<(usize, usize, Vec<bex_vm_types::RuntimeTy>)>,
+    /// Callables `reflect.signature` can describe: parameter, return and
+    /// throws types in order.
+    reflection_signatures: Option<Vec<(usize, Vec<bex_vm_types::RuntimeTy>)>>,
+    reflection_types: Vec<RuntimeTy>,
     next_object: usize,
     class_instances: Vec<(usize, Vec<bex_vm_types::RuntimeTy>, usize)>,
     concrete_types: Vec<RuntimeTy>,
     heads: BTreeMap<baml_type::typetag::TypeTag, baml_type::DeclName>,
     dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
     function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
+    error_contexts: bool,
     structural_strings: bool,
     structural_string_calls: BTreeSet<(usize, usize, Repr)>,
     string_overrides: BTreeMap<Repr, usize>,
+    structural_equals: bool,
+    equals_overrides: BTreeMap<Repr, usize>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
     list_stringify: bool,
     list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,
     json_decode_codes: BTreeSet<usize>,
     json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
     map_types: std::cell::RefCell<Vec<maps::MapType>>,
+    key_callbacks: BTreeMap<Repr, BTreeMap<String, usize>>,
+    key_hasher: Option<usize>,
+    key_edges: BTreeMap<usize, BTreeSet<usize>>,
     json_maps: BTreeMap<Repr, RuntimeTy>,
     map_stringify: bool,
     globals: BTreeMap<usize, Repr>,
+    literal_ids: std::cell::RefCell<BTreeMap<String, usize>>,
     init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
 }
 struct Emitter<'a, 'db> {
@@ -113,6 +129,7 @@ struct Emitter<'a, 'db> {
     statement: usize,
     stack: stack::Placement,
     proven_arithmetic: BTreeSet<(usize, usize)>,
+    list_narrowings: BTreeMap<(usize, usize, usize), usize>,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
     compact_sites: Vec<u32>,
@@ -131,6 +148,7 @@ struct ProgramEmission<'a, 'db> {
 }
 
 mod admission;
+mod assertions;
 mod body;
 mod builtins;
 mod call_cost;
@@ -140,8 +158,11 @@ mod containers;
 mod diagnostics;
 mod dispatch;
 mod driver;
+mod equality;
 mod errors;
+mod exceptions;
 mod expressions;
+mod hashing;
 mod host;
 mod json;
 mod json_flat_lists;
@@ -149,13 +170,19 @@ mod json_lists;
 mod json_scalars;
 mod json_tree;
 mod layout;
+mod list_callbacks;
+mod list_narrowing;
+mod list_scalars;
 mod lists;
 mod loop_ranges;
+mod operators;
 mod places;
+mod reflection;
 mod repr;
 mod stack;
 mod statements;
 mod telemetry;
+mod trace;
 
 use body::recursive;
 use diagnostics::no;
@@ -167,6 +194,7 @@ mod calls;
 mod formatting;
 mod globals;
 mod map_json;
+mod map_keys;
 mod maps;
 mod regex;
 mod registry;
@@ -186,3 +214,14 @@ mod interface_fields;
 mod callbacks;
 
 mod structural;
+
+mod builtin_classes;
+mod calendar;
+mod io;
+mod io_clock;
+mod logging;
+mod native;
+mod provider;
+mod provider_schema;
+mod random;
+mod scalars;

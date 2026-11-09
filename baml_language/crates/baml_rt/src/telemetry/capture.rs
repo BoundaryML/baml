@@ -42,6 +42,7 @@ pub struct Declaration {
 }
 pub enum Shape {
     String,
+    Reflected(&'static crate::reflection::Program),
     Bigint,
     Uint8Array,
     RustType,
@@ -90,6 +91,7 @@ pub enum Type {
         ret: &'static Type,
         throws: &'static Type,
     },
+    Type,
     Int,
     LiteralInt(i64, Freshness),
     LiteralBool(bool, Freshness),
@@ -151,6 +153,7 @@ impl Type {
                 throws: Box::new(throws.owned(leaves, carried)),
             },
             Self::Bigint => OwnedType::Bigint,
+            Self::Type => OwnedType::Type,
             Self::Int => OwnedType::Int,
             Self::LiteralInt(v, f) => OwnedType::Literal(baml_type::Literal::Int(*v), *f),
             Self::LiteralBool(v, f) => OwnedType::Literal(baml_type::Literal::Bool(*v), *f),
@@ -234,6 +237,15 @@ impl Default for Scratch {
     }
 }
 impl Scratch {
+    pub fn type_values(&mut self, types: &[&Type]) -> Snapshot {
+        self.begin();
+        let mut b = self.pool.acquire_beyond_budget();
+        let root = b.arguments(types.iter(), |leaves, ty| {
+            let ty = ty.owned(leaves, &mut self.carried);
+            SnapshotValue::Type(leaves.ty(ty))
+        });
+        b.finish(root, &mut self.shaper)
+    }
     /// # Safety
     /// Every pointer belongs to the current heap and is live throughout this call.
     pub unsafe fn arguments(&mut self, shapes: &[Shape], values: &[Dyn]) -> Snapshot {
@@ -339,6 +351,12 @@ impl Scratch {
             _ => {}
         }
         let shape = &shapes[usize::try_from(value.tag - 3).expect("descriptor index")];
+        if let Shape::Reflected(program) = shape {
+            let index = unsafe { crate::reflection::index(value.payload as usize) };
+            let ty =
+                crate::reflection::capture_type(program, index).owned(leaves, &mut self.carried);
+            return SnapshotValue::Type(leaves.ty(ty));
+        }
         if let Shape::Enum { variants, .. } = shape {
             let result = match self.declaration(shapes, leaves, value.tag, depth + 1) {
                 SnapshotValue::Object(declaration) => {

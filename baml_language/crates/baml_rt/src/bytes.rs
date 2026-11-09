@@ -3,38 +3,22 @@ use crate::{
     R,
     strings::{Cx, Str},
 };
-use baml_rt_gc::{Descriptor, ElementLayout, Elements, Kind};
-pub const DESC: Descriptor = Descriptor {
-    kind: Kind::Opaque,
-    size: 8,
-    ptr_slots: (0, 0),
-    tagged_slots: (0, 0),
-    elem: Some(Elements {
-        offset: 16,
-        layout: ElementLayout::Scalar,
-    }),
-    type_id: 19,
-    fields: &[],
-    finalizer: None,
-};
+use baml_rt_gc::Descriptor;
+pub const DESC: Descriptor = crate::native::BYTES_LAYOUT;
 /// # Safety
 /// `value` is a rooted byte array owned by the active instance.
 pub unsafe fn data<'a>(value: usize) -> &'a [u8] {
-    unsafe { std::slice::from_raw_parts((value + 16) as *const u8, *((value + 8) as *const usize)) }
-}
-pub fn new(cx: &mut Cx, data: &[u8]) -> R<usize> {
-    let size = data
-        .len()
-        .checked_add(7)
-        .map(|n| n & !7)
-        .and_then(|n| n.checked_add(16))
-        .ok_or_else(|| crate::allocation_failure(usize::MAX))?;
-    let p = cx.alloc(16, size)?;
     unsafe {
-        p.add(8).cast::<usize>().write(data.len());
-        std::ptr::copy_nonoverlapping(data.as_ptr(), p.add(16), data.len());
+        let p = value as *const u8;
+        let len = p.add(16).cast::<usize>().read();
+        if len == 0 {
+            return &[];
+        }
+        std::slice::from_raw_parts(p.add(8).cast::<*const u8>().read().add(8), len)
     }
-    Ok(p as usize)
+}
+pub fn new(_cx: &mut Cx, data: &[u8]) -> R<usize> {
+    crate::native::bytes(data.to_vec())
 }
 pub fn encode(cx: &mut Cx, text: Str) -> R<usize> {
     let read = unsafe { Cx::current() };
@@ -54,4 +38,22 @@ pub unsafe fn decode(cx: &mut Cx, value: usize, error_desc: u32) -> R<Str> {
             ),
         )),
     }
+}
+
+/// # Safety
+/// `value` is a live, growing integer list in the current instance.
+pub unsafe fn from_array(cx: &mut Cx, value: usize, error_desc: u32) -> R<usize> {
+    let list = unsafe { crate::lists::List::<i64>::from_raw(value) };
+    let mut values = Vec::with_capacity(list.len(cx) as usize);
+    for i in 0..list.len(cx) {
+        values.push(list.get(cx, i)?);
+    }
+    let bytes = bex_vm_types::bytes::from_array(&values).map_err(|error| match error {
+        bex_vm_types::errors::VmRustFnError::Panic(panic) => crate::language::from_panic(panic),
+        bex_vm_types::errors::VmRustFnError::BamlError(
+            bex_vm_types::errors::VmBamlError::InvalidArgument { message },
+        ) => crate::language::panic_value(error_desc, "baml.errors.InvalidArgument", message),
+        error => crate::Error::internal(error.to_string()),
+    })?;
+    new(cx, &bytes)
 }

@@ -1,6 +1,13 @@
 use super::Emitter;
 
 impl Emitter<'_, '_> {
+    pub(super) fn error_at(&self, error: &str) -> String {
+        if self.plan.error_contexts {
+            format!("{error}.at_cx(&S{},{},cx)", self.object, self.site)
+        } else {
+            format!("{error}.at(&S{},{})", self.object, self.site)
+        }
+    }
     pub(super) fn mark(&mut self, pc: Option<usize>) {
         use bex_vm_types::bytecode::OpCode;
         if let Some(pc) = pc {
@@ -41,8 +48,25 @@ impl Emitter<'_, '_> {
                 .lower_to_compact_with_offsets()
                 .offset_of(bytecode.block_pcs[handler.0].start.expect("handler pc"))
                 .expect("compact handler");
+            let context = if self.plan.error_contexts {
+                let c = super::strings::builtin_class(self.plan, "baml.errors.Context")
+                    .expect("planned Context");
+                let value = self
+                    .coerce(
+                        ("context".into(), super::Repr::Ptr(c)),
+                        self.local(landing.context_local.0).expect("context local"),
+                    )
+                    .expect("context storage");
+                format!(
+                    "let context=rooted.materialize({})?;l{}={value};",
+                    super::exceptions::schema(self).expect("context schema"),
+                    landing.context_local.0
+                )
+            } else {
+                String::new()
+            };
             format!(
-                "{{let mut error={error};rt::telemetry::evidence::caught(&mut error,{pc}u32);if error.value==0{{return Err(error);}}let rooted=rt::CaughtError::new(error);let p=rooted.value();l{}=rt::Dyn{{tag:(*(p as *const baml_rt_gc::Header)).desc as u64+3,payload:p as u64}};caught{}=Some(rooted);{}}}",
+                "{{let mut error={error};rt::telemetry::evidence::caught(&mut error,{pc}u32);if error.value==0{{return Err(error);}}let mut rooted=rt::CaughtError::new(error);{context}l{}=rooted.dynamic_value();caught{}=Some(rooted);{}}}",
                 landing.error_local.0, handler.0, self.unwind_jumps[self.block]
             )
         } else {
@@ -56,7 +80,7 @@ impl Emitter<'_, '_> {
         ) {
             return format!("({code})?");
         }
-        let error = format!("e.at(&S{},{})", self.object, self.site);
+        let error = self.error_at("e");
         format!(
             "match ({code}){{Ok(v)=>v,Err(e)=>{{{}}}}}",
             self.raise(&error)
@@ -74,6 +98,7 @@ pub(super) fn thrown_display(
 ) -> super::Gen<String> {
     use super::Repr;
     Ok(match repr {
+        Repr::Float => format!("rt::format_float({value})"),
         Repr::Int | Repr::Bool => format!("format!(\"{{}}\",{value})"),
         Repr::Str => format!("format!(\"{{:?}}\",rt::strings::Str::from_raw({value}).to_owned())"),
         Repr::Bigint => format!("format!(\"{{}}n\",rt::tasks::bigint_value({value}))"),

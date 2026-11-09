@@ -32,6 +32,7 @@ fn store(pointer: *mut u8, field: &Field, value: Dyn) {
 }
 unsafe fn build(cx: &mut Cx, r: &mut Reader<'_>, ty: &Ty) -> Fast<Dyn> {
     Ok(match ty {
+        Ty::Map { .. } => return Err(Failure::Mismatch),
         Ty::Int | Ty::LiteralInt(_) => {
             let n = required(r.number()?.as_i64().and_then(baml_type::Int63::new))?.get();
             if matches!(ty,Ty::LiteralInt(w) if *w!=n) {

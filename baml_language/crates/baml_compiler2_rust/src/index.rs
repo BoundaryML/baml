@@ -391,7 +391,7 @@ impl<'p> ProgramIndex<'p> {
     }
 
     pub(crate) fn name(&self, object: usize) -> &str {
-        &self.names[object].0
+        &self.names[self.rt_origin(object)].0
     }
 
     /// Every method and interface body named `method`, whichever class or
@@ -404,6 +404,19 @@ impl<'p> ProgramIndex<'p> {
     /// [`crate::CompiledFunction::display`].
     pub(crate) fn display(&self, object: usize) -> &str {
         &self.names[self.rt_origins.get(&object).copied().unwrap_or(object)].1
+    }
+
+    /// Dispatch keys are declaration identities, independent of rendered
+    /// interface-body names such as `<(C as I)>.method`.
+    pub(crate) fn builtin_path(&self, object: usize) -> &str {
+        let function = self.info(object);
+        if let Some(key) = function.native_key.as_deref() {
+            return key;
+        }
+        if let bex_vm_types::types::FunctionKind::SysOp(op) = function.kind {
+            return op.path();
+        }
+        self.display(object)
     }
 
     fn key(&self, (root, path): DeclCoords) -> Option<(u32, DeclPath)> {

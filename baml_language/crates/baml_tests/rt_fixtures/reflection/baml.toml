@@ -1,0 +1,5 @@
+[package]
+name = "rt-reflection"
+
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"

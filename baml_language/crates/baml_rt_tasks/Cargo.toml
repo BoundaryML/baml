@@ -10,5 +10,8 @@ tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync", "macr
 tokio-util = { workspace = true, features = ["rt"] }
 libc.workspace = true
 
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+quanta.workspace = true
+
 [features]
 instrument = []

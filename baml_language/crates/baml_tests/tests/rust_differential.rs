@@ -13,6 +13,55 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "RuntimeListJoinOverrides",
+    "RuntimeListJoinMutation",
+    "RuntimeListJoinThrow",
+    "RuntimeListRopes",
+    "RuntimeListCallbacks",
+    "RuntimeListPublicSort",
+    "RuntimeListSortClasses",
+    "RuntimeListCallbackThrow",
+    "RuntimeListSortThrow",
+    "RuntimeListTaggedSort",
+    "RuntimeListSortMixedError",
+    "RuntimeListSortNullError",
+    "RuntimeListSortBoolError",
+    "RuntimeListPointerCallbacks",
+    "RuntimeListJsonMaps",
+    "RuntimeListJsonMapNonFinite",
+    "RuntimeListJsonMapError",
+    "RuntimeListJsonMapKeyError",
+    "RuntimeListJsonAliases",
+    "RuntimeListJsonMapCycle",
+    "RuntimeListGenericJson",
+    "RuntimeListNarrowedFields",
+    "RuntimeListSortSingletons",
+    "RuntimeListSortMutation",
+    "RuntimeListEmptyCallbacks",
+    "RuntimeListSavedTypeTest",
+    "RuntimeListValidationThrow",
+    "RuntimeListScalarBoundaries",
+    "RuntimeListInvalidCodePoint",
+    "RuntimeListFloatTruncationError",
+    "RuntimeListStringEntry",
+    "RtNativeMath",
+    "RtNativeBytes",
+    "RtNativeClock",
+    "RtNativeRandom",
+    "RtNativeFiles",
+    "RtNativeProcess",
+    "RtNativeCalendar",
+    "RtNativeIoValues",
+    "RtNativeReflection",
+    "RtNativeEquality",
+    "RtNativeEqualityOverrides",
+    "RtNativeReflectionRuntime",
+    "RtNativeReflectionMeta",
+    "RtNativeReflectionGlobals",
+    "RtNativeOperators",
+    "RtNativeHashing",
+    "RtNativeCallAny",
+    "RtNativeTraceOptions",
     "StackAllocation",
     "RuntimeListFloatConstants",
     "RuntimeListStructuralJoin",
@@ -50,6 +99,7 @@ const PROBES: &[&str] = &[
     "RtTaskErrors",
     "RtBackgroundTask",
     "RtBackgroundError",
+    "RtUnhandledOrder",
     "RtTokenComposition",
     "RtVirtualGenericClosures",
     "RtBoundGenericClosures",
@@ -327,6 +377,20 @@ fn is_list_probe(probe: &str) -> bool {
 
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
+        "RtNativeOperators" | "RtNativeHashing" | "RtNativeTraceOptions" => {
+            Some(manifest.join("rt_fixtures/operators"))
+        }
+        "RtNativeReflection"
+        | "RtNativeEquality"
+        | "RtNativeEqualityOverrides"
+        | "RtNativeReflectionRuntime"
+        | "RtNativeReflectionMeta"
+        | "RtNativeReflectionGlobals"
+        | "RtNativeCallAny" => Some(manifest.join("rt_fixtures/reflection")),
+        "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" | "RtNativeFiles"
+        | "RtNativeProcess" | "RtNativeCalendar" | "RtNativeIoValues" => {
+            Some(manifest.join("rt_fixtures/native"))
+        }
         "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
             Some(manifest.join("rt_fixtures/task_terminal"))
         }
@@ -338,9 +402,8 @@ fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf>
         | "RtVirtualOwnGenericClosure"
         | "RtNativeHigherOrderValue"
         | "RtDefaultCallbacks" => Some(manifest.join("rt_fixtures/closure_edges")),
-        "RtTaskErrors" | "RtBackgroundTask" | "RtBackgroundError" | "RtTokenComposition" => {
-            Some(manifest.join("rt_fixtures/task_edges"))
-        }
+        "RtTaskErrors" | "RtBackgroundTask" | "RtBackgroundError" | "RtUnhandledOrder"
+        | "RtTokenComposition" => Some(manifest.join("rt_fixtures/task_edges")),
         "RtClosures" | "RtEmptyClosures" | "RtGenericClosures" | "RtGenericMethods"
         | "RtNativeCallback" | "RtBuiltinCallbacks" => Some(manifest.join("rt_fixtures/closures")),
         "RtSpawnAwait" | "RtTaskControls" | "RtTaskSleep" | "RtTaskModifiers"
@@ -438,6 +501,24 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         }
     }
     for probe in [
+        "RtNativeMath",
+        "RtNativeBytes",
+        "RtNativeClock",
+        "RtNativeRandom",
+        "RtNativeFiles",
+        "RtNativeProcess",
+        "RtNativeCalendar",
+        "RtNativeIoValues",
+        "RtNativeReflection",
+        "RtNativeEquality",
+        "RtNativeEqualityOverrides",
+        "RtNativeReflectionRuntime",
+        "RtNativeReflectionMeta",
+        "RtNativeReflectionGlobals",
+        "RtNativeOperators",
+        "RtNativeHashing",
+        "RtNativeCallAny",
+        "RtNativeTraceOptions",
         "RtClosures",
         "RtEmptyClosures",
         "RtGenericClosures",
@@ -452,6 +533,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         "RtTaskErrors",
         "RtBackgroundTask",
         "RtBackgroundError",
+        "RtUnhandledOrder",
         "RtTokenComposition",
         "RtVirtualGenericClosures",
         "RtBoundGenericClosures",
@@ -674,6 +756,41 @@ fn rt_call_cost_semantics_at_every_telemetry_level() {
     }
 }
 
+// Preserve both selectors after merging the list and shared runtime harnesses.
+// The bytecode oracle is mandatory even for a scoped backend run.
+fn select_backends(selected: Option<&str>, only_rt: bool) -> Vec<&'static Backend> {
+    BACKENDS
+        .iter()
+        .filter(|backend| {
+            backend.name == "bytecode"
+                || (!only_rt || backend.artifact_key == "rt")
+                    && selected
+                        .is_none_or(|names| names.split(',').any(|name| name == backend.name))
+        })
+        .collect()
+}
+
+#[test]
+fn backend_selection_preserves_both_scoping_controls_and_the_oracle() {
+    let names = |selected, rt_only| {
+        select_backends(selected, rt_only)
+            .into_iter()
+            .map(|b| b.name)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        names(Some("rt,rt-gc-stress"), false),
+        ["bytecode", "rt", "rt-gc-stress"]
+    );
+    assert_eq!(names(None, true), ["bytecode", "rt", "rt-gc-stress"]);
+    assert_eq!(
+        names(Some("rt-gc-stress"), true),
+        ["bytecode", "rt-gc-stress"]
+    );
+    assert_eq!(names(Some("compiled"), true), ["bytecode"]);
+    assert_eq!(names(None, false).len(), BACKENDS.len());
+}
+
 #[test]
 #[ignore = "builds generated Rust crates with cargo"]
 #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
@@ -700,18 +817,8 @@ fn rust_differential() {
             );
         }
     }
-    // The bytecode oracle is mandatory even for a scoped backend run.
-    let requested_rt_only = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
-    let backends: Vec<_> = BACKENDS
-        .iter()
-        .filter(|backend| {
-            backend.name == "bytecode"
-                || ((!requested_rt_only || backend.artifact_key == "rt")
-                    && selected
-                        .as_ref()
-                        .is_none_or(|names| names.split(',').any(|name| name == backend.name)))
-        })
-        .collect();
+    let only_rt = std::env::var("BAML_RUST_DIFF_RT_ONLY").is_ok_and(|v| v == "1");
+    let backends = select_backends(selected.as_deref(), only_rt);
     let rt_only = backends
         .iter()
         .all(|b| b.name == "bytecode" || b.artifact_key == "rt");
@@ -804,10 +911,31 @@ fn rust_differential() {
                             "Scalars"
                                 | "Hooked"
                                 | "ManualSpan"
+                                | "RuntimeListJoinOverrides"
+                                | "RuntimeListJoinMutation"
+                                | "RuntimeListJoinThrow"
                                 | "RtClosures"
                                 | "RtEmptyClosures"
                                 | "RtGenericClosures"
                                 | "RtGenericMethods"
+                                | "RtNativeMath"
+                                | "RtNativeBytes"
+                                | "RtNativeClock"
+                                | "RtNativeRandom"
+                                | "RtNativeFiles"
+                                | "RtNativeProcess"
+                                | "RtNativeCalendar"
+                                | "RtNativeIoValues"
+                                | "RtNativeReflection"
+                                | "RtNativeEquality"
+                                | "RtNativeEqualityOverrides"
+                                | "RtNativeReflectionRuntime"
+                                | "RtNativeReflectionMeta"
+                                | "RtNativeReflectionGlobals"
+                                | "RtNativeOperators"
+                                | "RtNativeHashing"
+                                | "RtNativeCallAny"
+                                | "RtNativeTraceOptions"
                                 | "RtNativeCallback"
                                 | "RtBuiltinCallbacks"
                                 | "RtSpawnAwait"
@@ -818,6 +946,7 @@ fn rust_differential() {
                                 | "RtTaskErrors"
                                 | "RtBackgroundTask"
                                 | "RtBackgroundError"
+                                | "RtUnhandledOrder"
                                 | "RtTokenComposition"
                                 | "RtVirtualGenericClosures"
                                 | "RtBoundGenericClosures"
@@ -1133,6 +1262,14 @@ fn report_known(build: &Path, probe: &str, mode: &str, reason: &str, detail: &st
     file.write_all(report.as_bytes()).unwrap();
 }
 
+/// Characters shown per telemetry diff row (`BAML_RUST_DIFF_WIDTH`).
+fn diff_width() -> usize {
+    std::env::var("BAML_RUST_DIFF_WIDTH")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(800)
+}
+
 fn diff(expected: &str, actual: &str, mode: &str) -> String {
     // Telemetry is sorted by its JSON row, with the multiplicity prefixed.
     // Avoid an edit-distance matrix or constructing an unbounded unified diff
@@ -1175,7 +1312,7 @@ fn diff(expected: &str, actual: &str, mode: &str) -> String {
         .to_string()
         .lines()
         .take(24)
-        .map(|line| line.chars().take(800).collect::<String>())
+        .map(|line| line.chars().take(diff_width()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -1195,6 +1332,18 @@ fn rt_type_dispatch_semantics() {
 
 #[path = "../rust_diff/setup_state.rs"]
 mod setup_state;
+
+#[path = "../rust_diff/testing.rs"]
+mod testing;
+
+#[test]
+#[ignore = "builds standalone packed tests with cargo"]
+fn rt_testing_stdlib_and_test_host() {
+    let _pack_guard = PACK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    testing::run();
+}
 
 #[test]
 #[ignore = "builds generated Rust crates with cargo"]
@@ -1216,4 +1365,130 @@ fn rt_json_runtime_semantics() {
         include_str!("../rust_diff/json_runtime.baml"),
     );
     type_dispatch::compare_json_telemetry();
+}
+
+#[test]
+#[ignore = "builds generated Rust crates with cargo"]
+fn rt_exception_semantics_at_every_telemetry_level() {
+    let selected = std::env::var("BAML_RT_EXCEPTION_ENTRIES")
+        .unwrap_or_else(|_| "main,uncaught,assertion_failure,contexts,chains,scalars,exit,exit_zero,exit_large,exit_negative,handles,throw_caught,enums,enum_throw,diagnostics,wide_throw,selectors,float_throw,bytes_throw,null_throw,positive_infinity_throw,negative_infinity_throw,nan_throw,approx_nan_epsilon,approx_nan_delta".into());
+    let entries = selected.split(',').collect::<Vec<_>>();
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest.parent().unwrap().parent().unwrap();
+    let build = Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-exception-parity");
+    std::fs::create_dir_all(&build).unwrap();
+    let source = build.join("source");
+    std::fs::create_dir_all(source.join("baml_src")).unwrap();
+    std::fs::write(
+        source.join("baml.toml"),
+        include_str!("../rust_diff/exceptions/baml.toml"),
+    )
+    .unwrap();
+    std::fs::write(
+        source.join("baml_src/main.baml"),
+        include_str!("../rust_diff/exceptions/main.baml"),
+    )
+    .unwrap();
+    let bytecode = build.join("bytecode");
+    pack_result(
+        &build.join("vm-build"),
+        workspace,
+        &source,
+        &bytecode,
+        entries.iter().copied(),
+        false,
+    )
+    .unwrap();
+    let run = |program: &Path, entry: &str, is_rt: bool, stress: bool, level: &str| {
+        let home = tempfile::tempdir_in(&build).unwrap();
+        let mut command = Command::new(program);
+        if !is_rt {
+            command.arg(entry);
+        }
+        command
+            .env("BAML_HOME", home.path())
+            .env("BAML_TELEMETRY", level)
+            .env("BAML_COMPILED_BODIES", "0")
+            .env("BAML_COMPILED_FRAMES", "0")
+            .env("BAML_GC_STRESS", if stress { "1" } else { "0" })
+            .env_remove("BOUNDARY_PROJECT")
+            .env_remove("BOUNDARY_API_URL")
+            .env("NO_COLOR", "1");
+        if level == "default" {
+            command.env_remove("BAML_TELEMETRY");
+        }
+        let output = run_probe(&mut command, Duration::from_secs(120)).unwrap();
+        assert!(
+            entry.starts_with("exit")
+                || output.status.success()
+                    == matches!(
+                        entry,
+                        "main"
+                            | "contexts"
+                            | "chains"
+                            | "scalars"
+                            | "handles"
+                            | "enums"
+                            | "diagnostics"
+                            | "selectors"
+                    ),
+            "{level}/{is_rt}/{stress}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let trace = telemetry::read(home.path());
+        assert_eq!(
+            trace.is_empty(),
+            level == "off",
+            "{level}: telemetry presence"
+        );
+        (
+            output,
+            known_telemetry_divergences::without_gc(&trace, "rt"),
+        )
+    };
+    for entry in entries {
+        let compiled = build.join(format!("rt-{entry}"));
+        pack_result(
+            &build.join("rt-build"),
+            workspace,
+            &source,
+            &compiled,
+            [entry],
+            true,
+        )
+        .unwrap();
+        for level in ["off", "low", "medium", "high", "default"] {
+            let (expected, trace) = run(&bytecode, entry, false, false, level);
+            for stress in [false, true] {
+                let (actual, observed) = run(&compiled, entry, true, stress, level);
+                assert_eq!(
+                    actual.status.code(),
+                    expected.status.code(),
+                    "{entry}/{level}/{stress}: status"
+                );
+                assert_eq!(
+                    actual.stdout, expected.stdout,
+                    "{entry}/{level}/{stress}: stdout"
+                );
+                assert_eq!(
+                    actual.stderr, expected.stderr,
+                    "{entry}/{level}/{stress}: stderr"
+                );
+                std::fs::write(
+                    build.join(format!("{entry}-{level}-{stress}-vm.txt")),
+                    &trace,
+                )
+                .unwrap();
+                std::fs::write(
+                    build.join(format!("{entry}-{level}-{stress}-rt.txt")),
+                    &observed,
+                )
+                .unwrap();
+                assert_eq!(
+                    observed, trace,
+                    "{entry}/{level}/{stress}: semantic telemetry"
+                );
+            }
+        }
+    }
 }

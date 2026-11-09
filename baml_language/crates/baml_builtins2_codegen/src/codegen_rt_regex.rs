@@ -114,7 +114,11 @@ mod tests {
         let (declarations, _, _) = crate::extract_native_builtins().unwrap();
         let requested = declarations
             .iter()
-            .filter(|d| super::supports(&d.path) || crate::codegen_rt_bytes::supports(&d.path))
+            .filter(|d| {
+                super::supports(&d.path)
+                    || crate::codegen_rt_bytes::supports(&d.path)
+                    || crate::codegen_rt_string_bytes::supports(&d.path)
+            })
             .map(|d| d.path.clone())
             .collect();
         let source = crate::generate_rt(&declarations, &requested).unwrap();

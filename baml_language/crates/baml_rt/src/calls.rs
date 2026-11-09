@@ -10,6 +10,12 @@ pub struct Context {
     poll_word: *const Cell<u8>,
 }
 
+pub struct ErrorFrame {
+    pub source: &'static crate::Source,
+    pub caller_pc: u32,
+    pub parent: *const ErrorFrame,
+}
+
 impl Context {
     /// # Safety
     /// Use only on the current fiber, inside its scoped runtime binding. Do not
@@ -44,5 +50,53 @@ impl Context {
         // The slow path keeps using the scoped binding: it can yield, deliver
         // cancellation and collect, with exactly the ordinary poll's errors.
         crate::language::poll()
+    }
+}
+
+/// Only programs observing error contexts carry immutable BAML frame links.
+#[derive(Clone, Copy)]
+pub struct ErrorContext {
+    base: Context,
+    pub(crate) frame: *const ErrorFrame,
+    pub(crate) handling: usize,
+}
+impl ErrorContext {
+    /// # Safety
+    /// Same fiber and lifetime requirements as Context::current.
+    #[inline(always)]
+    pub unsafe fn current() -> Self {
+        Self {
+            base: unsafe { Context::current() },
+            frame: std::ptr::null(),
+            handling: 0,
+        }
+    }
+    #[inline(always)]
+    pub fn check_stack(self) -> R<()> {
+        self.base.check_stack()
+    }
+    /// # Safety
+    /// Same rooting requirements as Context::poll.
+    #[inline(always)]
+    pub unsafe fn poll(self) -> R<()> {
+        unsafe { self.base.poll() }
+    }
+    pub fn error_frame(self, source: &'static crate::Source, site: usize) -> ErrorFrame {
+        ErrorFrame {
+            source,
+            caller_pc: crate::telemetry::caller_pc(site),
+            parent: self.frame,
+        }
+    }
+    /// # Safety
+    /// The frame must outlive all calls using the returned context.
+    pub unsafe fn with_frame(self, frame: &ErrorFrame) -> Self {
+        Self { frame, ..self }
+    }
+    pub fn with_handling(self, handling: usize) -> Self {
+        Self { handling, ..self }
+    }
+    pub fn handling(self) -> usize {
+        self.handling
     }
 }

@@ -8,6 +8,7 @@ pub enum BuiltinPipeline {
 }
 
 /// A single extracted `$rust_function` or `$rust_io_function` builtin.
+#[derive(Clone)]
 pub struct NativeBuiltin {
     /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.argv"`
     pub path: String,
@@ -92,6 +93,7 @@ pub enum VmUsage {
 }
 
 /// A single non-receiver parameter.
+#[derive(Clone)]
 pub struct Param {
     pub name: String,
     pub ty: BamlType,
@@ -100,6 +102,7 @@ pub struct Param {
 }
 
 /// Receiver (the `self` parameter) of a method.
+#[derive(Clone)]
 pub struct Receiver {
     /// The class name (e.g. `"Array"`, `"Map"`, `"String"`, `"Pdf"`).
     pub class_name: String,
