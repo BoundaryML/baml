@@ -23,8 +23,7 @@ impl registry::Feature for Feature {
         let (id, _) = plan.index.function(db, *function)?;
         // Operand representations are only known at emission, which rejects
         // overrides and layouts the shared walk cannot describe.
-        (plan.index.builtin_path(id) == STRUCTURAL_EQUALS)
-            .then(|| Ok(registry::Reach::default()))
+        (plan.index.builtin_path(id) == STRUCTURAL_EQUALS).then(|| Ok(registry::Reach::default()))
     }
 
     fn call(
@@ -38,11 +37,7 @@ impl registry::Feature for Feature {
             return None;
         }
         // Null tests and primitive string comparisons keep their direct forms.
-        if name == EQUALS_EQUALS
-            && values
-                .iter()
-                .any(|v| matches!(v.1, Repr::Null | Repr::Str))
-        {
+        if name == EQUALS_EQUALS && values.iter().any(|v| matches!(v.1, Repr::Null | Repr::Str)) {
             return None;
         }
         Some((|| {
@@ -79,7 +74,8 @@ fn reject_overrides(plan: &Plan<'_>) -> Gen<()> {
         tags.insert(plan.class(class).type_tag);
     }
     for &enumeration in &plan.enums {
-        if let Object::Enum(e) = &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(enumeration)]
+        if let Object::Enum(e) =
+            &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(enumeration)]
         {
             tags.insert(e.type_tag);
         }
@@ -98,7 +94,9 @@ fn reject_overrides(plan: &Plan<'_>) -> Gen<()> {
                 _ => continue,
             };
             if tags.contains(&head) {
-                return Err(no("structural equality with an explicit Equals implementation"));
+                return Err(no(
+                    "structural equality with an explicit Equals implementation",
+                ));
             }
         }
     }

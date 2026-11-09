@@ -352,8 +352,8 @@ pub(super) fn emit(out: &mut String, db: &dyn Db, plan: &Plan<'_>) -> Gen<()> {
     }
     // Spelling comes from the interpreter's own renderer over the linked
     // declarations, so displayed names cannot drift from `Type.to_string`.
-    let displays = bex_vm::telemetry::frozen::type_displays(plan.program, &anchored_types)
-        .map_err(no)?;
+    let displays =
+        bex_vm::telemetry::frozen::type_displays(plan.program, &anchored_types).map_err(no)?;
     out.push_str("static REFLECT_TYPES:&[rt::reflection::StaticType]=&[\n");
     for (ty, display) in plan.reflection_types.iter().zip(&displays) {
         let comparable = baml_type::Ty::from(ty.clone());
