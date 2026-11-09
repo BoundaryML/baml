@@ -36,6 +36,12 @@ pub enum Ty {
         name: &'static str,
         fields: &'static [Field],
     },
+    Map {
+        desc: u32,
+        value: &'static Ty,
+        new: unsafe fn(&mut Cx) -> R<usize>,
+        insert: unsafe fn(&mut Cx, usize, &str, Dyn) -> R<()>,
+    },
     Union(&'static [Member]),
 }
 pub struct Field {
@@ -243,6 +249,15 @@ impl Ty {
                 }
                 None
             }
+            Self::Map { value: element, .. } => {
+                let Some(values) = value.as_object() else {
+                    return Err(fail("expected object", path));
+                };
+                for (key, value) in values {
+                    element.check(value, &format!("{path}[{key:?}]"))?;
+                }
+                None
+            }
             Self::Class { name, fields, .. } => {
                 let Some(object) = value.as_object() else {
                     return Err(fail(
@@ -287,6 +302,7 @@ impl Ty {
             Self::LiteralFloat(n) => Value::from(*n),
             Self::LiteralBool(b) => Value::from(*b),
             Self::List { .. } => Value::Array(vec![]),
+            Self::Map { .. } => Value::Object(serde_json::Map::new()),
             Self::Class { fields, .. } => Value::Object(
                 fields
                     .iter()
@@ -338,6 +354,22 @@ impl Ty {
                     .expect("validated union")
                     .build(cx, value)
             }?,
+            Self::Map {
+                desc,
+                value: element,
+                new,
+                insert,
+            } => {
+                let pointer = unsafe { new(cx) }?;
+                for (key, value) in value.as_object().unwrap() {
+                    let value = unsafe { element.build(cx, value) }?;
+                    unsafe { insert(cx, pointer, key, value) }?;
+                }
+                Dyn {
+                    tag: *desc as u64 + 3,
+                    payload: pointer as u64,
+                }
+            }
             Self::Class {
                 desc,
                 bytes,
@@ -460,6 +492,7 @@ pub enum Shape {
     },
     Class(&'static [EncodeField]),
     Map {
+        string_keys: bool,
         len: unsafe fn(usize) -> usize,
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
@@ -477,6 +510,36 @@ enum PathStep {
     Index(usize),
     Key(Str),
 }
+fn write_string(out: &mut String, text: &str) {
+    out.push('"');
+    let mut start = 0;
+    let bytes = text.as_bytes();
+    while start < bytes.len() {
+        let end = start + bex_vm_types::json_text::plain_run(&bytes[start..]);
+        out.push_str(&text[start..end]);
+        if end == bytes.len() {
+            break;
+        }
+        match bytes[end] {
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            b'\n' => out.push_str("\\n"),
+            b'\r' => out.push_str("\\r"),
+            b'\t' => out.push_str("\\t"),
+            8 => out.push_str("\\b"),
+            12 => out.push_str("\\f"),
+            control => {
+                const HEX: &[u8; 16] = b"0123456789abcdef";
+                out.push_str("\\u00");
+                out.push(HEX[(control >> 4) as usize] as char);
+                out.push(HEX[(control & 15) as usize] as char);
+            }
+        }
+        start = end + 1;
+    }
+    out.push('"');
+}
+
 pub struct Encoder<'a> {
     shapes: &'static [Shape],
     cx: &'a mut Cx,
@@ -502,33 +565,7 @@ impl Encoder<'_> {
         crate::list_errors::serialization(self.cx, message, &path, reason)
     }
     fn quoted(&mut self, text: &str) {
-        self.out.push('"');
-        let mut start = 0;
-        let bytes = text.as_bytes();
-        while start < bytes.len() {
-            let end = start + bex_vm_types::json_text::plain_run(&bytes[start..]);
-            self.out.push_str(&text[start..end]);
-            if end == bytes.len() {
-                break;
-            }
-            match bytes[end] {
-                b'"' => self.out.push_str("\\\""),
-                b'\\' => self.out.push_str("\\\\"),
-                b'\n' => self.out.push_str("\\n"),
-                b'\r' => self.out.push_str("\\r"),
-                b'\t' => self.out.push_str("\\t"),
-                8 => self.out.push_str("\\b"),
-                12 => self.out.push_str("\\f"),
-                control => {
-                    const HEX: &[u8; 16] = b"0123456789abcdef";
-                    self.out.push_str("\\u00");
-                    self.out.push(HEX[(control >> 4) as usize] as char);
-                    self.out.push(HEX[(control & 15) as usize] as char);
-                }
-            }
-            start = end + 1;
-        }
-        self.out.push('"');
+        write_string(&mut self.out, text);
     }
     pub fn begin_class(&mut self) {
         self.out.push('{');
@@ -635,8 +672,7 @@ impl Encoder<'_> {
                         "non_finite",
                     ));
                 }
-                serde_json::to_writer(unsafe { self.out.as_mut_vec() }, &f)
-                    .expect("finite float JSON");
+                self.out.push_str(zmij::Buffer::new().format_finite(f));
             }
             tag => {
                 let pointer = value.payload as usize;
@@ -737,7 +773,16 @@ impl Encoder<'_> {
                         }
                         self.out.push('}');
                     }
-                    Shape::Map { len, entry } => {
+                    Shape::Map {
+                        string_keys,
+                        len,
+                        entry,
+                    } => {
+                        if !string_keys {
+                            return Err(
+                                self.error("JSON requires maps with string keys".into(), "map_key")
+                            );
+                        }
                         let len = unsafe { len(pointer) };
                         self.out.push('{');
                         for i in 0..len {
@@ -852,6 +897,50 @@ mod tests {
     use super::*;
     use crate::{Instance, language::*, lists};
     use baml_rt_gc::{Descriptor, Field as GcField, Kind, SlotKind};
+
+    #[test]
+    fn string_escaping_matches_serde_json() {
+        let ascii: String = (0..=127).map(char::from).collect();
+        for value in [
+            "",
+            ascii.as_str(),
+            "é🙂\u{2028}\u{2029}中",
+            "a\"b\\c\n🙂\0z",
+        ] {
+            let mut out = String::from("prefix");
+            write_string(&mut out, value);
+            assert_eq!(
+                out,
+                format!("prefix{}", serde_json::to_string(value).unwrap())
+            );
+        }
+    }
+
+    #[test]
+    fn float_format_matches_serde_json() {
+        let mut bits = 0u64;
+        for value in [
+            0.0,
+            -0.0,
+            f64::MIN,
+            f64::MAX,
+            f64::MIN_POSITIVE,
+            f64::from_bits(1),
+        ]
+        .into_iter()
+        .chain((0..10_000).map(|_| {
+            bits = bits.wrapping_mul(6364136223846793005).wrapping_add(1);
+            f64::from_bits(bits)
+        }))
+        .filter(|value| value.is_finite())
+        {
+            assert_eq!(
+                zmij::Buffer::new().format_finite(value),
+                serde_json::to_string(&value).unwrap()
+            );
+        }
+    }
+
     static DESCRIPTORS: &[Descriptor] = &[
         STRING_DESC,
         OVERFLOW_DESC,

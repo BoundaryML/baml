@@ -514,7 +514,7 @@ pub(super) fn implements(
 // 64 KiB runtime reserve cover their bounded locals, including observed entry.
 pub(super) fn inline_leaves(
     plan: &Plan<'_>,
-    all: &BTreeMap<usize, MirFunction<'_>>,
+    all: &BTreeMap<usize, super::TestMir<'_>>,
 ) -> BTreeSet<usize> {
     let mut leaves = plan
         .dispatches
@@ -544,7 +544,8 @@ pub(super) fn inline_leaves(
                 plan.dispatches.get(&(id, b.id.0)).is_some_and(|targets| {
                     !targets.is_empty()
                         && targets.iter().all(|(_, target)| {
-                            all.get(target).is_some_and(super::stack::small_leaf)
+                            all.get(target)
+                                .is_some_and(|mir| super::stack::small_leaf(mir))
                         })
                 })
             }

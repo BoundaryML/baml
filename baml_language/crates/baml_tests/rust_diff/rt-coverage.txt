@@ -158,8 +158,6 @@ compute::pure call 1m	pass
 compute::quick sort 3-way 1k	unsupported: list element
 concurrency::spawn await x10k	pass
 interfaces::polymorphic dispatch 100k	pass
-memory::allocation high retention	unsupported: list element
-memory::allocation low retention	unsupported: list element
 memory::binary trees 14	pass
 memory::cycles into live	unsupported: list element
 memory::cyclic churn	unsupported: list field element

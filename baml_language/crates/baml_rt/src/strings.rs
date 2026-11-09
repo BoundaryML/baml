@@ -663,10 +663,11 @@ pub fn code_points(cx: &Cx, value: Str) -> R<Vec<i64>> {
 /// # Safety
 /// `desc` and `desc+1` describe List<i64> and its buffer in the active instance.
 pub unsafe fn to_code_points(cx: &mut Cx, value: Str, desc: u32) -> R<usize> {
-    let values = code_points(cx, value)?;
-    let list = unsafe { crate::lists::List::<i64>::with_capacity(cx, desc, values.len()) }?;
-    for value in values {
-        list.push(cx, value)?;
+    let read = unsafe { Cx::current() };
+    let text = value.try_as_str(&read)?;
+    let list = unsafe { crate::lists::List::<i64>::with_capacity(cx, desc, value.char_len()) }?;
+    for character in text.chars() {
+        list.push(cx, i64::from(u32::from(character)))?;
     }
     Ok(list.as_raw())
 }

@@ -13,6 +13,37 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "RuntimeListJoinOverrides",
+    "RuntimeListJoinMutation",
+    "RuntimeListJoinThrow",
+    "RuntimeListRopes",
+    "RuntimeListCallbacks",
+    "RuntimeListPublicSort",
+    "RuntimeListSortClasses",
+    "RuntimeListCallbackThrow",
+    "RuntimeListSortThrow",
+    "RuntimeListTaggedSort",
+    "RuntimeListSortMixedError",
+    "RuntimeListSortNullError",
+    "RuntimeListSortBoolError",
+    "RuntimeListPointerCallbacks",
+    "RuntimeListJsonMaps",
+    "RuntimeListJsonMapNonFinite",
+    "RuntimeListJsonMapError",
+    "RuntimeListJsonMapKeyError",
+    "RuntimeListJsonAliases",
+    "RuntimeListJsonMapCycle",
+    "RuntimeListGenericJson",
+    "RuntimeListNarrowedFields",
+    "RuntimeListSortSingletons",
+    "RuntimeListSortMutation",
+    "RuntimeListEmptyCallbacks",
+    "RuntimeListSavedTypeTest",
+    "RuntimeListValidationThrow",
+    "RuntimeListScalarBoundaries",
+    "RuntimeListInvalidCodePoint",
+    "RuntimeListFloatTruncationError",
+    "RuntimeListStringEntry",
     "StackAllocation",
     "RuntimeListFloatConstants",
     "RuntimeListStructuralJoin",
@@ -804,6 +835,9 @@ fn rust_differential() {
                             "Scalars"
                                 | "Hooked"
                                 | "ManualSpan"
+                                | "RuntimeListJoinOverrides"
+                                | "RuntimeListJoinMutation"
+                                | "RuntimeListJoinThrow"
                                 | "RtClosures"
                                 | "RtEmptyClosures"
                                 | "RtGenericClosures"

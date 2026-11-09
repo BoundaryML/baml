@@ -412,11 +412,40 @@ mod tests {
             fields: &[],
             finalizer: Some(42),
         },
+        crate::lists::descriptor::<crate::lists::Ptr>(17),
+        crate::lists::buffer_descriptor::<crate::lists::Ptr>(18),
     ];
     static POINTERS: &[bool] = &[
         false, false, false, true, true, true, true, true, true, true, true, true, true, true,
-        true, true, true,
+        true, true, true, true, true,
     ];
+    #[test]
+    fn modifier_pointer_lists_follow_inline_and_grown_buffers() {
+        fn entry() -> R<i64> {
+            unsafe {
+                let mut cx = crate::strings::Cx::current();
+                let list = crate::lists::List::<crate::lists::Ptr>::new(&mut cx, 14)?;
+                assert!(pointer_list(list.as_raw()).is_empty());
+                let text = cx.string("modifier")?.as_raw();
+                for _ in 0..9 {
+                    list.push(&mut cx, crate::lists::Ptr::from_raw(text))?;
+                }
+                let tail = crate::lists::List::<crate::lists::Ptr>::with_capacity(&mut cx, 14, 1)?;
+                tail.push(&mut cx, crate::lists::Ptr::from_raw(text))?;
+                assert_eq!(pointer_list(tail.as_raw()), &[text]);
+                assert_eq!(pointer_list(list.as_raw()), vec![text; 9]);
+                let combined = concat_pointers(14, list.as_raw(), tail.as_raw())?;
+                collect()?;
+                assert_eq!(pointer_list(combined), vec![text; 10]);
+                Ok(1)
+            }
+        }
+        for stress in [false, true] {
+            let mut instance = crate::Instance::new(DESCRIPTORS, POINTERS);
+            instance.set_stress(stress);
+            assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+        }
+    }
     thread_local! {
         static FINALIZED: Cell<usize> = const { Cell::new(0) };
         static ROOT_TASK: Cell<usize> = const { Cell::new(0) };
@@ -842,26 +871,19 @@ pub unsafe fn spawn_options(detached: bool, limits: &[usize], tokens: &[usize]) 
 }
 
 /// # Safety
-/// The pointer names a live fixed-layout pointer array.
+/// The pointer names a rooted growing pointer list. The list cannot be mutated
+/// or suspended while the returned slice is borrowed.
 pub unsafe fn pointer_list<'a>(pointer: usize) -> &'a [usize] {
-    unsafe {
-        let length = *((pointer + 8) as *const usize);
-        std::slice::from_raw_parts((pointer + 16) as *const usize, length)
-    }
+    unsafe { crate::lists::pointer_values(pointer) }
 }
 /// # Safety
-/// Inputs are rooted fixed pointer arrays and desc is their common layout.
-pub unsafe fn concat_pointers(desc: u32, a: usize, b: usize) -> R<usize> {
+/// Inputs are rooted growing pointer lists sharing the same descriptor pair.
+pub unsafe fn concat_pointers(_desc: u32, a: usize, b: usize) -> R<usize> {
     unsafe {
-        let a = pointer_list(a);
-        let b = pointer_list(b);
-        let len = a.len() + b.len();
-        let p = crate::try_alloc(desc, 16 + len * 8)?;
-        p.add(8).cast::<usize>().write(len);
-        for (i, &value) in a.iter().chain(b).enumerate() {
-            baml_rt_gc::write_ptr(p, p.add(16 + i * 8).cast(), value);
-        }
-        Ok(p as usize)
+        let a = crate::lists::List::<crate::lists::Ptr>::from_raw(a);
+        let b = crate::lists::List::<crate::lists::Ptr>::from_raw(b);
+        a.concat(&mut crate::strings::Cx::current(), b)
+            .map(|list| list.as_raw())
     }
 }
 

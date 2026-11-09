@@ -294,13 +294,7 @@ impl Emitter<'_, '_> {
         }
     }
     fn map_snapshot(&self, map: &str, element: Repr, keys: bool) -> Gen<(String, Repr)> {
-        let repr = match element {
-            Repr::Int => Repr::ListInt,
-            Repr::Str => Repr::ListStr,
-            Repr::ListStr => Repr::ListListStr,
-            Repr::Ptr(c) => Repr::ListPtr(c),
-            _ => return Err(no("map snapshot list representation")),
-        };
+        let repr = self.plan.list_repr(element);
         let desc = *self
             .lists
             .get(&repr)

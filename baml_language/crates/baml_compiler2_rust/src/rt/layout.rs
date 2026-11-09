@@ -94,17 +94,14 @@ impl Plan<'_> {
                 self.add(c)?;
             }
             Repr::Map(_) => {
-                self.lists.insert(repr);
+                if !self.lists.insert(repr) {
+                    return Ok(());
+                }
                 let (key, value) = self.map_parts(repr)?;
                 self.record(key)?;
                 self.record(value)?;
                 for element in [key, value] {
-                    if let Repr::Ptr(c) = element {
-                        self.record(Repr::ListPtr(c))?;
-                    }
-                    if element == Repr::ListStr {
-                        self.record(Repr::ListListStr)?;
-                    }
+                    self.record(self.list_repr(element))?;
                 }
             }
             Repr::MapStrPtr(c) => {

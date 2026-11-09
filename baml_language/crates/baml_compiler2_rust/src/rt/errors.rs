@@ -74,6 +74,7 @@ pub(super) fn thrown_display(
 ) -> super::Gen<String> {
     use super::Repr;
     Ok(match repr {
+        Repr::Float => format!("rt::format_float({value})"),
         Repr::Int | Repr::Bool => format!("format!(\"{{}}\",{value})"),
         Repr::Str => format!("format!(\"{{:?}}\",rt::strings::Str::from_raw({value}).to_owned())"),
         Repr::Bigint => format!("format!(\"{{}}n\",rt::tasks::bigint_value({value}))"),

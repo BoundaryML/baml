@@ -12,7 +12,9 @@ fn run_case(string_result: bool) {
         .unwrap()
         .parent()
         .unwrap();
-    let build = Path::new(env!("CARGO_TARGET_TMPDIR")).join("rust-differential");
+    let build = std::env::var_os("BAML_RUST_DIFF_BUILD_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_TARGET_TMPDIR")).join("rust-differential"));
     let source = build.join("setup-state-source");
     std::fs::create_dir_all(source.join("baml_src")).unwrap();
     std::fs::write(

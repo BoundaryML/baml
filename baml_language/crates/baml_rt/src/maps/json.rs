@@ -351,13 +351,15 @@ pub unsafe fn write_scalar(
 /// # Safety
 /// `list` is a live fixed integer list in the active instance.
 pub unsafe fn write_int_list(list: usize, out: &mut String) -> R<()> {
-    let len = unsafe { *((list + 8) as *const usize) };
+    let cx = unsafe { Cx::current() };
+    let list = unsafe { crate::lists::List::<i64>::from_raw(list) };
+    let len = list.len(&cx);
     out.push('[');
     for i in 0..len {
         if i != 0 {
             out.push(',');
         }
-        let value = unsafe { *(crate::list_slot(list, i as i64)?.cast::<i64>()) };
+        let value = list.get(&cx, i)?;
         out.push_str(&value.to_string());
     }
     out.push(']');

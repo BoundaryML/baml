@@ -435,6 +435,7 @@ pub(super) fn register_decoders(
             plan.record(repr)?;
             plan.json_maps.insert(repr, runtime);
         }
+        plan.json_decode_codes.insert(plan.type_code(ty)?);
     }
     Ok(())
 }

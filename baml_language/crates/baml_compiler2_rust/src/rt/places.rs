@@ -57,7 +57,7 @@ impl Emitter<'_, '_> {
         }
     }
     pub(super) fn null_test(value: &(String, Repr)) -> String {
-        if value.1 == Repr::Tagged {
+        if matches!(value.1, Repr::Tagged | Repr::Dyn(_)) {
             format!("({}).tag==2", value.0)
         } else if value.1.pointer() || value.1 == Repr::Null {
             format!("({})==0", value.0)
@@ -67,6 +67,15 @@ impl Emitter<'_, '_> {
     }
     pub(super) fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
         let (value, source) = value;
+        // Static alias expansion may give an otherwise identical list two
+        // declared element types. Its managed buffer and alias identity stay
+        // intact when both sides use exactly the same element representation.
+        if source.growing()
+            && target.growing()
+            && self.plan.element(source)? == self.plan.element(target)?
+        {
+            return Ok(value);
+        }
         if source == target
             || (source == Repr::Null && target.pointer())
             || (matches!(source, Repr::Dyn(_)) && target == Repr::Tagged)
@@ -128,7 +137,7 @@ impl Emitter<'_, '_> {
                 ))
             }
             Place::Field { base, field } => {
-                let (base, repr) = self.place(base)?;
+                let (base, repr) = self.class_base(base)?;
                 if repr == Repr::Tagged {
                     let mut expression = format!("{{let value={base};match value.tag{{");
                     for (&class, layout) in &self.plan.layouts {
@@ -223,7 +232,25 @@ impl Emitter<'_, '_> {
                 Ok((self.coerce((value, Repr::Tagged), repr)?, repr))
             }
             Operand::Constant(Constant::Float(f)) => {
-                Ok((format!("f64::from_bits({}u64)", f.to_bits()), Repr::Float))
+                // Bytecode interns equal floats per function, including the
+                // two zero signs. Preserve the first pooled constant's bits.
+                let bits = self
+                    .plan
+                    .index
+                    .positions(self.object)
+                    .constants
+                    .iter()
+                    .find_map(|value| {
+                        if let bex_vm_types::ConstValue::Float(value) = value
+                            && value == f
+                        {
+                            Some(value.to_bits())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| f.to_bits());
+                Ok((format!("f64::from_bits({bits}u64)"), Repr::Float))
             }
             Operand::Constant(Constant::Bigint(i)) => Ok((
                 self.fallible(&format!(
@@ -313,7 +340,7 @@ impl Emitter<'_, '_> {
         match p {
             Place::Local(_) => Ok(format!("{dst}={src};\n")),
             Place::Field { base, field } => {
-                let (obj, Repr::Ptr(c)) = self.place(base)? else {
+                let (obj, Repr::Ptr(c)) = self.class_base(base)? else {
                     return Err(no("field store"));
                 };
                 let obj = self.fallible(&format!("rt::nonnull({obj})"));

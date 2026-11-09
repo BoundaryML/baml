@@ -7,7 +7,7 @@ use baml_compiler2_mir::{TyTemplate, TypeTest};
 pub(super) fn expand<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
     roots: Vec<usize>,
 ) -> Gen<()> {
     let mut queue = VecDeque::from(roots);
@@ -22,7 +22,7 @@ pub(super) fn expand<'db>(
             let Some(mut mir) = all.get(&object).cloned() else {
                 continue;
             };
-            specialize_bound_values(plan, object, &mut mir)?;
+            specialize_bound_values(plan, object, std::rc::Rc::make_mut(&mut mir))?;
             all.insert(object, mir.clone());
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
@@ -48,10 +48,10 @@ pub(super) fn expand<'db>(
                     let target = if plan.function_frames.contains_key(&object) {
                         let target = plan.next_object;
                         plan.next_object += 1;
-                        plan.index.rt_alias(target, origin);
+                        std::rc::Rc::make_mut(&mut plan.index).rt_alias(target, origin);
                         plan.function_frames
                             .insert(target, plan.function_frames[&object].clone());
-                        all.insert(target, lambda.clone());
+                        all.insert(target, std::rc::Rc::new(lambda.clone()));
                         target
                     } else {
                         origin
@@ -376,6 +376,19 @@ pub(super) fn expand<'db>(
                         let Some((callee, _)) = plan.index.function(db, *f) else {
                             continue;
                         };
+                        // Join's structural elements use the same nested ToString
+                        // witnesses as string.from. Link overrides before admission.
+                        if plan.index.display(callee) == "baml.Array.join" {
+                            let element = operand_ty(plan, object, body, &args[*ntypeargs])
+                                .and_then(|ty| plan.repr(&ty).ok())
+                                .and_then(|repr| plan.element(repr).ok());
+                            if !matches!(
+                                element,
+                                Some(Repr::Int | Repr::Float | Repr::Bool | Repr::Str)
+                            ) {
+                                plan.structural_strings = true;
+                            }
+                        }
                         if plan.index.display(callee) == "baml._to_string_default" {
                             let ty = operand_ty(plan, object, body, &args[*ntypeargs]);
                             if !matches!(
@@ -394,6 +407,8 @@ pub(super) fn expand<'db>(
                         }
                         if baml_builtins2_codegen::supports_rt(plan.index.display(callee))
                             || lists::handles(plan.index.display(callee))
+                            || super::list_callbacks::handles(plan.index.display(callee))
+                            || super::list_scalars::handles(plan.index.display(callee))
                             || plan.index.display(callee).starts_with("baml.Map.")
                             || matches!(
                                 plan.index.display(callee),
@@ -978,7 +993,7 @@ impl Plan<'_> {
 pub(super) fn instance<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
     instances: &mut Vec<(usize, Vec<RuntimeTy>, usize)>,
     callee: usize,
     frame: Vec<RuntimeTy>,
@@ -1018,8 +1033,8 @@ pub(super) fn instance<'db>(
     let id = plan.next_object;
     plan.next_object += 1;
     plan.function_frames.insert(id, captures);
-    all.insert(id, specialized);
-    plan.index.rt_alias(id, callee);
+    all.insert(id, std::rc::Rc::new(specialized));
+    std::rc::Rc::make_mut(&mut plan.index).rt_alias(id, callee);
     instances.push((callee, frame, id));
     Ok(id)
 }

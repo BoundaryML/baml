@@ -208,26 +208,63 @@ impl Emitter<'_, '_> {
                 Ok((self.fallible(&format!("{list}.median({cx})")), Repr::Float))
             }
             ("baml._is_primitive_array", 1) => Ok((
-                matches!(element, Repr::Int | Repr::Float | Repr::Str).to_string(),
+                if matches!(element, Repr::Tagged | Repr::Dyn(_)) {
+                    format!("{list}.is_primitive(&rt::strings::Cx::current())")
+                } else if matches!(element, Repr::Int | Repr::Float) {
+                    "true".into()
+                } else if element == Repr::Str {
+                    format!(
+                        "{list}.len(&rt::strings::Cx::current())==0 || {list}.get(&rt::strings::Cx::current(),0).unwrap().as_raw()!=0"
+                    )
+                } else {
+                    format!("{list}.len(&rt::strings::Cx::current())==0")
+                },
                 Repr::Bool,
             )),
             ("baml._rust_sort", 1) => {
-                if let Repr::List(id) = repr
-                    && self.plan.list_elements.borrow()[id]
-                        .members
-                        .contains(&Repr::Null)
-                {
-                    return Err(no("natural sort of nullable list elements"));
+                if matches!(element, Repr::Tagged | Repr::Dyn(_)) {
+                    return Ok((
+                        self.fallible(&format!(
+                            "{list}.natural_sort({cx},DESCRIPTORS).map(|v|v.as_raw())"
+                        )),
+                        repr,
+                    ));
                 }
                 let compare = match element {
                     Repr::Int => "a.cmp(&b)",
                     Repr::Float => "rt::float_cmp(a,b)",
                     Repr::Str => {
-                        "rt::strings::Str::from_raw(a.as_raw()).text(&read_cx).cmp(&rt::strings::Str::from_raw(b.as_raw()).text(&read_cx))"
+                        "rt::strings::Str::from_raw(a.as_raw()).try_as_str(&read_cx)?.cmp(rt::strings::Str::from_raw(b.as_raw()).try_as_str(&read_cx)?)"
                     }
-                    _ => return Err(no("list natural-sort comparator")),
+                    other => {
+                        let kind = match other {
+                            Repr::Bool => "bool",
+                            Repr::Null => "null",
+                            Repr::Ptr(_) => "instance",
+                            Repr::Map(_) | Repr::MapStrInt => "map",
+                            r if r.growing() => "array",
+                            _ => "enum variant",
+                        };
+                        let error = format!(
+                            "bridge failure: sort: natural ordering does not support {kind}"
+                        );
+                        return Ok((self.fallible(&format!("if {list}.len(&rt::strings::Cx::current())<=1{{Ok({receiver})}}else{{Err(rt::Error::internal({error:?}.into()))}}")),repr));
+                    }
                 };
-                Ok((self.fallible(&format!("{{let read_cx=rt::strings::Cx::current();{list}.sort_native({cx},|a,b|{compare}).map(|v|v.as_raw())}}")),repr))
+                if matches!(element, Repr::Int | Repr::Float) {
+                    return Ok((self.fallible(&format!("{{let read_cx=rt::strings::Cx::current();{list}.sort_native({cx},|a,b|{compare}).map(|v|v.as_raw())}}")),repr));
+                }
+                let validate = if element == Repr::Str {
+                    format!(
+                        "if {list}.len(&read_cx)>1{{for i in 0..{list}.len(&read_cx){{if {list}.get(&read_cx,i)?.as_raw()==0{{return Err(rt::Error::internal(\"bridge failure: sort: natural ordering does not support null\".into()));}}}}}}"
+                    )
+                } else {
+                    String::new()
+                };
+                let sort = format!(
+                    "(||->R<usize>{{let read_cx=rt::strings::Cx::current();{validate}{list}.sort_by({cx},|a,b|Ok({compare})).map(|v|v.as_raw())}})()"
+                );
+                Ok((self.fallible(&sort), repr))
             }
 
             ("length", 1) => Ok((format!("{list}.len({cx})"), Repr::Int)),
@@ -280,16 +317,16 @@ impl Emitter<'_, '_> {
             ("includes" | "index_of" | "last_index_of", 2) => {
                 let item = element.to_slot(&self.coerce(values[1].clone(), element)?)?;
                 let equality=match element {
-                    Repr::Str=>"if a.as_raw()==0 || b.as_raw()==0 {a.as_raw()==b.as_raw()} else {rt::strings::Str::from_raw(a.as_raw()).text(&read_cx)==rt::strings::Str::from_raw(b.as_raw()).text(&read_cx)}".into(),
+                    Repr::Str=>"if a.as_raw()==0 || b.as_raw()==0 {a.as_raw()==b.as_raw()} else {rt::strings::Str::from_raw(a.as_raw()).try_as_str(&read_cx)?==rt::strings::Str::from_raw(b.as_raw()).try_as_str(&read_cx)?}".into(),
                     Repr::Float=>"rt::float_eq(a,b)".into(),
-                    Repr::Tagged|Repr::Dyn(_)=>"rt::lists::builtin_eq(&read_cx,a,b)".into(),
+                    Repr::Tagged|Repr::Dyn(_)=>"rt::lists::builtin_eq(&read_cx,a,b)?".into(),
                     r if r.pointer()=>"a.as_raw()==b.as_raw()".into(),
                     _=>"a==b".to_owned(),
                 };
-                let search = format!(
-                    "{{let read_cx=rt::strings::Cx::current();{list}.index_of(&read_cx,{item},{},|a,b|{equality})}}",
+                let search = self.fallible(&format!(
+                    "{{let read_cx=rt::strings::Cx::current();{list}.index_of(&read_cx,{item},{},|a,b|Ok({equality}))}}",
                     method == "last_index_of"
-                );
+                ));
                 if method == "includes" {
                     Ok((format!("({search}).is_some()"), Repr::Bool))
                 } else {
@@ -315,10 +352,30 @@ impl Emitter<'_, '_> {
                 Ok((self.fallible(&format!("rt::lists::join_pointers({cx},{list},rt::strings::Str::from_raw({separator})).map(|v|v.as_raw())")), Repr::Str))
             }
             ("join", 2) => {
-                self.plan.list_render_roots.borrow_mut().insert(repr);
                 let separator = self.coerce(values[1].clone(), Repr::Str)?;
-                let value = self.coerce((element.from_slot("value"), element), Repr::Tagged)?;
-                Ok((self.fallible(&format!("rt::lists::join_with({cx},{list},rt::strings::Str::from_raw({separator}),|value|rt::lists::structural_string(&mut rt::strings::Cx::current(),{value},DESCRIPTORS,LIST_RENDER_SHAPES)).map(|v|v.as_raw())")),Repr::Str))
+                let value = self.capture_value(element.from_slot("value"), element)?;
+                let render = super::formatting::render(self, &value)?;
+                let Some(Terminator::Call {
+                    callee: Operand::Constant(Constant::Function(function)),
+                    ..
+                }) = &self.body.blocks[self.block].terminator
+                else {
+                    return Err(no("join native callback boundary"));
+                };
+                let (callee, info) = self
+                    .plan
+                    .index
+                    .function(self.db, *function)
+                    .ok_or_else(|| no("join native callback metadata"))?;
+                let site = self.telemetry_site(callee);
+                let body = format!(
+                    "rt::lists::join_with({cx},{list},rt::strings::Str::from_raw({separator}),|value|{render}).map(|v|v.as_raw())"
+                );
+                let body = format!(
+                    "{{static SOURCE:rt::Source=rt::Source{{file:{:?},function:\"baml.Array.join\",lines:&[0],pcs:&[0],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};rt::telemetry::evidence::native_callback({site},||({body}).map_err(|error|error.at(&SOURCE,0)))}}",
+                    info.source_file
+                );
+                Ok((self.fallible(&body), Repr::Str))
             }
             _ => Err(no(format!("list builtin {method} arguments"))),
         }

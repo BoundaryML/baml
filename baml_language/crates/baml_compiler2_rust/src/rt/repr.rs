@@ -76,6 +76,7 @@ impl Repr {
             Self::Int => "i64",
             Self::Float => "f64",
             Self::Bool => "bool",
+            Self::Enum(_) => "usize",
             Self::Str => "rt::lists::Ptr",
             Self::Closure => "rt::closures::Closure",
             Self::Future => "rt::tasks::FutureSlot",

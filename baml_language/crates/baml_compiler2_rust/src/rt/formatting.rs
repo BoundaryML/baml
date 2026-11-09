@@ -4,7 +4,7 @@ use super::*;
 pub(super) fn register<'db>(
     db: &'db dyn Db,
     plan: &mut Plan<'_>,
-    all: &mut BTreeMap<usize, MirFunction<'db>>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
     instances: &mut Vec<(usize, Vec<RuntimeTy>, usize)>,
     queue: &mut VecDeque<usize>,
 ) -> Gen<()> {
@@ -61,6 +61,36 @@ pub(super) fn register<'db>(
     }
     Ok(())
 }
+pub(super) fn render(e: &Emitter<'_, '_>, value: &str) -> Gen<String> {
+    let mut tags = Vec::new();
+    let mut invoke = String::from("|value:rt::Dyn|{match value.tag{");
+    for (&repr, &callee) in &e.plan.string_overrides {
+        let tag = match repr {
+            Repr::Enum(i) => format!("CAPTURE_ENUM_{i}_TAG"),
+            Repr::Naming => "CAPTURE_NAMING_TAG".into(),
+            _ => e.tag(repr)?.to_string(),
+        };
+        tags.push(tag.clone());
+        let raw = match repr {
+            Repr::Bool => "value.payload!=0".into(),
+            Repr::Float => "f64::from_bits(value.payload)".into(),
+            _ => format!("value.payload as {}", repr.rust()),
+        };
+        write!(
+            invoke,
+            "{tag}=>f{callee}::<OBSERVE>(cx,{}, {raw}).map(|p|rt::strings::Str::from_raw(p)),",
+            e.telemetry_site(callee)
+        )
+        .unwrap();
+    }
+    invoke.push_str("_=>unreachable!(\"checked ToString witness\")}} ");
+    let code = format!(
+        "rt::format::render(&mut rt::strings::Cx::current(),{value},CAPTURE_SHAPES,&[{}],{invoke})",
+        tags.join(",")
+    );
+    Ok(code)
+}
+
 pub(super) struct Feature;
 impl registry::Feature for Feature {
     fn call(
@@ -81,27 +111,7 @@ impl registry::Feature for Feature {
         }
         Some((|| {
             let value = e.capture_value(values[0].0.clone(), values[0].1)?;
-            let mut tags = Vec::new();
-            let mut invoke = String::from("|value:rt::Dyn|{match value.tag{");
-            for (&repr, &callee) in &e.plan.string_overrides {
-                let tag = match repr {
-                    Repr::Enum(i) => format!("CAPTURE_ENUM_{i}_TAG"),
-                    Repr::Naming => "CAPTURE_NAMING_TAG".into(),
-                    _ => e.tag(repr)?.to_string(),
-                };
-                tags.push(tag.clone());
-                let raw = match repr {
-                    Repr::Bool => "value.payload!=0".into(),
-                    Repr::Float => "f64::from_bits(value.payload)".into(),
-                    _ => format!("value.payload as {}", repr.rust()),
-                };
-                write!(invoke,"{tag}=>f{callee}::<OBSERVE>(cx,{}, {raw}).map(|p|rt::strings::Str::from_raw(p)),",e.telemetry_site(callee)).unwrap();
-            }
-            invoke.push_str("_=>unreachable!(\"checked ToString witness\")}} ");
-            let code = format!(
-                "rt::format::render(&mut rt::strings::Cx::current(),{value},CAPTURE_SHAPES,&[{}],{invoke}).map(|s|s.as_raw())",
-                tags.join(",")
-            );
+            let code = format!("{}.map(|s|s.as_raw())", render(e, &value)?);
             Ok((e.fallible(&code), Repr::Str))
         })())
     }

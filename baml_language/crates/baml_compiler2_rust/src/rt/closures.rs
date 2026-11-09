@@ -58,16 +58,25 @@ impl Plan<'_> {
         let definitions: Vec<_> = body
             .blocks
             .iter()
-            .flat_map(|b| &b.statements)
-            .filter_map(|s| match &s.kind {
+            .enumerate()
+            .flat_map(|(block, b)| {
+                b.statements
+                    .iter()
+                    .enumerate()
+                    .map(move |(at, s)| (block, at, s))
+            })
+            .filter_map(|(block, at, s)| match &s.kind {
                 StatementKind::Assign {
                     destination: Place::Local(l),
                     value,
-                } if l.0 == i => Some(value),
+                } if l.0 == i => Some((block, at, value)),
                 _ => None,
             })
             .collect();
-        if definitions.iter().any(|v| matches!(v, Rvalue::LoadType(_))) {
+        if definitions
+            .iter()
+            .any(|(_, _, v)| matches!(v, Rvalue::LoadType(_)))
+        {
             if i == 0
                 || body.locals[i].name.is_some()
                 || body.blocks.iter().any(|b| {
@@ -81,7 +90,7 @@ impl Plan<'_> {
             }
 
             let mut code = None;
-            for value in definitions {
+            for (_, _, value) in definitions {
                 let Rvalue::LoadType(ty) = value else {
                     return Err(no("dynamic type storage"));
                 };
@@ -101,9 +110,9 @@ impl Plan<'_> {
         // managed environment irrespective of signature.
         if depth < body.locals.len() && i != 0 && body.locals[i].name.is_none() {
             let mut inferred = None;
-            for value in definitions {
+            for (block, at, value) in definitions {
                 if let Rvalue::Use(Operand::Copy(place) | Operand::Move(place)) = value {
-                    if let Ok(repr) = self.storage_repr(body, place, depth + 1) {
+                    if let Ok(repr) = self.list_field_repr(body, place, block, at, depth + 1) {
                         if inferred.is_some_and(|previous| previous != repr) {
                             return Ok(Repr::Closure);
                         }
@@ -171,12 +180,12 @@ impl registry::Feature for Feature {
         db: &'db dyn super::Db,
         _root: super::SourceRoot,
         plan: &mut Plan<'_>,
-        all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
+        all: &mut super::BTreeMap<usize, super::TestMir<'db>>,
     ) -> Gen<Vec<usize>> {
         fn register<'db>(
             db: &'db dyn super::Db,
             plan: &mut Plan<'_>,
-            all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
+            all: &mut super::BTreeMap<usize, super::TestMir<'db>>,
             mir: &super::MirFunction<'db>,
         ) -> Gen<()> {
             for lambda in &mir.lambdas {
@@ -190,7 +199,10 @@ impl registry::Feature for Feature {
                             .ok_or_else(|| no("lambda identity"))?,
                     )
                     .ok_or_else(|| no("unlinked lambda"))?;
-                all.insert(object, lambda.clone());
+                // Prepared tests already register borrowed lambda MIR. Keep it
+                // shared instead of cloning every corpus lambda for each leaf.
+                all.entry(object)
+                    .or_insert_with(|| std::rc::Rc::new(lambda.clone()));
                 if let super::MirFunctionKind::Bytecode(body) = &lambda.kind {
                     plan.lambda_bodies.insert(body as *const _ as usize, object);
                 }
@@ -202,12 +214,6 @@ impl registry::Feature for Feature {
             register(db, plan, all, &mir)?;
         }
         Ok(Vec::new())
-    }
-    fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
-        match event {
-            registry::Admission::Class { generic: true, .. } => Err(no("generic class or cleanup")),
-            _ => Ok(()),
-        }
     }
     fn call(
         &self,

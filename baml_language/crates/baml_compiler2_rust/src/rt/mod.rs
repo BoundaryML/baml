@@ -16,6 +16,8 @@ use bex_vm_types::{Object, Program};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
 
+type TestMir<'db> = std::rc::Rc<MirFunction<'db>>;
+
 type Gen<T> = Result<T, String>;
 #[derive(Clone)]
 struct MirFunction<'db> {
@@ -50,7 +52,7 @@ struct ListElement {
 struct Plan<'a> {
     root: SourceRoot,
     lang: baml_base::LangRoots,
-    index: ProgramIndex<'a>,
+    index: std::rc::Rc<ProgramIndex<'a>>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     bigints: bool,
@@ -59,6 +61,7 @@ struct Plan<'a> {
     json_to_types: Vec<baml_compiler2_mir::TyTemplate>,
     lists: BTreeSet<Repr>,
     list_elements: std::cell::RefCell<Vec<ListElement>>,
+    list_narrowing_facts: BTreeMap<usize, BTreeMap<(usize, usize, usize), usize>>,
     json_types: Vec<Vec<usize>>,
     environments: bool,
     task_support: bool,
@@ -102,7 +105,7 @@ struct Emitter<'a, 'db> {
     object: usize,
     descriptors: &'a BTreeMap<usize, usize>,
     lists: &'a BTreeMap<Repr, usize>,
-    all: &'a BTreeMap<usize, MirFunction<'db>>,
+    all: &'a BTreeMap<usize, TestMir<'db>>,
     iters: BTreeSet<usize>,
     iter_arrays: BTreeMap<usize, usize>,
     arity: usize,
@@ -110,6 +113,7 @@ struct Emitter<'a, 'db> {
     statement: usize,
     stack: stack::Placement,
     proven_arithmetic: BTreeSet<(usize, usize)>,
+    list_narrowings: BTreeMap<(usize, usize, usize), usize>,
     unwind_jumps: Vec<String>,
     sites: Vec<usize>,
     compact_sites: Vec<u32>,
@@ -123,7 +127,7 @@ struct Emitter<'a, 'db> {
 struct ProgramEmission<'a, 'db> {
     db: &'db dyn Db,
     plan: &'a Plan<'a>,
-    all: &'a BTreeMap<usize, MirFunction<'db>>,
+    all: &'a BTreeMap<usize, TestMir<'db>>,
     descriptors: &'a BTreeMap<usize, usize>,
 }
 
@@ -146,6 +150,9 @@ mod json_lists;
 mod json_scalars;
 mod json_tree;
 mod layout;
+mod list_callbacks;
+mod list_narrowing;
+mod list_scalars;
 mod lists;
 mod loop_ranges;
 mod places;
@@ -158,7 +165,7 @@ use body::recursive;
 use diagnostics::no;
 use repr::Repr;
 
-pub use driver::{compile_rt, compile_rt_benchmark};
+pub use driver::{RtTestCompiler, compile_rt, compile_rt_benchmark, compile_rt_test};
 
 mod calls;
 mod formatting;

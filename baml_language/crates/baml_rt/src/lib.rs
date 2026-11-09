@@ -15,6 +15,7 @@ pub mod json_scalars;
 pub mod json_tree;
 pub mod language;
 pub mod list_errors;
+pub mod list_scalars;
 pub mod lists;
 pub mod maps;
 pub mod native;
@@ -460,3 +461,5 @@ mod tests {
         }
     }
 }
+
+pub mod test_host;

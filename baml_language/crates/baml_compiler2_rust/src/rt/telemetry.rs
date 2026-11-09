@@ -222,6 +222,17 @@ pub(super) fn emit(
             .unwrap();
         }
     }
+    // Native container continuations need declaration metadata for error
+    // frames even though their bodies are not emitted as managed functions.
+    for &(_, _, callee) in telemetry_sites.borrow().iter() {
+        if observed.insert(callee) {
+            writeln!(
+                out,
+                "static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);"
+            )
+            .unwrap();
+        }
+    }
     let function_ids: BTreeMap<_, _> = observed
         .iter()
         .enumerate()
@@ -242,8 +253,10 @@ pub(super) fn emit(
             .map(|p| baml_base::Name::new(&p.name));
         let metadata = info.telemetry_metadata(allocator.allocate().unwrap(), label.as_ref());
         let metadata = telemetry_metadata_source(&metadata);
-        let hidden = matches!(all.get(&id).map(|m|&m.kind), Some(MirFunctionKind::Builtin(_)))
-            || info.trace_passthrough
+        let hidden = matches!(
+            all.get(&id).map(|m| &m.kind),
+            Some(MirFunctionKind::Builtin(_))
+        ) || info.trace_passthrough
             || matches!(all.get(&id).map(|m|&m.kind),
             Some(MirFunctionKind::Bytecode(body)) if body.blocks.iter().flat_map(|b|&b.statements).any(|s|matches!(&s.kind,
                 StatementKind::Intrinsic {op:baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(baml_compiler2_mir::BuiltinTraceHook::Hidden),..})));

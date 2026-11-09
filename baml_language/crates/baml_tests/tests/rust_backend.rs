@@ -1006,7 +1006,7 @@ fn rt_source_bytes_and_diagnostics() {
         let expected = match name {
             "trees" => "a9c1360490a04a0a8190be3689f4448c6a2c32a3d1cf1e9898210e8b8fd2af0b",
             "richards" => "9483fe1976e40f9f7fe2f42300adf7a3de2dafd2acd3d35aa15d931e9d44f475",
-            "agent" => "bf131b91e2e73daf35610c37b2c36f684ab29ca7267d3e5704f1c0f54f727ccb",
+            "agent" => "aacd7c26264cdba6192bec2936981a8cf830f72987610c205f3c4d3e738bb63a",
             "initializer" => "4b26e9226fdeae11c541dc7ad8f6a32ff1a9530b3326f2060e67113cb289b693",
             _ => "",
         };
@@ -1605,4 +1605,257 @@ fn rt_generated_terminal_cancelled_error() {
         .unwrap();
         syn::parse_file(&source).unwrap();
     }
+}
+
+#[test]
+fn rt_list_kpi_admission() {
+    let inputs = [
+        (
+            "ns_k0/main.baml",
+            include_str!(
+                "../../../tools/speedtest/workloads/compute/array-build-sum-100k/main.baml"
+            ),
+        ),
+        (
+            "ns_k1/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/array-traversal-8k/main.baml"),
+        ),
+        (
+            "ns_k2/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/json-aggregate-2k/main.baml"),
+        ),
+        (
+            "ns_k3/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/json-request-body/main.baml"),
+        ),
+        (
+            "ns_k4/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/merge-sort-20k/main.baml"),
+        ),
+        (
+            "ns_k5/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/nbody-20k/main.baml"),
+        ),
+        (
+            "ns_k6/main.baml",
+            include_str!("../../../tools/speedtest/workloads/compute/quick-sort-3way-1k/main.baml"),
+        ),
+        (
+            "ns_k7/main.baml",
+            include_str!(
+                "../../../tools/speedtest/workloads/memory/allocation-high-retention/main.baml"
+            ),
+        ),
+        (
+            "ns_k8/main.baml",
+            include_str!(
+                "../../../tools/speedtest/workloads/memory/allocation-low-retention/main.baml"
+            ),
+        ),
+        (
+            "ns_k9/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/cycles-into-live/main.baml"),
+        ),
+        (
+            "ns_k10/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/cyclic-churn/main.baml"),
+        ),
+        (
+            "ns_k11/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/heap-calls/main.baml"),
+        ),
+        (
+            "ns_k12/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/live-heap/main.baml"),
+        ),
+        (
+            "ns_k13/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/live-walk/main.baml"),
+        ),
+        (
+            "ns_k14/main.baml",
+            include_str!("../../../tools/speedtest/workloads/memory/splay-2k/main.baml"),
+        ),
+        (
+            "ns_k15/main.baml",
+            include_str!("../../../tools/speedtest/workloads/programs/json-parser-15/main.baml"),
+        ),
+    ];
+    let names = [
+        "array-build-sum-100k",
+        "array-traversal-8k",
+        "json-aggregate-2k",
+        "json-request-body",
+        "merge-sort-20k",
+        "nbody-20k",
+        "quick-sort-3way-1k",
+        "allocation-high-retention",
+        "allocation-low-retention",
+        "cycles-into-live",
+        "cyclic-churn",
+        "heap-calls",
+        "live-heap",
+        "live-walk",
+        "splay-2k",
+        "json-parser-15",
+    ];
+    let db = baml_test_support::setup_multi_file_db(&inputs);
+    let program = lower(&db, OptLevel::Two);
+    let mut admitted = 0;
+    let mut rejected = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        let entry = program.rendered_callables()[&format!("user.k{i}.main")]
+            .object
+            .raw();
+        match baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        ) {
+            Ok(source) => {
+                admitted += 1;
+                std::fs::write(
+                    std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                        .join(format!("rt-kpi-{name}.rs")),
+                    source,
+                )
+                .unwrap();
+                eprintln!("KPI {name}: admitted");
+            }
+            Err(error) => {
+                eprintln!("KPI {name}: {error}");
+                rejected.push(format!("{name}: {error}"));
+            }
+        }
+    }
+    assert_eq!(admitted, 16, "{}", rejected.join("\n"));
+}
+
+#[test]
+fn rt_list_callbacks_are_typed_and_closed() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "lists.baml",
+        include_str!("../rust_diff/list_probes/baml_src/rt_lists.baml"),
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    for name in [
+        "RuntimeListJoinOverrides",
+        "RuntimeListJoinMutation",
+        "RuntimeListJoinThrow",
+        "RuntimeListCallbacks",
+        "RuntimeListPublicSort",
+        "RuntimeListSortClasses",
+        "RuntimeListCallbackThrow",
+        "RuntimeListSortThrow",
+        "RuntimeListJsonMaps",
+        "RuntimeListGenericJson",
+        "RuntimeListNarrowedFields",
+    ] {
+        let entry = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
+        let emitted = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+        syn::parse_file(&emitted).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(!emitted.contains("BexVm"));
+    }
+    assert_eq!(before, fingerprint(&program));
+}
+
+#[test]
+fn rt_test_admission_runs_initializers_and_isolates_siblings() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "tests.baml",
+        r#"
+const INITIAL = initialized();
+function initialized() -> string { "ready" }
+class Resource {
+    value: int,
+    function cleanup(self) -> void { self.value += 1; }
+}
+test "admitted" { let scalar = INITIAL.length(); }
+test "cleanup admitted" { let resource = Resource { value: 1 }; resource.value += 1; }
+test "unsupported sibling" { let value = baml.Float.nan(); }
+"#,
+    )]);
+    let program = lower(&db, OptLevel::Two);
+    let mut admitted = 0;
+    let mut rejected = 0;
+    let mut cleanup_entries = 0;
+    let mut diagnostics = Vec::new();
+    for (entry, object) in program.objects.iter().enumerate() {
+        if !program.packages[program.root as usize]
+            .objects
+            .contains(&(entry as u32))
+        {
+            continue;
+        }
+        let bex_vm_types::Object::Function(function) = object else {
+            continue;
+        };
+        if !matches!(
+            function.identity,
+            bex_vm_types::types::FunctionIdentity::Synthetic { .. }
+        ) || function.arity != 0
+        {
+            continue;
+        }
+        let result = baml_db::rust_backend::compile_rt_test(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        );
+        if let Err(error) = &result {
+            diagnostics.push(format!("{}: {error}", function.name()));
+        }
+        if result
+            .as_ref()
+            .is_ok_and(|source| source.contains("test_host::run"))
+        {
+            admitted += 1;
+            assert!(
+                result
+                    .as_ref()
+                    .unwrap()
+                    .contains("name,Some(initialize_program)"),
+                "test host must execute initializer schedule"
+            );
+        }
+        if result.as_ref().is_ok_and(|source| {
+            source.contains(
+                "fn entry()->R<i64>{unsafe{rt::tasks::set_cleanup_dispatch(cleanup_dispatch);",
+            )
+        }) {
+            cleanup_entries += 1;
+        }
+        if result
+            .as_ref()
+            .is_err_and(|error| error.contains("unsupported in baml_rt: baml.Float.nan"))
+        {
+            rejected += 1;
+        }
+    }
+    assert!(
+        admitted >= 1,
+        "a supported leaf must compile with initializers despite an unsupported sibling"
+    );
+    assert_eq!(
+        rejected, 1,
+        "the sibling's own reachable unsupported builtin is rejected"
+    );
+    assert!(
+        cleanup_entries > 0,
+        "test hosts must install reachable cleanup dispatch: {diagnostics:?}"
+    );
 }

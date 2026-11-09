@@ -41,6 +41,7 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
     level == "off"
         || TELEMETRY_SUPPORTED
         || probe.starts_with("strings::")
+        || probe.starts_with("RuntimeListJoin")
         || matches!(
             probe,
             "RtClosures"
@@ -75,6 +76,37 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
 // List coverage baseline: each admitted fixture must keep passing both runtime
 // variants. An admission regression is a failure, never an unsupported skip.
 const REQUIRED_LIST_COVERAGE: &[&str] = &[
+    "RuntimeListJoinOverrides",
+    "RuntimeListJoinMutation",
+    "RuntimeListJoinThrow",
+    "RuntimeListRopes",
+    "RuntimeListCallbacks",
+    "RuntimeListPublicSort",
+    "RuntimeListSortClasses",
+    "RuntimeListCallbackThrow",
+    "RuntimeListSortThrow",
+    "RuntimeListTaggedSort",
+    "RuntimeListSortMixedError",
+    "RuntimeListSortNullError",
+    "RuntimeListSortBoolError",
+    "RuntimeListPointerCallbacks",
+    "RuntimeListJsonMaps",
+    "RuntimeListJsonMapNonFinite",
+    "RuntimeListJsonMapError",
+    "RuntimeListJsonMapKeyError",
+    "RuntimeListJsonAliases",
+    "RuntimeListJsonMapCycle",
+    "RuntimeListGenericJson",
+    "RuntimeListNarrowedFields",
+    "RuntimeListSortSingletons",
+    "RuntimeListSortMutation",
+    "RuntimeListEmptyCallbacks",
+    "RuntimeListSavedTypeTest",
+    "RuntimeListValidationThrow",
+    "RuntimeListScalarBoundaries",
+    "RuntimeListInvalidCodePoint",
+    "RuntimeListFloatTruncationError",
+    "RuntimeListStringEntry",
     "RuntimeListFloatConstants",
     "RuntimeLists",
     "RuntimeListBounds",
@@ -419,6 +451,13 @@ fn standalone_closure_coverage_cannot_silently_become_unsupported() {
     for level in ["off", "low", "medium", "high", "default"] {
         assert!(supports_level("RtClosures", level));
         assert!(supports_level("RtEmptyClosures", level));
+        for probe in [
+            "RuntimeListJoinOverrides",
+            "RuntimeListJoinMutation",
+            "RuntimeListJoinThrow",
+        ] {
+            assert!(supports_level(probe, level));
+        }
     }
 }
 

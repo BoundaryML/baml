@@ -257,7 +257,6 @@ pub(super) fn capture_type(plan: &Plan<'_>, ty: &RuntimeTy) -> Gen<String> {
 pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -> Gen<String> {
     use bex_vm_types::RuntimeTy as T;
     let member = match ty {
-        T::Bigint => "Bigint".into(),
         T::Int => "Int".into(),
         T::Literal(lit, f) => match lit {
             baml_type::Literal::Int(v) => {
@@ -276,6 +275,7 @@ pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -
             _ => return Err(no("bigint literal capture type")),
         },
         T::Float => "Float".into(),
+        T::Bigint => "Bigint".into(),
         T::Bool => "Bool".into(),
         T::Null => "Null".into(),
         T::Unknown => "Unknown".into(),
@@ -387,14 +387,39 @@ fn capture_element(
     descriptors: &BTreeMap<usize, usize>,
     lists: &BTreeMap<Repr, usize>,
     repr: Repr,
-) -> Gen<(usize, String)> {
-    Ok(match repr {
+) -> Gen<(String, String)> {
+    let (tag, ty) = match repr {
         Repr::Int => (0, "Int".into()),
         Repr::Bigint => (plan.bigint_descriptor() + 3, "Bigint".into()),
         Repr::Bool => (1, "Bool".into()),
         Repr::Float => ((u32::MAX - 1) as usize, "Float".into()),
         Repr::Str => (3, "String".into()),
-        Repr::Ptr(c) => (descriptors[&c] + 3, format!("Class(CAPTURE_D{c})")),
+        Repr::Enum(e) => {
+            return Ok((
+                format!("CAPTURE_ENUM_{e}_TAG"),
+                format!("Enum(CAPTURE_D{e})"),
+            ));
+        }
+        Repr::Opaque => (18, "RustType".into()),
+        Repr::Bytes => (19, "Uint8Array".into()),
+        Repr::Ptr(c) => (
+            descriptors[&c] + 3,
+            capture_repr(plan, repr)?
+                .strip_prefix("rt::telemetry::capture::Type::")
+                .unwrap()
+                .to_owned(),
+        ),
+        Repr::MapStrPtr(c) => (
+            lists[&repr] + 3,
+            format!(
+                "Map(&rt::telemetry::capture::Type::String,&{})",
+                capture_repr(plan, Repr::Ptr(c))?
+            ),
+        ),
+        Repr::Map(_) => {
+            let (key, value) = map_types(plan, repr)?;
+            (lists[&repr] + 3, format!("Map(&{key},&{value})"))
+        }
         r if r.growing() => {
             let (_, element) = capture_list_element(plan, descriptors, lists, r)?;
             (
@@ -406,10 +431,11 @@ fn capture_element(
             lists[&Repr::MapStrInt] + 3,
             "Map(&rt::telemetry::capture::Type::String,&rt::telemetry::capture::Type::Int)".into(),
         ),
-        Repr::Tagged => (usize::MAX - 1, "Unknown".into()),
+        Repr::Tagged | Repr::Dyn(_) => (usize::MAX - 1, "Unknown".into()),
         Repr::Null => (2, "Null".into()),
         _ => return Err(no("capture list element")),
-    })
+    };
+    Ok((tag.to_string(), ty))
 }
 
 fn capture_list_element(
@@ -417,15 +443,16 @@ fn capture_list_element(
     descriptors: &BTreeMap<usize, usize>,
     lists: &BTreeMap<Repr, usize>,
     repr: Repr,
-) -> Gen<(usize, String)> {
+) -> Gen<(String, String)> {
     if let Repr::ListClosure(id) | Repr::ListFuture(id) = repr {
         let full = super::closures::capture_type(&plan.closure_lists[&id])?;
         return Ok((
-            (if matches!(repr, Repr::ListFuture(_)) {
+            ((if matches!(repr, Repr::ListFuture(_)) {
                 plan.future_descriptor().unwrap()
             } else {
                 plan.closure_descriptors().unwrap().1
-            }) + 3,
+            }) + 3)
+                .to_string(),
             full.strip_prefix("rt::telemetry::capture::Type::")
                 .unwrap()
                 .to_owned(),
@@ -473,7 +500,22 @@ pub(super) fn capture_repr(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
         Repr::Str => format!("{prefix}String"),
         Repr::Null => format!("{prefix}Null"),
         Repr::Tagged | Repr::Dyn(_) => format!("{prefix}Unknown"),
-        Repr::Ptr(c) => format!("{prefix}Class(CAPTURE_D{c})"),
+        Repr::Ptr(c) => {
+            if let Some((_, args, _)) = plan.class_instances.iter().find(|(_, _, id)| *id == c) {
+                let args = args
+                    .iter()
+                    .map(|t| capture_wire_type(plan, t))
+                    .collect::<Gen<Vec<_>>>()?
+                    .join(",");
+                format!("{prefix}GenericClass(CAPTURE_D{c},&[{args}])")
+            } else {
+                format!("{prefix}Class(CAPTURE_D{c})")
+            }
+        }
+        Repr::MapStrPtr(c) => format!(
+            "{prefix}Map(&{prefix}String,&{})",
+            capture_repr(plan, Repr::Ptr(c))?
+        ),
         Repr::Map(_) | Repr::MapStrInt => {
             let (key, value) = map_types(plan, repr)?;
             format!("{prefix}Map(&{key},&{value})")
