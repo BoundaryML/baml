@@ -871,15 +871,17 @@ pub unsafe fn spawn_options(detached: bool, limits: &[usize], tokens: &[usize]) 
 }
 
 /// # Safety
-/// The pointer names a rooted growing pointer list. The list cannot be mutated
-/// or suspended while the returned slice is borrowed.
+/// The pointer names a rooted typed pointer list. Neither the list nor its
+/// buffer may be mutated or grown while the returned slice is borrowed.
 pub unsafe fn pointer_list<'a>(pointer: usize) -> &'a [usize] {
-    unsafe { crate::lists::pointer_values(pointer) }
+    unsafe { crate::lists::List::<crate::lists::Ptr>::from_raw(pointer).pointers() }
 }
 /// # Safety
-/// Inputs are rooted growing pointer lists sharing the same descriptor pair.
-pub unsafe fn concat_pointers(_desc: u32, a: usize, b: usize) -> R<usize> {
+/// Inputs are rooted typed pointer lists and desc is their common layout.
+pub unsafe fn concat_pointers(desc: u32, a: usize, b: usize) -> R<usize> {
     unsafe {
+        debug_assert_eq!((*(a as *const Header)).desc, desc);
+        debug_assert_eq!((*(b as *const Header)).desc, desc);
         let a = crate::lists::List::<crate::lists::Ptr>::from_raw(a);
         let b = crate::lists::List::<crate::lists::Ptr>::from_raw(b);
         a.concat(&mut crate::strings::Cx::current(), b)

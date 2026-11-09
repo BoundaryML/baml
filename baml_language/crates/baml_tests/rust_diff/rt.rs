@@ -216,7 +216,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         let result = pack_result(
             build,
             workspace,
-            &super::standalone_source(manifest, probe).unwrap_or(source),
+            &source,
             &executable,
             [if super::initializer_probes::collects_tests(probe) {
                 "InitializerTestSummary"

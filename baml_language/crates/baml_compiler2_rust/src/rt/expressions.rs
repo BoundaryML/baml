@@ -250,11 +250,19 @@ impl Emitter<'_, '_> {
                     let v = self.coerce(self.operand(v)?, layout.fields[i])?;
                     write!(&mut init, "let a{i}={v};").unwrap();
                 }
+                let allocator = if self.plan.cleanup_methods.contains_key(&c)
+                    || super::tasks::class_is(self.plan, c, "spawn.Limit")
+                    || super::tasks::class_is(self.plan, c, "spawn.CancelToken")
+                {
+                    "try_alloc"
+                } else {
+                    "try_alloc_class"
+                };
                 write!(
                     &mut init,
                     "let p={} as *mut C{c};",
                     self.fallible(&format!(
-                        "rt::try_alloc({}, {})",
+                        "rt::{allocator}({}, {})",
                         self.descriptors[&c], layout.bytes
                     ))
                 )

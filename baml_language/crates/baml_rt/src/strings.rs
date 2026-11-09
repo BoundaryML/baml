@@ -90,7 +90,6 @@ const ASCII: usize = 72;
 
 pub struct Cx {
     heap: *mut baml_rt_gc::Heap,
-    roots: *const baml_rt_tasks::IntegrationRoots,
     compact: bool,
     _owner: PhantomData<Rc<()>>,
 }
@@ -100,14 +99,9 @@ impl Cx {
     #[inline(always)]
     pub unsafe fn current() -> Self {
         let heap = crate::HEAP.get();
-        let roots = crate::ROOTS.get();
-        assert!(
-            !heap.is_null() && !roots.is_null(),
-            "builtin outside a root task"
-        );
+        assert!(!heap.is_null(), "builtin outside a root task");
         Self {
             heap,
-            roots,
             compact: COMPACT_STRINGS.get(),
             _owner: PhantomData,
         }
@@ -118,7 +112,13 @@ impl Cx {
         // Construct mutable heap access only for the synchronous allocation.
         // Builtin strings, byte buffers, lists and regex records never have
         // language cleanup methods. User class allocation uses try_alloc.
-        unsafe { (&mut *self.heap).try_alloc_unfinalized(desc, bytes, &crate::Roots(&*self.roots)) }
+        unsafe { (&mut *self.heap).try_alloc_unfinalized(desc, bytes, &crate::CurrentRoots) }
+            .map_err(|failure| allocation_failure(failure.bytes))
+    }
+    /// The caller initializes all traced slots before any subsequent allocation.
+    #[inline(always)]
+    pub(crate) unsafe fn alloc_uninit(&self, desc: u32, bytes: usize) -> R<*mut u8> {
+        unsafe { (&mut *self.heap).try_alloc_uninit(desc, bytes, &crate::CurrentRoots) }
             .map_err(|failure| allocation_failure(failure.bytes))
     }
     pub fn poll(&mut self) -> R<()> {
@@ -126,7 +126,7 @@ impl Cx {
     }
     pub fn string(&self, text: &str) -> R<Str> {
         let size = allocation_size(text.len())?;
-        let pointer = self.alloc(0, size)?;
+        let pointer = unsafe { self.alloc_uninit(0, size) }?;
         unsafe { init_flat(pointer, text) };
         Ok(unsafe { Str::from_raw(pointer as usize) })
     }
@@ -280,7 +280,7 @@ impl Str {
             let bytes = self.byte_len();
             let chars = self.char_len();
             let ascii = self.ascii();
-            let target = cx.alloc(0, allocation_size(bytes)?)?;
+            let target = cx.alloc_uninit(0, allocation_size(bytes)?)?;
             init_flat(target, "");
             (*target.cast::<Object>()).bytes = bytes;
             (*target.cast::<Object>()).chars = chars;
@@ -533,7 +533,7 @@ pub fn concat(cx: &mut Cx, values: &[Str]) -> R<Str> {
                 result = ascii_append(cx, result, bytes, right.ascii_suffix())?;
                 continue;
             } else if cx.compact && chars <= COMPACT_MAX {
-                let pointer = cx.alloc(CONCAT_DESC_ID, 32)?;
+                let pointer = unsafe { cx.alloc_uninit(CONCAT_DESC_ID, 32) }?;
                 unsafe {
                     let node = &mut *pointer.cast::<Compact>();
                     node.header.aux = (chars as u32) << 1;
@@ -543,10 +543,11 @@ pub fn concat(cx: &mut Cx, values: &[Str]) -> R<Str> {
                 }
                 pointer
             } else {
-                let pointer = cx.alloc(0, NODE)?;
+                let pointer = unsafe { cx.alloc_uninit(0, NODE) }?;
                 unsafe {
                     let object = &mut *pointer.cast::<Object>();
                     object.header.aux = CONCAT;
+                    object.cache = 0;
                     object.bytes = bytes;
                     object.chars = chars;
                     write_ptr(pointer, &raw mut object.left, result.0);
@@ -588,7 +589,7 @@ fn ascii_append(cx: &Cx, left: Str, bytes: usize, suffix: u8) -> R<Str> {
     } else {
         left.0
     };
-    let pointer = cx.alloc(ASCII_APPEND_DESC_ID, 16)?;
+    let pointer = unsafe { cx.alloc_uninit(ASCII_APPEND_DESC_ID, 16) }?;
     unsafe {
         let node = &mut *pointer.cast::<AsciiAppend>();
         node.header.aux = ((bytes as u32) << 7) | u32::from(suffix);
@@ -651,7 +652,11 @@ pub fn slice(cx: &mut Cx, value: Str, start: i64, end: i64) -> R<Str> {
     byte_slice(cx, value, first, last)
 }
 pub fn integer_to_string(cx: &mut Cx, value: i64) -> R<Str> {
-    cx.string(&value.to_string())
+    let pointer = crate::globals::integer_string(value, || {
+        cx.string(itoa::Buffer::new().format(value))
+            .map(|text| text.as_raw())
+    })?;
+    Ok(unsafe { Str::from_raw(pointer) })
 }
 pub fn code_points(cx: &Cx, value: Str) -> R<Vec<i64>> {
     Ok(value
@@ -1025,6 +1030,87 @@ mod tests {
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 4);
         assert!(instance.stats().collections >= 81);
+    }
+    #[test]
+    fn repeated_integer_formatting_reuses_one_root_and_preserves_evicted_aliases() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let first = integer_to_string(&mut cx, 123456789)?;
+            let allocated = unsafe { (&*crate::HEAP.get()).stats().allocated_since_gc };
+            for _ in 0..16 {
+                assert_eq!(
+                    integer_to_string(&mut cx, 123456789)?.as_raw(),
+                    first.as_raw()
+                );
+            }
+            assert_eq!(
+                unsafe { (&*crate::HEAP.get()).stats().allocated_since_gc },
+                allocated
+            );
+            let second = integer_to_string(&mut cx, -987654321)?;
+            for _ in 0..64 {
+                cx.string("churn")?;
+                cx.poll()?;
+            }
+            assert_eq!(first.as_str(&cx), "123456789");
+            assert_eq!(second.as_str(&cx), "-987654321");
+            assert_eq!(
+                integer_to_string(&mut cx, -987654321)?.as_raw(),
+                second.as_raw()
+            );
+            Ok(1)
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[
+                false, false, false, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true,
+            ],
+        );
+        instance.set_stress(true);
+        for _ in 0..3 {
+            assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+        }
+    }
+    #[test]
+    fn integer_spelling_survives_reused_uninitialized_regions() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            for value in [
+                i64::MIN,
+                -(1i64 << 62),
+                -1000000000,
+                -100,
+                -10,
+                -1,
+                0,
+                1,
+                9,
+                10,
+                99,
+                100,
+                1000000000,
+                (1i64 << 62) - 1,
+                i64::MAX,
+            ] {
+                let text = integer_to_string(&mut cx, value)?;
+                cx.poll()?;
+                assert_eq!(text.as_str(&cx), value.to_string());
+                assert_eq!(text.char_len(), value.to_string().len());
+            }
+            Ok(1)
+        }
+        let mut instance = Instance::new(
+            DESCRIPTORS,
+            &[
+                false, false, false, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true,
+            ],
+        );
+        instance.set_stress(true);
+        for _ in 0..3 {
+            assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+        }
     }
     #[test]
     fn deep_ropes_flatten_iteratively_and_keep_aliases_and_cached_hashes() {

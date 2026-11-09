@@ -395,7 +395,9 @@ fn stress_slow_paths_and_safepoints() {
 #[test]
 fn budget_headroom_large_payload_and_saturation() {
     unsafe {
-        assert_eq!(Heap::budget_for(0), MIN_BUDGET);
+        assert_eq!(Heap::budget_for(0), SMALL_HEAP_BUDGET);
+        assert_eq!(Heap::budget_for(BLOCK_BYTES), SMALL_HEAP_BUDGET);
+        assert_eq!(Heap::budget_for(BLOCK_BYTES + 16), MIN_BUDGET);
         assert_eq!(Heap::budget_for(MIN_BUDGET), 4 * MIN_BUDGET);
         assert_eq!(Heap::budget_for(usize::MAX), usize::MAX);
         let mut h = heap();
@@ -409,7 +411,7 @@ fn budget_headroom_large_payload_and_saturation() {
         assert_eq!(h.stats().budget, 4 * MIN_BUDGET);
         r.precise.borrow_mut().clear();
         h.collect(&r);
-        assert_eq!(h.stats().budget, MIN_BUDGET);
+        assert_eq!(h.stats().budget, SMALL_HEAP_BUDGET);
     }
 }
 #[test]
@@ -725,6 +727,141 @@ fn allocatable_descriptors_still_require_headers() {
         finalizer: None,
     }];
     let _ = Heap::new(&D, &TYPES);
+}
+
+#[test]
+fn sparse_start_words_and_cached_blocks_preserve_interior_bounds_after_sweep() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        let mut objects = Vec::new();
+        for i in 0..128 {
+            let bytes = [24, 40, 2056, 8192][i % 4];
+            let p = h.alloc(2, bytes, &roots) as usize;
+            roots.precise.borrow_mut().push(p);
+            objects.push((p, bytes));
+        }
+        // Reverse visits cross block boundaries and exercise sparse bitmap words.
+        for &(p, bytes) in objects.iter().rev() {
+            for offset in [0, 7, 15, bytes / 2, bytes - 1] {
+                assert_eq!(h.object_start(p + offset), Some(p));
+            }
+            if bytes % 16 != 0 {
+                assert_eq!(h.object_start(p + bytes), None);
+            }
+        }
+        *roots.precise.borrow_mut() = objects.iter().step_by(3).map(|&(p, _)| p).collect();
+        for _ in 0..2 {
+            h.collect(&roots);
+            for (i, &(p, bytes)) in objects.iter().enumerate().rev() {
+                assert_eq!(h.object_start(p + bytes - 1), (i % 3 == 0).then_some(p));
+            }
+        }
+        for _ in 0..1024 {
+            let p = h.alloc(2, 40, &roots);
+            assert!(
+                std::slice::from_raw_parts(p.add(8), 32)
+                    .iter()
+                    .all(|&v| v == 0)
+            );
+            p.add(8).write_bytes(0xab, 32);
+        }
+        h.collect(&roots);
+        for &(p, bytes) in objects.iter().step_by(3) {
+            assert_eq!(h.object_start(p + bytes - 1), Some(p));
+        }
+    }
+}
+
+#[test]
+fn run_summary_words_skip_empty_tail_words_in_the_active_run() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        // A fresh run covers the block and summarizes every word before any
+        // object reaches them. Lookups past the cursor find no object.
+        let p = h.alloc(2, 3000, &roots) as usize;
+        roots.precise.borrow_mut().push(p);
+        assert_eq!(h.object_start(p + 2999), Some(p));
+        for offset in [3008, 4096, 9000, 20000, 32000] {
+            assert_eq!(h.object_start(p + offset), None);
+        }
+        let q = h.alloc(2, 24, &roots) as usize;
+        roots.precise.borrow_mut().push(q);
+        assert_eq!(h.object_start(q + 23), Some(q));
+        assert_eq!(h.object_start(q + 4000), None);
+        h.collect(&roots);
+        assert_eq!(h.object_start(p + 2999), Some(p));
+        assert_eq!(h.object_start(q + 4000), None);
+    }
+}
+
+#[test]
+fn direct_mark_stack_traces_deep_cycles_without_recursive_frames() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        let head = h.alloc(0, 32, &roots);
+        roots.precise.borrow_mut().push(head as usize);
+        let mut previous = head;
+        for _ in 1..65536 {
+            let next = h.alloc(0, 32, &roots);
+            link(previous, 1, next as usize);
+            link(next, 2, head as usize);
+            previous = next;
+        }
+        link(previous, 1, head as usize);
+        for _ in 0..3 {
+            h.collect(&roots);
+            assert_eq!(h.stats().live_bytes, 65536 * 32);
+        }
+        roots.precise.borrow_mut().clear();
+        h.collect(&roots);
+        assert_eq!(h.stats().live_bytes, 0);
+        assert_eq!(h.object_start(head as usize), None);
+    }
+}
+
+#[test]
+fn large_heap_stress_forces_bounded_full_collections_during_allocation_and_reads() {
+    unsafe {
+        let mut h = heap();
+        let roots = Roots::default();
+        let head = h.alloc(0, 32, &roots);
+        roots.precise.borrow_mut().push(head as usize);
+        let mut tail = head;
+        for _ in 1..20000 {
+            let p = h.alloc(0, 32, &roots);
+            link(tail, 1, p as usize);
+            tail = p;
+        }
+        h.collect(&roots);
+        h.set_stress(true);
+        let before = h.stats().collections;
+        // 640,000 retained bytes require 10,000 read checkpoints. This
+        // remains a bounded full collection without making each recursive
+        // graph traversal trigger hundreds of complete live-heap walks.
+        for _ in 0..9999 {
+            h.safepoint(&roots);
+        }
+        assert_eq!(h.stats().collections, before);
+        h.safepoint(&roots);
+        assert_eq!(h.stats().collections, before + 1);
+        assert_eq!(h.stats().live_bytes, 20000 * 32);
+        // Less than one normal collection budget, but exceeds stress headroom.
+        h.alloc(2, 8 + 40 * 1024, &roots);
+        h.safepoint(&roots);
+        assert_eq!(h.stats().collections, before + 2);
+        assert_eq!(h.stats().live_bytes, 20000 * 32);
+        roots.precise.borrow_mut().clear();
+        for _ in 0..10000 {
+            h.safepoint(&roots);
+        }
+        assert_eq!(h.stats().live_bytes, 0);
+        let before = h.stats().collections;
+        h.safepoint(&roots);
+        assert_eq!(h.stats().collections, before + 1);
+    }
 }
 
 #[test]

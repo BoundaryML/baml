@@ -96,19 +96,6 @@ struct Object {
     capacity: usize,
 }
 
-/// # Safety
-/// `pointer` is a rooted pointer list that cannot be mutated or suspended while
-/// the returned slice is borrowed. Both inline and grown buffers use this ABI.
-pub(crate) unsafe fn pointer_values<'a>(pointer: usize) -> &'a [usize] {
-    unsafe {
-        let object = &*(pointer as *const Object);
-        if object.len == 0 {
-            return &[];
-        }
-        std::slice::from_raw_parts((object.buffer + 16) as *const usize, object.len)
-    }
-}
-
 #[repr(transparent)]
 pub struct List<T: Slot> {
     pointer: usize,
@@ -118,6 +105,20 @@ impl<T: Slot> Copy for List<T> {}
 impl<T: Slot> Clone for List<T> {
     fn clone(&self) -> Self {
         *self
+    }
+}
+impl List<Ptr> {
+    /// Borrow the current pointer buffer without allocating a host snapshot.
+    ///
+    /// # Safety
+    /// The list and buffer must remain rooted, and the list must not be mutated
+    /// or grown, for the lifetime of the returned slice.
+    pub(crate) unsafe fn pointers<'a>(self) -> &'a [usize] {
+        let object = unsafe { &*(self.pointer as *const Object) };
+        if object.len == 0 {
+            return &[];
+        }
+        unsafe { std::slice::from_raw_parts((object.buffer + 16) as *const usize, object.len) }
     }
 }
 unsafe impl<T: Slot> Slot for List<T> {
@@ -169,8 +170,8 @@ impl<T: Slot> List<T> {
     /// `desc` and `desc+1` describe this list and its T buffer as above. All
     /// handles obey Cx's root invocation and rooting contract.
     #[inline(always)]
-    pub unsafe fn new(_cx: &mut Cx, desc: u32) -> R<Self> {
-        let pointer = unsafe { crate::try_alloc(desc, 32) }? as usize;
+    pub unsafe fn new(cx: &mut Cx, desc: u32) -> R<Self> {
+        let pointer = unsafe { cx.alloc_uninit(desc, 32) }? as usize;
         unsafe {
             let object = pointer as *mut Object;
             write_ptr(object.cast(), &raw mut (*object).buffer, 0);
@@ -273,7 +274,7 @@ impl<T: Slot> List<T> {
     }
     #[cold]
     #[inline(never)]
-    fn grow(self, _cx: &mut Cx, required: usize) -> R<()> {
+    fn grow(self, cx: &mut Cx, required: usize) -> R<()> {
         let object = self.pointer as *mut Object;
         let (len, capacity, desc) =
             unsafe { ((*object).len, (*object).capacity, (*object).header.desc) };
@@ -286,7 +287,15 @@ impl<T: Slot> List<T> {
             .checked_mul(T::SIZE)
             .and_then(|n| n.checked_add(16))
             .ok_or_else(|| allocation_failure(usize::MAX))?;
-        let buffer = unsafe { crate::try_alloc(desc + 1, bytes) }?;
+        let buffer = unsafe { cx.alloc_uninit(desc + 1, bytes) }?;
+        unsafe {
+            buffer.add(8).cast::<usize>().write(0);
+            if !matches!(T::LAYOUT, ElementLayout::Scalar) {
+                // The collector traces buffer capacity, including unused slots.
+                // Scalar tails are unread until a push initializes the slot.
+                buffer.add(16).write_bytes(0, capacity * T::SIZE);
+            }
+        }
         unsafe {
             let old = (*object).buffer as *const u8;
             for i in 0..len {
@@ -316,7 +325,7 @@ impl<T: Slot> List<T> {
             .and_then(|n| n.checked_add(32))
             .filter(|_| capacity <= baml_type::Int63::MAX.get() as usize)
             .ok_or_else(|| allocation_failure(usize::MAX))?;
-        let pointer = unsafe { crate::try_alloc(desc, bytes) }? as usize;
+        let pointer = unsafe { cx.alloc_uninit(desc, bytes) }? as usize;
         unsafe {
             let object = pointer as *mut Object;
             // The buffer ABI addresses elements at buffer+16. This interior
@@ -324,6 +333,13 @@ impl<T: Slot> List<T> {
             write_ptr(object.cast(), &raw mut (*object).buffer, pointer + 16);
             (*object).len = 0;
             (*object).capacity = capacity;
+            if !matches!(T::LAYOUT, ElementLayout::Scalar) {
+                // Embedded pointer/tagged slots participate in tracing even
+                // before the list length reaches them. Clear only this buffer.
+                (pointer as *mut u8)
+                    .add(32)
+                    .write_bytes(0, capacity * T::SIZE);
+            }
             Ok(Self::from_raw(pointer))
         }
     }
@@ -1363,6 +1379,68 @@ mod tests {
         let mut instance = Instance::new(DESCRIPTORS, POINTER_TYPES);
         instance.set_stress(true);
         assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+    #[test]
+    fn task_modifier_lists_use_embedded_and_grown_typed_buffers() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let empty = unsafe { List::<Ptr>::new(&mut cx, 7) }?;
+            assert!(unsafe { crate::tasks::pointer_list(empty.as_raw()) }.is_empty());
+            let input = unsafe { List::<Ptr>::with_capacity(&mut cx, 7, 4) }?;
+            for i in 0..9 {
+                let text = cx.string(&format!("token{i}"))?;
+                input.push(&mut cx, unsafe { Ptr::from_raw(text.as_raw()) })?;
+                let pointers = unsafe { crate::tasks::pointer_list(input.as_raw()) };
+                assert_eq!(pointers.len(), (i + 1) as usize);
+                assert_eq!(pointers[i as usize], text.as_raw());
+            }
+            let combined =
+                unsafe { crate::tasks::concat_pointers(7, input.as_raw(), input.as_raw()) }?;
+            cx.poll()?;
+            let combined = unsafe { List::<Ptr>::from_raw(combined) };
+            assert_eq!(combined.len(&cx), 18);
+            for i in 0..18 {
+                let value = unsafe { Str::from_raw(combined.get(&cx, i)?.as_raw()) };
+                assert_eq!(value.as_str(&cx), format!("token{}", i % 9));
+            }
+            assert_eq!(input.len(&cx), 9);
+            Ok(1)
+        }
+        let mut instance = Instance::new(DESCRIPTORS, POINTER_TYPES);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+    }
+    #[test]
+    fn unfilled_pointer_capacity_stays_traceable_through_growth_and_reuse() {
+        fn entry() -> R<i64> {
+            let mut cx = unsafe { Cx::current() };
+            let list = unsafe { List::<Str>::with_capacity(&mut cx, 7, 32) }?;
+            for i in 0..70 {
+                let text = cx.string(&format!("value{i}"))?;
+                list.push(&mut cx, text)?;
+                cx.poll()?;
+                assert_eq!(list.get(&cx, i)?.as_str(&cx), format!("value{i}"));
+            }
+            list.clear(&cx);
+            cx.poll()?;
+            let scalar = unsafe { List::<i64>::with_capacity(&mut cx, 11, 128) }?;
+            cx.poll()?;
+            for i in 0..200 {
+                scalar.push(&mut cx, i)?;
+                if i % 17 == 0 {
+                    cx.poll()?;
+                }
+            }
+            for i in 0..200 {
+                assert_eq!(scalar.get(&cx, i)?, i);
+            }
+            Ok(1)
+        }
+        let mut instance = Instance::new(DESCRIPTORS, POINTER_TYPES);
+        instance.set_stress(true);
+        for _ in 0..3 {
+            assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 1);
+        }
     }
     #[test]
     fn failed_growth_preserves_length_and_elements() {
