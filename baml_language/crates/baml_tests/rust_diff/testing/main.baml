@@ -9,6 +9,11 @@ function rethrow_error() -> int {
     throw_error() catch (e) { baml.errors.InvalidArgument => 0 }
 }
 
+function bad_index() -> int {
+    let xs = [1];
+    xs[3]
+}
+
 test "all assertions pass" {
     assert.is_true(true);
     assert.not_null(7);
@@ -39,7 +44,7 @@ test "typed failure" { throw_error(); }
 test "rethrow failure" { rethrow_error(); }
 test "scalar failure" { throw "scalar error" }
 test "enum failure" { throw TestMarker.Two }
-test "runtime panic failure" { let xs = [1]; let ignored = xs[3]; }
+test "runtime panic failure" { assert.equal(bad_index(), 0) }
 test "cause chain failure" {
     throw_error() catch (e, ctx) { TestError => {
         assert.equal(ctx.cause, null);

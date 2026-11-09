@@ -197,7 +197,10 @@ impl Emitter<'_, '_> {
             self.object,
             self.object,
             self.plan.index.info(self.object).source_file,
-            self.plan.index.display(self.object)
+            // Diagnostics use the loader's canonical name. Telemetry's display
+            // label prefixes synthetic lambdas with their package, while VM
+            // StackFrame.function_name intentionally keeps the leading dot.
+            self.plan.index.name(self.plan.index.rt_origin(self.object))
         ))
     }
     pub(super) fn stmts(&mut self, stmts: &[Stmt], headers: &BTreeSet<usize>) -> Gen<String> {
