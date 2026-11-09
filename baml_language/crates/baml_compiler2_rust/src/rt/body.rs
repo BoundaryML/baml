@@ -178,6 +178,21 @@ impl Emitter<'_, '_> {
         for iter in &self.iters {
             writeln!(&mut code, "let mut iter_index{iter}=0i64;").unwrap();
         }
+        // Private task environments stay addressable until spawn copies their
+        // metadata and capture cells into the managed future's trailing slots.
+        for (block, b) in self.body.blocks.iter().enumerate() {
+            for (statement, s) in b.statements.iter().enumerate() {
+                if let StatementKind::Assign {
+                    value: Rvalue::MakeClosure { captures, .. },
+                    ..
+                } = &s.kind
+                    && captures.len() <= 6
+                    && super::tasks::private_environment_at(self, block, statement)
+                {
+                    writeln!(&mut code, "let mut private_env_{block}_{statement}=rt::closures::PrivateEnvironment::<{}>::empty();", captures.len()).unwrap();
+                }
+            }
+        }
         code.push_str(&self.stack.declarations(self));
         for b in &self.body.blocks {
             if b.landing.is_some() {

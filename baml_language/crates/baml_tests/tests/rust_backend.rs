@@ -1513,6 +1513,7 @@ fn rt_generated_task_errors_and_background_work() {
         "RtTaskErrors",
         "RtBackgroundTask",
         "RtBackgroundError",
+        "RtUnhandledOrder",
         "RtTokenComposition",
     ] {
         let entry = program.rendered_callables()[&format!("user.{name}")]

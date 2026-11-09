@@ -81,6 +81,7 @@ const PROBES: &[&str] = &[
     "RtTaskErrors",
     "RtBackgroundTask",
     "RtBackgroundError",
+    "RtUnhandledOrder",
     "RtTokenComposition",
     "RtVirtualGenericClosures",
     "RtBoundGenericClosures",
@@ -369,9 +370,8 @@ fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf>
         | "RtVirtualOwnGenericClosure"
         | "RtNativeHigherOrderValue"
         | "RtDefaultCallbacks" => Some(manifest.join("rt_fixtures/closure_edges")),
-        "RtTaskErrors" | "RtBackgroundTask" | "RtBackgroundError" | "RtTokenComposition" => {
-            Some(manifest.join("rt_fixtures/task_edges"))
-        }
+        "RtTaskErrors" | "RtBackgroundTask" | "RtBackgroundError" | "RtUnhandledOrder"
+        | "RtTokenComposition" => Some(manifest.join("rt_fixtures/task_edges")),
         "RtClosures" | "RtEmptyClosures" | "RtGenericClosures" | "RtGenericMethods"
         | "RtNativeCallback" | "RtBuiltinCallbacks" => Some(manifest.join("rt_fixtures/closures")),
         "RtSpawnAwait" | "RtTaskControls" | "RtTaskSleep" | "RtTaskModifiers"
@@ -483,6 +483,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
         "RtTaskErrors",
         "RtBackgroundTask",
         "RtBackgroundError",
+        "RtUnhandledOrder",
         "RtTokenComposition",
         "RtVirtualGenericClosures",
         "RtBoundGenericClosures",
@@ -877,6 +878,7 @@ fn rust_differential() {
                                 | "RtTaskErrors"
                                 | "RtBackgroundTask"
                                 | "RtBackgroundError"
+                                | "RtUnhandledOrder"
                                 | "RtTokenComposition"
                                 | "RtVirtualGenericClosures"
                                 | "RtBoundGenericClosures"

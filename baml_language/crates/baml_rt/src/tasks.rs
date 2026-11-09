@@ -1,31 +1,57 @@
 //! Managed futures and owner-thread bindings for compiled task entry points.
 use crate::{Dyn, Error, R};
-use baml_rt_gc::{Descriptor, Header, Kind};
+use baml_rt_gc::{Descriptor, ElementLayout, Elements, Header, Kind};
 pub use baml_rt_tasks::SpawnOptions;
-use baml_rt_tasks::{FutureHandle, SwitchHook, TaskCx, Value};
+use baml_rt_tasks::{SwitchHook, TaskCx, Value};
 use std::{cell::Cell, mem::size_of, ptr};
 
 pub const FUTURE_FINALIZER: u32 = u32::MAX;
+// The managed future is the producer's only future record: the loop keeps
+// just the live task (waiters, cancellation) and the producer settles here.
+// Native state exists only while telemetry is pending or after an error, so
+// only those futures are registered for finalization.
 #[repr(C)]
 struct Future {
     header: Header,
     environment: usize,
     result: Dyn,
     error: *mut Error,
-    handle: Option<FutureHandle>,
-    registration: usize,
+    // Loop task id; meaningful only while the producer has not settled.
+    task: usize,
     telemetry: Option<Box<crate::telemetry::Task>>,
+    // Index into the native finalizer table, or NO_REGISTRATION.
+    registration: u32,
+    flags: u32,
 }
+const NO_REGISTRATION: u32 = u32::MAX;
+const OBSERVED: u32 = 1;
+const CANCEL_REQUESTED: u32 = 2;
+// The producer unwound without its epilogue (a native panic).
+const PANICKED: u32 = 4;
+impl Future {
+    fn settled(&self) -> bool {
+        self.result.tag != u64::MAX || !self.error.is_null() || self.flags & PANICKED != 0
+    }
+}
+// Preserve the ordinary future's 16-byte rounded footprint. Optional trailing
+// tagged slots coallocate a private closure environment with its future.
+const FUTURE_BYTES: usize = (size_of::<Future>() + 15) & !15;
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(size_of::<Future>() == 64);
 pub const fn future_descriptor(type_id: u32) -> Descriptor {
     Descriptor {
         kind: Kind::Future,
-        size: size_of::<Future>(),
+        size: size_of::<Dyn>(),
         ptr_slots: (8, 1),
         tagged_slots: (16, 1),
-        elem: None,
+        elem: Some(Elements {
+            offset: FUTURE_BYTES,
+            layout: ElementLayout::Tagged,
+        }),
         type_id,
         fields: &[],
-        finalizer: Some(FUTURE_FINALIZER),
+        // Attached on demand, when an error is stored.
+        finalizer: None,
     }
 }
 
@@ -37,36 +63,53 @@ pub struct UnhandledTaskError {
 // the GC callback clears its entry, including cycles of settled future values.
 #[derive(Default)]
 pub(crate) struct NativeFinalizers {
-    entries: Vec<usize>,
+    // Registered futures with their spawn sequence numbers.
+    entries: Vec<(usize, u64)>,
     free: Vec<usize>,
     resources: std::collections::HashMap<usize, Resource>,
-    unhandled: Vec<(crate::CaughtError, bool)>,
+    unhandled: Vec<(crate::CaughtError, bool, u64)>,
+    next_sequence: u64,
 }
 impl NativeFinalizers {
-    unsafe fn save_unhandled(&mut self, f: &Future) {
+    unsafe fn save_unhandled(&mut self, f: &mut Future) {
         if !f.error.is_null()
             && unsafe { &*f.error }.class != "baml.panics.Cancelled"
-            && f.handle.as_ref().is_some_and(|h| !h.is_observed())
+            && f.flags & OBSERVED == 0
         {
             let error = Box::new(unsafe { &*f.error }.clone());
+            let sequence = self.entries[f.registration as usize].1;
             self.unhandled.push((
                 unsafe { crate::CaughtError::new(error) },
-                f.handle.as_ref().unwrap().was_cancel_requested(),
+                f.flags & CANCEL_REQUESTED != 0,
+                sequence,
             ));
-            let _ = f.handle.as_ref().unwrap().result();
+            f.flags |= OBSERVED;
         }
     }
+    // Reports found together (one collection, or the end of an invocation)
+    // follow the VM: dead futures in allocation order, i.e. spawn order,
+    // whatever order their producers settled in.
+    fn order_reports_since(&mut self, start: usize) {
+        self.unhandled[start..].sort_by_key(|report| report.2);
+    }
     pub(crate) unsafe fn finish_invocation(&mut self) {
-        for pointer in self.entries.clone().into_iter().filter(|p| *p != 0) {
+        let start = self.unhandled.len();
+        for (pointer, _) in self.entries.clone().into_iter().filter(|e| e.0 != 0) {
             unsafe {
-                self.save_unhandled(&*(pointer as *const Future));
+                self.save_unhandled(&mut *(pointer as *mut Future));
             }
         }
+        self.order_reports_since(start);
+    }
+    fn next_sequence(&mut self) -> u64 {
+        let sequence = self.next_sequence;
+        self.next_sequence += 1;
+        sequence
     }
     pub(crate) fn take_reports(&mut self) -> Vec<UnhandledTaskError> {
         std::mem::take(&mut self.unhandled)
             .into_iter()
-            .map(|(error, cancelled)| UnhandledTaskError {
+            .map(|(error, cancelled, _)| UnhandledTaskError {
                 error: error.rethrow(),
                 cancelled,
             })
@@ -78,27 +121,26 @@ impl NativeFinalizers {
             .find(|r| !r.cancelled)
             .map(|r| r.error)
     }
-    fn register(&mut self, pointer: usize) -> usize {
+    fn register(&mut self, pointer: usize, sequence: u64) -> usize {
         if let Some(i) = self.free.pop() {
-            self.entries[i] = pointer;
+            self.entries[i] = (pointer, sequence);
             i
         } else {
             let i = self.entries.len();
-            self.entries.push(pointer);
+            self.entries.push((pointer, sequence));
             i
         }
     }
     fn release(&mut self, i: usize) {
-        if self.entries[i] != 0 {
-            self.entries[i] = 0;
+        if self.entries[i].0 != 0 {
+            self.entries[i].0 = 0;
             self.free.push(i);
         }
     }
     pub(crate) unsafe fn destroy(&mut self) {
-        for pointer in self.entries.drain(..).filter(|p| *p != 0) {
+        for (pointer, _) in self.entries.drain(..).filter(|e| e.0 != 0) {
             unsafe {
                 let f = &mut *(pointer as *mut Future);
-                f.handle.take();
                 f.telemetry.take();
                 if !f.error.is_null() {
                     drop(Box::from_raw(f.error));
@@ -112,19 +154,25 @@ impl NativeFinalizers {
 }
 thread_local! { pub(crate) static FINALIZERS: Cell<*mut NativeFinalizers> = const { Cell::new(ptr::null_mut()) }; }
 
+unsafe fn register(pointer: usize, sequence: u64) -> u32 {
+    let index = unsafe { (&mut *FINALIZERS.get()).register(pointer, sequence) };
+    u32::try_from(index)
+        .ok()
+        .filter(|&i| i != NO_REGISTRATION)
+        .expect("future registrations exhausted")
+}
 unsafe fn release_registration(f: &mut Future) {
-    if f.registration != usize::MAX {
+    if f.registration != NO_REGISTRATION {
         unsafe {
-            (&mut *FINALIZERS.get()).release(f.registration);
+            (&mut *FINALIZERS.get()).release(f.registration as usize);
         }
-        f.registration = usize::MAX;
+        f.registration = NO_REGISTRATION;
     }
 }
 pub(crate) unsafe fn finalize(pointer: usize) {
     unsafe {
         let f = &mut *(pointer as *mut Future);
         (&mut *FINALIZERS.get()).save_unhandled(f);
-        f.handle.take();
         f.telemetry.take();
         if !f.error.is_null() {
             drop(Box::from_raw(f.error));
@@ -135,6 +183,7 @@ pub(crate) unsafe fn finalize(pointer: usize) {
 }
 pub(crate) unsafe fn drain_finalizers() {
     let pending = unsafe { (&mut *crate::HEAP.get()).take_pending_finalizers() };
+    let start = unsafe { (&*FINALIZERS.get()).unhandled.len() };
     for token in pending {
         unsafe {
             if token.cleanup == FUTURE_FINALIZER {
@@ -151,6 +200,7 @@ pub(crate) unsafe fn drain_finalizers() {
             (&mut *crate::HEAP.get()).complete_finalizer(token);
         }
     }
+    unsafe { (&mut *FINALIZERS.get()).order_reports_since(start) };
 }
 
 pub(crate) struct FiberBinding<'a> {
@@ -167,7 +217,7 @@ impl<'a> FiberBinding<'a> {
         unsafe {
             Self {
                 cx,
-                limit: (&*crate::ROOTS.get()).stack_limit(cx.id()),
+                limit: cx.stack_limit(),
                 telemetry: crate::telemetry::Fiber::current(telemetry),
                 previous_entry_error: crate::ENTRY_ERROR.replace(ptr::null_mut()),
                 previous_task: crate::TASK.get(),
@@ -247,26 +297,46 @@ pub unsafe fn spawn(
     name: Option<String>,
 ) -> R<usize> {
     unsafe {
-        let pointer = crate::try_alloc(desc, size_of::<Future>())?.cast::<Future>();
+        let slots = if crate::closures::is_private(environment) {
+            crate::closures::private_slots(environment)
+        } else {
+            0
+        };
+        let pointer =
+            crate::try_alloc(desc, FUTURE_BYTES + slots * size_of::<Dyn>())?.cast::<Future>();
+        let environment = if slots != 0 {
+            let target = pointer.cast::<u8>().add(FUTURE_BYTES).cast::<Dyn>();
+            let source = (environment & !1) as *const Dyn;
+            for i in 0..slots {
+                crate::write_dyn(pointer.cast(), target.add(i), source.add(i).read());
+            }
+            (target as usize) | 1
+        } else {
+            environment
+        };
         baml_rt_gc::write_ptr(pointer.cast(), &mut (*pointer).environment, environment);
         (*pointer).result = Dyn {
             tag: u64::MAX,
             payload: 0,
         };
         (*pointer).error = ptr::null_mut();
-        ptr::write(&mut (*pointer).handle, None);
-        ptr::write(
-            &mut (*pointer).telemetry,
-            crate::telemetry::Task::spawn(site, name),
-        );
-        (*pointer).registration = (&mut *FINALIZERS.get()).register(pointer as usize);
+        (*pointer).flags = 0;
+        let sequence = (&mut *FINALIZERS.get()).next_sequence();
+        let telemetry = crate::telemetry::Task::spawn(site, name);
+        // Until execution takes it, a telemetry record is native state that
+        // shutdown must release; plain futures own nothing native.
+        (*pointer).registration = if telemetry.is_some() {
+            register(pointer as usize, sequence)
+        } else {
+            NO_REGISTRATION
+        };
+        ptr::write(&mut (*pointer).telemetry, telemetry);
         options.managed_roots = [pointer as usize, 0];
-        let handle = (&mut *crate::TASK.get()).spawn_managed(
-            options,
+        (*pointer).task = (&mut *crate::TASK.get()).spawn_managed(
+            &mut options,
             execute,
-            [pointer as usize, site, entry_site, 0],
+            [pointer as usize, site, entry_site, sequence as usize],
         );
-        (*pointer).handle = Some(handle);
         Ok(pointer as usize)
     }
 }
@@ -274,6 +344,15 @@ unsafe fn execute(cx: &mut TaskCx<'_>, data: [usize; 4]) -> baml_rt_tasks::Outco
     unsafe {
         let f = data[0] as *mut Future;
         let telemetry = (*f).telemetry.take();
+        release_registration(&mut *f);
+        // A native panic unwinds through here without the epilogue below.
+        struct Unwind(*mut Future);
+        impl Drop for Unwind {
+            fn drop(&mut self) {
+                unsafe { (*self.0).flags |= PANICKED };
+            }
+        }
+        let unwind = Unwind(f);
         let mut binding = FiberBinding::new(cx, ptr::null_mut());
         binding.telemetry = telemetry.as_ref().map(|task| task.fiber.clone());
         binding.install();
@@ -293,6 +372,16 @@ unsafe fn execute(cx: &mut TaskCx<'_>, data: [usize; 4]) -> baml_rt_tasks::Outco
         }
         if let Some(task) = &telemetry {
             task.finish(&result);
+        }
+        if crate::closures::is_private((*f).environment) {
+            // Capture cells must not stay rooted merely because a settled
+            // future remains live after its producer's environment is dead.
+            let env = (*f).environment;
+            let slots = crate::closures::private_slots(env);
+            let tail = (env & !1) as *mut Dyn;
+            for i in 0..slots {
+                crate::write_dyn(f.cast(), tail.add(i), Dyn { tag: 0, payload: 0 });
+            }
         }
         baml_rt_gc::write_ptr(f.cast(), &mut (*f).environment, 0);
         let outcome = match result {
@@ -325,9 +414,19 @@ unsafe fn execute(cx: &mut TaskCx<'_>, data: [usize; 4]) -> baml_rt_tasks::Outco
                     }
                 };
                 (*f).error = Box::into_raw(error);
+                // Preserve cancellation from ancestors, linked tokens and
+                // deadlines, exactly as a loop-side future records it.
+                if cx.cancellation_requested() {
+                    (*f).flags |= CANCEL_REQUESTED;
+                }
+                // The error box is native state: register it for unhandled
+                // reporting and release when the future dies.
+                (*f).registration = register(f as usize, data[3] as u64);
+                (&mut *crate::HEAP.get()).attach_finalizer(f as usize, FUTURE_FINALIZER);
                 Err(outcome)
             }
         };
+        std::mem::forget(unwind);
         outcome
     }
 }
@@ -340,24 +439,22 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
         (&mut *crate::TASK.get())
             .check_cancel()
             .map_err(loop_error)?;
-        if (*pointer).result.tag == u64::MAX && (*pointer).error.is_null() {
-            let handle = (*pointer)
-                .handle
-                .as_ref()
-                .expect("pending producer")
-                .clone();
+        if !(*pointer).settled() {
             crate::telemetry::before_yield();
-            let result = (&mut *crate::TASK.get()).await_future(&handle);
+            let result = (&mut *crate::TASK.get()).await_task((*pointer).task);
             // Admission errors still pass through the managed entry wrapper.
-            if let Err(error) = result {
-                if (*pointer).error.is_null() {
-                    return Err(loop_error(error));
-                }
+            if let Err(error) = result
+                && (*pointer).error.is_null()
+            {
+                return Err(loop_error(error));
             }
         }
-        if let Some(handle) = (*pointer).handle.take() {
-            let _ = handle.result();
+        if (*pointer).flags & PANICKED != 0 && (*pointer).error.is_null() {
+            return Err(loop_error(baml_rt_tasks::Err::InternalError(
+                "task panicked".into(),
+            )));
         }
+        (*pointer).flags |= OBSERVED;
         if !(*pointer).error.is_null() {
             let mut error = Box::new((*(*pointer).error).clone());
             // A cancelled await is a fresh raise in the awaiting task.
@@ -368,10 +465,6 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
             }
             return Err(error);
         }
-        if (*pointer).registration != usize::MAX {
-            release_registration(&mut *pointer);
-            (&mut *crate::HEAP.get()).suppress_finalizer(pointer as usize);
-        }
         Ok((*pointer).result)
     }
 }
@@ -380,8 +473,14 @@ pub unsafe fn await_future(pointer: usize) -> R<Dyn> {
 /// The argument names a live future in the current heap.
 pub unsafe fn cancel(pointer: usize) -> bool {
     unsafe {
-        let f = &*(pointer as *const Future);
-        f.handle.as_ref().is_some_and(FutureHandle::try_cancel)
+        let f = &mut *(pointer as *mut Future);
+        let previous = f.flags & CANCEL_REQUESTED != 0;
+        f.flags |= CANCEL_REQUESTED;
+        if previous || f.settled() {
+            return false;
+        }
+        (&*crate::TASK.get()).cancel_task(f.task);
+        true
     }
 }
 
@@ -553,6 +652,54 @@ mod tests {
         }
     }
     #[test]
+    fn private_environment_is_copied_traced_and_released_after_settlement() {
+        struct OnlyFuture(std::cell::UnsafeCell<usize>);
+        impl baml_rt_gc::RootSource for OnlyFuture {
+            fn conservative_ranges(&self, _: &mut dyn FnMut(*const usize, *const usize)) {}
+            fn precise_roots(&self, visit: &mut dyn FnMut(*mut usize)) {
+                visit(self.0.get());
+            }
+        }
+        fn entry() -> R<i64> {
+            static META: crate::closures::PrivateMetadata =
+                crate::closures::PrivateMetadata::new(123, child, 1);
+            unsafe {
+                let cell = crate::closures::cell(10, Dyn { tag: 0, payload: 1 })?;
+                let mut env = crate::closures::PrivateEnvironment::new(&META, 13, [cell]);
+                let future = spawn(12, env.as_raw(), 0, 0, SpawnOptions::default(), None)?;
+                env = crate::closures::PrivateEnvironment::empty();
+                std::hint::black_box(&env);
+                let copied = (*(future as *const Future)).environment;
+                assert!(crate::closures::is_private(copied));
+                assert_eq!(crate::closures::capture(copied, 0), cell);
+                // Ignore all stacks: only the future's precise trailing slots
+                // can keep the captured cell alive during this collection.
+                (&mut *crate::HEAP.get()).collect(&OnlyFuture(std::cell::UnsafeCell::new(future)));
+                // A dead object can retain its start bit until lazy sweeping.
+                // Verify the cell's mark from that collection without adding
+                // it to the collection's roots.
+                (&*crate::HEAP.get()).verify(&OnlyFuture(std::cell::UnsafeCell::new(cell)));
+                assert_eq!((&*crate::HEAP.get()).object_start(cell), Some(cell));
+                crate::closures::store(
+                    cell,
+                    Dyn {
+                        tag: 0,
+                        payload: 41,
+                    },
+                );
+                assert_eq!(await_future(future)?.payload, 42);
+                let tail = (future + FUTURE_BYTES) as *const Dyn;
+                assert_eq!((*tail).payload, 0);
+                assert_eq!((*tail.add(1)).payload, 0);
+                Ok(42)
+            }
+        }
+        let mut instance = crate::Instance::new(DESCRIPTORS, POINTERS);
+        instance.set_stress(true);
+        assert_eq!(unsafe { instance.run_baml(entry) }.unwrap(), 42);
+    }
+
+    #[test]
     fn managed_await_restores_fiber_bindings_and_roots_across_gc_and_sleeps() {
         let mut instance = crate::Instance::new(DESCRIPTORS, POINTERS);
         instance.set_stress(true);
@@ -636,21 +783,23 @@ pub unsafe fn await_any(pointers: &[usize]) -> R<i64> {
                 return Ok(i as i64);
             }
         }
-        let handles = pointers
+        let tasks = pointers
             .iter()
-            .map(|&p| {
-                (*(p as *const Future))
-                    .handle
-                    .as_ref()
-                    .expect("pending future")
-                    .clone()
-            })
+            .map(|&p| (*(p as *const Future)).task)
             .collect::<Vec<_>>();
         crate::telemetry::before_yield();
-        (&mut *crate::TASK.get())
-            .await_settled(&handles)
-            .map(|i| i as i64)
-            .map_err(loop_error)
+        // The first settled input in input order, including a panicked one.
+        loop {
+            if let Some(i) = pointers
+                .iter()
+                .position(|&p| (*(p as *const Future)).settled())
+            {
+                return Ok(i as i64);
+            }
+            (&mut *crate::TASK.get())
+                .await_any_task(&tasks)
+                .map_err(loop_error)?;
+        }
     }
 }
 

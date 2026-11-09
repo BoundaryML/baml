@@ -1157,9 +1157,10 @@ impl Heap {
         native.retain(|&object, _| self.marked(object));
         self.native = native;
         let finals = std::mem::take(&mut self.finalizable);
+        // Retired records were detached from their objects, which may be dead.
         self.finalizable = finals
             .into_iter()
-            .filter(|f| self.marked(f.object))
+            .filter(|f| f.state != 2 && self.marked(f.object))
             .collect();
         for (index, record) in self.finalizable.iter().enumerate() {
             unsafe {
@@ -1304,12 +1305,20 @@ impl Heap {
             .get_mut(index as usize - 1)
             .filter(|f| f.object == object)
     }
+    // A finished record has nothing left to run. Detach it from its object
+    // so the next collection can drop it without locating that object.
+    fn retire_record(object: usize, record: &mut Finalizable) {
+        record.state = 2;
+        unsafe {
+            (*(object as *mut Header)).aux &= 1;
+        }
+    }
     pub fn complete_finalizer(&mut self, token: Finalizer) {
         let record = self
             .finalizer_record(token.object)
             .expect("finalizer belongs to heap");
         assert_eq!(record.state, 1, "finalizer not pending");
-        record.state = 2;
+        Self::retire_record(token.object, record);
     }
     /// Aux bit zero is the class run-once latch; upper bits index its finalizer.
     pub unsafe fn begin_cleanup(&mut self, object: usize) -> bool {
@@ -1321,15 +1330,34 @@ impl Heap {
         if let Some(record) = self.finalizer_record(object)
             && record.state == 0
         {
-            record.state = 2;
+            Self::retire_record(object, record);
         }
         true
+    }
+    /// Arm a finalizer for an object whose descriptor has none, once it
+    /// acquires native state. The object keeps any run-once latch.
+    ///
+    /// # Safety
+    /// `object` is a live object of this heap with no armed finalizer.
+    pub unsafe fn attach_finalizer(&mut self, object: usize, cleanup: FinalizerId) {
+        let index = u32::try_from(self.finalizable.len() + 1).expect("finalizer table exhausted");
+        assert!(index <= u32::MAX / 2, "finalizer table exhausted");
+        debug_assert!(self.finalizer_record(object).is_none());
+        unsafe {
+            let header = &mut *(object as *mut Header);
+            header.aux = (index << 1) | (header.aux & 1);
+        }
+        self.finalizable.push(Finalizable {
+            object,
+            cleanup,
+            state: 0,
+        });
     }
     /// Suppress after native resources were released by an explicit observer.
     pub fn suppress_finalizer(&mut self, object: usize) {
         if let Some(record) = self.finalizer_record(object) {
             assert_eq!(record.state, 0);
-            record.state = 2;
+            Self::retire_record(object, record);
         }
     }
     /// Attach owner-thread native state to a managed opaque handle.

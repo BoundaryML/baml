@@ -184,6 +184,7 @@ RtTaskModifiers	pass
 RtTaskSleep	pass
 RtTaskTimeout	pass
 RtTokenComposition	pass
+RtUnhandledOrder	pass
 RtVirtualGenericClosures	pass
 RtVirtualOwnGenericClosure	pass
 RuntimeClass	unsupported: field type Type (layout Class, object 14, types [Type])

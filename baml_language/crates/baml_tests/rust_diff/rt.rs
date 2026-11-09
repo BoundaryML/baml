@@ -23,6 +23,7 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtTaskErrors",
     "RtBackgroundTask",
     "RtBackgroundError",
+    "RtUnhandledOrder",
     "RtTokenComposition",
     "RtVirtualGenericClosures",
     "RtBoundGenericClosures",
@@ -58,6 +59,7 @@ pub fn supports_level(probe: &str, level: &str) -> bool {
                 | "RtTaskErrors"
                 | "RtBackgroundTask"
                 | "RtBackgroundError"
+                | "RtUnhandledOrder"
                 | "RtTokenComposition"
                 | "RtVirtualGenericClosures"
                 | "RtBoundGenericClosures"

@@ -11,7 +11,6 @@ use btel_types::{
 };
 use std::{
     cell::Cell,
-    collections::HashMap,
     num::NonZeroUsize,
     sync::{
         Arc,
@@ -101,7 +100,8 @@ struct State {
     name: Option<btel_records::ThreadName>,
     sites: &'static [Site],
     caches: Vec<Cache>,
-    paths: HashMap<Key, (CallPathId, *mut AggregateDelta)>,
+    // Keys are small loop-local integers; no untrusted input reaches this map.
+    paths: rustc_hash::FxHashMap<Key, (CallPathId, *mut AggregateDelta)>,
     histories: Vec<Vec<Cache>>,
     // Stable addresses let on-stack frames update their slot after nested calls
     // grow the table. These pointers never address the managed heap.
@@ -171,6 +171,12 @@ impl State {
             }
         }
         if !batch.is_empty() {
+            // Select only when there is timing data to attribute. A fiber can
+            // enter/leave without completing an observed call; publishing an
+            // otherwise empty selector chunk costs a transport handoff.
+            self.producer.write_timing(TimingRecord::ThreadSelected {
+                thread_id: self.thread,
+            });
             self.producer
                 .write_timing(TimingRecord::AggregateDeltas(batch.into_boxed_slice()));
         }
@@ -291,9 +297,6 @@ impl Fiber {
         state.name = self.name.clone();
         state.started = self.started;
         CURRENT.set(self.state);
-        state.producer.write_timing(TimingRecord::ThreadSelected {
-            thread_id: self.thread,
-        });
     }
     pub(crate) unsafe fn leave(&mut self) {
         *self = unsafe { Self::current(self.state.cast()) }.unwrap();
@@ -839,6 +842,9 @@ fn complete_unusual(
     if let Some(sum) = slot.checked_merge(sample) {
         *slot = sum;
     } else {
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
         state.producer.write_timing(TimingRecord::AggregateDeltas(
             vec![*slot].into_boxed_slice(),
         ));
@@ -1014,10 +1020,25 @@ impl Session {
         if level.is_none() {
             return Ok(session);
         }
-        let pool = Pool::new(bex_chunkedringbuffer::Config::for_producers(
-            NonZeroUsize::new(1).unwrap(),
-        ))
-        .map_err(|e| Error::internal(format!("telemetry transport: {e:?}")))?;
+        // Logical tasks seal sparse chunks at every suspension and completion.
+        // Retain the standard transport's lane sizing even though there is only
+        // one OS producer, so two partial chunks do not force it to wait for
+        // the processor after almost every task.
+        let defaults = bex_chunkedringbuffer::Config::default();
+        let mut transport =
+            bex_chunkedringbuffer::Config::for_producers(NonZeroUsize::new(1).unwrap());
+        // Keep the standard lane record budget, spread across smaller chunks:
+        // task switches seal partial streams, so record capacity per chunk is
+        // rarely the limiting resource for this single producer.
+        transport.chunk_capacity = NonZeroUsize::new(32).unwrap();
+        let scale = defaults
+            .chunk_capacity
+            .get()
+            .div_ceil(transport.chunk_capacity.get());
+        transport.timing_chunks = NonZeroUsize::new(defaults.timing_chunks.get() * scale).unwrap();
+        transport.span_chunks = NonZeroUsize::new(defaults.span_chunks.get() * scale).unwrap();
+        let pool = Pool::new(transport)
+            .map_err(|e| Error::internal(format!("telemetry transport: {e:?}")))?;
         let consumer_pool = pool.clone();
         let allocator = btel_types::FunctionIdAllocator::default();
         let ids: Vec<_> = functions
@@ -1104,7 +1125,7 @@ impl Session {
             name: None,
             sites,
             caches: vec![Cache::default(); sites.len()],
-            paths: HashMap::new(),
+            paths: Default::default(),
             histories: vec![Vec::new(); sites.len()],
             reader: DeltaClock::for_epoch(&clock),
             slots: Vec::new(),
@@ -1537,7 +1558,7 @@ mod tests {
             name: None,
             sites: SITES,
             caches: vec![Cache::default(); 3],
-            paths: HashMap::new(),
+            paths: Default::default(),
             histories: vec![Vec::new(); SITES.len()],
             reader: DeltaClock::Epoch,
             slots: Vec::new(),
@@ -1825,6 +1846,9 @@ pub(crate) fn sysop<T>(call: impl FnOnce() -> R<T>) -> R<T> {
     let result = call();
     let state = unsafe { &mut *pointer };
     if path != CallPathId::ROOT && state.active_function.is_some() {
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
         state.producer.write_timing(TimingRecord::SysOpTime {
             call_path: path,
             elapsed: started.elapsed_until(state.read()),
