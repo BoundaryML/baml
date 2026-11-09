@@ -88,14 +88,18 @@ impl Repr {
         })
     }
     pub(super) fn to_slot(self, value: &str) -> Gen<String> {
-        Ok(if self.pointer() {
+        Ok(if self == Self::Null {
+            format!("{{let _={value};rt::maps::Null}}")
+        } else if self.pointer() {
             format!("<{}>::from_raw({value})", self.slot()?)
         } else {
             value.into()
         })
     }
     pub(super) fn from_slot(self, value: &str) -> String {
-        if self.pointer() {
+        if self == Self::Null {
+            format!("{{let _={value};0usize}}")
+        } else if self.pointer() {
             format!("({value}).as_raw()")
         } else {
             value.into()

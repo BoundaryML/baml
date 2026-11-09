@@ -159,7 +159,8 @@ pub(super) fn emit(
                 };
                 format!("rt::Dyn{{tag:{tag},payload:{payload}}}")
             };
-            writeln!(out,"let cx=rt::calls::Context::current();let value=(if rt::telemetry::active(){{f{callee}::<true>(cx,{site})}}else{{f{callee}::<false>(cx,{site})}}).map_err(|e|e.at(&S{chain},{step}))?;rt::globals::store({slot},{value},{});",repr.pointer()).unwrap();
+            let cxt = super::exceptions::context_type(plan.error_contexts);
+            writeln!(out,"let cx={cxt}::current();let value=(if rt::telemetry::active(){{f{callee}::<true>(cx,{site})}}else{{f{callee}::<false>(cx,{site})}}).map_err(|e|e.at(&S{chain},{step}))?;rt::globals::store({slot},{value},{});",repr.pointer()).unwrap();
         }
         let package = plan
             .program

@@ -439,7 +439,7 @@ pub(super) fn emit_shapes(
             }
         }
     }
-    let last = plan.bigint_descriptor() + usize::from(plan.bigints);
+    let last = plan.descriptor_end();
     for (&class, layout) in &plan.layouts {
         let definition = plan.class(class);
         writeln!(out,"unsafe fn json_encode_class_{class}(encoder:&mut rt::json_lists::Encoder<'_>,p:usize,depth:usize)->R<()>{{unsafe{{encoder.begin_class();let mut first=true;").unwrap();

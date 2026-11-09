@@ -63,8 +63,9 @@ impl super::Emitter<'_, '_> {
         }
         };
         let expression = self.coerce((expression, repr), Repr::Tagged)?;
+        let cxt = super::exceptions::context_type(self.plan.error_contexts);
         Ok(format!(
-            "static O{object}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);unsafe fn closure{object}(env:usize,_site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let cx=rt::calls::Context::current();{prelude}Ok({expression})}}}}\n"
+            "static O{object}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);unsafe fn closure{object}(env:usize,_site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let cx={cxt}::current();{prelude}Ok({expression})}}}}\n"
         ))
     }
 }
