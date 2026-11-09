@@ -181,6 +181,20 @@ function main()->int { GATE }"#,
         r#"class Counter{calls:int} class Key{id:int counter:Counter implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{self.counter.calls+=1;self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{0.hash(state);}}} function main()->int {let counter=Counter{calls:0};let a=Key{id:1,counter};let b=Key{id:1,counter};let m:map<Key[],int> = {[a,a]:7};m[[b,b]]+counter.calls}"#,
         r#"class Counter{calls:int values:Key[]} class Key{id:int counter:Counter implements baml.ops.Equals{function eq(self,other:Self)->bool throws never{self.id==other.id}} implements baml.Hash{function hash(self,state:baml.hash.Hasher)->void throws never{self.counter.calls+=1;self.counter.values.clear();baml.sys.collect_garbage();0.hash(state);}}} function main()->int {let counter=Counter{calls:0,values:[]};counter.values=[Key{id:1,counter},Key{id:2,counter}];let m:map<Key[],int> = {};m[counter.values]=7;counter.calls+m.length()}"#,
         r#"enum E{A B} class Box{kind:E maybe:int?} function main()->int{let m:map<string,Box> = {"a":Box{kind:E.A,maybe:null}};let text=baml.json.stringify(m,omit_nulls=true);let n=0;for(let c in text.to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"first":"Red","second":"Blue"}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Blue} class Box{items:map<string,Color?>} function main()->int{let b=baml.json.decode<Box>(`{"items":{"red":"Red","none":null}}`);let n=0;for(let c in baml.json.stringify(b.items).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red @alias("r") Blue Hidden @skip} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"a":"r","b":"Blue"}`,naming=baml.json.Naming.Aliased);let n=0;for(let c in baml.json.stringify(m,naming=baml.json.Naming.Aliased).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"a":"Missing"}`);m.length()}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"a":7}`);m.length()}"#,
+        r#"enum Color{Red @alias("r") Blue} function main()->int{let m=baml.json.decode<map<string,Color|string>>(`{"a":"Red","b":"other"}`);let n=0;for(let c in baml.json.stringify(m,naming=baml.json.Naming.Aliased).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color.Red>>(`{"a":"Blue"}`);m.length()}"#,
+        r#"enum Color{Red Blue} function main()->int{let m=baml.json.decode<map<string,Color.Red>>(`{"a":"Red"}`);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"enum Color{Red Hidden @skip} function main()->int{let m=baml.json.decode<map<string,Color>>(`{"a":"Hidden"}`,naming=baml.json.Naming.Aliased);m.length()}"#,
+        r#"enum Color{Red Hidden @skip} function main()->int{let m=baml.json.decode<map<string,Color.Hidden>>(`{"a":"Hidden"}`,naming=baml.json.Naming.Aliased);m.length()}"#,
+        r#"enum Color{Hidden @skip Visible @alias("Hidden")} class Box{kind:Color @skip items:map<string,Color>} function main()->int{let b=baml.json.decode<Box>(`{"items":{"a":"Hidden"}}`,naming=baml.json.Naming.Aliased);let n=0;for(let c in baml.json.stringify(b).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
+        r#"function main()->int{let m=baml.json.decode<map<string,baml.json.Naming>>(`{"a":"Declared","b":"Aliased"}`);m.length()}"#,
+        r#"enum E{A @skip B @skip} class Box{kind:E @skip} function main()->int{let m=baml.json.decode<map<string,Box>>(`{"a":{}}`,naming=baml.json.Naming.Aliased);m.length()}"#,
+        r#"enum E{A @skip B @skip} class Box{kind:E.B @skip} function main()->int{let m=baml.json.decode<map<string,Box>>(`{"a":{}}`,naming=baml.json.Naming.Aliased);let n=0;for(let c in baml.json.stringify(m).to_code_points()){n=(n*31+c)%1000000007;}n}"#,
     ];
     let selected = std::env::var("BAML_RT_GLOBALS_MAPS_CASES")
         .ok()
@@ -235,8 +249,10 @@ function main()->int { GATE }"#,
         if compare_telemetry {
             // The in-process VM oracle returns the integer to its caller; it
             // does not call the CLI's ToString formatter after the invocation.
-            let marker = ",Some(";
-            let start = emitted.rfind(marker).expect("driver format site");
+            // The initializer argument follows the format site; keep it.
+            let marker = "TELEMETRY_SITES,Some(";
+            let start =
+                emitted.rfind(marker).expect("driver format site") + "TELEMETRY_SITES".len();
             let end = emitted[start..].find(')').unwrap() + start + 1;
             emitted.replace_range(start..end, ",None");
         }
@@ -246,6 +262,11 @@ function main()->int { GATE }"#,
             baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap(),
         )
         .unwrap();
+        if std::env::var_os("BAML_RT_GLOBALS_MAPS_DUMP").is_some() {
+            let dump =
+                PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("globals-maps-case{i}.rs"));
+            std::fs::write(dump, &emitted).unwrap();
+        }
         let src = temp.path().join(format!("case{i}.rs"));
         let bin = temp.path().join(format!("case{i}"));
         std::fs::write(&src, emitted).unwrap();

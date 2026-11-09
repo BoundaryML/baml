@@ -181,6 +181,15 @@ mod tests {
 /// The initializer runner is a host boundary, just as engine construction is
 /// for the VM. Observation of the original thrown value finishes before this
 /// host diagnostic is constructed.
+/// The VM's startup traceback renders each frame with `Function::name`, which
+/// spells synthetic bodies (closures) without their package label:
+/// `.<lambda(GLOBAL, 0)>`, where emitted sources carry `user.<lambda(..)>`.
+fn vm_frame_name(function: &str) -> &str {
+    match function.find(".<") {
+        Some(dot) if !function[..dot].contains('<') => &function[dot..],
+        _ => function,
+    }
+}
 pub fn init_failed(error: Box<Error>, package: &str) -> Box<Error> {
     let global = error
         .frames
@@ -191,7 +200,7 @@ pub fn init_failed(error: Box<Error>, package: &str) -> Box<Error> {
             .frames
             .iter()
             .rev()
-            .map(|f| (f.file, f.line, f.function)),
+            .map(|f| (f.file, f.line, vm_frame_name(f.function))),
     );
     let detail = if error.value == 0 {
         if let Some(detail) = error

@@ -365,6 +365,34 @@ pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -
             format!("Enum(CAPTURE_D{e})")
         }
         T::List(t) => format!("List(&{})", capture_wire_type(plan, t)?),
+        T::Future(value, error) => format!(
+            "Future(&{},&{})",
+            capture_wire_type(plan, value)?,
+            capture_wire_type(plan, error)?
+        ),
+        T::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            let params = params
+                .iter()
+                .map(|p| {
+                    Ok(format!(
+                        "rt::telemetry::capture::Parameter{{name:{:?},optional:{},ty:&{}}}",
+                        p.name.as_ref().map(|n| n.as_str()),
+                        p.mode == baml_type::FunctionParamMode::Optional,
+                        capture_wire_type(plan, &p.ty)?
+                    ))
+                })
+                .collect::<Gen<Vec<_>>>()?
+                .join(",");
+            format!(
+                "Function{{params:&[{params}],ret:&{},throws:&{}}}",
+                capture_wire_type(plan, ret)?,
+                capture_wire_type(plan, throws)?
+            )
+        }
         T::Map { key, value } => format!(
             "Map(&{},&{})",
             capture_wire_type(plan, key)?,
@@ -515,7 +543,7 @@ pub(super) fn capture_repr(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
             let (key, value) = map_types(plan, repr)?;
             format!("{prefix}Map(&{key},&{value})")
         }
-        Repr::ListClosure(id)|Repr::ListFuture(id) => format!(
+        Repr::ListClosure(id) | Repr::ListFuture(id) => format!(
             "{prefix}List(&{})",
             super::closures::capture_type(&plan.closure_lists[&id])?
         ),
