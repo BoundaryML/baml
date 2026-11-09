@@ -1,0 +1,200 @@
+name: baml_rt gate
+
+# Differential and corpus checks for the compiled runtime (baml_rt) against the
+# bytecode VM. Runs only for the runtime branch; fold into kiln-shadow.yml once
+# the branch merges.
+
+on:
+  push:
+    branches: ["brr/runtime-v2"]
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: "Corpus shards (parallel runners)"
+        default: "16"
+
+concurrency:
+  group: rt-gate-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: 0
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  plan:
+    name: "Plan corpus shards"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: plan
+        name: "Split corpus namespaces into shards"
+        run: |
+          n="${{ github.event.inputs.shards || '16' }}"
+          python3 - "$n" <<'EOF' >> "$GITHUB_OUTPUT"
+          import json, os, sys
+          n = int(sys.argv[1])
+          root = "baml_language/crates/baml_tests/baml_src"
+          names = sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d)))
+          shards = [names[i::n] for i in range(n)]
+          matrix = [{"index": i, "namespaces": " ".join(s)} for i, s in enumerate(shards) if s]
+          print("shards=" + json.dumps(matrix))
+          EOF
+
+  corpus:
+    name: "Corpus shard ${{ matrix.shard.index }}"
+    needs: plan
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=high
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            git update-ref refs/heads/canary "${basis:-$(git rev-parse HEAD)}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          if [ -n "${basis}" ]; then echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"; fi
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv uv"
+      - name: "Load .envrc with direnv"
+        run: |
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+      - name: "Run corpus gate on this shard"
+        working-directory: baml_language
+        run: |
+          set -uo pipefail
+          mkdir -p ../rt-gate-out
+          first=1
+          for ns in ${{ matrix.shard.namespaces }}; do
+            name="${ns#ns_}"
+            flags=()
+            [ "$first" = 1 ] || flags+=(--skip-build)
+            first=0
+            echo "::group::${ns}"
+            uv run --no-project crates/baml_tests/rust_diff/rt_corpus.py \
+              --select "root.${name}*" --label "ci-${ns}" "${flags[@]}" \
+              2>&1 | tee "../rt-gate-out/${ns}.log" || true
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rt-corpus-shard-${{ matrix.shard.index }}
+          path: rt-gate-out/
+
+  differential:
+    name: "Differential suite (rt, rt-gc-stress)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=high
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            git update-ref refs/heads/canary "${basis:-$(git rev-parse HEAD)}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          if [ -n "${basis}" ]; then echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"; fi
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv uv"
+      - name: "Load .envrc with direnv"
+        run: |
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+      - name: "Backend and compiler tests"
+        working-directory: baml_language
+        run: cargo test -p baml_compiler2_rust -p baml_rt -p baml_rt_gc -p baml_rt_tasks && cargo test -p baml_tests --test rust_backend
+      - name: "Differential suite"
+        working-directory: baml_language
+        run: cargo test -p baml_tests --test rust_differential -- --ignored --nocapture 2>&1 | tee ../differential.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rt-differential
+          path: differential.log
+
+  summary:
+    name: "Corpus summary"
+    needs: corpus
+    if: always()
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rt-corpus-shard-*
+          path: shards
+          merge-multiple: true
+      - name: "Sum shard results"
+        run: |
+          python3 - <<'EOF' | tee -a "$GITHUB_STEP_SUMMARY"
+          import collections, glob, re
+          totals = collections.Counter()
+          groups = collections.Counter()
+          bugs, failed = [], []
+          for path in sorted(glob.glob("shards/*.log")):
+              text = open(path, errors="replace").read()
+              m = re.search(r"^combined\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)", text, re.M)
+              if not m:
+                  failed.append(path.split("/")[-1][:-4]); continue
+              for k, v in zip(["match", "mismatch", "unsupported", "crash/timeout", "excluded"], m.groups()):
+                  totals[k] += int(v)
+              for line in re.findall(r"^(\d+)\t\d+\t([^\t]+)\t", text, re.M):
+                  groups[line[1]] += int(line[0])
+              bugs += re.findall(r"^BUG (.+)$", text, re.M)
+          print("## baml_rt corpus gate\n")
+          print("| match | mismatch | unsupported | crash/timeout | excluded |\n|---|---|---|---|---|")
+          print("| " + " | ".join(str(totals[k]) for k in ["match", "mismatch", "unsupported", "crash/timeout", "excluded"]) + " |\n")
+          if failed: print(f"Namespaces without a result ({len(failed)}): " + ", ".join(failed) + "\n")
+          if bugs: print("### Mismatches\n" + "\n".join(f"- {b}" for b in bugs[:200]) + "\n")
+          print("### Top admission blockers\n\n| tests | signature |\n|---|---|")
+          for sig, c in groups.most_common(40): print(f"| {c} | {sig[:160]} |")
+          EOF
