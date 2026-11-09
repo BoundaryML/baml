@@ -265,21 +265,49 @@ impl Emitter<'_, '_> {
                     associated_types: assoc.clone(),
                 };
                 let v = self.coerce(value, Repr::Tagged)?;
-                let mut tags = BTreeSet::new();
+                // Storage tags identify a value's runtime type only when every
+                // concrete type sharing the tag gives the same answer (e.g. two
+                // pointer lists whose element types differ in eligibility).
+                let mut answers = BTreeMap::<String, bool>::new();
                 for t in &self.plan.concrete_types {
-                    if super::dispatch::implements(self.db, self.plan, t, &iface)? {
-                        let Ok(repr) = self.plan.repr(t) else {
+                    let implements = super::dispatch::implements(self.db, self.plan, t, &iface)?;
+                    let Ok(repr) = self.plan.repr(t) else {
+                        continue;
+                    };
+                    let tag = match repr {
+                        Repr::Naming => "CAPTURE_NAMING_TAG".into(),
+                        Repr::Enum(e) if !self.plan.enums.contains(&e) => continue,
+                        Repr::Enum(e) => format!("CAPTURE_ENUM_{e}_TAG"),
+                        Repr::Ptr(c) if !self.descriptors.contains_key(&c) => continue,
+                        // A container without a descriptor has no runtime values.
+                        Repr::List(_)
+                        | Repr::ListInt
+                        | Repr::ListStr
+                        | Repr::ListListStr
+                        | Repr::ListClosure(_)
+                        | Repr::ListFuture(_)
+                        | Repr::ListPtr(_)
+                        | Repr::MapStrInt
+                        | Repr::Map(_)
+                        | Repr::MapStrPtr(_)
+                            if !self.lists.contains_key(&repr) =>
+                        {
                             continue;
-                        };
-                        let tag = match repr {
-                            Repr::Naming => "CAPTURE_NAMING_TAG".into(),
-                            Repr::Enum(e) => format!("CAPTURE_ENUM_{e}_TAG"),
-                            Repr::Ptr(c) if !self.descriptors.contains_key(&c) => continue,
-                            _ => self.tag(repr)?.to_string(),
-                        };
-                        tags.insert(tag);
+                        }
+                        _ if implements => self.tag(repr)?.to_string(),
+                        _ => match self.tag(repr) {
+                            Ok(tag) => tag.to_string(),
+                            Err(_) => continue,
+                        },
+                    };
+                    if answers.insert(tag, implements).is_some_and(|old| old != implements) {
+                        return Err(no("ambiguous interface membership"));
                     }
                 }
+                let tags = answers
+                    .into_iter()
+                    .filter_map(|(tag, implements)| implements.then_some(tag))
+                    .collect::<Vec<_>>();
                 let checks = tags
                     .iter()
                     .map(|t| format!("v.tag=={t}"))

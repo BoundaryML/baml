@@ -141,6 +141,50 @@ impl Plan<'_> {
         Ok(())
     }
 
+    /// A non-recursive alias is stored exactly like its definition; recursive
+    /// aliases (and cycles through other aliases) stay dynamically tagged.
+    pub(super) fn alias_target(
+        &self,
+        tag: baml_type::typetag::TypeTag,
+    ) -> Option<bex_vm_types::RuntimeTy> {
+        if let Some(cached) = self.alias_targets.borrow().get(&tag) {
+            return cached.clone();
+        }
+        let definition = |tag: baml_type::typetag::TypeTag| {
+            self.program.objects.iter().find_map(|o| match o {
+                Object::TypeAlias(a) if a.type_tag == tag => {
+                    Some(bex_vm_types::RuntimeTy::from(a.definition.clone()))
+                }
+                _ => None,
+            })
+        };
+        fn aliases(ty: &bex_vm_types::RuntimeTy, out: &mut Vec<baml_type::typetag::TypeTag>) {
+            if let bex_vm_types::RuntimeTy::TypeAlias(head) = ty {
+                out.push(head.tag());
+            }
+            ty.visit_children(&mut |child| aliases(child, out));
+        }
+        let target = definition(tag).filter(|def| {
+            let mut pending = vec![def.clone()];
+            let mut seen = BTreeSet::new();
+            while let Some(ty) = pending.pop() {
+                let mut found = Vec::new();
+                aliases(&ty, &mut found);
+                for next in found {
+                    if next == tag {
+                        return false;
+                    }
+                    if seen.insert(next) {
+                        pending.extend(definition(next));
+                    }
+                }
+            }
+            true
+        });
+        self.alias_targets.borrow_mut().insert(tag, target.clone());
+        target
+    }
+
     pub(super) fn repr(&self, ty: &RuntimeTy) -> Gen<Repr> {
         if super::generics::has_projection(ty) {
             let reduced = self.resolve_type(ty);
@@ -159,7 +203,35 @@ impl Plan<'_> {
             RuntimeTy::Int | RuntimeTy::Literal(baml_type::Literal::Int(_), _) => Repr::Int,
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), _) => Repr::Bool,
             RuntimeTy::String | RuntimeTy::Literal(baml_type::Literal::String(_), _) => Repr::Str,
-            RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
+            RuntimeTy::TypeAlias(head) => {
+                match self
+                    .index
+                    .anchor(&baml_compiler2_mir::TyTemplate::TypeAlias(head.clone()))
+                    .and_then(|t| match t {
+                        bex_vm_types::TyTemplate::TypeAlias(h) => self.alias_target(h.tag()),
+                        _ => None,
+                    }) {
+                    // Same storage as a local spelled with the definition.
+                    Some(target) => match target
+                        .try_map_heads(&mut |head| self.index.declaration(head.tag()).ok_or(()))
+                    {
+                        Ok(named) => self.repr(&named)?,
+                        Err(()) => self.field_repr(&target)?,
+                    },
+                    // Only recursive aliases are linked objects. Any other
+                    // alias is expanded exactly as MIR expands its own types.
+                    None => {
+                        let expanded = baml_compiler2_mir::RuntimeLowering::of(self.db, self.root)
+                            .convert(&baml_type::Ty::from(ty.clone()));
+                        if matches!(expanded, RuntimeTy::TypeAlias(_)) || expanded == *ty {
+                            Repr::Tagged
+                        } else {
+                            self.repr(&expanded)?
+                        }
+                    }
+                }
+            }
+            RuntimeTy::Unknown => Repr::Tagged,
             RuntimeTy::Never => Repr::Null,
             RuntimeTy::Future(..) => Repr::Future,
             RuntimeTy::Uint8Array => Repr::Bytes,
@@ -247,6 +319,29 @@ impl Plan<'_> {
             {
                 Repr::Str
             }
+            // Scalar primitives spelled through their builtin class head (an
+            // implementation's `Self`, a static receiver) use scalar storage.
+            RuntimeTy::Class(head, args)
+                if args.is_empty()
+                    && matches!(
+                        head.builtin_primitive(self.lang),
+                        Some(
+                            baml_type::PrimitiveType::Int
+                                | baml_type::PrimitiveType::Float
+                                | baml_type::PrimitiveType::Bool
+                                | baml_type::PrimitiveType::Bigint
+                                | baml_type::PrimitiveType::Null
+                        )
+                    ) =>
+            {
+                self.repr(&match head.builtin_primitive(self.lang).unwrap() {
+                    baml_type::PrimitiveType::Int => RuntimeTy::Int,
+                    baml_type::PrimitiveType::Float => RuntimeTy::Float,
+                    baml_type::PrimitiveType::Bool => RuntimeTy::Bool,
+                    baml_type::PrimitiveType::Bigint => RuntimeTy::Bigint,
+                    _ => RuntimeTy::Null,
+                })?
+            }
             RuntimeTy::Class(head, args) if !args.is_empty() => {
                 let template = baml_compiler2_mir::TyTemplate::from(
                     baml_compiler2_mir::RealizedTy::try_from(ty.clone())
@@ -294,7 +389,11 @@ impl Plan<'_> {
             T::Null | T::Never => Repr::Null,
             T::Function { .. } => Repr::Closure,
             T::Future(..) => Repr::Future,
-            T::Unknown | T::TypeAlias(_) => Repr::Tagged,
+            T::TypeAlias(head) => match self.alias_target(head.tag()) {
+                Some(target) => self.field_repr(&target)?,
+                None => Repr::Tagged,
+            },
+            T::Unknown => Repr::Tagged,
             T::Uint8Array => Repr::Bytes,
             T::Type => Repr::Reflected,
             T::Class(head, args)
@@ -386,7 +485,7 @@ impl Plan<'_> {
                         self.class(*c).type_tag == head.tag() && *a == args
                     })
                     .map(|(_, _, c)| *c)
-                    .ok_or_else(|| no("unregistered generic class"))?)
+                    .ok_or_else(|| no(format!("unregistered generic class (layout {ty:?})")))?)
             },
             T::Class(head, args) if args.is_empty() => {
                 let object = self

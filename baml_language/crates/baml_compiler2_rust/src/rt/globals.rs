@@ -65,7 +65,16 @@ pub(super) fn prepare<'db>(
                             return Err(no("initializer body"));
                         };
                         roots.push(object);
-                        plan.repr(&body.locals[0].ty)?
+                        let repr = plan.repr(&body.locals[0].ty)?;
+                        // An initializer typed through dynamic storage still
+                        // produces one concrete list; readers use its layout.
+                        if repr == Repr::Tagged
+                            && let Some(load) = initializer_layout(plan, body)
+                        {
+                            plan.record(load)?;
+                            plan.global_loads.insert(slot.raw(), load);
+                        }
+                        repr
                     } else {
                         return Err(no("initializer MIR unavailable"));
                     };
@@ -145,9 +154,17 @@ pub(super) fn emit(
                         .ok_or_else(|| no("reflected global descriptor"))?
                         + 3
                 }
-                r if r.pointer() => *lists.get(&r).ok_or_else(|| no("global representation"))? + 3,
+                r if r.pointer() => {
+                    *lists
+                        .get(&r)
+                        .ok_or_else(|| no(format!("global representation (layout {r:?}, global {slot})")))?
+                        + 3
+                }
                 Repr::Tagged | Repr::Dyn(_) => 0,
-                _ => return Err(no("global representation")),
+                r @ (Repr::Enum(_) | Repr::Naming) => {
+                    super::layout::enum_tag(plan, r, descriptors, lists)
+                }
+                r => return Err(no(format!("global representation (layout {r:?})"))),
             };
             let value = if matches!(repr, Repr::Tagged | Repr::Dyn(_)) {
                 "value".to_owned()
@@ -186,4 +203,31 @@ pub(super) fn emit(
     startup.push_str("Ok(())}\n");
     out.push_str(&startup);
     Ok(())
+}
+
+fn initializer_layout(plan: &Plan<'_>, body: &MirFunctionBody<'_>) -> Option<Repr> {
+    let mut layout = None;
+    for statement in body.blocks.iter().flat_map(|b| &b.statements) {
+        let StatementKind::Assign {
+            destination: Place::Local(local),
+            value,
+        } = &statement.kind
+        else {
+            continue;
+        };
+        if local.0 != 0 {
+            continue;
+        }
+        let next = match value {
+            Rvalue::Array(element, _) => plan
+                .repr(&RuntimeTy::List(Box::new(element.substitute_symbolic(&[]))))
+                .ok()?,
+            _ => return None,
+        };
+        if layout.is_some_and(|old| old != next) {
+            return None;
+        }
+        layout = Some(next);
+    }
+    layout.filter(|r| r.growing())
 }

@@ -69,9 +69,10 @@ impl Emitter<'_, '_> {
                     let Repr::Type(code) = self.operand(&args[0])?.1 else {
                         return Err(no("JSON type argument"));
                     };
-                    if *ntypeargs != 1 || args.len() != 3 || code < 3 || code == usize::MAX {
+                    if *ntypeargs != 1 || args.len() != 3 || code == usize::MAX {
                         return Err(no("JSON decode specialization/naming"));
                     }
+                    let code = self.plan.decode_code(code)?;
                     let omitted = matches!(args[2], Operand::Constant(Constant::OmittedArg));
                     let naming = if omitted {
                         "0usize".to_owned()

@@ -40,12 +40,25 @@ impl Emitter<'_, '_> {
             r @ (Repr::Enum(_) | Repr::Naming) => {
                 Ok(layout::enum_tag(self.plan, r, self.descriptors, self.lists))
             }
-            Repr::Cell => Ok(self.plan.closure_descriptors().unwrap().0 + 3),
-            Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
+            Repr::Cell | Repr::Closure => {
+                let (cell, closure) = self
+                    .plan
+                    .closure_descriptors()
+                    .ok_or_else(|| no("closure descriptor"))?;
+                Ok(if repr == Repr::Cell { cell } else { closure } + 3)
+            }
             Repr::Opaque => Ok(18),
             Repr::Bytes => Ok(19),
-            Repr::Reflected => Ok(self.plan.reflection_descriptor().unwrap() + 3),
-            Repr::Future => Ok(self.plan.future_descriptor().unwrap() + 3),
+            Repr::Reflected => Ok(self
+                .plan
+                .reflection_descriptor()
+                .ok_or_else(|| no("reflection descriptor"))?
+                + 3),
+            Repr::Future => Ok(self
+                .plan
+                .future_descriptor()
+                .ok_or_else(|| no("future descriptor"))?
+                + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::List(_)
             | Repr::ListInt
@@ -248,8 +261,9 @@ impl Emitter<'_, '_> {
                     .ok_or_else(|| no("unlinked global"))?;
                 let repr = *self
                     .plan
-                    .globals
+                    .global_loads
                     .get(&slot)
+                    .or_else(|| self.plan.globals.get(&slot))
                     .ok_or_else(|| no("unplanned global"))?;
                 let name = baml_compiler2_mir::global_display_name(self.db, *binding);
                 let value = self.fallible(&format!("rt::globals::load_named({slot},{name:?})"));

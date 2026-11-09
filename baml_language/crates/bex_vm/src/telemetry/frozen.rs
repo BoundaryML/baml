@@ -109,9 +109,13 @@ pub struct ReflectionFacts {
 
 /// Evaluate `implements` and `to_baml` with the interpreter's own resolver and
 /// renderer over a private VM image. Compile-time only: no BAML code runs.
+/// `to_baml` renderings are computed only when requested: validating a
+/// rendering walks the type's definition graph, which compiled programs that
+/// never call `Type.to_baml` do not need.
 pub fn reflection_facts(
     program: &bex_vm_types::Program,
     types: &[bex_vm_types::RealizedTy],
+    with_to_baml: bool,
 ) -> Result<ReflectionFacts, String> {
     program.validate().map_err(|error| error.to_string())?;
     let vm = crate::BexVm::from_program(
@@ -162,7 +166,11 @@ pub fn reflection_facts(
             .collect(),
         to_baml: bound
             .iter()
-            .map(|ty| crate::package_reflect::type_class::frozen_to_baml(&vm, ty))
+            .map(|ty| {
+                with_to_baml
+                    .then(|| crate::package_reflect::type_class::frozen_to_baml(&vm, ty))
+                    .flatten()
+            })
             .collect(),
     })
 }

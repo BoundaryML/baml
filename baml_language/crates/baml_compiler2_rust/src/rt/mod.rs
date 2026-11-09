@@ -81,6 +81,7 @@ struct Plan<'a> {
     type_codes: Vec<baml_compiler2_mir::TyTemplate>,
     reflected: bool,
     reflect_meta: bool,
+    reflect_to_baml: bool,
     /// Static class entry, class object and its substituted field types.
     reflection_fields: Vec<(usize, usize, Vec<bex_vm_types::RuntimeTy>)>,
     /// Callables `reflect.signature` can describe: parameter, return and
@@ -105,12 +106,18 @@ struct Plan<'a> {
     json_decode_codes: BTreeSet<usize>,
     json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
     map_types: std::cell::RefCell<Vec<maps::MapType>>,
+    /// Non-recursive alias definitions by alias tag (`None`: recursive).
+    alias_targets: std::cell::RefCell<
+        BTreeMap<baml_type::typetag::TypeTag, Option<bex_vm_types::RuntimeTy>>,
+    >,
     key_callbacks: BTreeMap<Repr, BTreeMap<String, usize>>,
     key_hasher: Option<usize>,
     key_edges: BTreeMap<usize, BTreeSet<usize>>,
     json_maps: BTreeMap<Repr, RuntimeTy>,
     map_stringify: bool,
     globals: BTreeMap<usize, Repr>,
+    /// Concrete layouts read from dynamically typed global storage.
+    global_loads: BTreeMap<usize, Repr>,
     literal_ids: std::cell::RefCell<BTreeMap<String, usize>>,
     init_chains: Vec<(usize, Vec<(usize, usize, usize)>)>,
 }

@@ -352,16 +352,7 @@ pub(super) fn expand<'db>(
                                 continue;
                             }
                             plan.remember_heads(&iface.to_template().substitute_symbolic(&[]));
-                            let candidates = match receiver {
-                                Some(RuntimeTy::Union(types)) => types.to_vec(),
-                                Some(
-                                    RuntimeTy::Interface(..)
-                                    | RuntimeTy::Unknown
-                                    | RuntimeTy::Function { .. },
-                                )
-                                | None => plan.concrete_types.clone(),
-                                Some(concrete) => vec![concrete],
-                            };
+                            let candidates = dispatch_candidates(plan, receiver.as_ref());
                             let mut targets = Vec::new();
                             for concrete in candidates {
                                 if let Some((callee, frame)) = super::dispatch::resolve(
@@ -374,7 +365,8 @@ pub(super) fn expand<'db>(
                                 )? {
                                     let target =
                                         instance(db, plan, all, &mut instances, callee, frame)?;
-                                    let repr = plan.repr(&concrete)?;
+                                    let _ = plan.register_class_type(&concrete);
+                            let repr = plan.repr(&concrete)?;
                                     if !targets.contains(&(repr, target)) {
                                         targets.push((repr, target));
                                     }
@@ -425,6 +417,11 @@ pub(super) fn expand<'db>(
                     } = &s.kind
                     {
                         plan.remember_heads(&t.substitute_symbolic(&[]));
+                        // Reflected type values of generic classes need their
+                        // instantiated layouts even when never constructed. A
+                        // class that cannot be laid out stays unsupported
+                        // wherever its layout is actually required.
+                        let _ = plan.register_class_type(&t.substitute_symbolic(&[]));
                         if !plan.type_codes.contains(t) {
                             plan.type_codes.push(t.clone());
                         }
@@ -541,16 +538,7 @@ pub(super) fn expand<'db>(
                             .collect::<Gen<Vec<_>>>()?;
                         let receiver =
                             operand_ty(plan, object, body, &args[*ntypeargs + *self_arg]);
-                        let candidates = receiver
-                            .as_ref()
-                            .map(|t| match t {
-                                RuntimeTy::Union(m) => m.to_vec(),
-                                RuntimeTy::Interface(..)
-                                | RuntimeTy::Unknown
-                                | RuntimeTy::Function { .. } => plan.concrete_types.clone(),
-                                _ => vec![t.clone()],
-                            })
-                            .unwrap_or_else(|| plan.concrete_types.clone());
+                        let candidates = dispatch_candidates(plan, receiver.as_ref());
                         let mut targets = Vec::new();
                         for concrete in candidates {
                             let Some((callee, frame)) = super::dispatch::resolve(
@@ -565,6 +553,7 @@ pub(super) fn expand<'db>(
                                 continue;
                             };
                             let target = instance(db, plan, all, &mut instances, callee, frame)?;
+                            let _ = plan.register_class_type(&concrete);
                             let repr = plan.repr(&concrete).map_err(|error| {
                                 format!("{error} (interface receiver {concrete:?})")
                             })?;
@@ -578,7 +567,10 @@ pub(super) fn expand<'db>(
                             }
                             queue.push_back(target);
                         }
-                        if !targets.is_empty() {
+                        // A static interface receiver can only hold a closed-world
+                        // concrete value. With no implementor constructed, the
+                        // call is unreachable (e.g. a match arm only reached by null).
+                        if !targets.is_empty() || interface_receiver(receiver.as_ref()) {
                             plan.dispatches.insert((object, b.id.0), targets);
                         }
                     }
@@ -1156,10 +1148,54 @@ impl Plan<'_> {
                     pending.push(Work::Visit(*value, origins.map_value()));
                     pending.push(Work::Visit(*key, origins.map_key()));
                 }
+                // A non-recursive alias is laid out as its definition.
+                T::TypeAlias(head) => {
+                    if let Some(target) = self.alias_target(head.tag()) {
+                        pending.push(Work::Visit(target, Origins::root()));
+                    }
+                }
                 _ => {}
             }
         }
         Ok(())
+    }
+}
+
+// Dynamic receivers, including interface members of optional or union
+// receivers, may hold any closed-world concrete value.
+fn dispatch_candidates(plan: &Plan<'_>, receiver: Option<&RuntimeTy>) -> Vec<RuntimeTy> {
+    let mut candidates = Vec::new();
+    let mut push = |ty: &RuntimeTy| {
+        if !candidates.contains(ty) {
+            candidates.push(ty.clone());
+        }
+    };
+    let members = match receiver {
+        Some(RuntimeTy::Union(members)) => members.to_vec(),
+        Some(ty) => vec![ty.clone()],
+        None => vec![RuntimeTy::Unknown],
+    };
+    for member in &members {
+        match member {
+            RuntimeTy::Interface(..) | RuntimeTy::Unknown | RuntimeTy::Function { .. } => {
+                plan.concrete_types.iter().for_each(&mut push)
+            }
+            _ => push(member),
+        }
+    }
+    candidates
+}
+
+fn interface_receiver(receiver: Option<&RuntimeTy>) -> bool {
+    match receiver {
+        Some(RuntimeTy::Interface(..)) => true,
+        Some(RuntimeTy::Union(members)) => {
+            members.iter().any(|m| matches!(m, RuntimeTy::Interface(..)))
+                && members
+                    .iter()
+                    .all(|m| matches!(m, RuntimeTy::Interface(..) | RuntimeTy::Null))
+        }
+        _ => false,
     }
 }
 
@@ -1250,6 +1286,15 @@ pub(super) fn instance<'db>(
         .zip(&frame)
         .map(|(p, t)| (p.as_str().to_owned(), t.clone()))
         .collect();
+    // Builtins in a specialized body receive their frame as type tokens.
+    for ty in &frame {
+        if let Ok(realized) = baml_compiler2_mir::RealizedTy::try_from(ty.clone()) {
+            let template = TyTemplate::from(realized);
+            if !plan.type_codes.contains(&template) {
+                plan.type_codes.push(template);
+            }
+        }
+    }
     let id = plan.next_object;
     plan.next_object += 1;
     plan.function_frames.insert(id, captures);
@@ -1356,6 +1401,11 @@ impl Plan<'_> {
             RuntimeTy::Class(_, args) => {
                 for t in args {
                     self.candidate(t);
+                }
+                // A closed-world candidate must have a layout to be
+                // represented; register instantiations seen only as types.
+                if !args.is_empty() && self.register_class_type(ty).is_err() {
+                    return;
                 }
                 if !self.concrete_types.contains(ty) {
                     self.concrete_types.push(ty.clone());

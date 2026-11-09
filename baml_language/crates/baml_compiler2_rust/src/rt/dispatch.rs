@@ -529,7 +529,10 @@ pub(super) fn implements(
     concrete: &RuntimeTy,
     iface: &TyTemplateInterface,
 ) -> Gen<bool> {
-    Ok(witness(db, plan, concrete, iface)?.is_some())
+    if witness(db, plan, concrete, iface)?.is_some() {
+        return Ok(true);
+    }
+    Ok(super::structural::default_applies(db, concrete, iface))
 }
 
 // In a bounded program these leaves and their one-level dispatch adapters are
