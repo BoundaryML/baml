@@ -646,6 +646,7 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "btel_types",
+ "serde_json",
 ]
 
 [[package]]
@@ -1014,15 +1015,20 @@ dependencies = [
  "btel_types",
  "getrandom 0.2.17",
  "indexmap",
+ "itoa",
  "libc",
  "num-bigint",
+ "num-traits",
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "rand_xoshiro",
  "serde_json",
+ "smallvec",
  "sys_native",
+ "sys_regex",
  "sys_types",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]

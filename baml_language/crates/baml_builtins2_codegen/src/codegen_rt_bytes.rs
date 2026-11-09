@@ -88,7 +88,7 @@ pub(crate) fn generate(d: &NativeBuiltin) -> Result<String, String> {
         .enumerate()
         .map(|(i, t)| match t {
             T::Uint8Array => format!("&rt::native::bytes_owned(a{i})"),
-            T::String => format!("a{i}.as_str(&rt::strings::Cx::current())"),
+            T::String => format!("a{i}.try_as_str(&rt::strings::Cx::current())?"),
             T::List(_) => format!("&rt::native::int_list_owned(a{i})"),
             _ => format!("a{i}"),
         })

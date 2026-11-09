@@ -1,9 +1,9 @@
 //! Typed native leaves. Their Rust storage belongs to one program instance.
 use crate::R;
 use num_bigint::BigInt;
-pub const BIGINT_DESC: u32 = 15;
+pub const BIGINT_DESC: u32 = 17;
 pub const BYTES_DESC: u32 = 16;
-pub const OPAQUE_DESC: u32 = 17;
+pub const OPAQUE_DESC: u32 = 15;
 pub const BIGINT_TAG: u64 = BIGINT_DESC as u64 + 3;
 pub const BYTES_TAG: u64 = BYTES_DESC as u64 + 3;
 pub const OPAQUE_TAG: u64 = OPAQUE_DESC as u64 + 3;
@@ -16,7 +16,7 @@ pub const BIGINT_LAYOUT: baml_rt_gc::Descriptor = baml_rt_gc::Descriptor {
         offset: 24,
         layout: baml_rt_gc::ElementLayout::Scalar,
     }),
-    type_id: 18,
+    type_id: 20,
     fields: &[],
     finalizer: None,
 };
@@ -164,6 +164,7 @@ pub fn binary(left: crate::Dyn, right: crate::Dyn, op: &str) -> R<usize> {
                 unsafe { crate::write_dyn(p, p.add(8).cast(), left) };
                 let value = l.to_string();
                 return Err(Box::new(crate::Error {
+                    telemetry_caught: None,
                     value: p as usize,
                     class: "baml.panics.DivisionByZero",
                     message: format!("division by zero: {l} / 0"),
@@ -222,23 +223,19 @@ pub fn optional_int(value: Option<i64>) -> crate::Dyn {
     })
 }
 pub unsafe fn int_list_owned(value: usize) -> Vec<i64> {
-    unsafe {
-        let p = value as *const u8;
-        std::slice::from_raw_parts(p.add(16).cast(), p.add(8).cast::<usize>().read()).to_vec()
-    }
+    let cx = unsafe { crate::strings::Cx::current() };
+    let list = unsafe { crate::lists::List::<i64>::from_raw(value) };
+    (0..list.len(&cx))
+        .map(|i| list.at(&cx, i).unwrap())
+        .collect()
 }
 pub fn int_list(desc: u32, values: Vec<i64>) -> R<usize> {
-    let size = values
-        .len()
-        .checked_mul(8)
-        .and_then(|n| n.checked_add(16))
-        .ok_or_else(|| crate::language::allocation_failure(usize::MAX))?;
-    let p = unsafe { crate::try_alloc(desc, size)? };
-    unsafe {
-        p.add(8).cast::<usize>().write(values.len());
-        std::ptr::copy_nonoverlapping(values.as_ptr(), p.add(16).cast(), values.len());
+    let mut cx = unsafe { crate::strings::Cx::current() };
+    let list = unsafe { crate::lists::List::<i64>::new(&mut cx, desc)? };
+    for v in values {
+        list.push(&mut cx, v)?;
     }
-    Ok(p as usize)
+    Ok(list.as_raw())
 }
 pub unsafe fn byte_index(value: usize, index: i64) -> R<i64> {
     let bytes = unsafe { bytes_owned(value) };
@@ -267,9 +264,9 @@ mod tests {
     static D: &[baml_rt_gc::Descriptor] = &{
         let mut descriptors = [crate::STRING_DESC; 19];
         descriptors[9] = crate::DIV_DESC;
-        descriptors[15] = BIGINT_LAYOUT;
+        descriptors[17] = BIGINT_LAYOUT;
         descriptors[16] = BYTES_LAYOUT;
-        descriptors[17] = crate::opaque::descriptor(20);
+        descriptors[15] = crate::opaque::descriptor(18);
         descriptors[18] = BYTES_BUFFER_LAYOUT;
         descriptors
     };
@@ -330,4 +327,33 @@ mod tests {
         }
         .unwrap();
     }
+}
+
+use crate::strings::Cx;
+use baml_rt_gc::{Descriptor, Kind};
+use std::rc::Rc;
+pub const DESC: Descriptor = Descriptor {
+    kind: Kind::Opaque,
+    size: 8,
+    ptr_slots: (0, 0),
+    tagged_slots: (0, 0),
+    elem: None,
+    type_id: 18,
+    fields: &[],
+    finalizer: None,
+};
+/// # Safety
+/// The payload must not contain managed pointers. Its handle's descriptor has
+/// no pointer slots; the collector cannot trace Rust-owned payload fields.
+pub unsafe fn new<T: std::any::Any>(cx: &mut Cx, payload: T) -> R<usize> {
+    let object = cx.alloc(15, 8)? as usize;
+    unsafe {
+        (&mut *crate::HEAP.get()).attach_native(object, Rc::new(payload));
+    }
+    Ok(object)
+}
+/// # Safety
+/// `object` is a live handle of T in the active instance.
+pub unsafe fn get<T: std::any::Any>(object: usize) -> Rc<T> {
+    unsafe { (&*crate::HEAP.get()).native(object) }
 }

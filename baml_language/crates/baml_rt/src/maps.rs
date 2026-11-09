@@ -471,6 +471,29 @@ impl StringIntMap {
     pub fn as_raw(self) -> usize {
         self.0.as_raw()
     }
+    pub(crate) fn structural_string(self, cx: &Cx) -> String {
+        use std::fmt::Write;
+        let mut text = String::from("{");
+        for i in 0..self.0.len() {
+            if i != 0 {
+                text.push_str(", ");
+            }
+            let (key, value) = self.0.entry(i).unwrap();
+            write!(&mut text, "{:?}: {}", key.text(cx), value).unwrap();
+        }
+        text.push('}');
+        text
+    }
+    /// # Safety
+    /// `desc` and `desc+1` describe a growing integer list and its buffer.
+    pub unsafe fn growing_values(self, cx: &mut Cx, desc: u32) -> R<usize> {
+        let list = unsafe { crate::lists::List::<i64>::with_capacity(cx, desc, self.0.len()) }?;
+        for i in 0..self.0.len() {
+            list.push(cx, self.0.entry(i).unwrap().1)?;
+        }
+        Ok(list.as_raw())
+    }
+
     pub fn set(self, cx: &mut Cx, key: Str, value: i64) -> R<Dyn> {
         Ok(self
             .0
@@ -481,20 +504,9 @@ impl StringIntMap {
             }))
     }
     /// # Safety
-    /// desc describes the fixed integer-list layout (length at 8, data at 16).
-    pub unsafe fn values(self, _: &mut Cx, desc: u32) -> R<usize> {
-        let len = self.0.len();
-        let list = unsafe { crate::try_alloc(desc, 16 + len * 8) }?;
-        unsafe {
-            list.add(8).cast::<usize>().write(len);
-            for i in 0..len {
-                list.add(16)
-                    .cast::<i64>()
-                    .add(i)
-                    .write(self.0.entry(i).unwrap().1);
-            }
-        }
-        Ok(list as usize)
+    /// `desc` describes a growing integer list and its buffer.
+    pub unsafe fn values(self, cx: &mut Cx, desc: u32) -> R<usize> {
+        unsafe { self.growing_values(cx, desc) }
     }
 }
 
@@ -704,5 +716,28 @@ mod tests {
             Ok(1)
         }
         assert_eq!(unsafe { instance().run_baml(run) }.unwrap(), 1);
+    }
+}
+
+impl<V: Slot> Map<Str, V> {
+    /// Heap-neutral lookup for JSON field/path readers. No temporary managed key.
+    pub fn get_text(self, cx: &Cx, key: &str) -> Option<V> {
+        if self.is_empty() {
+            return None;
+        }
+        let hash = slots::hash_bytes(key.as_bytes());
+        let mask = self.bucket_len() - 1;
+        let mut bucket = hash as usize & mask;
+        loop {
+            let raw = unsafe { *self.bucket(bucket) };
+            if raw == 0 {
+                return None;
+            }
+            let entry = unsafe { &*self.entry_ptr(raw - 1) };
+            if entry.hash == hash && entry.key.text(cx) == key {
+                return Some(entry.value);
+            }
+            bucket = (bucket + 1) & mask;
+        }
     }
 }

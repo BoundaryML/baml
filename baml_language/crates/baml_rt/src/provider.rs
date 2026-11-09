@@ -15,7 +15,7 @@ pub fn context() -> SysOpContext {
 }
 pub fn perform(
     make: impl FnOnce() -> SysOpResult,
-    on_error: fn(OpError, bool) -> Box<Error>,
+    on_error: impl FnOnce(OpError, bool) -> Box<Error>,
 ) -> R<BexExternalValue> {
     let started = crate::telemetry::sysop_started();
     let mut asynchronous = false;
@@ -149,6 +149,7 @@ pub fn error(
         Err(error) => return error,
     };
     Box::new(Error {
+        telemetry_caught: None,
         value: value.payload as usize,
         class,
         message,

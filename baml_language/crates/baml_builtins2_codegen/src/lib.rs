@@ -1,12 +1,7 @@
 mod codegen_rt;
-mod codegen_rt_bigint;
 mod codegen_rt_bytes;
-mod codegen_rt_clock;
-mod codegen_rt_provider;
-pub use codegen_rt_provider::supports as supports_rt_provider;
-mod codegen_rt_io;
-mod codegen_rt_random;
-mod codegen_rt_scalar;
+mod codegen_rt_regex;
+mod codegen_rt_strings;
 pub use codegen_rt::{generate_rt, supports_rt};
 mod codegen;
 mod codegen_errors;
@@ -80,3 +75,15 @@ pub fn supports_rt_calendar(path: &str) -> bool {
 }
 
 mod codegen_rt_calendar;
+
+mod codegen_rt_bigint;
+mod codegen_rt_clock;
+mod codegen_rt_io;
+mod codegen_rt_provider;
+mod codegen_rt_random;
+mod codegen_rt_scalar;
+
+pub use codegen_rt_provider::supports as supports_rt_provider;
+mod codegen_rt_string_bytes;
+
+pub use codegen_rt_io::supports as supports_rt_io;

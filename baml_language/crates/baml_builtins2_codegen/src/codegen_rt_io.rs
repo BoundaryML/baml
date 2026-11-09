@@ -1,5 +1,5 @@
 use crate::{BamlType, BuiltinPipeline, NativeBuiltin};
-pub(crate) fn supports(path: &str) -> bool {
+pub fn supports(path: &str) -> bool {
     matches!(
         path,
         "baml.io.print"
@@ -74,12 +74,13 @@ pub(crate) fn generate(d: &NativeBuiltin) -> Result<String, String> {
             .expect("qualified builtin")
             .to_owned(),
     };
-    let param = (0..params.len())
+    let mut param = (0..params.len())
         .map(|i| format!("a{i}:rt::strings::Str"))
-        .collect::<Vec<_>>()
-        .join(",");
+        .collect::<Vec<_>>();
+    param.push("call_site:Option<usize>".into());
+    let param = param.join(",");
     let arg = (0..params.len())
-        .map(|i| format!("a{i}.as_str(&unsafe{{rt::strings::Cx::current()}}).to_owned()"))
+        .map(|i| format!("a{i}.to_owned()"))
         .collect::<Vec<_>>()
         .join(",");
     let schema = match ret {
@@ -91,7 +92,7 @@ pub(crate) fn generate(d: &NativeBuiltin) -> Result<String, String> {
         _ => unreachable!(),
     };
     Ok(format!(
-        "#[inline(always)] fn rt_io_{}({param})->rt::R<rt::Dyn>{{let owned=rt::io::perform(rt::io::{method}({arg}))?;let ty={schema};ty.validate(&owned,0).map_err(rt::Error::internal)?;unsafe{{ty.hydrate(&owned)}}}}\n",
+        "#[inline(always)] fn rt_io_{}({param})->rt::R<rt::Dyn>{{let owned=rt::io::perform_at(rt::io::{method}({arg}),call_site)?;let ty={schema};ty.validate(&owned,0).map_err(rt::Error::internal)?;unsafe{{ty.hydrate(&owned)}}}}\n",
         d.fn_name
     ))
 }

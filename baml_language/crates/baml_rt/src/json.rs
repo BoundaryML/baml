@@ -5,7 +5,8 @@ use crate::{
     strings::{Cx, Str},
 };
 use baml_rt_gc::{Descriptor, Field, Kind, SlotKind, write_ptr};
-use bex_vm_types::json_text::{Reader, Refusal, bigint_limit_message, refusal};
+pub use bex_vm_types::json_text::Reader;
+use bex_vm_types::json_text::{Refusal, bigint_limit_message, refusal};
 use serde_json::Value;
 #[derive(Clone, Copy)]
 pub enum Ty {
@@ -166,6 +167,7 @@ pub(crate) fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<E
         Ok(value) => Box::new(Error {
             telemetry_raise: None,
             telemetry_at: None,
+            telemetry_caught: None,
             value,
             class: if path.is_some() {
                 "baml.json.DecodeError"
@@ -212,16 +214,26 @@ fn owned(reader: &mut Reader<'_>) -> Result<Value, bex_vm_types::json_text::Stop
             let number = reader.number()?;
             match number.as_i64() {
                 Some(n) => Value::from(n),
-                None => Value::from(number.as_f64().unwrap_or(1e100)),
+                None => Value::Number(number.text.parse().expect("validated JSON number")),
             }
         }
     })
+}
+pub(crate) fn parse_owned(cx: &mut Cx, source: &str) -> R<Value> {
+    let mut reader = Reader::new(source);
+    if reader.skip_value().is_err() || reader.finish().is_err() {
+        return Err(syntax_error(cx, source));
+    }
+    Ok(owned(&mut Reader::new(source)).expect("shared scanner accepted JSON"))
+}
+pub(crate) fn decode_error(cx: &mut Cx, message: String, path: String) -> Box<Error> {
+    error(cx, message, Some(path))
 }
 /// # Safety
 /// Schemas describe actual class descriptors/offsets, including tagged optional
 /// ints and literal unions. All handles obey the active Cx rooting contract.
 pub unsafe fn decode(cx: &mut Cx, text: Str, schemas: &'static [Schema]) -> R<Dyn> {
-    let source = text.as_str(cx).to_owned();
+    let source = text.try_as_str(cx)?.to_owned();
     let mut reader = Reader::new(&source);
     if reader.skip_value().is_err() || reader.finish().is_err() {
         let message = match refusal(&source) {
@@ -370,8 +382,9 @@ impl<'a, const N: usize> Stream<'a, N> {
                 first = false;
                 let slot = field(key);
                 if let Some(slot) = slot {
+                    let next = reader.peek();
                     let mark = reader.mark();
-                    fields[slot] = Some(match reader.peek() {
+                    fields[slot] = Some(match next {
                         Some(b'"') => match reader.borrowed_string()? {
                             Some(value) => Token::String(value),
                             None => Token::Escaped(mark),
@@ -436,10 +449,7 @@ impl<'a, const N: usize> Stream<'a, N> {
     fn text(&mut self, token: Token<'a>) -> Option<&str> {
         match token {
             Token::String(s) => Some(s),
-            Token::Escaped(mark) => {
-                self.reader.reset(mark);
-                Some(self.reader.string().expect("validated escape"))
-            }
+            Token::Escaped(mark) => Some(self.reader.string_at(mark).expect("validated escape")),
             _ => None,
         }
     }

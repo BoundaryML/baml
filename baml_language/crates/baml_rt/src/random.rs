@@ -21,7 +21,7 @@ pub fn new(seed: usize, chacha: bool) -> R<usize> {
     } else {
         Generator::Xoshiro(rand_xoshiro::Xoshiro256PlusPlus::from_seed(seed))
     };
-    Opaque::new(17, RefCell::new(generator)).map(Opaque::as_raw)
+    Opaque::new(15, RefCell::new(generator)).map(Opaque::as_raw)
 }
 /// # Safety
 /// `state` is a live seeded generator's opaque state in the current instance.

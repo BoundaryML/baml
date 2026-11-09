@@ -66,7 +66,7 @@ impl<'a, 'p, 'db> Schemas<'a, 'p, 'db> {
             | Repr::Bytes
             | Repr::Opaque) => Key::Scalar(r),
             r @ (Repr::ListInt | Repr::ListStr | Repr::ListPtr(_) | Repr::ListListStr) => {
-                Key::List(r, Box::new(self.from_repr(Emitter::element(r)?)?))
+                Key::List(r, Box::new(self.from_repr(self.e.plan.element(r)?)?))
             }
             _ => return Err(no(format!("native boundary storage {r:?}"))),
         })
@@ -124,7 +124,7 @@ impl<'a, 'p, 'db> Schemas<'a, 'p, 'db> {
                             .lists
                             .iter()
                             .copied()
-                            .find(|r| Emitter::element(*r).ok() == Some(element.repr()))
+                            .find(|r| self.e.plan.element(*r).ok() == Some(element.repr()))
                     })
                     .ok_or_else(|| no("native list layout"))?;
                 Key::List(r, Box::new(element))

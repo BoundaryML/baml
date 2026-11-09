@@ -21,7 +21,7 @@ use std::{
 
 pub mod capture;
 pub mod evidence;
-pub use btel_records::{LogLevel, RaiseKind};
+pub use btel_records::{RaiseKind,LogLevel};
 pub use btel_types as types;
 pub type Policy = btel_settings::policy::TelemetryPolicy<std::time::Duration>;
 pub struct Function {
@@ -29,8 +29,8 @@ pub struct Function {
     pub metadata: fn(FunctionId) -> btel_types::FunctionMetadata,
     pub word: &'static AtomicU8,
     pub hidden: bool,
-    pub hook_mode: Option<btel_types::InvocationMode>,
     pub policy: Policy,
+    pub hook_mode: Option<btel_types::InvocationMode>,
 }
 #[derive(Clone, Copy)]
 pub struct Site {
@@ -50,10 +50,19 @@ struct Key {
     caller: Option<usize>,
     pc: u32,
     callee: usize,
+    spawn: bool,
 }
 type Span = SpanRecord<Snapshot, Snapshot>;
 type Pool = ChunkPool<TimingRecord, Span>;
 thread_local! { static CURRENT: Cell<*mut State> = const { Cell::new(std::ptr::null_mut()) }; }
+
+pub(crate) fn current_raw() -> *mut () {
+    CURRENT.get().cast()
+}
+/// The pointer is null or an owner-thread state that outlives the binding.
+pub(crate) unsafe fn replace_current_raw(state: *mut ()) {
+    CURRENT.set(state.cast());
+}
 
 #[derive(Clone, Copy)]
 enum DeltaClock {
@@ -83,6 +92,7 @@ struct State {
     capture_scratch: Option<capture::Scratch>,
     evidence: bool,
     depth: u32,
+    awaits: Vec<AwaitDuration>,
     evidence_frame: *mut evidence::EvidenceFrame,
     producer: Producer<TimingRecord, Span>,
     clock: Arc<ClockEpoch>,
@@ -104,7 +114,6 @@ struct State {
     active: CallPathId,
     active_function: Option<usize>,
     active_slot: *mut AggregateDelta,
-    sysop_await: AwaitDuration,
     next_path: u32,
     gc_function: FunctionId,
     gc_started: Option<ClockInstant>,
@@ -184,6 +193,7 @@ impl State {
             caller: site.caller,
             pc: site.pc,
             callee: site.callee,
+            spawn: false,
         };
         if let Some(&(path, slot)) = self.paths.get(&key) {
             self.histories[site_id].push(Cache {
@@ -219,6 +229,201 @@ impl State {
     }
 }
 
+// Task-local execution state is swapped at every fiber boundary. Tables and
+// the owner-thread producer stay shared; frames retain stable slot addresses.
+#[derive(Clone)]
+pub(crate) struct Fiber {
+    state: *mut State,
+    depth: u32,
+    awaits: Vec<AwaitDuration>,
+    waiting_since: Option<ClockInstant>,
+    evidence_frame: *mut evidence::EvidenceFrame,
+    active_span: Option<TelemetryId>,
+    active: CallPathId,
+    active_function: Option<usize>,
+    active_slot: *mut AggregateDelta,
+    thread: TelemetryId,
+    name: Option<btel_records::ThreadName>,
+    started: ClockInstant,
+}
+impl Fiber {
+    pub(crate) unsafe fn current(pointer: *mut ()) -> Option<Self> {
+        if pointer.is_null() {
+            return None;
+        }
+        let state = unsafe { &*pointer.cast::<State>() };
+        Some(Self {
+            state: pointer.cast(),
+            depth: state.depth,
+            awaits: Vec::new(),
+            waiting_since: None,
+            evidence_frame: state.evidence_frame,
+            active_span: state.active_span,
+            active: state.active,
+            active_function: state.active_function,
+            active_slot: state.active_slot,
+            thread: state.thread,
+            name: state.name.clone(),
+            started: state.started,
+        })
+    }
+    pub(crate) unsafe fn enter(&mut self) {
+        let state = unsafe { &mut *self.state };
+        // A completing fiber unregisters its hook before returning to the loop.
+        // Its last span chunk still belongs to that thread until it is sealed.
+        if state.thread != self.thread {
+            state.flush();
+        }
+        state.awaits = std::mem::take(&mut self.awaits);
+        if let Some(started) = self.waiting_since.take()
+            && self.depth > 0
+        {
+            let elapsed = started.elapsed_until(state.read());
+            let index = self.depth as usize - 1;
+            state.awaits[index] = state.awaits[index].saturating_add(elapsed);
+        }
+        state.depth = self.depth;
+        state.evidence_frame = self.evidence_frame;
+        state.active_span = self.active_span;
+        state.active = self.active;
+        state.active_function = self.active_function;
+        state.active_slot = self.active_slot;
+        state.thread = self.thread;
+        state.name = self.name.clone();
+        state.started = self.started;
+        CURRENT.set(self.state);
+        state.producer.write_timing(TimingRecord::ThreadSelected {
+            thread_id: self.thread,
+        });
+    }
+    pub(crate) unsafe fn leave(&mut self) {
+        *self = unsafe { Self::current(self.state.cast()) }.unwrap();
+        let state = unsafe { &mut *self.state };
+        self.awaits = std::mem::take(&mut state.awaits);
+        state.flush();
+        self.waiting_since = Some(state.read());
+        CURRENT.set(std::ptr::null_mut());
+    }
+}
+pub(crate) struct Task {
+    pub(crate) fiber: Fiber,
+    parent: Option<TelemetryId>,
+    path: CallPathId,
+    callee: usize,
+}
+impl Task {
+    pub(crate) fn spawn(site_id: usize, name: Option<String>) -> Option<Box<Self>> {
+        Self::create(site_id, name, false)
+    }
+    pub(crate) fn root(site_id: usize) -> Option<Box<Self>> {
+        Self::create(site_id, None, true)
+    }
+    fn create(site_id: usize, name: Option<String>, root: bool) -> Option<Box<Self>> {
+        let pointer = CURRENT.get();
+        if pointer.is_null() {
+            return None;
+        }
+        let state = unsafe { &mut *pointer };
+        let site = state.sites[site_id];
+        let key = Key {
+            parent: state.active,
+            caller: site.caller,
+            pc: site.pc,
+            callee: site.callee,
+            spawn: true,
+        };
+        let path = if root {
+            CallPathId::ROOT
+        } else if let Some(&(path, _)) = state.paths.get(&key) {
+            path
+        } else {
+            state.next_path = state.next_path.checked_add(1).expect("call path exhausted");
+            let path = CallPathId::new_non_root(state.next_path).unwrap();
+            state.paths.insert(key, (path, std::ptr::null_mut()));
+            state.span(SpanRecord::CallPathDefined {
+                call_path: path,
+                parent_call_path: state.active,
+                visible_caller: site.caller.map(|f| state.functions[f]),
+                caller_pc: site.pc,
+                callee: state.functions[site.callee],
+                edge: CallPathEdge::Spawn,
+            });
+            path
+        };
+        let fiber = Fiber {
+            state: pointer,
+            depth: 0,
+            awaits: Vec::new(),
+            waiting_since: None,
+            evidence_frame: std::ptr::null_mut(),
+            active_span: None,
+            active: path,
+            active_function: None,
+            active_slot: std::ptr::null_mut(),
+            thread: allocate_telemetry_id(),
+            name: if root {
+                Some(state.names[site.callee].clone())
+            } else {
+                name.map(|n| Arc::new(n.into_boxed_str()))
+            },
+            started: state.read(),
+        };
+        Some(Box::new(Self {
+            fiber,
+            parent: if root {
+                None
+            } else {
+                Some(state.active_span.unwrap_or(state.thread))
+            },
+            path,
+            callee: site.callee,
+        }))
+    }
+    pub(crate) fn announce(&self) {
+        let state = unsafe { &mut *self.fiber.state };
+        state.span(SpanRecord::ThreadSpanAnnouncement {
+            id: self.fiber.thread,
+            parent_id: self.parent,
+            spawn_call_path: self.path,
+            started_at: self.fiber.started,
+            clock: state.clock.clone(),
+            name: self.fiber.name.clone(),
+        });
+    }
+    pub(crate) fn running(&self, cancelled: bool) {
+        let state = unsafe { &mut *self.fiber.state };
+        if cancelled && (mode(state.words[self.callee]) & 3) >= 2 {
+            state.span(SpanRecord::ThreadSpanRunning { at: state.read() });
+            return;
+        }
+        // Running precedes the child's first context selection in the VM.
+        state.producer.seal();
+        state.producer.write_span(SpanRecord::ThreadSelected {
+            thread_id: state.thread,
+        });
+        state
+            .producer
+            .write_span(SpanRecord::ThreadSpanRunning { at: state.read() });
+        state.producer.write_span(SpanRecord::ContextCleared);
+    }
+    pub(crate) fn finish<T>(&self, result: &R<T>) {
+        let state = unsafe { &mut *self.fiber.state };
+        state.span(SpanRecord::ThreadSpanCompletion {
+            id: self.fiber.thread,
+            parent_id: self.parent,
+            spawn_call_path: self.path,
+            started_at: self.fiber.started,
+            completed_at: state.read(),
+            outcome: result
+                .as_ref()
+                .map_or_else(|e| outcome(e), |_| InvocationOutcome::Ok),
+            clock: state.clock.clone(),
+            name: self.fiber.name.clone(),
+        });
+        state.flush();
+    }
+}
+
 /// Explicit completion, including errors, is required; Drop does not guess outcomes.
 pub struct Frame {
     state: *mut State,
@@ -228,7 +433,6 @@ pub struct Frame {
     saved_slot: *mut AggregateDelta,
     slot: *mut AggregateDelta,
     pub await_duration: AwaitDuration,
-    saved_await: AwaitDuration,
     flags: u8,
 }
 /// # Safety
@@ -290,9 +494,12 @@ pub unsafe fn enter_observed(site_id: usize) -> Frame {
         saved_slot: state.active_slot,
         slot,
         await_duration: AwaitDuration::ZERO,
-        saved_await: std::mem::replace(&mut state.sysop_await, AwaitDuration::ZERO),
         flags: u8::from(reentry),
     };
+    state
+        .awaits
+        .resize(state.depth as usize + 1, AwaitDuration::ZERO);
+    state.awaits[state.depth as usize] = AwaitDuration::ZERO;
     state.depth += 1;
     state.active = path;
     state.active_slot = if reentry {
@@ -304,11 +511,15 @@ pub unsafe fn enter_observed(site_id: usize) -> Frame {
     frame
 }
 impl Frame {
+    fn await_time(&self) -> AwaitDuration {
+        let state = unsafe { &*self.state };
+        self.await_duration
+            .saturating_add(state.awaits[state.depth as usize - 1].get())
+    }
     #[inline(always)]
-    pub fn finish<T>(mut self, result: &mut R<T>) {
+    pub fn finish<T>(self, result: &mut R<T>) {
+        let await_duration = self.await_time();
         let state = unsafe { &mut *self.state };
-        self.await_duration = self.await_duration.saturating_add(state.sysop_await.get());
-        state.sysop_await = self.saved_await;
         let (exited_at, outcome) = match result {
             Ok(_) => (state.read(), InvocationOutcome::Ok),
             Err(error) => (
@@ -322,10 +533,10 @@ impl Frame {
         let duration = self.entered_at.elapsed_until(exited_at);
         debug_assert_eq!(slot.node.is_reentry(), self.flags != 0);
         if !(outcome == InvocationOutcome::Ok
-            && self.await_duration == AwaitDuration::ZERO
+            && await_duration == AwaitDuration::ZERO
             && add_ok(slot, duration))
         {
-            complete_unusual(state, self.slot, duration, self.await_duration, outcome);
+            complete_unusual(state, self.slot, duration, await_duration, outcome);
         }
         evidence::frame_completed(state, result);
         state.depth -= 1;
@@ -462,7 +673,7 @@ pub unsafe fn observe_captured<T>(
         };
         let state = unsafe { &mut *frame.state };
         let id = id.unwrap_or_else(allocate_telemetry_id);
-        let await_time = frame.await_duration.saturating_add(state.sysop_await.get());
+        let await_time = frame.await_time();
         macro_rules! completion {
             ($variant:ident) => {
                 SpanRecord::$variant {
@@ -551,18 +762,11 @@ pub unsafe fn observe_captured<T>(
         };
         state.span(record);
     } else {
-        complete_unusual(
-            state,
-            frame.slot,
-            duration,
-            frame.await_duration.saturating_add(state.sysop_await.get()),
-            outcome,
-        );
+        complete_unusual(state, frame.slot, duration, frame.await_time(), outcome);
     }
     let state = unsafe { &mut *frame.state };
     evidence::frame_completed(state, &mut result);
     state.depth -= 1;
-    state.sysop_await = frame.saved_await;
     state.active_span = saved_span;
     state.active = frame.saved_path;
     state.active_function = frame.saved_function;
@@ -806,13 +1010,7 @@ impl Session {
                 .word
                 .store(word | if explicit_stack { 4 } else { 0 }, Ordering::Relaxed);
         }
-        // An unobserved run never reads this clock. Avoid hardware calibration
-        // (including its holdout sleep) when telemetry is disabled.
-        let clocks = ClockRuntime::new(if level.is_none() {
-            btel_clock::ClockMode::Monotonic
-        } else {
-            btel_settings::clock::DEFAULT_MODE
-        });
+        let clocks = ClockRuntime::new(btel_settings::clock::DEFAULT_MODE);
         let exit = Arc::new(btel_types::ProcessExitSlot::default());
         let mut session = Self {
             root_panicked: false,
@@ -906,6 +1104,7 @@ impl Session {
             capture_scratch: None,
             evidence,
             depth: 0,
+            awaits: Vec::new(),
             evidence_frame: std::ptr::null_mut(),
             producer: pool.register_producer().unwrap(),
             clock: clock.clone(),
@@ -924,7 +1123,6 @@ impl Session {
             active: CallPathId::ROOT,
             active_function: None,
             active_slot: std::ptr::null_mut(),
-            sysop_await: AwaitDuration::ZERO,
             next_path: 0,
             gc_function,
             gc_started: None,
@@ -996,6 +1194,53 @@ impl Session {
                             || Ok(false),
                         );
                         aliased.map(|_| value.to_string())
+                    },
+                )
+            }
+        })
+    }
+    pub fn format_string(&mut self, value: &str, site: usize) -> R<String> {
+        let Some(state) = &self.state else {
+            return Ok(serde_json::to_string(value).expect("string JSON"));
+        };
+        let word = state.words[state.sites[site].callee];
+        let alias_word = state.words[state.sites[site + 1].callee];
+        let naming_tag = state.capture_metadata.map_or(0, |m| m.naming_tag);
+        self.run_at(site, || {
+            // Typed specialization of stringify(string, Declared, 0, false):
+            // resolve the naming mode, then encode the scalar without a heap.
+            unsafe {
+                observed_captured(
+                    word,
+                    site,
+                    || InputCaptures {
+                        inputs: Some(with_capture(|s, _| s.text_arguments(value, 3))),
+                        types: None,
+                    },
+                    |r: &R<String>| match r {
+                        Ok(v) => capture_text(v),
+                        Err(e) => capture_error(e),
+                    },
+                    || {
+                        let aliased: R<bool> = observed_captured(
+                            alias_word,
+                            site + 1,
+                            || {
+                                capture_arguments(&[crate::Dyn {
+                                    tag: naming_tag,
+                                    payload: 0,
+                                }])
+                            },
+                            |r| match r {
+                                Ok(v) => capture_value(crate::Dyn {
+                                    tag: 1,
+                                    payload: *v as u64,
+                                }),
+                                Err(e) => capture_error(e),
+                            },
+                            || Ok(false),
+                        );
+                        aliased.map(|_| serde_json::to_string(value).expect("string JSON"))
                     },
                 )
             }
@@ -1292,6 +1537,7 @@ mod tests {
             capture_scratch: None,
             evidence: true,
             depth: 0,
+            awaits: Vec::new(),
             evidence_frame: std::ptr::null_mut(),
             producer: pool.register_producer().unwrap(),
             clock,
@@ -1310,7 +1556,6 @@ mod tests {
             active: CallPathId::ROOT,
             active_function: None,
             active_slot: std::ptr::null_mut(),
-            sysop_await: AwaitDuration::ZERO,
             next_path: 0,
             gc_function: allocator.allocate().unwrap(),
             gc_started: None,
@@ -1578,6 +1823,26 @@ mod tests {
     }
 }
 
+/// Charge a native system operation to its caller's observed call path.
+pub(crate) fn sysop<T>(call: impl FnOnce() -> R<T>) -> R<T> {
+    let pointer = CURRENT.get();
+    if pointer.is_null() {
+        return call();
+    }
+    let state = unsafe { &*pointer };
+    let path = state.active;
+    let started = state.read();
+    let result = call();
+    let state = unsafe { &mut *pointer };
+    if path != CallPathId::ROOT && state.active_function.is_some() {
+        state.producer.write_timing(TimingRecord::SysOpTime {
+            call_path: path,
+            elapsed: started.elapsed_until(state.read()),
+        });
+    }
+    result
+}
+
 /// Record a log with its actual statement PC, independently of call-frame state.
 /// # Safety
 /// Both values must be rooted in the running owner-thread task.
@@ -1600,7 +1865,7 @@ pub unsafe fn log(
         .position(|w| std::ptr::eq(*w, word))
         .expect("registered log function");
     let event_name =
-        name.map(|s| Arc::<str>::from(s.as_str(&unsafe { crate::strings::Cx::current() })));
+        name.map(|s| Arc::<str>::from(s.to_owned()));
     state.span(SpanRecord::Log {
         parent_id: state.active_span.unwrap_or(state.thread),
         function: state.functions[function],
@@ -1624,7 +1889,6 @@ pub(crate) fn sysop_finished(started: Option<ClockInstant>) {
     let Some(started) = started else { return };
     let state = unsafe { &mut *CURRENT.get() };
     let elapsed = started.elapsed_until(state.clock.read());
-    state.sysop_await = state.sysop_await.saturating_add(elapsed);
     if state.active != CallPathId::ROOT {
         state.producer.write_timing(TimingRecord::SysOpTime {
             call_path: state.active,

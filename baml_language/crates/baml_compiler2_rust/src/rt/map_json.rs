@@ -2,8 +2,8 @@
 use super::*;
 pub(super) fn code(repr: Repr) -> Gen<usize> {
     match repr {
-        Repr::MapStrInt => Ok(1_000_000),
-        Repr::Map(id) => Ok(1_000_001 + id),
+        Repr::MapStrInt => Ok(2_000_000),
+        Repr::Map(id) => Ok(2_000_001 + id),
         _ => Err(no("JSON map representation")),
     }
 }
@@ -20,7 +20,7 @@ pub(super) fn emit(
     if plan.json_maps.is_empty() {
         return Ok(());
     }
-    let MirFunctionKind::Bytecode(body) = cx.all[&callee].kind.as_ref() else {
+    let MirFunctionKind::Bytecode(body) = &cx.all[&callee].kind else {
         return Err(no("JSON decode body"));
     };
     let block=body.blocks.iter().find(|b|matches!(&b.terminator,Some(Terminator::Call{callee:Operand::Constant(Constant::Function(f)),..}) if plan.index.function(cx.db,*f).is_some_and(|(id,_)|plan.index.display(id)=="baml.json._decode"))).ok_or_else(||no("JSON source location"))?;
@@ -31,7 +31,7 @@ pub(super) fn emit(
         .lower_to_compact_with_offsets()
         .offset_of(pc)
         .unwrap();
-    if plan.json_types.is_empty() {
+    if plan.json_types.is_empty() && plan.json_list_types.is_empty() {
         writeln!(out,"static O{callee}:std::sync::atomic::AtomicU8=std::sync::atomic::AtomicU8::new(0);static S{callee}:rt::Source=rt::Source{{file:{:?},function:{:?},lines:&[{line}],pcs:&[{pc}],kinds:&[rt::telemetry::RaiseKind::NativeBoundary]}};",plan.index.info(callee).source_file,plan.index.display(callee)).unwrap();
     }
     for (&repr, ty) in &plan.json_maps {
@@ -50,7 +50,7 @@ pub(super) fn emit(
         let tag = lists[&repr] + 3;
         let desc = lists[&repr];
         let slot = maps::slot_type(value_repr, cx.descriptors, lists)?;
-        let ty = capture_codegen::capture_repr_type(plan, repr)?;
+        let ty = capture_codegen::capture_repr(plan, repr)?;
         writeln!(out,"unsafe fn f{callee}_json{code}(telemetry_site:usize,s:usize,naming:usize,omitted:bool)->R<rt::Dyn>{{unsafe{{rt::telemetry::observed_captured(&O{callee},telemetry_site,||{{let mut c=rt::telemetry::capture_arguments(&[rt::Dyn{{tag:3,payload:s as u64}},rt::Dyn{{tag:if omitted{{u64::MAX}}else{{CAPTURE_NAMING_TAG}},payload:naming as u64}}]);c.types=rt::telemetry::capture_type_args(&[(\"T\",&{ty})]);c}},|r|match r{{Ok(v)=>rt::telemetry::capture_value(*v),Err(e)=>rt::telemetry::capture_error(e)}},||{{rt::check_stack().map_err(|e|e.at(&S{callee},0))?;rt::telemetry::observed_captured(&O{alias},JSON_ALIAS_SITE,||rt::telemetry::capture_arguments(&[rt::Dyn{{tag:CAPTURE_NAMING_TAG,payload:naming as u64}}]),|r|match r{{Ok(v)=>rt::telemetry::capture_value(rt::Dyn{{tag:1,payload:*v as u64}}),Err(e)=>rt::telemetry::capture_error(e)}},||Ok(naming!=0))?;rt::maps::json::decode::<{slot}>(&mut rt::strings::Cx::current(),{desc},rt::strings::Str::from_raw(s),{decoder}).map(|map|rt::Dyn{{tag:{tag},payload:map.as_raw() as u64}}).map_err(|mut e|{{rt::telemetry::evidence::raised(&mut e,&S{callee},0,None);e}})}})}}}}").unwrap();
     }
     Ok(())
@@ -99,10 +99,10 @@ fn emit_encoders(
             Repr::ListInt => "rt::maps::json::write_int_list(value.as_raw(),out)?;".into(),
             Repr::ListStr => "rt::maps::json::write_string_list(cx,rt::lists::List::from_raw(value.as_raw()),out)?;".into(),
             Repr::ListListStr => "rt::maps::json::write_nested_string_list(cx,rt::lists::List::from_raw(value.as_raw()),out)?;".into(),
-            Repr::Str => "rt::maps::json::write_string(out,value.as_str(cx));".to_owned(),
+            Repr::Str => "rt::maps::json::write_string(out,value.try_as_str(cx)?);".to_owned(),
             Repr::Null => "out.push_str(\"null\");".to_owned(),
             Repr::MapStrInt | Repr::Map(_) => format!(
-                "let text=rt_map_json_encode_{}(cx,value.as_raw(),path)?;out.push_str(text.as_str(cx));",
+                "let text=rt_map_json_encode_{}(cx,value.as_raw(),path)?;out.push_str(text.try_as_str(cx)?);",
                 self::code(value)?
             ),
             _ => unreachable!(),
@@ -204,7 +204,7 @@ pub(super) fn terminator(emitter: &Emitter<'_, '_>, term: &Terminator<'_>) -> Op
         let code = code(repr)?;
         let site = emitter.telemetry_site(callee);
         // Keep stringify's logical naming helper, at its own source location.
-        let MirFunctionKind::Bytecode(body) = emitter.all[&callee].kind.as_ref() else {
+        let MirFunctionKind::Bytecode(body) = &emitter.all[&callee].kind else {
             return Err(no("stringify body"));
         };
         let (block, alias) = body

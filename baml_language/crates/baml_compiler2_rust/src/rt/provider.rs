@@ -147,12 +147,15 @@ fn invoke(
         let schema = schemas.object(c)?;
         errors.push(format!("({:?},&{schema})", format!("baml.errors.{name}")));
     }
+    let error_callback = if matches!(e.all[&e.object].kind, MirFunctionKind::Builtin(_)) {
+        "let IO_ERROR=|error:rt::provider::OpError,asynchronous:bool|{let mut error=rt::provider::error(error,IO_ERRORS);if asynchronous{rt::telemetry::evidence::raised_at_call_site(&mut error,_site,rt::telemetry::RaiseKind::HostBoundary);}error};".to_owned()
+    } else {
+        format!("fn IO_ERROR(error:rt::provider::OpError,asynchronous:bool)->Box<rt::Error>{{let mut error=rt::provider::error(error,IO_ERRORS);if asynchronous{{rt::telemetry::evidence::raised_with_kind(&mut error,&S{},{},None,Some(rt::telemetry::RaiseKind::HostBoundary));}}error}}",e.object,e.site)
+    };
     let mut out = format!(
-        "{{{} static IO_ERRORS:&[(&str,&rt::external::Type)]=&[{}];fn IO_ERROR(error:rt::provider::OpError,asynchronous:bool)->Box<rt::Error>{{let mut error=rt::provider::error(error,IO_ERRORS);if asynchronous{{rt::telemetry::evidence::raised_with_kind(&mut error,&S{},{},None,Some(rt::telemetry::RaiseKind::HostBoundary));}}error}}{conversions}",
+        "{{{} static IO_ERRORS:&[(&str,&rt::external::Type)]=&[{}];{error_callback}{conversions}",
         schemas.finish(),
         errors.join(","),
-        e.object,
-        e.site
     );
     args.push("IO_ERROR".into());
     write!(

@@ -31,8 +31,8 @@ fn failure(error: Failure) -> Box<Error> {
         "AllocFailure" => {
             crate::language::panic_value(5, "baml.panics.AllocFailure", error.message)
         }
-        "ParseError" => crate::language::panic_value(11, "baml.errors.ParseError", error.message),
-        "Io" => crate::language::panic_value(13, "baml.errors.Io", error.message),
+        "ParseError" => crate::language::panic_value(20, "baml.errors.ParseError", error.message),
+        "Io" => crate::language::panic_value(22, "baml.errors.Io", error.message),
         "HostUnavailable" => host_unavailable(error.resource, error.message),
         _ => Error::internal(error.message),
     }
@@ -42,7 +42,7 @@ pub(crate) fn host_unavailable(resource: String, message: String) -> Box<Error> 
     let result = (|| -> R<usize> {
         let resource = cx.string(&resource)?;
         let message = cx.string(&message)?;
-        let object = unsafe { crate::try_alloc(12, 24) }?;
+        let object = unsafe { crate::try_alloc(21, 24) }?;
         unsafe {
             baml_rt_gc::write_ptr(object, object.add(8).cast(), resource.as_raw());
             baml_rt_gc::write_ptr(object, object.add(16).cast(), message.as_raw());
@@ -51,6 +51,7 @@ pub(crate) fn host_unavailable(resource: String, message: String) -> Box<Error> 
     })();
     match result {
         Ok(value) => Box::new(Error {
+            telemetry_caught: None,
             value,
             class: "baml.panics.HostUnavailable",
             message: message.clone(),
@@ -66,6 +67,19 @@ pub(crate) fn host_unavailable(resource: String, message: String) -> Box<Error> 
 }
 
 /// Run a heap-free sysop, then hydrate its owned result on the owner thread.
+pub fn perform_at(output: Output, call_site: Option<usize>) -> R<Owned> {
+    let asynchronous = matches!(&output, Output::Async(_));
+    perform(output).map_err(|mut error| {
+        if asynchronous && let Some(site) = call_site {
+            crate::telemetry::evidence::raised_at_call_site(
+                &mut error, site, crate::telemetry::RaiseKind::HostBoundary,
+            );
+        }
+        error
+    })
+}
+
+/// Run a direct sysop whose generated source table supplies its error site.
 pub fn perform(output: Output) -> R<Owned> {
     let started = crate::telemetry::sysop_started();
     let result = match output {

@@ -11,8 +11,13 @@ pub(super) fn resolve(
     method: &str,
     method_args: &[RuntimeTy],
 ) -> Gen<Option<(usize, Vec<RuntimeTy>)>> {
+    // The VM invokes the structural primitive conversion directly, without
+    // entering the interface's default BAML body or emitting its call record.
+    if let Some(target) = super::tasks::duration_string_default(plan, concrete, iface, method) {
+        return Ok(Some(target));
+    }
     let Some(w) = witness(db, plan, concrete, iface)? else {
-        return Ok(None);
+        return super::formatting::structural_fallback(plan, concrete, iface, method);
     };
     let Witness {
         rule,
@@ -66,6 +71,17 @@ struct Witness<'p> {
     bindings: Vec<bex_vm_types::RuntimeTy>,
     interface: usize,
     concrete: bex_vm_types::RuntimeTy,
+}
+pub(super) fn structural_string_default(
+    db: &dyn Db,
+    plan: &Plan<'_>,
+    concrete: &RuntimeTy,
+    iface: &TyTemplateInterface,
+    method: &str,
+) -> Gen<bool> {
+    Ok(super::formatting::is_to_string(plan, iface, method)
+        && witness(db, plan, concrete, iface)?.is_none()
+        && super::formatting::primitive_override(plan, concrete, iface)?.is_none())
 }
 fn witness<'p>(
     db: &dyn Db,
@@ -241,6 +257,23 @@ impl registry::Feature for Feature {
                 if !tags.insert(tag.clone()) {
                     return Err(no("overlapping dispatch storage tags"));
                 }
+                if e.plan
+                    .structural_string_calls
+                    .contains(&(e.object, e.block, repr))
+                {
+                    // The VM selects the native structural default directly;
+                    // its BAML interface body is only used by explicit rules.
+                    let raw = match repr {
+                        Repr::Bool => "receiver.payload!=0".into(),
+                        Repr::Float => "f64::from_bits(receiver.payload)".into(),
+                        _ => format!("receiver.payload as {}", repr.rust()),
+                    };
+                    let value = registry::call(e, "baml._to_string_default", &[], &[(raw, repr)])
+                        .ok_or_else(|| no("structural string renderer"))??;
+                    let result = e.coerce(value, returned)?;
+                    write!(expression, "{tag}=>{{{result}}},").unwrap();
+                    continue;
+                }
                 let mut call_values = values
                     .iter()
                     .enumerate()
@@ -272,10 +305,10 @@ impl registry::Feature for Feature {
                 if call_values.len() != e.all[&callee].arity {
                     return Err(no("interface call arity"));
                 }
-                let MirFunctionKind::Bytecode(body) = e.all[&callee].kind.as_ref() else {
+                let MirFunctionKind::Bytecode(body) = &e.all[&callee].kind else {
                     let name = e.plan.index.builtin_path(callee);
                     let (value, repr) = registry::call(e, name, &[], &call_values)
-                        .ok_or_else(|| no(format!("interface native adapter {name}")))??;
+                        .ok_or_else(|| no("interface builtin implementation"))??;
                     let result = e.coerce((value, repr), returned)?;
                     write!(expression, "{tag}=>{{{result}}},").unwrap();
                     continue;
@@ -311,6 +344,13 @@ impl Emitter<'_, '_> {
         if targets.len() <= 2 || !targets.iter().all(|(r, _)| matches!(r, Repr::Ptr(_))) {
             return None;
         }
+        if targets.iter().any(|(repr, _)| {
+            self.plan
+                .structural_string_calls
+                .contains(&(self.object, self.block, *repr))
+        }) {
+            return None;
+        }
         let Terminator::VirtualCall {
             args,
             ntypeargs,
@@ -323,7 +363,7 @@ impl Emitter<'_, '_> {
             return None;
         };
         let first = targets[0].1;
-        let MirFunctionKind::Bytecode(body) = self.all[&first].kind.as_ref() else {
+        let MirFunctionKind::Bytecode(body) = &self.all[&first].kind else {
             return None;
         };
         let signature = (1..=self.all[&first].arity)
@@ -336,7 +376,7 @@ impl Emitter<'_, '_> {
             return None;
         };
         for &(_, callee) in targets {
-            let MirFunctionKind::Bytecode(b) = self.all[&callee].kind.as_ref() else {
+            let MirFunctionKind::Bytecode(b) = &self.all[&callee].kind else {
                 return None;
             };
             if self.all[&callee].arity != signature.len()
@@ -383,22 +423,21 @@ impl Emitter<'_, '_> {
             for &(repr, callee) in targets {
                 table.insert(self.tag(repr)?, (callee, self.telemetry_site(callee)));
             }
-            for (observed, table_name) in [(true, "VTABLE_TRUE"), (false, "VTABLE_FALSE")] {
-                write!(code, "static {table_name}:&[Option<({fn_ty},usize)>]=&[").unwrap();
-                for tag in 0..=*table.keys().last().unwrap() {
-                    if let Some((callee, site)) = table.get(&tag) {
-                        write!(code, "Some((f{callee}::<{observed}> as {fn_ty},{site})),").unwrap();
-                    } else {
-                        code.push_str("None,");
-                    }
+            write!(code, "static VTABLE:&[Option<({fn_ty},{fn_ty},usize)>]=&[").unwrap();
+            for tag in 0..=*table.keys().last().unwrap() {
+                if let Some((callee, site)) = table.get(&tag) {
+                    write!(
+                        code,
+                        "Some((f{callee}::<false> as {fn_ty},f{callee}::<true> as {fn_ty},{site})),"
+                    )
+                    .unwrap();
+                } else {
+                    code.push_str("None,");
                 }
-                code.push_str("];");
             }
-            code.push_str(
-                "let vtable=if OBSERVE{VTABLE_TRUE}else{VTABLE_FALSE};let (callee,site)=",
-            );
-            code.push_str(&self.fallible("vtable.get(receiver.tag as usize).copied().flatten().ok_or_else(||rt::Error::internal(\"invalid closed-world interface receiver\".into()))"));
-            code.push(';');
+            code.push_str("];let (plain,observed,site)=");
+            code.push_str(&self.fallible("VTABLE.get(receiver.tag as usize).copied().flatten().ok_or_else(||rt::Error::internal(\"invalid closed-world interface receiver\".into()))"));
+            code.push_str(";let callee=if OBSERVE{observed}else{plain};");
             let mut values = values
                 .iter()
                 .enumerate()
@@ -468,4 +507,76 @@ pub(super) fn implements(
     iface: &TyTemplateInterface,
 ) -> Gen<bool> {
     Ok(witness(db, plan, concrete, iface)?.is_some())
+}
+
+// In a bounded program these leaves and their one-level dispatch adapters are
+// forced inline. They introduce no BAML frame; the caller's ordinary guard and
+// 64 KiB runtime reserve cover their bounded locals, including observed entry.
+pub(super) fn inline_leaves(
+    plan: &Plan<'_>,
+    all: &BTreeMap<usize, MirFunction<'_>>,
+) -> BTreeSet<usize> {
+    let mut leaves = plan
+        .dispatches
+        .values()
+        .flatten()
+        .filter_map(|(_, id)| {
+            all.get(id)
+                .filter(|m| super::stack::small_leaf(m))
+                .map(|_| *id)
+        })
+        .collect::<BTreeSet<_>>();
+    for (&id, mir) in all {
+        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+            continue;
+        };
+        if matches!(body.locals[0].ty, RuntimeTy::Interface(..)) && super::stack::small_leaf(mir) {
+            leaves.insert(id);
+            continue;
+        }
+        if mir.arity == 0 || body.locals.len() > 32 || body.blocks.len() > 16 {
+            continue;
+        }
+        let mut dispatch = false;
+        let bounded = body.blocks.iter().all(|b| match &b.terminator {
+            Some(Terminator::VirtualCall { .. }) => {
+                dispatch = true;
+                plan.dispatches.get(&(id, b.id.0)).is_some_and(|targets| {
+                    !targets.is_empty()
+                        && targets.iter().all(|(_, target)| {
+                            all.get(target).is_some_and(super::stack::small_leaf)
+                        })
+                })
+            }
+            Some(
+                Terminator::Goto { .. }
+                | Terminator::Return
+                | Terminator::Branch { .. }
+                | Terminator::ShortCircuit { .. }
+                | Terminator::Throw { .. }
+                | Terminator::Rethrow { .. },
+            ) => true,
+            _ => false,
+        });
+        if bounded && dispatch {
+            leaves.insert(id);
+        }
+    }
+    leaves
+}
+
+// Native structural rendering dispatches only explicit implementations. The
+// ordinary default would call the renderer again, so it is deliberately absent.
+pub(super) fn resolve_string_override(
+    db: &dyn Db,
+    plan: &Plan<'_>,
+    concrete: &RuntimeTy,
+    iface: &TyTemplateInterface,
+) -> Gen<Option<(usize, Vec<RuntimeTy>)>> {
+    if witness(db, plan, concrete, iface)?.is_some_and(|w| w.rule.methods.contains_key("to_string"))
+    {
+        resolve(db, plan, concrete, iface, "to_string", &[])
+    } else {
+        super::formatting::primitive_override(plan, concrete, iface)
+    }
 }

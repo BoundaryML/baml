@@ -61,6 +61,7 @@ pub(super) fn slot_type(
         Repr::Bool => "bool".into(),
         Repr::Tagged | Repr::Dyn(_) => "rt::Dyn".into(),
         Repr::Str => "rt::strings::Str".into(),
+        Repr::Bigint => "rt::maps::Pointer<BIGINT_TAG>".into(),
         Repr::Ptr(c) => format!("rt::maps::Pointer<{}>", descriptors[&c] + 3),
         r if r.pointer() => format!("rt::maps::Pointer<{}>", lists[&r] + 3),
         _ => return Err(no("map slot representation")),
@@ -127,6 +128,12 @@ impl registry::Feature for Feature {
         _types: &[Repr],
         values: &[(String, Repr)],
     ) -> Option<Gen<(String, Repr)>> {
+        if values
+            .first()
+            .is_some_and(|v| matches!(v.1, Repr::MapStrPtr(_)))
+        {
+            return None;
+        }
         name.starts_with("baml.Map.")
             .then(|| emitter.map_call(name, values))
     }
@@ -137,6 +144,9 @@ impl registry::Feature for Feature {
         expected: Repr,
     ) -> Option<Gen<(String, Repr)>> {
         if let Rvalue::Map(_, _, entries) = value {
+            if matches!(expected, Repr::MapStrPtr(_)) {
+                return None;
+            }
             Some(emitter.map_literal(entries, expected))
         } else if let Rvalue::Len(place) = value {
             match emitter.place(place) {
@@ -242,7 +252,7 @@ impl Emitter<'_, '_> {
                             types[*id].value_type.clone()
                         }
                     };
-                    if declared != capture_codegen::capture_repr_type(self.plan, element)? {
+                    if declared != capture_codegen::capture_repr(self.plan, element)? {
                         return Err(no("map snapshot declared list element type"));
                     }
                 }
@@ -300,16 +310,10 @@ impl Emitter<'_, '_> {
         if repr.growing() {
             let slot = element.slot()?;
             let new = self.fallible(&format!(
-                "rt::lists::List::<{slot}>::new(&mut rt::strings::Cx::current(),{desc})"
+                "rt::lists::List::<{slot}>::with_capacity(&mut rt::strings::Cx::current(),{desc},len)"
             ));
-            let item = if element == Repr::Str {
-                format!("map.entry(i).unwrap().{select}")
-            } else {
-                format!(
-                    "<{slot}>::from_raw({})",
-                    self.map_out(&format!("map.entry(i).unwrap().{select}"), element)
-                )
-            };
+            let item = element
+                .to_slot(&self.map_out(&format!("map.entry(i).unwrap().{select}"), element))?;
             let push = self.fallible(&format!(
                 "list.push(&mut rt::strings::Cx::current(),{item})"
             ));

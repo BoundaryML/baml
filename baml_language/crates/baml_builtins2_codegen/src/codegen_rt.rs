@@ -8,10 +8,13 @@ pub fn supports_rt(path: &str) -> bool {
         || crate::codegen_rt_provider::supports(path)
         || crate::codegen_rt_random::supports(path)
         || crate::codegen_rt_clock::supports(path)
-        || crate::codegen_rt_bytes::supports(path)
         || crate::codegen_rt_bigint::supports(path)
-        || crate::codegen_rt_io::supports(path)
         || crate::codegen_rt_scalar::supports(path)
+        || crate::codegen_rt_io::supports(path)
+        || crate::codegen_rt_string_bytes::supports(path)
+        || crate::codegen_rt_regex::supports(path)
+        || crate::codegen_rt_bytes::supports(path)
+        || crate::codegen_rt_strings::supports(path)
         || matches!(
             path,
             "baml._to_string_primitive"
@@ -58,12 +61,21 @@ pub fn generate_rt(
             output.push_str(&crate::codegen_rt_clock::generate(declaration)?);
             continue;
         }
-        if crate::codegen_rt_bytes::supports(path) {
-            output.push_str(&crate::codegen_rt_bytes::generate(declaration)?);
-            continue;
-        }
         if crate::codegen_rt_bigint::supports(path) {
             output.push_str(&crate::codegen_rt_bigint::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_scalar::supports(path) {
+            output.push_str(&crate::codegen_rt_scalar::generate(declaration)?);
+            if crate::codegen_rt_strings::supports(path){output.push_str(&crate::codegen_rt_strings::generate(declaration)?);}
+            continue;
+        }
+        if crate::codegen_rt_io::supports(path) {
+            output.push_str(&crate::codegen_rt_io::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_string_bytes::supports(path) {
+            output.push_str(&crate::codegen_rt_string_bytes::generate(declaration)?);
             continue;
         }
         if path == "baml._to_string_primitive" {
@@ -79,12 +91,16 @@ pub fn generate_rt(
             }
             continue;
         }
-        if crate::codegen_rt_io::supports(path) {
-            output.push_str(&crate::codegen_rt_io::generate(declaration)?);
+        if crate::codegen_rt_regex::supports(path) {
+            output.push_str(&crate::codegen_rt_regex::generate(declaration)?);
             continue;
         }
-        if crate::codegen_rt_scalar::supports(path) {
-            output.push_str(&crate::codegen_rt_scalar::generate(declaration)?);
+        if crate::codegen_rt_bytes::supports(path) {
+            output.push_str(&crate::codegen_rt_bytes::generate(declaration)?);
+            continue;
+        }
+        if crate::codegen_rt_strings::supports(path) {
+            output.push_str(&crate::codegen_rt_strings::generate(declaration)?);
             continue;
         }
         if path == "baml._to_string_default" || path == "baml.String.to_code_points" {
@@ -159,7 +175,7 @@ pub fn generate_rt(
             output.push_str(if set {
                 "#[inline(always)] fn rt_map_set(cx:&mut rt::strings::Cx,map:rt::maps::StringIntMap,key:rt::strings::Str,value:i64)->rt::R<rt::Dyn>{map.set(cx,key,value)}\n"
             } else {
-                "#[inline(always)] unsafe fn rt_map_values(cx:&mut rt::strings::Cx,map:rt::maps::StringIntMap,desc:u32)->rt::R<usize>{unsafe{map.values(cx,desc)}}\n"
+                "#[inline(always)] unsafe fn rt_map_values(cx:&mut rt::strings::Cx,map:rt::maps::StringIntMap,desc:u32)->rt::R<usize>{unsafe{map.growing_values(cx,desc)}}\n"
             });
             continue;
         }
@@ -302,7 +318,7 @@ mod tests {
                 .contains("changed builtin signature")
         );
         assert!(
-            generate_rt(&declarations, &["baml.String.trim".into()].into())
+            generate_rt(&declarations, &["baml.String.unknown".into()].into())
                 .unwrap_err()
                 .contains("unsupported in baml_rt")
         );

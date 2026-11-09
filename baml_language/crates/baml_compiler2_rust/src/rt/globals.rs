@@ -28,10 +28,10 @@ pub(super) fn prepare<'db>(
             all.insert(
                 object,
                 MirFunction {
-                    arity: 0,
                     identity: None,
-                    kind: std::borrow::Cow::Owned(MirFunctionKind::Bytecode(body)),
-                    lambdas: std::borrow::Cow::Owned(lambdas),
+                    arity: 0,
+                    kind: MirFunctionKind::Bytecode(body),
+                    lambdas: lambdas.iter().map(MirFunction::from).collect(),
                 },
             );
         }
@@ -61,7 +61,7 @@ pub(super) fn prepare<'db>(
                     };
                     let object = callee.raw();
                     let repr = if let Some(mir) = all.get(&object) {
-                        let MirFunctionKind::Bytecode(body) = mir.kind.as_ref() else {
+                        let MirFunctionKind::Bytecode(body) = &mir.kind else {
                             return Err(no("initializer body"));
                         };
                         roots.push(object);
@@ -152,7 +152,7 @@ pub(super) fn emit(
                 };
                 format!("rt::Dyn{{tag:{tag},payload:{payload}}}")
             };
-            writeln!(out,"let value=if rt::telemetry::active(){{f{callee}::<true>(rt::calls::Context::current(),{site})}}else{{f{callee}::<false>(rt::calls::Context::current(),{site})}}.map_err(|e|e.at(&S{chain},{step}))?;rt::globals::store({slot},{value},{});",repr.pointer()).unwrap();
+            writeln!(out,"let cx=rt::calls::Context::current();let value=(if rt::telemetry::active(){{f{callee}::<true>(cx,{site})}}else{{f{callee}::<false>(cx,{site})}}).map_err(|e|e.at(&S{chain},{step}))?;rt::globals::store({slot},{value},{});",repr.pointer()).unwrap();
         }
         let package = plan
             .program

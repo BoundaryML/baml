@@ -9,8 +9,6 @@ const TELEMETRY_SUPPORTED: bool = false;
 // The standalone probes exercise closures without the shared project's global
 // initializer dependency. Their admission is a required coverage baseline.
 const REQUIRED_PROBES: &[&str] = &[
-    "RtClosures",
-    "RtEmptyClosures",
     "RtNativeMath",
     "RtNativeBytes",
     "RtNativeClock",
@@ -18,10 +16,123 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtNativeFiles",
     "RtNativeProcess",
     "RtNativeCalendar",
+    "RtNativeIoValues",
+    "RtClosures",
+    "RtEmptyClosures",
+    "RtGenericClosures",
+    "RtGenericMethods",
+    "RtNativeCallback",
+    "RtBuiltinCallbacks",
+    "RtSpawnAwait",
+    "RtTaskControls",
+    "RtTaskSleep",
+    "RtTaskModifiers",
+    "RtScalarTaskOrder",
+    "RtTaskErrors",
+    "RtBackgroundTask",
+    "RtBackgroundError",
+    "RtTokenComposition",
+    "RtVirtualGenericClosures",
+    "RtBoundGenericClosures",
+    "RtVirtualOwnGenericClosure",
+    "RtNativeHigherOrderValue",
+    "RtDefaultCallbacks",
+    "RtTaskLimits",
+    "RtTaskTimeout",
+    "RtAutomaticCleanup",
+    "RtCancelledFailure",
+    "RtLinkedCancelledFailure",
+    "concurrency::spawn await x10k",
 ];
 
 pub fn supports_level(probe: &str, level: &str) -> bool {
-    level == "off" || TELEMETRY_SUPPORTED || REQUIRED_PROBES.contains(&probe)
+    level == "off"
+        || TELEMETRY_SUPPORTED
+        || probe.starts_with("strings::")
+        || probe.starts_with("RtNative")
+        || matches!(probe,"Logs"|"LogsDeep")
+        || matches!(
+            probe,
+            "RtClosures"
+                | "RtEmptyClosures"
+                | "RtGenericClosures"
+                | "RtGenericMethods"
+                | "RtNativeCallback"
+                | "RtBuiltinCallbacks"
+                | "RtSpawnAwait"
+                | "RtTaskControls"
+                | "RtTaskSleep"
+                | "RtTaskModifiers"
+                | "RtScalarTaskOrder"
+                | "RtTaskErrors"
+                | "RtBackgroundTask"
+                | "RtBackgroundError"
+                | "RtTokenComposition"
+                | "RtVirtualGenericClosures"
+                | "RtBoundGenericClosures"
+                | "RtVirtualOwnGenericClosure"
+                | "RtNativeHigherOrderValue"
+                | "RtDefaultCallbacks"
+                | "RtTaskLimits"
+                | "RtTaskTimeout"
+                | "RtAutomaticCleanup"
+                | "RtCancelledFailure"
+                | "RtLinkedCancelledFailure"
+                | "concurrency::spawn await x10k"
+        )
+}
+
+// List coverage baseline: each admitted fixture must keep passing both runtime
+// variants. An admission regression is a failure, never an unsupported skip.
+const REQUIRED_LIST_COVERAGE: &[&str] = &[
+    "RuntimeListFloatConstants",
+    "RuntimeLists",
+    "RuntimeListBounds",
+    "RuntimeListStoreBounds",
+    "RuntimeListJson",
+    "RuntimeListJsonField",
+    "RuntimeListJsonError",
+    "RuntimeListJsonOptional",
+    "RuntimeListJsonOptionalError",
+    "RuntimeListBuiltins",
+    "RuntimeListInsertError",
+    "RuntimeListMaps",
+    "RuntimeListRecursiveJson",
+    "RuntimeListLiteralJson",
+    "RuntimeListLiteralJsonError",
+    "RuntimeListJsonFieldError",
+    "RuntimeListReductions",
+    "RuntimeListReductionOverflow",
+    "RuntimeListMedianError",
+    "RuntimeListStructuralJoin",
+    "RuntimeListFloatSpecials",
+    "RuntimeListJsonNonFinite",
+    "compute::array build sum 100k",
+    "compute::array traversal 8k",
+    "compute::merge sort 20k",
+    "compute::quick sort 3-way 1k",
+    "memory::live walk",
+    "memory::splay 2k",
+];
+const REQUIRED_JSON_KPIS: &[&str] = &[
+    "compute::generate sort 8k",
+    "compute::json aggregate 2k",
+    "compute::json hello",
+    "compute::json ndjson events",
+    "compute::json request body",
+    "compute::json tree path",
+    "interfaces::polymorphic dispatch 100k",
+];
+fn require_list_coverage<T>(name: &str, result: Result<T, Rejection>) -> Result<T, Rejection> {
+    match result {
+        Err(Rejection::Unsupported(reason)) if REQUIRED_JSON_KPIS.contains(&name) => Err(
+            Rejection::Fail(format!("JSON KPI coverage regression: {reason}")),
+        ),
+        Err(Rejection::Unsupported(reason)) if REQUIRED_LIST_COVERAGE.contains(&name) => Err(
+            Rejection::Fail(format!("list coverage regression: {reason}")),
+        ),
+        other => other,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +163,9 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         // Initializer admission is checked for the whole source project before
         // entry reachability. Rechecking every entry cannot change this result.
         // Standalone fixtures use a different project and must still be packed.
-        if *probe != "StackAllocation"
+        if super::standalone_source(manifest, probe).is_none()
+            && *probe != "StackAllocation"
+            && !super::is_list_probe(probe)
             && let Some(rejection) = &initializer_rejection
         {
             artifacts.insert((*probe).into(), Err(rejection.clone()));
@@ -73,13 +186,15 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
             )
             .unwrap();
             standalone
+        } else if super::is_list_probe(probe) {
+            manifest.join("rust_diff/list_probes")
         } else {
-            manifest.join("rust_diff")
+            super::standalone_source(manifest, probe).unwrap_or_else(|| manifest.join("rust_diff"))
         };
         let result = pack_result(
             build,
             workspace,
-            &super::standalone_closure_source(manifest, probe).unwrap_or_else(|| source.clone()),
+            &super::standalone_source(manifest, probe).unwrap_or(source),
             &executable,
             [if super::initializer_probes::collects_tests(probe) {
                 "InitializerTestSummary"
@@ -109,11 +224,12 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
             }
         });
         if *probe != "StackAllocation"
+            && !super::is_list_probe(probe)
             && matches!(&result, Err(Rejection::Unsupported(reason)) if reason == "top-level initializers")
         {
             initializer_rejection = result.as_ref().err().cloned();
         }
-        artifacts.insert((*probe).into(), result);
+        artifacts.insert((*probe).into(), require_list_coverage(probe, result));
     }
     for fixture in kpis::fixtures(workspace, only) {
         let dir = build.join("kpis").join(&fixture.slug);
@@ -132,6 +248,7 @@ pub fn build(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str>
         )
         .map(|()| executable)
         .map_err(classify);
+        let result = require_list_coverage(&fixture.name, result);
         artifacts.insert(fixture.name, result);
     }
     artifacts
@@ -190,6 +307,13 @@ impl Coverage {
             .iter()
             .filter_map(|(name, result)| match result {
                 Err(Rejection::Fail(reason)) => Some(format!("{name}/rt: {reason}")),
+                Err(Rejection::Unsupported(reason))
+                    if name.starts_with("strings::") || name.starts_with("string::") =>
+                {
+                    Some(format!(
+                        "{name}/rt: required string fixture unsupported: {reason}"
+                    ))
+                }
                 _ => None,
             })
             .collect()
@@ -220,14 +344,14 @@ impl Coverage {
         let mut blockers: Vec<_> = blockers.into_iter().collect();
         blockers.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
         let mut report = format!(
-            "BAML runtime coverage (normal AND GC stress): {} pass, {} unsupported, {} fail\nTelemetry off: required\nTelemetry low/medium/high/default: {}\n\nFirst unsupported constructs (fixtures blocked):\n",
+            "BAML runtime coverage (normal AND GC stress): {} pass, {} unsupported, {} fail\nTelemetry off: required\nString probes: off/low/medium/high/default required\nTelemetry low/medium/high/default for other probes: {}\n\nFirst unsupported constructs (fixtures blocked):\n",
             counts[0],
             counts[1],
             counts[2],
             if TELEMETRY_SUPPORTED {
                 "required"
             } else {
-                "not yet supported generally; required for standalone closure probes"
+                "not yet supported generally; required for standalone closure/task probes and spawn KPI"
             }
         );
         for (construct, count) in blockers {
@@ -279,6 +403,21 @@ fn coverage_counts_each_fixture_once_and_preserves_failures() {
 }
 
 #[test]
+fn list_coverage_baseline_rejects_admission_regressions() {
+    assert!(matches!(
+        require_list_coverage::<()>(
+            "RuntimeLists",
+            Err(Rejection::Unsupported("list element".into()))
+        ),
+        Err(Rejection::Fail(_))
+    ));
+    assert!(matches!(
+        require_list_coverage::<()>("Closures", Err(Rejection::Unsupported("closures".into()))),
+        Err(Rejection::Unsupported(_))
+    ));
+}
+
+#[test]
 fn standalone_closure_coverage_cannot_silently_become_unsupported() {
     let artifacts = BTreeMap::from([(
         "RtClosures".into(),
@@ -291,4 +430,23 @@ fn standalone_closure_coverage_cannot_silently_become_unsupported() {
         assert!(supports_level("RtClosures", level));
         assert!(supports_level("RtEmptyClosures", level));
     }
+}
+
+#[test]
+fn string_admission_regressions_fail_the_gate() {
+    let artifacts = BTreeMap::from([
+        (
+            "strings::semantics".into(),
+            Err(Rejection::Unsupported("builtin".into())),
+        ),
+        (
+            "string::concat loop 10k".into(),
+            Err(Rejection::Unsupported("loop".into())),
+        ),
+        (
+            "other".into(),
+            Err(Rejection::Unsupported("other job".into())),
+        ),
+    ]);
+    assert_eq!(Coverage::new(&artifacts).build_failures().len(), 2);
 }

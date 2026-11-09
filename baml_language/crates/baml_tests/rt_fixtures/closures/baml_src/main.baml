@@ -50,3 +50,46 @@ function main() -> int {
 
 function RtClosures() -> int { main() }
 function RtEmptyClosures() -> int { empty() }
+
+function identity<T>(n: T) -> T { n }
+function closure<T>(n: T) -> () -> T throws never {
+    let get = () -> T { identity<T>(n) };
+    () -> T { get() }
+}
+function generic_callback<T>(n: T, f: (T) -> T throws never) -> T { f(n) }
+function RtGenericClosures() -> int {
+    let a = closure<int>(17);
+    let b = closure<string>("hello");
+    let f = identity<int>;
+    a() + b().length() + generic_callback<int>(20, f)
+}
+
+function RtNativeCallback() -> int {
+    let count = baml.String.char_count;
+    let slice = "hello".slice;
+    count("hello") + count(slice(1, 4))
+}
+
+function RtBuiltinCallbacks()->int {
+    let offset=3;
+    let input=[1,2,3];
+    let doubled=input.map((n:int)->int {n*2+offset});
+    let selected=doubled.filter((n:int)->bool {n>5});
+    let total=selected.reduce((sum:int,n:int)->int {sum+n},0);
+    let lengths=["a","bb","ccc"].map(baml.String.char_count);
+    if (!lengths.every((n:int)->bool {n>0}) || !input.some((n:int)->bool {n==2})) {return -1;}
+    total+lengths.reduce((sum:int,n:int)->int {sum+n},0)
+}
+
+class GenericCallbackBox<T> {
+    value:T,
+    function get(self)->T {self.value}
+}
+function RtGenericMethods()->int {
+    let box=GenericCallbackBox<int> {value:30};
+    let get=box.get;
+    let words=["ab","c"];
+    let length=words.length;
+    let join=words.join;
+    get()+length()+join("").length()
+}

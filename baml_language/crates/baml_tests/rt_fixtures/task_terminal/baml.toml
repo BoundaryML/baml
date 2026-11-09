@@ -1,0 +1,5 @@
+[package]
+name = "task_terminal"
+
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"

@@ -68,17 +68,14 @@ impl Closure {
         self.pointer
     }
 }
-impl crate::lists::sealed::Sealed for Closure {}
-impl crate::lists::Slot for Closure {
-    const POINTER: bool = true;
-    fn word(self) -> usize {
-        self.pointer
+unsafe impl crate::lists::Slot for Closure {
+    const SIZE: usize = 8;
+    const LAYOUT: ElementLayout = ElementLayout::Pointer;
+    unsafe fn read(slot: *const u8) -> Self {
+        unsafe { Self::from_raw(slot.cast::<usize>().read()) }
     }
-    unsafe fn from_word(word: usize) -> Self {
-        Self {
-            pointer: word,
-            owner: std::marker::PhantomData,
-        }
+    unsafe fn write(self, object: *mut u8, slot: *mut u8) {
+        unsafe { baml_rt_gc::write_ptr(object, slot.cast(), self.pointer) }
     }
 }
 /// # Safety
@@ -325,5 +322,52 @@ pub unsafe fn bind(
 /// # Safety
 /// `env` is a live closure environment.
 pub unsafe fn is_bound(env: usize) -> bool {
-    unsafe { (*(env as *const Environment)).kind == 2 }
+    unsafe {
+        let env = &*(env as *const Environment);
+        env.kind == 2
+    }
+}
+
+/// # Safety
+/// Same layout and code contract as `function`, with a concrete generic frame.
+pub unsafe fn generic_function(desc: u32, object: usize, code: Code) -> R<usize> {
+    unsafe { crate::function_value(object, || create(desc, object, code, &[], None, 3)) }
+}
+/// # Safety
+/// Same receiver/capture contract as `bind`, with a concrete generic frame.
+pub unsafe fn bind_generic(
+    cell_desc: u32,
+    env_desc: u32,
+    object: usize,
+    code: Code,
+    receiver: Dyn,
+) -> R<usize> {
+    unsafe {
+        let cell = cell(cell_desc, receiver)?;
+        create(env_desc, object, code, &[cell], None, 2)
+    }
+}
+/// # Safety
+/// `env` names a live managed closure environment.
+pub unsafe fn is_generic(env: usize) -> bool {
+    unsafe { (*(env as *const Environment)).kind == 3 }
+}
+
+/// # Safety
+/// Both pointers are rooted function values in the current managed heap.
+pub unsafe fn equal(left: usize, right: usize) -> bool {
+    if left == right {
+        return true;
+    }
+    unsafe {
+        if !is_bound(left) || !is_bound(right) {
+            return false;
+        }
+        if (*(left as *const Environment)).object != (*(right as *const Environment)).object {
+            return false;
+        }
+        let a = load(capture(left, 0));
+        let b = load(capture(right, 0));
+        a.tag == b.tag && a.payload == b.payload
+    }
 }

@@ -34,7 +34,7 @@ impl registry::Feature for Feature {
                 )?;
                 Ok(match t {
                     Repr::Str => format!(
-                        "rt::strings::Str::from_raw({value}).as_str(&rt::strings::Cx::current()).to_owned()"
+                        "rt::strings::Str::from_raw({value}).to_owned()"
                     ),
                     Repr::Bigint => format!("rt::native::bigint_owned({value})"),
                     _ => value,
@@ -44,7 +44,7 @@ impl registry::Feature for Feature {
                 return e.assign(
                     destination,
                     (
-                        format!("{{{};0usize}}", e.fallible("rt::collect_garbage()")),
+                        format!("{{{};0usize}}", e.fallible("rt::tasks::collect()")),
                         Repr::Null,
                     ),
                 );

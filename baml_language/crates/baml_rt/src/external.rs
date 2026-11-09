@@ -92,7 +92,7 @@ impl Type {
             Shape::Bool => Owned::Bool(value.payload != 0),
             Shape::String => Owned::String(
                 unsafe { crate::strings::Str::from_raw(p) }
-                    .as_str(&unsafe { crate::strings::Cx::current() })
+                    .try_as_str(&unsafe { crate::strings::Cx::current() })?
                     .to_owned()
                     .into(),
             ),
@@ -195,7 +195,7 @@ impl Type {
             (Shape::Bigint, Owned::Bigint(v)) => crate::native::bigint(v.clone())? as u64,
             (Shape::Bytes, Owned::Uint8Array(v)) => crate::native::bytes(v.clone())? as u64,
             (Shape::Opaque, Owned::RustData(v)) => {
-                crate::opaque::Opaque::new(17, v.clone())?.as_raw() as u64
+                crate::opaque::Opaque::new(15, v.clone())?.as_raw() as u64
             }
             (
                 Shape::Class(c),
@@ -384,7 +384,7 @@ pub unsafe fn copy_string_map<V: SlotValue>(
     // reachable objects are copied. No BAML callback or suspension occurs here.
     for (key, value) in map.copied_entries() {
         let key = key
-            .as_str(&unsafe { crate::strings::Cx::current() })
+            .try_as_str(&unsafe { crate::strings::Cx::current() })?
             .to_owned();
         let value = unsafe { value_type.copy_out(value.dynamic(value_type.tag), n + 1)? };
         entries.insert(key, value);
@@ -436,7 +436,7 @@ mod tests {
         shape: Shape::String,
     };
     static BIG: Type = Type {
-        tag: 18,
+        tag: crate::native::BIGINT_TAG,
         wire: || WireTy::Bigint,
         shape: Shape::Bigint,
     };
@@ -446,7 +446,7 @@ mod tests {
         shape: Shape::Bytes,
     };
     static RESOURCE: Type = Type {
-        tag: 20,
+        tag: crate::native::OPAQUE_TAG,
         wire: || WireTy::Unknown,
         shape: Shape::Opaque,
     };
@@ -523,9 +523,9 @@ mod tests {
     };
     const fn descriptors() -> [Descriptor; 21] {
         let mut d = [crate::STRING_DESC; 21];
-        d[15] = crate::native::BIGINT_LAYOUT;
+        d[17] = crate::native::BIGINT_LAYOUT;
         d[16] = crate::native::BYTES_LAYOUT;
-        d[17] = crate::opaque::descriptor(20);
+        d[15] = crate::opaque::descriptor(18);
         d[18] = crate::native::BYTES_BUFFER_LAYOUT;
         d[19] = crate::USER_PANIC_DESC;
         d[20] = Descriptor {

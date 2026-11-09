@@ -3074,7 +3074,7 @@ pub fn generate_rt_provider(
         let output = emit_into_result_call(&b.return_type, &op, &call, &names, &paths);
         functions.push(quote!{
             #[allow(non_snake_case)]
-            fn #stub(#(#params,)*on_error:fn(rt::provider::OpError,bool)->Box<rt::Error>)->rt::R<rt::provider::BexExternalValue> {
+            fn #stub(#(#params,)*on_error:impl FnOnce(rt::provider::OpError,bool)->Box<rt::Error>)->rt::R<rt::provider::BexExternalValue> {
                 use rt::provider::{BexExternalValue,AccessError,indexmap,baml_type,AsBexExternalValue,SysOp};
                 #(#convert)*
                 let provider=rt::provider::native();

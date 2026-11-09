@@ -137,3 +137,15 @@ function RtNativeCalendar()->int {
     let bad_offset={baml.time.TimeZoneOffset.from_duration(baml.time.Duration.from_hours(25));false} catch(e) {baml.errors.InvalidArgument {message}=>{baml.io.println(message);true}};
     if (instant._nanoseconds==0n && rfc._nanoseconds==0n && date._days==parsed_date._days && date.year()==2024 && date.month()==2 && date.day()==29 && clock._nanoseconds==parsed_clock._nanoseconds && combined._nanoseconds==datetime._nanoseconds && datetime._nanoseconds==parsed_datetime._nanoseconds && datetime.year()==2024 && datetime.month()==2 && datetime.day()==29 && datetime.hour()==23 && datetime.minute()==59 && datetime.second()==58 && datetime.millisecond()==123 && datetime.to_plain_date()._days==date._days && datetime.to_plain_time()._nanoseconds==clock._nanoseconds && before.to_plain_date()._days == -1 && before.to_plain_time()._nanoseconds==86399999999999 && offset._nanoseconds == -25200000000000 && zoned._nanoseconds==0n && zoned._offset_ns==null && zoned._iana=="Etc/UTC" && (fixed._offset_ns ?? -1)==3600000000000 && fixed._iana==null && bad_date && bad_time && bad_offset) {7}else{9}
 }
+
+function RtNativeIoValues()->int {
+    let env=baml.env.get;
+    let print=baml.io.println;
+    let pid=baml.sys.pid;
+    let exists=baml.fs.exists;
+    let read=baml.fs.read;
+    let home=env("BAML_HOME") ?? ".";
+    let missing={read(`${home}/native-function-missing`);false} catch(e) {baml.errors.Io {message}=>message.char_count()>0};
+    print("native-callback");
+    if(pid()>0 && exists(home) && home.char_count()>0 && missing){7}else{9}
+}

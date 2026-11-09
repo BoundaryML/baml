@@ -4,70 +4,26 @@ use super::{
 };
 
 impl Plan<'_> {
-    pub(super) fn implementors(
-        &self,
-        interface: usize,
-    ) -> Gen<Vec<(usize, &bex_vm_types::types::ProgramImplRule)>> {
-        let Object::Interface(def) =
-            &self.program.objects[bex_vm_types::ObjectIndex::from_raw(interface)]
-        else {
-            return Err(no("non-interface dispatch"));
-        };
-        if def.structural_default.is_some()
-            || !def.args.is_empty()
-            || !def.assoc.is_empty()
-            || !def.requires.is_empty()
-        {
-            return Err(no("generic or structural interface"));
-        }
-        let mut result = Vec::new();
-        for package in &self.program.packages {
-            if let Some(rules) = package
-                .impl_rules
-                .get(&bex_vm_types::ObjectIndex::from_raw(interface))
-            {
-                for rule in rules {
-                    if !rule.generic_param_bounds.is_empty()
-                        || !rule.interface_args.is_empty()
-                        || !rule.interface_assoc.is_empty()
-                    {
-                        return Err(no("generic interface implementation"));
-                    }
-                    let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
-                        return Err(no("non-class implementation"));
-                    };
-                    if !args.is_empty() {
-                        return Err(no("generic implementor"));
-                    }
-                    result.push((self.class_tag(head.tag())?, rule));
-                }
-            }
-        }
-        if result.is_empty() {
-            return Err(no("interface without concrete implementations"));
-        }
-        Ok(result)
-    }
-    pub(super) fn targets(&self, interface: usize, method: &str) -> Gen<Vec<(usize, usize)>> {
-        self.implementors(interface)?
-            .into_iter()
-            .map(|(c, rule)| {
-                let body = rule
-                    .methods
-                    .get(method)
-                    .ok_or_else(|| no("adopted interface default"))?;
-                if !body.frame.is_empty() {
-                    return Err(no("generic dispatch frame"));
-                }
-                Ok((c, body.fqn.raw()))
-            })
-            .collect()
-    }
-}
-
-impl Plan<'_> {
     // Infer copy-assigned receiver storage; all definitions must agree.
     // Real callables retain a managed environment at every dynamic boundary.
+    pub(super) fn linked_function_frame(&self, object: usize) -> Gen<Vec<bex_vm_types::RuntimeTy>> {
+        self.function_frames
+            .get(&object)
+            .map(|frame| {
+                frame
+                    .iter()
+                    .map(|(_, ty)| {
+                        let realized = baml_compiler2_mir::RealizedTy::try_from(ty.clone())
+                            .map_err(|_| no("generic builtin frame"))?;
+                        self.index
+                            .anchor(&baml_compiler2_mir::TyTemplate::from(realized))
+                            .map(|t| t.substitute_symbolic(&[]))
+                            .ok_or_else(|| no("generic builtin type"))
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(|| Ok(Vec::new()))
+    }
     pub(super) fn closure_type(&self, ty: &RuntimeTy) -> Gen<(u64, baml_type::RuntimeTy<usize>)> {
         let ty = ty.try_map_heads(&mut |head| {
             self.index
@@ -84,26 +40,21 @@ impl Plan<'_> {
         let ty = ty.try_map_heads(&mut |head| self.class_tag(head.tag()))?;
         Ok((signature_key(&ty), ty))
     }
-    fn virtual_callable_targets(
-        &self,
-        iface: &baml_compiler2_mir::TyTemplateInterface,
-        method: &str,
-    ) -> Gen<Vec<(usize, usize)>> {
-        if !iface.generics.is_empty() {
-            return Err(no("generic bound interface"));
-        }
-        let id = self
-            .index
-            .interface_at(&iface.name)
-            .ok_or_else(|| no("bound method interface"))?;
-        self.targets(id, method)
-    }
     pub(super) fn local_repr(
         &self,
         body: &MirFunctionBody<'_>,
         i: usize,
         depth: usize,
     ) -> Gen<Repr> {
+        if body.blocks.iter().any(|b| matches!(&b.terminator, Some(Terminator::Spawn {future:Place::Local(l),..} | Terminator::Await {future:Place::Local(l),..}) if l.0==i)) { return Ok(Repr::Future); }
+        if i > 0
+            && self
+                .lambda_bodies
+                .get(&(body as *const _ as usize))
+                .is_some_and(|id| self.index.info(*id).param_has_default.get(i - 1) == Some(&true))
+        {
+            return Ok(Repr::Tagged);
+        }
         let definitions: Vec<_> = body
             .blocks
             .iter()
@@ -203,6 +154,11 @@ impl Plan<'_> {
                         .ok_or_else(|| no("receiver field"))?,
                 )
             }
+            Place::Index {
+                base,
+                kind: baml_compiler2_mir::IndexKind::Array,
+                ..
+            } => self.element(self.storage_repr(body, base, depth)?),
             _ => Err(no("receiver storage place")),
         }
     }
@@ -221,25 +177,29 @@ impl registry::Feature for Feature {
             db: &'db dyn super::Db,
             plan: &mut Plan<'_>,
             all: &mut super::BTreeMap<usize, super::MirFunction<'db>>,
-            lambdas: &[baml_compiler2_mir::MirFunction<'db>],
+            mir: &super::MirFunction<'db>,
         ) -> Gen<()> {
-            for lambda in lambdas {
+            for lambda in &mir.lambdas {
                 let object = plan
                     .index
-                    .lambda(db, &lambda.identity)
+                    .lambda(
+                        db,
+                        lambda
+                            .identity
+                            .as_ref()
+                            .ok_or_else(|| no("lambda identity"))?,
+                    )
                     .ok_or_else(|| no("unlinked lambda"))?;
-                all.insert(object, super::MirFunction::from(lambda.clone()));
-                register(db, plan, all, &lambda.lambdas)?;
+                all.insert(object, lambda.clone());
+                if let super::MirFunctionKind::Bytecode(body) = &lambda.kind {
+                    plan.lambda_bodies.insert(body as *const _ as usize, object);
+                }
+                register(db, plan, all, lambda)?;
             }
             Ok(())
         }
         for mir in all.values().cloned().collect::<Vec<_>>() {
-            register(db, plan, all, &mir.lambdas)?;
-        }
-        for (&object, mir) in all.iter() {
-            if let super::MirFunctionKind::Bytecode(body) = mir.kind.as_ref() {
-                plan.lambda_bodies.insert(body as *const _ as usize, object);
-            }
+            register(db, plan, all, &mir)?;
         }
         Ok(Vec::new())
     }
@@ -256,6 +216,15 @@ impl registry::Feature for Feature {
         _types: &[Repr],
         values: &[(String, Repr)],
     ) -> Option<Gen<(String, Repr)>> {
+        if name == "baml.ops.equals_equals"
+            && values.len() == 2
+            && values.iter().all(|v| v.1 == Repr::Closure)
+        {
+            return Some(Ok((
+                format!("rt::closures::equal({},{})", values[0].0, values[1].0),
+                Repr::Bool,
+            )));
+        }
         if !matches!(name, "baml.Array.push" | "baml.Array.length")
             || values
                 .first()
@@ -304,81 +273,157 @@ impl registry::Feature for Feature {
         value: &Rvalue<'_>,
         _expected: Repr,
     ) -> Option<Gen<(String, Repr)>> {
-        if let Rvalue::MakeVirtualBoundMethod {
-            iface,
-            method,
-            receiver,
-            type_args,
-        } = value
-        {
-            return Some((|| {
-                if !type_args.is_empty() {
-                    return Err(no("generic bound method"));
+        if let Rvalue::BinaryOp { op, left, right } = value {
+            if matches!(op, super::BinOp::Eq | super::BinOp::Ne) {
+                if let (Ok((l, Repr::Closure)), Ok((r, Repr::Closure))) =
+                    (emitter.operand(left), emitter.operand(right))
+                {
+                    let negate = if *op == super::BinOp::Ne { "!" } else { "" };
+                    return Some(Ok((
+                        format!("{negate}rt::closures::equal({l},{r})"),
+                        Repr::Bool,
+                    )));
                 }
-                let receiver = emitter.coerce(emitter.operand(receiver)?, Repr::Tagged)?;
-                let targets = emitter.plan.virtual_callable_targets(iface, method)?;
-                let cases = targets
-                    .into_iter()
-                    .map(|(class, object)| {
-                        format!(
-                            "{}=>rt::closures::bind({},{},{object},closure{object},receiver),",
-                            emitter.descriptors[&class] + 3,
+            }
+            if matches!(op, super::BinOp::Eq | super::BinOp::Ne)
+                && (matches!(left, Operand::Constant(super::Constant::OmittedArg))
+                    || matches!(right, Operand::Constant(super::Constant::OmittedArg)))
+            {
+                return Some((|| {
+                    let other = if matches!(right, Operand::Constant(super::Constant::OmittedArg)) {
+                        left
+                    } else {
+                        right
+                    };
+                    let raw = match other {
+                        Operand::Copy(p) | Operand::Move(p) => emitter.place(p)?,
+                        _ => emitter.operand(other)?,
+                    };
+                    let expression = if raw.1 == Repr::Tagged {
+                        format!("({}).tag==u64::MAX", raw.0)
+                    } else {
+                        "false".into()
+                    };
+                    Ok((
+                        if *op == super::BinOp::Ne {
+                            format!("!({expression})")
+                        } else {
+                            expression
+                        },
+                        Repr::Bool,
+                    ))
+                })());
+            }
+        }
+        if matches!(
+            value,
+            Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::MakeVirtualFunction { .. }
+        ) {
+            return Some((|| {
+                let targets = emitter
+                    .plan
+                    .virtual_values
+                    .get(&(emitter.object, emitter.block, emitter.statement))
+                    .ok_or_else(|| no("interface callable has no concrete target"))?;
+                if let Rvalue::MakeVirtualBoundMethod { receiver, .. } = value {
+                    let receiver = emitter.coerce(emitter.operand(receiver)?, Repr::Tagged)?;
+                    let mut cases = String::new();
+                    for &(repr, object) in targets {
+                        let bind = if emitter
+                            .plan
+                            .function_frames
+                            .get(&object)
+                            .is_some_and(|f| !f.is_empty())
+                        {
+                            "bind_generic"
+                        } else {
+                            "bind"
+                        };
+                        cases.push_str(&format!(
+                            "{}=>rt::closures::{bind}({},{},{object},closure{object},receiver),",
+                            emitter.tag(repr)?,
                             emitter.plan.closure_descriptors().unwrap().0,
                             emitter.plan.closure_descriptors().unwrap().1
-                        )
-                    })
-                    .collect::<String>();
-                Ok((emitter.fallible(&format!("{{let receiver={receiver};match receiver.tag{{{cases}_=>Err(rt::Error::internal(\"invalid bound interface receiver\".into()))}}}}")),Repr::Closure))
+                        ));
+                    }
+                    Ok((emitter.fallible(&format!("{{let receiver={receiver};match receiver.tag{{{cases}_=>Err(rt::Error::internal(\"invalid bound interface receiver\".into()))}}}}")),Repr::Closure))
+                } else {
+                    let [(_, object)] = targets.as_slice() else {
+                        return Err(no("ambiguous interface function value"));
+                    };
+                    let function = if emitter
+                        .plan
+                        .function_frames
+                        .get(object)
+                        .is_some_and(|f| !f.is_empty())
+                    {
+                        "generic_function"
+                    } else {
+                        "function"
+                    };
+                    let name = if function == "function" {
+                        format!(",{:?}", emitter.plan.index.info(*object).name().as_str())
+                    } else {
+                        String::new()
+                    };
+                    Ok((
+                        emitter.fallible(&format!(
+                            "rt::closures::{function}({}, {object},closure{object}{name})",
+                            emitter.plan.closure_descriptors().unwrap().1
+                        )),
+                        Repr::Closure,
+                    ))
+                }
             })());
         }
-        if let Rvalue::MakeVirtualFunction {
-            self_ty: baml_compiler2_mir::TyTemplate::Class(head, args),
-            iface,
-            method,
-            type_args,
+        if let Rvalue::MakeBoundMethod {
+            func,
+            receiver,
+            frame: _,
         } = value
         {
             return Some((|| {
-                if !args.is_empty() || !type_args.is_empty() {
-                    return Err(no("generic interface function value"));
-                }
-                let (class, _) = emitter
-                    .plan
-                    .index
-                    .class_at(head)
-                    .ok_or_else(|| no("interface function class"))?;
                 let object = emitter
                     .plan
-                    .virtual_callable_targets(iface, method)?
-                    .into_iter()
-                    .find_map(|(c, f)| (c == class).then_some(f))
-                    .ok_or_else(|| no("interface function target"))?;
+                    .generic_values
+                    .get(&(emitter.object, emitter.block, emitter.statement))
+                    .copied()
+                    .or_else(|| {
+                        emitter
+                            .plan
+                            .index
+                            .function(emitter.db, *func)
+                            .map(|(id, _)| id)
+                    })
+                    .ok_or_else(|| no("bound method target"))?;
+                let receiver = emitter.coerce(emitter.operand(receiver)?, Repr::Tagged)?;
+                let bind = if emitter
+                    .plan
+                    .function_frames
+                    .get(&object)
+                    .is_some_and(|f| !f.is_empty())
+                {
+                    "bind_generic"
+                } else {
+                    "bind"
+                };
                 Ok((
                     emitter.fallible(&format!(
-                        "rt::closures::new({}, {object},closure{object},&[])",
+                        "rt::closures::{bind}({},{},{object},closure{object},{receiver})",
+                        emitter.plan.closure_descriptors().unwrap().0,
                         emitter.plan.closure_descriptors().unwrap().1
                     )),
                     Repr::Closure,
                 ))
             })());
         }
-        if let Rvalue::MakeBoundMethod {
-            func,
-            receiver,
-            frame: baml_compiler2_mir::BoundFrame::Receiver,
-        } = value
-        {
+        if let Rvalue::MakeGenericFunction { .. } = value {
             return Some((|| {
-                let (object, _) = emitter
-                    .plan
-                    .index
-                    .function(emitter.db, *func)
-                    .ok_or_else(|| no("bound method target"))?;
-                let receiver = emitter.coerce(emitter.operand(receiver)?, Repr::Tagged)?;
+                let object = emitter.plan.generic_values
+                    [&(emitter.object, emitter.block, emitter.statement)];
                 Ok((
                     emitter.fallible(&format!(
-                        "rt::closures::bind({},{},{object},closure{object},{receiver})",
-                        emitter.plan.closure_descriptors().unwrap().0,
+                        "rt::closures::generic_function({}, {object},closure{object})",
                         emitter.plan.closure_descriptors().unwrap().1
                     )),
                     Repr::Closure,
@@ -394,27 +439,18 @@ impl registry::Feature for Feature {
             return None;
         };
         Some((|| {
-            if !type_arg_templates.is_empty() {
-                return Err(no("generic closure environment"));
-            }
-            let lambda = &emitter.all[&emitter.object].lambdas[*lambda_idx];
-            let object = emitter
-                .plan
-                .index
-                .lambda(emitter.db, &lambda.identity)
-                .ok_or_else(|| no("unlinked lambda"))?;
+            let _ = type_arg_templates;
+            let object = emitter.plan.lambda_targets[&(emitter.object, *lambda_idx)];
             let captures = captures
                 .iter()
                 .map(|cell| emitter.operand(cell).map(|v| v.0))
                 .collect::<Gen<Vec<_>>>()?
                 .join(",");
-            Ok((
-                emitter.fallible(&format!(
-                    "rt::closures::new({}, {object},closure{object},&[{captures}])",
-                    emitter.plan.closure_descriptors().unwrap().1
-                )),
-                Repr::Closure,
-            ))
+            let ordinary = emitter.fallible(&format!(
+                "rt::closures::new({}, {object},closure{object},&[{captures}])",
+                emitter.plan.closure_descriptors().unwrap().1
+            ));
+            Ok((ordinary, Repr::Closure))
         })())
     }
     fn statement(
@@ -515,16 +551,26 @@ pub(super) fn discover<'db>(
     object: usize,
     mir: &super::MirFunction<'db>,
 ) -> Gen<Vec<usize>> {
-    let MirFunctionBody { blocks, .. } = match mir.kind.as_ref() {
+    let MirFunctionBody { blocks, .. } = match &mir.kind {
         super::MirFunctionKind::Bytecode(body) => body,
         _ => return Ok(Vec::new()),
     };
-    let body = match mir.kind.as_ref() {
+    let body = match &mir.kind {
         super::MirFunctionKind::Bytecode(body) => body,
         _ => unreachable!(),
     };
-    let mut targets = Vec::new();
-    for statement in blocks.iter().flat_map(|b| &b.statements) {
+    let mut targets = plan
+        .generic_values
+        .iter()
+        .filter_map(|(&(parent, _, _), &target)| (parent == object).then_some(target))
+        .collect::<Vec<_>>();
+    plan.callables.extend(targets.iter().copied());
+    for (block, statement_index, statement) in blocks.iter().flat_map(|b| {
+        b.statements
+            .iter()
+            .enumerate()
+            .map(move |(i, s)| (b.id.0, i, s))
+    }) {
         if let StatementKind::Assign {
             value:
                 Rvalue::MakeClosure {
@@ -535,11 +581,7 @@ pub(super) fn discover<'db>(
             ..
         } = &statement.kind
         {
-            let lambda = &mir.lambdas[*lambda_idx];
-            let target = plan
-                .index
-                .lambda(db, &lambda.identity)
-                .ok_or_else(|| no("unlinked lambda"))?;
+            let target = plan.lambda_targets[&(object, *lambda_idx)];
             let types = captures
                 .iter()
                 .map(|o| match o {
@@ -567,27 +609,44 @@ pub(super) fn discover<'db>(
             ..
         } = &statement.kind
         {
-            let (target, _) = plan
-                .index
-                .function(db, *func)
+            let target = plan
+                .generic_values
+                .get(&(object, block, statement_index))
+                .copied()
+                .or_else(|| plan.index.function(db, *func).map(|(id, _)| id))
                 .ok_or_else(|| no("bound method target"))?;
             plan.callables.insert(target);
             targets.push(target);
         }
-        if let StatementKind::Assign {
-            value:
-                Rvalue::MakeVirtualBoundMethod { iface, method, .. }
-                | Rvalue::MakeVirtualFunction { iface, method, .. },
-            ..
-        } = &statement.kind
+        if let Some(cases) = plan
+            .virtual_values
+            .get(&(object, block, statement_index))
+            .cloned()
         {
-            for (class, target) in plan.virtual_callable_targets(iface, method)? {
-                plan.add(class)?;
+            for (repr, target) in cases {
+                plan.record(repr)?;
                 plan.callables.insert(target);
                 targets.push(target);
             }
         }
         crate::operands::walk_statement_operands(&statement.kind, &mut |operand| {
+            if let Operand::Constant(super::Constant::GenericFunction { func, type_args }) = operand
+            {
+                if let Some((base, _)) = plan.index.function(db, *func) {
+                    let frame = type_args
+                        .iter()
+                        .map(|t| super::RuntimeTy::from(t.clone()))
+                        .collect::<Vec<_>>();
+                    if let Some((_, _, target)) = plan
+                        .generic_functions
+                        .iter()
+                        .find(|(c, t, _)| *c == base && *t == frame)
+                    {
+                        plan.callables.insert(*target);
+                        targets.push(*target);
+                    }
+                }
+            }
             if let Operand::Constant(super::Constant::Function(f)) = operand {
                 if let Some((target, _)) = plan.index.function(db, *f) {
                     plan.callables.insert(target);
@@ -602,6 +661,25 @@ pub(super) fn discover<'db>(
             _ => &[],
         };
         for operand in args {
+            if let Operand::Constant(super::Constant::GenericFunction { func, type_args }) = operand
+            {
+                let (base, _) = plan
+                    .index
+                    .function(db, *func)
+                    .ok_or_else(|| no("generic callback"))?;
+                let frame = type_args
+                    .iter()
+                    .map(|t| super::RuntimeTy::from(t.clone()))
+                    .collect::<Vec<_>>();
+                let target = plan
+                    .generic_functions
+                    .iter()
+                    .find(|(c, t, _)| *c == base && *t == frame)
+                    .map(|(_, _, id)| *id)
+                    .ok_or_else(|| no("generic callback instance"))?;
+                plan.callables.insert(target);
+                targets.push(target);
+            }
             if let Operand::Constant(super::Constant::Function(f)) = operand {
                 let (target, _) = plan
                     .index
@@ -633,7 +711,7 @@ impl super::Emitter<'_, '_> {
             ),
         })
     }
-    fn closure_argument(&self, value: String, repr: Repr) -> Gen<String> {
+    pub(super) fn closure_argument(&self, value: String, repr: Repr) -> Gen<String> {
         if matches!(repr, Repr::Tagged | Repr::Dyn(_)) {
             return Ok(value);
         }
@@ -649,13 +727,13 @@ impl super::Emitter<'_, '_> {
         let arguments = (1..=self.arity)
             .map(|i| {
                 let value = if self.plan.captures.contains_key(&self.object) {
-                    format!("args[{}]", i - 1)
+                    format!("args.get({}).copied().unwrap_or(rt::Dyn{{tag:u64::MAX,payload:0}})",i-1)
                 } else if i == 1 {
-                    "if rt::closures::is_bound(env){rt::closures::load(rt::closures::capture(env,0))}else{args[0]}".to_owned()
+                    "if rt::closures::is_bound(env){rt::closures::load(rt::closures::capture(env,0))}else{args.get(0).copied().unwrap_or(rt::Dyn{tag:u64::MAX,payload:0})}".to_owned()
                 } else {
-                    format!("args[if rt::closures::is_bound(env){{{}}}else{{{}}}]", i - 2, i - 1)
+                    format!("args.get(if rt::closures::is_bound(env){{{}}}else{{{}}}).copied().unwrap_or(rt::Dyn{{tag:u64::MAX,payload:0}})",i-2,i-1)
                 };
-                self.closure_argument(value, self.plan.local_repr(self.body, i, 0)?)
+                self.closure_argument(value, self.argument_repr(i)?)
             })
             .collect::<Gen<Vec<_>>>()?
             .join(",");
@@ -669,12 +747,12 @@ impl super::Emitter<'_, '_> {
             Repr::Tagged,
         )?;
         Ok(format!(
-            "unsafe fn closure{object}(env:usize,site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let value=if rt::telemetry::active(){{f{object}::<true>(rt::calls::Context::current(),site,{env}{arguments})}}else{{f{object}::<false>(rt::calls::Context::current(),site,{env}{arguments})}}?;Ok({value})}}}}\n"
+            "unsafe fn closure{object}(env:usize,site:usize,args:&[rt::Dyn])->R<rt::Dyn>{{unsafe{{let cx=rt::calls::Context::current();let value=if rt::telemetry::active(){{f{object}::<true>(cx,site,{env}{arguments})}}else{{f{object}::<false>(cx,site,{env}{arguments})}}?;Ok({value})}}}}\n"
         ))
     }
 }
 
-fn signature_key(ty: &baml_type::RuntimeTy<usize>) -> u64 {
+pub(super) fn signature_key(ty: &baml_type::RuntimeTy<usize>) -> u64 {
     // Stable across MIR's declaration heads and linked field metadata.
     borsh::to_vec(ty)
         .expect("runtime type")
@@ -687,6 +765,14 @@ fn signature_key(ty: &baml_type::RuntimeTy<usize>) -> u64 {
 pub(super) fn capture_type(ty: &baml_type::RuntimeTy<usize>) -> Gen<String> {
     use baml_type::RuntimeTy as T;
     let body = match ty {
+        T::Future(value, error) => format!(
+            "Future(&{},&{})",
+            capture_type(value)?,
+            capture_type(error)?
+        ),
+        T::Float => "Float".into(),
+        T::Enum(id) => format!("Enum(CAPTURE_D{id})"),
+        T::Bigint => "Bigint".into(),
         T::Int => "Int".into(),
         T::Bool => "Bool".into(),
         T::String => "String".into(),
@@ -729,4 +815,66 @@ pub(super) fn capture_type(ty: &baml_type::RuntimeTy<usize>) -> Gen<String> {
         _ => return Err(no("closure capture signature")),
     };
     Ok(format!("rt::telemetry::capture::Type::{body}"))
+}
+
+impl Plan<'_> {
+    pub(super) fn implementors(
+        &self,
+        interface: usize,
+    ) -> Gen<Vec<(usize, &bex_vm_types::types::ProgramImplRule)>> {
+        let Object::Interface(def) =
+            &self.program.objects[bex_vm_types::ObjectIndex::from_raw(interface)]
+        else {
+            return Err(no("non-interface dispatch"));
+        };
+        if def.structural_default.is_some()
+            || !def.args.is_empty()
+            || !def.assoc.is_empty()
+            || !def.requires.is_empty()
+        {
+            return Err(no("generic or structural interface"));
+        }
+        let mut result = Vec::new();
+        for package in &self.program.packages {
+            if let Some(rules) = package
+                .impl_rules
+                .get(&bex_vm_types::ObjectIndex::from_raw(interface))
+            {
+                for rule in rules {
+                    if !rule.generic_param_bounds.is_empty()
+                        || !rule.interface_args.is_empty()
+                        || !rule.interface_assoc.is_empty()
+                    {
+                        return Err(no("generic interface implementation"));
+                    }
+                    let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
+                        return Err(no("non-class implementation"));
+                    };
+                    if !args.is_empty() {
+                        return Err(no("generic implementor"));
+                    }
+                    result.push((self.class_tag(head.tag())?, rule));
+                }
+            }
+        }
+        if result.is_empty() {
+            return Err(no("interface without concrete implementations"));
+        }
+        Ok(result)
+    }
+    pub(super) fn targets(&self, interface: usize, method: &str) -> Gen<Vec<(usize, usize)>> {
+        self.implementors(interface)?
+            .into_iter()
+            .map(|(c, rule)| {
+                let body = rule
+                    .methods
+                    .get(method)
+                    .ok_or_else(|| no("adopted interface default"))?;
+                if !body.frame.is_empty() {
+                    return Err(no("generic dispatch frame"));
+                }
+                Ok((c, body.fqn.raw()))
+            })
+            .collect()
+    }
 }

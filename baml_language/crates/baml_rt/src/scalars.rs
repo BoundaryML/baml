@@ -11,10 +11,10 @@ pub fn error(error: VmRustFnError) -> Box<Error> {
     match error {
         VmRustFnError::Panic(panic) => crate::language::from_panic(panic),
         VmRustFnError::BamlError(VmBamlError::InvalidArgument { message }) => {
-            crate::language::panic_value(10, "baml.errors.InvalidArgument", message)
+            crate::language::panic_value(11, "baml.errors.InvalidArgument", message)
         }
         VmRustFnError::BamlError(VmBamlError::ParseError { message }) => {
-            crate::language::panic_value(11, "baml.errors.ParseError", message)
+            crate::language::panic_value(20, "baml.errors.ParseError", message)
         }
         error => Error::internal(error.to_string()),
     }

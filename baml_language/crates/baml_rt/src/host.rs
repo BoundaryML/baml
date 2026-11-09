@@ -308,7 +308,7 @@ pub unsafe fn copy_primitive(value: Dyn) -> R<Owned> {
         2 => Owned::Null,
         3 => Owned::String(
             unsafe { Str::from_raw(value.payload as usize) }
-                .as_str(&unsafe { Cx::current() })
+                .try_as_str(&unsafe { Cx::current() })?
                 .to_owned(),
         ),
         crate::scalars::FLOAT_TAG => serde_json::Number::from_f64(f64::from_bits(value.payload))
@@ -495,9 +495,9 @@ mod tests {
         use baml_rt_gc::{Descriptor, Field as GcField, Kind, SlotKind};
         static DESCRIPTORS: &[Descriptor] = &[
             crate::STRING_DESC,
-            crate::lists::descriptor(4),
+            crate::lists::descriptor::<Str>(4),
             crate::lists::buffer_descriptor::<Str>(5),
-            crate::lists::descriptor(6),
+            crate::lists::descriptor::<crate::lists::List<Str>>(6),
             crate::lists::buffer_descriptor::<crate::lists::List<Str>>(7),
             Descriptor {
                 kind: Kind::Class,
