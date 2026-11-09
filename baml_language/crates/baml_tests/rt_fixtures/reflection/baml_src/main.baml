@@ -161,3 +161,37 @@ function RtNativeEquality() -> int {
     };
     count + caught
 }
+
+class EqTag { id: int, note: string }
+implement baml.ops.Equals for EqTag {
+    function eq(self, other: Self) -> bool throws never {
+        log.info(`eq ${self.note} ${other.note}`);
+        self.id == other.id
+    }
+}
+class EqWrap { tag: EqTag, items: EqTag[], label: string }
+enum EqLoose { A, B }
+implement baml.ops.Equals for EqLoose {
+    function eq(self, other: Self) -> bool throws never { true }
+}
+
+function RtNativeEqualityOverrides() -> int {
+    let a = EqTag { id: 1, note: "a" };
+    let b = EqTag { id: 1, note: "b" };
+    let c = EqTag { id: 2, note: "c" };
+    let w1 = EqWrap { tag: a, items: [a, c], label: "w" };
+    let w2 = EqWrap { tag: b, items: [b, c], label: "w" };
+    let w3 = EqWrap { tag: c, items: [a], label: "w" };
+    let results = [
+        a == b, a == c, a != c, a == a,
+        EqSame(a, b), EqSame(w1, w2), EqSame(w1, w3), w1 == w2,
+        EqSame(EqLoose.A, EqLoose.B), EqLoose.A == EqLoose.B,
+        EqSame([a], [b]), EqSame({ "k": a }, { "k": c }),
+    ];
+    let count = 0;
+    for (let r in results) {
+        log.info(r);
+        if (r) { count = count + 1; }
+    }
+    count
+}

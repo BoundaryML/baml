@@ -163,7 +163,7 @@ pub fn classify_builtin(d: &NativeBuiltin) -> (BuiltinGroup, RtDisposition) {
                 "typed primitive-key maps; class hash/equality callbacks are not lowered"
             }
             "baml.ops.equals_equals" | "baml._equals_structural_default" => {
-                "shared structural walk; explicit class/enum Equals overrides are rejected"
+                "shared structural walk with closed-world Equals.eq witnesses; generic Equals implementations are rejected"
             }
             _ => "typed list lowering; element and erased-callback specializations are limited",
         })

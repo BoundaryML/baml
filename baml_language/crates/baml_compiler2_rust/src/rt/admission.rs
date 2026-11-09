@@ -54,6 +54,7 @@ pub(super) fn collect<'db>(
         }
     }
     queue.extend(plan.string_overrides.values().copied());
+    queue.extend(plan.equals_overrides.values().copied());
     // Automatic finalizers are host callbacks, so they have no ordinary call
     // edge from a test body. Admit their bodies and telemetry like other roots.
     queue.extend(plan.cleanup_methods.values().copied());

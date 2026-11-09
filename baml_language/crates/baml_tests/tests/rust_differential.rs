@@ -26,6 +26,7 @@ const PROBES: &[&str] = &[
     "RtNativeIoValues",
     "RtNativeReflection",
     "RtNativeEquality",
+    "RtNativeEqualityOverrides",
     "StackAllocation",
     "RuntimeListFloatConstants",
     "RuntimeListStructuralJoin",
@@ -340,7 +341,7 @@ fn is_list_probe(probe: &str) -> bool {
 
 fn standalone_source(manifest: &Path, probe: &str) -> Option<std::path::PathBuf> {
     match probe {
-        "RtNativeReflection" | "RtNativeEquality" => Some(manifest.join("rt_fixtures/reflection")),
+        "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides" => Some(manifest.join("rt_fixtures/reflection")),
         "RtNativeMath" | "RtNativeBytes" | "RtNativeClock" | "RtNativeRandom" | "RtNativeFiles"
         | "RtNativeProcess" | "RtNativeCalendar" | "RtNativeIoValues" => Some(manifest.join("rt_fixtures/native")),
         "RtCancelledFailure" | "RtLinkedCancelledFailure" => {
@@ -464,6 +465,7 @@ fn build_rust(build: &Path, workspace: &Path, manifest: &Path, only: Option<&str
     "RtNativeIoValues",
     "RtNativeReflection",
     "RtNativeEquality",
+    "RtNativeEqualityOverrides",
         "RtClosures",
         "RtEmptyClosures",
         "RtGenericClosures",
@@ -840,7 +842,7 @@ fn rust_differential() {
                                 | "RtNativeRandom"
                                 | "RtNativeFiles"
                                 | "RtNativeProcess"
-                                | "RtNativeCalendar" | "RtNativeIoValues" | "RtNativeReflection" | "RtNativeEquality"
+                                | "RtNativeCalendar" | "RtNativeIoValues" | "RtNativeReflection" | "RtNativeEquality" | "RtNativeEqualityOverrides"
                                 | "RtNativeCallback"
                                 | "RtBuiltinCallbacks"
                                 | "RtSpawnAwait"

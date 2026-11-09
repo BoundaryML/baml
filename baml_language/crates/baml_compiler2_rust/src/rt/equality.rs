@@ -1,9 +1,113 @@
 //! `==` drivers over erased or structural operands: `baml.ops.equals_equals`
 //! and `baml._equals_structural_default` share the interpreter's one walk.
+//! Explicit `Equals.eq` implementations on classes and enums are closed-world
+//! witnesses, called where the interpreter yields to them.
 use super::*;
 
 pub(super) const STRUCTURAL_EQUALS: &str = "baml._equals_structural_default";
 const EQUALS_EQUALS: &str = "baml.ops.equals_equals";
+
+fn equals_interface(plan: &Plan<'_>) -> Option<usize> {
+    plan.program.objects.iter().position(|object| {
+        matches!(object, Object::Interface(def) if def.structural_default.as_ref().is_some_and(
+            |d| d.kind == baml_type::StructuralInterface::Equals))
+    })
+}
+
+fn declaration_tag(plan: &Plan<'_>, repr: Repr) -> Option<baml_type::typetag::TypeTag> {
+    match repr {
+        Repr::Ptr(class) => Some(plan.class(class).type_tag),
+        Repr::Enum(e) => match &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(e)] {
+            Object::Enum(e) => Some(e.type_tag),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Explicit `Equals` rules whose implementing head is `tag`.
+fn rules<'p>(
+    plan: &'p Plan<'_>,
+    interface: usize,
+    tag: baml_type::typetag::TypeTag,
+) -> impl Iterator<Item = &'p bex_vm_types::types::ProgramImplRule> + 'p {
+    plan.program.packages.iter().flat_map(move |package| {
+        package
+            .impl_rules
+            .get(&bex_vm_types::ObjectIndex::from_raw(interface))
+            .into_iter()
+            .flatten()
+            .filter(move |rule| match &rule.for_ty_pattern {
+                bex_vm_types::TyTemplate::Class(head, _) | bex_vm_types::TyTemplate::Enum(head) => {
+                    head.tag() == tag
+                }
+                _ => false,
+            })
+    })
+}
+
+/// Register the `eq` override of every concrete class or enum the program can
+/// compare. Generic implementations need bindings and remain unsupported.
+pub(super) fn register<'db>(
+    db: &'db dyn Db,
+    plan: &mut Plan<'_>,
+    all: &mut BTreeMap<usize, super::TestMir<'db>>,
+    instances: &mut Vec<(usize, Vec<RuntimeTy>, usize)>,
+    queue: &mut VecDeque<usize>,
+) -> Gen<()> {
+    if !plan.structural_equals {
+        return Ok(());
+    }
+    let Some(interface) = equals_interface(plan) else {
+        return Ok(());
+    };
+    for ty in plan.concrete_types.clone() {
+        if !matches!(ty, RuntimeTy::Class(..) | RuntimeTy::Enum(..)) {
+            continue;
+        }
+        let Ok(repr) = plan.repr(&ty) else {
+            continue;
+        };
+        if plan.equals_overrides.contains_key(&repr) {
+            continue;
+        }
+        let Some(tag) = declaration_tag(plan, repr) else {
+            continue;
+        };
+        let mut found = None;
+        for rule in rules(plan, interface, tag) {
+            let Some(method) = rule.methods.get("eq") else {
+                continue;
+            };
+            let generic = !rule.generic_param_bounds.is_empty()
+                || matches!(&rule.for_ty_pattern,
+                    bex_vm_types::TyTemplate::Class(_, args) if !args.is_empty());
+            if generic {
+                return Err(no("generic Equals implementation"));
+            }
+            let frame = method
+                .frame
+                .iter()
+                .map(|t| {
+                    t.substitute_symbolic(&[]).try_map_heads(&mut |h| {
+                        plan.heads
+                            .get(&h.tag())
+                            .cloned()
+                            .ok_or_else(|| no("Equals implementation frame"))
+                    })
+                })
+                .collect::<Gen<Vec<_>>>()?;
+            found = Some((method.fqn.raw(), frame));
+            break;
+        }
+        if let Some((callee, frame)) = found {
+            let target = super::generics::instance(db, plan, all, instances, callee, frame)?;
+            plan.equals_overrides.insert(repr, target);
+            queue.push_back(target);
+        }
+    }
+    Ok(())
+}
 
 pub(super) struct Feature;
 impl registry::Feature for Feature {
@@ -22,7 +126,7 @@ impl registry::Feature for Feature {
         };
         let (id, _) = plan.index.function(db, *function)?;
         // Operand representations are only known at emission, which rejects
-        // overrides and layouts the shared walk cannot describe.
+        // layouts the shared walk cannot describe. Overrides are roots.
         (plan.index.builtin_path(id) == STRUCTURAL_EQUALS).then(|| Ok(registry::Reach::default()))
     }
 
@@ -47,12 +151,38 @@ impl registry::Feature for Feature {
             if values.iter().all(|v| v.1 == Repr::Null) {
                 return Ok(("true".into(), Repr::Bool));
             }
-            reject_overrides(e.plan)?;
+            reject_unregistered(e.plan)?;
             let left = e.coerce(values[0].clone(), Repr::Tagged)?;
             let right = e.coerce(values[1].clone(), Repr::Tagged)?;
+            if e.plan.equals_overrides.is_empty() {
+                return Ok((
+                    e.fallible(&format!(
+                        "rt::equality::structural(&rt::strings::Cx::current(),{left},{right},CAPTURE_SHAPES)"
+                    )),
+                    Repr::Bool,
+                ));
+            }
+            let mut tags = Vec::new();
+            let mut invoke = String::from("|a:rt::Dyn,b:rt::Dyn|{match a.tag{");
+            for (&repr, &callee) in &e.plan.equals_overrides {
+                let tag = match repr {
+                    Repr::Enum(i) => format!("CAPTURE_ENUM_{i}_TAG"),
+                    _ => e.tag(repr)?.to_string(),
+                };
+                tags.push(tag.clone());
+                let rust = repr.rust();
+                write!(
+                    invoke,
+                    "{tag}=>f{callee}::<OBSERVE>(cx,{}, a.payload as {rust}, b.payload as {rust}),",
+                    e.telemetry_site(callee)
+                )
+                .unwrap();
+            }
+            invoke.push_str("_=>unreachable!(\"checked Equals witness\")}}");
             Ok((
                 e.fallible(&format!(
-                    "rt::equality::structural(&rt::strings::Cx::current(),{left},{right},CAPTURE_SHAPES)"
+                    "rt::equality::with_overrides(&rt::strings::Cx::current(),{left},{right},CAPTURE_SHAPES,&[{}],{invoke})",
+                    tags.join(",")
                 )),
                 Repr::Bool,
             ))
@@ -60,44 +190,28 @@ impl registry::Feature for Feature {
     }
 }
 
-/// The shared walk never calls user code. An explicit `Equals` on a class or
-/// enum this program can hold would need pre-order dispatch, so reject it.
-fn reject_overrides(plan: &Plan<'_>) -> Gen<()> {
-    let Some(interface) = plan.program.objects.iter().position(|object| {
-        matches!(object, Object::Interface(def) if def.structural_default.as_ref().is_some_and(
-            |d| d.kind == baml_type::StructuralInterface::Equals))
-    }) else {
+/// The walk only calls registered witnesses; any other explicit `Equals` on a
+/// class or enum this program can hold must not be skipped silently.
+fn reject_unregistered(plan: &Plan<'_>) -> Gen<()> {
+    let Some(interface) = equals_interface(plan) else {
         return Ok(());
     };
-    let mut tags = BTreeSet::new();
-    for &class in plan.layouts.keys() {
-        tags.insert(plan.class(class).type_tag);
-    }
-    for &enumeration in &plan.enums {
-        if let Object::Enum(e) =
-            &plan.program.objects[bex_vm_types::ObjectIndex::from_raw(enumeration)]
-        {
-            tags.insert(e.type_tag);
+    let reprs = plan
+        .layouts
+        .keys()
+        .map(|&c| Repr::Ptr(c))
+        .chain(plan.enums.iter().map(|&e| Repr::Enum(e)));
+    for repr in reprs {
+        if plan.equals_overrides.contains_key(&repr) {
+            continue;
         }
-    }
-    for package in &plan.program.packages {
-        let Some(rules) = package
-            .impl_rules
-            .get(&bex_vm_types::ObjectIndex::from_raw(interface))
-        else {
+        let Some(tag) = declaration_tag(plan, repr) else {
             continue;
         };
-        for rule in rules {
-            let head = match &rule.for_ty_pattern {
-                bex_vm_types::TyTemplate::Class(head, _) => head.tag(),
-                bex_vm_types::TyTemplate::Enum(head) => head.tag(),
-                _ => continue,
-            };
-            if tags.contains(&head) {
-                return Err(no(
-                    "structural equality with an explicit Equals implementation",
-                ));
-            }
+        if rules(plan, interface, tag).any(|rule| rule.methods.contains_key("eq")) {
+            return Err(no(
+                "structural equality with an unregistered Equals implementation",
+            ));
         }
     }
     Ok(())

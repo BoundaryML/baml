@@ -45,16 +45,54 @@ fn is_map(shape: Option<&Shape>) -> bool {
 /// Both operands and every value reachable from them are live values of the
 /// active program, described by `shapes`.
 pub unsafe fn structural(cx: &Cx, left: Dyn, right: Dyn, shapes: &[Shape]) -> R<bool> {
-    let mut visited = HashSet::new();
-    unsafe { walk(cx, left, right, shapes, &mut visited) }
+    unsafe { with_overrides(cx, left, right, shapes, &[], |_, _| Ok(true)) }
 }
 
+/// The interpreter's walk with explicit `Equals.eq` implementations: a pair
+/// of the same class or enum whose tag is in `tags` is decided by `invoke`
+/// (pre-order, without descending), exactly where the interpreter yields.
+///
+/// # Safety
+/// As [`structural`]. `invoke` receives values of a tag listed in `tags` and
+/// may run arbitrary BAML code; every pending operand stays precisely rooted.
+pub unsafe fn with_overrides(
+    cx: &Cx,
+    left: Dyn,
+    right: Dyn,
+    shapes: &[Shape],
+    tags: &[u64],
+    mut invoke: impl FnMut(Dyn, Dyn) -> R<bool>,
+) -> R<bool> {
+    let mut visited = HashSet::new();
+    let mut leases = Vec::new();
+    unsafe {
+        walk(
+            cx,
+            left,
+            right,
+            shapes,
+            tags,
+            &mut invoke,
+            &mut leases,
+            &mut visited,
+        )
+    }
+}
+
+fn pointer(shapes: &[Shape], value: Dyn) -> bool {
+    value.payload != 0 && shape(shapes, value).is_some_and(|s| !matches!(s, Shape::Enum { .. }))
+}
+
+#[allow(clippy::too_many_arguments)]
 unsafe fn walk(
     cx: &Cx,
     left: Dyn,
     right: Dyn,
     shapes: &[Shape],
-    visited: &mut HashSet<(u64, u64)>,
+    tags: &[u64],
+    invoke: &mut dyn FnMut(Dyn, Dyn) -> R<bool>,
+    leases: &mut Vec<baml_rt_tasks::IntegrationRoot>,
+    visited: &mut HashSet<((u64, u64), (u64, u64))>,
 ) -> R<bool> {
     let mut stack = vec![(left, right)];
     while let Some((a, b)) = stack.pop() {
@@ -78,11 +116,29 @@ unsafe fn walk(
             _ => {}
         }
         let (sa, sb) = (shape(shapes, a), shape(shapes, b));
-        let key = if a.payload < b.payload {
-            (a.payload, b.payload)
+        let key = if (a.tag, a.payload) < (b.tag, b.payload) {
+            ((a.tag, a.payload), (b.tag, b.payload))
         } else {
-            (b.payload, a.payload)
+            ((b.tag, b.payload), (a.tag, a.payload))
         };
+        if a.tag == b.tag && tags.contains(&a.tag) {
+            if !visited.insert(key) {
+                continue;
+            }
+            // User code may detach pending operands from the rooted roots.
+            let roots = crate::ROOTS.get();
+            for (x, y) in &stack {
+                for value in [x, y] {
+                    if pointer(shapes, *value) {
+                        leases.push(unsafe { (&*roots).root(value.payload as usize) });
+                    }
+                }
+            }
+            if !invoke(a, b)? {
+                return Ok(false);
+            }
+            continue;
+        }
         if matches!(sa, Some(Shape::String)) && matches!(sb, Some(Shape::String)) {
             if !crate::strings::equals_raw(cx, a.payload as usize, b.payload as usize)? {
                 return Ok(false);
@@ -157,7 +213,18 @@ unsafe fn walk(
                     let mut matched = None;
                     for candidate in ys.chunks_exact(2) {
                         let mut scratch = visited.clone();
-                        if unsafe { walk(cx, entry[0], candidate[0], shapes, &mut scratch) }? {
+                        if unsafe {
+                            walk(
+                                cx,
+                                entry[0],
+                                candidate[0],
+                                shapes,
+                                tags,
+                                invoke,
+                                leases,
+                                &mut scratch,
+                            )
+                        }? {
                             matched = Some(candidate[1]);
                             break;
                         }

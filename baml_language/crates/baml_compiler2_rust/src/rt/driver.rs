@@ -81,6 +81,8 @@ fn compile_entry<'db>(
         structural_strings: false,
         structural_string_calls: BTreeSet::new(),
         string_overrides: BTreeMap::new(),
+        structural_equals: false,
+        equals_overrides: BTreeMap::new(),
         alias_tests: std::cell::RefCell::new(BTreeSet::new()),
         list_stringify: false,
         list_render_roots: std::cell::RefCell::new(BTreeSet::new()),

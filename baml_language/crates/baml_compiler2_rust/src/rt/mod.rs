@@ -88,6 +88,8 @@ struct Plan<'a> {
     structural_strings: bool,
     structural_string_calls: BTreeSet<(usize, usize, Repr)>,
     string_overrides: BTreeMap<Repr, usize>,
+    structural_equals: bool,
+    equals_overrides: BTreeMap<Repr, usize>,
     alias_tests: std::cell::RefCell<BTreeSet<baml_type::DeclName>>,
     list_stringify: bool,
     list_render_roots: std::cell::RefCell<BTreeSet<Repr>>,

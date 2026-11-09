@@ -411,6 +411,12 @@ pub(super) fn expand<'db>(
                         let Some((callee, _)) = plan.index.function(db, *f) else {
                             continue;
                         };
+                        if matches!(
+                            plan.index.display(callee),
+                            "baml._equals_structural_default" | "baml.ops.equals_equals"
+                        ) {
+                            plan.structural_equals = true;
+                        }
                         if plan.index.display(callee) == "baml._to_string_default" {
                             let ty = operand_ty(plan, object, body, &args[*ntypeargs]);
                             if !matches!(
@@ -517,6 +523,7 @@ pub(super) fn expand<'db>(
             }
         }
         super::formatting::register(db, plan, all, &mut instances, &mut queue)?;
+        super::equality::register(db, plan, all, &mut instances, &mut queue)?;
         if !queue.is_empty() {
             continue;
         }

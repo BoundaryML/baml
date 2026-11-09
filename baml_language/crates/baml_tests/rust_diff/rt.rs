@@ -19,6 +19,7 @@ const REQUIRED_PROBES: &[&str] = &[
     "RtNativeIoValues",
     "RtNativeReflection",
     "RtNativeEquality",
+    "RtNativeEqualityOverrides",
     "RtClosures",
     "RtEmptyClosures",
     "RtGenericClosures",
