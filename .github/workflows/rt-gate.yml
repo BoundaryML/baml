@@ -80,7 +80,8 @@ jobs:
           fi
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
-          if [ -n "${basis}" ]; then echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"; fi
+          # The corpus gate packs against this checkout, so stamp the CLI with HEAD.
+          echo "BAML_GIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
@@ -138,7 +139,8 @@ jobs:
           fi
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
-          if [ -n "${basis}" ]; then echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"; fi
+          # The corpus gate packs against this checkout, so stamp the CLI with HEAD.
+          echo "BAML_GIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
