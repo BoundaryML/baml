@@ -667,37 +667,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_compiler_lexer"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "logos 0.15.1",
- "salsa",
- "text-size",
-]
-
-[[package]]
-name = "baml_compiler_parser"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_syntax",
- "rowan 0.16.1",
- "salsa",
- "text-size",
-]
-
-[[package]]
-name = "baml_compiler_syntax"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "rowan 0.16.1",
-]
-
-[[package]]
 name = "baml_db"
 version = "0.0.0-beta"
 dependencies = [
@@ -1059,9 +1028,6 @@ dependencies = [
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_db",
  "baml_env",
  "baml_exec",
@@ -5584,18 +5550,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rowan"
-version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "417a3a9f582e349834051b8a10c8d71ca88da4211e4093528e36b9845f6b5f21"
-dependencies = [
- "countme",
- "hashbrown 0.14.5",
- "rustc-hash 1.1.0",
- "text-size",
-]
-
-[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6690,7 +6644,7 @@ dependencies = [
  "itertools 0.10.5",
  "logos 0.12.1",
  "once_cell",
- "rowan 0.15.18",
+ "rowan",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

@@ -106,9 +106,6 @@ baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_rust = { path = "crates/baml_compiler2_rust" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
-baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
-baml_compiler_parser = { path = "crates/baml_compiler_parser" }
-baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
@@ -258,7 +255,6 @@ reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
 mimalloc = { version = "0.1.52" }
-rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
 rusqlite = "0.37.0"
@@ -473,10 +469,14 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
-# Syntax trees and type interning are hot in every compiler check. Neither
-# package depends on the embedded stdlib, so stdlib-only edits reuse these
-# optimized artifacts. Keep the dev profile's assertions and overflow checks.
-[profile.dev.package.rowan]
+# Syntax trees and type interning are hot in every compiler check. None of
+# these packages depends on the embedded stdlib, so stdlib-only edits reuse
+# their optimized artifacts. Keep the dev profile's assertions and overflow
+# checks.
+[profile.dev.package.baml_syntax]
+opt-level = 3
+
+[profile.dev.package.baml_parser]
 opt-level = 3
 
 [profile.dev.package.baml_type]

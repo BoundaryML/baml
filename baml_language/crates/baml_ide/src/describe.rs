@@ -6,7 +6,7 @@
 //! dependencies, and reference sites.
 //!
 //! This is a regular function (not a Salsa query). Internally it calls
-//! Salsa-cached queries (`file_outline`, the `item_data` firewall, `syntax_tree`,
+//! Salsa-cached queries (`file_outline`, the `item_data` firewall, `typed_tree`,
 //! etc.).
 
 use std::sync::Arc;

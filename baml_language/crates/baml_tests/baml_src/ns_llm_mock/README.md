@@ -209,8 +209,8 @@ any server at all.
 2. **~~The word `client` (or `prompt`) inside a string literal can turn your
    function into an LLM function.~~ FIXED — kept as history.** The parser
    decides "is this an LLM function" with a raw token pre-scan of the body
-   (`looks_like_llm_function_body_from` in
-   `crates/baml_compiler_parser/src/parser.rs`), and the lexer emits no string
+   (`looks_like_llm_function_body_from` in the old rowan parser, since
+   deleted), and that lexer emitted no string
    token, so string *contents* used to arrive in that scan as ordinary tokens
    (`client` even lexes as `KW_CLIENT` inside quotes). A body whose first
    `client`/`prompt` token was not followed by `=`, `,`, `)`, `.` or `(`

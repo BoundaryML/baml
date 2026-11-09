@@ -7,66 +7,16 @@ use baml_base::Span;
 
 use crate::{
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic},
-    errors::{ErrorContext, NameError, ParseError, TypeError},
+    errors::{ErrorContext, NameError, TypeError},
     message::{DiagnosticIdentifierKind, DiagnosticText},
     runtime_type,
 };
 
-// ============================================================================
-// ParseError
-// ============================================================================
-
-impl ToDiagnostic for ParseError {
-    fn to_diagnostic(&self) -> Diagnostic {
-        let diag = match self {
-            ParseError::UnexpectedToken {
-                expected,
-                found,
-                span,
-            } => {
-                let label = DiagnosticText::new()
-                    .text("expected ")
-                    .code(expected)
-                    .text(", found ")
-                    .code(found);
-                Diagnostic::error(DiagnosticId::UnexpectedToken, "unexpected token")
-                    .with_primary(*span, label)
-            }
-
-            ParseError::UnexpectedEof { expected, span } => {
-                let label = DiagnosticText::new()
-                    .text("expected ")
-                    .code(expected)
-                    .text(", found end of file");
-                Diagnostic::error(DiagnosticId::UnexpectedEof, "unexpected end of file")
-                    .with_primary(*span, label)
-            }
-
-            ParseError::InvalidSyntax { message, span } => {
-                Diagnostic::error(DiagnosticId::InvalidSyntax, "invalid syntax")
-                    .with_primary(*span, message.clone())
-            }
-
-            ParseError::AmbiguousUnion { span, groupings } => Diagnostic::error(
-                DiagnosticId::AmbiguousUnion,
-                ParseError::AMBIGUOUS_UNION_MESSAGE,
-            )
-            .with_primary(*span, ParseError::ambiguous_union_label(groupings)),
-
-            ParseError::RemovedFeature { message, span } => {
-                Diagnostic::error(DiagnosticId::RemovedFeature, "removed language feature")
-                    .with_primary(*span, message.clone())
-            }
-        };
-        diag.with_phase(DiagnosticPhase::Parse)
-    }
-}
-
-/// The diagnostic for a typed-parser error in `file_id`.
+/// The diagnostic for a parse error in `file_id`.
 ///
-/// Same ids and wording as the rowan parser's errors above; the two kinds
-/// the rowan pipeline raised from its lowering keep their ids too: an escape
-/// sequence that does not decode is E0109 and a directive problem is E0105.
+/// The ids predate the typed parser and are kept: an unexpected token is
+/// E0010, an escape sequence that does not decode is E0109 and a directive
+/// problem is E0105.
 pub fn typed_parse_error_diagnostic(
     error: &baml_parser::ParseError,
     file_id: baml_base::FileId,
@@ -437,26 +387,6 @@ mod tests {
             file_id: baml_base::FileId::new(0),
             range: TextRange::new(0.into(), 10.into()),
         }
-    }
-
-    #[test]
-    fn test_parse_error_to_diagnostic() {
-        let error = ParseError::UnexpectedToken {
-            expected: "identifier".to_string(),
-            found: "'{'".to_string(),
-            span: test_span(),
-        };
-
-        let diag = error.to_diagnostic();
-        assert_eq!(diag.code(), "E0010");
-        assert_eq!(diag.message, "unexpected token");
-        assert!(
-            diag.annotations[0]
-                .message
-                .as_deref()
-                .is_some_and(|message| message.contains("expected"))
-        );
-        assert_eq!(diag.phase, DiagnosticPhase::Parse);
     }
 
     #[test]
