@@ -240,6 +240,75 @@ fn object_get(vm: &BexVm, ptr: HeapPtr, hash: u64, key: &str) -> Option<Value> {
     })
 }
 
+/// The `map<string, json>` a [`plan::Rest`] field of `plan` holds, read from
+/// the object at `ptr`: a `json` copy, so the instance owns all of it, or why
+/// it can't be copied, as [`copy_json`] refuses.
+fn rest_value(
+    vm: &mut BexVm,
+    ptr: HeapPtr,
+    plan: &plan::ClassPlan,
+    rest: plan::Rest,
+) -> Result<Value, (&'static str, String)> {
+    let Object::Map(map) = vm.get_object(ptr) else {
+        unreachable!("a class decodes from a JSON object")
+    };
+    let mut data = bex_vm_types::MapData::new();
+    for (key, value) in map.snapshot_entries() {
+        let Ok(text) = vm.as_string(&key).map(BexStr::as_str) else {
+            continue;
+        };
+        let claimed = rest == plan::Rest::Unclaimed
+            && plan
+                .fields
+                .iter()
+                .any(|field| field.shown && field.key == text);
+        if !claimed {
+            data.insert_hashed(bex_vm_types::map_string_hash(text), key, value);
+        }
+    }
+    let json_ty = json_alias_ty(vm);
+    let kept = Value::object(vm.alloc(Object::Map(Map::new(RealizedTy::String, json_ty, data))));
+    copy_json(vm, kept)
+}
+
+/// Whether `value` is of `literal`'s JSON kind, and that kind's name.
+fn tag_kind(vm: &BexVm, value: Value, literal: &RealizedTy) -> (bool, &'static str) {
+    use baml_type::Literal;
+    let kind = decode::kind_of(vm, value);
+    match literal {
+        RealizedTy::Literal(Literal::Bool(_), _) => (kind == union::Kind::Bool, "boolean"),
+        RealizedTy::Literal(Literal::Bigint(_), _) => (
+            matches!(kind, union::Kind::Number | union::Kind::String),
+            "number",
+        ),
+        RealizedTy::Literal(Literal::Int(_) | Literal::Float(_), _) => {
+            (kind == union::Kind::Number, "number")
+        }
+        _ => (kind == union::Kind::String, "string"),
+    }
+}
+
+/// Why the object at `ptr` is not a `@json.fallback` class of `plan`, and the
+/// key that is about when the object holds it: the object has to hold each key
+/// the class's literal fields name, the union's tag, as the JSON kind of its
+/// literal. The value itself is whatever the server sent.
+fn fallback_tag_error(
+    vm: &BexVm,
+    ptr: HeapPtr,
+    plan: &plan::ClassPlan,
+) -> Option<(String, Option<String>)> {
+    plan.fields.iter().find_map(|field| {
+        if !matches!(field.ty, RealizedTy::Literal(..)) {
+            return None;
+        }
+        let Some(value) = object_get(vm, ptr, field.hash(), &field.key) else {
+            return Some((format!("missing required field `{}`", field.key), None));
+        };
+        let (fits, kind) = tag_kind(vm, value, &field.ty);
+        (!fits).then(|| (format!("expected {kind}"), Some(field.key.clone())))
+    })
+}
+
 /// The entries of the string-keyed map at `ptr`, in order.
 fn string_entries(vm: &BexVm, ptr: HeapPtr) -> Vec<(BexStr, Value)> {
     let Object::Map(map) = vm.get_object(ptr) else {
@@ -517,7 +586,8 @@ fn variant_named(
 ) -> Result<Option<usize>, ()> {
     match vm.get_object(head.ptr()) {
         Object::Enum(e) => Ok(e.variants.iter().position(|v| {
-            naming.shows(v.skip) && naming.key(&v.name, v.alias.as_deref()) == written
+            naming.shows(v.skip)
+                && naming.key(&v.name, v.alias.as_deref(), v.json_rename.as_deref()) == written
         })),
         _ => Err(()),
     }
@@ -536,7 +606,12 @@ fn variant_written_as(
         return None;
     };
     let variant = e.variants.iter().find(|v| v.name == name.as_str())?;
-    if !naming.shows(variant.skip) || naming.key(&variant.name, variant.alias.as_deref()) != written
+    if !naming.shows(variant.skip)
+        || naming.key(
+            &variant.name,
+            variant.alias.as_deref(),
+            variant.json_rename.as_deref(),
+        ) != written
     {
         return None;
     }

@@ -731,6 +731,8 @@ pub struct ClassDefinition {
 }
 
 /// A field in a pre-extracted class definition.
+// Each bool is one flag attribute of the declaration.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug)]
 pub struct ClassFieldDefinition {
     pub name: String,
@@ -746,6 +748,12 @@ pub struct ClassFieldDefinition {
     pub docstring: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
+    /// `@json.rename`: the field's JSON key, under every naming.
+    pub json_rename: Option<String>,
+    /// `@json.flatten`: the field holds every key no other field took.
+    pub json_flatten: bool,
+    /// `@json.fallback`: the field holds the whole object.
+    pub json_fallback: bool,
     /// `@stream.done`: the field holds its default until its value is complete.
     pub stream_done: bool,
     /// `@stream.must_exist`: the field has no default, so its class has no
@@ -783,6 +791,8 @@ pub struct EnumVariantDefinition {
     pub docstring: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
+    /// `@json.rename`: the variant's JSON string, under every naming.
+    pub json_rename: Option<String>,
 }
 
 pub use baml_type::json_inhabit::JsonNaming;

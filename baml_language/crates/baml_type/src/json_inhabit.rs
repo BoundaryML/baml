@@ -43,11 +43,18 @@ impl JsonNaming {
     }
 
     /// The JSON key of a field, or the JSON string of a variant, declared as
-    /// `name` with `alias`.
-    pub fn key<'a>(self, name: &'a str, alias: Option<&'a str>) -> &'a str {
-        match self {
-            JsonNaming::Declared => name,
-            JsonNaming::Aliased => alias.unwrap_or(name),
+    /// `name` with `alias` and `rename`. `@json.rename` holds under every
+    /// naming; `@alias` is only the name a model is shown.
+    pub fn key<'a>(
+        self,
+        name: &'a str,
+        alias: Option<&'a str>,
+        rename: Option<&'a str>,
+    ) -> &'a str {
+        match (rename, self) {
+            (Some(rename), _) => rename,
+            (None, JsonNaming::Declared) => name,
+            (None, JsonNaming::Aliased) => alias.unwrap_or(name),
         }
     }
 
