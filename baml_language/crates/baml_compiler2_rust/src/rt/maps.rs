@@ -7,6 +7,9 @@ pub(super) struct MapType {
     pub key_type: String,
     pub value_type: String,
     pub scalar_json_value: bool,
+    /// Whether the declared key type is a string subtype (JSON object keys);
+    /// `None` when that cannot be decided syntactically.
+    pub string_keys: Option<bool>,
 }
 impl Plan<'_> {
     pub(super) fn map_repr(
@@ -16,6 +19,7 @@ impl Plan<'_> {
         key_ty: String,
         value_ty: String,
         scalar_json_value: bool,
+        string_keys: Option<bool>,
     ) -> Repr {
         if key == Repr::Str
             && value == Repr::Int
@@ -30,6 +34,7 @@ impl Plan<'_> {
             key_type: key_ty,
             value_type: value_ty,
             scalar_json_value,
+            string_keys,
         };
         let mut types = self.map_types.borrow_mut();
         let id = types.iter().position(|old| old == &ty).unwrap_or_else(|| {
@@ -364,5 +369,28 @@ impl Emitter<'_, '_> {
             let (set, _) = self.map_call("baml.Map.set", &[receiver, key, value])?;
             Ok(format!("{set};\n"))
         })())
+    }
+}
+
+/// The VM serializes a map as a JSON object only when its declared key type
+/// is a subtype of string, independently of its current entries.
+pub(super) fn string_keys<N: Clone>(key: &baml_type::RuntimeTy<N>) -> Option<bool> {
+    use baml_type::RuntimeTy as T;
+    match key {
+        T::String | T::Literal(baml_type::Literal::String(_), _) => Some(true),
+        T::Int
+        | T::Bool
+        | T::Float
+        | T::Bigint
+        | T::Null
+        | T::Enum(_)
+        | T::EnumVariant(..)
+        | T::Literal(..) => Some(false),
+        T::Union(members) => members
+            .iter()
+            .map(string_keys)
+            .collect::<Option<Vec<_>>>()
+            .map(|all| all.into_iter().all(|s| s)),
+        _ => None,
     }
 }

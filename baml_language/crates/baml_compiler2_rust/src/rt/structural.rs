@@ -62,3 +62,28 @@ pub(super) fn fallback(
     };
     Ok(Some((target, frame)))
 }
+
+/// Membership through the language-provided structural default, including
+/// Hash component eligibility, exactly as the VM resolver decides it.
+pub(super) fn default_applies(
+    db: &dyn Db,
+    concrete: &RuntimeTy,
+    iface: &baml_compiler2_mir::TyTemplateInterface,
+) -> bool {
+    if baml_compiler2_hir_ty::impls::structural_interface(db, &iface.name).is_none()
+        || !iface.generics.is_empty()
+        || !iface.associated_types.is_empty()
+    {
+        return false;
+    }
+    let requested = baml_type::interned::InferInterface {
+        name: iface.name.clone(),
+        generics: Box::new([]),
+        associated_types: Box::new([]),
+    };
+    let ty = baml_compiler2_hir_ty::impls::interned_ty(&baml_type::Ty::from(concrete.clone()));
+    matches!(
+        baml_compiler2_hir_ty::impls::resolve_implementation(db, &ty, &requested),
+        Some(baml_compiler2_hir_ty::impls::ResolvedImplementation::StructuralDefault(_))
+    )
+}

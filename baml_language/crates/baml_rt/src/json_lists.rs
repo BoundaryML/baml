@@ -460,6 +460,8 @@ pub enum Shape {
     },
     Class(&'static [EncodeField]),
     Map {
+        /// The declared key type is a string subtype.
+        string_keys: bool,
         len: unsafe fn(usize) -> usize,
         entry: unsafe fn(usize, usize) -> (Dyn, Dyn),
     },
@@ -737,7 +739,18 @@ impl Encoder<'_> {
                         }
                         self.out.push('}');
                     }
-                    Shape::Map { len, entry } => {
+                    Shape::Map {
+                        string_keys,
+                        len,
+                        entry,
+                    } => {
+                        // The VM rejects by declared key type, even when empty.
+                        if !string_keys {
+                            return Err(self.error(
+                                "JSON requires maps with string keys".into(),
+                                "map_key",
+                            ));
+                        }
                         let len = unsafe { len(pointer) };
                         self.out.push('{');
                         for i in 0..len {

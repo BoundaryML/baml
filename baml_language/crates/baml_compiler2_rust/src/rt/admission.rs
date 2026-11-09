@@ -185,6 +185,7 @@ pub(super) fn collect<'db>(
                 }
             }
         }
+        reject_context_reads(body)?;
         super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
@@ -273,6 +274,14 @@ pub(super) fn collect<'db>(
                             }
                             _ => return Err(no("JSON type argument storage")),
                         };
+                        // Only class, list and map codes have generated decoders;
+                        // scalar and fallback type tokens (e.g. bigint) do not.
+                        if code < 3
+                            || (code >= 3 + plan.json_types.len()
+                                && code < super::json_lists::TYPE_BASE)
+                        {
+                            return Err(no("JSON decode type"));
+                        }
                         plan.json_decode_codes.insert(code);
                     }
                     for target in reach.targets {
@@ -326,6 +335,40 @@ pub(super) fn collect<'db>(
         builtins,
         json_decode,
     })
+}
+
+// A handler's `baml.errors.Context` binding is not materialized by rt; only
+// its use as a rethrow context is lowered. Any other read is unsupported.
+fn reject_context_reads(body: &baml_compiler2_mir::MirFunctionBody<'_>) -> super::Gen<()> {
+    use baml_compiler2_mir::{Operand, Place};
+    let contexts = body
+        .blocks
+        .iter()
+        .filter_map(|b| b.landing.map(|l| l.context_local.0))
+        .collect::<BTreeSet<_>>();
+    if contexts.is_empty() {
+        return Ok(());
+    }
+    let mut read = false;
+    let mut visit = |operand: &Operand<'_>| {
+        if let Operand::Copy(place) | Operand::Move(place) = operand {
+            read |= Place::base_local(place).is_some_and(|l| contexts.contains(&l.0));
+        }
+    };
+    for block in &body.blocks {
+        for statement in &block.statements {
+            crate::operands::walk_statement_operands(&statement.kind, &mut visit);
+        }
+        match &block.terminator {
+            Some(Terminator::Rethrow { value, .. }) => visit(value),
+            Some(term) => crate::operands::walk_terminator_operands(term, &mut visit),
+            None => {}
+        }
+    }
+    if read {
+        return Err(no("catch context binding"));
+    }
+    Ok(())
 }
 
 fn insert_lambdas<'db>(

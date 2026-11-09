@@ -164,6 +164,27 @@ function effect_result() -> int {
   let applied = apply_generic_effect<int>;
   applied(holder.callback, 3) + apply_effect(holder.callback, 1) + apply_generic_effect<int>(holder.callback, 2)
 }
+interface OptSpeaker { function speak(self) -> int throws never; }
+class OptDog {
+  implements OptSpeaker { function speak(self) -> int throws never { 163 } }
+}
+interface NeverBuilt { function make(self) -> int throws never; }
+function opt_speak(a: OptSpeaker?) -> int {
+  match (a) { let s: OptSpeaker => s.speak(), null => 1 }
+}
+function never_built(a: NeverBuilt?) -> int {
+  match (a) { let s: NeverBuilt => s.make(), null => 167 }
+}
+class HashOnlyEq {
+  value: int
+  implements baml.ops.Equals { function eq(self, other: Self) -> bool throws never { true } }
+}
+function hashable(value: unknown) -> int { if (value is baml.Hash) { 1 } else { 0 } }
+function optional_dispatch() -> int {
+  let dog: OptSpeaker? = OptDog {};
+  opt_speak(dog) + opt_speak(null) + never_built(null)
+    + hashable(1) * 2 + hashable([1, 2]) * 4 + hashable(HashOnlyEq { value: 1 }) * 8
+}
 function main() -> int {
   let a = Box<int> { value: 29 };
   let b = Box<string> { value: "hello" };
@@ -189,5 +210,6 @@ function main() -> int {
   total += projection_fields() + projection_error();
   total += projection_catch() + decoded_generics();
   total += alias_dispatch(AliasOwner<string> { left: 101, right: "alias" });
+  total += optional_dispatch();
   total
 }

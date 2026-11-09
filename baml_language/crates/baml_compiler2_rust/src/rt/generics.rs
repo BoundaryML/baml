@@ -326,16 +326,7 @@ pub(super) fn expand<'db>(
                         };
                         if let Some((iface, method, receiver, method_args)) = virtual_value {
                             plan.remember_heads(&iface.to_template().substitute_symbolic(&[]));
-                            let candidates = match receiver {
-                                Some(RuntimeTy::Union(types)) => types.to_vec(),
-                                Some(
-                                    RuntimeTy::Interface(..)
-                                    | RuntimeTy::Unknown
-                                    | RuntimeTy::Function { .. },
-                                )
-                                | None => plan.concrete_types.clone(),
-                                Some(concrete) => vec![concrete],
-                            };
+                            let candidates = dispatch_candidates(plan, receiver.as_ref());
                             let mut targets = Vec::new();
                             for concrete in candidates {
                                 if let Some((callee, frame)) = super::dispatch::resolve(
@@ -488,16 +479,7 @@ pub(super) fn expand<'db>(
                             .collect::<Gen<Vec<_>>>()?;
                         let receiver =
                             operand_ty(plan, object, body, &args[*ntypeargs + *self_arg]);
-                        let candidates = receiver
-                            .as_ref()
-                            .map(|t| match t {
-                                RuntimeTy::Union(m) => m.to_vec(),
-                                RuntimeTy::Interface(..)
-                                | RuntimeTy::Unknown
-                                | RuntimeTy::Function { .. } => plan.concrete_types.clone(),
-                                _ => vec![t.clone()],
-                            })
-                            .unwrap_or_else(|| plan.concrete_types.clone());
+                        let candidates = dispatch_candidates(plan, receiver.as_ref());
                         let mut targets = Vec::new();
                         for concrete in candidates {
                             let Some((callee, frame)) = super::dispatch::resolve(
@@ -525,7 +507,10 @@ pub(super) fn expand<'db>(
                             }
                             queue.push_back(target);
                         }
-                        if !targets.is_empty() {
+                        // A static interface receiver can only hold a closed-world
+                        // concrete value. With no implementor constructed, the
+                        // call is unreachable (e.g. a match arm only reached by null).
+                        if !targets.is_empty() || interface_receiver(receiver.as_ref()) {
                             plan.dispatches.insert((object, b.id.0), targets);
                         }
                     }
@@ -1106,6 +1091,44 @@ impl Plan<'_> {
             }
         }
         Ok(())
+    }
+}
+
+// Dynamic receivers, including interface members of optional or union
+// receivers, may hold any closed-world concrete value.
+fn dispatch_candidates(plan: &Plan<'_>, receiver: Option<&RuntimeTy>) -> Vec<RuntimeTy> {
+    let mut candidates = Vec::new();
+    let mut push = |ty: &RuntimeTy| {
+        if !candidates.contains(ty) {
+            candidates.push(ty.clone());
+        }
+    };
+    let members = match receiver {
+        Some(RuntimeTy::Union(members)) => members.to_vec(),
+        Some(ty) => vec![ty.clone()],
+        None => vec![RuntimeTy::Unknown],
+    };
+    for member in &members {
+        match member {
+            RuntimeTy::Interface(..) | RuntimeTy::Unknown | RuntimeTy::Function { .. } => {
+                plan.concrete_types.iter().for_each(&mut push)
+            }
+            _ => push(member),
+        }
+    }
+    candidates
+}
+
+fn interface_receiver(receiver: Option<&RuntimeTy>) -> bool {
+    match receiver {
+        Some(RuntimeTy::Interface(..)) => true,
+        Some(RuntimeTy::Union(members)) => {
+            members.iter().any(|m| matches!(m, RuntimeTy::Interface(..)))
+                && members
+                    .iter()
+                    .all(|m| matches!(m, RuntimeTy::Interface(..) | RuntimeTy::Null))
+        }
+        _ => false,
     }
 }
 

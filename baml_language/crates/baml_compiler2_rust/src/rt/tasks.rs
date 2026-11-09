@@ -465,7 +465,18 @@ impl registry::Feature for Feature {
                                 )
                             } else {
                                 let inputs = if operation == "any" {
-                                    format!("rt::tasks::pointer_list({})", values[0].0)
+                                    // A list literal is an ordinary growable
+                                    // pointer list, not a fixed pointer array.
+                                    let (list, repr) = &values[0];
+                                    if repr.growing() {
+                                        if e.plan.element(*repr)?.slot()? != "rt::lists::Ptr" {
+                                            return Err(no("cancel token input list"));
+                                        }
+                                        let read = e.fallible("l.get(&rt::strings::Cx::current(),i).map(|p|p.as_raw())");
+                                        format!("&{{let l=rt::lists::List::<rt::lists::Ptr>::from_raw({list});let mut inputs=Vec::new();for i in 0..l.len(&rt::strings::Cx::current()){{inputs.push({read});}}inputs}}")
+                                    } else {
+                                        format!("rt::tasks::pointer_list({list})")
+                                    }
                                 } else {
                                     "&[]".into()
                                 };

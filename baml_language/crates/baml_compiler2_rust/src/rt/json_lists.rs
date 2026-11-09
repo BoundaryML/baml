@@ -485,7 +485,14 @@ pub(super) fn emit_shapes(
                 let v = maps::slot_type(value, descriptors, lists)?;
                 let kd = capture_codegen::capture_dyn(key, "key", descriptors, lists)?;
                 let vd = capture_codegen::capture_dyn(value, "value", descriptors, lists)?;
-                writeln!(out,"rt::json_lists::Shape::Map{{len:|p|unsafe{{rt::maps::Map::<{k},{v}>::from_raw(p).len()}},entry:|p,i|unsafe{{let(key,value)=rt::maps::Map::<{k},{v}>::from_raw(p).entry(i).unwrap();({kd},{vd})}}}},").unwrap();
+                let string_keys = match repr {
+                    Repr::MapStrInt => true,
+                    Repr::Map(id) => plan.map_types.borrow()[id]
+                        .string_keys
+                        .ok_or_else(|| no("JSON map key type"))?,
+                    _ => unreachable!(),
+                };
+                writeln!(out,"rt::json_lists::Shape::Map{{string_keys:{string_keys},len:|p|unsafe{{rt::maps::Map::<{k},{v}>::from_raw(p).len()}},entry:|p,i|unsafe{{let(key,value)=rt::maps::Map::<{k},{v}>::from_raw(p).entry(i).unwrap();({kd},{vd})}}}},").unwrap();
                 continue;
             }
             let element = plan.element(repr)?;

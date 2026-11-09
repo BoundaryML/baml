@@ -173,6 +173,7 @@ impl Plan<'_> {
                     capture_codegen::declared_type(self, key)?,
                     capture_codegen::declared_type(self, value)?,
                     scalar_json_value(value),
+                    super::maps::string_keys(key),
                 )
             }
             RuntimeTy::Null => Repr::Null,
@@ -320,6 +321,7 @@ impl Plan<'_> {
                     capture_codegen::declared_field_type(self, key)?,
                     capture_codegen::declared_field_type(self, value)?,
                     scalar_json_field_value(value),
+                    super::maps::string_keys(key),
                 )
             }
             T::List(element) => {
@@ -362,7 +364,7 @@ impl Plan<'_> {
                         self.class(*c).type_tag == head.tag() && *a == args
                     })
                     .map(|(_, _, c)| *c)
-                    .ok_or_else(|| no("unregistered generic class"))?)
+                    .ok_or_else(|| no(format!("unregistered generic class (layout {ty:?})")))?)
             },
             T::Class(head, args) if args.is_empty() => {
                 let object = self
