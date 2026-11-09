@@ -120,6 +120,11 @@ impl Emitter<'_, '_> {
             .collect::<Gen<Vec<_>>>()?
             .join(",");
         let captured_result = self.capture_value("*value".to_owned(), self.local(0)?)?;
+        let input_captures = if self.plan.frozen_strings.contains(&self.object) {
+            "rt::telemetry::capture_frozen_arguments(&[l1],ASSERT_FROZEN_TYPES)".to_owned()
+        } else {
+            format!("rt::telemetry::capture_arguments(&[{captured_args}])")
+        };
         let capture_arguments = if let Some(frame) = self.plan.function_frames.get(&self.object) {
             let types = frame
                 .iter()
@@ -132,16 +137,23 @@ impl Emitter<'_, '_> {
                 .collect::<Gen<Vec<_>>>()?
                 .join(",");
             format!(
-                "{{let mut c=rt::telemetry::capture_arguments(&[{captured_args}]);c.types=rt::telemetry::capture_type_args(&[{types}]);c}}"
+                "{{let mut c={input_captures};c.types=rt::telemetry::capture_type_args(&[{types}]);c}}"
             )
         } else {
-            format!("rt::telemetry::capture_arguments(&[{captured_args}])")
+            input_captures
         };
         let captures = format!(
             "||{capture_arguments},|result:&R<{returned}>|match result{{Ok(value)=>rt::telemetry::capture_value({captured_result}),Err(error)=>rt::telemetry::capture_error(error)}}"
         );
         let mut code = call_cost::prologue(
-            object, &params, &arguments, returned, &captures, attribute, &guard,
+            object,
+            &params,
+            &arguments,
+            returned,
+            &captures,
+            attribute,
+            &guard,
+            self.plan.error_contexts,
         );
         if recursive {
             code.push_str(&format!("{};\n", self.fallible("cx.poll()")));
@@ -156,6 +168,9 @@ impl Emitter<'_, '_> {
                 )
                 .unwrap();
             }
+        }
+        if self.plan.error_contexts {
+            code.push_str("let base_cx=cx;\n");
         }
         for i in 0..self.body.locals.len() {
             if i > 0 && i <= arity {
@@ -244,19 +259,10 @@ impl Emitter<'_, '_> {
             self.object,
             self.object,
             self.plan.index.info(self.object).source_file,
-            if matches!(
-                self.plan.index.info(self.object).identity,
-                bex_vm_types::types::FunctionIdentity::Synthetic { .. }
-            ) {
-                self.plan
-                    .program
-                    .function_name(bex_vm_types::ObjectIndex::from_raw(
-                        self.plan.index.rt_origin(self.object),
-                    ))
-                    .unwrap()
-            } else {
-                self.plan.index.display(self.object).to_owned()
-            }
+            // Diagnostics use the loader's canonical name. Telemetry's display
+            // label prefixes synthetic lambdas with their package, while VM
+            // StackFrame.function_name intentionally keeps the leading dot.
+            self.plan.index.name(self.plan.index.rt_origin(self.object))
         ))
     }
     pub(super) fn stmts(&mut self, stmts: &[Stmt], headers: &BTreeSet<usize>) -> Gen<String> {

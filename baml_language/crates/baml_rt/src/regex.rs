@@ -111,11 +111,18 @@ fn build_error(cx: &mut Cx, pattern: Str, error: &BuildError, schema: &Schema) -
     Ok(Box::new(Error {
         telemetry_caught: None,
         telemetry_at: None,
+        telemetry_history: Default::default(),
         telemetry_raise: None,
         value,
         class: "baml.regex.Error",
         message: error.message.clone(),
         frames: vec![],
+        thrown_value: None,
+        exit_code: None,
+        context: 0,
+        cause: 0,
+        trace: None,
+        diagnostic_value: None,
         display_value: Some(format!(
             "baml.regex.Error {{kind: {}, message: {:?}, pattern: {:?}, span_start: {}, span_end: {}}}",
             error.kind.variant_name(),

@@ -78,6 +78,10 @@ fn compile_entry<'db>(
         heads: BTreeMap::new(),
         dispatches: BTreeMap::new(),
         function_frames: BTreeMap::new(),
+        frozen_types: BTreeMap::new(),
+        frozen_strings: BTreeSet::new(),
+        type_renderer: None,
+        error_contexts: false,
         structural_strings: false,
         structural_string_calls: BTreeSet::new(),
         string_overrides: BTreeMap::new(),
@@ -114,11 +118,13 @@ fn compile_entry<'db>(
             .map(|p| p.all.as_ref().map_err(Clone::clone))
             .transpose()?,
     )?;
+    super::assertions::validate(&plan, &builtins)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
     builtins::emit(&mut out, &builtins)?;
     let layout::LayoutIds { descriptors, lists } = layout::emit(&mut out, &plan)?;
+    super::assertions::emit(&mut out, &plan)?;
     super::regex::emit(&mut out, &plan, &descriptors, &lists, &builtins)?;
     let host_function = |name: &str| {
         program
@@ -347,6 +353,7 @@ fn compile_entry<'db>(
         (stringify, aliased),
         &telemetry_sites,
     )?;
+    let cx_type = super::exceptions::context_type(plan.error_contexts);
     let cleanup_init = if plan.cleanup_methods.is_empty() {
         ""
     } else {
@@ -358,7 +365,7 @@ fn compile_entry<'db>(
         } else {
             "Some(initialize_program)"
         };
-        write!(&mut out, "fn entry()->R<i64>{{unsafe{{{cleanup_init}let cx=rt::calls::Context::current();(if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}})?;Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name,{initializer})}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
+        write!(&mut out, "fn entry()->R<i64>{{unsafe{{{cleanup_init}let cx={cx_type}::current();(if rt::telemetry::active(){{f{entry}::<true>(cx,0)}}else{{f{entry}::<false>(cx,0)}})?;Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name,{initializer})}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
     } else if let Some((setup, run)) = benchmark {
         host::emit_benchmark(
             &mut out,
@@ -370,6 +377,7 @@ fn compile_entry<'db>(
             !plan.init_chains.is_empty(),
             string_result,
             !plan.cleanup_methods.is_empty(),
+            plan.error_contexts,
         );
     } else {
         host::emit(
@@ -380,6 +388,7 @@ fn compile_entry<'db>(
             !plan.init_chains.is_empty(),
             string_result,
             !plan.cleanup_methods.is_empty(),
+            plan.error_contexts,
         );
     }
     Ok(out)

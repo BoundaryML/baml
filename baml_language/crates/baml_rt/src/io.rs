@@ -46,6 +46,14 @@ fn host_unavailable(resource: String, message: String) -> Box<Error> {
     })();
     match result {
         Ok(value) => Box::new(Error {
+            telemetry_caught: None,
+            telemetry_history: Default::default(),
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             value,
             class: "baml.panics.HostUnavailable",
             message: message.clone(),

@@ -165,6 +165,7 @@ pub(crate) fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<E
     match build(cx, &message, path.as_deref()) {
         Err(e) => e,
         Ok(value) => Box::new(Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_at: None,
             telemetry_caught: None,
@@ -174,6 +175,12 @@ pub(crate) fn error(cx: &mut Cx, message: String, path: Option<String>) -> Box<E
             } else {
                 "baml.json.ParseError"
             },
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             display_value: path
                 .as_ref()
                 .map(|p| format!("baml.json.DecodeError {{message: {message:?}, path: {p:?}}}")),

@@ -11,6 +11,18 @@ impl Emitter<'_, '_> {
         } else {
             String::new()
         };
+        if self.plan.error_contexts {
+            let cause = block.handling.map_or_else(
+                || "base_cx.handling()".into(),
+                |h| {
+                    format!(
+                        "caught{}.as_ref().map_or(base_cx.handling(),|e|e.context())",
+                        h.0
+                    )
+                },
+            );
+            writeln!(&mut out, "let cx=base_cx.with_handling({cause});").unwrap();
+        }
         if headers.contains(&b) {
             writeln!(
                 &mut out,
@@ -55,20 +67,6 @@ impl Emitter<'_, '_> {
             return Ok(out);
         }
         match term {
-            Terminator::Throw { value } => {
-                let (value, repr) = self.operand(value)?;
-                let name = match repr {
-                    Repr::Ptr(class) => super::errors::thrown_class(self, class)?,
-                    Repr::Str => "string".into(),
-                    _ => return Err(no("non-pointer throw")),
-                };
-                let display = super::errors::thrown_display(self, repr, "p", &mut BTreeSet::new())?;
-                let error = format!(
-                    "Box::new(rt::Error{{telemetry_at:None,telemetry_raise:None,telemetry_caught:None,value:p,class:{name:?},message:String::new(),frames:Vec::new(),display_value:Some({display})}}).at(&S{},{})",
-                    self.object, self.site
-                );
-                writeln!(&mut out, "{{let p={value};{}}}", self.raise(&error)).unwrap();
-            }
             Terminator::Rethrow {
                 context: Operand::Copy(Place::Local(context)) | Operand::Move(Place::Local(context)),
                 ..
@@ -82,7 +80,7 @@ impl Emitter<'_, '_> {
                     .id
                     .0;
                 out.push_str(&self.raise(&format!(
-                    "rt::telemetry::evidence::rethrow(caught{handler}.take().expect(\"missing caught error\").rethrow(),&S{}, {})",self.object,self.site
+                    "caught{handler}.take().expect(\"missing caught error\").rethrow().rethrow_at(&S{},{})",self.object,self.site
                 )));
             }
 

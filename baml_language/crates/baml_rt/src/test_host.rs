@@ -21,8 +21,25 @@ pub fn run(
     pointers.extend(vec![true; descriptors.len()]);
     let mut instance = Instance::new(descriptors, Box::leak(pointers.into_boxed_slice()));
     // SAFETY: same admitted entry ABI as driver_observed; the instance owns the heap.
+    let shapes = functions.iter().find_map(|f| f.captures).map(|c| c.shapes);
+    let failure = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let captured = failure.clone();
     let initialized = initialize.map_or(Ok(()), |run| run(&mut instance, &mut session));
-    let result = initialized.and_then(|()| session.run(|| unsafe { instance.run_baml(entry) }));
+    let result = initialized.and_then(|()| {
+        session.run(|| unsafe {
+            instance.run_baml(move || {
+                entry().map_err(|error| {
+                    if let Some(shapes) = shapes
+                        && error.value != 0
+                    {
+                        *captured.borrow_mut() =
+                            Some(crate::exceptions::test_failure(&error, shapes));
+                    }
+                    error
+                })
+            })
+        })
+    });
     if result
         .as_ref()
         .is_err_and(|error| error.class == "InitFailed")
@@ -41,7 +58,15 @@ pub fn run(
             eprintln!("VM internal error: {}", e.message);
             return std::process::ExitCode::FAILURE;
         }
-        Err(e) => ("fail", Some(failure_message(&e))),
+        Err(e) => (
+            "fail",
+            Some(
+                failure
+                    .borrow_mut()
+                    .take()
+                    .unwrap_or_else(|| failure_message(&e)),
+            ),
+        ),
     };
     println!(
         "BAML_CORPUS_RESULT\t{}",
@@ -71,8 +96,9 @@ fn failure_message(error: &crate::Error) -> String {
             .map(|f| (f.file, f.line, f.function)),
     );
     let value = error
-        .display_value
+        .diagnostic_value
         .clone()
+        .or_else(|| error.display_value.clone())
         .unwrap_or_else(|| format!("{} {{ message: {:?} }}", error.class, error.message));
     format!("{}\n{value}", traceback.trim_end())
         .trim_end()
@@ -84,6 +110,7 @@ mod tests {
     use super::*;
     fn error(class: &'static str) -> crate::Error {
         crate::Error {
+            telemetry_history: Default::default(),
             telemetry_raise: None,
             telemetry_caught: None,
             telemetry_at: None,
@@ -95,6 +122,12 @@ mod tests {
                 function: "user.test",
                 line: 2,
             }],
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             display_value: Some(format!("{class} {{ code: 1 }}")),
         }
     }

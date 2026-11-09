@@ -11,6 +11,7 @@ pub(super) struct Admitted<'db> {
     pub builtins: BTreeSet<String>,
     pub json_decode: Option<usize>,
 }
+
 pub(super) fn collect<'db>(
     db: &'db dyn Db,
     root: SourceRoot,
@@ -96,6 +97,7 @@ pub(super) fn collect<'db>(
         let facts = super::list_narrowing::analyze(db, plan, body);
         plan.list_narrowing_facts
             .insert(body as *const _ as usize, facts);
+        super::exceptions::prepare_contexts(db, plan, body)?;
         for target in super::closures::discover(db, plan, object, mir)? {
             calls.entry(object).or_default().insert(target);
             queue.push_back(target);
@@ -105,6 +107,14 @@ pub(super) fn collect<'db>(
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
             registry::admit(registry::Admission::Statement(&statement.kind))?;
+            if let StatementKind::Assign {
+                value: Rvalue::IsType { test, .. },
+                ..
+            } = &statement.kind
+            {
+                super::exceptions::record_test(db, plan, test)?;
+            }
+
             if let StatementKind::Assign {
                 value:
                     Rvalue::Aggregate {
@@ -216,6 +226,9 @@ pub(super) fn collect<'db>(
             queue.extend(edges.iter().copied());
         }
         for block in &body.blocks {
+            if let Some(Terminator::NarrowBind { test, .. }) = &block.terminator {
+                super::exceptions::record_test(db, plan, test)?;
+            }
             registry::admit(registry::Admission::ShieldedBlock(block.shielded))?;
             if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
                 for (repr, target) in targets {

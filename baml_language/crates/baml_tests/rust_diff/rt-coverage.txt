@@ -2,6 +2,8 @@ BAML runtime coverage (normal AND GC stress): 59 pass, 117 unsupported, 0 fail
 Telemetry off: required
 String probes: off/low/medium/high/default required
 Standalone JSON and closure/task telemetry checked; not enabled generally
+Exception probe: off/low/medium/high/default required
+Packed testing probe: off/low/medium/high/default process/report parity required
 
 First unsupported constructs (fixtures blocked):
 18	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
@@ -233,7 +235,9 @@ process::startup	pass
 programs::agent loop 300	pass
 programs::json parser 15	unsupported: list field element
 programs::richards 50	pass
+rt_exception_semantics_at_every_telemetry_level	pass
 rt_setup_state_benchmark	pass
+rt_testing_stdlib_and_test_host	pass
 rt_type_dispatch_semantics	pass
 string::concat loop 10k	pass
 string::split medium literal 10k	pass

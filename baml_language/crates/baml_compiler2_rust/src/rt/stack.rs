@@ -278,7 +278,7 @@ pub(super) fn small_leaf(mir: &MirFunction<'_>) -> bool {
 
 impl Emitter<'_, '_> {
     pub(super) fn stack_leaf_call(&self, callee: usize, arguments: &str, observed: &str) -> String {
-        if self.stack.leaf_calls.contains(&callee) {
+        if self.stack.leaf_calls.contains(&callee) && !self.plan.error_contexts {
             format!(
                 "if stack_mode{callee}==0 {{f{callee}_body::<OBSERVE>(cx,{arguments})}} else {{{observed}}}"
             )

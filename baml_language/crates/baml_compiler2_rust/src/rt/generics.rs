@@ -85,6 +85,7 @@ pub(super) fn expand<'db>(
             for local in &body.locals {
                 registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;
             }
+            super::exceptions::prepare_contexts(db, plan, body)?;
             // Materialized lambdas belong to this concrete parent instance.
             // Keep the source identity for positions/telemetry, but never share
             // typed MIR or capture layouts between distinct generic frames.
@@ -274,6 +275,11 @@ pub(super) fn expand<'db>(
             }
             for t in constants {
                 plan.candidate(&t);
+                // Erased assertion equality and thrown enum values need capture
+                // tags even when a literal never occupies an enum-typed local.
+                if matches!(t, RuntimeTy::Enum(_)) {
+                    plan.record_ty(&t)?;
+                }
             }
             for (repr, method, callee, frame) in super::map_keys::discover(db, plan, body)? {
                 let target = instance(db, plan, all, &mut instances, callee, frame)?;
@@ -1229,6 +1235,7 @@ pub(super) fn instance<'db>(
     // Include aliases declared in the user pack when specializing stdlib MIR.
     let runtime = baml_compiler2_mir::RuntimeLowering::of(db, plan.root);
     let mut specialized = specialize(source, &params, &frame, &runtime)?;
+    super::assertions::specialize(plan, callee, &frame, &mut specialized)?;
     fold_primitive_sort_guards(db, plan, &mut specialized);
     let captures = runtime_params
         .params()
@@ -1238,6 +1245,10 @@ pub(super) fn instance<'db>(
         .collect();
     let id = plan.next_object;
     plan.next_object += 1;
+    if plan.index.display(callee) == "baml.String.from" && frame == [RuntimeTy::Type] {
+        plan.frozen_strings.insert(id);
+        plan.type_renderer = Some(super::assertions::renderer(plan)?);
+    }
     plan.function_frames.insert(id, captures);
     all.insert(id, std::rc::Rc::new(specialized));
     std::rc::Rc::make_mut(&mut plan.index).rt_alias(id, callee);
@@ -1310,7 +1321,7 @@ impl Plan<'_> {
             }
         });
     }
-    fn candidate(&mut self, ty: &RuntimeTy) {
+    pub(super) fn candidate(&mut self, ty: &RuntimeTy) {
         let normalized = canonical_type(ty);
         let ty = &normalized;
         if matches!(ty,RuntimeTy::Class(head,args) if args.is_empty() && head.builtin_primitive(self.lang)==Some(baml_type::PrimitiveType::String))

@@ -13,6 +13,9 @@ impl Plan<'_> {
             .ok_or_else(|| no("unlinked class tag"))
     }
     pub(super) fn record_ty(&mut self, ty: &RuntimeTy) -> Gen<()> {
+        if super::exceptions::dividend(ty) {
+            return Ok(());
+        }
         if let RuntimeTy::List(element) = ty
             && matches!(
                 element.as_ref(),
@@ -41,6 +44,9 @@ impl Plan<'_> {
         Ok(())
     }
     pub(super) fn record_field_ty(&mut self, ty: &bex_vm_types::RuntimeTy) -> Gen<()> {
+        if super::exceptions::dividend(ty) {
+            return Ok(());
+        }
         if let bex_vm_types::RuntimeTy::List(element) = ty
             && matches!(
                 element.as_ref(),
@@ -140,6 +146,9 @@ impl Plan<'_> {
             if reduced != *ty {
                 return self.repr(&reduced);
             }
+        }
+        if super::exceptions::dividend(ty) {
+            return Ok(Repr::Tagged);
         }
         Ok(match ty {
             RuntimeTy::Bigint | RuntimeTy::Literal(baml_type::Literal::Bigint(_), _) => {
@@ -268,6 +277,9 @@ impl Plan<'_> {
         })
     }
     pub(super) fn field_repr(&self, ty: &bex_vm_types::RuntimeTy) -> Gen<Repr> {
+        if super::exceptions::dividend(ty) {
+            return Ok(Repr::Tagged);
+        }
         use bex_vm_types::RuntimeTy as T;
         Ok(match ty {
             T::Null | T::Never => Repr::Null,
@@ -393,27 +405,6 @@ impl Plan<'_> {
             return Ok(());
         }
         let class = self.class(object);
-        // Runtime-produced exception descriptors are reserved. The runtime supports
-        // wildcard panic exclusion and user-defined typed catches; never emit a
-        // second, incompatible layout/tag for a builtin exception class.
-        if self.program.packages.iter().any(|package| {
-            package.name == "baml"
-                && package
-                    .objects
-                    .contains(&u32::try_from(object).expect("object index"))
-        }) && self.list_error_descriptor(object).is_none()
-            && ((class.path.to_string().starts_with("panics.")
-                && !matches!(
-                    class.path.to_string().as_str(),
-                    "panics.UserPanic" | "panics.AssertionFailed"
-                ))
-                || matches!(
-                    class.path.to_string().as_str(),
-                    "json.ParseError" | "json.DecodeError"
-                ))
-        {
-            return Err(no("typed builtin exception class"));
-        }
         registry::admit(registry::Admission::Class {
             cleanup: class.cleanup.is_some(),
             generic: false,
@@ -540,7 +531,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         } else {
             0
         };
-    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::MAP_KEY_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,\n");
+    out.push_str("static DESCRIPTORS: &[Descriptor] = &[rt::STRING_DESC,rt::OVERFLOW_DESC,rt::SHIFT_DESC,rt::CANCEL_DESC,rt::STACK_DESC,rt::ALLOC_DESC,rt::INDEX_DESC,rt::json::PARSE_DESC,rt::json::DECODE_DESC,rt::DIV_DESC,rt::list_errors::SERIALIZATION_DESC,rt::list_errors::INVALID_ARGUMENT_DESC,rt::MAP_KEY_DESC,rt::strings::CONCAT_DESC,rt::strings::ASCII_APPEND_DESC,rt::native::DESC,rt::bytes::DESC,rt::exceptions::VALUE_DESC,\n");
     for (&object, layout) in &plan.layouts {
         if plan.list_error_descriptor(object).is_some() {
             continue;
@@ -741,7 +732,7 @@ pub(super) struct LayoutIds {
     pub lists: BTreeMap<Repr, usize>,
 }
 pub(super) fn rt_descriptors() -> usize {
-    17
+    18
 }
 
 impl Plan<'_> {

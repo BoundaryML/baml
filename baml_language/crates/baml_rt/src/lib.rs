@@ -2,11 +2,13 @@
 //!
 //! One owner thread installs a heap and root task for the duration of a call.
 //! No managed pointer may escape that call's owned result boundary.
+pub mod assertions;
 pub mod bigint;
 pub mod bytes;
 pub mod callbacks;
 pub mod calls;
 pub mod closures;
+pub mod exceptions;
 pub mod format;
 pub mod globals;
 pub mod json;

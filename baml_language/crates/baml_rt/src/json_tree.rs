@@ -216,6 +216,13 @@ impl Config {
             }
         }
         Box::new(Error {
+            telemetry_history: Default::default(),
+            thrown_value: None,
+            exit_code: None,
+            context: 0,
+            cause: 0,
+            trace: None,
+            diagnostic_value: None,
             telemetry_at: None,
             telemetry_caught: None,
             telemetry_raise: None,

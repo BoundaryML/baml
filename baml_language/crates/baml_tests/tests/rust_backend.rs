@@ -1004,10 +1004,10 @@ fn rt_source_bytes_and_diagnostics() {
             entry,
         );
         let expected = match name {
-            "trees" => "4a0e98fe5201b0f6da46c7ee1441edd5527c1055f0d02b6920bad716399caa87",
-            "richards" => "7748c27d7db47682fc8fe6bc4b69f4f9e17209fe697b6f2622ae5ed10f7804e7",
-            "agent" => "391f8b43a8453fdaa2141ca0ac4f05757acb516bf4c4b1caf5745f27368d7523",
-            "initializer" => "4b26e9226fdeae11c541dc7ad8f6a32ff1a9530b3326f2060e67113cb289b693",
+            "trees" => "a4f32b6577ac59fdf3a27977786bb488811ca34a6d484ba1bf8207b0654852d6",
+            "richards" => "41950d33fefc3be62f2909cd6e8dd0c9d32ae85562392156dbf7ebfb2de10440",
+            "agent" => "635db66ac40c94230fa38838c7657c24785ed7d5897ad843e721dbc6297eee17",
+            "initializer" => "e615a5401434c92f6660c1be2143813d88be30db2246f40ea5e6d7229d13a17a",
             _ => "",
         };
         if expected.is_empty() {
@@ -2239,4 +2239,36 @@ function main() -> int {
     if let Err(error) = result {
         assert!(error.starts_with("unsupported in baml_rt:"), "{error}");
     }
+}
+
+#[test]
+fn rt_typed_exceptions_and_assertion_bodies_are_admitted() {
+    let source = include_str!("../rust_diff/exceptions/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("exceptions.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    for (entry, function) in user_functions(&program) {
+        if ![
+            "main",
+            "uncaught",
+            "assertion_failure",
+            "contexts",
+            "chains",
+            "scalars",
+        ]
+        .contains(&function.name().as_str())
+        {
+            continue;
+        }
+        let generated = baml_db::rust_backend::compile_rt(
+            &db,
+            db.workspace_root().unwrap(),
+            &program,
+            OptLevel::Two,
+            entry,
+        )
+        .unwrap();
+        assert!(generated.contains("rt::exceptions::thrown"));
+    }
+    assert_eq!(fingerprint(&program), before);
 }

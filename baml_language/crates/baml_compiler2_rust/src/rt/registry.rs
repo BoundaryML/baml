@@ -74,6 +74,8 @@ pub(super) trait Feature {
 }
 
 const FEATURES: &[&dyn Feature] = &[
+    &super::exceptions::Feature,
+    &super::assertions::Feature,
     &stack::Feature,
     &globals::Feature,
     &closures::Feature,

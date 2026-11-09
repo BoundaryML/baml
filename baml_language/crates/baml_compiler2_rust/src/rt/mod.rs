@@ -85,6 +85,10 @@ struct Plan<'a> {
     heads: BTreeMap<baml_type::typetag::TypeTag, baml_type::DeclName>,
     dispatches: BTreeMap<(usize, usize), Vec<(Repr, usize)>>,
     function_frames: BTreeMap<usize, Vec<(String, RuntimeTy)>>,
+    frozen_types: BTreeMap<String, RuntimeTy>,
+    frozen_strings: BTreeSet<usize>,
+    type_renderer: Option<usize>,
+    error_contexts: bool,
     structural_strings: bool,
     structural_string_calls: BTreeSet<(usize, usize, Repr)>,
     string_overrides: BTreeMap<Repr, usize>,
@@ -137,6 +141,7 @@ struct ProgramEmission<'a, 'db> {
 }
 
 mod admission;
+mod assertions;
 mod body;
 mod builtins;
 mod call_cost;
@@ -147,6 +152,7 @@ mod diagnostics;
 mod dispatch;
 mod driver;
 mod errors;
+mod exceptions;
 mod expressions;
 mod host;
 mod json;
