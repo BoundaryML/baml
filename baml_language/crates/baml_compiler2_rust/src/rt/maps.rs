@@ -62,6 +62,7 @@ pub(super) fn slot_type(
         Repr::Tagged | Repr::Dyn(_) => "rt::Dyn".into(),
         Repr::Str => "rt::strings::Str".into(),
         Repr::Bigint => "rt::maps::Pointer<BIGINT_TAG>".into(),
+        Repr::Reflected => "rt::maps::Pointer<REFLECT_TAG>".into(),
         Repr::Ptr(c) => format!("rt::maps::Pointer<{}>", descriptors[&c] + 3),
         r if r.pointer() => format!("rt::maps::Pointer<{}>", lists[&r] + 3),
         _ => return Err(no("map slot representation")),

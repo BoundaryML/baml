@@ -16,7 +16,7 @@ unsafe fn field(pointer: usize, field: &Field) -> Dyn {
         },
     }
 }
-unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
+pub(crate) unsafe fn children(shapes: &[Shape], value: Dyn) -> Vec<Dyn> {
     if value.tag < 3 || value.tag == 4294967294 || value.payload == 0 {
         return vec![];
     }

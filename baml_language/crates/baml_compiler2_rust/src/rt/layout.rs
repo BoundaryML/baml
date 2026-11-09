@@ -70,6 +70,7 @@ impl Plan<'_> {
     }
     pub(super) fn record(&mut self, repr: Repr) -> Gen<()> {
         match repr {
+            Repr::Reflected => self.reflected = true,
             Repr::Bigint => self.bigints = true,
             Repr::Future => self.task_support = true,
             Repr::ListFuture(_) => {
@@ -144,6 +145,7 @@ impl Plan<'_> {
             RuntimeTy::Unknown | RuntimeTy::TypeAlias(_) => Repr::Tagged,
             RuntimeTy::Future(..) => Repr::Future,
             RuntimeTy::Uint8Array => Repr::Bytes,
+            RuntimeTy::Type => Repr::Reflected,
             RuntimeTy::RustType => Repr::Opaque,
             RuntimeTy::Function { .. } => Repr::Closure,
             RuntimeTy::Map { key, value }
@@ -269,6 +271,7 @@ impl Plan<'_> {
             T::Future(..) => Repr::Future,
             T::Unknown | T::TypeAlias(_) => Repr::Tagged,
             T::Uint8Array => Repr::Bytes,
+            T::Type => Repr::Reflected,
             T::RustType => Repr::Opaque,
             T::Enum(head) | T::EnumVariant(head, _)
                 if self.program.packages.iter().any(|p| {
@@ -392,6 +395,8 @@ impl Plan<'_> {
         // Runtime-produced exception descriptors are reserved. The runtime supports
         // wildcard panic exclusion and user-defined typed catches; never emit a
         // second, incompatible layout/tag for a builtin exception class.
+        // `AssertionFailed` is only ever constructed by BAML source (`assert.*`),
+        // never by the runtime, so its ordinary layout is the only one.
         if self.program.packages.iter().any(|package| {
             package.name == "baml"
                 && package
@@ -399,7 +404,10 @@ impl Plan<'_> {
                     .contains(&u32::try_from(object).expect("object index"))
         }) && self.list_error_descriptor(object).is_none()
             && ((class.path.to_string().starts_with("panics.")
-                && class.path.to_string() != "panics.UserPanic")
+                && !matches!(
+                    class.path.to_string().as_str(),
+                    "panics.UserPanic" | "panics.AssertionFailed"
+                ))
                 || matches!(
                     class.path.to_string().as_str(),
                     "json.ParseError" | "json.DecodeError"
@@ -520,6 +528,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
         .max()
         .unwrap_or(next_class);
     let after_descriptors = after_lists
+        + usize::from(plan.reflected)
         + usize::from(plan.task_support)
         + if plan.closure_descriptors().is_some() {
             2
@@ -575,6 +584,7 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
                             Repr::Str => 3,
                             Repr::Opaque => 18,
                             Repr::Bytes => 19,
+                            Repr::Reflected => plan.reflection_descriptor().unwrap() + 3,
                             Repr::Cell => plan.closure_descriptors().unwrap().0 + 3,
                             Repr::Closure => plan.closure_descriptors().unwrap().1 + 3,
                             Repr::Bigint => plan.bigint_descriptor() + 3,
@@ -671,7 +681,13 @@ pub(super) fn emit(mut out: &mut String, plan: &Plan<'_>) -> Gen<LayoutIds> {
     if let Some(future) = plan.future_descriptor() {
         writeln!(out, "rt::tasks::future_descriptor({}),", future + 3).unwrap();
     }
+    if let Some(reflection) = plan.reflection_descriptor() {
+        writeln!(out, "rt::reflection::descriptor({}),", reflection + 3).unwrap();
+    }
     out.push_str("];\n");
+    if let Some(reflection) = plan.reflection_descriptor() {
+        writeln!(out, "const REFLECT_TAG:u64={};", reflection + 3).unwrap();
+    }
     if plan.bigints {
         writeln!(
             out,
@@ -756,6 +772,11 @@ impl Plan<'_> {
     pub(super) fn future_descriptor(&self) -> Option<usize> {
         self.task_support
             .then(|| self.descriptor_tail() + usize::from(self.closure_descriptors().is_some()) * 2)
+    }
+    pub(super) fn reflection_descriptor(&self) -> Option<usize> {
+        self.reflected.then(|| self.descriptor_tail()
+            + usize::from(self.closure_descriptors().is_some()) * 2
+            + usize::from(self.task_support))
     }
 }
 

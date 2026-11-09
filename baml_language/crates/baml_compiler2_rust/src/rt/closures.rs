@@ -77,7 +77,7 @@ impl Plan<'_> {
                         .is_some_and(|(p, _)| matches!(p,Place::Local(l) if l.0 == i))
                 })
             {
-                return Err(no("runtime type value"));
+                return Ok(Repr::Reflected);
             }
 
             let mut code = None;
@@ -773,6 +773,7 @@ pub(super) fn capture_type(ty: &baml_type::RuntimeTy<usize>) -> Gen<String> {
         T::Float => "Float".into(),
         T::Enum(id) => format!("Enum(CAPTURE_D{id})"),
         T::Bigint => "Bigint".into(),
+        T::Type => "Type".into(),
         T::Int => "Int".into(),
         T::Bool => "Bool".into(),
         T::String => "String".into(),

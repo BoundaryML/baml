@@ -64,10 +64,16 @@ pub(super) fn collect<'db>(
         })?;
         let MirFunctionKind::Bytecode(body) = &mir.kind else {
             let name = plan.index.builtin_path(object);
-            if !baml_builtins2_codegen::supports_rt(name) && !super::callbacks::native(name) {
+            if !baml_builtins2_codegen::supports_rt(name)
+                && !super::callbacks::native(name)
+                && !super::reflection::native(name)
+            {
                 return Err(no(name));
             }
-            if !super::callbacks::native(name) {
+            if super::reflection::native(name) {
+                let name = name.to_owned();
+                super::reflection::prepare_native(plan, &name)?;
+            } else if !super::callbacks::native(name) {
                 let name = name.to_owned();
                 super::provider::prepare_types(plan, &name)?;
                 builtins.insert(name);

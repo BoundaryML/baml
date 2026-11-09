@@ -74,6 +74,7 @@ pub(super) trait Feature {
 }
 
 const FEATURES: &[&dyn Feature] = &[
+    &super::reflection::Feature,
     &super::calendar::Feature,
     &super::random::Feature,
     &super::native::Feature,
@@ -103,6 +104,7 @@ const FEATURES: &[&dyn Feature] = &[
     &super::json_tree::Feature,
     &super::generics::Feature,
     &loop_ranges::Feature,
+    &super::equality::Feature,
     &calls::Feature,
 ];
 

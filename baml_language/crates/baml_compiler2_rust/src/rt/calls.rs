@@ -152,7 +152,9 @@ impl Emitter<'_, '_> {
                     if values.len() != 2 {
                         return Err(no("equality arity"));
                     }
-                    if let Some(other) = values.iter().find(|v| v.1 != Repr::Null)
+                    if values.iter().all(|v| v.1 == Repr::Null) {
+                        ("true".into(), Repr::Bool)
+                    } else if let Some(other) = values.iter().find(|v| v.1 != Repr::Null)
                         && values.iter().any(|v| v.1 == Repr::Null)
                     {
                         (Self::null_test(other), Repr::Bool)

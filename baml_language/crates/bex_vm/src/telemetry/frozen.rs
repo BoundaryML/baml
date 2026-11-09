@@ -57,3 +57,43 @@ pub fn declarations(
         })
         .collect())
 }
+
+/// Render closed-world type values exactly as the interpreter's
+/// `reflect.Type.to_string` does: every declaration head is bound to its
+/// compile-time object in a private image and named by the VM's own display.
+/// Heads carry `TypeTag::of_static_index(object)`, as produced by the native
+/// emitter's anchoring.
+pub fn type_displays(
+    program: &bex_vm_types::Program,
+    types: &[bex_vm_types::RealizedTy],
+) -> Result<Vec<String>, String> {
+    program.validate().map_err(|error| error.to_string())?;
+    let mut image: Vec<_> = program.objects.iter().cloned().collect();
+    bex_vm_types::types::box_compile_time_floats(&mut image, &program.globals);
+    crate::prepare_compact_code(&mut image, &program.globals);
+    let (heap, _packages) =
+        crate::package_load::build_heap_with_packages(image, &program.packages, program.root);
+    types
+        .iter()
+        .map(|ty| {
+            let mut ty = ty.clone();
+            let mut missing = None;
+            ty.visit_heads_mut(&mut |head: &mut bex_vm_types::TypeHead| {
+                match head.tag().static_index() {
+                    Some(index) if index < program.objects.len() => {
+                        let mut bound = bex_vm_types::TypeHead::unresolved(head.tag());
+                        bound.resolve(heap.compile_time_ptr(index));
+                        *head = bound;
+                    }
+                    _ => missing = Some(head.tag()),
+                }
+            });
+            match missing {
+                Some(tag) => Err(format!("type head {} has no declaration", tag.as_i64())),
+                // The private image has no mutator or collector; declarations
+                // stay pinned while their names are copied out.
+                None => Ok(ty.to_string()),
+            }
+        })
+        .collect()
+}

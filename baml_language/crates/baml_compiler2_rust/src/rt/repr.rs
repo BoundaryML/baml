@@ -15,6 +15,7 @@ pub(super) enum Repr {
     ListStr,
     ListListStr,
     Type(usize),
+    Reflected,
     ListPtr(usize),
     Dyn(usize),
     Tagged,
@@ -106,6 +107,7 @@ impl Repr {
                 | Self::Bigint
                 | Self::Bytes
                 | Self::Opaque
+                | Self::Reflected
                 | Self::Ptr(_)
                 | Self::List(_)
                 | Self::ListInt

@@ -36,7 +36,7 @@ fn format_tokens(tokens: &proc_macro2::TokenStream) -> String {
 
 mod triage;
 pub use triage::{
-    BuiltinGroup, RtDisposition, RtStrategy, classify_builtin, implementation_strategy,
+    BuiltinGroup, RtDisposition, RtStrategy, classify_builtin, implementation_strategy, supports_rt_reflection,
     native_inventory,
 };
 

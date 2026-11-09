@@ -78,6 +78,21 @@ pub(super) fn emit(
             });
         }
     }
+    for ty in &plan.reflection_types {
+        let realized = baml_compiler2_mir::RealizedTy::try_from(ty.clone())
+            .map_err(|_| no("reflected capture declaration"))?;
+        let anchored = plan.index.anchor(&baml_compiler2_mir::TyTemplate::from(realized))
+            .ok_or_else(|| no("reflected capture identity"))?;
+        anchored.substitute_symbolic(&[]).visit_heads(&mut |head| {
+            for (object, declaration) in plan.program.objects.iter().enumerate() {
+                if matches!(declaration,Object::Class(class) if class.type_tag == head.tag())
+                    || matches!(declaration,Object::Enum(enumeration) if enumeration.type_tag == head.tag())
+                {
+                    extra.insert(object);
+                }
+            }
+        });
+    }
     // Empty callable lists can mention classes never allocated by the entry.
     // Their type captures still require the declaration, without a heap layout.
     let mut signature_declarations = BTreeSet::new();
@@ -149,6 +164,8 @@ pub(super) fn emit(
         };
         let shape = if plan.bigints && desc == plan.bigint_descriptor() {
             "Bigint".to_owned()
+        } else if plan.reflection_descriptor() == Some(desc) {
+            "Reflected(REFLECT_TYPES)".to_owned()
         } else if plan.future_descriptor() == Some(desc) {
             "Future".to_owned()
         } else if plan
@@ -275,6 +292,17 @@ pub(super) fn capture_wire_type(plan: &Plan<'_>, ty: &bex_vm_types::RuntimeTy) -
     use bex_vm_types::RuntimeTy as T;
     let member = match ty {
         T::Bigint => "Bigint".into(),
+        T::Type => "Type".into(),
+        T::Future(value, error) => format!("Future(&{},&{})",capture_wire_type(plan,value)?,capture_wire_type(plan,error)?),
+        T::Function {params,ret,throws} => {
+            let params = params.iter().map(|param| Ok(format!(
+                "rt::telemetry::capture::Parameter{{name:{:?},optional:{},ty:&{}}}",
+                param.name.as_ref().map(|name|name.as_str()),
+                param.mode == baml_type::FunctionParamMode::Optional,
+                capture_wire_type(plan,&param.ty)?
+            ))).collect::<Gen<Vec<_>>>()?.join(",");
+            format!("Function{{params:&[{params}],ret:&{},throws:&{}}}",capture_wire_type(plan,ret)?,capture_wire_type(plan,throws)?)
+        },
         T::Int => "Int".into(),
         T::Literal(lit, f) => match lit {
             baml_type::Literal::Int(v) => {
@@ -407,6 +435,7 @@ fn capture_element(
 ) -> Gen<(usize, String)> {
     Ok(match repr {
         Repr::Int => (0, "Int".into()),
+        Repr::Reflected => (plan.reflection_descriptor().unwrap() + 3, "Type".into()),
         Repr::Bigint => (plan.bigint_descriptor() + 3, "Bigint".into()),
         Repr::Bool => (1, "Bool".into()),
         Repr::Float => ((u32::MAX - 1) as usize, "Float".into()),
@@ -484,6 +513,7 @@ fn capture_list_element(
 pub(super) fn capture_repr(plan: &Plan<'_>, repr: Repr) -> Gen<String> {
     let prefix = "rt::telemetry::capture::Type::";
     Ok(match repr {
+        Repr::Reflected => format!("{prefix}Type"),
         Repr::Int => format!("{prefix}Int"),
         Repr::Float => format!("{prefix}Float"),
         Repr::Bool => format!("{prefix}Bool"),
@@ -511,6 +541,9 @@ pub(super) fn capture_dyn(
         return Ok(value.to_owned());
     }
     let (tag, raw) = match repr {
+        Repr::Reflected => {
+            return Ok(format!("rt::Dyn{{tag:REFLECT_TAG,payload:({value}).as_raw() as u64}}"));
+        }
         Repr::Bigint => {
             return Ok(format!(
                 "rt::Dyn{{tag:BIGINT_TAG,payload:({value}).as_raw() as u64}}"

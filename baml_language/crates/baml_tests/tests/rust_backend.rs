@@ -1606,6 +1606,28 @@ fn rt_generated_terminal_cancelled_error() {
 }
 
 #[test]
+fn rt_static_type_values_and_kind_views_preserve_bytecode() {
+    let source = include_str!("../rt_fixtures/reflection/baml_src/main.baml");
+    let db = baml_test_support::setup_multi_file_db(&[("reflection.baml", source)]);
+    let program = lower(&db, OptLevel::Two);
+    let before = fingerprint(&program);
+    let (entry, _) = user_functions(&program)
+        .find(|(_, function)| function.name() == "RtNativeReflection")
+        .unwrap();
+    let source = baml_db::rust_backend::compile_rt(
+        &db, db.workspace_root().unwrap(), &program, OptLevel::Two, entry,
+    ).unwrap();
+    assert!(source.contains("rt::reflection::StaticType"));
+    assert!(source.contains("rt::reflection::descriptor("));
+    assert!(source.contains("Shape::Reflected(REFLECT_TYPES)"));
+    assert!(!source.contains("BexVm"));
+    assert_eq!(before, fingerprint(&program));
+    std::fs::write(
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("rt-reflection.rs"), source,
+    ).unwrap();
+}
+
+#[test]
 fn rt_host_scalars_io_and_statement_log_sites() {
     for source in [
         include_str!("../../../tools/speedtest/workloads/compute/nbody-20k/main.baml"),

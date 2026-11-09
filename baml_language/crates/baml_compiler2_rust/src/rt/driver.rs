@@ -64,6 +64,8 @@ fn compile(
         enums: BTreeSet::new(),
         specialized_calls: BTreeMap::new(),
         type_codes: Vec::new(),
+        reflected: false,
+        reflection_types: Vec::new(),
         next_object: program.objects.len(),
         class_instances: Vec::new(),
         concrete_types: Vec::new(),
@@ -91,11 +93,13 @@ fn compile(
         builtins,
         json_decode,
     } = admission::collect(db, root, opt, entry, benchmark, &mut plan)?;
+    super::reflection::collect(&mut plan, &all, &reached)?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
     builtins::emit(&mut out, &builtins)?;
     let layout::LayoutIds { descriptors, lists } = layout::emit(&mut out, &plan)?;
+    super::reflection::emit(&mut out, db, &plan)?;
     super::regex::emit(&mut out, &plan, &descriptors, &lists, &builtins)?;
     let host_function = |name: &str| {
         program

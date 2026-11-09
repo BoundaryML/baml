@@ -41,6 +41,7 @@ impl Emitter<'_, '_> {
             Repr::Closure => Ok(self.plan.closure_descriptors().unwrap().1 + 3),
             Repr::Opaque => Ok(18),
             Repr::Bytes => Ok(19),
+            Repr::Reflected => Ok(self.plan.reflection_descriptor().unwrap() + 3),
             Repr::Future => Ok(self.plan.future_descriptor().unwrap() + 3),
             Repr::Ptr(c) => Ok(self.descriptors[&c] + 3),
             r @ (Repr::List(_)
@@ -67,6 +68,9 @@ impl Emitter<'_, '_> {
     }
     pub(super) fn coerce(&self, value: (String, Repr), target: Repr) -> Gen<String> {
         let (value, source) = value;
+        if matches!(source, Repr::Type(_)) && matches!(target, Repr::Reflected | Repr::Tagged) {
+            return self.coerce((value, Repr::Reflected), target);
+        }
         if source == target
             || (source == Repr::Null && target.pointer())
             || (matches!(source, Repr::Dyn(_)) && target == Repr::Tagged)

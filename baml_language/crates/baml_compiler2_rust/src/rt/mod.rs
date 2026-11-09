@@ -75,6 +75,8 @@ struct Plan<'a> {
     enums: BTreeSet<usize>,
     specialized_calls: BTreeMap<(usize, usize), usize>,
     type_codes: Vec<baml_compiler2_mir::TyTemplate>,
+    reflected: bool,
+    reflection_types: Vec<RuntimeTy>,
     next_object: usize,
     class_instances: Vec<(usize, Vec<bex_vm_types::RuntimeTy>, usize)>,
     concrete_types: Vec<RuntimeTy>,
@@ -147,9 +149,11 @@ mod json_scalars;
 mod json_tree;
 mod layout;
 mod lists;
+mod equality;
 mod loop_ranges;
 mod places;
 mod repr;
+mod reflection;
 mod stack;
 mod statements;
 mod telemetry;

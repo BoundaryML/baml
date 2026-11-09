@@ -42,6 +42,7 @@ pub struct Declaration {
 }
 pub enum Shape {
     String,
+    Reflected(&'static [crate::reflection::StaticType]),
     Bigint,
     Uint8Array,
     RustType,
@@ -80,6 +81,7 @@ pub enum Shape {
 }
 pub use baml_type::Freshness;
 pub enum Type {
+    Type,
     Null,
     Never,
     Unknown,
@@ -123,6 +125,7 @@ pub struct Parameter {
 impl Type {
     fn owned(&self, leaves: &mut Leaves<'_>, carried: &mut Carried) -> OwnedType {
         match self {
+            Self::Type => OwnedType::Type,
             Self::Null => OwnedType::Null,
             Self::Never => OwnedType::Never,
             Self::Unknown => OwnedType::Unknown,
@@ -339,6 +342,11 @@ impl Scratch {
             _ => {}
         }
         let shape = &shapes[usize::try_from(value.tag - 3).expect("descriptor index")];
+        if let Shape::Reflected(types) = shape {
+            let ty = unsafe { types[crate::reflection::index(value.payload as usize)].ty }
+                .owned(leaves, &mut self.carried);
+            return SnapshotValue::Type(leaves.ty(ty));
+        }
         if let Shape::Enum { variants, .. } = shape {
             let result = match self.declaration(shapes, leaves, value.tag, depth + 1) {
                 SnapshotValue::Object(declaration) => {
