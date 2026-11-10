@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, type ReactNode, useContext, useState } from 'react';
+import { LAMB_PATHS } from '@/components/home/lamb';
 import {
   LangIcon,
   LangPicker,
@@ -9,6 +10,7 @@ import {
 import { BOOK } from '@/components/home/links';
 import { ArchitecturePage } from './architecture';
 import { LANGS, SAMPLES } from './code';
+import { Start } from './start';
 
 // The /adopt page: the homepage's three ways in, small, then each one in full, then how BAML runs.
 // The language picked anywhere on the page is the language everywhere on it.
@@ -24,6 +26,23 @@ const Lang = createContext<{ at: number; setAt: (i: number) => void }>({
 // Highlighted HTML for every sample, keyed by its source, made on the server by the page.
 const Html = createContext<Record<string, string>>({});
 
+/** The BAML lamb, at the size of the language logos, for the BAML file. */
+function Lamb() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-3.5 w-auto shrink-0 text-clover"
+      fill="currentColor"
+      viewBox="0 0 356 422"
+    >
+      {LAMB_PATHS.map((d) => (
+        <path d={d} key={d} />
+      ))}
+    </svg>
+  );
+}
+
+/** One file in the figure: its name, then its code. The figure draws the frame around both. */
 function Pane({
   children,
   file,
@@ -31,55 +50,27 @@ function Pane({
 }: {
   children: string;
   file: string;
-  // The language the file is in, for its logo.
+  // The language the file is in, for its logo; a BAML file gets the lamb.
   lang?: string;
 }) {
   const html = useContext(Html)[children];
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-rule bg-raised">
-      <div className="flex h-10 items-center border-b border-rule px-3.5">
-        <span className="flex items-center gap-2 font-mono text-[12px] text-ink-2">
-          {lang && <LangIcon className="size-3.5" name={lang} />}
-          {file}
-        </span>
-      </div>
+    <div className="flex min-w-0 flex-col">
+      <span className="flex items-center gap-2 px-4 pt-3 font-mono text-[11.5px] text-muted">
+        {lang ? <LangIcon className="size-3.5" name={lang} /> : <Lamb />}
+        {file}
+      </span>
       {html ? (
         <div
-          className="flex-1 overflow-x-auto px-3.5 py-3 font-mono text-[12px] leading-[1.65] [&_pre]:!bg-transparent [&_code]:font-mono"
+          className="flex-1 overflow-x-auto px-4 pt-2 pb-4 font-mono text-[12.5px] leading-[1.65] [&_pre]:!bg-transparent [&_code]:font-mono"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki's output for our own fixed samples
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
-        <pre className="flex-1 overflow-x-auto px-3.5 py-3 font-mono text-[12.5px] leading-[1.65] text-body">
+        <pre className="flex-1 overflow-x-auto px-4 pt-2 pb-4 font-mono text-[12.5px] leading-[1.65] text-body">
           {children}
         </pre>
       )}
-    </div>
-  );
-}
-
-/** The incremental route as one picture: the BAML function on the left, the code that calls it on
- *  the right in whichever language you pick, and the one command between them. */
-function Incremental() {
-  const { at, setAt } = useContext(Lang);
-  const lang = LANGS[at];
-  const sample = SAMPLES[useContext(Sample).at];
-  return (
-    <div>
-      <LangPicker at={at} setAt={setAt} />
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <Pane file={`baml_src/${sample.file}`}>{sample.baml}</Pane>
-        <Pane file={lang.file} lang={lang.name}>
-          {sample.calls[lang.name] ?? lang.call}
-        </Pane>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-rule bg-raised px-3.5 py-2.5 font-mono text-[12.5px]">
-        <span className="text-ink">
-          <span className="text-muted">$ </span>baml generate add {lang.target}{' '}
-          &amp;&amp; baml generate
-        </span>
-        <span className="text-muted">then {lang.install}</span>
-      </div>
     </div>
   );
 }
@@ -89,36 +80,53 @@ const Sample = createContext<{ at: number; setAt: (i: number) => void }>({
   setAt: () => {},
 });
 
-/** The list of samples, beside the incremental route's text: picking one swaps the code on the right. */
-function SamplePicker() {
-  const { at, setAt } = useContext(Sample);
+/** The incremental route as one framed picture: what to try and your language along the top, the
+ *  BAML function and the code that calls it side by side, and the one command along the bottom. */
+function Incremental() {
+  const { at, setAt } = useContext(Lang);
+  const picked = useContext(Sample);
+  const lang = LANGS[at];
+  const sample = SAMPLES[picked.at];
   return (
-    <div className="mt-6">
-      <p className="font-mono text-[12px] text-muted">Try it with</p>
-      <div className="mt-2 space-y-1.5">
-        {SAMPLES.map((sm, i) => {
-          const on = i === at;
-          return (
-            <button
-              aria-pressed={on}
-              className={`focus-ring block w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors ${on ? 'border-clover bg-clover/10' : 'border-white/10 hover:border-white/25'}`}
-              key={sm.name}
-              onClick={() => setAt(i)}
-              type="button"
-            >
-              <span
-                className={`block text-[15px] ${on ? 'text-head' : 'text-ink-2'}`}
-              >
-                {sm.name}
-              </span>
-              <span className="mt-0.5 block text-[13px] leading-snug text-muted">
-                {sm.note}
-              </span>
-            </button>
-          );
-        })}
+    <figure>
+      <div className="overflow-hidden rounded-xl border border-rule bg-raised">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rule px-2 py-1.5">
+          <div className="flex flex-wrap items-center gap-0.5">
+            {SAMPLES.map((sm, i) => {
+              const on = i === picked.at;
+              return (
+                <button
+                  aria-pressed={on}
+                  className={`focus-ring h-7 cursor-pointer rounded-md px-2.5 text-[13px] transition-colors ${on ? 'bg-white/10 text-head' : 'text-muted hover:text-ink'}`}
+                  key={sm.name}
+                  onClick={() => picked.setAt(i)}
+                  type="button"
+                >
+                  {sm.name}
+                </button>
+              );
+            })}
+          </div>
+          <LangPicker at={at} compact setAt={setAt} />
+        </div>
+        <div className="grid divide-rule max-lg:divide-y lg:grid-cols-2 lg:divide-x">
+          <Pane file={`baml_src/${sample.file}`}>{sample.baml}</Pane>
+          <Pane file={lang.file} lang={lang.name}>
+            {sample.calls[lang.name] ?? lang.call}
+          </Pane>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule px-4 py-2.5 font-mono text-[12.5px]">
+          <span className="text-ink">
+            <span className="text-muted">$ </span>baml generate add{' '}
+            {lang.target} &amp;&amp; baml generate
+          </span>
+          <span className="text-muted">then {lang.install}</span>
+        </div>
       </div>
-    </div>
+      <figcaption className="mt-3 text-[14px] text-muted">
+        {sample.note}
+      </figcaption>
+    </figure>
   );
 }
 
@@ -141,23 +149,35 @@ function EarlyAccess({ children }: { children: ReactNode }) {
   );
 }
 
-const PRODUCTION: Step = {
-  body: (
-    <>
-      BAML is open source (Apache 2.0), and on your machine it records every
-      call with no account. For hyperobservability in production,{' '}
-      <EarlyAccess>get early access</EarlyAccess> to Boundary Cloud.
-    </>
-  ),
-};
+/** What BAML costs and where its recordings go, as three plain rows: the same for every route that
+ *  runs BAML. */
+function Facts() {
+  const rows: [string, ReactNode][] = [
+    ['Open source', 'Apache 2.0'],
+    ['Hyperobservability locally', 'SQLite'],
+    [
+      'Hyperobservability in production',
+      <EarlyAccess key="cloud">Boundary Cloud, in early access</EarlyAccess>,
+    ],
+  ];
+  return (
+    <dl className="mt-6 divide-y divide-rule border-y border-rule">
+      {rows.map(([k, v]) => (
+        <div className="py-2.5" key={k}>
+          <dt className="text-[12.5px] text-muted">{k}</dt>
+          <dd className="mt-0.5 text-[14.5px] text-ink">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 const ROUTES: {
-  after: string;
   id: string;
-  // Something under the route's text, in the space beside its steps.
-  aside?: ReactNode;
-  // A route can draw its own first step, ahead of the listed ones.
-  custom?: ReactNode;
+  // A route can show one picture in place of steps.
+  figure?: ReactNode;
+  // Shows the open source, local and production rows under the route's text.
+  facts?: boolean;
   steps: Step[];
   title: string;
   recommended?: boolean;
@@ -166,19 +186,15 @@ const ROUTES: {
   when: string;
 }[] = [
   {
-    after:
-      'Those functions get hyperobservability. Boundary can trace the rest of your code too, so you can move your whole tracing stack off OTel.',
-    aside: <SamplePicker />,
-    custom: <Incremental />,
+    facts: true,
+    figure: <Incremental />,
     id: 'incremental',
     recommended: true,
-    steps: [PRODUCTION],
+    steps: [],
     title: 'Adopt BAML incrementally',
     when: 'BAML generates a typed SDK for most languages, so your app calls it like its own code.',
   },
   {
-    after:
-      'Every service lands in Boundary Cloud: one place to see and query what your backend does.',
     id: 'otel',
     steps: [
       {
@@ -205,8 +221,7 @@ const ROUTES: {
     when: 'Works with whatever your backend is written in.',
   },
   {
-    after:
-      'Everything you write is hyperobservable from the first run. Nothing else to deploy next to it.',
+    facts: true,
     id: 'rewrite',
     steps: [
       { body: 'Start a project.', code: 'baml new my-service' },
@@ -218,17 +233,14 @@ const ROUTES: {
         body: 'Ship it as one self-contained binary, no host language.',
         code: 'baml pack -f handle_ticket',
       },
-      PRODUCTION,
     ],
     title: 'Write new services in BAML',
     warning: {
-      label: 'Why not rewrite yet',
+      label: 'Don’t rewrite your codebase in BAML yet',
       text: (
         <>
-          We don&apos;t recommend rewriting existing services yet. BAML&apos;s
-          standard library and package ecosystem are still young, and a rewrite
-          trades code that works for risk. Move the functions that benefit most
-          first, and save full BAML for new services.
+          Its standard library and package ecosystem are still young. Keep the
+          code that works, and move over only the functions that gain the most.
         </>
       ),
     },
@@ -247,61 +259,50 @@ function StepNumber({ n }: { n: number }) {
 function Route({ r }: { r: (typeof ROUTES)[number] }) {
   return (
     <div
-      className="grid scroll-mt-24 gap-6 border-t border-rule py-10 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:gap-12"
+      className="grid scroll-mt-24 gap-8 border-t border-rule py-12 md:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] md:gap-14"
       id={r.id}
     >
       <div>
         {r.recommended && (
-          <span className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-clover/60 px-2.5 py-1 text-[12px] font-medium text-clover">
+          <span className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-clover">
             <span className="size-1.5 rounded-full bg-clover" />
             Recommended
           </span>
         )}
         <h3 className="v4-h3 text-head">{r.title}</h3>
         <p className="mt-3 v4-body text-ink-2">{r.when}</p>
-        {r.aside}
         {r.warning && (
-          <p className="mt-4 rounded-lg border border-[#f5c451]/40 bg-[#f5c451]/[0.06] px-3.5 py-3 text-[14px] leading-snug text-ink-2">
-            <span className="font-mono text-[11px] uppercase tracking-wider text-[#f5c451]">
-              {r.warning.label}
-            </span>
-            <br />
+          <p className="mt-5 border-l-2 border-[#f5c451]/60 pl-3.5 text-[14px] leading-relaxed text-ink-2">
+            <span className="font-medium text-[#f5c451]">
+              {r.warning.label}.
+            </span>{' '}
             {r.warning.text}
           </p>
         )}
+        {r.facts && <Facts />}
       </div>
-      <div>
-        <ol className="space-y-4">
-          {r.custom && (
-            <li className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3">
-              <StepNumber n={1} />
-              <div className="min-w-0">{r.custom}</div>
-            </li>
-          )}
-          {r.steps.map((s, i) => (
-            <li
-              className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3"
-              key={s.code ?? String(i)}
-            >
-              <StepNumber n={i + (r.custom ? 2 : 1)} />
-              <div className="min-w-0">
-                <p className="v4-body text-body">{s.body}</p>
-                {s.code && (
-                  <pre className="mt-2 overflow-x-auto rounded-lg border border-rule bg-raised px-3.5 py-2.5 font-mono text-[13px] leading-[1.6] text-ink">
-                    {s.code}
-                  </pre>
-                )}
-              </div>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-5 rounded-lg border border-clover/40 bg-clover/[0.06] px-4 py-3 text-[15px] leading-snug text-head">
-          <span className="font-mono text-[12px] uppercase tracking-wider text-clover">
-            What you get
-          </span>
-          <br />
-          {r.after}
-        </p>
+      <div className="min-w-0">
+        {r.figure}
+        {r.steps.length > 0 && (
+          <ol className="space-y-5">
+            {r.steps.map((s, i) => (
+              <li
+                className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3"
+                key={s.code ?? String(i)}
+              >
+                <StepNumber n={i + 1} />
+                <div className="min-w-0">
+                  <p className="v4-body text-body">{s.body}</p>
+                  {s.code && (
+                    <pre className="mt-2 overflow-x-auto rounded-lg border border-rule bg-raised px-3.5 py-2.5 font-mono text-[13px] leading-[1.6] text-ink">
+                      {s.code}
+                    </pre>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
     </div>
   );
@@ -320,18 +321,17 @@ export function AdoptGuide({ html }: { html: Record<string, string> }) {
             <h1 className="v4-h2 max-w-[22em] text-head">
               Adopting Boundary and BAML
             </h1>
-            <nav aria-label="On this page" className="mt-8 md:mt-10">
+            <Start />
+            <nav aria-label="On this page" className="mt-10 md:mt-14">
               <ol className="grid gap-px overflow-hidden rounded-xl border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   ...ROUTES.map((r) => ({
                     href: `#${r.id}`,
                     label: r.title,
-                    recommended: r.recommended,
                   })),
                   {
                     href: '#how-baml-runs',
                     label: 'How BAML runs',
-                    recommended: false,
                   },
                 ].map((item, i) => (
                   <li className="bg-ground" key={item.href}>
@@ -342,12 +342,7 @@ export function AdoptGuide({ html }: { html: Record<string, string> }) {
                       <span className="mt-0.5 font-mono text-[12px] text-muted">
                         {String(i + 1).padStart(2, '0')}
                       </span>
-                      <span className="flex-1">
-                        {item.label}
-                        {item.recommended && (
-                          <span className="ml-2 inline-block size-1.5 -translate-y-0.5 rounded-full bg-clover" />
-                        )}
-                      </span>
+                      <span className="flex-1">{item.label}</span>
                       <span
                         aria-hidden
                         className="text-muted transition-[translate] group-hover:translate-y-0.5"

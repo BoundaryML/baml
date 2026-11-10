@@ -49,8 +49,11 @@ export function LangIcon({
 const KEY = 'boundary-sdk-lang';
 const EVENT = 'boundary-sdk-lang';
 
+// The language shown before the visitor picks one.
+const DEFAULT = SDK_LANGS.findIndex((l) => l.name === 'Rust');
+
 // The choice for this page load, for when storage is blocked or full and can't hold it.
-let memory = 0;
+let memory = DEFAULT;
 
 function read() {
   try {
@@ -63,7 +66,7 @@ function read() {
 
 /** The visitor's language, pinned: picking it anywhere changes it everywhere, and it's remembered. */
 export function usePinnedLang(): [number, (i: number) => void] {
-  const [at, setLocal] = useState(0);
+  const [at, setLocal] = useState(DEFAULT);
   useEffect(() => {
     setLocal(read());
     const sync = () => setLocal(read());
@@ -90,11 +93,36 @@ export function usePinnedLang(): [number, (i: number) => void] {
 /** One pill per language, with its logo. */
 export function LangPicker({
   at,
+  compact = false,
   setAt,
 }: {
   at: number;
+  // Logos only, for a toolbar: the picked language also shows its name.
+  compact?: boolean;
   setAt: (i: number) => void;
 }) {
+  if (compact)
+    return (
+      <div className="flex items-center gap-0.5">
+        {SDK_LANGS.map((l, i) => {
+          const on = i === at;
+          return (
+            <button
+              aria-label={l.name}
+              aria-pressed={on}
+              className={`focus-ring flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[12.5px] transition-colors ${on ? 'bg-white/10 text-head' : 'text-muted hover:text-ink'}`}
+              key={l.name}
+              onClick={() => setAt(i)}
+              title={l.name}
+              type="button"
+            >
+              <LangIcon className="size-3.5" name={l.name} />
+              {on && <span aria-hidden>{l.name}</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {SDK_LANGS.map((l, i) => (
