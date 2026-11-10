@@ -43,6 +43,7 @@ pub(super) fn decode(
             json: super::json_alias_ty(vm),
         },
         plans,
+        slow_path_only: false,
     };
     let value = decoder.value(vm, ty).ok()?;
     decoder.parser.reader.finish().ok()?;
@@ -53,6 +54,9 @@ struct TextDecoder<'a, 'p> {
     /// Builds the `json` and `unknown` parts of the result.
     parser: Parser<'a>,
     plans: &'p mut Plans,
+    /// A value only the slow path can read was met, so the decode stops here
+    /// rather than try a union's next member.
+    slow_path_only: bool,
 }
 
 impl TextDecoder<'_, '_> {
@@ -166,6 +170,11 @@ impl TextDecoder<'_, '_> {
                 self.value(vm, other)
             };
         }
+        // Picking by tag is the slow path's.
+        if super::union::union_tags(vm, members, self.plans).is_some() {
+            self.slow_path_only = true;
+            return Err(Stop);
+        }
         let kind = Kind::of_text(first);
         let start = self.parser.reader.mark();
         let candidates = Candidates::of(vm, members, kind);
@@ -181,6 +190,7 @@ impl TextDecoder<'_, '_> {
         for index in candidates.order(vm, members, self.plans, keys.as_ref()) {
             match self.value(vm, &members[index]) {
                 Ok(value) => return Ok(value),
+                Err(Stop) if self.slow_path_only => return Err(Stop),
                 Err(Stop) => self.parser.reader.reset(start),
             }
         }
@@ -262,6 +272,11 @@ impl TextDecoder<'_, '_> {
     ) -> Result<Value, Stop> {
         self.parser.reader.open_object()?;
         let plan = self.plans.class(vm, head, type_args).map_err(|_| Stop)?;
+        // Its value is the object's keys, which the slow path has as a map.
+        if plan.reads_rest() {
+            self.slow_path_only = true;
+            return Err(Stop);
+        }
         let mut slots: Vec<Option<Value>> = vec![None; plan.fields.len()];
         let mut first = true;
         while let Some(key) = self.parser.reader.next_key(first)? {

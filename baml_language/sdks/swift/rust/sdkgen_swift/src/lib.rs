@@ -1076,10 +1076,14 @@ mod tests {
                 name: "items".into(),
                 docstring: None,
                 ty: list(Ty::TypeVar(ParamTy::new(0, "T".into()))),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
             origin: origin(),
+            json_omit_nulls: false,
         });
         let pool = SymbolPool::from([
             (user("Box"), box_class),
@@ -1144,10 +1148,14 @@ mod tests {
                 name: "_inner".into(),
                 docstring: None,
                 ty: Ty::Unknown,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![current],
             instance_methods: vec![name],
             origin: origin(),
+            json_omit_nulls: false,
         });
         let pool = SymbolPool::from([
             (package(), class),
@@ -1485,10 +1493,14 @@ mod tests {
                 name: "bar_sync".into(),
                 docstring: None,
                 ty: Ty::Int,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![foo, foo_sync],
             instance_methods: vec![bar],
             origin: origin(),
+            json_omit_nulls: false,
         });
         let emitted = emit(&SymbolPool::from([(thing, class)]));
         for decl in [
@@ -1529,6 +1541,7 @@ mod tests {
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
             origin: origin(),
+            json_omit_nulls: false,
         });
         let pool = SymbolPool::from([
             (prompt(), class),

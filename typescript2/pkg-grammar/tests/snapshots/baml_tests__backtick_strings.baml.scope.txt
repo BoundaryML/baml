@@ -413,7 +413,7 @@
 127:12-13    "("                source.baml meta.function.baml meta.block.function.baml string.interpolated.baml meta.interpolation.control.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 127:13-16    "let"              source.baml meta.function.baml meta.block.function.baml string.interpolated.baml meta.interpolation.control.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 127:17-18    "x"                source.baml meta.function.baml meta.block.function.baml string.interpolated.baml meta.interpolation.control.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-127:19-21    "in"               source.baml meta.function.baml meta.block.function.baml string.interpolated.baml meta.interpolation.control.for.baml meta.for.header.baml keyword.operator.in.baml
+127:19-21    "in"               source.baml meta.function.baml meta.block.function.baml string.interpolated.baml meta.interpolation.control.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 127:22-24    "xs"               source.baml meta.function.baml meta.block.function.baml string.interpolated.baml meta.interpolation.control.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 127:24-25    ")"                source.baml meta.function.baml meta.block.function.baml string.interpolated.baml meta.interpolation.control.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 127:25-26    "}"                source.baml meta.function.baml meta.block.function.baml string.interpolated.baml meta.interpolation.control.for.baml punctuation.section.interpolation.end.baml

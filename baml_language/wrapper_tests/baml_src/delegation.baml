@@ -214,6 +214,48 @@ testset "CLI delegation" {
         root.harness.require(!fixture.requests(), "toolchain subcommand help tried to install the active CLI");
     }
 
+    test "help after toolchain arguments changes nothing" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        // A newer canary release gives update something to advance.
+        fixture.config("canary");
+        fixture.channel("canary", NEXT_VERSION);
+        // File contents also catch rewrites within one timestamp tick.
+        let state = () -> string {
+            baml.json.stringify(
+                fixture.tree("baml").concat(
+                    [USER_CONFIG_FILE, CHANNEL_STATE_FILE, PROJECT_MANIFEST_FILE].map((file) -> string {
+                        fixture.read(file)
+                    }),
+                ),
+            )
+        };
+        let before = state();
+        for (let flag in ["--help", "-h"]) {
+            for (
+                let args in [
+                    ["toolchain", "use", NEXT_VERSION, flag],
+                    ["toolchain", "use", "--global", NEXT_VERSION, flag],
+                    ["toolchain", "install", LATEST_VERSION, "--force", flag],
+                    ["toolchain", "update", flag],
+                    ["toolchain", "uninstall", NEXT_VERSION, flag],
+                ]
+            ) {
+                let command = args.join(" ");
+                let output = fixture.manage(candidate, args).stdout.to_string();
+                root.harness.require(
+                    output.includes(`Usage: baml toolchain ${args[1]}`),
+                    `${command} did not print help: ${output}`,
+                );
+                root.harness.require(
+                    state() == before,
+                    `${command} changed BAML_HOME or the project`,
+                );
+                root.harness.require(!fixture.requests(), `${command} contacted the release server`);
+            }
+        }
+    }
+
     test "telemetry helper bypasses invalid selection and emits no cli calls" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }

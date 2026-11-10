@@ -12,6 +12,8 @@ pub struct EnumVariant {
     pub docstring: Option<String>,
     pub other: IndexMap<String, String>,
     pub skip: bool,
+    /// `@json.rename`: the variant's JSON string, under every naming.
+    pub json_rename: Option<String>,
 }
 
 /// Runtime enum representation.

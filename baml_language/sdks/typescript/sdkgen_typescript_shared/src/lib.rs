@@ -313,6 +313,7 @@ mod tests {
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
             origin: origin(span),
+            json_omit_nulls: false,
         })
     }
 
@@ -324,6 +325,7 @@ mod tests {
                 name: BaseName::new("POSITIVE"),
                 docstring: None,
                 value: "POSITIVE".to_string(),
+                json_rename: None,
             }],
             origin: origin(span),
         })
@@ -405,6 +407,9 @@ mod tests {
             name: BaseName::new("bar_sync"),
             docstring: None,
             ty: Ty::Int,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
         });
         class.instance_methods = vec![
             named_fn("foo", 1),
@@ -540,6 +545,9 @@ mod tests {
             name: BaseName::new(field),
             docstring: None,
             ty,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
         })
         .collect();
         pool.insert(class, Symbol::Class(payload));

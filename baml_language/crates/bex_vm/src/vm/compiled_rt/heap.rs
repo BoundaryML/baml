@@ -450,6 +450,7 @@ mod tests {
             docstring: None,
             other: IndexMap::default(),
             skip: false,
+            json_rename: None,
         };
         Object::Enum(Box::new(Enum {
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Color")),

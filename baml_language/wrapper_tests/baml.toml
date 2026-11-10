@@ -54,6 +54,7 @@ args = [
     "--include", "root::CLI delegation::delegation preserves arguments stdio and exit code",
     "--include", "root::CLI delegation::delegation supports simultaneous binary stdio",
     "--include", "root::CLI delegation::root help lists wrapper commands without installing",
+    "--include", "root::CLI delegation::help after toolchain arguments changes nothing",
     # version reporting
     "--include", "root::version reporting::version reports wrapper and selected toolchain",
     # passive update checks

@@ -25,7 +25,7 @@
 8:36-37      ","                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml punctuation.definition.type.baml
 8:38-39      "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 8:39-40      ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml punctuation.definition.type.baml
-8:41-47      "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.throws.baml
+8:41-47      "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.expression.throws.baml
 8:48-53      "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml support.type.primitive.baml
 9:1-2        "}"                source.baml meta.interface.baml meta.interface.body.baml punctuation.definition.block.end.baml
 11:1-10      "interface"        source.baml meta.interface.baml keyword.declaration.interface.baml
@@ -52,7 +52,7 @@
 12:26-27     "T"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 12:28-29     "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.type.baml
 12:30-34     "Done"             source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-12:35-41     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.throws.baml
+12:35-41     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.expression.throws.baml
 12:42-43     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 14:3-11      "function"         source.baml meta.interface.baml meta.interface.body.baml meta.function.baml keyword.declaration.function.baml
 14:12-15     "map"              source.baml meta.interface.baml meta.interface.body.baml meta.function.baml entity.name.function.baml
@@ -71,7 +71,7 @@
 14:35-36     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
 14:37-39     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
 14:40-41     "R"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
-14:42-48     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.throws.baml
+14:42-48     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.expression.throws.baml
 14:49-51     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 14:51-52     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 14:53-55     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
@@ -83,7 +83,7 @@
 14:70-71     "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 14:72-74     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 14:74-75     ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-14:76-82     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+14:76-82     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 14:83-88     "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 14:89-90     "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 15:5-8       "Map"              source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -121,7 +121,7 @@
 18:42-43     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
 18:44-46     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
 18:47-51     "bool"             source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
-18:52-58     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.throws.baml
+18:52-58     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.expression.throws.baml
 18:59-61     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 18:61-62     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 18:63-65     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
@@ -133,7 +133,7 @@
 18:80-81     "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 18:82-84     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 18:84-85     ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-18:86-92     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+18:86-92     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 18:93-98     "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 18:99-100    "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 19:5-11      "Filter"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -172,7 +172,7 @@
 22:44-46     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
 22:47-48     "R"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 22:48-49     "?"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.optional.baml
-22:50-56     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.throws.baml
+22:50-56     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.expression.throws.baml
 22:57-59     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 22:59-60     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 22:61-63     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
@@ -184,7 +184,7 @@
 22:78-79     "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 22:80-82     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 22:82-83     ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-22:84-90     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+22:84-90     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 22:91-96     "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 22:97-98     "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 23:5-14      "FilterMap"        source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -231,7 +231,7 @@
 26:59-60     ","                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
 26:61-63     "E3"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
 26:63-64     ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
-26:65-71     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.throws.baml
+26:65-71     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.expression.throws.baml
 26:72-74     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 26:74-75     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 26:76-78     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
@@ -245,7 +245,7 @@
 26:98-99     "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 26:100-102   "E3"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 26:102-103   ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-26:104-110   "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+26:104-110   "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 26:111-116   "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 26:117-118   "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 27:5-12      "FlatMap"          source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -292,7 +292,7 @@
 30:47-48     ","                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 30:49-50     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 30:50-51     ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-30:52-58     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+30:52-58     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 30:59-64     "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 30:65-66     "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 31:5-11      "StepBy"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -336,7 +336,7 @@
 34:60-61     ","                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 34:62-63     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 34:63-64     ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-34:65-71     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+34:65-71     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 34:72-77     "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 34:78-79     "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 35:5-10      "Chain"            source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -371,7 +371,7 @@
 38:40-41     ","                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 38:42-43     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 38:43-44     ">"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-38:45-51     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+38:45-51     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 38:52-57     "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 38:58-59     "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 39:5-13      "Peekable"         source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -405,7 +405,7 @@
 42:29-30     "T"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 42:30-31     "["                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 42:31-32     "]"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-42:33-39     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+42:33-39     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 42:40-41     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 42:42-43     "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 43:5-8       "let"              source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
@@ -474,7 +474,7 @@
 53:41-42     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
 53:43-45     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
 53:46-47     "A"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
-53:48-54     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.throws.baml
+53:48-54     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.expression.throws.baml
 53:55-57     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 53:57-58     ","                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.separator.comma.baml
 53:59-66     "initial"          source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
@@ -483,7 +483,7 @@
 53:69-70     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 53:71-73     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 53:74-75     "A"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-53:76-82     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+53:76-82     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 53:83-84     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 53:85-86     "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 53:87-89     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -544,7 +544,7 @@
 64:22-23     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 64:24-26     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 64:27-30     "int"              source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
-64:31-37     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+64:31-37     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 64:38-39     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 64:40-41     "{"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 65:5-8       "let"              source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
@@ -606,12 +606,12 @@
 75:40-41     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
 75:42-44     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
 75:45-49     "bool"             source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
-75:50-56     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.throws.baml
+75:50-56     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.expression.throws.baml
 75:57-59     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 75:59-60     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 75:61-63     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 75:64-68     "bool"             source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
-75:69-75     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+75:69-75     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 75:76-77     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 75:78-79     "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 75:80-82     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -676,12 +676,12 @@
 89:41-42     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
 89:43-45     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
 89:46-50     "bool"             source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
-89:51-57     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.throws.baml
+89:51-57     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.expression.throws.baml
 89:58-60     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 89:60-61     ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 89:62-64     "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 89:65-69     "bool"             source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
-89:70-76     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+89:70-76     "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 89:77-78     "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 89:79-80     "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 89:81-83     "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -747,13 +747,13 @@
 103:40-41    ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.group.type.baml punctuation.definition.type.end.baml
 103:42-44    "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.arrow.baml
 103:45-49    "bool"             source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
-103:50-56    "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.throws.baml
+103:50-56    "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.expression.throws.baml
 103:57-59    "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
 103:59-60    ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 103:61-63    "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 103:64-65    "T"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 103:65-66    "?"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.optional.baml
-103:67-73    "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+103:67-73    "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 103:74-75    "E"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 103:76-77    "|"                source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 103:78-80    "E2"               source.baml meta.interface.baml meta.interface.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -837,7 +837,7 @@
 118:80-81    "|"                source.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 118:82-84    "E3"               source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 118:84-85    ">"                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-118:86-92    "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+118:86-92    "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 118:93-98    "never"            source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 118:99-100   "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 119:3-10     "Flatten"          source.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -888,7 +888,7 @@
 126:42-43    "<"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 126:43-44    "T"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 126:44-45    ">"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-126:46-52    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+126:46-52    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 126:53-58    "never"            source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 126:59-60    "{"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 127:5-18     "ArrayIterator"    source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -936,7 +936,7 @@
 131:38-39    ","                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 131:40-45    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 131:45-46    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-131:47-53    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+131:47-53    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 131:54-59    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 131:60-61    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 131:62-66    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -959,7 +959,7 @@
 135:28-29    "T"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 135:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 135:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-135:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+135:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 135:44-49    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 135:50-51    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 136:7-12     "match"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.expression.match.baml keyword.control.match.baml
@@ -1032,7 +1032,7 @@
 152:49-50    ")"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 152:51-53    "->"               source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 152:54-59    "Range"            source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-152:60-66    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+152:60-66    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 152:67-72    "never"            source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 152:73-74    "{"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 153:5-10     "Range"            source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -1070,7 +1070,7 @@
 157:40-41    ","                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 157:42-47    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 157:47-48    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-157:49-55    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+157:49-55    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 157:56-61    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 157:62-63    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 157:64-68    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -1093,7 +1093,7 @@
 161:28-31    "int"              source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 161:32-33    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 161:34-38    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-161:39-45    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+161:39-45    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 161:46-51    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 161:52-53    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 162:7-9      "if"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
@@ -1164,7 +1164,7 @@
 177:52-53    "<"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 177:53-54    "T"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 177:54-55    ">"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-177:56-62    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+177:56-62    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 177:63-68    "never"            source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 177:69-70    "{"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 178:5-11     "Repeat"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -1201,7 +1201,7 @@
 182:38-39    ","                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 182:40-45    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 182:45-46    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-182:47-53    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+182:47-53    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 182:54-59    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 182:60-61    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 182:62-66    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -1224,7 +1224,7 @@
 186:28-29    "T"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 186:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 186:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-186:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+186:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 186:44-49    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 186:50-51    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 187:7-9      "if"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
@@ -1282,7 +1282,7 @@
 200:20-21    ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 200:22-24    "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.arrow.baml
 200:25-26    "T"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-200:27-33    "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.throws.baml
+200:27-33    "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.expression.throws.baml
 200:34-41    "unknown"          source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml support.type.primitive.baml
 201:1-2      "}"                source.baml meta.interface.baml meta.interface.body.baml punctuation.definition.block.end.baml
 203:1-6      "class"            source.baml meta.class.baml keyword.declaration.class.baml
@@ -1306,7 +1306,7 @@
 206:41-42    "<"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 206:42-43    "T"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 206:43-44    ">"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-206:45-51    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+206:45-51    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 206:52-57    "never"            source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 206:58-59    "{"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 207:5-17     "OutOfBodyBox"     source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.constructor.expression.baml entity.name.type.baml
@@ -1341,7 +1341,7 @@
 212:20-21    ")"                source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 212:22-24    "->"               source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 212:25-26    "T"                source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-212:27-33    "throws"           source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+212:27-33    "throws"           source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 212:34-41    "unknown"          source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 212:42-43    "{"                source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 213:5-9      "self"             source.baml meta.implements-for.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -1376,7 +1376,7 @@
 219:11-12    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
 219:13-15    "->"               source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.arrow.baml
 219:16-17    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-219:18-24    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.throws.baml
+219:18-24    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.expression.throws.baml
 219:25-27    "E2"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 221:3-13     "implements"       source.baml meta.class.baml meta.class.body.baml meta.implements.baml keyword.declaration.implements.baml
 221:14-22    "Iterable"         source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.target.baml meta.type-reference.baml entity.name.type.baml
@@ -1402,7 +1402,7 @@
 222:42-43    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 222:44-46    "E2"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 222:46-47    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-222:48-54    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+222:48-54    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 222:55-60    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 222:61-62    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 222:63-67    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -1427,7 +1427,7 @@
 226:28-29    "R"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 226:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 226:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-226:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+226:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 226:44-45    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 226:46-47    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 226:48-50    "E2"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -1490,7 +1490,7 @@
 237:16-17    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
 237:18-20    "->"               source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.arrow.baml
 237:21-25    "bool"             source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-237:26-32    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.throws.baml
+237:26-32    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.expression.throws.baml
 237:33-35    "E2"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 239:3-13     "implements"       source.baml meta.class.baml meta.class.body.baml meta.implements.baml keyword.declaration.implements.baml
 239:14-22    "Iterable"         source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.target.baml meta.type-reference.baml entity.name.type.baml
@@ -1516,7 +1516,7 @@
 240:42-43    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 240:44-46    "E2"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 240:46-47    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-240:48-54    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+240:48-54    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 240:55-60    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 240:61-62    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 240:63-67    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -1541,7 +1541,7 @@
 244:28-29    "T"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 244:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 244:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-244:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+244:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 244:44-45    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 244:46-47    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 244:48-50    "E2"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -1630,7 +1630,7 @@
 262:13-15    "->"               source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.arrow.baml
 262:16-17    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 262:17-18    "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
-262:19-25    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.throws.baml
+262:19-25    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.expression.throws.baml
 262:26-28    "E2"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 264:3-13     "implements"       source.baml meta.class.baml meta.class.body.baml meta.implements.baml keyword.declaration.implements.baml
 264:14-22    "Iterable"         source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.target.baml meta.type-reference.baml entity.name.type.baml
@@ -1656,7 +1656,7 @@
 265:42-43    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 265:44-46    "E2"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 265:46-47    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-265:48-54    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+265:48-54    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 265:55-60    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 265:61-62    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 265:63-67    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -1681,7 +1681,7 @@
 269:28-29    "R"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 269:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 269:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-269:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+269:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 269:44-45    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 269:46-47    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 269:48-50    "E2"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -1789,7 +1789,7 @@
 288:26-27    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
 288:28-30    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 288:30-31    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-288:32-38    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.throws.baml
+288:32-38    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.expression.throws.baml
 288:39-41    "E2"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 289:3-8      "inner"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 289:8-9      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
@@ -1829,7 +1829,7 @@
 292:47-48    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 292:49-51    "E3"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 292:51-52    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-292:53-59    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+292:53-59    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 292:60-65    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 292:66-67    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 292:68-72    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -1856,7 +1856,7 @@
 296:28-29    "R"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 296:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 296:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-296:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+296:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 296:44-45    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 296:46-47    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 296:48-50    "E2"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -2042,7 +2042,7 @@
 326:42-43    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 326:44-46    "E3"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 326:46-47    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-326:48-54    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+326:48-54    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 326:55-60    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 326:61-62    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 326:63-67    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -2067,7 +2067,7 @@
 330:28-29    "R"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 330:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 330:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-330:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+330:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 330:44-45    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 330:46-47    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 330:48-50    "E3"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
@@ -2227,7 +2227,7 @@
 360:26-27    "T"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 360:28-29    "|"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 360:30-34    "Done"             source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-360:35-41    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+360:35-41    "throws"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 360:42-43    "E"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 360:44-45    "{"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 361:5-7      "if"               source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
@@ -2288,7 +2288,7 @@
 371:38-39    ","                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 371:40-41    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 371:41-42    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-371:43-49    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+371:43-49    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 371:50-55    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 371:56-57    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 371:58-62    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -2311,7 +2311,7 @@
 375:28-29    "T"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 375:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 375:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-375:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+375:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 375:44-45    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 375:46-47    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 376:7-9      "if"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
@@ -2398,7 +2398,7 @@
 393:38-39    ","                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 393:40-41    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 393:41-42    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-393:43-49    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+393:43-49    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 393:50-55    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 393:56-57    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 393:58-62    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -2421,7 +2421,7 @@
 397:28-29    "T"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 397:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 397:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-397:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+397:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 397:44-45    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 397:46-47    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 398:7-9      "if"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
@@ -2555,7 +2555,7 @@
 419:38-39    ","                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 419:40-41    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 419:41-42    ">"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-419:43-49    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+419:43-49    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 419:50-55    "never"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 419:56-57    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 419:58-62    "self"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.language.self.baml
@@ -2578,7 +2578,7 @@
 423:28-29    "T"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 423:30-31    "|"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 423:32-36    "Done"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
-423:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+423:37-43    "throws"           source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 423:44-45    "E"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 423:46-47    "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 424:7-9      "if"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml

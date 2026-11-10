@@ -371,7 +371,12 @@ fn mint_class(
             skip: false,
             stream_done: false,
             must_exist: false,
+            json_rename: None,
+            json_flatten: false,
+            json_fallback: false,
+            json_omit_null: false,
             runtime_type: Some(row.type_value),
+            redact: false,
         });
     }
 
@@ -398,6 +403,7 @@ fn mint_class(
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        redact: false,
     })));
     // The head is built off the declaration that was just allocated, so the
     // type reaches it directly — there is no table to consult and no name
@@ -2003,6 +2009,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
             docstring: None,
             other: IndexMap::new(),
             skip: false,
+            json_rename: None,
         }),
         Object::Instance(instance) => {
             let Object::Class(class) = vm.get_object(instance.class) else {
@@ -2066,6 +2073,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 docstring: optional_string(2)?,
                 other,
                 skip,
+                json_rename: None,
             })
         }
         _ => Err("reflect.Enum.new values must be strings or reflect.enum.Value rows".into()),

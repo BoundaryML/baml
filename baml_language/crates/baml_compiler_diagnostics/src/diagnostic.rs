@@ -461,6 +461,10 @@ pub enum DiagnosticId {
     /// An optional field of an LLM output class that a model's JSON answer
     /// can never fill, so it is always `null` (a warning).
     LlmOutputFieldAlwaysNull,
+    /// `@json` attributes that cannot hold: on a class with a `baml.ToJson` or
+    /// `baml.FromJson` override, on the wrong field, or on a union whose
+    /// `@json.fallback` member another member would shadow.
+    InvalidJsonAttribute,
 }
 
 impl DiagnosticId {
@@ -682,6 +686,7 @@ impl DiagnosticId {
             DiagnosticId::InitThrowNotHandled => "E0183",
             DiagnosticId::LlmOutputMemberDropped => "E0184",
             DiagnosticId::LlmOutputFieldAlwaysNull => "E0185",
+            DiagnosticId::InvalidJsonAttribute => "E0186",
         }
     }
 }

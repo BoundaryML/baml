@@ -141,6 +141,74 @@ stream.must_exist:
   details: |
     A class field normally has a default the partial parse uses before the field arrives, `""` for a string. `@stream.must_exist` makes that default `never`, and a class with any `never` field has no partial parse, so nothing is produced for `Invoice` until `currency` is present. Reach for it when a partial object missing that field would mislead. Applies to class fields only. Takes no arguments, at most once per declaration.
 
+json:
+  summary: "An untyped JSON value, and the `@json` attributes that set a class's JSON shape."
+  syntax: |
+    class Network {
+      vpcId string @json.rename("vpc_id")
+      extra map<string, json> @json.flatten
+
+      @@json.omit_nulls
+    }
+  details: |
+    `json` is `baml.json.json`: `null`, a bool, a number, a string, a list or a map. Reach an arm with `match`, or decode it with `baml.json.to<T>`. To shape a class's JSON, use `@json.rename`, `@json.flatten`, `@json.fallback` and `@@json.omit_nulls`. Prefer them to a `baml.ToJson` or `baml.FromJson` override: they need no code, and generated `serde` impls follow them. A class can't have both.
+
+json.rename:
+  summary: "Sets a field's JSON key, or an enum variant's JSON string. Takes the key."
+  syntax: |
+    class Network {
+      vpcId string @json.rename("vpc_id")
+    }
+  details: |
+    The field reads from and writes to this key under every naming, in `baml.json` and in the Rust SDK's `serde` impls. `@alias` stays the name a model is shown. A field with both uses `@json.rename` as its JSON key, and a model's answer may use either. A class with a `baml.ToJson` or `baml.FromJson` override can't use `@json` attributes.
+
+json.flatten:
+  summary: "Makes a `map<string, json>` field hold every key no other field took. Takes no arguments."
+  syntax: |
+    class Config {
+      id string
+      extra map<string, json> @json.flatten
+    }
+  details: |
+    The field writes its keys next to the class's other fields. If the map holds a key a declared field also writes, the declared field wins and the map entry is skipped. A class has one `@json.flatten` or `@json.fallback` field.
+
+json.fallback:
+  summary: "Makes a class the union member for objects with a tag no other member has. Takes no arguments."
+  syntax: |
+    class NetworkOther {
+      type "UNKNOWN"
+      raw map<string, json> @json.fallback
+    }
+  details: |
+    The field holds the whole object, and writes it back and nothing else. The class's other fields must be literals: they name the union's tag, which every other member has too. An object with no tag is an error. Only the tag decides: once it picks a member, anything else wrong is an error rather than a fall through to the fallback. Members sharing a tag value are told apart by the next literal field. The compiler rejects a union with a member that has no tag, such as a map, or with two members no literal field tells apart.
+
+json.omit_nulls:
+  summary: "Leaves a class's optional fields out of its JSON while they hold `null`. Takes no arguments."
+  syntax: |
+    class Request {
+      name string
+      note string?
+
+      @@json.omit_nulls
+    }
+  details: |
+    Reading doesn't change: a missing optional field reads as `null`. It applies to the class's own fields, not to nested classes. A field is optional when its declared type has a `null` arm. A `json` field keeps its `null`, because there `null` is a value.
+
+trace.redact:
+  summary: "Keeps a class field's value, or every instance of a class, out of telemetry recordings. Takes no arguments."
+  syntax: |
+    class Account {
+        name: string,
+        api_key: string @trace.redact,
+    }
+
+    class Credentials {
+        token: string,
+        @@trace.redact
+    }
+  details: |
+    A recording keeps a marker saying the value was redacted in its place, wherever the value is captured: a function's inputs or output, a thrown error, or `log.*` data. `@trace.redact` applies to a class field, and `@@trace.redact` to a class, whose every instance is withheld whole, fields and all. Only recordings change: the program reads, prints and serializes the value as before. A value copied out of a redacted field into a plain string or another field is recorded as that copy. Takes no arguments, at most once per declaration.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |
@@ -1061,11 +1129,15 @@ python:
   details: |
     You install `baml_bridge` (the runtime); you import `baml_sdk` (the generated
     code). Functions become top-level Python functions; classes/enums become
-    Pydantic models:
+    Pydantic models. Each function is async; its blocking twin ends in `_sync`:
 
       import baml_sdk                       # initializes the BAML runtime
-      from baml_sdk import classify_ticket
-      ticket = classify_ticket("login is broken")   # typed in, typed Pydantic out
+      from baml_sdk import classify_ticket, classify_ticket_sync
+
+      async def main():
+          ticket = await classify_ticket("login is broken")   # typed in, typed Pydantic out
+
+      ticket = classify_ticket_sync("login is broken")        # same call, blocking
 
     See also: `baml describe baml_sdk`, `baml describe typescript`.
 

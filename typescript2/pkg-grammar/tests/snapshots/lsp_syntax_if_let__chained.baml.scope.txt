@@ -47,7 +47,7 @@
 16:5-9       "else"             source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml keyword.control.conditional.baml
 16:10-12     "if"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml keyword.control.conditional.baml
 16:13-14     "r"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.if.condition.baml meta.dotted-expression.baml variable.other.readwrite.baml
-16:15-17     "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.if.condition.baml meta.expression.is.baml keyword.operator.is.baml
+16:15-17     "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.if.condition.baml meta.expression.is.baml keyword.operator.expression.is.baml
 16:18-23     "Empty"            source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.if.condition.baml meta.expression.is.baml meta.type-reference.baml entity.name.type.baml
 16:24-25     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.begin.baml
 17:5-6       "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml string.quoted.double.baml punctuation.definition.string.begin.baml
