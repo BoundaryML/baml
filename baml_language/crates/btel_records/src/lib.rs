@@ -579,8 +579,6 @@ pub enum NetworkEventName {
     Await,
     /// The program closed a stream before its end.
     Close,
-    /// The response was collected without being read.
-    Drop,
     /// Names for other protocols, such as WebSocket messages.
     Other(Arc<str>),
 }
@@ -593,7 +591,6 @@ impl NetworkEventName {
             Self::End => "end",
             Self::Await => "await",
             Self::Close => "close",
-            Self::Drop => "drop",
             Self::Other(name) => name,
         }
     }
