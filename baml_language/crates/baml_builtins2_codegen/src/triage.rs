@@ -233,8 +233,6 @@ pub fn check_coverage(declarations: &[NativeBuiltin]) -> Result<(), Vec<Coverage
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use super::*;
 
     #[test]
@@ -266,19 +264,5 @@ mod tests {
             .map(|row| row.path)
             .collect();
         assert!(wrong.is_empty(), "{wrong:?}");
-    }
-
-    #[test]
-    fn summary() {
-        let mut counts = BTreeMap::<(char, AdapterForm), usize>::new();
-        for row in ROWS {
-            *counts
-                .entry((row.group.census_letter(), row.form))
-                .or_default() += 1;
-        }
-        for ((letter, form), count) in &counts {
-            eprintln!("{letter} {form:?}: {count}");
-        }
-        assert_eq!(counts.values().sum::<usize>(), ROWS.len());
     }
 }
