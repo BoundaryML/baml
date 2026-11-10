@@ -698,14 +698,18 @@ fn convert_object(
         Object::String(s) => Ok(BexExternalValue::String(s.clone())),
         // Deep-copy path for trace payloads: no declared type is available here,
         // so placeholder types with default attr are used.
-        Object::Array(array) => Ok(BexExternalValue::Array {
-            element_type: bex_external_types::WireTy::Unknown,
-            items: array
-                .to_vec()
-                .into_iter()
-                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy))
-                .collect::<Result<_, _>>()?,
-        }),
+        Object::Shared(bex_vm_types::types::SharedKind::List) => {
+            // SAFETY: the marker is only shown for a list.
+            let list = unsafe { bex_vm_types::ListRef::new_unchecked(heap_ptr) };
+            Ok(BexExternalValue::Array {
+                element_type: bex_external_types::WireTy::Unknown,
+                items: list
+                    .snapshot(bex_vm_types::object_format::Access::Shared)
+                    .into_iter()
+                    .map(|item| owned_inner(item.into(), heap, lossy))
+                    .collect::<Result<_, _>>()?,
+            })
+        }
         Object::Map(map) => {
             if !baml_type::normalize::is_string_key(map.key_ty.as_ty(), &MapKeyFacts) {
                 return Err(AccessError::CannotConvertToOwned {

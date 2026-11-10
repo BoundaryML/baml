@@ -181,7 +181,6 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
         | Object::BoundMethod(_)
         | Object::GenericFunction(_)
         | Object::HostClosure(_)
-        | Object::Array(_)
         | Object::Map(_)
         | Object::Future(_)
         | Object::RustData(_)

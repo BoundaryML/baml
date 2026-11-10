@@ -89,7 +89,7 @@ pub(crate) mod bodies {
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    ArrayReadGuard, HeapPtr, MapReadGuard, RootHaver, RootVisitor,
+    HeapPtr, MapReadGuard, RootHaver, RootVisitor,
     types::{Object, Type, Value},
 };
 use indexmap::IndexMap;

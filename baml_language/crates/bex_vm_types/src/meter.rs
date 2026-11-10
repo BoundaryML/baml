@@ -157,10 +157,6 @@ impl Object {
         match self {
             Object::String(string) => meter.string(string),
             Object::Uint8Array(bytes) => meter.bytes(bytes.get_mut().footprint()),
-            Object::Array(array) => {
-                meter.bytes(size_of::<RealizedTy>());
-                meter.bytes(array.data.get_mut().footprint());
-            }
             Object::Map(map) => {
                 meter.bytes(2 * size_of::<RealizedTy>());
                 meter.bytes(map.data.get_mut().footprint());
@@ -252,10 +248,7 @@ mod tests {
     use bex_str::BexStr;
 
     use super::*;
-    use crate::{
-        MapData, Value,
-        types::{Array, Map},
-    };
+    use crate::{MapData, Value, types::Map};
 
     fn charged(mut object: Object) -> usize {
         let mut meter = Meter::charge();
@@ -280,14 +273,6 @@ mod tests {
 
     #[test]
     fn containers_are_measured_by_capacity_not_length() {
-        let mut elements = Vec::with_capacity(1_000);
-        elements.push(Value::int(1));
-        let array = Object::Array(Array::new(RealizedTy::int(), elements));
-        assert_eq!(
-            charged(array),
-            size_of::<RealizedTy>() + 1_000 * size_of::<Value>()
-        );
-
         let mut bytes = Vec::with_capacity(4_096);
         bytes.push(7u8);
         assert_eq!(charged(Object::Uint8Array(bytes.into())), 4_096);

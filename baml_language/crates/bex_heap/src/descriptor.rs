@@ -19,7 +19,12 @@ use std::{borrow::Cow, collections::HashMap, sync::OnceLock};
 
 pub use bex_vm_types::layout::{DescriptorId, ElemKind, Kind, RawKind, SlotKind};
 use bex_vm_types::{
-    HeapPtr, InstanceLayout, Meter, Object, RealizedTy, object_format::FIRST_INSTANCE_DESC,
+    HeapPtr, InstanceLayout, Meter, Object, RealizedTy,
+    object_format::FIRST_INSTANCE_DESC,
+    types::{
+        BACKING_DESCS, BACKING_ELEMS_OFFSET, LIST_BACKING_OFFSET, LIST_BYTES, LIST_DESCS,
+        LIST_ELEM_TY_OFFSET, backing_descriptor, list_descriptor,
+    },
 };
 use parking_lot::Mutex;
 
@@ -179,6 +184,37 @@ impl Descriptor {
         }
     }
 
+    /// The descriptor of lists whose elements are stored in `slot`: the
+    /// backing and element type pointers.
+    fn list(slot: SlotKind) -> Self {
+        Self {
+            kind: Kind::List,
+            trace: Trace::Slots,
+            size: LIST_BYTES,
+            elems: None,
+            ptr_slots: Cow::Owned(vec![LIST_BACKING_OFFSET, LIST_ELEM_TY_OFFSET]),
+            tagged_slots: Cow::Borrowed(&[]),
+            slot_kinds: Cow::Owned(vec![slot]),
+            type_id: list_descriptor(slot).0,
+            finalizer: None,
+        }
+    }
+
+    /// The descriptor of list backings holding `elem` elements.
+    fn backing(elem: ElemKind) -> Self {
+        Self {
+            kind: Kind::Backing,
+            trace: Trace::Slots,
+            size: BACKING_ELEMS_OFFSET,
+            elems: Some(elem),
+            ptr_slots: Cow::Borrowed(&[]),
+            tagged_slots: Cow::Borrowed(&[]),
+            slot_kinds: Cow::Borrowed(&[]),
+            type_id: backing_descriptor(elem).0,
+            finalizer: None,
+        }
+    }
+
     /// The descriptor of instances laid out by `layout`: the class and type
     /// pointers and the declared fields' slots.
     pub fn for_instance(layout: &InstanceLayout) -> Self {
@@ -261,6 +297,12 @@ impl DescriptorTable {
     pub(crate) fn new() -> Self {
         let mut fixed = vec![None; FIRST_INSTANCE_DESC.0 as usize];
         fixed[OBJECT_DESC.0 as usize] = Some(OBJECT_DESCRIPTOR);
+        for (slot, id) in LIST_DESCS {
+            fixed[id.0 as usize] = Some(Descriptor::list(slot));
+        }
+        for (elem, id) in BACKING_DESCS {
+            fixed[id.0 as usize] = Some(Descriptor::backing(elem));
+        }
         Self {
             fixed,
             segments: [const { OnceLock::new() }; SEGMENTS],
@@ -441,7 +483,7 @@ mod tests {
             Err(DescriptorError::BadSlot(24)),
             "overruns the object"
         );
-        assert_eq!(table.len(), 2);
+        assert_eq!(table.len(), 1 + 5 + 3 + 1);
     }
 
     /// Fields are laid out after the header in declaration order, each in

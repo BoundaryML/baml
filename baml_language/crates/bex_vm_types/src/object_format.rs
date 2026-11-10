@@ -97,19 +97,29 @@ pub enum Format {
     /// A class instance laid out by its class's
     /// [`InstanceLayout`](crate::types::InstanceLayout).
     Instance,
+    /// A list ([`ListRef`](crate::types::ListRef)) whose elements are stored
+    /// in this slot kind.
+    List(SlotKind),
+    /// A list's backing object, holding elements of this kind. No value
+    /// points at one.
+    Backing(ElemKind),
 }
 
 impl Format {
     #[inline]
     pub fn of(descriptor: DescriptorId) -> Self {
         if descriptor == OBJECT_DESC {
-            Format::Object
-        } else {
-            debug_assert!(
-                descriptor.0 >= FIRST_INSTANCE_DESC.0,
-                "descriptor {descriptor:?} names no object format"
-            );
-            Format::Instance
+            return Format::Object;
+        }
+        if descriptor.0 >= FIRST_INSTANCE_DESC.0 {
+            return Format::Instance;
+        }
+        if let Some(slot) = crate::types::list_slot_of(descriptor) {
+            return Format::List(slot);
+        }
+        match crate::types::backing_elem_of(descriptor) {
+            Some(elem) => Format::Backing(elem),
+            None => unreachable!("descriptor {descriptor:?} names no object format"),
         }
     }
 }
@@ -180,6 +190,14 @@ impl SlotValue {
         match self {
             SlotValue::Value(value) => value,
             SlotValue::Float(float) => panic!("expected a non-float slot, found {float}"),
+        }
+    }
+
+    /// The object a pointer value names; `None` for a scalar or a float.
+    pub fn as_object_ptr(self) -> Option<HeapPtr> {
+        match self {
+            SlotValue::Value(value) => value.as_object_ptr(),
+            SlotValue::Float(_) => None,
         }
     }
 

@@ -204,7 +204,7 @@ impl<T> LockedContainer<T> {
     /// # Safety
     ///
     /// In addition to the no-concurrent-mutator contract, the caller
-    /// must hold the only `&mut ArrayContainer` (or otherwise
+    /// must hold the only `&mut` to the container (or otherwise
     /// guarantee no other readers).
     #[allow(clippy::missing_safety_doc, clippy::mut_from_ref)]
     pub unsafe fn data_unchecked_mut(&self) -> &mut T {
@@ -337,105 +337,8 @@ impl<T: Footprint> std::ops::DerefMut for LockedWriteGuard<'_, T> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Array {
-    pub element_ty: Box<crate::RealizedTy>,
-    pub data: ArrayContainer,
-}
-
-impl Array {
-    /// Build an array of `element_ty` from its backing values.
-    pub fn new(element_ty: crate::RealizedTy, data: Vec<Value>) -> Self {
-        Self {
-            element_ty: Box::new(element_ty),
-            data: ArrayContainer::new(data),
-        }
-    }
-
-    /// Lock the backing store for reading (see [`LockedContainer::lock`]).
-    pub fn lock(&self) -> ArrayReadGuard<'_> {
-        self.data.lock()
-    }
-
-    /// Lock the backing store for writing (see [`LockedContainer::lock_mut`]).
-    pub fn lock_mut<'a>(&'a self, debt: &'a AllocDebt) -> ArrayWriteGuard<'a> {
-        self.data.lock_mut(debt)
-    }
-
-    /// Read a thread-local array's backing store without the lock.
-    ///
-    /// # Safety
-    ///
-    /// See [`LockedContainer::lock_thread_local`].
-    pub unsafe fn lock_thread_local(&self) -> ArrayReadGuard<'_> {
-        // SAFETY: forwarded contract.
-        unsafe { self.data.lock_thread_local() }
-    }
-
-    /// Write a thread-local array's backing store without the lock.
-    ///
-    /// # Safety
-    ///
-    /// See [`LockedContainer::lock_thread_local`].
-    pub unsafe fn lock_mut_thread_local<'a>(&'a self, debt: &'a AllocDebt) -> ArrayWriteGuard<'a> {
-        // SAFETY: forwarded contract.
-        unsafe { self.data.lock_mut_thread_local(debt) }
-    }
-
-    /// Locked convenience: number of elements.
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    /// Locked convenience: whether the array is empty.
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
-    }
-
-    /// Locked convenience: copy the element at `idx`, or `None` if out of bounds.
-    pub fn get(&self, idx: usize) -> Option<Value> {
-        self.data.get(idx)
-    }
-
-    /// Locked convenience: snapshot the backing `Vec<Value>`.
-    pub fn to_vec(&self) -> Vec<Value> {
-        self.data.to_vec()
-    }
-
-    /// Unlocked read of the backing store. See [`LockedContainer::data_unchecked`].
-    ///
-    /// # Safety
-    ///
-    /// The caller must uphold the no-concurrent-writer contract documented on
-    /// [`LockedContainer::data_unchecked`].
-    pub unsafe fn data_unchecked(&self) -> &Vec<Value> {
-        // SAFETY: forwarded to the caller's obligation.
-        unsafe { self.data.data_unchecked() }
-    }
-
-    /// Unlocked mutable access to the backing store. See
-    /// [`LockedContainer::data_unchecked_mut`].
-    ///
-    /// # Safety
-    ///
-    /// The caller must uphold the contract documented on
-    /// [`LockedContainer::data_unchecked_mut`].
-    #[expect(clippy::mut_from_ref)]
-    pub unsafe fn data_unchecked_mut(&self) -> &mut Vec<Value> {
-        // SAFETY: forwarded to the caller's obligation.
-        unsafe { self.data.data_unchecked_mut() }
-    }
-}
-
-/// Heap-mutable array container.
-///
-/// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.
-pub type ArrayContainer = LockedContainer<Vec<Value>>;
-pub type ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<Value>>;
-pub type ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<Value>>;
-
-/// Heap-mutable byte-array container. Same synchronization strategy as
-/// [`ArrayContainer`], but over a `Vec<u8>` backing store.
+/// Heap-mutable byte-array container: a `Vec<u8>` behind a
+/// [`LockedContainer`].
 pub type Uint8ArrayContainer = LockedContainer<Vec<u8>>;
 pub type Uint8ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<u8>>;
 pub type Uint8ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<u8>>;
@@ -763,7 +666,7 @@ mod guard_tests {
     #[test]
     fn write_guards_charge_the_change_in_footprint() {
         let debt = AllocDebt::new();
-        let array: ArrayContainer = LockedContainer::new(vec![Value::int(1); 4]);
+        let array: LockedContainer<Vec<Value>> = LockedContainer::new(vec![Value::int(1); 4]);
 
         array.lock_mut(&debt)[..].fill(Value::int(0));
         assert_eq!(debt.balance(), 0, "an in-place write costs nothing");
@@ -797,7 +700,7 @@ mod guard_tests {
     #[test]
     fn thread_local_guards_skip_the_lock_and_still_charge() {
         let debt = AllocDebt::new();
-        let array: ArrayContainer = LockedContainer::new(vec![Value::int(1)]);
+        let array: LockedContainer<Vec<Value>> = LockedContainer::new(vec![Value::int(1)]);
         // SAFETY: nothing else can reach `array`.
         unsafe { array.lock_mut_thread_local(&debt) }.extend((0..100).map(Value::int));
         assert!(

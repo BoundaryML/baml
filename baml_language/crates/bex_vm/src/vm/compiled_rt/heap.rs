@@ -11,6 +11,8 @@ use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     vm::BexVm,
 };
+use bex_vm_types::object_format::SlotValue;
+use bex_vm_types::types::SharedKind;
 
 impl BexVm {
     /// Return the length of a container, measuring strings in bytes.
@@ -39,12 +41,11 @@ impl BexVm {
         // container.
         #[allow(clippy::cast_possible_wrap, unsafe_code)]
         let len = match self.get_object(ptr) {
-            Object::Array(arr) if THREAD_LOCAL => unsafe { arr.lock_thread_local() }.len() as i64,
             Object::Uint8Array(bytes) if THREAD_LOCAL => {
                 unsafe { bytes.lock_thread_local() }.len() as i64
             }
             Object::Map(map) if THREAD_LOCAL => unsafe { map.lock_thread_local() }.len() as i64,
-            Object::Array(arr) => arr.len() as i64,
+            Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
             Object::Map(map) => map.len() as i64,
             Object::String(s) => s.byte_len() as i64,
@@ -86,19 +87,10 @@ impl BexVm {
             return Err(self.type_error(Type::Int, index));
         };
         // Hold the lock across bounds checking and loading to prevent races with growth.
-        let load_result: Result<Value, (i64, usize)> = {
+        let load_result: Result<SlotValue, (i64, usize)> = {
             match self.get_object(array_ptr) {
-                Object::Array(arr) => {
-                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
-                    #[allow(unsafe_code)]
-                    let guard = if THREAD_LOCAL {
-                        unsafe { arr.lock_thread_local() }
-                    } else {
-                        arr.lock()
-                    };
-                    crate::array_index::resolve_index_inline(i, guard.len())
-                        .map(|idx| guard[idx])
-                        .ok_or((i, guard.len()))
+                Object::Shared(SharedKind::List) => {
+                    self.load_list_element(array_ptr, i, access::<THREAD_LOCAL>())
                 }
                 Object::Uint8Array(bytes) => {
                     // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
@@ -109,14 +101,14 @@ impl BexVm {
                         bytes.lock()
                     };
                     crate::array_index::resolve_index_inline(i, guard.len())
-                        .map(|idx| Value::int(i64::from(guard[idx])))
+                        .map(|idx| SlotValue::Value(Value::int(i64::from(guard[idx]))))
                         .ok_or((i, guard.len()))
                 }
                 other => return Err(object_type_error(ObjectType::Array, other)),
             }
         };
         match load_result {
-            Ok(v) => Ok(v),
+            Ok(v) => Ok(self.slot_value(v)),
             Err((index, length)) => Err(self.index_out_of_bounds_boxed(index, length)),
         }
     }
@@ -158,18 +150,8 @@ impl BexVm {
         let new_value_u8: Option<u8> = new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
         let store_result: Result<(), (i64, usize)> = {
             match self.get_object(array_ptr) {
-                Object::Array(arr) => {
-                    let debt = self.tlab.alloc_debt();
-                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
-                    #[allow(unsafe_code)]
-                    let mut guard = if THREAD_LOCAL {
-                        unsafe { arr.lock_mut_thread_local(debt) }
-                    } else {
-                        arr.lock_mut(debt)
-                    };
-                    crate::array_index::resolve_index_inline(i, guard.len())
-                        .ok_or((i, guard.len()))
-                        .map(|idx| guard[idx] = new_value)
+                Object::Shared(SharedKind::List) => {
+                    self.store_list_element(array_ptr, i, new_value, access::<THREAD_LOCAL>())
                 }
                 Object::Uint8Array(bytes) => {
                     let Some(byte_v) = new_value_u8 else {
@@ -486,5 +468,14 @@ mod tests {
         let red = vm.new_variant(color, 0);
         assert_eq!(vm.discriminant(red).unwrap(), 0);
         assert_ne!(red, green, "each literal is a fresh object");
+    }
+}
+
+/// The slot access a `THREAD_LOCAL` entry point uses.
+const fn access<const THREAD_LOCAL: bool>() -> Access {
+    if THREAD_LOCAL {
+        Access::ThreadLocal
+    } else {
+        Access::Shared
     }
 }

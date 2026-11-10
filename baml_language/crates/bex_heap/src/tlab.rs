@@ -9,10 +9,16 @@
 
 use std::{ptr::NonNull, sync::Arc};
 
+use std::collections::HashMap;
+
 use bex_vm_types::{
-    AllocDebt, Class, HeapPtr, InstanceRef, Meter, Object, RealizedTy, TypeHead, Value,
-    object_format::Access,
-    types::{Array, Map, TypeValue, Variant},
+    AllocDebt, Class, HeapPtr, InstanceRef, ListRef, Meter, Object, RealizedTy, TypeHead, Value,
+    layout::{ElemKind, SlotKind},
+    object_format::{Access, SlotValue},
+    types::{
+        BackingAlloc, LIST_BYTES, Map, TypeValue, Variant, backing_bytes, backing_descriptor,
+        init_backing, list_descriptor,
+    },
 };
 use indexmap::IndexMap;
 
@@ -59,6 +65,13 @@ pub struct Tlab {
     /// Set when a settlement by this TLAB took spending over the budget, until
     /// the owner reads it with [`Self::take_budget_crossed`].
     budget_crossed: bool,
+
+    /// Type objects this allocator made for list element types and generic
+    /// instances, by type, so containers of one type share one. Valid while
+    /// no collection has run since `types_epoch`: a collection may have freed
+    /// any of them.
+    types: HashMap<RealizedTy, HeapPtr>,
+    types_epoch: usize,
 }
 
 impl Tlab {
@@ -82,6 +95,8 @@ impl Tlab {
             debt: AllocDebt::new(),
             debt_epoch: heap.gc_budget().full_collections,
             budget_crossed: false,
+            types: HashMap::new(),
+            types_epoch: heap.gc_budget().full_collections,
             heap,
         }
     }
@@ -261,14 +276,10 @@ impl Tlab {
         self.alloc(Object::String(s.into()))
     }
 
-    /// Allocate an array object whose elements have static type `element_ty`.
-    #[inline]
-    pub fn alloc_array(
-        &mut self,
-        element_ty: bex_vm_types::RealizedTy,
-        values: Vec<Value>,
-    ) -> HeapPtr {
-        self.alloc(Object::Array(Array::new(element_ty, values)))
+    /// Allocate a list whose elements have static type `element_ty`.
+    pub fn alloc_array(&mut self, element_ty: RealizedTy, values: Vec<Value>) -> HeapPtr {
+        let values: Vec<SlotValue> = values.into_iter().map(SlotValue::Value).collect();
+        self.alloc_list_of(element_ty, &values).ptr()
     }
 
     /// Allocate a map object whose keys/values have static types `key_ty`/`value_ty`.
@@ -326,11 +337,7 @@ impl Tlab {
             .has_type_args()
             .then(|| self.alloc_type_args(class, class_def, type_args));
         let cell = self.alloc_zeroed(layout.descriptor(), layout.size());
-        // SAFETY: the payload of a fresh cell of the class's layout.
-        let ptr = unsafe {
-            self.heap
-                .make_heap_ptr(cell.as_ptr().add(HEADER_BYTES).cast::<Object>())
-        };
+        let ptr = self.payload_ptr(cell);
         // SAFETY: a fresh cell of the class's layout; the type object exists
         // exactly when the layout has type arguments.
         let instance = unsafe { InstanceRef::init(ptr, class, type_object) };
@@ -352,7 +359,51 @@ impl Tlab {
     ) -> HeapPtr {
         debug_assert_eq!(type_args.len(), class_def.generic_param_count);
         let head = TypeHead::new(class, class_def.type_tag);
-        self.alloc_type(TypeValue::new(RealizedTy::Class(head, type_args)))
+        self.type_object(RealizedTy::Class(head, type_args))
+    }
+
+    /// The `Object::Type` holding `ty`, shared by every container this
+    /// allocator makes of that type until the next collection.
+    pub fn type_object(&mut self, ty: RealizedTy) -> HeapPtr {
+        let epoch = self.heap.gc_budget().full_collections;
+        if epoch != self.types_epoch {
+            self.types.clear();
+            self.types_epoch = epoch;
+        }
+        if let Some(&ptr) = self.types.get(&ty) {
+            return ptr;
+        }
+        let ptr = self.alloc_type(TypeValue::new(ty.clone()));
+        self.types.insert(ty, ptr);
+        ptr
+    }
+
+    /// Allocate an empty list of `element_ty`.
+    pub fn alloc_list(&mut self, element_ty: RealizedTy) -> ListRef {
+        let slot = SlotKind::of_type(&element_ty);
+        let elem_ty = self.type_object(element_ty);
+        let cell = self.alloc_zeroed(list_descriptor(slot), LIST_BYTES as usize);
+        // SAFETY: the payload of a fresh list cell; the type object was just
+        // made.
+        unsafe { ListRef::init(self.payload_ptr(cell), elem_ty) }
+    }
+
+    /// Allocate a list of `element_ty` holding `values`, floats unboxed.
+    pub fn alloc_list_of(&mut self, element_ty: RealizedTy, values: &[SlotValue]) -> ListRef {
+        let list = self.alloc_list(element_ty);
+        list.lock(Access::ThreadLocal)
+            .replace_all(self, values)
+            .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"));
+        list
+    }
+
+    /// The pointer to the object in `cell`, just after its header.
+    fn payload_ptr(&self, cell: NonNull<u8>) -> HeapPtr {
+        // SAFETY: the payload of a fresh cell of this heap.
+        unsafe {
+            self.heap
+                .make_heap_ptr(cell.as_ptr().add(HEADER_BYTES).cast::<Object>())
+        }
     }
 
     /// A copy of `source`, a fresh instance of its class with the same type
@@ -506,6 +557,16 @@ impl Reservation {
     #[inline]
     pub fn ptr(&self) -> HeapPtr {
         self.ptr
+    }
+}
+
+impl BackingAlloc for Tlab {
+    fn alloc_backing(&mut self, elem: ElemKind, cap: usize) -> HeapPtr {
+        let cell = self.alloc_zeroed(backing_descriptor(elem), backing_bytes(elem, cap));
+        let ptr = self.payload_ptr(cell);
+        // SAFETY: a fresh backing cell of room for `cap` elements.
+        unsafe { init_backing(ptr, cap, elem) };
+        ptr
     }
 }
 
@@ -699,15 +760,9 @@ mod tests {
         let values = vec![Value::int(1), Value::int(2), Value::int(3)];
         let ptr = tlab.alloc_array(bex_vm_types::RealizedTy::int(), values);
 
-        unsafe {
-            match ptr.get() {
-                Object::Array(arr) => {
-                    assert_eq!(arr.len(), 3);
-                    assert_eq!(arr.get(0), Some(Value::int(1)));
-                }
-                _ => panic!("Expected Array"),
-            }
-        }
+        let list = unsafe { ListRef::of(ptr) }.expect("a list");
+        assert_eq!(list.len(), 3);
+        assert_eq!(list.get(0), Some(SlotValue::Value(Value::int(1))));
     }
 
     #[test]

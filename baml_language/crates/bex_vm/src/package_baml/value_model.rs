@@ -1,7 +1,7 @@
 //! The layout ABI over today's heap: the interpreter's instantiation of the
 //! shared builtin bodies.
 //!
-//! Lists, maps and strings are `Object::Array`/`Map`/`String` holding tagged
+//! Lists are shared-format list objects; maps and strings are `Map`/`String` holding tagged
 //! `Value`s behind their `LockedContainer`s. The interpreter runs every
 //! adapter builtin's one generic body at `E = Value` through [`ValueModel`]:
 //! `Value` is the 16-byte tagged slot of today's format, so elements move
@@ -16,13 +16,14 @@ use std::{num::NonZeroU64, ops::Range};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    EntryId, HeapPtr, MapReadGuard, MapWriteGuard, Object, RealizedTy, Value, ValueKind,
+    EntryId, HeapPtr, ListRef, MapReadGuard, MapWriteGuard, Object, RealizedTy, Value, ValueKind,
     errors::{VmBamlError, VmInternalError, VmPanic, VmRustFnError},
     layout::{
         Descriptors, Elem, Fault, Kind, ListOf, Lists, Maps, ObjPtr, RawWord, Shape, SlotKind,
         Slots, StrKey, Strings, Tagged,
     },
-    types::{Array, ArrayReadGuard, ArrayWriteGuard, Map, ObjectType, Type},
+    object_format::Access,
+    types::{Map, ObjectType, SharedKind, Type},
 };
 
 use super::NativeCallResult;
@@ -297,10 +298,17 @@ impl<'vm> ValueModel<'vm> {
         self.vm.get_object(heap_ptr(ptr))
     }
 
-    fn array(&self, list: ObjPtr) -> &Array {
-        match self.object(list) {
-            Object::Array(array) => array,
-            other => panic!("list ABI call on {}", ObjectType::of(other)),
+    fn array(&self, list: ObjPtr) -> ListRef {
+        self.vm
+            .list_at(heap_ptr(list))
+            .unwrap_or_else(|| panic!("list ABI call on {}", ObjectType::of(self.object(list))))
+    }
+
+    /// The slot access the locality allows.
+    fn access(&self) -> Access {
+        match self.locality {
+            Locality::Shared => Access::Shared,
+            Locality::ThreadLocal => Access::ThreadLocal,
         }
     }
 
@@ -311,26 +319,9 @@ impl<'vm> ValueModel<'vm> {
         }
     }
 
-    #[allow(unsafe_code)]
-    fn read(&self, list: ObjPtr) -> ArrayReadGuard<'_> {
-        let array = self.array(list);
-        match self.locality {
-            Locality::Shared => array.lock(),
-            // SAFETY: `ThreadLocal` is only chosen through `run_thread_local`,
-            // whose caller proves the receiver thread-local.
-            Locality::ThreadLocal => unsafe { array.lock_thread_local() },
-        }
-    }
-
-    #[allow(unsafe_code)]
-    fn write(&self, list: ObjPtr) -> ArrayWriteGuard<'_> {
-        let array = self.array(list);
-        let debt = self.vm.tlab.alloc_debt();
-        match self.locality {
-            Locality::Shared => array.lock_mut(debt),
-            // SAFETY: as for `read`.
-            Locality::ThreadLocal => unsafe { array.lock_mut_thread_local(debt) },
-        }
+    /// The list's elements, under its lock, as values.
+    fn read(&self, list: ObjPtr) -> Vec<Value> {
+        self.vm.list_values(self.array(list), self.access())
     }
 
     #[allow(unsafe_code)]
@@ -371,7 +362,7 @@ impl<'vm> ValueModel<'vm> {
     }
 
     fn list_slot(&self, list: ObjPtr) -> SlotKind {
-        SlotKind::of_type(&self.array(list).element_ty)
+        SlotKind::of_type(self.array(list).element_ty())
     }
 
     fn map_value_slot(&self, map: ObjPtr) -> SlotKind {
@@ -395,7 +386,7 @@ impl<'vm> ValueModel<'vm> {
             (ListOf::SameAs(_), View::Values) => type_arg(0),
             (ListOf::ValuesOf(_), View::Values) => type_arg(1),
             #[cfg(test)]
-            (ListOf::SameAs(list), View::Typed) => (*self.array(list).element_ty).clone(),
+            (ListOf::SameAs(list), View::Typed) => self.array(list).element_ty().clone(),
             #[cfg(test)]
             (ListOf::ValuesOf(map), View::Typed) => (*self.map(map).value_ty).clone(),
         }
@@ -508,15 +499,15 @@ impl Slots<Value> for ValueModel<'_> {
 impl Descriptors for ValueModel<'_> {
     fn shape(&self, obj: ObjPtr) -> Shape {
         match self.object(obj) {
-            Object::Array(array) => Shape::List {
-                elem: self.slot_of(&array.element_ty),
+            Object::Shared(SharedKind::List) => Shape::List {
+                elem: self.slot_of(self.array(obj).element_ty()),
             },
             Object::Map(map) => Shape::Map {
                 key: self.slot_of(&map.key_ty),
                 value: self.slot_of(&map.value_ty),
             },
             Object::String(_) => Shape::Str,
-            Object::Shared(_) => Shape::Other(Kind::Instance),
+            Object::Shared(SharedKind::Instance) => Shape::Other(Kind::Instance),
             Object::Closure(_) => Shape::Other(Kind::Closure),
             Object::Future(_) => Shape::Other(Kind::Future),
             Object::Uint8Array(_) => Shape::Other(Kind::Bytes),
@@ -531,39 +522,39 @@ impl Descriptors for ValueModel<'_> {
 
 impl<E: ValueElem> Lists<E> for ValueModel<'_> {
     fn list_len(&self, list: ObjPtr) -> usize {
-        self.read(list).len()
+        self.array(list).len()
     }
 
     fn list_get(&self, list: ObjPtr, index: usize) -> Option<E> {
-        let value = self.read(list).get(index).copied()?;
-        Some(self.elem(value, self.list_slot(list)))
+        let value = self.array(list).get_with(index, self.access())?;
+        Some(self.elem(self.vm.box_slot(value), self.list_slot(list)))
     }
 
     fn list_to_vec(&self, list: ObjPtr) -> Vec<E> {
-        let values = self.read(list).to_vec();
+        let values = self.read(list);
         self.elems(values, self.list_slot(list))
     }
 
     fn list_splice(&mut self, list: ObjPtr, range: Range<usize>, with: &[E]) -> Vec<E> {
         let slot = self.list_slot(list);
         let inserted = self.values(with, slot);
-        let removed: Vec<Value> = {
-            let mut values = self.write(list);
+        let (array, access) = (self.array(list), self.access());
+        let removed: Vec<Value> = self.vm.edit_list(array, access, |values| {
             let range = clamp(range, values.len());
             values.splice(range, inserted).collect()
-        };
+        });
         self.elems(removed, slot)
     }
 
     fn list_push(&mut self, list: ObjPtr, elem: E) -> usize {
         let value = elem.into_value(self, self.list_slot(list));
-        let mut values = self.write(list);
-        values.push(value);
-        values.len()
+        let (array, access) = (self.array(list), self.access());
+        self.vm.list_push(array, access, value)
     }
 
     fn list_pop(&mut self, list: ObjPtr) -> Option<E> {
-        let popped = self.write(list).pop()?;
+        let popped = self.array(list).lock(self.access()).pop()?;
+        let popped = self.vm.slot_value(popped);
         Some(self.elem(popped, self.list_slot(list)))
     }
 

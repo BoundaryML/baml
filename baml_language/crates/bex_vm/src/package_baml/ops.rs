@@ -41,6 +41,7 @@ use super::{
     resolve,
 };
 use crate::BexVm;
+use bex_vm_types::object_format::Access;
 use bex_vm_types::types::SharedKind;
 
 // ── int ───────────────────────────────────────────────────────────────────
@@ -488,16 +489,17 @@ impl EqualsDriver {
             }
             (Object::Uint8Array(_), _) => Cmp::NotEqual,
 
-            (Object::Array(x), Object::Array(y)) => {
-                let (xs, ys) = lock_pair_ordered(pa, &x.data, pb, &y.data);
+            (Object::Shared(SharedKind::List), Object::Shared(SharedKind::List)) => {
+                // Each list is read under its own lock, never both at once.
+                let xs = vm.list_values(vm.expect_list(pa), Access::Shared);
+                let ys = vm.list_values(vm.expect_list(pb), Access::Shared);
                 if xs.len() != ys.len() {
                     return Cmp::NotEqual;
                 }
-                self.stack
-                    .extend(xs.iter().copied().zip(ys.iter().copied()));
+                self.stack.extend(xs.into_iter().zip(ys));
                 Cmp::Continue
             }
-            (Object::Array(_), _) => Cmp::NotEqual,
+            (Object::Shared(SharedKind::List), _) => Cmp::NotEqual,
 
             (Object::Map(x), Object::Map(y)) => {
                 let (xs, ys) = lock_pair_ordered(pa, &x.data, pb, &y.data);

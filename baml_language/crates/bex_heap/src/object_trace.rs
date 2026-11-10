@@ -92,12 +92,8 @@ fn push_values(worklist: &mut Vec<HeapPtr>, values: impl IntoIterator<Item = Val
 /// The edges of one object, its type heads aside.
 fn trace_variant(obj: &Object, worklist: &mut Vec<HeapPtr>) {
     match obj {
-        // SAFETY (Array and Map arms): GC traversal runs under STW; all
-        // mutator fibers are parked, so no concurrent writer can race with
-        // these reads.
-        Object::Array(arr) => {
-            push_values(worklist, unsafe { arr.data_unchecked() }.iter().copied())
-        }
+        // SAFETY (Map arm): GC traversal runs under STW; all mutator fibers
+        // are parked, so no concurrent writer can race with these reads.
         Object::Map(map) => {
             let data = unsafe { map.data_unchecked() };
             push_values(worklist, data.keys().chain(data.values()).copied());

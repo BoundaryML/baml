@@ -709,13 +709,12 @@ mod tests {
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[arr]) };
 
         // Should copy both the array and the string it references
-        assert_eq!(stats.live_count, 2);
+        assert_eq!(stats.live_count, 4); // a non-empty list is a list and a backing cell, plus its element type
         assert_eq!(remapped.len(), 1);
 
         // Verify the array's reference was updated
         let new_arr_ptr = remapped[0];
-        let arr_obj = unsafe { new_arr_ptr.get() };
-        if let Object::Array(elements) = arr_obj {
+        if let Some(elements) = unsafe { bex_vm_types::ListRef::of(new_arr_ptr) } {
             // The string reference should have been updated
             if let Some(str_ptr) = elements.get(0).and_then(|__v| __v.as_object_ptr()) {
                 // Verify the referenced string is valid
@@ -829,13 +828,14 @@ mod tests {
             bex_vm_types::MapData::from_hashed_entries([(17, Value::object(key), Value::int(42))]),
         )));
         let (stats, roots, _) = unsafe { heap.collect_garbage(&[map]) };
-        assert_eq!(stats.live_count, 3);
+        assert_eq!(stats.live_count, 5); // a non-empty list is a list and a backing cell, plus its element type
         let Object::Map(map) = (unsafe { roots[0].get() }) else {
             panic!("expected map");
         };
         let (_, entries) = map.snapshot_bucket(17);
         assert_eq!(entries[0].1.value, Value::int(42));
-        let Object::Array(key) = (unsafe { entries[0].1.key.as_object_ptr().unwrap().get() })
+        let Some(key) =
+            (unsafe { bex_vm_types::ListRef::of(entries[0].1.key.as_object_ptr().unwrap()) })
         else {
             panic!("expected array key");
         };
@@ -1012,22 +1012,19 @@ mod tests {
         let (stats, remapped, _forwarding) = unsafe { heap.collect_garbage(&[outer_array]) };
 
         // The four chain objects and the map key should survive.
-        assert_eq!(stats.live_count, 5);
+        assert_eq!(stats.live_count, 8); // a non-empty list is a list and a backing cell, plus its element type
         assert!(stats.collected_count >= 2);
 
         // Verify the chain is intact after forwarding
         let new_outer = remapped[0];
-        let outer_obj = unsafe { new_outer.get() };
-
-        if let Object::Array(arr) = outer_obj
+        if let Some(arr) = unsafe { bex_vm_types::ListRef::of(new_outer) }
             && let Some(map_ptr) = arr.get(0).and_then(|v| v.as_object_ptr())
         {
             let map_obj = unsafe { map_ptr.get() };
             if let Object::Map(m) = map_obj
                 && let Some(inner_arr_ptr) = m.snapshot_entries()[0].1.as_object_ptr()
             {
-                let inner_arr_obj = unsafe { inner_arr_ptr.get() };
-                if let Object::Array(inner_arr) = inner_arr_obj
+                if let Some(inner_arr) = unsafe { bex_vm_types::ListRef::of(inner_arr_ptr) }
                     && let Some(str_ptr) = inner_arr.get(0).and_then(|__v| __v.as_object_ptr())
                 {
                     let str_obj = unsafe { str_ptr.get() };
@@ -1712,8 +1709,8 @@ mod tests {
         );
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[arr, map]) };
-        assert_eq!(stats.live_count, 2);
-        let Object::Array(a) = (unsafe { new_roots[0].get() }) else {
+        assert_eq!(stats.live_count, 3); // a non-empty list is a list and a backing cell, plus its element type
+        let Some(a) = (unsafe { bex_vm_types::ListRef::of(new_roots[0]) }) else {
             panic!("not array")
         };
         assert!(a.is_empty());
@@ -1741,22 +1738,22 @@ mod tests {
         let d = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(c)]);
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[d]) };
-        assert_eq!(stats.live_count, 4);
+        assert_eq!(stats.live_count, 8); // a non-empty list is a list and a backing cell, plus its element type
 
         // Verify chain is navigable end-to-end after GC
-        let Object::Array(d_arr) = (unsafe { new_roots[0].get() }) else {
+        let Some(d_arr) = (unsafe { bex_vm_types::ListRef::of(new_roots[0]) }) else {
             panic!("not array at d")
         };
         let Some(c_ptr) = d_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("d[0] not object")
         };
-        let Object::Array(c_arr) = (unsafe { c_ptr.get() }) else {
+        let Some(c_arr) = (unsafe { bex_vm_types::ListRef::of(c_ptr) }) else {
             panic!("not array at c")
         };
         let Some(b_ptr) = c_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("c[0] not object")
         };
-        let Object::Array(b_arr) = (unsafe { b_ptr.get() }) else {
+        let Some(b_arr) = (unsafe { bex_vm_types::ListRef::of(b_ptr) }) else {
             panic!("not array at b")
         };
         let Some(a_ptr) = b_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
@@ -1782,7 +1779,7 @@ mod tests {
         let _garbage = tlab.alloc_string("garbage".to_string());
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&[parent]) };
-        assert_eq!(stats.live_count, 6); // parent + 5 children
+        assert_eq!(stats.live_count, 8); // parent + 5 children // a non-empty list is a list and a backing cell, plus its element type
         // collected_count >= 1 (explicit garbage) + unused TLAB chunk slots
         assert!(stats.collected_count >= 1);
     }
@@ -1804,13 +1801,13 @@ mod tests {
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[parent_a, parent_b]) };
         // 2 parents + 1 shared child (not 4 — shared object copied only once)
-        assert_eq!(stats.live_count, 3);
+        assert_eq!(stats.live_count, 6); // a non-empty list is a list and a backing cell, plus its element type
 
         // Both parents should point to the same new location for the shared child
-        let Object::Array(a) = (unsafe { new_roots[0].get() }) else {
+        let Some(a) = (unsafe { bex_vm_types::ListRef::of(new_roots[0]) }) else {
             panic!("not array a")
         };
-        let Object::Array(b) = (unsafe { new_roots[1].get() }) else {
+        let Some(b) = (unsafe { bex_vm_types::ListRef::of(new_roots[1]) }) else {
             panic!("not array b")
         };
         let Some(a_child) = a.get(0).and_then(|__v| __v.as_object_ptr()) else {
@@ -1842,10 +1839,10 @@ mod tests {
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[root]) };
         // root + B + C + D (D is shared between B and C — copied only once)
-        assert_eq!(stats.live_count, 4);
+        assert_eq!(stats.live_count, 8); // a non-empty list is a list and a backing cell, plus its element type
 
         // Navigate: root -> B and root -> C both lead to the same D
-        let Object::Array(root_arr) = (unsafe { new_roots[0].get() }) else {
+        let Some(root_arr) = (unsafe { bex_vm_types::ListRef::of(new_roots[0]) }) else {
             panic!("not array root")
         };
         let Some(b_ptr) = root_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
@@ -1854,10 +1851,10 @@ mod tests {
         let Some(c_ptr) = root_arr.get(1).and_then(|__v| __v.as_object_ptr()) else {
             panic!("root[1] not object")
         };
-        let Object::Array(b_arr) = (unsafe { b_ptr.get() }) else {
+        let Some(b_arr) = (unsafe { bex_vm_types::ListRef::of(b_ptr) }) else {
             panic!("not array b")
         };
-        let Object::Array(c_arr) = (unsafe { c_ptr.get() }) else {
+        let Some(c_arr) = (unsafe { bex_vm_types::ListRef::of(c_ptr) }) else {
             panic!("not array c")
         };
         let Some(d_from_b) = b_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
@@ -1884,18 +1881,13 @@ mod tests {
             a,
         ))));
         // Patch A to reference B, forming a cycle
-        unsafe {
-            *a.get_mut() = Object::Array(bex_vm_types::types::Array::new(
-                baml_type::RealizedTy::unknown(),
-                vec![Value::object(b)],
-            ));
-        }
+        push_onto(&mut tlab, a, Value::object(b));
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[a]) };
-        assert_eq!(stats.live_count, 2);
+        assert_eq!(stats.live_count, 4); // a non-empty list is a list and a backing cell, plus its element type
 
         // Verify the cycle is preserved: A -> B -> A (forwarded)
-        let Object::Array(a_arr) = (unsafe { new_roots[0].get() }) else {
+        let Some(a_arr) = (unsafe { bex_vm_types::ListRef::of(new_roots[0]) }) else {
             panic!("not array a")
         };
         let Some(b_ptr) = a_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
@@ -1923,12 +1915,7 @@ mod tests {
         let x = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![]); // placeholder
         let y = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(x)]);
         let z = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(y)]);
-        unsafe {
-            *x.get_mut() = Object::Array(bex_vm_types::types::Array::new(
-                baml_type::RealizedTy::unknown(),
-                vec![Value::object(z)],
-            ));
-        }
+        push_onto(&mut tlab, x, Value::object(z));
 
         // Separate rooted survivor
         let rooted = tlab.alloc_string("survivor".to_string());
@@ -1954,7 +1941,7 @@ mod tests {
         }
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&[current]) };
-        assert_eq!(stats.live_count, 100);
+        assert_eq!(stats.live_count, 200); // a non-empty list is a list and a backing cell, plus its element type
     }
 
     #[test]
@@ -2025,7 +2012,7 @@ mod tests {
         // A function stand-in (Class acts as a leaf here, needed by Closure).
         let leaf_func = tlab.alloc_string("func_placeholder".to_string());
 
-        // --- Container: Object::Array ---
+        // --- Container: a list ---
         let array_container = tlab.alloc_array(
             baml_type::RealizedTy::unknown(),
             vec![Value::object(leaf_for_array)],
@@ -2117,7 +2104,7 @@ mod tests {
         // Spot-check each container to confirm fixup correctness.
 
         // Array: slot 0 should be the (forwarded) leaf string.
-        let Object::Array(arr) = (unsafe { new_roots[0].get() }) else {
+        let Some(arr) = (unsafe { bex_vm_types::ListRef::of(new_roots[0]) }) else {
             panic!("new_roots[0] not Array")
         };
         let Some(arr_leaf) = arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
@@ -2268,9 +2255,12 @@ mod tests {
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
         tlab.invalidate();
-        assert_eq!(
-            stats.live_payload_bytes,
-            size_of::<bex_vm_types::RealizedTy>() + 1_000 * size_of::<Value>()
+        // The list's elements live in its backing cell, on the heap: only
+        // its element type object's boxed type is payload.
+        assert!(
+            stats.live_payload_bytes < 1_000 * size_of::<Value>(),
+            "{} payload bytes",
+            stats.live_payload_bytes
         );
 
         // The array is no longer rooted; three strings share one buffer.
@@ -2298,6 +2288,14 @@ mod tests {
     /// A class whose `cleanup` method is `finalizer`, or with no finalizer.
     /// A class whose fields have `fields`' types and `generic_params` type
     /// parameters.
+    /// Append `value` to the list `list`.
+    fn push_onto(tlab: &mut Tlab, list: HeapPtr, value: Value) {
+        let list = unsafe { bex_vm_types::ListRef::of(list) }.expect("a list");
+        list.lock(bex_vm_types::object_format::Access::Shared)
+            .push(tlab, bex_vm_types::object_format::SlotValue::Value(value))
+            .expect("an unknown list holds anything");
+    }
+
     fn class_with_fields(
         fields: Vec<(&str, bex_vm_types::RealizedTy)>,
         generic_params: usize,
@@ -2365,6 +2363,51 @@ mod tests {
         instance.store_float(1, -0.5, bex_vm_types::object_format::Access::Shared);
         assert_eq!(instance.load(2), SlotValue::Value(Value::int(-3)));
         assert_eq!(instance.load(1), SlotValue::Float(-0.5));
+    }
+
+    /// A list grows by publishing a new backing; its elements live in the
+    /// backing's slots (floats unboxed in a `float[]`, mixed values tagged in
+    /// an `unknown[]`), and the collector reaches them through the backing.
+    #[test]
+    fn list_elements_live_in_their_backing() {
+        use bex_vm_types::{
+            ListRef,
+            object_format::{Access, SlotValue},
+        };
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let floats = tlab.alloc_list(bex_vm_types::RealizedTy::Float);
+        let mixed = tlab.alloc_list(bex_vm_types::RealizedTy::Unknown);
+        let text = tlab.alloc_string("reached through a tagged element");
+        for i in 0..10 {
+            let float = SlotValue::Float(f64::from(i) + 0.5);
+            floats.lock(Access::Shared).push(&mut tlab, float).unwrap();
+        }
+        let mixed_values = [
+            SlotValue::Value(Value::int(1)),
+            SlotValue::Float(2.5),
+            SlotValue::Value(Value::object(text)),
+        ];
+        mixed
+            .lock(Access::Shared)
+            .replace_all(&mut tlab, &mixed_values)
+            .unwrap();
+        assert_eq!(floats.len(), 10);
+        assert!(floats.backing_object().unwrap().1 >= 10);
+        assert_eq!(floats.get(9), Some(SlotValue::Float(9.5)));
+
+        let roots = [floats.ptr(), mixed.ptr()];
+        let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
+        // Two lists, two backings, two element type objects and the string.
+        assert_eq!(stats.live_count, 7);
+        assert_eq!(mixed.snapshot(Access::Shared), mixed_values);
+
+        let popped = mixed.lock(Access::Shared).pop();
+        assert_eq!(popped, Some(SlotValue::Value(Value::object(text))));
+        let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
+        assert_eq!(stats.live_count, 6, "a popped element is not kept");
+        let _ = unsafe { ListRef::of(roots[0]) }.expect("still a list");
     }
 
     /// A generic instance keeps its type arguments in a type object its

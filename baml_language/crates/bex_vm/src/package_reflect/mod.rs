@@ -10,7 +10,7 @@ mod type_class;
 pub(crate) mod type_kinds;
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{ArrayReadGuard, MapReadGuard, types::Value};
+use bex_vm_types::{MapReadGuard, types::Value};
 use indexmap::IndexMap;
 
 use crate::{

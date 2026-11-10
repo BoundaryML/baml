@@ -153,7 +153,6 @@ macro_rules! walk_object_heads {
                     }
                 }
                 Object::Future(fut) => fut.$visit(f),
-                Object::Array(array) => array.element_ty.$visit(f),
                 Object::Map(map) => {
                     map.key_ty.$visit(f);
                     map.value_ty.$visit(f);

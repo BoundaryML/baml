@@ -3,11 +3,10 @@ use std::sync::Arc;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-    ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure,
-    Uint8ArrayContainer, Value, Variant,
+    BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Uint8ArrayContainer, Variant,
     types::{
-        Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
-        RuntimeImplRule, TypeAliasDef,
+        Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package, RuntimeImplRule,
+        TypeAliasDef,
     },
 };
 
@@ -99,11 +98,6 @@ pub enum Object {
     /// racing mutation under `spawn`.
     Uint8Array(Uint8ArrayContainer),
 
-    /// List of values. Wrapped in [`ArrayContainer`] so the underlying
-    /// `Vec<Value>` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
-    /// mutation under `spawn`.
-    Array(Array),
-
     /// Map of values. Wrapped in [`crate::MapContainer`] so the underlying
     /// [`crate::MapData`] is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
@@ -144,6 +138,7 @@ pub enum Object {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SharedKind {
     Instance,
+    List,
 }
 
 impl SharedKind {
@@ -151,8 +146,10 @@ impl SharedKind {
     /// object of this kind.
     pub(crate) fn marker(self) -> &'static Object {
         static INSTANCE: Object = Object::Shared(SharedKind::Instance);
+        static LIST: Object = Object::Shared(SharedKind::List);
         match self {
             SharedKind::Instance => &INSTANCE,
+            SharedKind::List => &LIST,
         }
     }
 }
@@ -180,7 +177,6 @@ impl Object {
             | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Array(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
@@ -246,7 +242,6 @@ impl Object {
             | Object::BoundMethod(_)
             | Object::HostClosure(_)
             | Object::Cell(_)
-            | Object::Array(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
@@ -279,7 +274,6 @@ impl Object {
             | Object::BoundMethod(_)
             | Object::HostClosure(_)
             | Object::Cell(_)
-            | Object::Array(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
@@ -349,7 +343,8 @@ enum ObjectWire {
         num_bigint::BigInt,
     ),
     Uint8Array(Vec<u8>),
-    Array(Box<crate::RealizedTy>, Vec<Value>),
+    // Reserved tag: lists are runtime objects in the shared format.
+    Array,
     // Reserved tag. Runtime maps need VM Hash callbacks to rebuild their index.
     Map,
     Float(f64),
@@ -392,7 +387,6 @@ impl BorshSerialize for Object {
             Self::String(v) => ObjectWire::String(v.to_string()),
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
-            Self::Array(v) => ObjectWire::Array(v.element_ty.clone(), v.data.lock().clone()),
             Self::Map(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -440,12 +434,6 @@ impl BorshDeserialize for Object {
             ObjectWire::Interface(v) => Self::Interface(v),
             ObjectWire::ImplRule(v) => Self::ImplRule(v),
             ObjectWire::Class(v) => Self::Class(v),
-            ObjectWire::Instance => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "instances are runtime objects and have no wire form",
-                ));
-            }
             ObjectWire::Enum(v) => Self::Enum(v),
             ObjectWire::TypeAlias(v) => Self::TypeAlias(v),
             ObjectWire::Variant(v) => Self::Variant(v),
@@ -456,10 +444,12 @@ impl BorshDeserialize for Object {
             ObjectWire::String(v) => Self::String(bex_str::BexStr::from(v)),
             ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
             ObjectWire::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
-            ObjectWire::Array(ty, data) => Self::Array(Array {
-                element_ty: ty,
-                data: ArrayContainer::new(data),
-            }),
+            ObjectWire::Instance | ObjectWire::Array => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "instances and lists are runtime objects and have no wire form",
+                ));
+            }
             ObjectWire::Map => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -498,12 +488,7 @@ impl std::fmt::Display for Object {
             Object::String(string) => string.fmt(f),
             Object::Bigint(bi) => write!(f, "{bi}"),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
-            Object::Array(array) => write!(
-                f,
-                "<array[{}] len={}>",
-                array.element_ty,
-                array.data.lock().len()
-            ),
+            Object::Shared(SharedKind::List) => write!(f, "<array>"),
             Object::Map(map) => write!(
                 f,
                 "<map[{}: {}] len={}>",
@@ -573,7 +558,7 @@ impl ObjectType {
             Object::String(_) => Self::String,
             Object::Bigint(_) => Self::Bigint,
             Object::Uint8Array(_) => Self::Uint8Array,
-            Object::Array(_) => Self::Array,
+            Object::Shared(SharedKind::List) => Self::Array,
             Object::Map(_) => Self::Map,
             Object::RustData(_) => Self::RustData,
             Object::Type(_) => Self::Type,
@@ -633,7 +618,7 @@ mod wire_tests {
     use borsh::BorshDeserialize;
 
     use super::*;
-    use crate::types::TypeValue;
+    use crate::{Value, types::TypeValue};
 
     #[test]
     fn runtime_maps_do_not_persist_cached_hashes() {

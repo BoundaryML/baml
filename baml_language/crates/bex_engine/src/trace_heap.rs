@@ -15,10 +15,11 @@ use std::{
 
 use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
 use bex_heap::{BexHeap, PermitProof};
-use bex_vm_types::InstanceRef;
+use bex_vm_types::object_format::Access;
 use bex_vm_types::object_format::SlotValue;
 use bex_vm_types::types::SharedKind;
 use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
+use bex_vm_types::{InstanceRef, ListRef};
 
 /// A structured-log snapshot could not allocate its owned value graph.
 #[derive(Debug)]
@@ -345,10 +346,7 @@ impl TraceSnapshotBuilder {
         ptr: HeapPtr,
     ) -> Result<TraceValueRef, CopyError> {
         let object = unsafe { ptr.get() };
-        let tracks_recursion = matches!(
-            object,
-            Object::Array(_) | Object::Map(_) | Object::Shared(_)
-        );
+        let tracks_recursion = matches!(object, Object::Map(_) | Object::Shared(_));
         if tracks_recursion && self.in_progress.contains(&ptr) {
             return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
         }
@@ -373,11 +371,12 @@ impl TraceSnapshotBuilder {
                 copied.extend_from_slice(&bytes);
                 self.alloc(TraceValue::Bytes(copied))
             }
-            Object::Array(array) => {
-                let array = array.lock();
+            Object::Shared(SharedKind::List) => {
+                // SAFETY: the marker is only shown for a list.
+                let array = unsafe { ListRef::new_unchecked(ptr) }.snapshot(Access::Shared);
                 let mut items = Self::vec_with_capacity(array.len())?;
-                for value in array.iter().copied() {
-                    items.push(self.copy_value(heap, permit, value)?);
+                for value in array {
+                    items.push(self.copy_slot(heap, permit, value)?);
                 }
                 self.alloc(TraceValue::Array(items))
             }
@@ -586,7 +585,6 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::String(_)
         | Object::Bigint(_)
         | Object::Uint8Array(_)
-        | Object::Array(_)
         | Object::Map(_)
         | Object::Shared(_)
         | Object::Variant(_)
@@ -828,12 +826,16 @@ mod tests {
         let array_ptr = permit
             .tlab_mut()
             .alloc_array(bex_vm_types::RealizedTy::unknown(), vec![]);
-        unsafe {
-            *array_ptr.get_mut() = Object::Array(bex_vm_types::types::Array::new(
-                bex_vm_types::RealizedTy::unknown(),
-                vec![Value::int(1), Value::object(array_ptr)],
-            ));
-        }
+        use bex_vm_types::{
+            ListRef,
+            object_format::{Access, SlotValue},
+        };
+        let values = [Value::int(1), Value::object(array_ptr)].map(SlotValue::Value);
+        unsafe { ListRef::of(array_ptr) }
+            .expect("a list")
+            .lock(Access::Shared)
+            .replace_all(permit.tlab_mut(), &values)
+            .expect("an unknown list holds anything");
         let trace_heap = TraceHeap::new();
 
         let handle =

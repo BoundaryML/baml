@@ -339,15 +339,13 @@ function f() -> string[] {
     let ptr = result
         .as_object_ptr()
         .expect("map result should be an array object");
-    match vm.get_object(ptr) {
-        Object::Array(arr) => assert!(
-            matches!(&*arr.element_ty, RealizedTy::String),
-            "map result element_ty should be `string` (closure return `U`), not `{:?}` \
-             (the receiver `T`)",
-            arr.element_ty
-        ),
-        other => panic!("expected Object::Array result, got {other:?}"),
-    }
+    let arr = vm.list_at(ptr).expect("expected a list result");
+    assert!(
+        matches!(arr.element_ty(), RealizedTy::String),
+        "map result element_ty should be `string` (closure return `U`), not `{:?}` \
+         (the receiver `T`)",
+        arr.element_ty()
+    );
 }
 
 #[test]

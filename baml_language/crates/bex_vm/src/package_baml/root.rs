@@ -6,7 +6,7 @@ use std::{
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, ObjectType, RootHaver, RootVisitor, ValueKind,
-    types::{Array, Map, Object, Value},
+    types::{Map, Object, Value},
 };
 
 use super::{
@@ -21,6 +21,7 @@ use crate::{
     BexVm, VmPanic,
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
+use bex_vm_types::object_format::Access;
 use bex_vm_types::object_format::SlotValue;
 use bex_vm_types::types::SharedKind;
 
@@ -289,7 +290,10 @@ pub(super) fn collect_to_string_overrides(
     // child order (array elements, map key/value pairs, instance fields) matches
     // the renderer so the two stay index-aligned.
     let children: Vec<Value> = match vm.get_object(ptr) {
-        Object::Array(values) => values.to_vec(),
+        Object::Shared(SharedKind::List) => {
+            let values = vm.expect_list(ptr);
+            vm.list_values(values, bex_vm_types::object_format::Access::Shared)
+        }
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
@@ -758,8 +762,9 @@ pub(super) fn render_to_sink(
     let snap = match vm.get_object(ptr) {
         Object::String(s) => DisplaySnap::Str(s.as_str().to_string()),
         Object::Bigint(b) => DisplaySnap::Leaf(b.to_string()),
-        Object::Array(values) => {
-            let values = values.lock();
+        Object::Shared(SharedKind::List) => {
+            let values = vm.expect_list(ptr);
+            let values = vm.list_values(values, bex_vm_types::object_format::Access::Shared);
             let limit = state.snapshot_child_limit(values.len());
             DisplaySnap::Seq(
                 values.iter().take(limit).copied().collect(),
@@ -973,26 +978,29 @@ fn deep_copy_value_recursive(
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 
-                Object::Array(values) => {
+                Object::Shared(SharedKind::List) => {
+                    let values = vm.expect_list(ptr);
                     // A deep copy preserves the source array's element type.
-                    let element_ty = values.element_ty.as_ref().clone();
-                    let placeholder_ptr = vm
-                        .tlab
-                        .alloc(Object::Array(Array::new(element_ty, Vec::new())));
+                    let element_ty = values.element_ty().clone();
+                    let placeholder = vm.tlab.alloc_list(element_ty);
+                    let placeholder_ptr = placeholder.ptr();
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     // Snapshot under the source's lock; the recursive call
                     // re-enters the VM and may take other container locks.
-                    let snapshot = values.to_vec();
+                    let snapshot =
+                        vm.list_values(values, bex_vm_types::object_format::Access::Shared);
                     let mut new_values = Vec::with_capacity(snapshot.len());
                     for value in snapshot {
                         new_values.push(deep_copy_value_recursive(vm, value, copied_objects)?);
                     }
 
-                    let Object::Array(array) = vm.get_object(placeholder_ptr) else {
-                        unreachable!("the placeholder was allocated as an array")
-                    };
-                    array.lock_mut(vm.tlab.alloc_debt()).extend(new_values);
+                    let new_values: Vec<SlotValue> =
+                        new_values.into_iter().map(SlotValue::Value).collect();
+                    placeholder
+                        .lock(Access::Shared)
+                        .replace_all(&mut vm.tlab, &new_values)
+                        .expect("a copy's elements fit the original's slots");
                     placeholder_ptr
                 }
 

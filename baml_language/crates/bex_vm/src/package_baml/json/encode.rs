@@ -32,7 +32,7 @@
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, MapData, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
-    types::{Array, Map},
+    types::Map,
 };
 use rustc_hash::FxHashMap;
 use sys_types::JsonNaming;
@@ -224,7 +224,10 @@ impl ToJsonCache {
             Object::String(_) => OverrideKey::String,
             Object::Bigint(_) => OverrideKey::Bigint,
             Object::Uint8Array(_) => OverrideKey::Uint8Array,
-            Object::Array(array) => OverrideKey::List((*array.element_ty).clone()),
+            Object::Shared(SharedKind::List) => {
+                let array = vm.expect_list(ptr);
+                OverrideKey::List(array.element_ty().clone())
+            }
             Object::Map(map) => OverrideKey::Map((*map.key_ty).clone(), (*map.value_ty).clone()),
             Object::Shared(SharedKind::Instance) => {
                 let instance = vm.expect_instance(ptr);
@@ -313,7 +316,10 @@ fn collect(
 /// The children of the value at `ptr` the walk descends into, in its order.
 fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
     match vm.get_object(ptr) {
-        Object::Array(values) => values.to_vec(),
+        Object::Shared(SharedKind::List) => {
+            let values = vm.expect_list(ptr);
+            vm.list_values(values, bex_vm_types::object_format::Access::Shared)
+        }
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
@@ -675,7 +681,10 @@ impl Walker<'_, '_> {
             Object::Float(f) => Shape::Float(*f),
             Object::String(_) => Shape::String,
             Object::Bigint(_) => Shape::Bigint,
-            Object::Array(values) => Shape::Array(values.to_vec()),
+            Object::Shared(SharedKind::List) => {
+                let values = vm.expect_list(ptr);
+                Shape::Array(vm.list_values(values, bex_vm_types::object_format::Access::Shared))
+            }
             Object::Map(_) => Shape::Map,
             Object::Shared(SharedKind::Instance) => {
                 let instance = vm.expect_instance(ptr);
@@ -784,7 +793,12 @@ impl Walker<'_, '_> {
             Object::Float(f) => JsonShape::Float(*f),
             Object::String(_) => JsonShape::String,
             Object::Bigint(_) => JsonShape::Bigint,
-            Object::Array(values) => JsonShape::Array(values.to_vec()),
+            Object::Shared(SharedKind::List) => {
+                let values = vm.expect_list(ptr);
+                JsonShape::Array(
+                    vm.list_values(values, bex_vm_types::object_format::Access::Shared),
+                )
+            }
             Object::Map(_) => JsonShape::Map,
             Object::Variant(variant) => JsonShape::Variant(match vm.get_object(variant.enm) {
                 Object::Enum(e) => e.variants.get(variant.index).map(|v| v.name.clone()),
@@ -1286,7 +1300,7 @@ impl Sink for ValueSink {
         let Some(Building::Array(items)) = self.building.pop() else {
             unreachable!("an array ends what it began")
         };
-        let array = vm.alloc(Object::Array(Array::new(self.json.clone(), items)));
+        let array = vm.alloc_array(self.json.clone(), items);
         self.emit(Value::object(array));
     }
 

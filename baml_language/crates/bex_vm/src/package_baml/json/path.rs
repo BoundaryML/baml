@@ -138,10 +138,10 @@ fn element(
     index: i64,
     selector: &str,
 ) -> Result<Value, VmRustFnError> {
-    let length = match current.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-        Some(Object::Array(array)) => {
+    let length = match current.as_object_ptr().and_then(|ptr| vm.list_at(ptr)) {
+        Some(array) => {
             if let Some(value) = usize::try_from(index).ok().and_then(|i| array.get(i)) {
-                return Ok(value);
+                return Ok(vm.slot_value(value));
             }
             array.len()
         }

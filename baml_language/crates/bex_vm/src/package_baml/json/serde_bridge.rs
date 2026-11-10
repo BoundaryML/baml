@@ -5,14 +5,12 @@
 use std::sync::Arc;
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{
-    HeapPtr, RealizedTy, Value,
-    types::{Array, Object},
-};
+use bex_vm_types::{HeapPtr, RealizedTy, Value, types::Object};
 use indexmap::IndexMap;
 
 use super::{CYCLIC_JSON, STRING_MAP_REQUIRED, json_alias_ty, parse_decimal_bigint};
 use crate::BexVm;
+use bex_vm_types::types::SharedKind;
 
 /// Run `f` with `seg` appended to `path`, then restore `path` to its prior
 /// length.
@@ -76,10 +74,7 @@ pub(in crate::package_baml) fn serde_to_value(vm: &mut BexVm, v: &serde_json::Va
         serde_json::Value::Array(arr) => {
             let items: Vec<Value> = arr.iter().map(|elem| serde_to_value(vm, elem)).collect();
             // Untyped JSON: elements are `json` values.
-            Value::object(
-                vm.tlab
-                    .alloc(Object::Array(Array::new(json_alias_ty(vm), items))),
-            )
+            Value::object(vm.tlab.alloc_array(json_alias_ty(vm), items))
         }
         serde_json::Value::Object(map) => {
             let entries: IndexMap<bex_vm_types::BexStr, Value> = map
@@ -140,7 +135,10 @@ fn value_to_serde_at(
         ValueKind::Int(i) => serde_json::Value::Number(i.into()),
         ValueKind::OmittedArg => serde_json::Value::Null,
         ValueKind::Object(ptr) => {
-            let is_container = matches!(vm.get_object(ptr), Object::Array(_) | Object::Map(_));
+            let is_container = matches!(
+                vm.get_object(ptr),
+                Object::Shared(SharedKind::List) | Object::Map(_)
+            );
             if is_container {
                 if active.contains(&ptr) {
                     return Err(ValueToSerdeError {
@@ -171,8 +169,9 @@ fn object_to_serde_at(
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null),
         Object::String(s) => serde_json::Value::String(s.to_string()),
-        Object::Array(arr) => {
-            let arr = arr.to_vec();
+        Object::Shared(SharedKind::List) => {
+            let arr = vm.expect_list(ptr);
+            let arr = vm.list_values(arr, bex_vm_types::object_format::Access::Shared);
             let mut out = Vec::with_capacity(arr.len());
             for (i, el) in arr.into_iter().enumerate() {
                 out.push(with_path_segment(path, format_args!("[{i}]"), |p| {

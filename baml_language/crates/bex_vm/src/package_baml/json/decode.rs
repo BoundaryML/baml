@@ -34,7 +34,7 @@ use baml_type::MediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     BexStr, HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
-    types::Array,
+    types::SharedKind,
 };
 use indexmap::IndexMap;
 use rustc_hash::FxHashMap;
@@ -51,6 +51,7 @@ use crate::{
     errors::VmRustFnError,
     package_baml::{Continuation, NativeCallResult},
 };
+use bex_vm_types::object_format::Access;
 
 /// How many containers deep the in-place decode follows a value before it
 /// refuses: it is a Rust recursion, so it stops well before the stack does.
@@ -225,7 +226,7 @@ impl Container {
             // Type-directed: the list carries the element type it decoded.
             Self::List {
                 element, decoded, ..
-            } => vm.alloc(Object::Array(Array::new(element, decoded))),
+            } => vm.alloc_array(element, decoded),
             // Type-directed: the declared key type (string-keyed, checked at
             // opening) and the value type it decoded.
             Self::Map {
@@ -964,9 +965,9 @@ fn open_list(
     element: &RealizedTy,
     path: &dyn Fn() -> String,
 ) -> Result<Container, VmRustFnError> {
-    match json.as_object_ptr().map(|ptr| (ptr, vm.get_object(ptr))) {
-        Some((source, Object::Array(array))) => {
-            let elements = array.to_vec();
+    match json.as_object_ptr().map(|ptr| (ptr, vm.list_at(ptr))) {
+        Some((source, Some(array))) => {
+            let elements = vm.list_values(array, bex_vm_types::object_format::Access::Shared);
             Ok(Container::List {
                 source,
                 decoded: Vec::with_capacity(elements.len()),
@@ -1083,9 +1084,12 @@ fn validate(vm: &mut BexVm, json: Value, path: &dyn Fn() -> String) -> Result<()
 /// `json`.
 fn first_invalid(vm: &BexVm, json: Value) -> Option<(&'static str, String)> {
     let container = |value: Value| {
-        value
-            .as_object_ptr()
-            .filter(|&ptr| matches!(vm.get_object(ptr), Object::Array(_) | Object::Map(_)))
+        value.as_object_ptr().filter(|&ptr| {
+            matches!(
+                vm.get_object(ptr),
+                Object::Shared(SharedKind::List) | Object::Map(_)
+            )
+        })
     };
     let root = container(json)?;
     // Each open container with its children and the next one to visit.
@@ -1098,8 +1102,8 @@ fn first_invalid(vm: &BexVm, json: Value) -> Option<(&'static str, String)> {
                 return Some((CYCLIC_JSON, render_segments(&open)));
             }
             let children = match vm.get_object(ptr) {
-                Object::Array(array) => array
-                    .to_vec()
+                Object::Shared(SharedKind::List) => vm
+                    .list_values(vm.expect_list(ptr), Access::Shared)
                     .into_iter()
                     .enumerate()
                     .map(|(i, value)| (Segment::Index(i), value))
@@ -1215,7 +1219,7 @@ fn node_of(vm: &BexVm, json: Value) -> Node {
             Object::Float(f) => Node::Float(*f),
             Object::String(_) => Node::String(json),
             Object::Bigint(b) => Node::Bigint(Arc::clone(b)),
-            Object::Array(_) => Node::Array(ptr),
+            Object::Shared(SharedKind::List) => Node::Array(ptr),
             Object::Map(_) => Node::Object(ptr),
             Object::Variant(variant) => match vm.get_object(variant.enm) {
                 Object::Enum(enm) => enm
@@ -1490,7 +1494,10 @@ impl<'p> Structural<'p> {
             return Err(self.fail(vm, || "expected array".into()));
         };
         let elements = match vm.get_object(ptr) {
-            Object::Array(array) => array.to_vec(),
+            Object::Shared(SharedKind::List) => {
+                let array = vm.expect_list(ptr);
+                vm.list_values(array, bex_vm_types::object_format::Access::Shared)
+            }
             _ => unreachable!("an array node is an array"),
         };
         let mut items = Vec::with_capacity(elements.len());
@@ -1504,9 +1511,7 @@ impl<'p> Structural<'p> {
             )?;
             items.push(item);
         }
-        Ok(Value::object(
-            vm.alloc(Object::Array(Array::new(element.clone(), items))),
-        ))
+        Ok(Value::object(vm.alloc_array(element.clone(), items)))
     }
 
     fn map(

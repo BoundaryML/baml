@@ -24,10 +24,11 @@ use std::sync::Arc;
 
 use baml_type::MediaKind;
 use bex_heap::TlabHolder;
+use bex_vm_types::object_format::Access;
 use bex_vm_types::types::SharedKind;
 use bex_vm_types::{
     BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind,
-    types::{Array, Map, Object},
+    types::{Map, Object},
 };
 use decode::{Decoder, Root};
 use encode::{Finish, WriteOptions};
@@ -380,9 +381,8 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                 ValueKind::Bool(_) | ValueKind::Int(_) => Some(value),
                 ValueKind::Object(ptr) => {
                     let children = match vm.get_object(ptr) {
-                        Object::Array(array) => Some((
-                            array
-                                .to_vec()
+                        Object::Shared(SharedKind::List) => Some((
+                            vm.list_values(vm.expect_list(ptr), Access::Shared)
                                 .into_iter()
                                 .map(|v| (None, v))
                                 .collect::<Vec<_>>(),
@@ -458,7 +458,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                 data,
             )))
         } else {
-            vm.alloc(Object::Array(Array::new(json_ty.clone(), copying.copied)))
+            vm.alloc_array(json_ty.clone(), copying.copied)
         };
         match open.last_mut() {
             Some(parent) => parent.copied.push(Value::object(copied)),

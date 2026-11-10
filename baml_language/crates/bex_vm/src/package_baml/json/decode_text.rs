@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use baml_type::MediaKind;
 use bex_heap::TlabHolder;
-use bex_vm_types::{BexStr, Object, RealizedTy, TypeHead, Value, types::Array};
+use bex_vm_types::{BexStr, RealizedTy, TypeHead, Value};
 
 use super::{
     MediaFields,
@@ -139,9 +139,7 @@ impl TextDecoder<'_, '_> {
         while self.parser.reader.next_element(items.is_empty())? {
             items.push(self.value(vm, element)?);
         }
-        Ok(Value::object(
-            vm.alloc(Object::Array(Array::new(element.clone(), items))),
-        ))
+        Ok(Value::object(vm.alloc_array(element.clone(), items)))
     }
 
     /// A recursive alias decodes as its definition.

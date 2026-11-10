@@ -259,15 +259,21 @@ fn survivor_edge_to_a_fresh_object_is_traced_and_repointed() {
     assert_eq!(heap.generation_of(survivor), Generation::Runtime);
 
     let fresh = tlab.alloc_string("fresh".to_string());
-    let Object::Array(array) = (unsafe { survivor.get() }) else {
+    let Some(array) = (unsafe { bex_vm_types::ListRef::of(survivor) }) else {
         panic!("expected the container array")
     };
-    array.lock_mut(tlab.alloc_debt())[0] = Value::object(fresh);
+    array
+        .lock(bex_vm_types::object_format::Access::Shared)
+        .set(
+            0,
+            bex_vm_types::object_format::SlotValue::Value(Value::object(fresh)),
+        )
+        .expect("an unknown list holds anything");
 
     // Only the container is a root: `fresh` is reachable through it alone.
     let (_, roots, _) = unsafe { heap.collect_garbage(&[survivor]) };
     tlab.invalidate();
-    let Object::Array(array) = (unsafe { roots[0].get() }) else {
+    let Some(array) = (unsafe { bex_vm_types::ListRef::of(roots[0]) }) else {
         panic!("expected the container array")
     };
     let edge = array
@@ -294,15 +300,21 @@ fn survivor_edge_to_a_fresh_chain_is_traced_and_repointed() {
 
     let leaf = tlab.alloc_string("leaf".to_string());
     let middle = tlab.alloc_array(RealizedTy::unknown(), vec![Value::object(leaf)]);
-    let Object::Array(array) = (unsafe { survivor.get() }) else {
+    let Some(array) = (unsafe { bex_vm_types::ListRef::of(survivor) }) else {
         panic!("expected the container array")
     };
-    array.lock_mut(tlab.alloc_debt())[0] = Value::object(middle);
+    array
+        .lock(bex_vm_types::object_format::Access::Shared)
+        .set(
+            0,
+            bex_vm_types::object_format::SlotValue::Value(Value::object(middle)),
+        )
+        .expect("an unknown list holds anything");
 
     let (_, roots, _) = unsafe { heap.collect_garbage(&[survivor]) };
     tlab.invalidate();
     let link = |ptr: bex_vm_types::HeapPtr| {
-        let Object::Array(array) = (unsafe { ptr.get() }) else {
+        let Some(array) = (unsafe { bex_vm_types::ListRef::of(ptr) }) else {
             panic!("expected an array link")
         };
         array
@@ -941,20 +953,18 @@ fn future_output_type_heads_are_traced_and_forwarded() {
 fn backing_storage(roots: &[bex_vm_types::HeapPtr]) -> [(usize, usize); 3] {
     // SAFETY: single-threaded tests; the roots are live and nothing mutates them.
     unsafe {
-        let Object::Array(array) = roots[0].get() else {
-            panic!("roots[0] is not an array")
-        };
+        let array = bex_vm_types::ListRef::of(roots[0]).expect("roots[0] is a list");
         let Object::Uint8Array(bytes) = roots[1].get() else {
             panic!("roots[1] is not a byte array")
         };
         let Object::Map(map) = roots[2].get() else {
             panic!("roots[2] is not a map")
         };
-        let array = array.data_unchecked();
+        let (array, array_cap) = array.backing_object().expect("a non-empty list");
         let bytes = bytes.data_unchecked();
         let map = map.data_unchecked();
         [
-            (array.as_ptr().addr(), array.capacity()),
+            (array.as_ptr().addr(), array_cap),
             (bytes.as_ptr().addr(), bytes.capacity()),
             (std::ptr::from_ref(map).addr(), map.len()),
         ]
@@ -969,9 +979,13 @@ fn test_survivor_and_backing_storage_stay_in_place() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
-    let mut elements = Vec::with_capacity(100);
-    elements.extend([1, 2, 3].map(bex_vm_types::Value::int));
+    let elements = [1, 2, 3].map(bex_vm_types::Value::int).to_vec();
     let array = tlab.alloc_array(RealizedTy::int(), elements);
+    // SAFETY: the list was just allocated.
+    unsafe { bex_vm_types::ListRef::of(array) }
+        .expect("a list")
+        .lock(bex_vm_types::object_format::Access::Shared)
+        .reserve(&mut tlab, 97);
 
     let mut bytes = Vec::with_capacity(4096);
     bytes.extend_from_slice(b"abc");

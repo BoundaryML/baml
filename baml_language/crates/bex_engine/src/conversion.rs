@@ -439,7 +439,8 @@ impl BexEngine {
             Object::Float(f) => Ok(BexExternalValue::Float(*f)),
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
-            Object::Array(arr) => {
+            Object::Shared(bex_vm_types::types::SharedKind::List) => {
+                let arr = vm.expect_list(ptr);
                 // The element type is the declared one where the declared type
                 // is a list; where it is not (an `unknown` slot, a builtin
                 // class's array), the array's own, which the value carries.
@@ -447,14 +448,14 @@ impl BexEngine {
                 let element_type = match effective_type {
                     bex_vm_types::RealizedTy::List(elem_ty) => elem_ty.as_ref(),
                     _ => {
-                        own_element_type = arr.element_ty.as_ref().clone();
+                        own_element_type = arr.element_ty().clone();
                         &own_element_type
                     }
                 };
 
                 // Snapshot under the source's lock; the recursive
                 // convert call may lock other containers.
-                let snapshot = arr.to_vec();
+                let snapshot = vm.list_values(arr, bex_vm_types::object_format::Access::Shared);
                 let items: Result<Vec<_>, _> = snapshot
                     .iter()
                     .map(|v| {
@@ -805,12 +806,12 @@ impl BexEngine {
         // SAFETY: `permit` witnesses that the VM heap cannot move while these
         // pointers are inspected. Container snapshots release their locks
         // before recursive conversion.
-        let Object::Array(pack_array) = (unsafe { pack_ptr.get() }) else {
+        let Some(pack_array) = vm.list_at(pack_ptr) else {
             return Err(malformed(
                 "host-call argument pack is not an array".to_string(),
             ));
         };
-        let pack_items = pack_array.to_vec();
+        let pack_items = vm.list_values(pack_array, bex_vm_types::object_format::Access::Shared);
         if pack_items.len() != 2 {
             return Err(malformed(format!(
                 "host-call argument pack has {} items, expected 2",
@@ -822,12 +823,15 @@ impl BexEngine {
             malformed("host-call positional arguments are not a heap object".to_string())
         })?;
         // SAFETY: covered by the active heap permit above.
-        let Object::Array(positional_array) = (unsafe { positional_ptr.get() }) else {
+        let Some(positional_array) = vm.list_at(positional_ptr) else {
             return Err(malformed(
                 "host-call positional arguments are not an array".to_string(),
             ));
         };
-        let positional_values = positional_array.to_vec();
+        let positional_values = vm.list_values(
+            positional_array,
+            bex_vm_types::object_format::Access::Shared,
+        );
         let optional_ptr = pack_items[1].as_object_ptr().ok_or_else(|| {
             malformed("host-call optional arguments are not a heap object".to_string())
         })?;
@@ -1843,8 +1847,10 @@ fn find_matching_union_member(
                 // the VM heap. Those descriptors remain authoritative even
                 // when the container is empty, where payload inspection cannot
                 // distinguish `int[]` from `string[]` (or analogous maps).
-                Object::Array(array) => {
-                    let actual_element = array.element_ty.as_ref();
+                Object::Shared(bex_vm_types::types::SharedKind::List) => {
+                    // SAFETY: the marker is only shown for a list.
+                    let array = unsafe { bex_vm_types::ListRef::new_unchecked(ptr) };
+                    let actual_element = array.element_ty();
                     members.iter().find(|member| {
                         matches!(member, bex_vm_types::RealizedTy::List(expected)
                             if runtime_ty_structurally_equal(actual_element, expected))

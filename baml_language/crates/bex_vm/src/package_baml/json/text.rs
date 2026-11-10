@@ -13,10 +13,7 @@
 use std::sync::Arc;
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{
-    MapData, Object, RealizedTy, Value,
-    types::{Array, Map},
-};
+use bex_vm_types::{MapData, Object, RealizedTy, Value, types::Map};
 use rustc_hash::FxHashMap;
 
 use crate::{BexVm, errors::VmRustFnError};
@@ -494,10 +491,7 @@ impl Parser<'_> {
                 while self.reader.next_element(items.is_empty())? {
                     items.push(self.value(vm)?);
                 }
-                Ok(Value::object(vm.alloc(Object::Array(Array::new(
-                    self.json.clone(),
-                    items,
-                )))))
+                Ok(Value::object(vm.alloc_array(self.json.clone(), items)))
             }
             b'{' => {
                 reader.open()?;

@@ -93,9 +93,9 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Finalizable, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, InstanceRef, Object, ObjectIndex,
-    ObjectPool, ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, UnaryOp, Value,
-    Variant, VmGlobals,
+    BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, InstanceRef, ListRef, Object,
+    ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex,
+    UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, Instruction},
     object_format::{Access, SlotValue},
     types::SharedKind,
@@ -169,6 +169,49 @@ impl Drop for ObjectMut<'_> {
 
         self.heap
             .note_rewrite(self.finalizable_before, Self::finalizable(self.object));
+    }
+}
+
+/// A list's elements as a `Vec`, held under the list's lock and written back
+/// when dropped: for a builtin that rearranges a list with no
+/// single-element form (`splice`). Floats are boxed while held.
+pub struct ListEdit<'vm> {
+    vm: &'vm mut BexVm,
+    guard: bex_vm_types::types::ListGuard,
+    values: Vec<Value>,
+}
+
+impl<'vm> ListEdit<'vm> {
+    fn new(vm: &'vm mut BexVm, list: ListRef, access: Access) -> Self {
+        let guard = list.lock(access);
+        let values = guard
+            .to_vec()
+            .into_iter()
+            .map(|value| vm.slot_value(value))
+            .collect();
+        Self { vm, guard, values }
+    }
+}
+
+impl std::ops::Deref for ListEdit<'_> {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Vec<Value> {
+        &self.values
+    }
+}
+
+impl std::ops::DerefMut for ListEdit<'_> {
+    fn deref_mut(&mut self) -> &mut Vec<Value> {
+        &mut self.values
+    }
+}
+
+impl Drop for ListEdit<'_> {
+    fn drop(&mut self) {
+        let slots: Vec<SlotValue> = self.values.iter().copied().map(SlotValue::Value).collect();
+        self.guard
+            .replace_all(&mut self.vm.tlab, &slots)
+            .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"));
     }
 }
 
@@ -2261,7 +2304,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Bigint(_) => type_tags::BIGINT,
                 Object::Uint8Array(_) => type_tags::UINT8ARRAY,
                 Object::Variant(_) => type_tags::ENUM,
-                Object::Array(_) => type_tags::LIST,
+                Object::Shared(SharedKind::List) => type_tags::LIST,
                 Object::Map(_) => type_tags::MAP,
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
@@ -3332,7 +3375,10 @@ impl BexVm {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
-                Object::Array(arr) => Some((*arr.element_ty).clone()),
+                Object::Shared(SharedKind::List) => {
+                    let arr = self.expect_list(ptr);
+                    Some(arr.element_ty().clone())
+                }
                 _ => None,
             })
             .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
@@ -3965,7 +4011,10 @@ impl BexVm {
             ValueKind::Int(v) => v != 0,
             ValueKind::Object(ptr) => match self.get_object(ptr) {
                 Object::String(s) => !s.is_empty(),
-                Object::Array(arr) => !arr.is_empty(),
+                Object::Shared(SharedKind::List) => {
+                    let arr = self.expect_list(ptr);
+                    !arr.is_empty()
+                }
                 Object::Map(map) => !map.is_empty(),
                 Object::Uint8Array(bytes) => !bytes.is_empty(),
                 Object::Float(f) => *f != 0.0,
@@ -4455,7 +4504,10 @@ impl BexVm {
             Object::Type(_) => ConcreteRealizedTy::Type,
             // Arrays/maps carry their element/key/value types, so the faithful
             // `list<T>` / `map<K, V>` is reconstructed from the value itself.
-            Object::Array(arr) => ConcreteRealizedTy::List(Box::new((*arr.element_ty).clone())),
+            Object::Shared(SharedKind::List) => {
+                let arr = self.expect_list(ptr);
+                ConcreteRealizedTy::List(Box::new(arr.element_ty().clone()))
+            }
             Object::Map(map) => ConcreteRealizedTy::Map {
                 key: Box::new((*map.key_ty).clone()),
                 value: Box::new((*map.value_ty).clone()),
@@ -4701,44 +4753,79 @@ impl BexVm {
             .unwrap_or_else(HeapPtr::null)
     }
 
-    /// Get array from a Value. Acquires the container's mutex; the
-    /// returned guard derefs to `&[Value]` and releases the lock on drop.
-    pub fn as_array(
-        &self,
-        value: &Value,
-    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
-        // SAFETY: the locked specialization needs no locality proof.
-        unsafe { self.as_array_in::<false>(*value) }
+    /// The list `value` points to.
+    pub fn as_list(&self, value: &Value) -> Result<ListRef, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        self.list_at(ptr).ok_or_else(|| VmInternalError::TypeError {
+            expected: ObjectType::Array.into(),
+            got: ObjectType::of(self.get_object(ptr)).into(),
+        })
     }
 
-    /// Get mutable array from a Value. Acquires the container's mutex;
-    /// the returned guard derefs to `&mut Vec<Value>` and releases the
-    /// lock on drop, serializing concurrent mutators under `spawn`.
-    pub fn as_array_mut(
-        &mut self,
-        value: &Value,
-    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
-        // SAFETY: the locked specialization needs no locality proof.
-        unsafe { self.as_array_mut_in::<false>(*value) }
+    /// The list at `ptr`, if it is one.
+    #[inline]
+    pub fn list_at(&self, ptr: HeapPtr) -> Option<ListRef> {
+        // SAFETY: the VM holds a heap permit, so a pointer it holds is live.
+        unsafe { ListRef::of(ptr) }
     }
 
-    /// [`Self::as_array`] for an array only this thread can reach, without
+    /// The list at `ptr`, which the caller has seen is one.
+    ///
+    /// # Panics
+    /// If it is not a list.
+    #[track_caller]
+    pub fn expect_list(&self, ptr: HeapPtr) -> ListRef {
+        self.list_at(ptr)
+            .unwrap_or_else(|| panic!("expected a list at {ptr:?}"))
+    }
+
+    /// The elements of the list `value` points to, read under its lock;
+    /// float elements are boxed (see [`Self::box_slot`]).
+    pub fn as_array(&self, value: &Value) -> Result<Vec<Value>, VmInternalError> {
+        let list = self.as_list(value)?;
+        Ok(self.list_values(list, Access::Shared))
+    }
+
+    /// [`Self::as_array`] for a list only this thread can reach, without
     /// its lock.
     ///
     /// # Safety
     ///
-    /// No other thread may reach the array while the guard lives; escape
-    /// analysis proves this at the call sites that select a `$local` builtin.
-    pub unsafe fn as_array_local(
-        &self,
-        value: &Value,
-    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
-        // SAFETY: forwarded locality contract.
-        unsafe { self.as_array_in::<true>(*value) }
+    /// No other thread may reach the list meanwhile; escape analysis proves
+    /// this at the call sites that select a `$local` builtin.
+    pub unsafe fn as_array_local(&self, value: &Value) -> Result<Vec<Value>, VmInternalError> {
+        let list = self.as_list(value)?;
+        Ok(self.list_values(list, Access::ThreadLocal))
     }
 
-    /// [`Self::as_array_mut`] for an array only this thread can reach,
-    /// without its lock.
+    /// Every element of `list`, read under its lock, as values.
+    pub fn list_values(&self, list: ListRef, access: Access) -> Vec<Value> {
+        list.snapshot(access)
+            .into_iter()
+            .map(|value| self.box_slot(value))
+            .collect()
+    }
+
+    /// Edit the elements of `list` as a `Vec` under its lock (see
+    /// [`ListEdit`]).
+    pub fn edit_list<R>(
+        &mut self,
+        list: ListRef,
+        access: Access,
+        edit: impl FnOnce(&mut Vec<Value>) -> R,
+    ) -> R {
+        edit(&mut ListEdit::new(self, list, access))
+    }
+
+    /// The list `value` points to, as an editable `Vec` held under its lock
+    /// (see [`ListEdit`]).
+    pub fn as_array_mut(&mut self, value: &Value) -> Result<ListEdit<'_>, VmInternalError> {
+        let list = self.as_list(value)?;
+        Ok(ListEdit::new(self, list, Access::Shared))
+    }
+
+    /// [`Self::as_array_mut`] for a list only this thread can reach, without
+    /// its lock.
     ///
     /// # Safety
     ///
@@ -4746,9 +4833,16 @@ impl BexVm {
     pub unsafe fn as_array_mut_local(
         &mut self,
         value: &Value,
-    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
-        // SAFETY: forwarded locality contract.
-        unsafe { self.as_array_mut_in::<true>(*value) }
+    ) -> Result<ListEdit<'_>, VmInternalError> {
+        let list = self.as_list(value)?;
+        Ok(ListEdit::new(self, list, Access::ThreadLocal))
+    }
+
+    /// Append `value` to `list`.
+    pub fn list_push(&mut self, list: ListRef, access: Access, value: Value) -> usize {
+        list.lock(access)
+            .push(&mut self.tlab, SlotValue::Value(value))
+            .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"))
     }
 
     /// Get map from a Value. Acquires the container's mutex.
@@ -4803,48 +4897,6 @@ impl BexVm {
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
         // SAFETY: forwarded locality contract.
         unsafe { self.as_map_mut_in::<true>(*value) }
-    }
-
-    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
-    #[inline]
-    unsafe fn as_array_in<const THREAD_LOCAL: bool>(
-        &self,
-        value: Value,
-    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
-        match self.get_object(ptr) {
-            Object::Array(container) => Ok(if THREAD_LOCAL {
-                // SAFETY: forwarded locality contract.
-                unsafe { container.lock_thread_local() }
-            } else {
-                container.lock()
-            }),
-            obj => Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
-    }
-
-    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
-    #[inline]
-    unsafe fn as_array_mut_in<const THREAD_LOCAL: bool>(
-        &mut self,
-        value: Value,
-    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
-        match self.get_object(ptr) {
-            Object::Array(container) => Ok(if THREAD_LOCAL {
-                // SAFETY: forwarded locality contract.
-                unsafe { container.lock_mut_thread_local(self.tlab.alloc_debt()) }
-            } else {
-                container.lock_mut(self.tlab.alloc_debt())
-            }),
-            obj => Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
     }
 
     /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
@@ -7937,6 +7989,40 @@ impl BexVm {
         result
     }
 
+    /// `LoadArrayElement` on a list: element `index` (negative counts from
+    /// the end), or the index and length to report.
+    #[inline]
+    pub(crate) fn load_list_element(
+        &self,
+        ptr: HeapPtr,
+        index: i64,
+        access: Access,
+    ) -> Result<SlotValue, (i64, usize)> {
+        let list = self.expect_list(ptr);
+        let len = list.len();
+        crate::array_index::resolve_index(index, len)
+            .and_then(|idx| list.get_with(idx, access))
+            .ok_or((index, len))
+    }
+
+    /// `StoreArrayElement` on a list, under its lock.
+    #[inline]
+    pub(crate) fn store_list_element(
+        &self,
+        ptr: HeapPtr,
+        index: i64,
+        value: Value,
+        access: Access,
+    ) -> Result<(), (i64, usize)> {
+        let guard = self.expect_list(ptr).lock(access);
+        let len = guard.len();
+        let idx = crate::array_index::resolve_index(index, len).ok_or((index, len))?;
+        guard
+            .set(idx, SlotValue::Value(value))
+            .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"));
+        Ok(())
+    }
+
     /// The instance an instance operand points to.
     fn instance_operand(&self, value: Value) -> Result<InstanceRef, VmError> {
         let ptr = self.as_object_ptr(value, ObjectType::Instance)?;
@@ -9604,13 +9690,16 @@ impl BexVm {
                         let ptr = self.as_object_ptr(array, ObjectType::Array)?;
                         // SAFETY (`_LOCAL`): see `ContainerLenLocal`.
                         let element = match self.get_object(ptr) {
-                            Object::Array(arr) => {
-                                let guard = if op == OpCode::ArrayIterNextLocal {
-                                    arr.lock_thread_local()
+                            Object::Shared(SharedKind::List) => {
+                                let access = if op == OpCode::ArrayIterNextLocal {
+                                    Access::ThreadLocal
                                 } else {
-                                    arr.lock()
+                                    Access::Shared
                                 };
-                                usize::try_from(i).ok().and_then(|i| guard.get(i).copied())
+                                let arr = self.expect_list(ptr);
+                                usize::try_from(i)
+                                    .ok()
+                                    .and_then(|i| arr.get_with(i, access))
                             }
                             other => {
                                 return Err(VmInternalError::TypeError {
@@ -9623,7 +9712,7 @@ impl BexVm {
                         let item = match element {
                             Some(element) => {
                                 self.stack.set_at(index, Value::int(i + 1));
-                                element
+                                self.slot_value(element)
                             }
                             None => {
                                 let done = self.lang_object(crate::lang_items::BAML_ITER_DONE);
@@ -11458,16 +11547,13 @@ impl BexVm {
                         };
                         #[allow(clippy::cast_possible_wrap)]
                         let len = match self.get_object(ptr) {
-                            Object::Array(arr) if thread_local => {
-                                arr.lock_thread_local().len() as i64
-                            }
                             Object::Uint8Array(bytes) if thread_local => {
                                 bytes.lock_thread_local().len() as i64
                             }
                             Object::Map(map) if thread_local => {
                                 map.lock_thread_local().len() as i64
                             }
-                            Object::Array(arr) => arr.len() as i64,
+                            Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
                             Object::Map(map) => map.len() as i64,
                             Object::String(s) => s.byte_len() as i64,
@@ -11501,19 +11587,15 @@ impl BexVm {
                         // inner scope before any `&mut self` call. A negative index
                         // counts from the end; one that still lands outside the
                         // array reports the original index in the panic.
-                        let load_result: Result<Value, (i64, usize)> = {
+                        let load_result: Result<SlotValue, (i64, usize)> = {
                             match self.get_object(array_obj_index) {
-                                Object::Array(arr) => {
-                                    let guard = if thread_local {
-                                        arr.lock_thread_local()
+                                Object::Shared(SharedKind::List) => {
+                                    let access = if thread_local {
+                                        Access::ThreadLocal
                                     } else {
-                                        arr.lock()
+                                        Access::Shared
                                     };
-                                    let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
-                                        Some(idx) => Ok(guard[idx]),
-                                        None => Err((i, len)),
-                                    }
+                                    self.load_list_element(array_obj_index, i, access)
                                 }
                                 Object::Uint8Array(bytes) => {
                                     let guard = if thread_local {
@@ -11523,7 +11605,9 @@ impl BexVm {
                                     };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
-                                        Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
+                                        Some(idx) => {
+                                            Ok(SlotValue::Value(Value::int(i64::from(guard[idx]))))
+                                        }
                                         None => Err((i, len)),
                                     }
                                 }
@@ -11547,6 +11631,7 @@ impl BexVm {
                                 )));
                             }
                         };
+                        let element = self.slot_value(element);
                         self.push_stack(element)?;
                     }
 
@@ -11573,21 +11658,18 @@ impl BexVm {
                             new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
                         let store_result: Result<(), (i64, usize)> = {
                             match self.get_object(array_object_index) {
-                                Object::Array(arr) => {
-                                    let debt = self.tlab.alloc_debt();
-                                    let mut guard = if thread_local {
-                                        arr.lock_mut_thread_local(debt)
+                                Object::Shared(SharedKind::List) => {
+                                    let access = if thread_local {
+                                        Access::ThreadLocal
                                     } else {
-                                        arr.lock_mut(debt)
+                                        Access::Shared
                                     };
-                                    let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
-                                        Some(idx) => {
-                                            guard[idx] = new_value;
-                                            Ok(())
-                                        }
-                                        None => Err((i, len)),
-                                    }
+                                    self.store_list_element(
+                                        array_object_index,
+                                        i,
+                                        new_value,
+                                        access,
+                                    )
                                 }
                                 Object::Uint8Array(bytes) => {
                                     let Some(byte_v) = new_value_u8 else {

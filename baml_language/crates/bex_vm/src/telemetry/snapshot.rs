@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use bex_vm_types::{
-    HeapPtr, InstanceRef, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind,
+    HeapPtr, InstanceRef, ListRef, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind,
     object_format::SlotValue, types::SharedKind,
 };
 use btel_snapshot::{
@@ -15,6 +15,7 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use super::{definitions, network::NetworkPayload};
+use bex_vm_types::object_format::Access;
 
 #[derive(Clone, Copy)]
 pub(super) enum Input<'a> {
@@ -180,12 +181,14 @@ impl Scratch {
             // SAFETY: inherited heap permit, never relinquished during traversal.
             let object = match unsafe { ptr.get() } {
                 Object::Uint8Array(data) => b.bytes(&data.lock()),
-                Object::Array(data) => {
+                Object::Shared(SharedKind::List) => {
+                    // SAFETY: the marker is only shown for a list.
+                    let list = unsafe { ListRef::new_unchecked(ptr) };
                     let element_type =
-                        described(&mut b.leaves(), &mut self.carried, &data.element_ty);
-                    let data = data.lock();
+                        described(&mut b.leaves(), &mut self.carried, list.element_ty());
+                    let data = list.snapshot(Access::Shared);
                     b.list(element_type, data.iter(), |leaves, value| {
-                        self.add(leaves, *value, depth + 1)
+                        self.add_slot(leaves, *value, depth + 1)
                     })
                 }
                 Object::Map(data) => {
@@ -564,13 +567,13 @@ mod tests {
             .tlab
             .alloc_array(ty(), vec![Value::object(bytes), Value::object(bytes)]);
         // SAFETY: fixture holds the live heap with no collection.
-        let Object::Array(array) = (unsafe { list.get() }) else {
+        let Some(array) = (unsafe { ListRef::of(list) }) else {
             unreachable!()
         };
         let scratch = bex_vm_types::AllocDebt::new();
-        array.lock_mut(&scratch).push(Value::object(list));
+        vm.list_push(array, Access::Shared, Value::object(list));
         let snapshot = capture(&[Value::object(list)]);
-        array.lock_mut(&scratch).clear();
+        array.lock(Access::Shared).clear();
         let Object::Uint8Array(data) = (unsafe { bytes.get() }) else {
             unreachable!()
         };
@@ -746,16 +749,19 @@ mod tests {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let ptr = vm.tlab.alloc_array(ty(), vec![Value::int(1); 8]);
         // SAFETY: the fixture keeps the heap live and does not collect during capture.
-        let Object::Array(array) = (unsafe { ptr.get() }) else {
+        let Some(array) = (unsafe { ListRef::of(ptr) }) else {
             unreachable!()
         };
-        let scratch = bex_vm_types::AllocDebt::new();
+        let heap = std::sync::Arc::clone(&vm.heap);
         std::thread::scope(|scope| {
-            let writer = scope.spawn(|| {
+            let writer = scope.spawn(move || {
+                let mut tlab = bex_heap::Tlab::new(heap);
                 for i in 0..500 {
-                    let mut a = array.lock_mut(&scratch);
-                    a.clear();
-                    a.resize(8, Value::int(i));
+                    let values = [SlotValue::Value(Value::int(i)); 8];
+                    array
+                        .lock(Access::Shared)
+                        .replace_all(&mut tlab, &values)
+                        .unwrap();
                 }
             });
             for _ in 0..50 {
@@ -1216,12 +1222,10 @@ mod tests {
         let list = vm
             .tlab
             .alloc_array(ty(), vec![Value::object(bytes), Value::object(bytes)]);
-        let Object::Array(array) = (unsafe { list.get() }) else {
+        let Some(array) = (unsafe { ListRef::of(list) }) else {
             unreachable!()
         };
-        array
-            .lock_mut(&bex_vm_types::AllocDebt::new())
-            .push(Value::object(list));
+        vm.list_push(array, Access::Shared, Value::object(list));
         let map = vm.tlab.alloc_map(
             ty(),
             ty(),

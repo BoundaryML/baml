@@ -4,6 +4,7 @@ use bex_vm_types::{HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, Value, V
 
 use super::{Continuation, ImplResolver, NativeCallResult};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};
+use bex_vm_types::object_format::Access;
 use bex_vm_types::types::SharedKind;
 
 enum Work {
@@ -131,8 +132,8 @@ impl HashDriver {
                             Object::Bigint(value) => framed(4, &value.to_signed_bytes_le()),
                             Object::String(value) => framed(5, value.as_bytes()),
                             Object::Uint8Array(value) => framed(6, &value.lock()),
-                            Object::Array(array) => {
-                                let values = array.data.lock().to_vec();
+                            Object::Shared(SharedKind::List) => {
+                                let values = vm.list_values(vm.expect_list(ptr), Access::Shared);
                                 let bytes = framed(7, &(values.len() as u64).to_le_bytes());
                                 self.pending.extend(
                                     values

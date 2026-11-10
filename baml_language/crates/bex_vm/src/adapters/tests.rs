@@ -21,6 +21,7 @@ use crate::{
     },
     vm::tests::test_vm,
 };
+use bex_vm_types::types::SharedKind;
 
 // ── Fixtures ─────────────────────────────────────────────────────────────
 
@@ -182,7 +183,13 @@ fn dump(vm: &BexVm, value: Value) -> String {
     match vm.get_object(ptr) {
         Object::Float(float) => format!("{float:?}f"),
         Object::String(text) => format!("{:?}", text.as_str()),
-        Object::Array(array) => format!("[{}]", join(array.to_vec())),
+        Object::Shared(SharedKind::List) => {
+            let array = vm.expect_list(ptr);
+            format!(
+                "[{}]",
+                join(vm.list_values(array, bex_vm_types::object_format::Access::Shared))
+            )
+        }
         Object::Uint8Array(bytes) => format!("bytes{:?}", bytes.to_vec()),
         Object::Map(map) => {
             let entries: Vec<String> = map

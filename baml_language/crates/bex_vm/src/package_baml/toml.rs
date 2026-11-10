@@ -13,6 +13,7 @@ use crate::{
     errors::{VmBamlError, VmRustFnError},
     package_baml::PackageBamlImpl,
 };
+use bex_vm_types::object_format::Access;
 use bex_vm_types::types::SharedKind;
 
 impl super::BamlNamespaceToml for PackageBamlImpl {}
@@ -229,12 +230,14 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
     let result = match vm.get_object(ptr) {
         Object::String(s) => Ok(Node::Scalar(s.as_str().into())),
         Object::Float(f) => Ok(Node::Scalar((*f).into())),
-        Object::Array(values) => values
-            .to_vec()
-            .into_iter()
-            .map(|v| snapshot(vm, v, active))
-            .collect::<Result<Vec<_>, _>>()
-            .map(Node::Array),
+        Object::Shared(SharedKind::List) => {
+            let values = vm.list_values(vm.expect_list(ptr), Access::Shared);
+            values
+                .into_iter()
+                .map(|v| snapshot(vm, v, active))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Node::Array)
+        }
         Object::Shared(SharedKind::Instance) => {
             let instance = vm.expect_instance(ptr);
             let class = instance.class();

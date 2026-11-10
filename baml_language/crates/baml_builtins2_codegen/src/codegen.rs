@@ -358,7 +358,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             BamlType::List(_) => {
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> ArrayReadGuard<'v> {{"
+                    "{inner}pub fn {field_name}(&self, vm: &BexVm) -> Vec<bex_vm_types::Value> {{"
                 )
                 .unwrap();
                 writeln!(
@@ -1727,13 +1727,8 @@ fn extraction_expr(
             if is_mut {
                 format!("vm.as_array_mut({val})?")
             } else if arraymap_needs_owned {
-                // `as_array` returns an `ArrayReadGuard` that holds a borrow
-                // on `vm` via the container's lazy biased mutex. When the
-                // glue function later needs `&mut vm` (e.g. for
-                // `vm.alloc_array(result)`), the guard's lifetime would
-                // conflict. `arraymap_needs_owned` flags those cases; we
-                // then clone into an owned `Vec<Value>` and let the guard
-                // drop immediately.
+                // `as_array` returns an owned snapshot; the extra copy keeps
+                // the shape the map arm below needs.
                 format!("vm.as_array({val})?.to_vec()")
             } else {
                 // No `&mut vm` access after extraction — keep the guard

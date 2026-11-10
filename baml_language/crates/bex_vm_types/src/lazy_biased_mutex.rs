@@ -1,5 +1,5 @@
 //! Per-container spin-lock used to protect heap-mutable containers
-//! (`Object::Array`'s `Vec<Value>`, `Object::Map`'s `IndexMap`) from racing
+//! (lists, `Object::Map`'s `IndexMap`, `uint8array`s) from racing
 //! mutation introduced by BEP-034 `spawn`.
 //!
 //! # Why a spin-lock and not a full OS mutex
