@@ -29,7 +29,7 @@ test "adds two ints" {
 }
 ```
 
-Run it with `target/debug/baml-cli test --from crates/baml_tests/baml_src`
+Run it with `target/debug/baml-cli test --project-dir crates/baml_tests/baml_src`
 (add `-i "<name>"` to select one). See `crates/baml_tests/README.md` for the
 corpus layout and the "END-TO-END TESTING" section below for the CLI workflow
 and the language traps worth knowing.
@@ -185,7 +185,7 @@ cargo nextest run -p baml_tests
 cargo nextest run -p baml_tests --lib -E 'test(/corpus_/)'
 
 # Execute the BAML corpus the way CI does
-target/debug/baml-cli test --from crates/baml_tests/baml_src
+target/debug/baml-cli test --project-dir crates/baml_tests/baml_src
 
 # Run the editor-surface tests
 cargo nextest run -p baml_ide -p baml_lsp -p baml_lsp_server
@@ -251,13 +251,13 @@ $BAML describe baml                 # ← THE FULL PICTURE: every namespace, typ
                                     #   http, json, math, net, time, toml, yaml, iter, …)
 $BAML describe baml.json            # drill into a namespace → its types + function signatures
 $BAML describe Array                # drill into a type → full method list + docs
-$BAML describe String --budget 200  # output is line-budgeted; raise --budget to see all methods
+$BAML describe String --limit 200  # output is line-limited; raise --limit to see all methods
 $BAML describe <YourSymbol>         # also works on symbols in the loaded project
 ```
 
 `describe` resolves symbols against a project. From inside a project dir it just works; from
-elsewhere pass `--from <project-dir>`. Output is capped by `--budget` (default 30) and tells
-you "… N more lines (re-run with a higher --budget)" — raise it to see everything. Anything
+elsewhere pass `--project-dir <project-dir>`. Output is capped by `--limit` (default 30) and tells
+you "… N more lines (re-run with a higher --limit)" — raise it to see everything. Anything
 you can't see, `describe` it; do not guess stdlib names or signatures.
 
 ## Setting up a project

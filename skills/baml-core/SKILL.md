@@ -30,7 +30,8 @@ baml run -e 'expr'               # eval an expression; fast feedback + syntax ch
 baml test --list && baml test    # run every test/testset block
 baml fmt baml_src/main.baml      # canonicalize the project's formatting
 baml codequality --functions     # complexity per function, worst first
-baml <command> --output-format json  # any command: one JSON document on stdout, status on stderr
+baml <command> --output-format json  # one JSON document on stdout, status on stderr
+                                 #   (`baml run` also passes the program's own output through)
 ```
 
 `baml describe <name>` prints the **full source body** of stdlib functions. It's the fastest way to verify behavior, and the only path for embedded builtins like `assert` (no on-disk file). Pure functions need no test/client; check them with `baml run -e 'add(2, 3)'`. For anything not shown here (signatures, niche stdlib, advanced features), run `baml describe <name>`; never guess the stdlib.

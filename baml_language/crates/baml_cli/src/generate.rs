@@ -514,16 +514,15 @@ impl GenerateArgs {
                     program_identity: &generator.name,
                     output_directory: output_dir.clone(),
                 })?;
-                let count = report.written_files.len();
-                reporter.status(
-                    "Generated",
-                    format!(
-                        "{} ({count} file(s), 0 identifier renames → {})",
-                        generator.name,
-                        output_dir.display()
-                    ),
-                );
-                total_files += count;
+                total_files += report.written_files.len();
+                let sdk = GeneratedSdk {
+                    name: generator.name.clone(),
+                    output_dir,
+                    files: report.written_files,
+                    renames: Vec::new(),
+                };
+                reporter.status("Generated", generated_status(&sdk));
+                sdks.push(sdk);
                 continue;
             }
 

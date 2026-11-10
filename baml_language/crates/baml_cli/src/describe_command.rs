@@ -440,7 +440,11 @@ impl DescribeArgs {
                         .map(|dependency| dependency.root),
                 )
                 .collect();
-            let limit = usize::from(self.limit.unwrap_or(DEFAULT_LIMIT));
+            let limit = match self.limit {
+                Some(limit) => usize::from(limit),
+                None if json => usize::MAX,
+                None => usize::from(DEFAULT_LIMIT),
+            };
             let hits = baml_ide::search_ranked(db, package, &packages, name, limit);
             if hits.is_empty() {
                 // Not an error: "nothing does this" is a real answer about the

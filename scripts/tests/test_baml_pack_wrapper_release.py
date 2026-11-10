@@ -48,7 +48,7 @@ class WrapperReleasePackingTests(unittest.TestCase):
             "import json, pathlib, sys, tomllib\n"
             "args = sys.argv[1:]\n"
             "assert args[0] == 'pack' and '--embed-telemetry' in args\n"
-            "project = pathlib.Path(args[args.index('--from') + 1])\n"
+            "project = pathlib.Path(args[args.index('--project-dir') + 1])\n"
             "manifest = tomllib.loads((project / 'baml.toml').read_text())\n"
             "target = args[args.index('--target') + 1]\n"
             "host = pathlib.Path(args[args.index('--host-binary') + 1])\n"

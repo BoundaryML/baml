@@ -652,7 +652,7 @@ jobs:
           mkdir -p "$toolchain"
           tar -xzf artifacts/toolchain-x86_64-unknown-linux-gnu/*.tar.gz -C "$toolchain"
           args=(--artifacts "$PWD/artifacts" --commit "$SOURCE_SHA")
-          "$toolchain/bin/baml-cli" run --from tools/release-fingerprints check -- "${args[@]}"
+          "$toolchain/bin/baml-cli" run --project-dir tools/release-fingerprints check -- "${args[@]}"
 
   publish-pypi:
     name: Publish Python PyPI

@@ -505,7 +505,7 @@ test "explicit_resolve_selector_runs_against_the_mock" {
 //
 //      cd /Users/aaron/projects/baml
 //      infisical run -- baml_language/target/debug/baml-cli test \
-//          --from baml_language/crates/baml_tests/baml_src --profile live \
+//          --project-dir baml_language/crates/baml_tests/baml_src --profile live \
 //          -i "::live::env_ref"
 
 // A client whose credential is a late-bound `env.OPENAI_API_KEY` ref — the

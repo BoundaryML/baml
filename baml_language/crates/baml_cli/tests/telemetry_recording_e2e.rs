@@ -81,7 +81,7 @@ testset "smoke" { test "ok" { assert.is_true(true) } }
     let home = home(temp.path());
     let nested = project.join("baml_src/nested");
     std::fs::create_dir(&nested).unwrap();
-    // --from must win over both cwd and the baml_src subdirectory. Repeat to
+    // --project-dir must win over both cwd and the baml_src subdirectory. Repeat to
     // cover a bytecode-cache hit as well as compilation.
     for count in 1..=2 {
         run(

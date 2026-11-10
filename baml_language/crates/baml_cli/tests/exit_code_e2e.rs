@@ -104,7 +104,7 @@ fn create_project_with_go_generator(dir: &Path, source: &str) {
 // Tests for `baml check` exit codes
 // ============================================================================
 
-/// `baml check` with no `--from` is sugar for `baml check --from .`.
+/// `baml check` with no `--project-dir` is sugar for `baml check --project-dir .`.
 #[test]
 fn check_defaults_from_to_current_directory() {
     let built = &common::baml_cli();
@@ -1744,7 +1744,7 @@ testset "suite" with FirstOnlyWithoutNames {
 // ============================================================================
 
 /// `baml fmt` with no explicit source and no discoverable project is a no-op
-/// success. An explicit `--from` is different: it opts into that source tree.
+/// success. An explicit `--project-dir` is different: it opts into that source tree.
 #[test]
 fn fmt_without_from_or_project_is_noop_success() {
     let built = &common::baml_cli();

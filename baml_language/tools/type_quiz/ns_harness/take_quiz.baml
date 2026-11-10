@@ -12,7 +12,7 @@
 // read the bank, run the compiler, or search. It has the specification and its
 // own reasoning, which is what we are trying to measure.
 //
-//   baml run take_quiz --from tools/type_quiz -- --sessions 3 --models opus,sonnet,haiku
+//   baml run take_quiz --project-dir tools/type_quiz -- --sessions 3 --models opus,sonnet,haiku
 //
 // run from `baml_language`, where TYPE_SYSTEM.md and target/ are. Every run
 // writes as it goes and can be resumed, because the whole state of a sitting

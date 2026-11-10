@@ -23,14 +23,14 @@ From the repo root (`baml_language/`). Always `target/debug/baml-cli`, **never**
 
 ```bash
 # offline — the default profile, what CI runs. No keys, no network.
-target/debug/baml-cli test --from crates/baml_tests/baml_src
+target/debug/baml-cli test --project-dir crates/baml_tests/baml_src
 
 # one namespace / one case
-target/debug/baml-cli test --from crates/baml_tests/baml_src -i "llm_mock"
-target/debug/baml-cli test --from crates/baml_tests/baml_src -i "mock_sse_streams_events"
+target/debug/baml-cli test --project-dir crates/baml_tests/baml_src -i "llm_mock"
+target/debug/baml-cli test --project-dir crates/baml_tests/baml_src -i "mock_sse_streams_events"
 
 # what would run, without running it
-target/debug/baml-cli test --from crates/baml_tests/baml_src --list
+target/debug/baml-cli test --project-dir crates/baml_tests/baml_src --list
 ```
 
 Live tests (real providers, keys injected by Infisical — run from the monorepo
@@ -39,11 +39,11 @@ root or anywhere below it):
 ```bash
 cd /Users/aaron/projects/baml
 infisical run -- baml_language/target/debug/baml-cli test \
-    --from baml_language/crates/baml_tests/baml_src --profile live
+    --project-dir baml_language/crates/baml_tests/baml_src --profile live
 
 # one provider only
 infisical run -- baml_language/target/debug/baml-cli test \
-    --from baml_language/crates/baml_tests/baml_src --profile live -i "::live::anthropic"
+    --project-dir baml_language/crates/baml_tests/baml_src --profile live -i "::live::anthropic"
 ```
 
 Profiles are defined in `../baml.toml`: `offline` (the default) is
@@ -281,5 +281,5 @@ any server at all.
    `root.llm_mock.mock_json_serve` / `mock_sse_serve`, plus a thin `test` block.
 3. Put real-endpoint coverage in `../ns_llm_live_smoke/live_smoke.baml`'s
    `testset "live"` (env-gated leaf, current model id), not in your namespace.
-4. `target/debug/baml-cli test --from crates/baml_tests/baml_src -i "<provider>"`.
+4. `target/debug/baml-cli test --project-dir crates/baml_tests/baml_src -i "<provider>"`.
 5. Regenerate snapshots once: `cargo insta test -p baml_tests --accept`.

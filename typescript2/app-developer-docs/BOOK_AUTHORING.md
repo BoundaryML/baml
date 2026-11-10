@@ -323,7 +323,7 @@ the four inferred signatures displayed in Chapter 8. The cross-package fixture
 uses distinct compiler source roots and runs separately from `baml_language`:
 
 ```sh
-target/debug/baml-cli test --from crates/baml_tests/baml_src -i root.compiler.mounted_interface_diagnostics
+target/debug/baml-cli test --project-dir crates/baml_tests/baml_src -i root.compiler.mounted_interface_diagnostics
 ```
 
 The Developer Docs workflow already matches authored content, example files,

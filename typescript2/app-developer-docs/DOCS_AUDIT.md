@@ -111,7 +111,7 @@ python3 scripts/audit-site.py \
   --output /tmp/docs-audit.json
 BAML_TOOLCHAIN=canary pnpm docs:snippets:validate
 BAML_TOOLCHAIN=canary pnpm docs:book:validate
-BAML_TOOLCHAIN=canary baml test --project content/code/projects/vision
+BAML_TOOLCHAIN=canary baml test --project-dir content/code/projects/vision
 pnpm test
 pnpm lint
 pnpm typecheck

@@ -44,7 +44,7 @@ jobs:
 | Input | Default | Description |
 | --- | --- | --- |
 | `toolchain` | from `baml.toml` | Toolchain selector passed to `setup-baml`: an exact version, `canary`, or `nightly`. |
-| `project` | `.` | Project directory, passed as `--project`. |
+| `project` | `.` | Project directory, passed as `--project-dir` (`--project` on older toolchains). |
 | `check` | `true` | Run `baml check`. |
 | `fmt` | `true` | Run `baml fmt --check`. |
 | `test` | `true` | Run `baml test`. A project with no tests passes with a notice. |

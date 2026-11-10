@@ -348,7 +348,7 @@ write. They are tests rather than hooks because a hook gates a commit on the
 one machine that has it installed, and these gate a merge. The formatter
 itself stays a prek hook as well, since a hook can fix what a check can only
 report. Both of those and the `mise` task keep the CLI's home, cache and
-profile streams under `target/`. Invoking `baml-cli test --from tools/type_quiz` directly instead
+profile streams under `target/`. Invoking `baml-cli test --project-dir tools/type_quiz` directly instead
 leaves a few hundred megabytes of them in `tools/type_quiz/.baml`, which the
 CLI marks ignored but does not clean up.
 
@@ -422,7 +422,7 @@ answers, the same reveal after each one. It drives the quiz in-process through
 `adaptive_step`, so a step costs only what the model takes to answer.
 
 ```
-baml run take_quiz --from tools/type_quiz -- \
+baml run take_quiz --project-dir tools/type_quiz -- \
     --sessions 3 --models opus,sonnet,haiku --out target/type-quiz-llm
 ```
 

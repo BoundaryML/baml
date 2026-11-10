@@ -6,7 +6,7 @@
 //
 //   cd /Users/aaron/projects/baml
 //   infisical run -- baml_language/target/debug/baml-cli test \
-//       --from baml_language/crates/baml_tests/baml_src --profile live
+//       --project-dir baml_language/crates/baml_tests/baml_src --profile live
 //
 // Two independent gates, both deliberate:
 //   1. the profile — `-x "::live::"` prunes this testset subtree *before* its
