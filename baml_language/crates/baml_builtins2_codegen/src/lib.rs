@@ -3,6 +3,7 @@ mod codegen_adapters;
 mod codegen_errors;
 mod codegen_io;
 mod codegen_panics;
+pub mod escape_modeled;
 mod extract;
 mod lang_item;
 mod rust_ident;

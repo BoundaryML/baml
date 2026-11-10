@@ -247,9 +247,9 @@ mod tests {
     /// Every builtin the escape analysis models gets an adapter.
     #[test]
     fn every_escape_modelled_builtin_has_an_adapter() {
-        let missing: Vec<&str> = baml_compiler2_mir::escape::EFFECTS
+        let missing: Vec<&str> = crate::escape_modeled::ESCAPE_MODELED
             .iter()
-            .map(|(path, _)| *path)
+            .copied()
             .filter(|path| !row_for(path).is_some_and(|row| row.form.has_adapter()))
             .collect();
         assert!(missing.is_empty(), "no adapter for {missing:?}");

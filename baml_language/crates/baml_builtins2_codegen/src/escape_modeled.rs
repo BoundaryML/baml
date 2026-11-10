@@ -1,0 +1,36 @@
+//! Builtins the escape analysis models.
+
+/// Mirrors the `EFFECTS` table in `baml_compiler2_mir/src/escape.rs`, in its order;
+/// a test there checks the two agree.
+pub const ESCAPE_MODELED: &[&str] = &[
+    "baml.String.char_count",
+    "baml.Array.length",
+    "baml.Array.at",
+    "baml.Array.push",
+    "baml.Array.pop",
+    "baml.Array.remove_at",
+    "baml.Array.concat",
+    "baml.Array.reverse",
+    "baml.Array.slice",
+    "baml.Array.clear",
+    "baml.Array.shift",
+    "baml.Array.unshift",
+    "baml.Array.insert",
+    "baml.Map.length",
+    "baml.Map.has",
+    "baml.Map.keys",
+    "baml.Map.values",
+    "baml.Map.set",
+    "baml.Map.get",
+    "baml.Map.index",
+    "baml.Map.delete",
+    "baml.Map.get_or_insert",
+    "baml.Map.clear",
+    "baml.String.split",
+    "baml.String.chars",
+    "baml.String.lines",
+    "baml.String.to_utf8",
+    "baml.String.to_code_points",
+    "baml.Array.join",
+    "baml.Array.map",
+];

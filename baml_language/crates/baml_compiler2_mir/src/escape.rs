@@ -2223,3 +2223,25 @@ impl Resolved {
         needs
     }
 }
+
+#[cfg(test)]
+mod effects_mirror_tests {
+    /// The builtin generator's copy of the EFFECTS keys, read by path so the
+    /// compiler takes no dependency on the generator.
+    const GENERATOR_LIST: &str = include_str!("../../baml_builtins2_codegen/src/escape_modeled.rs");
+
+    /// Every quoted string in the generator's list, in order.
+    fn generator_names() -> Vec<&'static str> {
+        GENERATOR_LIST.split('"').skip(1).step_by(2).collect()
+    }
+
+    #[test]
+    fn effects_table_matches_the_generators_escape_modeled_list() {
+        let effects: Vec<&str> = super::EFFECTS.iter().map(|(path, _)| *path).collect();
+        assert_eq!(
+            effects,
+            generator_names(),
+            "update baml_builtins2_codegen/src/escape_modeled.rs to match EFFECTS"
+        );
+    }
+}
