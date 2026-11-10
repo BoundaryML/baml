@@ -156,7 +156,6 @@ public final class ProtoReader {
     private static final int ADT_MEDIA_AUDIO = 7;
     private static final int ADT_MEDIA_VIDEO = 8;
     private static final int ADT_MEDIA_PDF = 9;
-    private static final int ADT_MEDIA_GENERIC = 10;
     // Adt(TaggedHeapHandle{ty, heap_handle}) — a streaming call's result. Reifies
     // the runtime-owned BamlStream wrapper (the sole tagged-heap-handle capability
     // today; the typed generics are erased, exactly as in bridge_python).
@@ -1099,9 +1098,8 @@ public final class ProtoReader {
      * fresh {@link BamlHandle}; an {@code ADT_RUNTIME_VALUE} handle whose type
      * names a registered opaque class reifies that class's generated wrapper,
      * at the class type arguments the type states; any other handle type
-     * (including {@code ADT_MEDIA_GENERIC} and the not-yet-modeled
-     * handle-backed capabilities) decodes to a bare {@link BamlHandle}. Mirrors
-     * {@code bridge_python}'s {@code _decode_handle}.
+     * (the not-yet-modeled handle-backed capabilities) decodes to a bare
+     * {@link BamlHandle}. Mirrors {@code bridge_python}'s {@code _decode_handle}.
      */
     private static Object decodeHandle(WireReader r) {
         HandleWire wire = readHandleWire(r);
@@ -1656,7 +1654,6 @@ public final class ProtoReader {
                 case ADT_MEDIA_AUDIO -> MEDIA_AUDIO;
                 case ADT_MEDIA_VIDEO -> MEDIA_VIDEO;
                 case ADT_MEDIA_PDF -> MEDIA_PDF;
-                case ADT_MEDIA_GENERIC -> MEDIA_GENERIC;
                 default -> 0;
             };
         }

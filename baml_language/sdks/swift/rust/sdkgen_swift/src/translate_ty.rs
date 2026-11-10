@@ -45,6 +45,7 @@ impl TranslateCtx {
     /// The Swift type of media of kind `kind`: the generated struct of the
     /// class that crosses as that media.
     fn media_wrapper(&self, kind: MediaKind) -> Option<String> {
+        let kind = kind.concrete()?;
         let (fqn, _) = self
             .crossings
             .iter()

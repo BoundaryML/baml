@@ -672,7 +672,7 @@ function decodeValueHolder(
         if (ht === BamlHandleType.ADT_RUNTIME_VALUE) {
             return decodeRuntimeValue(handle, holder.handleValue.ty, typeMap);
         }
-        // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
+        // Every other handle type has no typed wrapper — stays a bare BamlHandle.
         return handle;
     }
     if (holder.mediaValue) {

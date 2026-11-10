@@ -56,7 +56,7 @@ fn request(name: &str) -> CallFunctionArgs {
 fn ordinary_row() -> CffiHandleTableEntry {
     CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(
         bex_project::MediaValue::from_url(
-            bex_project::MediaKind::Generic,
+            bex_project::ConcreteMediaKind::Image,
             "https://example.com/",
             None,
         ),
@@ -69,7 +69,7 @@ fn handle_arg(key: u64) -> InboundMapEntry {
         value: Some(InboundValue {
             value: Some(Value::Handle(BamlHandle {
                 key,
-                handle_type: BamlHandleType::AdtMediaGeneric as i32,
+                handle_type: BamlHandleType::AdtMediaImage as i32,
             })),
             ..Default::default()
         }),
@@ -338,7 +338,7 @@ async fn raw_invocation_and_callback_lifecycles() {
                 InboundValue {
                     value: Some(Value::Handle(BamlHandle {
                         key: key.get(),
-                        handle_type: BamlHandleType::AdtMediaGeneric as i32,
+                        handle_type: BamlHandleType::AdtMediaImage as i32,
                     })),
                     ..Default::default()
                 },

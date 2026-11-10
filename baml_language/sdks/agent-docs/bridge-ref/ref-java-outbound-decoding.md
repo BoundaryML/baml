@@ -689,10 +689,6 @@ registered classes on the wire-driven path.
 > (the same `default` arm as any unrecognized handle type,
 > `ProtoReader.java:897`). No reject path in Java.
 
-> ⚠ **Deviation from Python — `ADT_MEDIA_GENERIC` (10):** not in Java's
-> dispatch; it falls to the bare-`BamlHandle` default (`ProtoReader.java:874-897`
-> Javadoc calls this out explicitly).
-
 **The engine-drains-cloned-key contract.** A decoded handle **owns** the
 engine-minted `key` — `new BamlHandle(key, handleType, classFqn)` takes ownership
 (ordinary handles use the two-argument overload) and a

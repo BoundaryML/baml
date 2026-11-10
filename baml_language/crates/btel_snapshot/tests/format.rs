@@ -239,7 +239,7 @@ fn print_current_external_encodings() {
 /// Media of every kind and source, with and without a MIME type and loaded
 /// content, as a list root. The longest content is stored alone.
 fn media_graph(pool: &SnapshotPool) -> Snapshot {
-    use baml_type::MediaKind;
+    use baml_type::ConcreteMediaKind;
     use btel_snapshot::MediaSource;
     let mut b = pool.try_acquire().unwrap();
     let ty = b.leaves().ty(RealizedTy::Unknown);
@@ -256,12 +256,12 @@ fn media_graph(pool: &SnapshotPool) -> Snapshot {
         .unwrap();
     let sources = [
         (
-            MediaKind::Image,
+            ConcreteMediaKind::Image,
             Some(mime),
             MediaSource::Url { url, data: None },
         ),
         (
-            MediaKind::Audio,
+            ConcreteMediaKind::Audio,
             None,
             MediaSource::Url {
                 url,
@@ -269,12 +269,12 @@ fn media_graph(pool: &SnapshotPool) -> Snapshot {
             },
         ),
         (
-            MediaKind::Video,
+            ConcreteMediaKind::Video,
             Some(mime),
             MediaSource::File { path, data: None },
         ),
         (
-            MediaKind::Pdf,
+            ConcreteMediaKind::Pdf,
             None,
             MediaSource::File {
                 path,
@@ -282,11 +282,15 @@ fn media_graph(pool: &SnapshotPool) -> Snapshot {
             },
         ),
         (
-            MediaKind::Generic,
+            ConcreteMediaKind::Audio,
             Some(mime),
             MediaSource::Base64 { data: short },
         ),
-        (MediaKind::Image, None, MediaSource::Base64 { data: long }),
+        (
+            ConcreteMediaKind::Image,
+            None,
+            MediaSource::Base64 { data: long },
+        ),
     ];
     let list = b.list(
         ty,

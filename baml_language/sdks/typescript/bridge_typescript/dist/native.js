@@ -596,7 +596,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { _HostExecution, HostExecution, _HostMarker, HostMarker, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _encodeInbound, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _hostValueCount, _hostValueRegistered, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCallBridgeFailure, completeHostCallRaised, completeHostCallThrow, completeHostCallValue, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostAdapter, registerHostValueReleaseCallback, registerProgramDescriptor, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostValueKey, shutdownRuntime } = nativeBinding
+const { _HostExecution, HostExecution, _HostMarker, HostMarker, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _encodeInbound, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _hostValueCount, _hostValueRegistered, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedHeapHandle, _seedMediaHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCallBridgeFailure, completeHostCallRaised, completeHostCallThrow, completeHostCallValue, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostAdapter, registerHostValueReleaseCallback, registerProgramDescriptor, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostValueKey, shutdownRuntime } = nativeBinding
 export { _HostExecution }
 export { HostExecution }
 export { _HostMarker }
@@ -623,8 +623,8 @@ export { _isInvocationCancelled }
 export { _liveHandleCount }
 export { _recordHostCallResult }
 export { _releaseWireHandle }
-export { _seedGenericMediaHandle }
 export { _seedHeapHandle }
+export { _seedMediaHandle }
 export { _startHostCallExecution }
 export { _traceSelection }
 export { _validateHostOptions }

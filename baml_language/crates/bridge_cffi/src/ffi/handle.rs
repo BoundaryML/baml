@@ -132,18 +132,14 @@ pub unsafe extern "C" fn baml_handle_release(key: u64) -> BamlCffiStatus {
 /// `out_key` and `out_handle_type` must be either null or valid for writing
 /// one value of their pointee type.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __testonly_seed_generic_media(
+pub unsafe extern "C" fn __testonly_seed_media(
     out_key: *mut u64,
     out_handle_type: *mut i32,
 ) -> BamlCffiStatus {
     if out_key.is_null() || out_handle_type.is_null() {
         return BamlCffiStatus::UnexpectedNullptr;
     }
-    write_handle_parts(
-        handle_cffi::seed_generic_media_handle(),
-        out_key,
-        out_handle_type,
-    )
+    write_handle_parts(handle_cffi::seed_media_handle(), out_key, out_handle_type)
 }
 
 /// # Safety
@@ -399,11 +395,11 @@ mod tests {
         let mut handle_type = 0;
 
         assert_eq!(
-            unsafe { __testonly_seed_generic_media(ptr::null_mut(), &mut handle_type) },
+            unsafe { __testonly_seed_media(ptr::null_mut(), &mut handle_type) },
             BamlCffiStatus::UnexpectedNullptr
         );
         assert_eq!(
-            unsafe { __testonly_seed_generic_media(&mut key, ptr::null_mut()) },
+            unsafe { __testonly_seed_media(&mut key, ptr::null_mut()) },
             BamlCffiStatus::UnexpectedNullptr
         );
     }
@@ -563,5 +559,48 @@ mod tests {
         assert_eq!(read(baml_media_name, key, handle_type), None);
         assert_eq!(read(baml_media_file, key, handle_type), None);
         assert_eq!(unsafe { baml_handle_release(key) }, BamlCffiStatus::Ok);
+    }
+
+    #[test]
+    fn media_constructors_refuse_a_kind_that_is_not_one_of_their_own() {
+        let source = CString::new("aW1hZ2U=").unwrap();
+        let file = CString::new("/nowhere/a.png").unwrap();
+        // 5 is the reserved generic kind; 0 is unspecified; 99 is no member.
+        for kind in [5, MediaTypeEnum::MediaTypeUnspecified as i32, 99] {
+            let (mut key, mut handle_type) = (0, 0);
+            for status in [
+                unsafe {
+                    baml_media_from_url(
+                        kind,
+                        source.as_ptr(),
+                        ptr::null(),
+                        &mut key,
+                        &mut handle_type,
+                    )
+                },
+                unsafe {
+                    baml_media_from_base64(
+                        kind,
+                        source.as_ptr(),
+                        ptr::null(),
+                        &mut key,
+                        &mut handle_type,
+                    )
+                },
+                unsafe {
+                    baml_media_from_file_content(
+                        kind,
+                        file.as_ptr(),
+                        source.as_ptr(),
+                        ptr::null(),
+                        &mut key,
+                        &mut handle_type,
+                    )
+                },
+            ] {
+                assert_eq!(status, BamlCffiStatus::UnsupportedHandleType);
+            }
+            assert_eq!((key, handle_type), (0, 0));
+        }
     }
 }

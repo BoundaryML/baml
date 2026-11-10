@@ -824,9 +824,9 @@ async fn infer_tag_or_value_match_roundtrips_int() {
 async fn infer_identity_media_binds_concrete_media_type() {
     // A media argument is a concrete leaf BAML type, so identity<T>(image)
     // binds T = image.
-    use bex_external_types::{BexExternalAdt, MediaKind};
+    use bex_external_types::{BexExternalAdt, ConcreteMediaKind};
     let media = bex_vm_types::MediaValue::from_url(
-        MediaKind::Image,
+        ConcreteMediaKind::Image,
         "http://example.com/y.png",
         Some("image/png"),
     );

@@ -1,8 +1,7 @@
 """Decoder-side tests for BAML handle round-tripping.
 
-These tests exercise `_decode_handle` with handle kinds that have no
-Python-facing constructor (ADT_MEDIA_GENERIC). The
-HANDLE_TABLE entries are seeded via the `_seed_*_handle` PyO3 helpers,
+These tests exercise `_decode_handle` dispatch. The HANDLE_TABLE entries
+are seeded via the `_seed_*_handle` PyO3 helpers,
 which return `(key, handle_type)` so tests can stage a wire
 `BamlHandle` and exercise the decoder dispatch.
 """
@@ -21,11 +20,12 @@ import baml_bridge.proto
 
 from baml_bridge import BamlFunctionSpec, BamlPyHandle, BamlRuntimeValue, BamlStream
 from baml_bridge.baml_py import (
+    BamlImage,
     _encode_inbound,
     _handle_refcount,
     _live_handle_count,
     _release_wire_handle,
-    _seed_generic_media_handle,
+    _seed_media_handle,
     _seed_heap_handle,
 )
 from baml_bridge.proto import _EncodedCall
@@ -59,10 +59,12 @@ def test_returned_callable_parameter_aliases_preserve_controls():
     }
 
 
-def test_adt_media_generic_decodes_to_pyhandle():
-    key, ht = _seed_generic_media_handle()
+def test_adt_media_image_decodes_to_image():
+    key, ht = _seed_media_handle()
+    assert ht == baml_handle_pb2.ADT_MEDIA_IMAGE
     result = _decode_handle(_make_handle(key, ht), BamlTypeMap())
-    assert isinstance(result, BamlPyHandle)
+    assert isinstance(result, BamlImage)
+    assert result.url() == "https://example.com/"
 
 
 def test_decoded_pyhandle_releases_on_drop():
@@ -70,7 +72,7 @@ def test_decoded_pyhandle_releases_on_drop():
     a subsequent wrapper can still be created from the wire payload, but
     cloning it fails because the entry is gone.
     """
-    key, ht = _seed_generic_media_handle()
+    key, ht = _seed_heap_handle(0xD20B)
     decoded = _decode_handle(_make_handle(key, ht), BamlTypeMap())
     assert isinstance(decoded, BamlPyHandle)
     del decoded  # CPython refcount drops to 0; Drop runs HANDLE_TABLE.release.
@@ -92,7 +94,7 @@ def test_encode_failure_releases_every_cloned_capability_handle():
         BamlRuntimeValue._from_pyhandle,
     )
     for wrap in wrappers:
-        key, handle_type = _seed_generic_media_handle()
+        key, handle_type = _seed_media_handle()
         handle = BamlPyHandle(key, handle_type)
         handles.append(handle)
         capabilities.append(wrap(handle))
@@ -108,7 +110,7 @@ def test_encode_failure_releases_every_cloned_capability_handle():
 
 
 def test_successful_encode_retains_clone_until_wire_owner_consumes_it():
-    key, handle_type = _seed_generic_media_handle()
+    key, handle_type = _seed_media_handle()
     original = BamlPyHandle(key, handle_type)
     spec = BamlFunctionSpec._from_pyhandle(original)
     before = _live_handle_count()
@@ -123,7 +125,7 @@ def test_successful_encode_retains_clone_until_wire_owner_consumes_it():
 
 
 def test_stream_handle_kind_ignores_misleading_type_metadata():
-    key, _ = _seed_generic_media_handle()
+    key, _ = _seed_media_handle()
     handle = baml_outbound_pb2.BamlOutboundHandle()
     handle.key = key
     handle.handle_type = baml_handle_pb2.ADT_TAGGED_HEAP_HANDLE
@@ -139,7 +141,7 @@ def test_stream_handle_kind_ignores_misleading_type_metadata():
     ],
 )
 def test_live_handle_kinds_select_trusted_wrappers(handle_type, expected_type):
-    key, _ = _seed_generic_media_handle()
+    key, _ = _seed_media_handle()
     handle = baml_outbound_pb2.BamlOutboundHandle(
         key=key,
         handle_type=handle_type,

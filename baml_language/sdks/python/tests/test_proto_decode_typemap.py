@@ -14,7 +14,7 @@ import pydantic
 import pytest
 
 from baml_bridge import BamlClassInstance, BamlError, BamlPanic, BamlPyHandle
-from baml_bridge.baml_py import _seed_generic_media_handle
+from baml_bridge.baml_py import _seed_heap_handle
 from baml_bridge.typemap import BamlTypeMap
 from baml_bridge.proto import (
     _try_rehydrate_host_value,
@@ -67,7 +67,7 @@ def test_decode_value_class_unregistered_fqn_raises():
 
 
 def test_decode_value_class_keeps_projected_handle_alias_as_model_field():
-    key, handle_type = _seed_generic_media_handle()
+    key, handle_type = _seed_heap_handle(0xA11A5)
     holder = baml_outbound_pb2.BamlOutboundValue()
     cv = holder.class_value
     cv.name = "user.lorem.AliasedHandle"

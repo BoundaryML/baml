@@ -210,7 +210,10 @@ export function releaseHandle(key: bigint): boolean;
  */
 export function releaseWebHostValue(key: bigint): boolean;
 
-export function seedGenericMediaHandle(): bigint;
+/**
+ * Test-only: seed an image media entry into the handle table.
+ */
+export function seedMediaHandle(): bigint;
 
 /**
  * Take one more reference to the host value `key` for sending it to the
@@ -250,7 +253,7 @@ export interface InitOutput {
     readonly _testHandleTableEntryCount: () => [number, number, number];
     readonly cloneHandle: (a: bigint) => [bigint, number, number];
     readonly releaseHandle: (a: bigint) => number;
-    readonly seedGenericMediaHandle: () => [bigint, number, number];
+    readonly seedMediaHandle: () => [bigint, number, number];
     readonly __wbg_cancellationwatch_free: (a: number, b: number) => void;
     readonly cloneOutboundValue: (a: number, b: number) => [number, number, number, number];
     readonly invocationContext: (a: bigint) => [number, number, number, number];

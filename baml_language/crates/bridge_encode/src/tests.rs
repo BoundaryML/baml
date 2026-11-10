@@ -11,7 +11,9 @@ use baml_sdkgen_types::{
     ClassDescriptor, EnumDescriptor, FieldDescriptor, FunctionDescriptor, ParamDescriptor,
     ProgramDescriptor, Ty, TypeAliasDescriptor,
 };
-use baml_type::{Freshness, FunctionParamMode, Int63, Literal, MediaKind, TypeName};
+use baml_type::{
+    ConcreteMediaKind, Freshness, FunctionParamMode, Int63, Literal, MediaKind, TypeName,
+};
 use bridge_ctypes::{
     HostKey, TableKey,
     baml_bridge::cffi::{
@@ -45,7 +47,7 @@ enum Mock {
     Member(&'static str, &'static str),
     Callable,
     Handle,
-    Media(MediaKind),
+    Media(ConcreteMediaKind),
     /// A value whose `shape` raises.
     Raising,
     /// A list whose items never end: a host whose iteration lies about its
@@ -835,7 +837,7 @@ fn open_slots_take_the_values_own_type_and_fill_holes_with_unknown() {
     );
     assert_eq!(
         stated(&f.ok(
-            Mock::List(vec![Mock::Handle, Mock::Media(MediaKind::Image)]),
+            Mock::List(vec![Mock::Handle, Mock::Media(ConcreteMediaKind::Image)]),
             "g"
         )),
         Some(list_ty(StatedTy::Unknown))
@@ -931,15 +933,15 @@ fn an_empty_container_beside_other_types_states_its_own_type_under_unknown() {
 #[test]
 fn leaves_fit_their_kind_any_open_slot_and_open_union_members() {
     let f = Fixture::new();
-    assert!(f.encode(Mock::Media(MediaKind::Image), "q").is_ok());
+    assert!(f.encode(Mock::Media(ConcreteMediaKind::Image), "q").is_ok());
     assert_eq!(
-        f.refusal(Mock::Media(MediaKind::Image), "r"),
+        f.refusal(Mock::Media(ConcreteMediaKind::Image), "r"),
         "argument `x`: expected one of pdf | null, found Media(Image)"
     );
-    assert!(f.encode(Mock::Media(MediaKind::Pdf), "r").is_ok());
+    assert!(f.encode(Mock::Media(ConcreteMediaKind::Pdf), "r").is_ok());
     // Nested under `unknown`, and under `T?`.
     assert_eq!(
-        stated(&f.ok(Mock::List(vec![Mock::Media(MediaKind::Image)]), "g")),
+        stated(&f.ok(Mock::List(vec![Mock::Media(ConcreteMediaKind::Image)]), "g")),
         Some(list_ty(StatedTy::Media(MediaKind::Image)))
     );
     let optional_var = SlotTy::Union(Box::new([
@@ -947,7 +949,7 @@ fn leaves_fit_their_kind_any_open_slot_and_open_union_members() {
         SlotTy::Null,
     ]));
     assert!(
-        f.encode_in(Mock::Media(MediaKind::Image), optional_var)
+        f.encode_in(Mock::Media(ConcreteMediaKind::Image), optional_var)
             .is_ok()
     );
     // A handle fits any realized slot; the engine judges it live.

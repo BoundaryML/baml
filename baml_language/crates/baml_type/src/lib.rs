@@ -28,7 +28,7 @@ use std::fmt;
 // Re-export core baml_base types so downstream crates can depend on baml_type
 // instead of baml_base directly.
 pub use baml_base::qualified_name;
-pub use baml_base::{Literal, MediaKind, Name, Span};
+pub use baml_base::{ConcreteMediaKind, Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 pub mod accepts_null;

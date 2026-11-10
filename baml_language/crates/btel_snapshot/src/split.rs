@@ -241,7 +241,7 @@ mod tests {
         let image = object(
             &mut b,
             SnapshotObject::Media {
-                kind: baml_type::MediaKind::Image,
+                kind: baml_type::ConcreteMediaKind::Image,
                 mime_type,
                 source: MediaSource::Base64 { data },
             },

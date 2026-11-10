@@ -1599,7 +1599,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &WireTy) -> bool {
                 && variant_name == expected_variant.as_str()
         }
         (BexExternalValue::Adt(BexExternalAdt::Media(media)), WireTy::Media(expected_kind)) => {
-            *expected_kind == baml_type::MediaKind::Generic || media.kind == *expected_kind
+            expected_kind.admits(media.kind)
         }
         (BexExternalValue::HostValue(value), WireTy::Function { .. }) => {
             value.kind == bex_external_types::HostValueKind::Callable
@@ -1993,21 +1993,23 @@ fn matching_class_member<'m>(
 ///
 /// Keep this conversion contextual: the same wrapper remains an ordinary
 /// nominal class when passed as the receiver of a `baml.media.Image` method.
-pub(crate) fn stdlib_media_wrapper_kind(annotation: &WireTy) -> Option<baml_type::MediaKind> {
+pub(crate) fn stdlib_media_wrapper_kind(
+    annotation: &WireTy,
+) -> Option<baml_type::ConcreteMediaKind> {
     let WireTy::Class(WireHead::Static(name), args) = annotation else {
         return None;
     };
     if !args.is_empty() {
         return None;
     }
-    baml_type::MediaKind::from_wrapper_class_name(&name.render_dotted(false))
+    baml_type::ConcreteMediaKind::from_wrapper_class_name(&name.render_dotted(false))
 }
 
 #[cfg(test)]
 mod outbound_selection_tests {
     use std::sync::Arc;
 
-    use baml_type::{Freshness, MediaKind, Name, TypeName};
+    use baml_type::{ConcreteMediaKind, Freshness, Name, TypeName};
     use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
         EnumVariant, MediaContent, MediaValue, Object, Value,
@@ -2035,7 +2037,7 @@ mod outbound_selection_tests {
         WireTy::Literal(Literal::Float(value.to_string()), Freshness::Regular)
     }
 
-    fn media_value(kind: MediaKind) -> BexExternalValue {
+    fn media_value(kind: ConcreteMediaKind) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(MediaValue::new(
             kind,
             MediaContent::Url {
@@ -2046,15 +2048,11 @@ mod outbound_selection_tests {
         ))))
     }
 
-    fn media_wrapper_ty(kind: MediaKind) -> WireTy {
-        let name = match kind {
-            MediaKind::Image => "baml.media.Image",
-            MediaKind::Audio => "baml.media.Audio",
-            MediaKind::Video => "baml.media.Video",
-            MediaKind::Pdf => "baml.media.Pdf",
-            MediaKind::Generic => panic!("generic media has no stdlib wrapper class"),
-        };
-        WireTy::static_class_with_args(TypeName::from_dotted_path(name), Box::new([]))
+    fn media_wrapper_ty(kind: ConcreteMediaKind) -> WireTy {
+        WireTy::static_class_with_args(
+            TypeName::from_dotted_path(kind.wrapper_class_name()),
+            Box::new([]),
+        )
     }
 
     #[test]
@@ -2194,14 +2192,15 @@ mod outbound_selection_tests {
     #[test]
     fn portable_media_selects_the_nested_prompt_part_wrapper_union() {
         let media_part = WireTy::Union(Box::new([
-            media_wrapper_ty(MediaKind::Image),
-            media_wrapper_ty(MediaKind::Audio),
-            media_wrapper_ty(MediaKind::Video),
-            media_wrapper_ty(MediaKind::Pdf),
+            media_wrapper_ty(ConcreteMediaKind::Image),
+            media_wrapper_ty(ConcreteMediaKind::Audio),
+            media_wrapper_ty(ConcreteMediaKind::Video),
+            media_wrapper_ty(ConcreteMediaKind::Pdf),
         ]));
         let prompt_part = WireTy::Union(Box::new([WireTy::string(), media_part.clone()]));
 
-        let wrapped = maybe_wrap_union(media_value(MediaKind::Image), &prompt_part).unwrap();
+        let wrapped =
+            maybe_wrap_union(media_value(ConcreteMediaKind::Image), &prompt_part).unwrap();
         let BexExternalValue::Union { value, metadata } = wrapped else {
             panic!("expected prompt-part union metadata")
         };
@@ -2212,7 +2211,7 @@ mod outbound_selection_tests {
         assert!(matches!(
             *value,
             BexExternalValue::Adt(BexExternalAdt::Media(ref media))
-                if media.kind == MediaKind::Image
+                if media.kind == ConcreteMediaKind::Image
         ));
     }
 

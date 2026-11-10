@@ -13,7 +13,7 @@ mod common;
 
 use std::sync::Arc;
 
-use baml_type::MediaKind;
+use baml_type::ConcreteMediaKind;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;
 use bex_vm_types::{MediaContent, MediaValue};
@@ -23,7 +23,7 @@ use sys_native::SysOpsExt;
 
 fn pdf_media() -> Arc<MediaValue> {
     Arc::new(MediaValue::new(
-        MediaKind::Pdf,
+        ConcreteMediaKind::Pdf,
         MediaContent::Url {
             url: "https://example.test/sample.pdf".to_string(),
             base64_data: None,
@@ -79,7 +79,7 @@ class Holder {
 
     match result {
         BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
-            assert_eq!(arc.kind, MediaKind::Pdf);
+            assert_eq!(arc.kind, ConcreteMediaKind::Pdf);
             arc.read_content(|content| match content {
                 MediaContent::Url { url, .. } => {
                     assert_eq!(url, "https://example.test/sample.pdf");

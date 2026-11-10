@@ -11,7 +11,7 @@
 //! across four `#[pymethods]` blocks is intentional and gives the
 //! generator a concrete target to lower into.
 
-use bex_project::MediaKind;
+use bex_project::ConcreteMediaKind;
 use bridge_cffi::handle_cffi::{self, HandleError, HandleParts};
 use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use pyo3::{
@@ -27,8 +27,8 @@ use crate::py_handle::{BamlPyHandle, handle_clone, status_to_pyerr};
 type MediaAccessor<T> = fn(u64, i32) -> Result<T, HandleError>;
 
 fn create_media(
-    constructor: impl FnOnce(MediaKind, &str, Option<&str>) -> Result<HandleParts, HandleError>,
-    media_kind: MediaKind,
+    constructor: impl FnOnce(ConcreteMediaKind, &str, Option<&str>) -> Result<HandleParts, HandleError>,
+    media_kind: ConcreteMediaKind,
     value: String,
     mime_type: Option<String>,
     context: &str,
@@ -248,11 +248,10 @@ macro_rules! define_media_pyclass {
                     baml_value_media::Value,
                 };
                 let media = match $media_kind {
-                    MediaKind::Image => MediaTypeEnum::Image,
-                    MediaKind::Audio => MediaTypeEnum::Audio,
-                    MediaKind::Video => MediaTypeEnum::Video,
-                    MediaKind::Pdf => MediaTypeEnum::Pdf,
-                    MediaKind::Generic => MediaTypeEnum::Other,
+                    ConcreteMediaKind::Image => MediaTypeEnum::Image,
+                    ConcreteMediaKind::Audio => MediaTypeEnum::Audio,
+                    ConcreteMediaKind::Video => MediaTypeEnum::Video,
+                    ConcreteMediaKind::Pdf => MediaTypeEnum::Pdf,
                 };
                 let value = if let Some(url) = self.url(py)? {
                     Value::Url(url)
@@ -297,25 +296,25 @@ macro_rules! define_media_pyclass {
 define_media_pyclass!(
     BamlImage,
     "baml.media.Image",
-    MediaKind::Image,
+    ConcreteMediaKind::Image,
     BamlHandleType::AdtMediaImage as u64
 );
 define_media_pyclass!(
     BamlAudio,
     "baml.media.Audio",
-    MediaKind::Audio,
+    ConcreteMediaKind::Audio,
     BamlHandleType::AdtMediaAudio as u64
 );
 define_media_pyclass!(
     BamlVideo,
     "baml.media.Video",
-    MediaKind::Video,
+    ConcreteMediaKind::Video,
     BamlHandleType::AdtMediaVideo as u64
 );
 define_media_pyclass!(
     BamlPdf,
     "baml.media.Pdf",
-    MediaKind::Pdf,
+    ConcreteMediaKind::Pdf,
     BamlHandleType::AdtMediaPdf as u64
 );
 

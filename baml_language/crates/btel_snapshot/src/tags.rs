@@ -1,7 +1,7 @@
 //! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 5.
 //! Changing an assignment requires a format version change.
 
-use baml_type::MediaKind;
+use baml_type::{ConcreteMediaKind, MediaKind};
 
 use crate::{Description, Limit};
 
@@ -128,17 +128,17 @@ pub(super) fn description(value: Description) -> u8 {
     }
 }
 
-pub(super) fn media_kind(value: MediaKind) -> u8 {
+pub(super) fn media_kind(value: ConcreteMediaKind) -> u8 {
     match value {
-        MediaKind::Image => 0,
-        MediaKind::Audio => 1,
-        MediaKind::Video => 2,
-        MediaKind::Pdf => 3,
-        MediaKind::Generic => 4,
+        ConcreteMediaKind::Image => 0,
+        ConcreteMediaKind::Audio => 1,
+        ConcreteMediaKind::Video => 2,
+        ConcreteMediaKind::Pdf => 3,
     }
 }
 
-/// The kind [`media_kind`] writes as `tag`.
+/// The kind [`media_kind`] writes as `tag`. Tag 4, `Generic`, is no longer
+/// written; blobs from earlier runtimes may hold it.
 pub(super) fn media_kind_of(tag: u8) -> Option<MediaKind> {
     Some(match tag {
         0 => MediaKind::Image,

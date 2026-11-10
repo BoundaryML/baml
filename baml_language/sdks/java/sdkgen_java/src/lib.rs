@@ -2165,7 +2165,11 @@ mod tests {
         let img = name("baml", &["media"], "Image");
         pool.insert(
             img.clone(),
-            crossing_sym(&img, ClassCrossing::Media(baml_base::MediaKind::Image), 0),
+            crossing_sym(
+                &img,
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Image),
+                0,
+            ),
         );
         let stream = name("ai", &["stream"], "Stream");
         pool.insert(
@@ -2191,7 +2195,11 @@ mod tests {
         let clip = name("user", &["shapes"], "Clip");
         pool.insert(
             clip.clone(),
-            crossing_sym(&clip, ClassCrossing::Media(baml_base::MediaKind::Video), 6),
+            crossing_sym(
+                &clip,
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Video),
+                6,
+            ),
         );
         let user_prompt = name("user", &["shapes"], "Prompt");
         pool.insert(user_prompt.clone(), class_sym(&user_prompt, &[], 7));
@@ -2208,7 +2216,11 @@ mod tests {
         let mut pool = SymbolPool::new();
         pool.insert(
             clip.clone(),
-            crossing_sym(&clip, ClassCrossing::Media(baml_base::MediaKind::Video), 0),
+            crossing_sym(
+                &clip,
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Video),
+                0,
+            ),
         );
         let holder = name("user", &["shapes"], "Holder");
         pool.insert(

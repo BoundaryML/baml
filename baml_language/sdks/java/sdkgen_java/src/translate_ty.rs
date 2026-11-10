@@ -328,7 +328,7 @@ fn media_type(kind: baml_base::MediaKind) -> &'static str {
 /// nowhere, so it can only be named where a generated type would be.
 fn class_type(name: &Name, ctx: &TranslateCtx<'_>) -> String {
     match ctx.crossings.get(name).copied() {
-        Some(ClassCrossing::Media(kind)) => media_type(kind).to_string(),
+        Some(ClassCrossing::Media(kind)) => media_type(kind.into()).to_string(),
         Some(ClassCrossing::Prompt) => "baml_bridge.BamlPrompt".to_string(),
         Some(ClassCrossing::Stream) => "baml_bridge.BamlStream".to_string(),
         Some(ClassCrossing::FunctionSpec) => "baml_bridge.BamlFunctionSpec".to_string(),
@@ -1026,7 +1026,7 @@ mod tests {
                 (name("ai", &[], "Prompt"), ClassCrossing::Prompt),
                 (
                     name("baml", &["media"], "Image"),
-                    ClassCrossing::Media(baml_base::MediaKind::Image),
+                    ClassCrossing::Media(baml_base::ConcreteMediaKind::Image),
                 ),
             ])
         })

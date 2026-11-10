@@ -14,7 +14,7 @@ from baml_bridge.baml_py import (
     _handle_refcount,
     _invoke_host_callable,
     _release_wire_handle,
-    _seed_generic_media_handle,
+    _seed_media_handle,
     _seed_heap_handle,
 )
 from baml_bridge.cffi.v1 import baml_handle_pb2, baml_outbound_pb2
@@ -23,7 +23,7 @@ from baml_bridge.typemap import BamlTypeMap
 
 @pytest.mark.parametrize("heap", [False, True])
 def test_discarded_args_release_each_nested_wire_owner_once(heap):
-    key, kind = _seed_heap_handle(0xCA11BAC) if heap else _seed_generic_media_handle()
+    key, kind = _seed_heap_handle(0xCA11BAC) if heap else _seed_media_handle()
     owner = BamlPyHandle(key, kind)
     call = baml_outbound_pb2.BamlToHostCall()
     holders = [
@@ -53,8 +53,8 @@ def test_discarded_args_release_each_nested_wire_owner_once(heap):
 
 def test_discarded_args_do_not_release_borrowed_host_registry_keys():
     kind = baml_handle_pb2.BamlHandleType
-    key, _ = _seed_generic_media_handle()
-    owner = BamlPyHandle(key, kind.ADT_MEDIA_GENERIC)
+    key, _ = _seed_media_handle()
+    owner = BamlPyHandle(key, kind.ADT_MEDIA_IMAGE)
     call = baml_outbound_pb2.BamlToHostCall()
     # Numeric keys in the host registry have independent authority. Even when
     # a borrowed host key matches an ordinary key, it must not release that row.
@@ -73,7 +73,7 @@ def test_discarded_args_release_the_pin_of_each_host_value():
     call = baml_outbound_pb2.BamlToHostCall()
     pins = []
     for host_kind in (kind.HOST_VALUE_CALLABLE, kind.HOST_VALUE_OPAQUE):
-        pin, _ = _seed_generic_media_handle()
+        pin, _ = _seed_media_handle()
         pins.append(pin)
         handle = call.args.add().value.handle_value
         handle.key = 1
@@ -84,7 +84,7 @@ def test_discarded_args_release_the_pin_of_each_host_value():
 
 
 def test_decode_failure_releases_the_pin_of_an_unread_host_value(decoding_models):
-    pin, _ = _seed_generic_media_handle()
+    pin, _ = _seed_media_handle()
     call = baml_outbound_pb2.BamlToHostCall()
     reject_argument(call.args.add().value)
     handle = call.args.add().value.handle_value
@@ -145,7 +145,7 @@ def wire_handle(holder, key, kind):
 
 
 def test_decode_failure_releases_untransferred_callable_and_media(decoding_models):
-    owners = [_seed_generic_media_handle(), _seed_generic_media_handle()]
+    owners = [_seed_media_handle(), _seed_media_handle()]
     call = baml_outbound_pb2.BamlToHostCall()
     reject_argument(call.args.add().value)
     for key, kind in owners:
@@ -247,7 +247,7 @@ def test_decode_failure_preserves_transferred_owner_and_releases_remaining(
 
 
 def test_successful_decode_transfers_ownership_to_callback():
-    key, kind = _seed_generic_media_handle()
+    key, kind = _seed_media_handle()
     call = baml_outbound_pb2.BamlToHostCall()
     wire_handle(call.args.add().value, key, kind)
     captured = []

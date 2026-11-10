@@ -38,7 +38,9 @@ enum BamlHandleType {
   ADT_MEDIA_AUDIO = 7;
   ADT_MEDIA_VIDEO = 8;
   ADT_MEDIA_PDF = 9;
-  ADT_MEDIA_GENERIC = 10;
+  // Formerly ADT_MEDIA_GENERIC: a media value always has one of the kinds above.
+  reserved 10;
+  reserved "ADT_MEDIA_GENERIC";
   ADT_PROMPT_AST = 11;
   // Formerly ADT_TYPE: a type crosses as itself, a `ty_value`.
   reserved 13;

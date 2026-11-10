@@ -344,16 +344,16 @@ def _release_wire_handle(key: builtins.int) -> None:
     engine can consume it.
     """
 
-def _seed_generic_media_handle() -> tuple[builtins.int, builtins.int]:
-    r"""
-    Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
-    """
-
 def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.int]:
     r"""
     Test-only: seed an engine-heap (`BexHeapHandle`) entry through the shared
     CFFI API — the identity-bearing, deduplicating arm. Two seeds of one
     `slab_key` share a key.
+    """
+
+def _seed_media_handle() -> tuple[builtins.int, builtins.int]:
+    r"""
+    Test-only: seed an `Adt(Media(image))` entry through the shared CFFI API.
     """
 
 def _trace_selection(handle: BamlPyHandle, call_id: builtins.int) -> tuple[builtins.list[builtins.int], typing.Optional[BamlPyHandle]]: ...

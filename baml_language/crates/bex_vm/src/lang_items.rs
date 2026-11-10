@@ -5,7 +5,7 @@
 //! of panicking at the first native call that asks for it; `tests/lang_items.rs`
 //! runs that resolution against the toolchain's own standard library.
 
-use baml_base::{LangItem, MediaKind, lang_item};
+use baml_base::{ConcreteMediaKind, LangItem, lang_item};
 use baml_type::{BoundaryClass, compiler_aliases, normalize::WellKnownHead, type_kind::TypeKind};
 use bex_vm_types::{PanicClass, types::ErrorClass};
 
@@ -150,9 +150,9 @@ pub fn runtime_items() -> impl Iterator<Item = LangItem> {
         .copied()
         .chain(TypeKind::ALL.into_iter().map(TypeKind::class))
         .chain(
-            MediaKind::ALL
+            ConcreteMediaKind::ALL
                 .into_iter()
-                .filter_map(MediaKind::wrapper_class),
+                .map(ConcreteMediaKind::wrapper_class),
         )
         .chain(
             compiler_aliases::ALL

@@ -1,6 +1,6 @@
 //! How an instance of a class crosses the host boundary.
 
-use baml_base::{LangItem, LangRoots, MediaKind, RustPayloadKind, lang_item};
+use baml_base::{ConcreteMediaKind, LangItem, LangRoots, RustPayloadKind, lang_item};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::DeclName;
@@ -22,7 +22,7 @@ pub enum ClassCrossing {
     /// The live `ai.FunctionSpec` capability, as a reference.
     FunctionSpec,
     /// A media value, carried by its own wire arm.
-    Media(MediaKind),
+    Media(ConcreteMediaKind),
     /// A rendered `ai.Prompt`, carried by its own wire arm.
     Prompt,
     /// A host's own value (`baml.host.Value`), as the host's reference to
@@ -50,10 +50,10 @@ impl ClassCrossing {
     /// instance.
     pub const fn of_kind(kind: RustPayloadKind) -> Self {
         match kind {
-            RustPayloadKind::Image => Self::Media(MediaKind::Image),
-            RustPayloadKind::Audio => Self::Media(MediaKind::Audio),
-            RustPayloadKind::Pdf => Self::Media(MediaKind::Pdf),
-            RustPayloadKind::Video => Self::Media(MediaKind::Video),
+            RustPayloadKind::Image => Self::Media(ConcreteMediaKind::Image),
+            RustPayloadKind::Audio => Self::Media(ConcreteMediaKind::Audio),
+            RustPayloadKind::Pdf => Self::Media(ConcreteMediaKind::Pdf),
+            RustPayloadKind::Video => Self::Media(ConcreteMediaKind::Video),
             RustPayloadKind::Prompt => Self::Prompt,
             RustPayloadKind::HostValue => Self::HostValue,
             RustPayloadKind::Foreign

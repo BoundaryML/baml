@@ -4497,7 +4497,7 @@ impl BexVm {
                     | bex_vm_types::RustPayload::Pdf(media)
                     | bex_vm_types::RustPayload::Video(media),
                 ..
-            }) => ConcreteRealizedTy::Media(media.kind),
+            }) => ConcreteRealizedTy::Media(media.kind.into()),
             Object::RustInstance(instance) => match self.get_object(instance.class) {
                 Object::Class(class) => {
                     debug_assert_eq!(instance.class_type_args.len(), class.generic_param_count);
@@ -5998,10 +5998,7 @@ impl BexVm {
     /// A media value, as an instance of its kind's wrapper class
     /// (`baml.media.Image`, …).
     pub fn alloc_media(&mut self, media: bex_vm_types::payload::Media) -> Value {
-        let wrapper = media.kind.wrapper_class().unwrap_or_else(|| {
-            unreachable!("a media value is built with a kind of its own, never `Generic`")
-        });
-        let class = self.lang_object(wrapper);
+        let class = self.lang_object(media.kind.wrapper_class());
         self.alloc_rust_instance(
             class,
             bex_vm_types::ThinVec::new(),

@@ -144,7 +144,7 @@ pub(crate) fn render_class(
     key: &Name,
     fields: &[RenderedField],
     methods: &[String],
-    media: Option<(baml_base::MediaKind, &RenderedField)>,
+    media: Option<(baml_base::ConcreteMediaKind, &RenderedField)>,
 ) -> String {
     let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
@@ -218,11 +218,10 @@ pub(crate) fn render_class(
     if let Some((kind, data)) = media {
         let data = format!("self.{}", data.name);
         let kind = match kind {
-            baml_base::MediaKind::Image => "image",
-            baml_base::MediaKind::Audio => "audio",
-            baml_base::MediaKind::Video => "video",
-            baml_base::MediaKind::Pdf => "pdf",
-            baml_base::MediaKind::Generic => "generic",
+            baml_base::ConcreteMediaKind::Image => "image",
+            baml_base::ConcreteMediaKind::Audio => "audio",
+            baml_base::ConcreteMediaKind::Video => "video",
+            baml_base::ConcreteMediaKind::Pdf => "pdf",
         };
         let _ = write!(
             out,

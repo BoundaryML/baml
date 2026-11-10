@@ -671,15 +671,14 @@ namespace baml_bridge {
 namespace cffi {
 namespace v1 {
 PROTOBUF_CONSTINIT const uint32_t MediaTypeEnum_internal_data_[] = {
-    393216u, 0u, };
+    327680u, 0u, };
 static ::google::protobuf::internal::ExplicitlyConstructed<::std::string>
-    MediaTypeEnum_strings[6] = {};
+    MediaTypeEnum_strings[5] = {};
 
 static const char MediaTypeEnum_names[] = {
     "AUDIO"
     "IMAGE"
     "MEDIA_TYPE_UNSPECIFIED"
-    "OTHER"
     "PDF"
     "VIDEO"
 };
@@ -688,36 +687,34 @@ static const ::google::protobuf::internal::EnumEntry MediaTypeEnum_entries[] = {
     {{&MediaTypeEnum_names[0], 5}, 2},
     {{&MediaTypeEnum_names[5], 5}, 1},
     {{&MediaTypeEnum_names[10], 22}, 0},
-    {{&MediaTypeEnum_names[32], 5}, 5},
-    {{&MediaTypeEnum_names[37], 3}, 3},
-    {{&MediaTypeEnum_names[40], 5}, 4},
+    {{&MediaTypeEnum_names[32], 3}, 3},
+    {{&MediaTypeEnum_names[35], 5}, 4},
 };
 
 static const int MediaTypeEnum_entries_by_number[] = {
     2,  // 0 -> MEDIA_TYPE_UNSPECIFIED
     1,  // 1 -> IMAGE
     0,  // 2 -> AUDIO
-    4,  // 3 -> PDF
-    5,  // 4 -> VIDEO
-    3,  // 5 -> OTHER
+    3,  // 3 -> PDF
+    4,  // 4 -> VIDEO
 };
 
 const ::std::string& MediaTypeEnum_Name(MediaTypeEnum value) {
   static const bool kDummy = ::google::protobuf::internal::InitializeEnumStrings(
-      MediaTypeEnum_entries, MediaTypeEnum_entries_by_number, 6,
+      MediaTypeEnum_entries, MediaTypeEnum_entries_by_number, 5,
       MediaTypeEnum_strings);
   (void)kDummy;
 
   int idx = ::google::protobuf::internal::LookUpEnumName(MediaTypeEnum_entries,
                                   MediaTypeEnum_entries_by_number,
-                                  6, value);
+                                  5, value);
   return idx == -1 ? ::google::protobuf::internal::GetEmptyString() : MediaTypeEnum_strings[idx].get();
 }
 
 bool MediaTypeEnum_Parse(::absl::string_view name, MediaTypeEnum* PROTOBUF_NONNULL value) {
   int int_value;
   bool success = ::google::protobuf::internal::LookUpEnumValue(
-      MediaTypeEnum_entries, 6, name, &int_value);
+      MediaTypeEnum_entries, 5, name, &int_value);
   if (success) {
     *value = static_cast<MediaTypeEnum>(int_value);
   }

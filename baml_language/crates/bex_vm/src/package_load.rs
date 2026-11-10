@@ -21,7 +21,7 @@ use std::sync::{
 };
 
 use baml_base::{LangItem, LangPackage};
-use baml_type::{MediaKind, Name};
+use baml_type::{ConcreteMediaKind, Name};
 use bex_heap::BexHeap;
 use bex_vm_types::{
     HeapPtr, Object, ObjectIndex, RootVisitor, TypeHead, Weak,
@@ -651,7 +651,7 @@ pub enum TimeClass {
 #[derive(Debug, Default)]
 pub struct StdlibHeads {
     time: Vec<(TimeClass, TypeHead)>,
-    media: Vec<(MediaKind, TypeHead)>,
+    media: Vec<(ConcreteMediaKind, TypeHead)>,
     json: Option<TypeHead>,
     classes: Vec<(StdlibClass, TypeHead)>,
 }
@@ -724,11 +724,10 @@ impl StdlibHeads {
         .into_iter()
         .filter_map(|(class, item)| Some((class, head(item)?)))
         .collect();
-        // A runtime media value is an instance of one of these classes; there
-        // is no `Generic` media value, and no wrapper class for it.
-        let media = MediaKind::ALL
+        // A runtime media value is an instance of one of these classes.
+        let media = ConcreteMediaKind::ALL
             .into_iter()
-            .filter_map(|kind| Some((kind, head(kind.wrapper_class()?)?)))
+            .filter_map(|kind| Some((kind, head(kind.wrapper_class())?)))
             .collect();
         let classes = StdlibClass::ALL
             .into_iter()
@@ -750,9 +749,8 @@ impl StdlibHeads {
             .map(|(class, _)| *class)
     }
 
-    /// The wrapper class of media of `kind`, if the standard library declares
-    /// one (it declares none for the generic `media`).
-    pub fn media_wrapper(&self, kind: MediaKind) -> Option<TypeHead> {
+    /// The wrapper class of media of `kind`, if the program loads it.
+    pub fn media_wrapper(&self, kind: ConcreteMediaKind) -> Option<TypeHead> {
         self.media
             .iter()
             .find(|(k, _)| *k == kind)
@@ -760,7 +758,7 @@ impl StdlibHeads {
     }
 
     /// Which media wrapper class `head` is, if any.
-    pub fn media_kind(&self, head: TypeHead) -> Option<MediaKind> {
+    pub fn media_kind(&self, head: TypeHead) -> Option<ConcreteMediaKind> {
         self.media
             .iter()
             .find(|(_, h)| *h == head)

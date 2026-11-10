@@ -28,8 +28,8 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-/// We need to handle BamlMediaType. Since one variant is "Other(String)",
-/// we represent it as a message with an enum tag and an optional string.
+/// The kind of a media value. A media value always has one of these kinds;
+/// the media type that admits any of them is `BAML_TY_MEDIA_KIND_GENERIC`.
 nonisolated enum BamlBridge_Cffi_V1_MediaTypeEnum: SwiftProtobuf.Enum, Swift.CaseIterable {
   typealias RawValue = Int
   case mediaTypeUnspecified // = 0
@@ -37,7 +37,6 @@ nonisolated enum BamlBridge_Cffi_V1_MediaTypeEnum: SwiftProtobuf.Enum, Swift.Cas
   case audio // = 2
   case pdf // = 3
   case video // = 4
-  case other // = 5
   case UNRECOGNIZED(Int)
 
   init() {
@@ -51,7 +50,6 @@ nonisolated enum BamlBridge_Cffi_V1_MediaTypeEnum: SwiftProtobuf.Enum, Swift.Cas
     case 2: self = .audio
     case 3: self = .pdf
     case 4: self = .video
-    case 5: self = .other
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -63,7 +61,6 @@ nonisolated enum BamlBridge_Cffi_V1_MediaTypeEnum: SwiftProtobuf.Enum, Swift.Cas
     case .audio: return 2
     case .pdf: return 3
     case .video: return 4
-    case .other: return 5
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -75,7 +72,6 @@ nonisolated enum BamlBridge_Cffi_V1_MediaTypeEnum: SwiftProtobuf.Enum, Swift.Cas
     .audio,
     .pdf,
     .video,
-    .other,
   ]
 
 }
@@ -992,7 +988,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlLiteralValue: Sendable {
 fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_MediaTypeEnum: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MEDIA_TYPE_UNSPECIFIED\0\u{1}IMAGE\0\u{1}AUDIO\0\u{1}PDF\0\u{1}VIDEO\0\u{1}OTHER\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MEDIA_TYPE_UNSPECIFIED\0\u{1}IMAGE\0\u{1}AUDIO\0\u{1}PDF\0\u{1}VIDEO\0")
 }
 
 nonisolated extension BamlBridge_Cffi_V1_BamlOutboundResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

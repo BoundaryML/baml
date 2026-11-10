@@ -35,7 +35,6 @@ pub enum BamlHandleType {
     AdtMediaAudio = 7,
     AdtMediaVideo = 8,
     AdtMediaPdf = 9,
-    AdtMediaGeneric = 10,
     AdtPromptAst = 11,
     AdtTaggedHeapHandle = 14,
     /// Host-owned callable referenced via per-bridge HostValueRegistry.
@@ -85,7 +84,6 @@ impl BamlHandleType {
             Self::AdtMediaAudio => "ADT_MEDIA_AUDIO",
             Self::AdtMediaVideo => "ADT_MEDIA_VIDEO",
             Self::AdtMediaPdf => "ADT_MEDIA_PDF",
-            Self::AdtMediaGeneric => "ADT_MEDIA_GENERIC",
             Self::AdtPromptAst => "ADT_PROMPT_AST",
             Self::AdtTaggedHeapHandle => "ADT_TAGGED_HEAP_HANDLE",
             Self::HostValueCallable => "HOST_VALUE_CALLABLE",
@@ -107,7 +105,6 @@ impl BamlHandleType {
             "ADT_MEDIA_AUDIO" => Some(Self::AdtMediaAudio),
             "ADT_MEDIA_VIDEO" => Some(Self::AdtMediaVideo),
             "ADT_MEDIA_PDF" => Some(Self::AdtMediaPdf),
-            "ADT_MEDIA_GENERIC" => Some(Self::AdtMediaGeneric),
             "ADT_PROMPT_AST" => Some(Self::AdtPromptAst),
             "ADT_TAGGED_HEAP_HANDLE" => Some(Self::AdtTaggedHeapHandle),
             "HOST_VALUE_CALLABLE" => Some(Self::HostValueCallable),
@@ -935,8 +932,8 @@ pub mod baml_literal_value {
 // BamlMedia definitions
 // -----------------------------------------------------------------------------
 
-/// We need to handle BamlMediaType. Since one variant is "Other(String)",
-/// we represent it as a message with an enum tag and an optional string.
+/// The kind of a media value. A media value always has one of these kinds;
+/// the media type that admits any of them is `BAML_TY_MEDIA_KIND_GENERIC`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum MediaTypeEnum {
@@ -945,7 +942,6 @@ pub enum MediaTypeEnum {
     Audio = 2,
     Pdf = 3,
     Video = 4,
-    Other = 5,
 }
 impl MediaTypeEnum {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -959,7 +955,6 @@ impl MediaTypeEnum {
             Self::Audio => "AUDIO",
             Self::Pdf => "PDF",
             Self::Video => "VIDEO",
-            Self::Other => "OTHER",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -970,7 +965,6 @@ impl MediaTypeEnum {
             "AUDIO" => Some(Self::Audio),
             "PDF" => Some(Self::Pdf),
             "VIDEO" => Some(Self::Video),
-            "OTHER" => Some(Self::Other),
             _ => None,
         }
     }

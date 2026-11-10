@@ -3,7 +3,7 @@
 //! come from shaping this.
 use std::{marker::PhantomData, sync::Arc};
 
-use baml_type::{DeclarationName, MediaKind, typetag::TypeTag};
+use baml_type::{ConcreteMediaKind, DeclarationName, typetag::TypeTag};
 use bex_str::BexStr;
 use btel_types::DefinitionBlob;
 use num_bigint::BigInt;
@@ -196,7 +196,7 @@ pub enum SnapshotObject {
     /// A media value: its kind and where its content comes from. Its bytes
     /// are captured, as base64 text, only when the value holds them.
     Media {
-        kind: MediaKind,
+        kind: ConcreteMediaKind,
         mime_type: Option<LabelId>,
         source: MediaSource,
     },

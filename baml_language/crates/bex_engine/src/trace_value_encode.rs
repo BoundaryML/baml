@@ -134,7 +134,7 @@ enum MediaTypeEnum {
     Audio = 2,
     Pdf = 3,
     Video = 4,
-    Other = 5,
+    // 5 is reserved: no media value has a generic kind.
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -508,13 +508,12 @@ fn media_to_proto(media: &TraceMediaValue) -> BamlValueMedia {
     }
 }
 
-fn media_kind_to_proto_enum(kind: bex_external_types::MediaKind) -> MediaTypeEnum {
+fn media_kind_to_proto_enum(kind: bex_external_types::ConcreteMediaKind) -> MediaTypeEnum {
     match kind {
-        bex_external_types::MediaKind::Image => MediaTypeEnum::Image,
-        bex_external_types::MediaKind::Audio => MediaTypeEnum::Audio,
-        bex_external_types::MediaKind::Pdf => MediaTypeEnum::Pdf,
-        bex_external_types::MediaKind::Video => MediaTypeEnum::Video,
-        bex_external_types::MediaKind::Generic => MediaTypeEnum::Other,
+        bex_external_types::ConcreteMediaKind::Image => MediaTypeEnum::Image,
+        bex_external_types::ConcreteMediaKind::Audio => MediaTypeEnum::Audio,
+        bex_external_types::ConcreteMediaKind::Pdf => MediaTypeEnum::Pdf,
+        bex_external_types::ConcreteMediaKind::Video => MediaTypeEnum::Video,
     }
 }
 
@@ -807,7 +806,7 @@ fn render_media_value(media: &BamlValueMedia) -> String {
         MediaTypeEnum::Audio => "audio",
         MediaTypeEnum::Pdf => "pdf",
         MediaTypeEnum::Video => "video",
-        MediaTypeEnum::Unspecified | MediaTypeEnum::Other => "media",
+        MediaTypeEnum::Unspecified => "media",
     });
     let mime = media
         .mime_type
@@ -936,7 +935,7 @@ mod tests {
         let snapshot = TraceSnapshot::for_test(
             TraceValueRef::for_test(0),
             vec![TraceValue::Media(crate::trace_heap::TraceMediaValue {
-                kind: bex_external_types::MediaKind::Image,
+                kind: bex_external_types::ConcreteMediaKind::Image,
                 mime_type: Some("image/png".to_string()),
                 content: crate::trace_heap::TraceMediaContent::Base64 {
                     base64: "aW1hZ2UtYnl0ZXM=".to_string(),

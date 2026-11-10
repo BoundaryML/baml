@@ -16,13 +16,11 @@ class MediaTypeEnum(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     AUDIO: _ClassVar[MediaTypeEnum]
     PDF: _ClassVar[MediaTypeEnum]
     VIDEO: _ClassVar[MediaTypeEnum]
-    OTHER: _ClassVar[MediaTypeEnum]
 MEDIA_TYPE_UNSPECIFIED: MediaTypeEnum
 IMAGE: MediaTypeEnum
 AUDIO: MediaTypeEnum
 PDF: MediaTypeEnum
 VIDEO: MediaTypeEnum
-OTHER: MediaTypeEnum
 
 class BamlOutboundResult(_message.Message):
     __slots__ = ("ok", "error", "panic")

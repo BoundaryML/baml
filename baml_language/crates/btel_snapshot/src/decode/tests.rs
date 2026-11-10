@@ -681,11 +681,11 @@ fn media_round_trips_each_source_with_its_content() {
         (Some(mime), crate::MediaSource::Base64 { data }),
     ];
     let kinds = [
-        baml_type::MediaKind::Image,
-        baml_type::MediaKind::Audio,
-        baml_type::MediaKind::Video,
-        baml_type::MediaKind::Pdf,
-        baml_type::MediaKind::Generic,
+        baml_type::ConcreteMediaKind::Image,
+        baml_type::ConcreteMediaKind::Audio,
+        baml_type::ConcreteMediaKind::Video,
+        baml_type::ConcreteMediaKind::Pdf,
+        baml_type::ConcreteMediaKind::Image,
     ];
     let root = b.arguments(
         kinds.into_iter().zip(sources),
@@ -734,7 +734,7 @@ fn media_round_trips_each_source_with_its_content() {
             },
         ),
         (
-            MediaKind::Generic,
+            MediaKind::Image,
             Some("image/png"),
             DecodedMediaSource::Base64 { data: inline() },
         ),

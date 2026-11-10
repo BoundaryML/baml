@@ -22,7 +22,7 @@ mod union;
 
 use std::sync::Arc;
 
-use baml_type::MediaKind;
+use baml_type::ConcreteMediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind,
@@ -576,7 +576,7 @@ struct MediaFields {
 fn build_media(
     vm: &mut BexVm,
     fields: &MediaFields,
-    kind: MediaKind,
+    kind: ConcreteMediaKind,
     head: TypeHead,
 ) -> Result<Value, String> {
     let tagged_kind = fields

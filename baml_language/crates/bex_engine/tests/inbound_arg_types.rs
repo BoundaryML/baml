@@ -301,7 +301,7 @@ async fn handle_to_another_class_is_rejected() {
 
 fn pdf() -> BexExternalValue {
     BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(MediaValue::new(
-        baml_type::MediaKind::Pdf,
+        baml_type::ConcreteMediaKind::Pdf,
         MediaContent::Url {
             url: "https://example.test/sample.pdf".to_string(),
             base64_data: None,

@@ -14,7 +14,6 @@ class BamlHandleType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ADT_MEDIA_AUDIO: _ClassVar[BamlHandleType]
     ADT_MEDIA_VIDEO: _ClassVar[BamlHandleType]
     ADT_MEDIA_PDF: _ClassVar[BamlHandleType]
-    ADT_MEDIA_GENERIC: _ClassVar[BamlHandleType]
     ADT_PROMPT_AST: _ClassVar[BamlHandleType]
     ADT_TAGGED_HEAP_HANDLE: _ClassVar[BamlHandleType]
     HOST_VALUE_CALLABLE: _ClassVar[BamlHandleType]
@@ -31,7 +30,6 @@ ADT_MEDIA_IMAGE: BamlHandleType
 ADT_MEDIA_AUDIO: BamlHandleType
 ADT_MEDIA_VIDEO: BamlHandleType
 ADT_MEDIA_PDF: BamlHandleType
-ADT_MEDIA_GENERIC: BamlHandleType
 ADT_PROMPT_AST: BamlHandleType
 ADT_TAGGED_HEAP_HANDLE: BamlHandleType
 HOST_VALUE_CALLABLE: BamlHandleType

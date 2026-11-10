@@ -36,7 +36,7 @@ from baml_bridge import (
 )
 from baml_bridge.baml_py import (
     _live_handle_count,
-    _seed_generic_media_handle,
+    _seed_media_handle,
 )
 from baml_bridge.errors import BamlError, BamlPanic
 
@@ -268,11 +268,11 @@ def test_callable_raising_while_its_result_is_read_raises_that_error():
 
 def test_host_result_successful_encode_transfers_capability_clone_to_engine():
     """The handle itself encodes successfully, so the engine receives and
-    drains its cloned key before rejecting this synthetic generic-media handle
-    against the `string` that the callback declares. The original Python
+    drains its cloned key before rejecting this image handle against
+    the `string` that the callback declares. The original Python
     handle remains live."""
     rt = _make_runtime()
-    key, handle_type = _seed_generic_media_handle()
+    key, handle_type = _seed_media_handle()
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
 
@@ -288,7 +288,7 @@ def test_host_result_successful_encode_transfers_capability_clone_to_engine():
 
 def test_host_result_encode_failure_releases_capability_clone():
     rt = _make_runtime()
-    key, handle_type = _seed_generic_media_handle()
+    key, handle_type = _seed_media_handle()
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
 
@@ -334,7 +334,7 @@ def test_host_throw_encode_failure_releases_capability_clone():
     # settle both so the baseline counts this test's handles alone.
     call_function_sync(rt, "Collect", {})
     gc.collect()
-    key, handle_type = _seed_generic_media_handle()
+    key, handle_type = _seed_media_handle()
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
 
@@ -639,7 +639,7 @@ def test_a_refused_send_of_a_received_key_gives_back_only_its_reference():
     _collect(rt)
     # An engine handle whose row is gone: cloning it for the wire fails after
     # the host value earlier in the list has shipped.
-    key, kind = _seed_generic_media_handle()
+    key, kind = _seed_media_handle()
     _proto._release_wire_handle(key)
     stale = BamlPyHandle(key, kind)
     for _ in range(3):

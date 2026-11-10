@@ -21,7 +21,7 @@ use std::{
 };
 
 use baml_sdkgen_types::ProgramDescriptor;
-use baml_type::{MediaKind, Name, TypeName};
+use baml_type::{ConcreteMediaKind, Name, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
     HANDLE_TABLE, HostKey, TableKey,
@@ -401,10 +401,10 @@ impl<'env> Cx<'env> {
 fn leaf_kind(kind: u32) -> napi::Result<LeafKind> {
     Ok(match kind {
         0 => LeafKind::Handle,
-        1 => LeafKind::Media(MediaKind::Image),
-        2 => LeafKind::Media(MediaKind::Audio),
-        3 => LeafKind::Media(MediaKind::Video),
-        4 => LeafKind::Media(MediaKind::Pdf),
+        1 => LeafKind::Media(ConcreteMediaKind::Image),
+        2 => LeafKind::Media(ConcreteMediaKind::Audio),
+        3 => LeafKind::Media(ConcreteMediaKind::Video),
+        4 => LeafKind::Media(ConcreteMediaKind::Pdf),
         5 => LeafKind::Prompt,
         6 => LeafKind::TypeValue,
         other => {

@@ -39,8 +39,8 @@ fn role_and_metadata(message: &PromptAst) -> (&str, &serde_json::Value) {
     }
 }
 
-fn collect_media_kinds(ast: &PromptAst, out: &mut Vec<baml_base::MediaKind>) {
-    fn collect_content(content: &PromptAstSimple, out: &mut Vec<baml_base::MediaKind>) {
+fn collect_media_kinds(ast: &PromptAst, out: &mut Vec<baml_base::ConcreteMediaKind>) {
+    fn collect_content(content: &PromptAstSimple, out: &mut Vec<baml_base::ConcreteMediaKind>) {
         match content {
             PromptAstSimple::String(_) | PromptAstSimple::CacheDelimiter(_) => {}
             PromptAstSimple::Media(media) => out.push(media.kind),
@@ -104,7 +104,7 @@ function main() -> ai.Prompt {
     let ast = prompt_ast(output);
     let mut media_kinds = Vec::new();
     collect_media_kinds(&ast, &mut media_kinds);
-    assert_eq!(media_kinds, vec![baml_base::MediaKind::Image]);
+    assert_eq!(media_kinds, vec![baml_base::ConcreteMediaKind::Image]);
 }
 
 #[tokio::test]

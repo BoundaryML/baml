@@ -18,6 +18,8 @@
 
 namespace baml {
 
+// The kind of a media value, or `generic`: the type `media`, which admits a
+// value of every kind. A media value always has one of the other kinds.
 enum class media_kind {
   generic = 0,
   image = 1,
@@ -44,7 +46,8 @@ inline pb::MediaTypeEnum media_wire_kind(media_kind kind) {
   return pb::MEDIA_TYPE_UNSPECIFIED;
 }
 
-inline media_kind media_host_kind(pb::MediaTypeEnum kind) {
+// The kind of a media value on the wire; none for a kind no value has.
+inline std::optional<media_kind> media_host_kind(pb::MediaTypeEnum kind) {
   switch (kind) {
     case pb::IMAGE:
       return media_kind::image;
@@ -55,10 +58,8 @@ inline media_kind media_host_kind(pb::MediaTypeEnum kind) {
     case pb::VIDEO:
       return media_kind::video;
     case pb::MEDIA_TYPE_UNSPECIFIED:
-    case pb::OTHER:
-      return media_kind::generic;
     default:
-      return media_kind::generic;
+      return std::nullopt;
   }
 }
 
@@ -190,12 +191,11 @@ class basic_media {
       content->set_name(name.to_string());
       content->set_base64(std::move(base64));
     }
-    return basic_media(std::move(value));
+    return basic_media(kind, std::move(value));
   }
 
-  media_kind kind() const noexcept {
-    return detail::media_host_kind(value_.media());
-  }
+  // Never `generic`.
+  media_kind kind() const noexcept { return kind_; }
 
   std::optional<std::string> mime_type() const {
     return value_.has_mime_type()
@@ -230,8 +230,9 @@ class basic_media {
   }
 
  private:
-  explicit basic_media(detail::pb::BamlValueMedia value)
-      : value_(std::move(value)) {}
+  // `kind` is the concrete kind `value` states.
+  basic_media(media_kind kind, detail::pb::BamlValueMedia value)
+      : kind_(kind), value_(std::move(value)) {}
 
   static void check_kind(media_kind kind) {
     if (kind == media_kind::generic ||
@@ -263,9 +264,10 @@ class basic_media {
     value.set_media(detail::media_wire_kind(kind));
     if (mime_type) value.set_mime_type(std::move(*mime_type));
     set_value(value);
-    return basic_media(std::move(value));
+    return basic_media(kind, std::move(value));
   }
 
+  media_kind kind_;
   detail::pb::BamlValueMedia value_;
 
   friend struct codec<basic_media<Expected>>;
@@ -297,12 +299,15 @@ struct codec<basic_media<Expected>> {
     if (value.value_case() != detail::pb::BamlOutboundValue::kMediaValue) {
       detail::kind_mismatch("media", value);
     }
-    const media_kind actual =
+    const std::optional<media_kind> actual =
         detail::media_host_kind(value.media_value().media());
-    if (Expected != media_kind::generic && actual != Expected) {
+    if (!actual) {
+      detail::kind_mismatch("media of a known kind", value);
+    }
+    if (Expected != media_kind::generic && *actual != Expected) {
       detail::kind_mismatch("specific media kind", value);
     }
-    return basic_media<Expected>(value.media_value());
+    return basic_media<Expected>(*actual, value.media_value());
   }
 };
 

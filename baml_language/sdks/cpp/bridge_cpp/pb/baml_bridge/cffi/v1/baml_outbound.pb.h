@@ -166,7 +166,6 @@ enum MediaTypeEnum : int {
   AUDIO = 2,
   PDF = 3,
   VIDEO = 4,
-  OTHER = 5,
   MediaTypeEnum_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   MediaTypeEnum_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -177,11 +176,11 @@ extern const uint32_t MediaTypeEnum_internal_data_[];
 inline constexpr MediaTypeEnum MediaTypeEnum_MIN =
     static_cast<MediaTypeEnum>(0);
 inline constexpr MediaTypeEnum MediaTypeEnum_MAX =
-    static_cast<MediaTypeEnum>(5);
+    static_cast<MediaTypeEnum>(4);
 inline bool MediaTypeEnum_IsValid(int value) {
-  return 0 <= value && value <= 5;
+  return 0 <= value && value <= 4;
 }
-inline constexpr int MediaTypeEnum_ARRAYSIZE = 5 + 1;
+inline constexpr int MediaTypeEnum_ARRAYSIZE = 4 + 1;
 const ::std::string& MediaTypeEnum_Name(MediaTypeEnum value);
 template <typename T>
 const ::std::string& MediaTypeEnum_Name(T value) {

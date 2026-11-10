@@ -35,7 +35,6 @@ impl KeySpace {
                 | Kind::AdtMediaAudio
                 | Kind::AdtMediaVideo
                 | Kind::AdtMediaPdf
-                | Kind::AdtMediaGeneric
                 | Kind::AdtPromptAst
                 | Kind::AdtTaggedHeapHandle
                 | Kind::AdtFunctionSpec

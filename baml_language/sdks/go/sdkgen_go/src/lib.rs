@@ -23,7 +23,7 @@ use std::{
 
 #[cfg(test)]
 use baml_base::Literal;
-use baml_base::{MediaKind, Name as BaseName};
+use baml_base::{ConcreteMediaKind, Name as BaseName};
 use baml_sdkgen_types::{
     Class, ClassCrossing, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention,
     SkipWarning, Symbol, SymbolPool, Ty, TypeAlias,
@@ -3259,13 +3259,12 @@ fn render_returned_callback_go_type(
     )
 }
 
-fn media_go_type(kind: MediaKind) -> &'static str {
+fn media_go_type(kind: ConcreteMediaKind) -> &'static str {
     match kind {
-        MediaKind::Image => "Image",
-        MediaKind::Audio => "Audio",
-        MediaKind::Video => "Video",
-        MediaKind::Pdf => "Pdf",
-        MediaKind::Generic => unreachable!("generic media is not a supported Go projection"),
+        ConcreteMediaKind::Image => "Image",
+        ConcreteMediaKind::Audio => "Audio",
+        ConcreteMediaKind::Video => "Video",
+        ConcreteMediaKind::Pdf => "Pdf",
     }
 }
 

@@ -498,7 +498,7 @@ enum Shape {
     Map,
     Instance(HeapPtr),
     /// A media value, written in its tagged form.
-    Media(baml_type::MediaKind),
+    Media(baml_type::ConcreteMediaKind),
     Variant(HeapPtr, usize),
     /// No JSON form: the message, and the `SerializationError.reason` tag.
     Unserializable(&'static str, &'static str),
@@ -945,7 +945,7 @@ impl Walker<'_, '_> {
         &mut self,
         vm: &mut BexVm,
         value: Value,
-        kind: baml_type::MediaKind,
+        kind: baml_type::ConcreteMediaKind,
         sink: &mut impl Sink,
     ) -> Result<(), Stopped> {
         let Some(media) = super::read_media_value(vm, value) else {

@@ -33,7 +33,7 @@ const packageRootExports = [
   "_invoke",
   "_invokeAsync",
   "_withExecutionContext",
-  "_seedGenericMediaHandle",
+  "_seedMediaHandle",
   "callFunction",
   "callFunctionSync",
   "cancelFunctionCall",

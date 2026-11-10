@@ -48,7 +48,6 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   case adtMediaAudio // = 7
   case adtMediaVideo // = 8
   case adtMediaPdf // = 9
-  case adtMediaGeneric // = 10
   case adtPromptAst // = 11
   case adtTaggedHeapHandle // = 14
 
@@ -104,7 +103,6 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case 7: self = .adtMediaAudio
     case 8: self = .adtMediaVideo
     case 9: self = .adtMediaPdf
-    case 10: self = .adtMediaGeneric
     case 11: self = .adtPromptAst
     case 14: self = .adtTaggedHeapHandle
     case 15: self = .hostValueCallable
@@ -127,7 +125,6 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case .adtMediaAudio: return 7
     case .adtMediaVideo: return 8
     case .adtMediaPdf: return 9
-    case .adtMediaGeneric: return 10
     case .adtPromptAst: return 11
     case .adtTaggedHeapHandle: return 14
     case .hostValueCallable: return 15
@@ -150,7 +147,6 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     .adtMediaAudio,
     .adtMediaVideo,
     .adtMediaPdf,
-    .adtMediaGeneric,
     .adtPromptAst,
     .adtTaggedHeapHandle,
     .hostValueCallable,
@@ -183,7 +179,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlHandle: Sendable {
 fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{2}\u{2}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{1}ADT_MEDIA_GENERIC\0\u{1}ADT_PROMPT_AST\0\u{2}\u{3}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0\u{1}INVOCATION_STATE\0\u{1}TRACE_RESERVATION\0\u{1}HOST_VALUE_PIN\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{2}\u{2}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{2}\u{2}ADT_PROMPT_AST\0\u{2}\u{3}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0\u{1}INVOCATION_STATE\0\u{1}TRACE_RESERVATION\0\u{1}HOST_VALUE_PIN\0")
 }
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

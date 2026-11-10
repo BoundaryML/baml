@@ -13,7 +13,7 @@ use std::{
     },
 };
 
-use bex_external_types::MediaKind;
+use bex_external_types::ConcreteMediaKind;
 use bex_heap::{BexHeap, PermitProof};
 use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
 
@@ -74,7 +74,7 @@ pub enum TraceValue {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceMediaValue {
-    pub kind: MediaKind,
+    pub kind: ConcreteMediaKind,
     pub mime_type: Option<String>,
     pub content: TraceMediaContent,
 }
@@ -632,7 +632,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
 mod tests {
     use std::sync::Arc;
 
-    use bex_external_types::MediaKind;
+    use bex_external_types::ConcreteMediaKind;
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
     use bex_vm_types::{MediaValue, Object, RootHaver, Value};
 
@@ -852,7 +852,7 @@ mod tests {
             .acquire()
             .await;
         let media = MediaValue::from_base64(
-            MediaKind::Image,
+            ConcreteMediaKind::Image,
             "aW1hZ2UtYnl0ZXM=".into(),
             Some("image/png"),
         );
@@ -860,7 +860,7 @@ mod tests {
         let class = permit
             .tlab_mut()
             .alloc(Object::Class(Box::new(bex_vm_types::Class {
-                declared_crossing: baml_type::ClassCrossing::Media(MediaKind::Image),
+                declared_crossing: baml_type::ClassCrossing::Media(ConcreteMediaKind::Image),
                 path: bex_vm_types::types::LocalName::new(
                     Vec::new(),
                     baml_type::Name::new("Image"),
@@ -895,7 +895,7 @@ mod tests {
         let Some(TraceValue::Media(media)) = snapshot.value(snapshot.root()) else {
             panic!("root should be media");
         };
-        assert_eq!(media.kind, MediaKind::Image);
+        assert_eq!(media.kind, ConcreteMediaKind::Image);
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert_eq!(
             media.content,

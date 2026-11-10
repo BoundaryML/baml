@@ -104,6 +104,12 @@ pub enum CtypesError {
     #[error("InboundValue.js_number_value is no longer accepted: send int_value or float_value")]
     JsNumberValueRetired,
 
+    /// A media value's kind is image, audio, pdf or video; the `media` it
+    /// arrived with names none of them (unspecified, the reserved generic
+    /// kind, or no member of the enum).
+    #[error("BamlValueMedia.media is {0}, which is not IMAGE, AUDIO, PDF or VIDEO")]
+    MediaKindInvalid(i32),
+
     #[error("Internal error: {0}")]
     InternalError(String),
 }

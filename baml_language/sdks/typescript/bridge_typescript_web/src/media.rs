@@ -1,28 +1,31 @@
 //! Raw media handle bindings.
 
-use bex_project::MediaKind;
+use bex_project::ConcreteMediaKind;
 use bridge_cffi::handle_cffi::{self, HandleError, HandleParts};
 use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use wasm_bindgen::prelude::*;
 
 use crate::errors::{handle_error, unexpected_handle_type};
 
-fn media_kind(media_kind: i32, operation: &'static str) -> Result<MediaKind, JsError> {
+fn media_kind(media_kind: i32, operation: &'static str) -> Result<ConcreteMediaKind, JsError> {
     handle_cffi::media_kind_from_proto(media_kind)
         .ok_or_else(|| handle_error(operation, &HandleError::UnsupportedHandleType))
 }
 
-fn expected_handle_type(kind: MediaKind) -> BamlHandleType {
+fn expected_handle_type(kind: ConcreteMediaKind) -> BamlHandleType {
     match kind {
-        MediaKind::Image => BamlHandleType::AdtMediaImage,
-        MediaKind::Audio => BamlHandleType::AdtMediaAudio,
-        MediaKind::Video => BamlHandleType::AdtMediaVideo,
-        MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
-        MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
+        ConcreteMediaKind::Image => BamlHandleType::AdtMediaImage,
+        ConcreteMediaKind::Audio => BamlHandleType::AdtMediaAudio,
+        ConcreteMediaKind::Video => BamlHandleType::AdtMediaVideo,
+        ConcreteMediaKind::Pdf => BamlHandleType::AdtMediaPdf,
     }
 }
 
-fn media_key(operation: &'static str, kind: MediaKind, parts: HandleParts) -> Result<u64, JsError> {
+fn media_key(
+    operation: &'static str,
+    kind: ConcreteMediaKind,
+    parts: HandleParts,
+) -> Result<u64, JsError> {
     let expected = expected_handle_type(kind) as i32;
     if parts.handle_type != expected {
         return Err(unexpected_handle_type(

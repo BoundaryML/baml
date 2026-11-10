@@ -28,7 +28,7 @@
 
 use std::sync::Arc;
 
-use baml_type::MediaKind;
+use baml_type::ConcreteMediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     BexStr, HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
@@ -1409,15 +1409,16 @@ impl<'p> Structural<'p> {
             RealizedTy::Enum(head) => self.enumeration(vm, &node, *head),
             RealizedTy::EnumVariant(head, name) => self.enum_variant(vm, &node, *head, name),
             RealizedTy::Media(kind) => {
-                let Some(wrapper) = kind.wrapper_class() else {
+                let Some(kind) = kind.concrete() else {
                     return Err(self.fail(vm, || {
                         "cannot deserialize generic media - type must be concrete \
                          (image|audio|video|pdf)"
                             .into()
                     }));
                 };
+                let wrapper = kind.wrapper_class();
                 match vm.lang_head(wrapper) {
-                    Some(head) => self.media(vm, &node, *kind, head),
+                    Some(head) => self.media(vm, &node, kind, head),
                     None => Err(self.fail(vm, || format!("media class `{wrapper}` not found"))),
                 }
             }
@@ -1826,7 +1827,7 @@ impl<'p> Structural<'p> {
         &mut self,
         vm: &mut BexVm,
         node: &Node,
-        kind: MediaKind,
+        kind: ConcreteMediaKind,
         head: TypeHead,
     ) -> Result<Value, Failed> {
         let Node::Object(ptr) = *node else {

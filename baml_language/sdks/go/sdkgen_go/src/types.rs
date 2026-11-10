@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use baml_base::{Literal, MediaKind, Name as BaseName, qualified_name::BAML_JSON_JSON};
+use baml_base::{ConcreteMediaKind, Literal, Name as BaseName, qualified_name::BAML_JSON_JSON};
 use baml_sdkgen_types::{
     ClassCrossing, CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty,
     is_synthetic_effect_param,
@@ -27,7 +27,7 @@ pub(crate) enum GoTy {
     Bool,
     Null,
     Uint8Array,
-    Media(MediaKind),
+    Media(ConcreteMediaKind),
     /// The exact recursive stdlib alias `baml.json.json`. Its Go surface is
     /// `any`, but unlike a dynamic union its wire decoder accepts only the
     /// canonical JSON value algebra.
@@ -362,8 +362,8 @@ impl<'a> GoTypeProjection<'a> {
             Ty::Bool => GoTy::Bool,
             Ty::Null => GoTy::Null,
             Ty::Uint8Array => GoTy::Uint8Array,
-            Ty::Media(MediaKind::Generic) => GoTy::Unsupported,
-            Ty::Media(kind) => GoTy::Media(*kind),
+            // Go has no surface for the open `media` type yet.
+            Ty::Media(kind) => kind.concrete().map_or(GoTy::Unsupported, GoTy::Media),
             Ty::Type => GoTy::ReflectedType,
             Ty::Literal(literal, ..) => GoTy::Literal(match literal {
                 Literal::String(value) => GoLiteral::String(value.clone()),
@@ -397,7 +397,6 @@ impl<'a> GoTypeProjection<'a> {
                         .collect::<Vec<_>>()
                         .into_boxed_slice(),
                 ),
-                (ClassCrossing::Media(MediaKind::Generic), []) => GoTy::Unsupported,
                 (ClassCrossing::Media(kind), []) => GoTy::Media(kind),
                 (ClassCrossing::Fields, arguments) => GoTy::Class(
                     name.clone(),
@@ -847,6 +846,7 @@ pub(crate) fn literal_surface(literal: &GoLiteral) -> GoTy {
 
 #[cfg(test)]
 mod tests {
+    use baml_base::MediaKind;
     use baml_sdkgen_types::{CallableParam, Origin, TypeAlias};
     use baml_type::Freshness;
 
@@ -1081,13 +1081,11 @@ mod tests {
     fn concrete_media_kinds_project_canonically_and_generic_media_is_deferred() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
-        for kind in [
-            MediaKind::Image,
-            MediaKind::Audio,
-            MediaKind::Video,
-            MediaKind::Pdf,
-        ] {
-            assert_eq!(projection.project(&Ty::Media(kind)), GoTy::Media(kind));
+        for kind in ConcreteMediaKind::ALL {
+            assert_eq!(
+                projection.project(&Ty::Media(kind.into())),
+                GoTy::Media(kind)
+            );
         }
         assert_eq!(
             projection.project(&Ty::Media(MediaKind::Generic)),

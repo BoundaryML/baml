@@ -19,7 +19,7 @@
 //! and `_toHandle` clone the table row so the input/output `BamlHandle` and the
 //! media wrapper own independent references.
 
-use bex_project::MediaKind;
+use bex_project::ConcreteMediaKind;
 use bridge_cffi::handle_cffi::{self, HandleError, HandleParts};
 use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use napi::bindgen_prelude::*;
@@ -31,11 +31,11 @@ type MediaAccessor<T> = fn(u64, i32) -> std::result::Result<T, HandleError>;
 
 fn create_media(
     constructor: impl FnOnce(
-        MediaKind,
+        ConcreteMediaKind,
         &str,
         Option<&str>,
     ) -> std::result::Result<HandleParts, HandleError>,
-    media_kind: MediaKind,
+    media_kind: ConcreteMediaKind,
     value: String,
     mime_type: Option<String>,
     context: &str,
@@ -202,17 +202,21 @@ macro_rules! define_media_napi_class {
 
 define_media_napi_class!(
     BamlImage,
-    MediaKind::Image,
+    ConcreteMediaKind::Image,
     BamlHandleType::AdtMediaImage as u64
 );
 define_media_napi_class!(
     BamlAudio,
-    MediaKind::Audio,
+    ConcreteMediaKind::Audio,
     BamlHandleType::AdtMediaAudio as u64
 );
 define_media_napi_class!(
     BamlVideo,
-    MediaKind::Video,
+    ConcreteMediaKind::Video,
     BamlHandleType::AdtMediaVideo as u64
 );
-define_media_napi_class!(BamlPdf, MediaKind::Pdf, BamlHandleType::AdtMediaPdf as u64);
+define_media_napi_class!(
+    BamlPdf,
+    ConcreteMediaKind::Pdf,
+    BamlHandleType::AdtMediaPdf as u64
+);

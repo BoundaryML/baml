@@ -709,7 +709,7 @@ fn media(b: &mut Builder, source: crate::MediaSource) -> V {
     object(
         b,
         O::Media {
-            kind: baml_type::MediaKind::Image,
+            kind: baml_type::ConcreteMediaKind::Image,
             mime_type,
             source,
         },

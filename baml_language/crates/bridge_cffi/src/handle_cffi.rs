@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use bex_project::{MediaKind, MediaValue};
+use bex_project::{ConcreteMediaKind, MediaValue};
 use bridge_ctypes::{
     CffiHandleTableEntry, HANDLE_TABLE, TableKey,
     baml_bridge::cffi::{BamlHandleType, MediaTypeEnum},
@@ -112,10 +112,10 @@ pub fn handle_refcount(key: u64) -> Option<u64> {
     HANDLE_TABLE.refcount(TableKey::new(key)?)
 }
 
-/// Seed a generic-media handle for focused bridge tests.
-pub fn seed_generic_media_handle() -> HandleParts {
+/// Seed an image-media handle for focused bridge tests: an identity-free row.
+pub fn seed_media_handle() -> HandleParts {
     insert_entry(CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(
-        MediaValue::from_url(MediaKind::Generic, "https://example.com/", None),
+        MediaValue::from_url(ConcreteMediaKind::Image, "https://example.com/", None),
     )))
 }
 
@@ -149,7 +149,7 @@ pub fn seed_heap_handle(slab_key: u64) -> HandleParts {
 
 /// Construct an owned media handle from a URL descriptor.
 pub fn media_from_url(
-    kind: MediaKind,
+    kind: ConcreteMediaKind,
     url: &str,
     mime_type: Option<&str>,
 ) -> Result<HandleParts, HandleError> {
@@ -161,7 +161,7 @@ pub fn media_from_url(
 
 /// Construct an owned media handle from base64 content read from `file`.
 pub fn media_from_file_content(
-    kind: MediaKind,
+    kind: ConcreteMediaKind,
     file: &str,
     base64: &str,
     mime_type: Option<&str>,
@@ -180,7 +180,7 @@ pub fn media_from_file_content(
 
 /// Construct an owned media handle from base64 text.
 pub fn media_from_base64(
-    kind: MediaKind,
+    kind: ConcreteMediaKind,
     base64: &str,
     mime_type: Option<&str>,
 ) -> Result<HandleParts, HandleError> {
@@ -216,15 +216,15 @@ pub fn media_name(key: u64, handle_type: i32) -> Result<Option<String>, HandleEr
     Ok(resolve_media(key, handle_type)?.name())
 }
 
-/// Convert a protocol media discriminant, rejecting unspecified and unknown values.
-pub fn media_kind_from_proto(media_kind: i32) -> Option<MediaKind> {
-    match media_kind {
-        x if x == MediaTypeEnum::Image as i32 => Some(MediaKind::Image),
-        x if x == MediaTypeEnum::Audio as i32 => Some(MediaKind::Audio),
-        x if x == MediaTypeEnum::Pdf as i32 => Some(MediaKind::Pdf),
-        x if x == MediaTypeEnum::Video as i32 => Some(MediaKind::Video),
-        x if x == MediaTypeEnum::Other as i32 => Some(MediaKind::Generic),
-        _ => None,
+/// Convert a protocol media discriminant, rejecting unspecified, reserved and
+/// unknown values: a media value has a kind of its own.
+pub fn media_kind_from_proto(media_kind: i32) -> Option<ConcreteMediaKind> {
+    match MediaTypeEnum::try_from(media_kind).ok()? {
+        MediaTypeEnum::Image => Some(ConcreteMediaKind::Image),
+        MediaTypeEnum::Audio => Some(ConcreteMediaKind::Audio),
+        MediaTypeEnum::Pdf => Some(ConcreteMediaKind::Pdf),
+        MediaTypeEnum::Video => Some(ConcreteMediaKind::Video),
+        MediaTypeEnum::MediaTypeUnspecified => None,
     }
 }
 
@@ -251,8 +251,12 @@ mod tests {
 
     #[test]
     fn resolve_media_rejects_type_mismatch() {
-        let parts = media_from_url(MediaKind::Image, "https://example.com/image.png", None)
-            .expect("media handle should be created");
+        let parts = media_from_url(
+            ConcreteMediaKind::Image,
+            "https://example.com/image.png",
+            None,
+        )
+        .expect("media handle should be created");
 
         assert_eq!(
             resolve_media(parts.key, BamlHandleType::AdtMediaAudio as i32),
@@ -289,17 +293,17 @@ mod tests {
 mod media_kind_tests {
     use super::*;
     #[test]
-    fn protocol_kinds_include_generic_but_reject_unspecified_and_unknown() {
+    fn protocol_kinds_are_concrete_and_reject_unspecified_reserved_and_unknown() {
         for (proto, kind) in [
-            (MediaTypeEnum::Image, MediaKind::Image),
-            (MediaTypeEnum::Audio, MediaKind::Audio),
-            (MediaTypeEnum::Pdf, MediaKind::Pdf),
-            (MediaTypeEnum::Video, MediaKind::Video),
-            (MediaTypeEnum::Other, MediaKind::Generic),
+            (MediaTypeEnum::Image, ConcreteMediaKind::Image),
+            (MediaTypeEnum::Audio, ConcreteMediaKind::Audio),
+            (MediaTypeEnum::Pdf, ConcreteMediaKind::Pdf),
+            (MediaTypeEnum::Video, ConcreteMediaKind::Video),
         ] {
             assert_eq!(media_kind_from_proto(proto as i32), Some(kind));
         }
-        for value in [MediaTypeEnum::MediaTypeUnspecified as i32, -1, i32::MAX] {
+        // 5 is the reserved generic kind.
+        for value in [MediaTypeEnum::MediaTypeUnspecified as i32, 5, -1, i32::MAX] {
             assert_eq!(media_kind_from_proto(value), None);
         }
     }

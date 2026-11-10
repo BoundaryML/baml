@@ -154,10 +154,11 @@ pub fn release_wire_handle(key: HandleKey) -> napi::Result<()> {
         .map_err(|error| status_to_napi("host-call decode rollback", error.into()))
 }
 
-/// Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`.
-#[napi(js_name = "_seedGenericMediaHandle")]
-pub fn seed_generic_media_handle() -> napi::Result<(HandleKey, i32)> {
-    let parts = handle_cffi::seed_generic_media_handle();
+/// Test-only: seed an image media entry into `HANDLE_TABLE`, returning
+/// `[key, handleType]`.
+#[napi(js_name = "_seedMediaHandle")]
+pub fn seed_media_handle() -> napi::Result<(HandleKey, i32)> {
+    let parts = handle_cffi::seed_media_handle();
     Ok((HandleKey::from_u64(parts.key), parts.handle_type))
 }
 

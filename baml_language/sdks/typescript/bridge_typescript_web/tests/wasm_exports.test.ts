@@ -12,7 +12,7 @@ const rawHandleMediaExports = [
   "mediaName",
   "mediaUrl",
   "releaseHandle",
-  "seedGenericMediaHandle",
+  "seedMediaHandle",
   "_testHandleTableEntryCount",
 ] as const;
 
@@ -27,7 +27,7 @@ describe("raw WASM handle and media exports", () => {
 
   it("keeps handle keys lossless and release idempotent", () => {
     const initialCount = raw._testHandleTableEntryCount();
-    const original = raw.seedGenericMediaHandle();
+    const original = raw.seedMediaHandle();
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
     const clone = raw.cloneHandle(original);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 2);
@@ -73,11 +73,19 @@ describe("raw WASM handle and media exports", () => {
     expect(raw.releaseHandle(base64)).toBe(true);
   });
 
-  it("seeds generic media and validates explicit handle tags", () => {
-    const generic = raw.seedGenericMediaHandle();
-    expect(generic).toBeTypeOf("bigint");
-    expect(raw.mediaUrl(generic, 10)).toBe("https://example.com/");
-    expect(() => raw.mediaUrl(generic, 6)).toThrow(/mediaUrl: handle type mismatch/);
-    expect(raw.releaseHandle(generic)).toBe(true);
+  it("seeds image media and validates explicit handle tags", () => {
+    const image = raw.seedMediaHandle();
+    expect(image).toBeTypeOf("bigint");
+    expect(raw.mediaUrl(image, 6)).toBe("https://example.com/");
+    expect(() => raw.mediaUrl(image, 7)).toThrow(/mediaUrl: handle type mismatch/);
+    expect(raw.releaseHandle(image)).toBe(true);
+  });
+
+  it("refuses media without a concrete kind", () => {
+    const initialCount = raw._testHandleTableEntryCount();
+    for (const kind of [0, 5]) {
+      expect(() => raw.mediaFromUrl(kind, "https://example.com/")).toThrow(/mediaFromUrl: unsupported handle type/);
+    }
+    expect(raw._testHandleTableEntryCount()).toBe(initialCount);
   });
 });

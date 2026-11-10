@@ -1812,7 +1812,7 @@ fn translate_ty(
             };
             match class_def.crossing {
                 ClassCrossing::Prompt => return carried("::baml::prompt"),
-                ClassCrossing::Media(kind) => return carried(media_cpp_type(kind)),
+                ClassCrossing::Media(kind) => return carried(media_cpp_type(kind.into())),
                 ClassCrossing::FunctionSpec => return proxied("function_spec"),
                 ClassCrossing::Stream => return proxied("stream"),
                 // A host's own value is the host's handle to it.
@@ -3106,7 +3106,7 @@ mod opaque_class_tests {
         for (crossing, value_type) in [
             (ClassCrossing::Prompt, "::baml::prompt"),
             (
-                ClassCrossing::Media(baml_base::MediaKind::Image),
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Image),
                 "::baml::image",
             ),
         ] {

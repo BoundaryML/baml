@@ -29,10 +29,10 @@ use ffi::callbacks::send_outbound_result_to_callback;
 pub use ffi::{
     callbacks::{CallbackFn, register_callback},
     handle::{
-        __testonly_seed_generic_media, __testonly_seed_heap_handle, BamlCffiStatus,
-        baml_handle_clone, baml_handle_release, baml_media_base64, baml_media_file,
-        baml_media_from_base64, baml_media_from_file, baml_media_from_file_content,
-        baml_media_from_url, baml_media_mime_type, baml_media_name, baml_media_url,
+        __testonly_seed_heap_handle, __testonly_seed_media, BamlCffiStatus, baml_handle_clone,
+        baml_handle_release, baml_media_base64, baml_media_file, baml_media_from_base64,
+        baml_media_from_file, baml_media_from_file_content, baml_media_from_url,
+        baml_media_mime_type, baml_media_name, baml_media_url,
     },
     host_value::{
         HostDispatchFn, complete_host_call, register_host_cancel_callback,

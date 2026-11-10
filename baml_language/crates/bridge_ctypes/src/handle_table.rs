@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
+use bex_project::{BexExternalAdt, BexExternalValue, ConcreteMediaKind, Handle};
 
 use crate::baml_bridge::cffi::BamlHandleType;
 
@@ -233,11 +233,10 @@ impl CffiHandleTableEntry {
                 // value: the row, not the tag, says what it is.
                 TableAdt::CancelToken(_) => BamlHandleType::AdtRuntimeValue,
                 TableAdt::Media(media) => match media.kind {
-                    MediaKind::Image => BamlHandleType::AdtMediaImage,
-                    MediaKind::Audio => BamlHandleType::AdtMediaAudio,
-                    MediaKind::Video => BamlHandleType::AdtMediaVideo,
-                    MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
-                    MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
+                    ConcreteMediaKind::Image => BamlHandleType::AdtMediaImage,
+                    ConcreteMediaKind::Audio => BamlHandleType::AdtMediaAudio,
+                    ConcreteMediaKind::Video => BamlHandleType::AdtMediaVideo,
+                    ConcreteMediaKind::Pdf => BamlHandleType::AdtMediaPdf,
                 },
                 TableAdt::TaggedHeapHandle { kind, .. } => match kind {
                     bex_project::TaggedHeapHandleKind::Callable => BamlHandleType::FunctionRef,
@@ -529,7 +528,7 @@ mod tests {
     /// Any engine row a test can mint without a heap: a media value.
     fn media_row() -> CffiHandleTableEntry {
         CffiHandleTableEntry::Adt(TableAdt::Media(MediaValue::from_url(
-            MediaKind::Generic,
+            ConcreteMediaKind::Image,
             "https://example.com/",
             None,
         )))

@@ -29,12 +29,16 @@ use crate::Buffer;
 /// Revision 6: host-value keys are counted. The release callback takes
 /// `(host_value_key, count)` and gives back that many references; an
 /// outbound host value carries a `HOST_VALUE_PIN` row the host releases.
+///
+/// Revision 6 also reserves media kind 5 and handle type 10: a media value
+/// always has a concrete kind.
 pub const BAML_API_V1_ABI_VERSION: u32 = 6;
 
 /// Valid `media_kind` values for media constructors.
 ///
 /// These values are shared with the V1 protobuf `MediaTypeEnum` wire contract.
-/// Zero is not a constructible media kind.
+/// Zero is not a constructible media kind, and 5 is permanently reserved: a
+/// media value always has one of the kinds below.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(i32)]
 pub enum BamlCffiMediaKind {
@@ -43,12 +47,11 @@ pub enum BamlCffiMediaKind {
     Audio = 2,
     Pdf = 3,
     Video = 4,
-    Generic = 5,
 }
 
 /// Handle-type values returned by media constructors and carried on the wire.
 ///
-/// Values 1, 3, 4 and 13 are permanently reserved. Host-value handle keys use their
+/// Values 1, 3, 4, 10 and 13 are permanently reserved. Host-value handle keys use their
 /// own registry and release callback rather than `handle_release`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(i32)]
@@ -60,7 +63,6 @@ pub enum BamlCffiHandleType {
     MediaAudio = 7,
     MediaVideo = 8,
     MediaPdf = 9,
-    MediaGeneric = 10,
     PromptAst = 11,
     TaggedHeapHandle = 14,
     HostValueCallable = 15,
@@ -509,7 +511,6 @@ mod tests {
             (BamlCffiMediaKind::Audio, MediaTypeEnum::Audio),
             (BamlCffiMediaKind::Pdf, MediaTypeEnum::Pdf),
             (BamlCffiMediaKind::Video, MediaTypeEnum::Video),
-            (BamlCffiMediaKind::Generic, MediaTypeEnum::Other),
         ];
         for (public, wire) in media_pairs {
             assert_eq!(public as i32, wire as i32);
@@ -538,10 +539,6 @@ mod tests {
                 BamlHandleType::AdtMediaVideo,
             ),
             (BamlCffiHandleType::MediaPdf, BamlHandleType::AdtMediaPdf),
-            (
-                BamlCffiHandleType::MediaGeneric,
-                BamlHandleType::AdtMediaGeneric,
-            ),
             (BamlCffiHandleType::PromptAst, BamlHandleType::AdtPromptAst),
             (
                 BamlCffiHandleType::TaggedHeapHandle,

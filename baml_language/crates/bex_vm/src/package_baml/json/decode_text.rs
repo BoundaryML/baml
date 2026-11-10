@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use baml_type::MediaKind;
+use baml_type::ConcreteMediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     BexStr, Object, RealizedTy, TypeHead, Value,
@@ -106,11 +106,9 @@ impl TextDecoder<'_, '_> {
                 Ok(Value::object(vm.alloc_variant(head.ptr(), index)))
             }
             RealizedTy::Media(kind) => {
-                let head = kind
-                    .wrapper_class()
-                    .and_then(|wrapper| vm.lang_head(wrapper))
-                    .ok_or(Stop)?;
-                self.media(vm, *kind, head)
+                let kind = kind.concrete().ok_or(Stop)?;
+                let head = vm.lang_head(kind.wrapper_class()).ok_or(Stop)?;
+                self.media(vm, kind, head)
             }
             RealizedTy::Union(members) => self.union(vm, members),
             RealizedTy::Literal(literal, _) => self.literal(vm, literal),
@@ -309,7 +307,12 @@ impl TextDecoder<'_, '_> {
     }
 
     /// A media value from its tagged object.
-    fn media(&mut self, vm: &mut BexVm, kind: MediaKind, head: TypeHead) -> Result<Value, Stop> {
+    fn media(
+        &mut self,
+        vm: &mut BexVm,
+        kind: ConcreteMediaKind,
+        head: TypeHead,
+    ) -> Result<Value, Stop> {
         let reader = &mut self.parser.reader;
         reader.open_object()?;
         let mut fields = MediaFields::default();

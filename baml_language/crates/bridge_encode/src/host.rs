@@ -10,7 +10,7 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Int63, MediaKind, TypeName};
+use baml_type::{ConcreteMediaKind, Int63, TypeName};
 use bridge_ctypes::{
     Handle, HostKey, TableKey,
     baml_bridge::cffi::{BamlHandle, BamlValueMedia, BamlValuePromptAst},
@@ -156,7 +156,7 @@ pub enum Scalar {
 pub enum LeafKind {
     /// A rooted engine object; the engine checks it live against the slot.
     Handle,
-    Media(MediaKind),
+    Media(ConcreteMediaKind),
     Prompt,
     TypeValue,
 }
