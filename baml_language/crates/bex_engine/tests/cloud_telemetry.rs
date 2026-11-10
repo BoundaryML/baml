@@ -136,10 +136,10 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         let id: btel_snapshot::CasId = header.initial_context_cas_id.unwrap().into();
         let (identity, metadata) = trace_context::metadata(&snapshots[id.as_bytes()]);
         assert_eq!(identity, None);
-        assert!(matches!(
+        assert_eq!(
             metadata["baml.environment.os"],
-            btel_snapshot::DecodedValue::String(_)
-        ));
+            &btel_snapshot::DecodedValue::String(std::env::consts::OS.into())
+        );
         assert_eq!(
             metadata["baml.environment.architecture"],
             &btel_snapshot::DecodedValue::String(std::env::consts::ARCH.into())

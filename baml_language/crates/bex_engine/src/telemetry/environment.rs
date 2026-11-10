@@ -21,17 +21,11 @@ pub(super) fn context(launch: &Context) -> Context {
 }
 
 /// Probe native OS information, retaining only the version and distribution
-/// alongside the normalized target OS name; unknown details stay absent.
+/// alongside Rust's unmodified target OS value; unknown details stay absent.
 fn system() -> System {
     let info = os_info::get();
     System {
-        os: match std::env::consts::OS {
-            "macos" => "Mac OS X",
-            "windows" => "Windows",
-            "linux" => "Linux",
-            "freebsd" => "FreeBSD",
-            other => other,
-        },
+        os: std::env::consts::OS,
         version: (!matches!(info.version(), os_info::Version::Unknown))
             .then(|| info.version().to_string()),
         distro: (cfg!(target_os = "linux")
@@ -80,7 +74,7 @@ mod tests {
 
     fn platform() -> System {
         System {
-            os: "Linux",
+            os: "linux",
             version: Some("24.04".into()),
             distro: Some("Ubuntu".into()),
         }
@@ -99,7 +93,7 @@ mod tests {
         let metadata = context.metadata();
         assert_eq!(metadata.len(), 6);
         for (key, expected) in [
-            ("os", "Linux"),
+            ("os", "linux"),
             ("os_version", "24.04"),
             ("os_distro", "Ubuntu"),
             ("architecture", std::env::consts::ARCH),
@@ -188,7 +182,7 @@ mod tests {
             assert_eq!(patch.metadata["baml.environment.agent_harness"], None);
             assert_eq!(
                 patch.metadata["baml.environment.os"],
-                Some(ContextValue::String("Linux".into()))
+                Some(ContextValue::String("linux".into()))
             );
         }
     }
@@ -220,7 +214,7 @@ mod tests {
         assert_eq!(recorded.metadata()["owner"], launch.metadata()["owner"]);
         assert_eq!(
             recorded.metadata()["baml.environment.os"],
-            ContextValue::String("Linux".into())
+            ContextValue::String("linux".into())
         );
         assert!(
             !recorded
