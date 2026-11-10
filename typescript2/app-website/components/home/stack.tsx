@@ -15,7 +15,7 @@ import {
 } from 'react-icons/si';
 import { section } from '@/components/home/analytics';
 import { BoundaryLogo, BoundaryMark } from '@/components/home/boundary-logo';
-import { BAML_LOGO, COMBINATION, LAMB_PATHS } from '@/components/home/lamb';
+import { COMBINATION, LAMB_PATHS } from '@/components/home/lamb';
 import { MarkTile } from '@/components/home/mark';
 import { MARKS } from '@/components/home/marks';
 import { Hyper, Looped, Pinned, Played, sweep } from '@/components/home/pinned';
@@ -675,7 +675,7 @@ function Side({
           </div>
           {/* BAML's starts at 100% ("why would you?"), but it can sample too. */}
           <input
-            aria-label={`Share of ${lit ? 'BAML' : 'OpenTelemetry'} functions kept by sampling`}
+            aria-label={`Share of ${lit ? 'Boundary' : 'OpenTelemetry'} functions kept by sampling`}
             className="block h-4 w-full accent-[#caaaf2]"
             max={100}
             min={1}
@@ -914,7 +914,7 @@ export function Toggle({
   }, [wait]);
   return (
     <div className="relative inline-grid grid-cols-2 rounded-full border border-rule bg-black/40 p-1">
-      {(['Traditional stack', 'Boundary stack'] as const).map((name, i) => {
+      {(['Traditional stack', 'Boundary'] as const).map((name, i) => {
         // A click lights its side at once; otherwise the side the dot is over is lit.
         const right =
           chosen !== null
@@ -1088,7 +1088,7 @@ function Media({
               className={`flex items-center gap-2 rounded-full px-4 py-1.5 font-display text-[15px] font-medium ${after ? 'bg-clover text-black' : 'border border-rule text-white/85'}`}
             >
               {after ? <BoundaryMark className="h-[18px] w-auto" /> : null}
-              {after ? 'Boundary stack' : 'Traditional stack'}
+              {after ? 'Boundary' : 'Traditional stack'}
             </span>
           ) : (
             <Toggle after={after} pick={pick} wait={wait} />
@@ -1432,17 +1432,10 @@ function Speed({ p }: { p: number }) {
         <CostRow
           lit
           name={
-            <svg
-              aria-label="BAML"
-              className="h-[34px] w-auto"
-              fill="#fff"
-              role="img"
-              viewBox={BAML_LOGO.viewBox}
-            >
-              {BAML_LOGO.paths.map((d) => (
-                <path d={d} key={d} />
-              ))}
-            </svg>
+            <>
+              <BoundaryLogo className="h-[40px] w-auto text-white" />
+              <span className="sr-only">Boundary</span>
+            </>
           }
           ns={BAML_NS}
           on={ramp(s, 0, 0.2)}
@@ -1493,19 +1486,13 @@ export default function Stack() {
       className="border-t border-rule overflow-x-clip"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
-        <h2 className="v4-h2 text-head max-w-[22em]" id="stack">
-          To make <Hyper /> possible, we had to build a programming language.
-        </h2>
-        <div className="mt-12 md:mt-16">
-          <Pinned length="160vh">{(p) => <Layers p={p} />}</Pinned>
-        </div>
         {/* The worry, asked out loud, then answered in the order it's asked: fast, then small
             (storage, then the multimodal store), then the answer. Like the review section's
             "Can agents write high-quality BAML?" and its "So yes… By design." */}
         {/* Given room on both sides, so it reads as a new beat, not a caption on the figure. */}
-        <p className="mt-32 md:mt-48 v4-h2 text-head max-w-[22em]">
+        <h2 className="v4-h2 text-head max-w-[22em]" id="stack">
           Is <Hyper /> practical?
-        </p>
+        </h2>
         {/* The worry, stated before anything answers it. */}
         <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
           Recording every function means overhead on every call and far more
@@ -1535,6 +1522,13 @@ export default function Stack() {
         <p className="mt-16 md:mt-20 v4-h2 text-head max-w-[22em]">
           So yes, <Hyper /> is practical. By design.
         </p>
+        <h2 className="mt-32 md:mt-48 v4-h2 text-head max-w-[22em]">
+          But to make <Hyper /> possible, we had to build a programming
+          language.
+        </h2>
+        <div className="mt-12 md:mt-16">
+          <Pinned length="160vh">{(p) => <Layers p={p} />}</Pinned>
+        </div>
       </div>
     </section>
   );

@@ -19,7 +19,7 @@ import { Toggle } from '@/components/home/stack';
 
 // Every team ships software now, and each sends its data somewhere different, or nowhere. Drawn as the
 // stack section's toggle: in the traditional stack each file feeds its own mix of tools; in the
-// Boundary stack files turn to BAML one by one and get hyperobservability, and the rest reaches the
+// Boundary half, files turn to BAML one by one and get hyperobservability, and the rest reaches the
 // same place over OpenTelemetry.
 
 type Store = 'langsmith' | 'datadog' | 'sentry' | 's3' | 'nowhere';
@@ -522,7 +522,7 @@ function PhoneSide({ boundary }: { boundary?: boolean }) {
         className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1 font-display text-[15px] font-medium ${boundary ? 'bg-clover text-black' : 'border border-rule text-white/85'}`}
       >
         {boundary && <BoundaryMark className="h-4 w-auto" />}
-        {boundary ? 'Boundary stack' : 'Traditional stack'}
+        {boundary ? 'Boundary' : 'Traditional stack'}
       </span>
       {boundary ? (
         <div className="mt-4 rounded-xl border border-clover/50 p-3 shadow-[inset_0_0_0_999px_rgb(from_var(--color-clover)_r_g_b_/_0.06)]">
