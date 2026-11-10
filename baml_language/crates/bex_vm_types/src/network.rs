@@ -44,9 +44,6 @@ pub enum NetworkEventKind {
     Await,
     /// The program closed a stream before its end. Written by the engine.
     Close,
-    /// The response was collected without being read. Nothing emits it: a
-    /// response collected unread leaves its span open.
-    Drop,
 }
 
 /// One queued event: its span, and when it happened on the issuing run's clock.

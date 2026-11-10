@@ -97,7 +97,6 @@ pub(super) fn event_name(kind: &NetworkEventKind) -> NetworkEventName {
         NetworkEventKind::StreamEnd => NetworkEventName::End,
         NetworkEventKind::Await => NetworkEventName::Await,
         NetworkEventKind::Close => NetworkEventName::Close,
-        NetworkEventKind::Drop => NetworkEventName::Drop,
     }
 }
 
@@ -226,22 +225,13 @@ mod tests {
             NetworkEventKind::StreamEnd,
             NetworkEventKind::Await,
             NetworkEventKind::Close,
-            NetworkEventKind::Drop,
         ]
         .iter()
         .map(|kind| event_name(kind).as_str().to_owned())
         .collect::<Vec<_>>();
         assert_eq!(
             names,
-            [
-                "connection",
-                "data",
-                "data",
-                "end",
-                "await",
-                "close",
-                "drop"
-            ]
+            ["connection", "data", "data", "end", "await", "close"]
         );
     }
 }
