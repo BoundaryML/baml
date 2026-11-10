@@ -1,6 +1,6 @@
-//! Allowlisted environment metadata for BCS process recordings. `AI_AGENT` names
-//! the harness explicitly; named-marker contents, hostname, command line, paths
-//! and user identity are not copied here.
+//! Selected system fields and explicit `AI_AGENT` harness-name metadata for BCS.
+//! No environment enumeration or named-marker contents are captured. `AI_AGENT`
+//! is caller-provided metadata, subject to size/control bounds, not redaction.
 
 use std::{ffi::OsString, sync::OnceLock};
 
