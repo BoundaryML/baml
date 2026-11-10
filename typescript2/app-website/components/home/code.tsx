@@ -52,12 +52,15 @@ const MARK: Record<LineMark, string> = {
  *  With `wrap`, a line too long for the panel continues on the next row, indented past the line's own
  *  indent, instead of scrolling. */
 export function Code({
+  focusable = true,
   lines,
   marks = {},
   notes = {},
   prose = [],
   wrap = false,
 }: {
+  /** False while part of the code is clipped, so the keyboard can't reach a noted line out of view. */
+  focusable?: boolean;
   lines: string[];
   marks?: Record<number, LineMark>;
   /** A short explanation for a line, shown when it's hovered or focused. */
@@ -77,7 +80,7 @@ export function Code({
           data-line={i}
           // biome-ignore lint/suspicious/noArrayIndexKey: a sample's lines keep their positions
           key={i}
-          tabIndex={notes[i] ? 0 : undefined}
+          tabIndex={notes[i] && focusable ? 0 : undefined}
         >
           <span className="shrink-0 w-10 md:w-12 pr-4 text-right text-white/20 select-none">
             {i + 1}

@@ -753,13 +753,27 @@ function Collage() {
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [visible, held, reduce]);
+  // Scrolling away lets go of a pick, so the loop is running again when the reader comes back.
+  useEffect(() => {
+    if (!visible) setHeld(false);
+  }, [visible]);
   const pick = (i: number) => {
     setHeld(true);
     setStage(i);
     setT(1);
   };
   return (
-    <div onPointerLeave={() => setHeld(false)} ref={ref}>
+    // A pick holds until the mouse leaves or focus leaves the collage. Touch fires its leave before
+    // the click, so it's left out, and a touch pick holds until the collage scrolls away.
+    <div
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setHeld(false);
+      }}
+      onPointerLeave={(e) => {
+        if (e.pointerType === 'mouse') setHeld(false);
+      }}
+      ref={ref}
+    >
       <ol
         className="grid gap-2"
         style={{
@@ -772,6 +786,8 @@ function Collage() {
             <li className="min-w-0" key={f.name}>
               <button
                 aria-current={on ? 'step' : undefined}
+                // Below md only the number shows, so the name is given here at every width.
+                aria-label={f.name}
                 className="focus-ring flex w-full cursor-pointer items-start gap-2.5 rounded-lg py-1.5 pr-2 text-left transition-colors hover:bg-white/5"
                 onClick={() => pick(i)}
                 type="button"

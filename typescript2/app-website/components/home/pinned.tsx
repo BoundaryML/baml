@@ -190,7 +190,9 @@ export function Looped({
   // The figure's height can change between its two ends, so the slot keeps the tallest it has been,
   // and the page under it never moves.
   const [tallest, setTallest] = useState(0);
-  const visible = useRef(false);
+  // Under reduced motion there's no loop: the figure shows whichever end was picked last, kept in
+  // state so that every pick renders, including the first pick of end 0.
+  const [still, setStill] = useState<0 | 1>(1);
   // The end the reader picked, while it holds; and the end to carry on from once it lets go.
   const picked = useRef<0 | 1 | null>(null);
   const resume = useRef<0 | 1 | null>(null);
@@ -209,10 +211,6 @@ export function Looped({
   useEffect(() => {
     const el = ref.current;
     if (!el || reduce) return;
-    const io = new IntersectionObserver(([entry]) => {
-      visible.current = entry.isIntersecting;
-    });
-    io.observe(el);
     // One sweep across takes a hold and a move; the figure's move is centered on the middle.
     const sweepMs = hold + move;
     const lap = 2 * sweepMs;
@@ -234,7 +232,7 @@ export function Looped({
           clock = resume.current === 1 ? sweepMs : 0;
           resume.current = null;
         }
-        if (visible.current) clock = (clock + now - last) % lap;
+        clock = (clock + now - last) % lap;
         // Across and back, slowing into each end like a pendulum instead of stopping dead.
         const there = clock < sweepMs ? clock / sweepMs : 2 - clock / sweepMs;
         marker = 0.5 - 0.5 * Math.cos(Math.PI * there);
@@ -247,7 +245,20 @@ export function Looped({
       setWait(target !== null ? null : marker);
       frame = requestAnimationFrame(tick);
     };
-    frame = requestAnimationFrame(tick);
+    // The loop runs only while the figure is on screen. Off screen no frames run at all, and the
+    // clock picks up where it stopped, without jumping, when it comes back.
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        if (!frame) {
+          last = performance.now();
+          frame = requestAnimationFrame(tick);
+        }
+      } else {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    });
+    io.observe(el);
     return () => {
       cancelAnimationFrame(frame);
       io.disconnect();
@@ -266,10 +277,10 @@ export function Looped({
       style={{ minHeight: tallest || undefined }}
     >
       {children(
-        reduce ? (picked.current ?? 1) : p,
+        reduce ? still : p,
         (end) => {
-          picked.current = end;
-          if (reduce) setP(end);
+          if (reduce) setStill(end);
+          else picked.current = end;
         },
         reduce ? null : wait,
       )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { Cloud, EyeOff, Fingerprint, Layers as LayersIcon } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import {
   SiBun,
   SiGo,
@@ -791,33 +791,41 @@ const COPY = {
 
 const WAVE = [14, 34, 22, 48, 30, 56, 26, 44, 18, 52, 28, 38, 16, 30];
 
+/** The photo tile's picture. Its gradient id is per instance: the tile renders several times on a
+ *  page (desktop and phone copies), and a shared id would point every copy at the first, which may
+ *  sit in a hidden subtree. */
+function Landscape() {
+  const sky = useId();
+  return (
+    <svg
+      aria-hidden="true"
+      className="block h-full w-full"
+      preserveAspectRatio="xMidYMax slice"
+      viewBox="0 0 160 90"
+    >
+      <defs>
+        <linearGradient id={sky} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#3a2f63" />
+          <stop offset="1" stopColor="#e6a97a" />
+        </linearGradient>
+      </defs>
+      <rect fill={`url(#${sky})`} height="90" width="160" />
+      <circle cx="116" cy="28" fill="#F5C542" r="11" />
+      <path
+        d="M0 90 L0 66 L38 30 L66 58 L84 42 L120 76 L160 54 L160 90 Z"
+        fill="#6f5aa0"
+      />
+      <path
+        d="M0 90 L0 78 L46 58 L92 82 L128 68 L160 80 L160 90 Z"
+        fill="#2b2440"
+      />
+    </svg>
+  );
+}
+
 const TILES = [
   {
-    body: (
-      <svg
-        aria-hidden="true"
-        className="block h-full w-full"
-        preserveAspectRatio="xMidYMax slice"
-        viewBox="0 0 160 90"
-      >
-        <defs>
-          <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#3a2f63" />
-            <stop offset="1" stopColor="#e6a97a" />
-          </linearGradient>
-        </defs>
-        <rect fill="url(#sky)" height="90" width="160" />
-        <circle cx="116" cy="28" fill="#F5C542" r="11" />
-        <path
-          d="M0 90 L0 66 L38 30 L66 58 L84 42 L120 76 L160 54 L160 90 Z"
-          fill="#6f5aa0"
-        />
-        <path
-          d="M0 90 L0 78 L46 58 L92 82 L128 68 L160 80 L160 90 Z"
-          fill="#2b2440"
-        />
-      </svg>
-    ),
+    body: <Landscape />,
     name: 'image',
     span: 'describe_photo',
     url: 'a8f3.png',

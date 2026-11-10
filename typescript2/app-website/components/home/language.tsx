@@ -426,6 +426,7 @@ export function Examples({
               tabIndex={i === shown ? 0 : -1}
             >
               <Code
+                focusable={!capped}
                 lines={e.lines}
                 marks={focusMarks(e.lines, e.focus)}
                 notes={focusNotes(e.lines, e.focus)}
@@ -440,6 +441,7 @@ export function Examples({
               key={e.name}
             >
               <Code
+                focusable={!capped}
                 lines={e.lines}
                 marks={focusMarks(e.lines, e.focus)}
                 notes={focusNotes(e.lines, e.focus)}
@@ -459,6 +461,7 @@ export function Examples({
             />
           )}
           <button
+            aria-expanded={open}
             className="focus-ring w-full cursor-pointer py-2 text-[13px] text-muted hover:text-ink-2"
             onClick={() => setOpen((o) => !o)}
             type="button"

@@ -40,6 +40,8 @@ export default function SeenEnough() {
     <div
       {...section('seen-enough')}
       className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center px-4 transition-[opacity,translate] duration-300"
+      // Hidden, it's out of the tab order and the accessibility tree, not only invisible.
+      inert={!show}
       style={{ opacity: show ? 1 : 0, translate: show ? '0 0' : '0 12px' }}
     >
       <a

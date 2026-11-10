@@ -378,9 +378,17 @@ function DataWall({ p }: { p: number }) {
     const noGpu = new URLSearchParams(window.location.search).has('flat');
     const f = findsOf(count);
     const data = wallInstances(count, f, sortedPlaces(count, f));
-    const started = noGpu
+    // A lost context hands over to the flat wall, and the GPU one stops right away rather than at
+    // unmount, so nothing keeps watching a canvas that's no longer on the page.
+    let started: ReturnType<typeof startWall> = null;
+    started = noGpu
       ? null
-      : startWall(c, count, data, COLORS, () => setFlat(true));
+      : startWall(c, count, data, COLORS, () => {
+          started?.stop();
+          started = null;
+          wall.current = null;
+          setFlat(true);
+        });
     if (!started) setFlat(true);
     wall.current = started;
     return () => started?.stop();

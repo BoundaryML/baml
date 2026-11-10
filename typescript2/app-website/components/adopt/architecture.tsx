@@ -20,7 +20,10 @@ export function useBeat(count: number, ms: number) {
   const [beat, setBeat] = useState(0);
   useEffect(() => {
     if (reduce) return;
-    const timer = setInterval(() => setBeat((b) => (b + 1) % count), ms);
+    // A background tab doesn't advance: there's no one to see it.
+    const timer = setInterval(() => {
+      if (!document.hidden) setBeat((b) => (b + 1) % count);
+    }, ms);
     return () => clearInterval(timer);
   }, [count, ms, reduce]);
   // Under reduced motion, the last beat: every diagram's finished, fully shown state.
