@@ -121,6 +121,54 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
             snapshots.insert(*snapshot.id.as_bytes(), snapshot);
         }
     }
+    // Decode the actual BCS PUT payload and follow its process-context CAS
+    // reference. No caller supplied environment metadata to this engine.
+    assert!(!files.is_empty());
+    for file in &files {
+        let header = file.header.as_ref().unwrap();
+        assert!(header.command.is_empty(), "cloud arguments stay private");
+        assert_eq!(
+            header.baml_version.as_deref(),
+            Some(baml_version::CANONICAL_VERSION)
+        );
+        let id: btel_snapshot::CasId = header.initial_context_cas_id.unwrap().into();
+        let (identity, metadata) = trace_context::metadata(&snapshots[id.as_bytes()]);
+        assert_eq!(identity, None);
+        assert!(matches!(
+            metadata["baml.environment.os"],
+            btel_snapshot::DecodedValue::String(_)
+        ));
+        assert_eq!(
+            metadata["baml.environment.architecture"],
+            &btel_snapshot::DecodedValue::String(std::env::consts::ARCH.into())
+        );
+        assert_eq!(
+            metadata["baml.environment.is_ci"],
+            &btel_snapshot::DecodedValue::Bool(
+                baml_env::os_var("CI").is_some_and(|value| value == "true")
+            )
+        );
+        assert_eq!(
+            metadata.get("baml.environment.agent_harness").copied(),
+            baml_env::agent::detect()
+                .ok()
+                .flatten()
+                .map(|agent| btel_snapshot::DecodedValue::String(agent.into()))
+                .as_ref()
+        );
+        let allowed = [
+            "os",
+            "os_version",
+            "os_distro",
+            "architecture",
+            "is_ci",
+            "agent_harness",
+        ];
+        assert!(metadata.keys().all(|key| {
+            key.strip_prefix("baml.environment.")
+                .is_some_and(|key| allowed.contains(&key))
+        }));
+    }
     trace_context::assert_leaf_contexts(&files, &snapshots, 3);
 }
 

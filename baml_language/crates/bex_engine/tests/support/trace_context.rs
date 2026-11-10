@@ -42,7 +42,9 @@ fn whole_map(
         .collect()
 }
 
-fn metadata(snapshot: &DecodedSnapshot) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {
+pub(super) fn metadata(
+    snapshot: &DecodedSnapshot,
+) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {
     let DecodedRoot::Value(DecodedValue::Object(root)) = snapshot.root else {
         panic!("context root must be a map");
     };

@@ -16,6 +16,124 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// Inline because the published Rust bridge compiles this file through a symlink.
+pub mod agent {
+    //! Coding-agent signals shared by CLI output policy and runtime telemetry.
+
+    use std::ffi::OsString;
+
+    use super::EnvError;
+
+    /// Dev escape hatch used by hooks and task runners launched inside an agent.
+    pub const DISABLE_AGENT_DETECTION_ENV: &str = "DEV_BAML_CLI_DISABLE_AGENT_DETECTION";
+
+    // Keep specific harness markers ahead of generic agent markers. Values can be
+    // session IDs, paths or credentials: only these fixed labels may leave here.
+    const AGENT_ENV_VARS: &[(&str, &str)] = &[
+        ("CLAUDECODE", "claude-code"),
+        ("CODEX_SANDBOX", "codex"),
+        ("PI_CODING_AGENT", "pi"),
+        ("OPENCODE_CLIENT", "opencode"),
+        ("CURSOR_TRACE_ID", "cursor"),
+        ("REPL_ID", "replit"),
+        ("AI_AGENT", "unknown"),
+        ("AGENT", "unknown"),
+    ];
+
+    /// The detected harness, or `unknown` when only a generic agent marker is set.
+    /// Preserves the CLI's marker semantics: nonempty Unicode values other than `0`
+    /// indicate an agent (including `false`); no marker values are returned.
+    pub fn detect() -> Result<Option<&'static str>, EnvError> {
+        detect_with(super::os_var)
+    }
+
+    /// Injectable form of [`detect`], without changing process environment.
+    pub fn detect_with(
+        mut read: impl FnMut(&str) -> Option<OsString>,
+    ) -> Result<Option<&'static str>, EnvError> {
+        if super::bool_from(
+            DISABLE_AGENT_DETECTION_ENV,
+            read(DISABLE_AGENT_DETECTION_ENV),
+        )? == Some(true)
+        {
+            return Ok(None);
+        }
+        Ok(AGENT_ENV_VARS.iter().find_map(|(name, harness)| {
+            read(name)
+                .and_then(|value| value.into_string().ok())
+                .is_some_and(|value| !value.is_empty() && value != "0")
+                .then_some(*harness)
+        }))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn every_existing_marker_has_a_bounded_label() {
+            for &(marker, label) in AGENT_ENV_VARS {
+                assert_eq!(
+                    detect_with(|name| (name == marker).then(|| "private-session-value".into())),
+                    Ok(Some(label))
+                );
+                for value in ["", "0"] {
+                    assert_eq!(
+                        detect_with(|name| (name == marker).then(|| value.into())),
+                        Ok(None)
+                    );
+                }
+            }
+            assert_eq!(detect_with(|_| None), Ok(None));
+            assert_eq!(
+                detect_with(|name| (name == "AGENT").then(|| "false".into())),
+                Ok(Some("unknown"))
+            );
+        }
+
+        #[test]
+        fn specific_harness_wins_over_generic_markers() {
+            assert_eq!(
+                detect_with(
+                    |name| matches!(name, "AI_AGENT" | "CURSOR_TRACE_ID").then(|| "1".into())
+                ),
+                Ok(Some("cursor"))
+            );
+            assert_eq!(
+                detect_with(
+                    |name| matches!(name, "CLAUDECODE" | "CODEX_SANDBOX").then(|| "1".into())
+                ),
+                Ok(Some("claude-code"))
+            );
+        }
+
+        #[test]
+        fn escape_hatch_retains_strict_cli_validation() {
+            for value in ["true", "1", "on", "YES"] {
+                assert_eq!(
+                    detect_with(|name| Some(if name == DISABLE_AGENT_DETECTION_ENV {
+                        value.into()
+                    } else {
+                        "1".into()
+                    })),
+                    Ok(None)
+                );
+            }
+            assert!(detect_with(|_| Some("invalid".into())).is_err());
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn non_unicode_markers_are_ignored() {
+            use std::os::unix::ffi::OsStringExt as _;
+            assert_eq!(
+                detect_with(|name| (name == "CLAUDECODE").then(|| OsString::from_vec(vec![0xff]))),
+                Ok(None)
+            );
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EnvError {
     #[error("{name} is not valid unicode")]
