@@ -84,6 +84,20 @@ pub(crate) fn resolve_slice_bound(bound: i64, len: usize) -> usize {
     usize::try_from(resolved.clamp(0, len_i64)).unwrap_or(len)
 }
 
+/// The range `[start, end)` that `slice(start, end)` selects from a sequence
+/// of length `len`: both bounds resolve as [`resolve_slice_bound`], and an
+/// `end` before `start` selects nothing.
+pub(crate) fn slice_bounds(start: i64, end: i64, len: usize) -> std::ops::Range<usize> {
+    let start = resolve_slice_bound(start, len);
+    let end = resolve_slice_bound(end, len).max(start);
+    start..end
+}
+
+/// A length as a BAML `int`.
+pub(crate) fn int_len(len: usize) -> i64 {
+    i64::try_from(len).unwrap_or(i64::MAX)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

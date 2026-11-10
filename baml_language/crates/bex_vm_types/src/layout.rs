@@ -152,6 +152,46 @@ impl Shape {
             Shape::Other(kind) => kind,
         }
     }
+
+    fn not_a(self, expected: Kind) -> Fault {
+        Fault::WrongReceiver {
+            expected,
+            found: self.kind(),
+        }
+    }
+
+    /// A list receiver's element slot.
+    pub fn list_elem(self) -> Result<SlotKind, Fault> {
+        match self {
+            Shape::List { elem } => Ok(elem),
+            other => Err(other.not_a(Kind::List)),
+        }
+    }
+
+    /// A map receiver's value slot.
+    pub fn map_value(self) -> Result<SlotKind, Fault> {
+        match self {
+            Shape::Map { value, .. } => Ok(value),
+            other => Err(other.not_a(Kind::Map)),
+        }
+    }
+
+    /// Check a string receiver.
+    pub fn string(self) -> Result<(), Fault> {
+        match self {
+            Shape::Str => Ok(()),
+            other => Err(other.not_a(Kind::Str)),
+        }
+    }
+}
+
+/// A generic map key as a string object. Any other key needs the
+/// interpreter's hashing, which may run user code.
+pub fn string_key<R: Descriptors + ?Sized>(rt: &R, key: Tagged) -> Result<ObjPtr, Fault> {
+    match key {
+        Tagged::Ptr(ptr) if rt.shape(ptr) == Shape::Str => Ok(ptr),
+        _ => Err(Fault::NeedsVm(NeedsVm::KeyHash)),
+    }
 }
 
 /// Index into the program's descriptor table (the header's `descriptor`).
@@ -242,60 +282,78 @@ pub enum Tagged {
     Ptr(ObjPtr),
 }
 
-/// A slot representation bodies are generic over: [`RawWord`], [`ObjPtr`]
-/// or [`Tagged`].
+/// A slot representation bodies are generic over: [`RawWord`], [`ObjPtr`],
+/// [`Tagged`], or the interpreter's [`Value`](crate::Value), a tagged word
+/// whose floats are boxed.
 pub trait Elem: Copy + std::fmt::Debug {
     const KIND: ElemKind;
-
-    /// This representation of `value` for a slot of kind `slot`.
-    fn from_tagged(value: Tagged, slot: SlotKind) -> Result<Self, Fault>;
-
-    /// The universal form of an element read from a slot of kind `slot`.
-    fn to_tagged(self, slot: SlotKind) -> Tagged;
 }
 
 impl Elem for RawWord {
     const KIND: ElemKind = ElemKind::Raw8;
-
-    fn from_tagged(value: Tagged, slot: SlotKind) -> Result<Self, Fault> {
-        let SlotKind::Raw(raw) = slot else {
-            return Err(Fault::SlotMismatch { slot, value });
-        };
-        RawWord::from_tagged(value, raw).ok_or(Fault::SlotMismatch { slot, value })
-    }
-
-    fn to_tagged(self, slot: SlotKind) -> Tagged {
-        let SlotKind::Raw(raw) = slot else {
-            unreachable!("a raw word read from a {slot:?} slot");
-        };
-        RawWord::to_tagged(self, raw)
-    }
 }
 
 impl Elem for ObjPtr {
     const KIND: ElemKind = ElemKind::Ptr;
+}
 
-    fn from_tagged(value: Tagged, slot: SlotKind) -> Result<Self, Fault> {
+impl Elem for Tagged {
+    const KIND: ElemKind = ElemKind::Tagged16;
+}
+
+impl Elem for crate::Value {
+    const KIND: ElemKind = ElemKind::Tagged16;
+}
+
+/// Conversions between a slot representation and the universal [`Tagged`]
+/// form. A runtime implements them where they need the heap (the
+/// interpreter's boxed floats); the pure representations have them for every
+/// runtime.
+pub trait Slots<E: Elem> {
+    /// The universal form of an element read from a slot of kind `slot`.
+    fn to_tagged(&self, elem: E, slot: SlotKind) -> Tagged;
+
+    /// This representation of `value` for a slot of kind `slot`.
+    fn untag(&mut self, value: Tagged, slot: SlotKind) -> Result<E, Fault>;
+}
+
+impl<R: ?Sized> Slots<RawWord> for R {
+    fn to_tagged(&self, elem: RawWord, slot: SlotKind) -> Tagged {
+        let SlotKind::Raw(raw) = slot else {
+            unreachable!("a raw word read from a {slot:?} slot");
+        };
+        elem.to_tagged(raw)
+    }
+
+    fn untag(&mut self, value: Tagged, slot: SlotKind) -> Result<RawWord, Fault> {
+        let mismatch = Fault::SlotMismatch { slot, value };
+        let SlotKind::Raw(raw) = slot else {
+            return Err(mismatch);
+        };
+        RawWord::from_tagged(value, raw).ok_or(mismatch)
+    }
+}
+
+impl<R: ?Sized> Slots<ObjPtr> for R {
+    fn to_tagged(&self, elem: ObjPtr, _slot: SlotKind) -> Tagged {
+        Tagged::Ptr(elem)
+    }
+
+    fn untag(&mut self, value: Tagged, slot: SlotKind) -> Result<ObjPtr, Fault> {
         match value {
             Tagged::Ptr(ptr) => Ok(ptr),
             _ => Err(Fault::SlotMismatch { slot, value }),
         }
     }
-
-    fn to_tagged(self, _slot: SlotKind) -> Tagged {
-        Tagged::Ptr(self)
-    }
 }
 
-impl Elem for Tagged {
-    const KIND: ElemKind = ElemKind::Tagged16;
-
-    fn from_tagged(value: Tagged, _slot: SlotKind) -> Result<Self, Fault> {
-        Ok(value)
+impl<R: ?Sized> Slots<Tagged> for R {
+    fn to_tagged(&self, elem: Tagged, _slot: SlotKind) -> Tagged {
+        elem
     }
 
-    fn to_tagged(self, _slot: SlotKind) -> Tagged {
-        self
+    fn untag(&mut self, value: Tagged, _slot: SlotKind) -> Result<Tagged, Fault> {
+        Ok(value)
     }
 }
 
@@ -329,16 +387,12 @@ pub enum NeedsVm {
 pub enum ListOf {
     /// The receiver list's own descriptor.
     SameAs(ObjPtr),
-    /// A list of the map's key type.
-    KeysOf(ObjPtr),
     /// A list of the map's value type.
     ValuesOf(ObjPtr),
     /// `string[]`.
     Strings,
     /// `int[]`.
     Ints,
-    /// A descriptor the caller resolved (a callback's result type).
-    Described(DescriptorId),
 }
 
 /// A string map key, hashed with [`crate::map_string_hash`].
@@ -372,6 +426,12 @@ pub trait Lists<E: Elem>: Descriptors {
     /// `with` and return the removed ones.
     fn list_splice(&mut self, list: ObjPtr, range: Range<usize>, with: &[E]) -> Vec<E>;
 
+    /// Append `elem`; returns the new length.
+    fn list_push(&mut self, list: ObjPtr, elem: E) -> usize;
+
+    /// Remove and return the last element.
+    fn list_pop(&mut self, list: ObjPtr) -> Option<E>;
+
     fn list_alloc(&mut self, of: ListOf, elems: &[E]) -> ObjPtr;
 }
 
@@ -389,8 +449,8 @@ pub trait Maps<V: Elem>: Descriptors {
 
     fn map_clear(&mut self, map: ObjPtr);
 
-    /// A snapshot of the keys, in their universal form.
-    fn map_keys(&self, map: ObjPtr) -> Vec<Tagged>;
+    /// A new list of the keys, typed as the map's keys.
+    fn map_key_list(&mut self, map: ObjPtr) -> ObjPtr;
 
     /// A snapshot of the values.
     fn map_values(&self, map: ObjPtr) -> Vec<V>;
@@ -404,6 +464,10 @@ pub trait Strings: Descriptors {
     fn str_char_len(&self, string: ObjPtr) -> usize;
 
     fn str_alloc(&mut self, text: &str) -> ObjPtr;
+
+    /// The substring at `bytes` (char boundaries), sharing storage where the
+    /// representation allows.
+    fn str_substring(&mut self, string: ObjPtr, bytes: Range<usize>) -> ObjPtr;
 
     fn bytes_alloc(&mut self, bytes: &[u8]) -> ObjPtr;
 }
@@ -478,7 +542,7 @@ mod tests {
         let slot = SlotKind::Raw(RawKind::Int);
         let value = Tagged::Float(1.0);
         assert_eq!(
-            <RawWord as Elem>::from_tagged(value, slot),
+            Slots::<RawWord>::untag(&mut (), value, slot),
             Err(Fault::SlotMismatch { slot, value })
         );
     }

@@ -425,7 +425,7 @@ impl Continuation for ToStringWalkContinuation {
 /// `string.from` calls would: collect the element's overrides, dispatch each,
 /// render it, then move to the next. A string is appended as is, and a
 /// primitive never reaches the override probe.
-pub(super) fn join_honoring_overrides(
+pub(crate) fn join_honoring_overrides(
     vm: &mut BexVm,
     elements: Vec<Value>,
     separator: String,
@@ -647,15 +647,22 @@ impl StructuralRenderSink for StringRenderSink {
 /// for any other value. The leaf rendering of [`render_to_sink`], and all of
 /// `string.from` for these types.
 fn primitive_text(vm: &BexVm, value: Value) -> Option<String> {
-    match value.kind() {
-        ValueKind::Null => Some("null".to_string()),
-        ValueKind::Int(i) => Some(i.to_string()),
-        ValueKind::Bool(b) => Some(b.to_string()),
-        ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::Float(f) => Some(bex_vm_types::format_float(*f)),
-            _ => None,
-        },
-        ValueKind::OmittedArg => None,
+    if value.is_omitted() {
+        return None;
+    }
+    scalar_text(super::value_model::tagged(vm, value))
+}
+
+/// How a scalar renders: `null`, an int, a bool or a float; `None` for an
+/// object.
+pub(crate) fn scalar_text(value: bex_vm_types::layout::Tagged) -> Option<String> {
+    use bex_vm_types::layout::Tagged;
+    match value {
+        Tagged::Null => Some("null".to_string()),
+        Tagged::Int(int) => Some(int.to_string()),
+        Tagged::Bool(boolean) => Some(boolean.to_string()),
+        Tagged::Float(float) => Some(bex_vm_types::format_float(float)),
+        Tagged::Ptr(_) => None,
     }
 }
 

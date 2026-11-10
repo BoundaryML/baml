@@ -27,7 +27,6 @@ use std::{
 };
 
 use baml_type::normalize::TypeContext;
-use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, RealizedTy, RootHaver, RootVisitor, ValueKind,
     errors::VmInternalError,
@@ -84,10 +83,20 @@ impl BamlClassOpsEquals_for_bool for PackageBamlImpl {
 
 // ── string ─────────────────────────────────────────────────────────────────
 
-impl BamlClassOpsEquals_for_string for PackageBamlImpl {
-    fn eq(string: &BexStr, other: &BexStr) -> bool {
-        string == other
-    }
+/// `string == string` runs the shared body [`baml_ops_equals_for_string_eq`].
+impl BamlClassOpsEquals_for_string for PackageBamlImpl {}
+
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "one calling convention for every body: generated glue and adapters call \
+              each `fn(&mut R, ...) -> Result<_, Fault>` alike"
+)]
+pub(crate) fn baml_ops_equals_for_string_eq<R: bex_vm_types::layout::Strings>(
+    rt: &mut R,
+    string: bex_vm_types::layout::ObjPtr,
+    other: bex_vm_types::layout::ObjPtr,
+) -> Result<bool, bex_vm_types::layout::Fault> {
+    Ok(rt.str_text(string) == rt.str_text(other))
 }
 
 // ── uint8array ─────────────────────────────────────────────────────────────

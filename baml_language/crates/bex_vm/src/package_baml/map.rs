@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use bex_vm_types::{
-    EntryId, MapData, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value,
+    EntryId, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value,
+    layout::{Elem, Fault, ListOf, Lists, Maps, ObjPtr, StrKey, Strings},
 };
 
-use super::{BamlClassMap, Continuation, MapView, NativeCallResult, PackageBamlImpl};
-use crate::{BexVm, VmPanic, errors::VmRustFnError};
+use super::{BamlClassMap, Continuation, NativeCallResult, PackageBamlImpl, value_model::Locality};
+use crate::{BexVm, VmPanic, array_index::int_len, errors::VmRustFnError};
 
 #[derive(Clone, Copy)]
 enum Operation {
@@ -22,18 +23,22 @@ struct MapDriver {
     key: Value,
     value: Value,
     state: Value,
-    hasher: Option<Arc<super::hasher::HasherState>>,
+    hasher: Arc<super::hasher::HasherState>,
     operation: Operation,
     hash: u64,
     epoch: u64,
     candidates: Vec<(EntryId, Value)>,
     cursor: usize,
+    /// The first callback finishes hashing the key; later ones compare it.
     hashing: bool,
     /// The map is thread-local: escape analysis selected a `$local` twin.
     thread_local: bool,
 }
 
 impl MapDriver {
+    /// Look `args[1]` up with the interpreter's hashing and equality, which
+    /// may run user code. String keys never get here: the shared bodies
+    /// handle them, and the generated glue defers only other keys.
     fn start(
         vm: &mut BexVm,
         args: &[Value],
@@ -43,34 +48,21 @@ impl MapDriver {
         if let Err(error) = vm.as_map(&args[0]) {
             return error.into();
         }
-        let string_hash = vm
-            .as_string(&args[1])
-            .ok()
-            .map(|key| bex_vm_types::map_string_hash(key.as_str()));
-        let (state, hasher) = if string_hash.is_some() {
-            (Value::NULL, None)
-        } else {
-            let (state, hasher) = super::hasher::new_state(vm);
-            (state, Some(hasher))
-        };
-        let mut driver = Self {
+        let (state, hasher) = super::hasher::new_state(vm);
+        let driver = Self {
             map: args[0],
             key: args[1],
             value: args.get(2).copied().unwrap_or(Value::NULL),
             state,
             hasher,
             operation,
-            hash: string_hash.unwrap_or(0),
+            hash: 0,
             epoch: 0,
             candidates: Vec::new(),
             cursor: 0,
-            hashing: string_hash.is_none(),
+            hashing: true,
             thread_local,
         };
-        if string_hash.is_some() {
-            driver.snapshot(vm);
-            return driver.drive(vm, None);
-        }
         let result = super::hashing::hash_value(vm, driver.key, state);
         super::chain(vm, result, Box::new(driver))
     }
@@ -125,10 +117,7 @@ impl MapDriver {
             }
             if matched.is_none() && self.cursor < self.candidates.len() {
                 let key = self.candidates[self.cursor].1;
-                let result = match (vm.as_string(&key), vm.as_string(&self.key)) {
-                    (Ok(left), Ok(right)) => NativeCallResult::Done(Value::bool(left == right)),
-                    _ => super::ops::equals_structural_default(vm, key, self.key),
-                };
+                let result = super::ops::equals_structural_default(vm, key, self.key);
                 match result {
                     NativeCallResult::Done(value) => {
                         if value.as_bool() == Some(true) {
@@ -197,9 +186,7 @@ impl Continuation for MapDriver {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         let matched = if self.hashing {
             self.hashing = false;
-            self.hash = super::hasher::finish_state(
-                self.hasher.as_ref().expect("hash callback has a state"),
-            );
+            self.hash = super::hasher::finish_state(&self.hasher);
             self.snapshot(vm);
             None
         } else {
@@ -211,99 +198,137 @@ impl Continuation for MapDriver {
     }
 }
 
-impl BamlClassMap for PackageBamlImpl {
-    #[allow(clippy::cast_possible_wrap)]
-    fn length(map: MapView<'_>) -> i64 {
-        map.len() as i64
+/// Every `Map` builtin's glue is generated over the shared bodies below.
+impl BamlClassMap for PackageBamlImpl {}
+
+// ── Bodies shared by the interpreter and the shared-format adapters ──────
+//
+// One generic body per builtin over the value representation `E`, with
+// string keys. The interpreter's glue runs them at `E = Value` and defers
+// any other key to the `*_yielding` paths, whose hashing may run user code.
+pub(crate) mod shared {
+    #![allow(
+        clippy::unnecessary_wraps,
+        reason = "one calling convention for every body: generated glue and adapters call \
+                  each `fn(&mut R, ...) -> Result<_, Fault>` alike"
+    )]
+
+    use super::{
+        BexVm, Elem, Fault, ListOf, Lists, Locality, MapDriver, Maps, NativeCallResult, ObjPtr,
+        Operation, StrKey, Strings, Value, int_len,
+    };
+
+    fn str_key<R: Strings + ?Sized>(rt: &R, key: ObjPtr) -> StrKey {
+        StrKey {
+            ptr: key,
+            hash: bex_vm_types::map_string_hash(rt.str_text(key)),
+        }
     }
 
-    fn keys(_vm: &mut BexVm, map: MapView<'_>) -> Vec<Value> {
-        map.keys().copied().collect()
+    pub(crate) fn baml_map_length<R: Maps<E>, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+    ) -> Result<i64, Fault> {
+        Ok(int_len(rt.map_len(map)))
     }
 
-    fn values(map: MapView<'_>) -> Vec<Value> {
-        map.values().copied().collect()
+    pub(crate) fn baml_map_has<R: Maps<E> + Strings, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+        key: ObjPtr,
+    ) -> Result<bool, Fault> {
+        Ok(Maps::<E>::map_get(rt, map, str_key(rt, key)).is_some())
     }
 
-    fn __glue_has(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Has, false)
+    pub(crate) fn baml_map_get<R: Maps<E> + Strings, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+        key: ObjPtr,
+    ) -> Result<Option<E>, Fault> {
+        Ok(rt.map_get(map, str_key(rt, key)))
     }
 
-    fn __glue_has__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Has, true)
+    pub(crate) fn baml_map_index<R: Maps<E> + Strings, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+        key: ObjPtr,
+    ) -> Result<E, Fault> {
+        rt.map_get(map, str_key(rt, key))
+            .ok_or(Fault::MapKeyNotFound)
     }
 
-    fn has(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
-        unreachable!("Map.has uses custom glue")
+    /// Inserts or replaces; returns the previous value.
+    pub(crate) fn baml_map_set<R: Maps<E> + Strings, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+        key: ObjPtr,
+        value: E,
+    ) -> Result<Option<E>, Fault> {
+        let key = str_key(rt, key);
+        Ok(rt.map_set(map, key, value))
     }
 
-    fn __glue_get(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Get, false)
+    pub(crate) fn baml_map_delete<R: Maps<E> + Strings, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+        key: ObjPtr,
+    ) -> Result<Option<E>, Fault> {
+        let key = str_key(rt, key);
+        Ok(rt.map_remove(map, key))
     }
 
-    fn __glue_get__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Get, true)
+    pub(crate) fn baml_map_get_or_insert<R: Maps<E> + Strings, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+        key: ObjPtr,
+        default: E,
+    ) -> Result<E, Fault> {
+        let key = str_key(rt, key);
+        if let Some(existing) = rt.map_get(map, key) {
+            return Ok(existing);
+        }
+        rt.map_set(map, key, default);
+        Ok(default)
     }
 
-    fn get(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
-        unreachable!("Map.get uses custom glue")
+    pub(crate) fn baml_map_clear<R: Maps<E>, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+    ) -> Result<(), Fault> {
+        rt.map_clear(map);
+        Ok(())
     }
 
-    fn __glue_index(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Index, false)
+    pub(crate) fn baml_map_keys<R: Maps<E>, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        Ok(rt.map_key_list(map))
     }
 
-    fn __glue_index__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Index, true)
+    pub(crate) fn baml_map_values<R: Maps<E> + Lists<E>, E: Elem>(
+        rt: &mut R,
+        map: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let values = rt.map_values(map);
+        Ok(rt.list_alloc(ListOf::ValuesOf(map), &values))
     }
 
-    fn index(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
-        unreachable!("Map.index uses custom glue")
+    /// The yielding paths for keys only the interpreter can hash.
+    macro_rules! yielding {
+        ($($name:ident => $operation:ident),* $(,)?) => {$(
+            pub(crate) fn $name(vm: &mut BexVm, args: &[Value], locality: Locality) -> NativeCallResult {
+                MapDriver::start(vm, args, Operation::$operation, locality == Locality::ThreadLocal)
+            }
+        )*};
     }
 
-    fn __glue_set(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Set, false)
-    }
-
-    fn __glue_set__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Set, true)
-    }
-
-    fn set(_vm: &mut BexVm, _map: &Value, _key: &Value, _value: &Value) -> NativeCallResult {
-        unreachable!("Map.set uses custom glue")
-    }
-
-    fn __glue_delete(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Delete, false)
-    }
-
-    fn __glue_delete__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Delete, true)
-    }
-
-    fn delete(_vm: &mut BexVm, _map: &Value, _key: &Value) -> NativeCallResult {
-        unreachable!("Map.delete uses custom glue")
-    }
-
-    fn __glue_get_or_insert(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::GetOrInsert, false)
-    }
-
-    fn __glue_get_or_insert__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::GetOrInsert, true)
-    }
-
-    fn get_or_insert(
-        _vm: &mut BexVm,
-        _map: &Value,
-        _key: &Value,
-        _default: &Value,
-    ) -> NativeCallResult {
-        unreachable!("Map.get_or_insert uses custom glue")
-    }
-
-    #[allow(clippy::unused_unit)]
-    fn clear(map: &mut MapData) -> () {
-        map.clear();
+    yielding! {
+        baml_map_has_yielding => Has,
+        baml_map_get_yielding => Get,
+        baml_map_index_yielding => Index,
+        baml_map_set_yielding => Set,
+        baml_map_delete_yielding => Delete,
+        baml_map_get_or_insert_yielding => GetOrInsert,
     }
 }

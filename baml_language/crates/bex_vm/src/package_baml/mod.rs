@@ -59,7 +59,33 @@ mod time;
 mod toml;
 mod uint8array;
 mod unknown_error;
+pub mod value_model;
 mod yaml;
+
+/// The builtin bodies shared by the interpreter and the shared-format
+/// adapters, one per builtin, by declaration `fn_name`. The interpreter's
+/// generated glue and `crate::adapters::generated` both call them here.
+pub(crate) mod bodies {
+    pub(crate) use super::{
+        array::shared::{
+            baml_array_at, baml_array_clear, baml_array_concat, baml_array_insert, baml_array_join,
+            baml_array_join_yielding, baml_array_length, baml_array_pop, baml_array_push,
+            baml_array_remove_at, baml_array_reverse, baml_array_shift, baml_array_slice,
+            baml_array_unshift,
+        },
+        map::shared::{
+            baml_map_clear, baml_map_delete, baml_map_delete_yielding, baml_map_get,
+            baml_map_get_or_insert, baml_map_get_or_insert_yielding, baml_map_get_yielding,
+            baml_map_has, baml_map_has_yielding, baml_map_index, baml_map_index_yielding,
+            baml_map_keys, baml_map_length, baml_map_set, baml_map_set_yielding, baml_map_values,
+        },
+        ops::baml_ops_equals_for_string_eq,
+        string::shared::{
+            baml_string_char_count, baml_string_chars, baml_string_lines, baml_string_slice,
+            baml_string_split, baml_string_to_code_points, baml_string_to_utf8,
+        },
+    };
+}
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
@@ -200,28 +226,6 @@ pub struct ArrayView<'a> {
 impl std::ops::Deref for ArrayView<'_> {
     type Target = [Value];
     fn deref(&self) -> &[Value] {
-        self.data
-    }
-}
-
-/// A typed view of a map receiver: its declared key/value types alongside the
-/// insertion-ordered entries.
-///
-/// The map analogue of [`ArrayView`] — the key and value types ride *with* the
-/// receiver so a builtin that preserves them can tag its result map without a
-/// side channel. Derefs to the underlying [`bex_vm_types::MapData`].
-pub struct MapView<'a> {
-    /// The receiver map's declared key type (`K` of `map<K, V>`).
-    pub key_ty: &'a bex_vm_types::RealizedTy,
-    /// The receiver map's declared value type (`V` of `map<K, V>`).
-    pub value_ty: &'a bex_vm_types::RealizedTy,
-    /// The receiver map's entries.
-    pub data: &'a bex_vm_types::MapData,
-}
-
-impl std::ops::Deref for MapView<'_> {
-    type Target = bex_vm_types::MapData;
-    fn deref(&self) -> &bex_vm_types::MapData {
         self.data
     }
 }

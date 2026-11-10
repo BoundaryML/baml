@@ -4,10 +4,17 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, RootVisitor, types::Value};
 use num_bigint::BigInt;
 
-use super::{ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
+use bex_vm_types::layout::{
+    Elem, Fault, ListOf, Lists, NeedsVm, ObjPtr, Shape, Slots, Strings, Tagged,
+};
+
+use super::{
+    ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl,
+    value_model::Locality,
+};
 use crate::{
     BexVm,
-    array_index::{resolve_index, resolve_insert_index, resolve_slice_bound},
+    array_index::{int_len, resolve_index, resolve_insert_index, slice_bounds},
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
@@ -864,21 +871,6 @@ impl Continuation for SortByContinuation {
 }
 
 impl BamlClassArray for PackageBamlImpl {
-    #[allow(clippy::cast_possible_wrap)]
-    fn length(array: ArrayView<'_>) -> i64 {
-        array.len() as i64
-    }
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn push(array: &mut Vec<Value>, item: &Value) -> i64 {
-        array.push(*item);
-        array.len() as i64
-    }
-
-    fn at(array: ArrayView<'_>, index: i64) -> Option<Value> {
-        resolve_index(index, array.len()).map(|i| array[i])
-    }
-
     /// Builds a new array of `length` elements, each equal to `value`.
     ///
     /// Static constructor for `baml.Array.filled`. A negative `length` clamps to
@@ -899,66 +891,6 @@ impl BamlClassArray for PackageBamlImpl {
         }
         let count = usize::try_from(length).unwrap_or(usize::MAX);
         vec![*value; count]
-    }
-
-    fn concat(array: ArrayView<'_>, other: &[Value]) -> Vec<Value> {
-        array.iter().chain(other.iter()).copied().collect()
-    }
-
-    fn pop(array: &mut Vec<Value>) -> Option<Value> {
-        array.pop()
-    }
-
-    fn remove_at(array: &mut Vec<Value>, index: i64) -> Option<Value> {
-        let index = resolve_index(index, array.len())?;
-        Some(array.remove(index))
-    }
-
-    fn reverse(array: ArrayView<'_>) -> Vec<Value> {
-        let mut result = array.to_vec();
-        result.reverse();
-        result
-    }
-
-    fn slice(array: ArrayView<'_>, start: i64, end: i64) -> Vec<Value> {
-        let start = resolve_slice_bound(start, array.len());
-        // An `end` resolving before `start` yields an empty slice.
-        let end = resolve_slice_bound(end, array.len()).max(start);
-        array[start..end].to_vec()
-    }
-
-    #[allow(clippy::unused_unit)]
-    fn clear(array: &mut Vec<Value>) -> () {
-        array.clear();
-    }
-
-    fn shift(array: &mut Vec<Value>) -> Option<Value> {
-        if array.is_empty() {
-            None
-        } else {
-            Some(array.remove(0))
-        }
-    }
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn unshift(array: &mut Vec<Value>, item: &Value) -> i64 {
-        array.insert(0, *item);
-        array.len() as i64
-    }
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn insert(array: &mut Vec<Value>, item: &Value, idx: i64) -> Result<i64, VmRustFnError> {
-        let len = array.len();
-        // A negative `idx` counts from the end; `[0, len]` is the valid range
-        // (inserting at `len` appends).
-        let Some(idx) = resolve_insert_index(idx, len) else {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!("array.insert: idx ({idx}) is out of range for length {len}"),
-            }
-            .into());
-        };
-        array.insert(idx, *item);
-        Ok(array.len() as i64)
     }
 
     fn splice(
@@ -1013,11 +945,6 @@ impl BamlClassArray for PackageBamlImpl {
         })
         .advance(vm)
     }
-
-    fn join(vm: &mut BexVm, array: ArrayView<'_>, separator: &bex_str::BexStr) -> NativeCallResult {
-        super::root::join_honoring_overrides(vm, array.to_vec(), separator.as_str().to_owned())
-    }
-
     fn map(vm: &mut BexVm, array: ArrayView<'_>, f: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *f) {
             Ok(p) => p,
@@ -1290,5 +1217,186 @@ impl BamlClassArray for PackageBamlImpl {
                 element_ty,
             }),
         }
+    }
+}
+
+// ── Bodies shared by the interpreter and the shared-format adapters ──────
+//
+// One generic body per builtin over the slot representation `E`. The
+// interpreter's glue runs them at `E = Value` through
+// `value_model::ValueModel`; generated adapters run them at each slot kind.
+pub(crate) mod shared {
+    #![allow(
+        clippy::unnecessary_wraps,
+        reason = "one calling convention for every body: generated glue and adapters call \
+                  each `fn(&mut R, ...) -> Result<_, Fault>` alike"
+    )]
+
+    use super::{
+        BexVm, Elem, Fault, ListOf, Lists, Locality, NativeCallResult, NeedsVm, ObjPtr, Shape,
+        Slots, Strings, Tagged, Value, int_len, resolve_index, resolve_insert_index, slice_bounds,
+    };
+
+    pub(crate) fn baml_array_length<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+    ) -> Result<i64, Fault> {
+        Ok(int_len(rt.list_len(array)))
+    }
+
+    pub(crate) fn baml_array_at<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+        index: i64,
+    ) -> Result<Option<E>, Fault> {
+        let len = rt.list_len(array);
+        Ok(resolve_index(index, len).and_then(|index| rt.list_get(array, index)))
+    }
+
+    /// Appends `item`; returns the new length.
+    pub(crate) fn baml_array_push<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+        item: E,
+    ) -> Result<i64, Fault> {
+        Ok(int_len(rt.list_push(array, item)))
+    }
+
+    pub(crate) fn baml_array_pop<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+    ) -> Result<Option<E>, Fault> {
+        Ok(rt.list_pop(array))
+    }
+
+    pub(crate) fn baml_array_remove_at<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+        index: i64,
+    ) -> Result<Option<E>, Fault> {
+        let Some(index) = resolve_index(index, rt.list_len(array)) else {
+            return Ok(None);
+        };
+        Ok(rt.list_splice(array, index..index + 1, &[]).pop())
+    }
+
+    /// `other` is a `T[]` like the receiver, so it stores elements the same way.
+    pub(crate) fn baml_array_concat<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+        other: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let mut elems = rt.list_to_vec(array);
+        elems.extend(rt.list_to_vec(other));
+        Ok(rt.list_alloc(ListOf::SameAs(array), &elems))
+    }
+
+    pub(crate) fn baml_array_reverse<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let mut elems = rt.list_to_vec(array);
+        elems.reverse();
+        Ok(rt.list_alloc(ListOf::SameAs(array), &elems))
+    }
+
+    pub(crate) fn baml_array_slice<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+        start: i64,
+        end: i64,
+    ) -> Result<ObjPtr, Fault> {
+        let elems = rt.list_to_vec(array);
+        let range = slice_bounds(start, end, elems.len());
+        Ok(rt.list_alloc(ListOf::SameAs(array), &elems[range]))
+    }
+
+    pub(crate) fn baml_array_clear<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+    ) -> Result<(), Fault> {
+        rt.list_splice(array, 0..usize::MAX, &[]);
+        Ok(())
+    }
+
+    pub(crate) fn baml_array_shift<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+    ) -> Result<Option<E>, Fault> {
+        Ok(rt.list_splice(array, 0..1, &[]).pop())
+    }
+
+    /// Prepends `item`; returns the new length.
+    pub(crate) fn baml_array_unshift<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+        item: E,
+    ) -> Result<i64, Fault> {
+        rt.list_splice(array, 0..0, &[item]);
+        Ok(int_len(rt.list_len(array)))
+    }
+
+    pub(crate) fn baml_array_insert<R: Lists<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+        item: E,
+        idx: i64,
+    ) -> Result<i64, Fault> {
+        let len = rt.list_len(array);
+        // A negative `idx` counts from the end; `[0, len]` is the valid range
+        // (inserting at `len` appends).
+        let Some(at) = resolve_insert_index(idx, len) else {
+            return Err(Fault::InvalidArgument {
+                message: format!("array.insert: idx ({idx}) is out of range for length {len}"),
+            });
+        };
+        rt.list_splice(array, at..at, &[item]);
+        Ok(int_len(rt.list_len(array)))
+    }
+
+    /// Joins scalars and strings; any other element may have a `to_string`
+    /// override, so the body defers to [`baml_array_join_yielding`].
+    pub(crate) fn baml_array_join<R: Lists<E> + Strings + Slots<E>, E: Elem>(
+        rt: &mut R,
+        array: ObjPtr,
+        separator: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let slot = rt.shape(array).list_elem()?;
+        let elems = rt.list_to_vec(array);
+        let view: &R = rt;
+        let parts = elems
+            .into_iter()
+            .map(|elem| plain_text(view, view.to_tagged(elem, slot)))
+            .collect::<Result<Vec<String>, Fault>>()?;
+        let joined = parts.join(rt.str_text(separator));
+        Ok(rt.str_alloc(&joined))
+    }
+
+    /// A scalar or string as `join` renders it.
+    fn plain_text<R: Strings + ?Sized>(rt: &R, value: Tagged) -> Result<String, Fault> {
+        if let Some(text) = crate::package_baml::root::scalar_text(value) {
+            return Ok(text);
+        }
+        match value {
+            Tagged::Ptr(ptr) if rt.shape(ptr) == Shape::Str => Ok(rt.str_text(ptr).to_string()),
+            _ => Err(Fault::NeedsVm(NeedsVm::Render)),
+        }
+    }
+
+    /// `join` honoring `to_string` overrides, which yields to each override.
+    pub(crate) fn baml_array_join_yielding(
+        vm: &mut BexVm,
+        args: &[Value],
+        _locality: Locality,
+    ) -> NativeCallResult {
+        let elements = match vm.as_array(&args[0]) {
+            Ok(array) => array.to_vec(),
+            Err(error) => return NativeCallResult::Error(error.into()),
+        };
+        let separator = match vm.as_string(&args[1]) {
+            Ok(separator) => separator.as_str().to_owned(),
+            Err(error) => return NativeCallResult::Error(error.into()),
+        };
+        crate::package_baml::root::join_honoring_overrides(vm, elements, separator)
     }
 }

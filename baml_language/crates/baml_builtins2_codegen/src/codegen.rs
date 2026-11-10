@@ -822,12 +822,27 @@ fn emit_class_trait(
     emit_native_naming_allowance(out);
     writeln!(out, "pub trait {trait_name} {{").unwrap();
 
-    for entry in entries {
-        emit_required_method(out, &entry.rust_method_name, entry.builtin);
+    // A builtin with a shared-format adapter has one generic body; its glue
+    // instantiates that body over the interpreter's `ValueModel`, so the
+    // trait requires no `Value` body for it.
+    let model_glue: Vec<Option<String>> = entries
+        .iter()
+        .map(|entry| {
+            crate::codegen_adapters::value_glue_methods(entry.builtin, &entry.rust_method_name)
+        })
+        .collect();
+    for (entry, glue) in entries.iter().zip(&model_glue) {
+        if glue.is_none() {
+            emit_required_method(out, &entry.rust_method_name, entry.builtin);
+        }
     }
     out.push('\n');
 
-    for entry in entries {
+    for (entry, glue) in entries.iter().zip(&model_glue) {
+        if let Some(glue) = glue {
+            out.push_str(glue);
+            continue;
+        }
         emit_glue_method(out, trait_name, &entry.rust_method_name, entry.builtin);
         if entry.builtin.local_twin {
             emit_thread_local_twin(out, trait_name, &entry.rust_method_name, entry.builtin);
@@ -2448,8 +2463,8 @@ mod tests {
             generate_native_trait_for("reflect", &reflect_builtins, &reflect_class_defs);
 
         assert!(
-            output.contains("fn length(array: ArrayView<'_>) -> i64;"),
-            "BamlClassArray should have bare `length` method:\n{output}"
+            output.contains("fn filled(length: i64, value: &Value) -> Vec<Value>;"),
+            "BamlClassArray should have bare `filled` method:\n{output}"
         );
         assert!(
             output.contains("fn to_lower_case(string: &bex_str::BexStr) -> bex_str::BexStr;"),
@@ -2544,18 +2559,32 @@ mod tests {
     }
 
     #[test]
-    fn test_array_push_mut_receiver() {
+    fn test_array_splice_mut_receiver() {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn push(array: &mut Vec<Value>, item: &Value)"),
-            "Array.push should have &mut Vec<Value> receiver:\n{output}"
+            output.contains("fn splice(\n        array: &mut Vec<Value>,")
+                || output.contains("fn splice(array: &mut Vec<Value>,"),
+            "Array.splice should have &mut Vec<Value> receiver:\n{output}"
         );
         assert!(
-            !output.contains("fn push(vm: &mut BexVm,"),
-            "Array.push should NOT have vm as first param:\n{output}"
+            !output.contains("fn splice(vm: &mut BexVm,"),
+            "Array.splice should NOT have vm as first param:\n{output}"
         );
+    }
+
+    /// An adapter builtin's glue calls its one generic body through the
+    /// interpreter's value model, and the trait requires no `Value` body.
+    #[test]
+    fn test_adapter_builtins_glue_through_the_value_model() {
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(!output.contains("fn push(array: &mut Vec<Value>, item: &Value)"));
+        assert!(output.contains("crate::package_baml::bodies::baml_array_push::<"));
+        assert!(output.contains("fn __glue_push__local("));
+        assert!(output.contains("Some(crate::package_baml::bodies::baml_map_get_yielding)"));
     }
 
     #[test]
@@ -2563,7 +2592,11 @@ mod tests {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
-        for b in &builtins {
+        // Builtins with a shared-format adapter have no `Value` trait method.
+        let value_bodied = builtins
+            .iter()
+            .filter(|b| !crate::triage::row_for(&b.path).is_some_and(|row| row.form.has_adapter()));
+        for b in value_bodied {
             let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
             let segments: Vec<&str> = rest.split('.').collect();
             let baml_name = segments.last().unwrap();

@@ -244,13 +244,20 @@ mod tests {
         }
     }
 
-    /// Every builtin the escape analysis models gets an adapter.
+    /// Every builtin the escape analysis models gets an adapter, except
+    /// those that call back into BAML: their interpreter body is a yielding
+    /// continuation that a synchronous generic body cannot replace yet.
     #[test]
     fn every_escape_modelled_builtin_has_an_adapter() {
         let missing: Vec<&str> = crate::escape_modeled::ESCAPE_MODELED
             .iter()
             .copied()
-            .filter(|path| !row_for(path).is_some_and(|row| row.form.has_adapter()))
+            .filter(|path| {
+                !row_for(path).is_some_and(|row| {
+                    row.form.has_adapter()
+                        || row.form == AdapterForm::Pending(PendingReason::Callback)
+                })
+            })
             .collect();
         assert!(missing.is_empty(), "no adapter for {missing:?}");
     }

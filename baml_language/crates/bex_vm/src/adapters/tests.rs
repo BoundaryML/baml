@@ -6,17 +6,15 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     Object, RealizedTy, Value, ValueKind,
     errors::{VmInternalError, VmRustFnError},
-    layout::{Elem, Fault, Kind, ListOf, NeedsVm, ObjPtr, RawKind, SlotKind, Strings, Tagged},
+    layout::{Fault, Kind, NeedsVm, ObjPtr, RawKind, SlotKind, Slots, Strings, Tagged},
     types::ObjectType,
 };
 use indexmap::IndexMap;
 
-use super::{
-    generated as adapters,
-    vm_model::{VmModel, obj_ptr, ptr_value, vm_error},
-};
+use super::generated as adapters;
 use crate::{
     BexVm,
+    package_baml::value_model::{ValueModel, obj_ptr, ptr_value, vm_error},
     package_baml::{
         BamlClassArray, BamlClassMap, BamlClassOpsEquals_for_string, BamlClassString,
         NativeCallResult, PackageBamlImpl,
@@ -232,7 +230,7 @@ fn adapter_outcome(vm: &BexVm, result: Result<Value, Fault>) -> Outcome {
 // ── Cases ────────────────────────────────────────────────────────────────
 
 type Glue = fn(&mut BexVm, &[Value]) -> NativeCallResult;
-type Adapter = fn(&mut VmModel<'_>, &[Value]) -> Result<Value, Fault>;
+type Adapter = fn(&mut ValueModel<'_>, &[Value]) -> Result<Value, Fault>;
 
 /// An argument after the receiver.
 #[derive(Clone, Copy, Debug)]
@@ -299,7 +297,7 @@ fn int(value: Value) -> i64 {
     value.as_int().expect("an int argument")
 }
 
-fn opt(m: &mut VmModel<'_>, value: Option<Tagged>) -> Value {
+fn opt(m: &mut ValueModel<'_>, value: Option<Tagged>) -> Value {
     m.value(value.unwrap_or(Tagged::Null))
 }
 
@@ -585,7 +583,7 @@ fn run(case: &Case, receiver: &Receiver, args: &[Arg]) -> [(Outcome, String); 2]
     let mut vm = test_vm(Vec::new());
     let vm_side = run_vm(&mut vm, case, receiver, args);
     let adapter_args = build_args(&mut vm, receiver, args);
-    let adapter_result = (case.adapter)(&mut VmModel::new(&mut vm), &adapter_args);
+    let adapter_result = (case.adapter)(&mut ValueModel::typed(&mut vm), &adapter_args);
     let adapter_side = (
         adapter_outcome(&vm, adapter_result),
         dump(&vm, adapter_args[0]),
@@ -652,14 +650,12 @@ fn string_adapters_match_the_vm() {
     assert!(runs > 40, "{runs}");
 }
 
-/// The differential cases above plus `Array.map` cover every generated
-/// adapter.
+/// The differential cases above cover every generated adapter.
 #[test]
 fn every_generated_adapter_has_a_differential_case() {
     let mut tested: Vec<&str> = [LIST_CASES, MAP_CASES, STRING_CASES]
         .iter()
         .flat_map(|cases| cases.iter().map(|case| case.path))
-        .chain(["baml.Array.map"])
         .collect();
     tested.sort_unstable();
     let mut generated = adapters::ADAPTER_PATHS.to_vec();
@@ -667,11 +663,11 @@ fn every_generated_adapter_has_a_differential_case() {
     assert_eq!(tested, generated);
 }
 
-// ── Array.map: the VM's continuation driven with the same callee ─────────
+// ── Array.map: the VM's continuation, answered by a Rust callee ──────────
 
-/// The callee both sides use: scale numbers, negate bools, suffix strings.
+/// A callee: scale numbers, negate bools, suffix strings.
 fn callee(vm: &mut BexVm, value: Value) -> Value {
-    let tagged = VmModel::new(vm).tagged(value);
+    let tagged = ValueModel::new(vm).tagged(value);
     let result = match tagged {
         Tagged::Null => Tagged::Int(0),
         Tagged::Int(int) => Tagged::Int(int * 10),
@@ -682,7 +678,7 @@ fn callee(vm: &mut BexVm, value: Value) -> Value {
             return Value::object(vm.alloc_string(text));
         }
     };
-    VmModel::new(vm).value(result)
+    ValueModel::new(vm).value(result)
 }
 
 /// Run the VM's `Array.map`, answering each yield with [`callee`].
@@ -703,55 +699,6 @@ fn vm_map(vm: &mut BexVm, array: Value) -> Value {
     }
 }
 
-#[test]
-fn array_map_matches_the_vm_on_every_slot_kind() {
-    for fixture in LISTS {
-        let mut vm = test_vm(Vec::new());
-        let vm_array = list(&mut vm, fixture);
-        let expected = vm_map(&mut vm, vm_array);
-        let expected = dump(&vm, expected);
-
-        let array = ptr(list(&mut vm, fixture));
-        let mut model = VmModel::new(&mut vm);
-        let out = ListOf::Described(model.describe(RealizedTy::unknown()));
-        let mut f = |m: &mut VmModel<'_>, elem: Tagged| -> Result<Tagged, Fault> {
-            let value = m.value(elem);
-            let mapped = callee(m.vm(), value);
-            Ok(m.tagged(mapped))
-        };
-        let mapped = adapters::baml_array_map(&mut model, array, &mut f, out).unwrap();
-        assert_eq!(
-            dump(&vm, ptr_value(mapped)),
-            expected,
-            "{:?}",
-            fixture.elems
-        );
-    }
-}
-
-#[test]
-fn array_map_stops_at_the_first_callback_fault() {
-    let mut vm = test_vm(Vec::new());
-    let array = ptr(list(&mut vm, &LISTS[0]));
-    let mut model = VmModel::new(&mut vm);
-    let out = ListOf::Described(model.describe(RealizedTy::int()));
-    let mut calls = 0;
-    let mut f = |_: &mut VmModel<'_>, _: Tagged| -> Result<Tagged, Fault> {
-        calls += 1;
-        Err(Fault::InvalidArgument {
-            message: "stop".into(),
-        })
-    };
-    let result = adapters::baml_array_map(&mut model, array, &mut f, out);
-    assert_eq!(
-        result,
-        Err(Fault::InvalidArgument {
-            message: "stop".into()
-        })
-    );
-    assert_eq!(calls, 1);
-}
-
 // ── Specialized entry points, called directly by slot kind ───────────────
 
 #[test]
@@ -761,7 +708,7 @@ fn specialized_list_adapters_take_the_slot_representation() {
     let strings = ptr(list(&mut vm, &LISTS[4]));
     let optionals = ptr(list(&mut vm, &LISTS[5]));
     let z = obj_ptr(lit(&mut vm, Lit::Str("z")));
-    let mut m = VmModel::new(&mut vm);
+    let mut m = ValueModel::typed(&mut vm);
 
     let seven = bex_vm_types::layout::RawWord::from_int(7);
     assert_eq!(adapters::baml_array_push_raw8(&mut m, ints, seven), Ok(4));
@@ -803,7 +750,7 @@ fn specialized_map_adapters_take_the_slot_representation() {
     let optionals = ptr(map(&mut vm, &MAPS[3]));
     let key = obj_ptr(lit(&mut vm, Lit::Str("a")));
     let w = obj_ptr(lit(&mut vm, Lit::Str("w")));
-    let mut m = VmModel::new(&mut vm);
+    let mut m = ValueModel::typed(&mut vm);
     let one = bex_vm_types::layout::RawWord::from_int(1);
     let nine = bex_vm_types::layout::RawWord::from_int(9);
 
@@ -849,7 +796,7 @@ fn specialized_string_adapters_take_pointers() {
     let mut vm = test_vm(Vec::new());
     let hello = obj_ptr(lit(&mut vm, Lit::Str("héllo")));
     let other = obj_ptr(lit(&mut vm, Lit::Str("héllo")));
-    let mut m = VmModel::new(&mut vm);
+    let mut m = ValueModel::typed(&mut vm);
     assert_eq!(adapters::baml_string_char_count_ptr(&mut m, hello), Ok(5));
     assert_eq!(
         adapters::baml_ops_equals_for_string_eq_ptr(&mut m, hello, other),
@@ -865,7 +812,7 @@ fn specialized_string_adapters_take_pointers() {
 fn a_non_string_map_key_defers_to_the_vm() {
     let mut vm = test_vm(Vec::new());
     let ints = ptr(map(&mut vm, &MAPS[0]));
-    let mut m = VmModel::new(&mut vm);
+    let mut m = ValueModel::typed(&mut vm);
     assert_eq!(
         adapters::baml_map_get(&mut m, ints, Tagged::Int(1)),
         Err(Fault::NeedsVm(NeedsVm::KeyHash))
@@ -878,7 +825,7 @@ fn joining_a_non_string_object_defers_to_the_vm() {
     let inner = list(&mut vm, &LISTS[0]);
     let nested = Value::object(vm.alloc_array(RealizedTy::unknown(), vec![inner]));
     let separator = obj_ptr(lit(&mut vm, Lit::Str(",")));
-    let mut m = VmModel::new(&mut vm);
+    let mut m = ValueModel::typed(&mut vm);
     assert_eq!(
         adapters::baml_array_join(&mut m, ptr(nested), separator),
         Err(Fault::NeedsVm(NeedsVm::Render))
@@ -891,7 +838,7 @@ fn a_receiver_of_another_kind_is_rejected_like_the_vm() {
     let text = lit(&mut vm, Lit::Str("not a list"));
     let vm_result = <PackageBamlImpl as BamlClassArray>::__glue_length(&mut vm, &[text]);
     let vm_side = vm_outcome(&vm, vm_result);
-    let mut m = VmModel::new(&mut vm);
+    let mut m = ValueModel::typed(&mut vm);
     let fault = adapters::baml_array_length(&mut m, ptr(text)).unwrap_err();
     assert_eq!(
         fault,
@@ -907,7 +854,7 @@ fn a_receiver_of_another_kind_is_rejected_like_the_vm() {
 fn a_generic_argument_must_fit_the_receiver_slot() {
     let mut vm = test_vm(Vec::new());
     let ints = ptr(list(&mut vm, &LISTS[0]));
-    let mut m = VmModel::new(&mut vm);
+    let mut m = ValueModel::typed(&mut vm);
     let slot = SlotKind::Raw(RawKind::Int);
     assert_eq!(
         adapters::baml_array_push(&mut m, ints, Tagged::Bool(true)),
@@ -916,7 +863,7 @@ fn a_generic_argument_must_fit_the_receiver_slot() {
             value: Tagged::Bool(true)
         })
     );
-    assert!(<ObjPtr as Elem>::from_tagged(Tagged::Int(1), SlotKind::Ptr).is_err());
+    assert!(Slots::<ObjPtr>::untag(&mut (), Tagged::Int(1), SlotKind::Ptr).is_err());
 }
 
 // ── Interpreter outputs pinned across the move to shared bodies ──────────
@@ -936,45 +883,49 @@ fn string_receivers() -> Vec<Receiver> {
         .collect()
 }
 
+/// One recorded line: the glue's outcome and the receiver afterwards.
+fn record_case(case: &Case, receiver: &Receiver, args: &[Arg]) -> String {
+    let mut vm = test_vm(Vec::new());
+    let (outcome, after) = run_vm(&mut vm, case, receiver, args);
+    let name = &receiver.name;
+    format!("{} {name} {args:?} => {outcome:?} | {after}", case.path)
+}
+
+/// `Array.map`'s continuation over one fixture.
+fn record_map(fixture: &Fixture) -> String {
+    let mut vm = test_vm(Vec::new());
+    let array = list(&mut vm, fixture);
+    let mapped = vm_map(&mut vm, array);
+    format!(
+        "baml.Array.map {:?} => {}",
+        fixture.elems,
+        dump(&vm, mapped)
+    )
+}
+
 fn record_vm_glue() -> String {
     let suites = [
         (LIST_CASES, fixture_receivers(LISTS, list)),
         (MAP_CASES, fixture_receivers(MAPS, map)),
         (STRING_CASES, string_receivers()),
     ];
-    let mut lines = Vec::new();
-    for (cases, receivers) in &suites {
-        for case in *cases {
-            for receiver in receivers {
-                for args in arg_lists(case.args) {
-                    let mut vm = test_vm(Vec::new());
-                    let (outcome, after) = run_vm(&mut vm, case, receiver, &args);
-                    let name = &receiver.name;
-                    lines.push(format!(
-                        "{} {name} {args:?} => {outcome:?} | {after}",
-                        case.path
-                    ));
-                }
-            }
-        }
-    }
-    for fixture in LISTS {
-        let mut vm = test_vm(Vec::new());
-        let array = list(&mut vm, fixture);
-        let mapped = vm_map(&mut vm, array);
-        lines.push(format!(
-            "baml.Array.map {:?} => {}",
-            fixture.elems,
-            dump(&vm, mapped)
-        ));
-    }
+    let runs = suites.iter().flat_map(|(cases, receivers)| {
+        cases.iter().flat_map(move |case| {
+            receivers.iter().flat_map(move |receiver| {
+                arg_lists(case.args)
+                    .into_iter()
+                    .map(move |args| record_case(case, receiver, &args))
+            })
+        })
+    });
+    let lines: Vec<String> = runs.chain(LISTS.iter().map(record_map)).collect();
     lines.join("\n") + "\n"
 }
 
 #[test]
 fn vm_glue_outputs_are_unchanged() {
     let actual = record_vm_glue();
-    if std::env::var_os("BLESS_VM_GLUE").is_some() {
+    if baml_env::os_var("BLESS_VM_GLUE").is_some() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/adapters/vm_glue_golden.txt"

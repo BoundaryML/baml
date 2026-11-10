@@ -1,26 +1,18 @@
+use std::ops::Range;
+
 use bex_str::BexStr;
-use bex_vm_types::types::Value;
+use bex_vm_types::{
+    layout::{Fault, ListOf, Lists, ObjPtr, RawWord, Strings},
+    types::Value,
+};
 
 use super::{BamlClassString, PackageBamlImpl};
 use crate::{
-    array_index::{resolve_index, resolve_slice_bound},
+    array_index::{int_len, resolve_index, slice_bounds},
     errors::{VmBamlError, VmRustFnError},
 };
 
-fn char_substrings(string: &BexStr) -> Vec<BexStr> {
-    string
-        .as_str()
-        .char_indices()
-        .map(|(start, ch)| string.byte_slice(start..start + ch.len_utf8()))
-        .collect()
-}
-
 impl BamlClassString for PackageBamlImpl {
-    #[expect(clippy::cast_possible_wrap)]
-    fn char_count(string: &BexStr) -> i64 {
-        string.char_len() as i64
-    }
-
     #[expect(clippy::cast_possible_wrap)]
     fn byte_length(string: &BexStr) -> i64 {
         string.byte_len() as i64
@@ -75,47 +67,6 @@ impl BamlClassString for PackageBamlImpl {
     fn ends_with(string: &BexStr, suffix: &BexStr) -> bool {
         string.as_str().ends_with(suffix.as_str())
     }
-
-    // Zero-copy: each segment is a zero-copy substring Slice into the original.
-    fn split(string: &BexStr, delimiter: &BexStr) -> Vec<BexStr> {
-        let s = string.as_str();
-        let d = delimiter.as_str();
-        if d.is_empty() {
-            return char_substrings(string);
-        }
-        let base = s.as_ptr() as usize;
-        s.split(d)
-            .map(|part| {
-                let start = part.as_ptr() as usize - base;
-                string.byte_slice(start..start + part.len())
-            })
-            .collect()
-    }
-
-    fn chars(string: &BexStr) -> Vec<BexStr> {
-        char_substrings(string)
-    }
-
-    fn lines(string: &BexStr) -> Vec<BexStr> {
-        let s = string.as_str();
-        let base = s.as_ptr() as usize;
-        s.lines()
-            .map(|line| {
-                let start = line.as_ptr() as usize - base;
-                string.byte_slice(start..start + line.len())
-            })
-            .collect()
-    }
-
-    fn slice(string: &BexStr, start: i64, end: i64) -> BexStr {
-        // Codepoint-indexed, not byte-indexed; a negative index counts from the end.
-        let len = string.char_len();
-        let start = resolve_slice_bound(start, len);
-        // An `end` resolving before `start` yields an empty string.
-        let end = resolve_slice_bound(end, len).max(start);
-        string.char_slice(start..end)
-    }
-
     fn _replace_literal(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
         BexStr::from(
             string
@@ -249,11 +200,6 @@ impl BamlClassString for PackageBamlImpl {
     fn is_ascii_hex(string: &BexStr) -> bool {
         string.as_str().chars().all(|c| c.is_ascii_hexdigit())
     }
-
-    fn to_utf8(string: &BexStr) -> Vec<u8> {
-        string.as_bytes().to_vec()
-    }
-
     fn from_utf8(utf8: &[u8]) -> Result<BexStr, VmRustFnError> {
         std::str::from_utf8(utf8).map(BexStr::from).map_err(|e| {
             VmBamlError::InvalidArgument {
@@ -265,17 +211,6 @@ impl BamlClassString for PackageBamlImpl {
             .into()
         })
     }
-
-    fn to_code_points(string: &BexStr) -> Vec<Value> {
-        // The exact inverse of `from_code_points`: one `int` per character. Each
-        // `char` is in `[0, 0x10FFFF]`, so `Value::int` is always in range.
-        string
-            .as_str()
-            .chars()
-            .map(|c| Value::int(i64::from(u32::from(c))))
-            .collect()
-    }
-
     fn from_code_points(unicode: &[Value]) -> Result<BexStr, VmRustFnError> {
         let mut result = String::with_capacity(unicode.len());
         for (i, val) in unicode.iter().enumerate() {
@@ -297,5 +232,127 @@ impl BamlClassString for PackageBamlImpl {
             result.push(cp);
         }
         Ok(BexStr::from(result))
+    }
+}
+
+// ── Bodies shared by the interpreter and the shared-format adapters ──────
+//
+// The interpreter's glue runs them over `value_model::ValueModel`; generated
+// adapters run them over any runtime. Substrings share the receiver's
+// storage where the runtime allows (`Strings::str_substring`).
+pub(crate) mod shared {
+    #![allow(
+        clippy::unnecessary_wraps,
+        reason = "one calling convention for every body: generated glue and adapters call \
+                  each `fn(&mut R, ...) -> Result<_, Fault>` alike"
+    )]
+
+    use super::{Fault, ListOf, Lists, ObjPtr, Range, RawWord, Strings, int_len, slice_bounds};
+
+    /// The byte range of `part` within `text`, which it borrows from.
+    fn byte_range(text: &str, part: &str) -> Range<usize> {
+        let start = part.as_ptr() as usize - text.as_ptr() as usize;
+        start..start + part.len()
+    }
+
+    /// The byte range of each character of `text`.
+    fn char_ranges(text: &str) -> Vec<Range<usize>> {
+        text.char_indices()
+            .map(|(start, ch)| start..start + ch.len_utf8())
+            .collect()
+    }
+
+    /// A `string[]` of the substrings of `string` at `ranges`.
+    fn substrings<R: Strings + Lists<ObjPtr>>(
+        rt: &mut R,
+        string: ObjPtr,
+        ranges: Vec<Range<usize>>,
+    ) -> ObjPtr {
+        let parts: Vec<ObjPtr> = ranges
+            .into_iter()
+            .map(|range| rt.str_substring(string, range))
+            .collect();
+        rt.list_alloc(ListOf::Strings, &parts)
+    }
+
+    pub(crate) fn baml_string_char_count<R: Strings>(
+        rt: &mut R,
+        string: ObjPtr,
+    ) -> Result<i64, Fault> {
+        Ok(int_len(rt.str_char_len(string)))
+    }
+
+    /// An empty delimiter splits into characters.
+    pub(crate) fn baml_string_split<R: Strings + Lists<ObjPtr>>(
+        rt: &mut R,
+        string: ObjPtr,
+        delimiter: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let text = rt.str_text(string);
+        let delimiter = rt.str_text(delimiter);
+        let ranges = if delimiter.is_empty() {
+            char_ranges(text)
+        } else {
+            text.split(delimiter)
+                .map(|part| byte_range(text, part))
+                .collect()
+        };
+        Ok(substrings(rt, string, ranges))
+    }
+
+    pub(crate) fn baml_string_chars<R: Strings + Lists<ObjPtr>>(
+        rt: &mut R,
+        string: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let ranges = char_ranges(rt.str_text(string));
+        Ok(substrings(rt, string, ranges))
+    }
+
+    pub(crate) fn baml_string_lines<R: Strings + Lists<ObjPtr>>(
+        rt: &mut R,
+        string: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let text = rt.str_text(string);
+        let ranges = text.lines().map(|line| byte_range(text, line)).collect();
+        Ok(substrings(rt, string, ranges))
+    }
+
+    /// Codepoint-indexed, not byte-indexed; a negative index counts from the end.
+    pub(crate) fn baml_string_slice<R: Strings>(
+        rt: &mut R,
+        string: ObjPtr,
+        start: i64,
+        end: i64,
+    ) -> Result<ObjPtr, Fault> {
+        let chars = slice_bounds(start, end, rt.str_char_len(string));
+        let text = rt.str_text(string);
+        let byte_at = |char_index: usize| {
+            text.char_indices()
+                .nth(char_index)
+                .map_or(text.len(), |(byte, _)| byte)
+        };
+        let bytes = byte_at(chars.start)..byte_at(chars.end);
+        Ok(rt.str_substring(string, bytes))
+    }
+
+    pub(crate) fn baml_string_to_utf8<R: Strings>(
+        rt: &mut R,
+        string: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let bytes = rt.str_text(string).as_bytes().to_vec();
+        Ok(rt.bytes_alloc(&bytes))
+    }
+
+    /// One `int` per character: the inverse of `from_code_points`.
+    pub(crate) fn baml_string_to_code_points<R: Strings + Lists<RawWord>>(
+        rt: &mut R,
+        string: ObjPtr,
+    ) -> Result<ObjPtr, Fault> {
+        let points: Vec<RawWord> = rt
+            .str_text(string)
+            .chars()
+            .map(|ch| RawWord::from_int(i64::from(u32::from(ch))))
+            .collect();
+        Ok(rt.list_alloc(ListOf::Ints, &points))
     }
 }

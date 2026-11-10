@@ -63,7 +63,7 @@ pub(crate) const ROWS: &[TriageRow] = &[
         Pending(OutsideV1Set),
     ),
     row("baml.Array.length", Collection, Specialized),
-    row("baml.Array.map", VmInternal, Generic),
+    row("baml.Array.map", VmInternal, Pending(Callback)),
     row("baml.Array.pop", Collection, Specialized),
     row("baml.Array.push", Collection, Specialized),
     row("baml.Array.reduce", VmInternal, Pending(Callback)),
