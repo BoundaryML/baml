@@ -2335,7 +2335,7 @@ export default function Tracker({
           {!still && (
             <button
               aria-hidden={!done}
-              className="focus-ring absolute right-2 bottom-2 sm:right-auto sm:left-(--tracker-pad) sm:bottom-3 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-(--ds-line) px-3 py-1 text-[12.5px] text-(--ds-ink)/75 transition-[opacity,color,border-color] duration-500 hover:border-(--ds-accent) hover:text-(--ds-accent-ink)"
+              className="focus-ring absolute right-2 bottom-2 sm:right-auto sm:left-(--tracker-pad) sm:bottom-3 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-(--ds-line) px-3 py-1 pointer-coarse:py-2.5 text-[12.5px] text-(--ds-ink)/75 transition-[opacity,color,border-color] duration-500 hover:border-(--ds-accent) hover:text-(--ds-accent-ink)"
               onClick={() => {
                 if (!done) return;
                 root.current?.focus({ preventScroll: true });
