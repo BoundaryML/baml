@@ -252,25 +252,30 @@ function TsText({ line }: { line: string }) {
  *  line in. The original lines keep a clover tint, so they stay findable, and the tracing is muted. */
 function TsCode({ level }: { level: number }) {
   return (
-    <div className="py-3 font-mono text-[12.5px] text-[#BDBDC4]">
-      {TS.map((l, i) => {
-        const shown = l.at === 0 ? 1 : ramp(level, l.at - 1, l.at);
-        const indent = level > 0.5 ? l.d : (l.d0 ?? l.d);
-        return (
-          <div
-            className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'bg-clover/14 text-white' : 'text-white/35'}`}
-            // biome-ignore lint/suspicious/noArrayIndexKey: fixed listing
-            key={i}
-            style={{
-              height: `calc(${ROW} * ${shown})`,
-              opacity: shown,
-              paddingLeft: `calc(1rem + ${indent * 2}ch)`,
-            }}
-          >
-            {l.k === 'logic' ? <TsText line={l.s} /> : l.s}
-          </div>
-        );
-      })}
+    // On a phone the longest lines are wider than the panel. The listing scrolls sideways there
+    // rather than cutting them off; the inner block is as wide as the longest line, so every
+    // row's tint runs the whole way across.
+    <div className="code-pane py-3 font-mono text-[12.5px] text-[#BDBDC4]">
+      <div className="w-max min-w-full">
+        {TS.map((l, i) => {
+          const shown = l.at === 0 ? 1 : ramp(level, l.at - 1, l.at);
+          const indent = level > 0.5 ? l.d : (l.d0 ?? l.d);
+          return (
+            <div
+              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'bg-clover/14 text-white' : 'text-white/35'}`}
+              // biome-ignore lint/suspicious/noArrayIndexKey: fixed listing
+              key={i}
+              style={{
+                height: `calc(${ROW} * ${shown})`,
+                opacity: shown,
+                paddingLeft: `calc(1rem + ${indent * 2}ch)`,
+              }}
+            >
+              {l.k === 'logic' ? <TsText line={l.s} /> : l.s}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -284,23 +289,26 @@ const dim = (hot: string | null, group: string | null) =>
 
 function BamlCode({ hot, onHot }: Hover) {
   return (
-    <div className="py-3 font-mono text-[12.5px] text-[#BDBDC4]">
-      {BAML.map((l, i) => {
-        const group = BAML_GROUPS[i];
-        return (
-          <div
-            className={`flex items-center whitespace-pre px-4 text-white transition-[background-color,opacity] duration-150 ${hot !== null && group === hot ? 'bg-clover/30' : 'bg-clover/14'}`}
-            key={l}
-            onMouseEnter={() => onHot(group)}
-            onMouseLeave={() => onHot(null)}
-            style={{ height: ROW, opacity: dim(hot, group) }}
-          >
-            <span>
-              <Highlight line={l} />
-            </span>
-          </div>
-        );
-      })}
+    // Scrolls sideways on a phone, like the TypeScript listing.
+    <div className="code-pane py-3 font-mono text-[12.5px] text-[#BDBDC4]">
+      <div className="w-max min-w-full">
+        {BAML.map((l, i) => {
+          const group = BAML_GROUPS[i];
+          return (
+            <div
+              className={`flex items-center whitespace-pre px-4 text-white transition-[background-color,opacity] duration-150 ${hot !== null && group === hot ? 'bg-clover/30' : 'bg-clover/14'}`}
+              key={l}
+              onMouseEnter={() => onHot(group)}
+              onMouseLeave={() => onHot(null)}
+              style={{ height: ROW, opacity: dim(hot, group) }}
+            >
+              <span>
+                <Highlight line={l} />
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
