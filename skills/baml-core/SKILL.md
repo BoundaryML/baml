@@ -23,13 +23,14 @@ brew install baml                # CLI binary: `baml`
 baml init                        # new project (baml.toml + baml_src/)
 baml help <command>              # CLI options and examples
 baml describe baml.json          # reference for any module/type/method/signature/keyword
-baml describe Array --limit 120 #   (Array, String, Map, assert, match, patterns, spawn, python, ...)
+baml describe Array --limit 120  #   (Array, String, Map, assert, match, patterns, spawn, python, ...)
                                  #   ends with "N more lines"? re-run with `--limit <N>`
 baml check                       # compile-check the project
 baml run -e 'expr'               # eval an expression; fast feedback + syntax check
 baml test --list && baml test    # run every test/testset block
 baml fmt baml_src/main.baml      # canonicalize the project's formatting
 baml codequality --functions     # complexity per function, worst first
+baml <command> --output-format json  # any command: one JSON document on stdout, status on stderr
 ```
 
 `baml describe <name>` prints the **full source body** of stdlib functions. It's the fastest way to verify behavior, and the only path for embedded builtins like `assert` (no on-disk file). Pure functions need no test/client; check them with `baml run -e 'add(2, 3)'`. For anything not shown here (signatures, niche stdlib, advanced features), run `baml describe <name>`; never guess the stdlib.

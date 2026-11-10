@@ -349,6 +349,39 @@ impl Painter {
         crate::output::stderr_painter()
     }
 
+    fn apply(&self, style: Style, text: impl std::fmt::Display) -> String {
+        style.force_styling(self.color).apply_to(text).to_string()
+    }
+
+    /// A section header, in the brand accent.
+    pub fn accent(&self, text: impl std::fmt::Display) -> String {
+        self.apply(crate::reporter::accent_style(), text)
+    }
+
+    /// Secondary text: hints, locations, column headers.
+    pub fn dim(&self, text: impl std::fmt::Display) -> String {
+        self.apply(crate::reporter::secondary_style(), text)
+    }
+
+    pub fn bold(&self, text: impl std::fmt::Display) -> String {
+        self.apply(Style::new().bold(), text)
+    }
+
+    /// A state that is on or healthy.
+    pub fn good(&self, text: impl std::fmt::Display) -> String {
+        self.apply(Style::new().green().bold(), text)
+    }
+
+    /// A state that is off or failing.
+    pub fn bad(&self, text: impl std::fmt::Display) -> String {
+        self.apply(Style::new().red().bold(), text)
+    }
+
+    /// A URL the reader may want to open.
+    pub fn url(&self, text: impl std::fmt::Display) -> String {
+        self.apply(Style::new().cyan(), text)
+    }
+
     /// Whether this stream renders color. Also gates the verbatim-vs-cleaned body
     /// rendering fork in `describe` (a behavior choice, not just a color toggle).
     pub fn enabled(&self) -> bool {

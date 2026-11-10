@@ -1478,6 +1478,7 @@ impl RunArgs {
     /// by default — `--include-generated` shows them.
     fn write_list(
         out: &mut dyn Write,
+        style: &Style,
         functions: &[UserFunctionInfo],
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
@@ -1488,9 +1489,7 @@ impl RunArgs {
         }
         use bex_vm_types::FunctionOrigin;
 
-        let header_style = crate::reporter::accent_style();
-        let dim = crate::reporter::secondary_style();
-        let header = |out: &mut dyn Write, s: &str| writeln!(out, "{}", header_style.apply_to(s));
+        let header = |out: &mut dyn Write, s: &str| writeln!(out, "{}", style.accent(s));
 
         // Visible by default: user-authored entries only. Pass
         // `--include-generated` to expose compiler-synthesized helpers
@@ -1561,7 +1560,7 @@ impl RunArgs {
                     format!("<{}>", func.display_type_params.join(", "))
                 };
                 let suffix = if func.is_llm {
-                    format!("  {}", dim.apply_to("[llm]"))
+                    format!("  {}", style.dim("[llm]"))
                 } else {
                     String::new()
                 };
@@ -1583,7 +1582,7 @@ impl RunArgs {
             writeln!(
                 out,
                 "{}",
-                dim.apply_to(format!(
+                style.dim(format!(
                     "(hiding {} compiler-synthesized function(s); pass --include-generated to show them)",
                     functions.len()
                 ))
@@ -1869,9 +1868,10 @@ impl serde::Serialize for TargetList {
 }
 
 impl Report for TargetList {
-    fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+    fn text(&self, out: &mut dyn Write, style: &Style) -> io::Result<()> {
         RunArgs::write_list(
             out,
+            style,
             &self.functions,
             &self.scripts,
             &self.namespaces,

@@ -11,7 +11,6 @@ use std::{
 
 use anyhow::Result;
 use clap::{Args, ValueEnum};
-use console::style;
 use serde::Serialize;
 
 use crate::{
@@ -80,15 +79,15 @@ pub(crate) struct TelemetryStatus {
 /// Format matches Next.js's `nextTelemetry`: bold header, colored status,
 /// short body, cyan "Learn more" URL.
 impl Report for TelemetryStatus {
-    fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
-        writeln!(out, "{}", style("BAML CLI Telemetry").bold())?;
+    fn text(&self, out: &mut dyn Write, style: &Style) -> io::Result<()> {
+        writeln!(out, "{}", style.bold("BAML CLI Telemetry"))?;
         let status_word = if self.enabled {
-            style("Enabled").green().bold()
+            style.good("Enabled")
         } else {
-            style("Disabled").red().bold()
+            style.bad("Disabled")
         };
         writeln!(out, "\nStatus: {status_word}")?;
-        writeln!(out, "Config: {}", style(self.config.display()).dim())?;
+        writeln!(out, "Config: {}", style.dim(self.config.display()))?;
         if self.enabled {
             writeln!(
                 out,
@@ -101,11 +100,7 @@ impl Report for TelemetryStatus {
                  No data will be collected from your machine."
             )?;
         }
-        writeln!(
-            out,
-            "\nLearn more: {}",
-            style(telemetry::TELEMETRY_URL).cyan()
-        )
+        writeln!(out, "\nLearn more: {}", style.url(telemetry::TELEMETRY_URL))
     }
 }
 

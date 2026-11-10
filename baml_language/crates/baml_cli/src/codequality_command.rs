@@ -14,7 +14,7 @@ use baml_ide::{
     metrics::{FileMetrics, FunctionMetrics, ProjectMetrics, project_metrics},
 };
 use clap::{Args, ValueEnum};
-use console::{Alignment, Style};
+use console::Alignment;
 use num_bigint::BigUint;
 use serde::{Serialize, Serializer};
 
@@ -22,7 +22,7 @@ use crate::{
     output::{Command, CommandContext, Outcome, Report},
     paint::Painter,
     project_session::{CacheUse, ProjectSession},
-    reporter::{Reporter, accent_style, secondary_style},
+    reporter::Reporter,
 };
 
 /// Rows a list view shows without `--all`.
@@ -394,7 +394,7 @@ impl View {
             let total: BigUint = self.metrics.files.iter().map(|f| m.of_file(f)).sum();
             vec![m.label(), count(&total)]
         }));
-        writeln!(w, "{}", styles.header.apply_to("Overview"))?;
+        writeln!(w, "{}", painter.accent("Overview"))?;
         styles.table(w, None, &overview, &[0])?;
         writeln!(w)?;
 
@@ -413,12 +413,12 @@ impl View {
                     average(functions, m),
                     maximum(functions, m),
                     name,
-                    styles.dim.apply_to(location).to_string(),
+                    painter.dim(location),
                 ]
             })
             .collect();
         if !spread.is_empty() {
-            writeln!(w, "{}", styles.header.apply_to("Complexity"))?;
+            writeln!(w, "{}", painter.accent("Complexity"))?;
             let header = ["", "total", "avg", "max", "worst", ""].map(String::from);
             styles.table(w, Some(&header[..]), &spread, &[0, 4, 5])?;
             writeln!(w)?;
@@ -491,9 +491,7 @@ impl View {
         writeln!(
             w,
             "{}",
-            styles
-                .header
-                .apply_to(format!("Files, worst {} first", first.label()))
+            painter.accent(format!("Files, worst {} first", first.label()))
         )?;
         let file_column = header.len() - 1;
         styles.table(w, Some(header.as_slice()), &cells, &[file_column])?;
@@ -533,7 +531,7 @@ impl View {
                 let mut row: Vec<String> =
                     metrics.iter().map(|m| count(&m.of_function(f))).collect();
                 row.push(Self::name(painter, f));
-                row.push(styles.dim.apply_to(self.location(painter, f)).to_string());
+                row.push(painter.dim(self.location(painter, f)));
                 row
             })
             .collect();
@@ -541,9 +539,7 @@ impl View {
         writeln!(
             w,
             "{}",
-            styles
-                .header
-                .apply_to(format!("Functions, worst {} first", first.label()))
+            painter.accent(format!("Functions, worst {} first", first.label()))
         )?;
         let name_column = header.len() - 2;
         styles.table(
@@ -602,19 +598,14 @@ struct FileRow {
     test_lines: u32,
 }
 
-/// The styles one render uses, colored only when its stream is.
-struct Styles {
-    header: Style,
-    dim: Style,
+/// The table layout one render uses, styled by its stream's painter.
+struct Styles<'a> {
+    painter: &'a Painter,
 }
 
-impl Styles {
-    fn new(painter: &Painter) -> Self {
-        let color = painter.enabled();
-        Self {
-            header: accent_style().force_styling(color),
-            dim: secondary_style().force_styling(color),
-        }
+impl<'a> Styles<'a> {
+    fn new(painter: &'a Painter) -> Self {
+        Self { painter }
     }
 
     /// An indented table: the dim header row if any, then each row, every
@@ -652,7 +643,7 @@ impl Styles {
             cells.join("  ").trim_end().to_owned()
         };
         if let Some(header) = header {
-            writeln!(w, "  {}", self.dim.apply_to(line(header)))?;
+            writeln!(w, "  {}", self.painter.dim(line(header)))?;
         }
         for row in rows {
             writeln!(w, "  {}", line(row))?;
@@ -678,7 +669,7 @@ impl Styles {
     }
 
     fn hint(&self, w: &mut impl Write, text: &str) -> std::io::Result<()> {
-        writeln!(w, "{}", self.dim.apply_to(text))
+        writeln!(w, "{}", self.painter.dim(text))
     }
 }
 

@@ -175,10 +175,12 @@ fn jsonl_unsupported() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    /// Only the dispatcher writes stdout. `log_output` is the one other
-    /// writer: it passes a running program's `log.*` events through for `run`.
+    /// Only the dispatcher writes stdout, and text is styled only through
+    /// the [`super::Style`] it hands to `Report::text` (or a stderr painter).
+    /// `log_output` is the one other stdout writer: it passes a running
+    /// program's `log.*` events through for `run`.
     #[test]
-    fn only_the_output_module_writes_stdout() {
+    fn only_the_output_module_writes_or_styles_stdout() {
         fn visit(dir: &std::path::Path, offenders: &mut Vec<String>) {
             for entry in std::fs::read_dir(dir).unwrap() {
                 let path = entry.unwrap().path();
@@ -188,12 +190,17 @@ mod tests {
                     }
                     continue;
                 }
-                let exempt = path
+                let name = path
                     .file_name()
-                    .is_some_and(|name| name == "log_output.rs" || name == "main.rs");
-                if exempt || path.extension().is_none_or(|ext| ext != "rs") {
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("");
+                // `paint` and `reporter` are where the painters are defined.
+                if matches!(name, "main.rs" | "paint.rs" | "reporter.rs")
+                    || path.extension().is_none_or(|ext| ext != "rs")
+                {
                     continue;
                 }
+                let may_write = name == "log_output.rs";
                 let source = std::fs::read_to_string(&path).unwrap();
                 // Unit tests may print; the command code above them may not.
                 let code = source.split("#[cfg(test)]").next().unwrap_or(&source);
@@ -205,7 +212,14 @@ mod tests {
                                 && !line.contains("eprint!(")
                                 && !line.contains("println!(")
                             || line.contains("io::stdout()"));
-                    if writes_stdout {
+                    // `console`'s free styling reads a process-wide color
+                    // switch instead of the stream's resolved policy.
+                    let styles_globally = !line.starts_with("//")
+                        && (line.contains("console::style")
+                            || line.contains("console::Style")
+                            || line.contains("accent_style()")
+                            || line.contains("secondary_style()"));
+                    if writes_stdout && !may_write || styles_globally {
                         offenders.push(format!("{}:{}", path.display(), number + 1));
                     }
                 }
@@ -216,7 +230,7 @@ mod tests {
         visit(&src, &mut offenders);
         assert!(
             offenders.is_empty(),
-            "return a `Report` instead of writing stdout: {offenders:#?}"
+            "return a `Report` and style it with the `Style` passed to `text`: {offenders:#?}"
         );
     }
 }
