@@ -86,3 +86,5 @@ pub(crate) unsafe fn cell_bytes(cell: usize) -> usize {
     }
 }
 
+#[cfg(test)]
+mod tests;
