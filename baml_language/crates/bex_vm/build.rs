@@ -17,4 +17,14 @@ fn main() {
             baml_builtins2_codegen::generate_native_trait_for(package, &vm_builtins, &class_defs);
         std::fs::write(format!("{out_dir}/{file}"), code).unwrap();
     }
+    // Adapters on the shared object format, for every builtin the triage
+    // table marks generic or specialized.
+    let declarations =
+        baml_builtins2_codegen::triage::native_inventory().unwrap_or_else(|e| panic!("{e}"));
+    let adapters = baml_builtins2_codegen::generate_adapters(
+        &declarations,
+        baml_builtins2_codegen::triage::rows(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(format!("{out_dir}/adapters_generated.rs"), adapters).unwrap();
 }

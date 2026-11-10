@@ -12,6 +12,7 @@
 
 #![warn(clippy::disallowed_methods)]
 
+pub mod adapters;
 pub(crate) mod array_index;
 mod call_specialize;
 pub mod compile_artifact;
