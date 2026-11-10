@@ -334,11 +334,16 @@ impl Value {
         self.0
     }
 
-    // `from_bits` has no callers yet; the originally-planned atomic-load
-    // path will add one when it lands. Re-introduce as `pub(crate) const
-    // unsafe fn from_bits(bits: u64) -> Self` at that point so the
-    // invariant (bits came from `Value::bits` or a safe constructor) is
-    // upheld by callers via `unsafe`.
+    /// The `Value` whose [`Value::bits`] are `bits`.
+    ///
+    /// # Safety
+    ///
+    /// `bits` must come from [`Value::bits`] of a live value: an object
+    /// pattern is a heap pointer the caller vouches for.
+    #[inline(always)]
+    pub const unsafe fn from_bits(bits: u64) -> Self {
+        Self(bits)
+    }
 }
 
 impl Default for Value {
