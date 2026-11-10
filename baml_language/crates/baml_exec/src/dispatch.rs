@@ -140,7 +140,7 @@ pub async fn dispatch_target_with_context(
             // a consumer parses, so it always prints one — `null` for unit.
             // Value-carrying types like `int?` print in both, even when null.
             let elide = match output_format {
-                OutputFormat::Debug => func_info.return_type.is_unit(),
+                OutputFormat::Text => func_info.return_type.is_unit(),
                 OutputFormat::Json => false,
             };
             if !elide {

@@ -4,7 +4,10 @@ use anyhow::{Context, Result};
 use baml_db::{find_baml_project_root, resolve_project_search_start};
 use clap::Args;
 
-use crate::project_load::{SourceLocation, load_project_from, resolve_source_location};
+use crate::{
+    output::{Command, CommandContext, Outcome},
+    project_load::{SourceLocation, load_project_from, resolve_source_location},
+};
 
 /// Open the BAML playground in a browser.
 ///
@@ -18,7 +21,7 @@ Examples:
     baml playground
 
   Serve a specific project without opening a browser:
-    baml playground --project ./my-project --no-open
+    baml playground --project-dir ./my-project --no-open
 
   Serve a standalone file on a fixed port:
     baml playground --file script.baml --port 4265")]
@@ -29,10 +32,6 @@ pub struct PlaygroundArgs {
     /// Standalone single-file source. Loads only this file (no project discovery).
     #[arg(long, value_name = "PATH", help_heading = "Project options")]
     pub file: Option<PathBuf>,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 
     /// Listen on exactly this port (errors if unavailable).
     /// Default: the first free port from 4265.
@@ -45,15 +44,15 @@ pub struct PlaygroundArgs {
     pub no_open: bool,
 }
 
-impl PlaygroundArgs {
-    #[expect(
-        clippy::print_stdout,
-        reason = "the banner is this command's primary output"
-    )]
-    pub fn run(&self) -> Result<crate::ExitCode> {
+/// Serves until interrupted, so there is no result: the banner is status.
+impl Command for PlaygroundArgs {
+    type Output = ();
+
+    #[expect(clippy::print_stderr, reason = "the banner is status output")]
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<()>> {
         let playground_dir = resolve_playground_assets()?;
 
-        let roots = workspace_roots(self.from.as_deref(), self.file.as_deref())?;
+        let roots = workspace_roots(cx.project_dir.as_deref(), self.file.as_deref())?;
         // The server owns no terminal output (in editor mode its stdout is
         // the LSP channel), so the banner is printed from here once the port
         // is bound.
@@ -62,11 +61,11 @@ impl PlaygroundArgs {
             port: self.port,
             open_browser: !self.no_open && !is_headless_session(baml_env::has_var),
             on_listening: Some(Box::new(move |port| {
-                println!("{}", playground_banner(port, &banner_roots));
+                eprintln!("{}", playground_banner(port, &banner_roots));
             })),
         };
         baml_lsp_server::run_playground_server(roots, playground_dir, options)?;
-        Ok(crate::ExitCode::Success)
+        Ok(Outcome::ok(()))
     }
 }
 

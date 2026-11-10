@@ -2,20 +2,16 @@ use std::{
     env,
     ffi::OsString,
     fs,
+    io::{self, Write},
     path::{Path, PathBuf},
-    process::Command,
+    process,
 };
 
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
+use serde::Serialize;
 
-use crate::ExitCode;
-
-#[derive(Args, Clone, Debug)]
-pub(crate) struct IdeArgs {
-    #[command(subcommand)]
-    pub command: IdeCommand,
-}
+use crate::output::{Command, CommandContext, Outcome, Report, Style};
 
 #[derive(clap::Subcommand, Clone, Debug)]
 pub(crate) enum IdeCommand {
@@ -50,23 +46,35 @@ pub(crate) struct IdeInstallArgs {
     /// install.
     #[arg(
         long = "output-dir",
-        alias = "dir",
         value_name = "PATH",
         help_heading = "Editor options"
     )]
     pub dir: Option<PathBuf>,
 }
 
-impl IdeArgs {
-    pub fn run(&self) -> Result<ExitCode> {
-        match &self.command {
-            IdeCommand::Install(args) => args.run(),
-        }
+/// Where the extension went.
+#[derive(Debug, Serialize)]
+pub(crate) struct IdeInstalled {
+    pub vsix: PathBuf,
+    /// The editor CLI the extension was installed through.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub editor: Option<String>,
+    /// The copy made by `--output-dir`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copied_to: Option<PathBuf>,
+}
+
+impl Report for IdeInstalled {
+    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        Ok(())
     }
 }
 
-impl IdeInstallArgs {
-    pub fn run(&self) -> Result<ExitCode> {
+impl Command for IdeInstallArgs {
+    type Output = IdeInstalled;
+
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<IdeInstalled>> {
+        let reporter = crate::reporter::Reporter::new();
         let vsix = active_toolchain_vsix()?;
         if let Some(dir) = &self.dir {
             fs::create_dir_all(dir)
@@ -75,17 +83,20 @@ impl IdeInstallArgs {
             fs::copy(&vsix, &dest).with_context(|| {
                 format!("failed to copy {} to {}", vsix.display(), dest.display())
             })?;
-            #[allow(clippy::print_stdout)]
-            {
-                println!("extracted BAML IDE extension to {}", dest.display());
-            }
-            return Ok(ExitCode::Success);
+            reporter.status("Extracted", dest.display().to_string());
+            return Ok(Outcome::ok(IdeInstalled {
+                vsix,
+                editor: None,
+                copied_to: Some(dest),
+            }));
         }
 
         let editor = self.resolve_editor()?;
-        let status = Command::new(&editor)
+        // The editor CLI narrates on its stdout; ours carries only the result.
+        let status = process::Command::new(&editor)
             .arg("--install-extension")
             .arg(&vsix)
+            .stdout(io::stderr())
             .status()
             .with_context(|| format!("failed to run {}", editor.to_string_lossy()))?;
 
@@ -97,13 +108,16 @@ impl IdeInstallArgs {
             );
         }
 
-        #[allow(clippy::print_stdout)]
-        {
-            println!("installed BAML IDE extension from {}", vsix.display());
-        }
-        Ok(ExitCode::Success)
+        reporter.status("Installed", vsix.display().to_string());
+        Ok(Outcome::ok(IdeInstalled {
+            vsix,
+            editor: Some(editor.to_string_lossy().into_owned()),
+            copied_to: None,
+        }))
     }
+}
 
+impl IdeInstallArgs {
     fn resolve_editor(&self) -> Result<OsString> {
         if self.cursor {
             return command_on_path("cursor")

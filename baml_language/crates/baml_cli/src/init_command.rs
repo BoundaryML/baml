@@ -10,14 +10,19 @@
 // Both flows share the same writer (`scaffold`) so the produced layout
 // stays consistent — only the directory precondition differs.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+use std::{
+    io::{self, Write},
+    path::{Path, PathBuf},
+};
 
-use std::path::{Path, PathBuf};
-
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 use clap::Args;
+use serde::Serialize;
 
-use crate::reporter::Reporter;
+use crate::{
+    output::{Command, CommandContext, Outcome, Report, Style},
+    reporter::Reporter,
+};
 
 /// Scaffold a new BAML project under the given directory
 /// (default `.`). Refuses to clobber an existing `baml.toml`.
@@ -43,13 +48,26 @@ pub struct InitArgs {
     pub name: Option<String>,
 }
 
-impl InitArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
-        let reporter = Reporter::new();
-        self.run_with_reporter(&reporter)
-    }
+/// The project `init` or `new` created.
+#[derive(Debug, Serialize)]
+pub(crate) struct Scaffolded {
+    pub name: String,
+    pub root: PathBuf,
+    /// Files written, relative to `root`.
+    pub created: Vec<PathBuf>,
+}
 
-    fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+impl Report for Scaffolded {
+    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Command for InitArgs {
+    type Output = Scaffolded;
+
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<Scaffolded>> {
+        let reporter = &Reporter::new();
         // `init` is in-place: create-or-reuse the directory, then
         // refuse if `baml.toml` already exists so we never clobber a
         // project the user already initialized.
@@ -92,13 +110,11 @@ pub struct NewArgs {
     pub name: Option<String>,
 }
 
-impl NewArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
-        let reporter = Reporter::new();
-        self.run_with_reporter(&reporter)
-    }
+impl Command for NewArgs {
+    type Output = Scaffolded;
 
-    fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<Scaffolded>> {
+        let reporter = &Reporter::new();
         if self.path.exists() {
             anyhow::bail!(
                 "destination `{}` already exists. Use `baml init` to initialize \
@@ -123,13 +139,14 @@ fn scaffold(
     explicit_name: Option<&str>,
     reporter: &Reporter,
     verb: &str,
-) -> Result<crate::ExitCode> {
+) -> Result<Outcome<Scaffolded>> {
     let name = explicit_name
         .map(str::to_string)
         .or_else(|| default_project_name(canonical))
         .unwrap_or_else(|| "baml-project".to_string());
     validate_project_name(&name)?;
 
+    let mut created = vec![PathBuf::from("baml.toml")];
     let toml_path = canonical.join("baml.toml");
     reporter.spin("Creating", format!("baml.toml ({name})"));
     std::fs::write(&toml_path, render_baml_toml(&name))
@@ -144,10 +161,15 @@ fn scaffold(
         reporter.spin("Creating", "baml_src/main.baml");
         std::fs::write(&main_path, STARTER_MAIN_BAML)
             .with_context(|| format!("failed to write {}", main_path.display()))?;
+        created.push(PathBuf::from("baml_src/main.baml"));
     }
 
     reporter.finish(verb, format!("{} ({name})", canonical.display()));
-    Ok(crate::ExitCode::Success)
+    Ok(Outcome::ok(Scaffolded {
+        name,
+        root: canonical.to_path_buf(),
+        created,
+    }))
 }
 
 /// Derive a project name from the canonical path's basename. Returns
@@ -216,7 +238,9 @@ mod tests {
     #[test]
     fn init_creates_baml_toml_and_starter_file() {
         let tmp = tempfile::tempdir().unwrap();
-        init_args(tmp.path().to_path_buf()).run().unwrap();
+        init_args(tmp.path().to_path_buf())
+            .run(&CommandContext::for_test(None))
+            .unwrap();
         let toml = std::fs::read_to_string(tmp.path().join("baml.toml")).unwrap();
         assert!(toml.contains("[package]"));
         assert!(toml.contains("name = "));
@@ -230,7 +254,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let sub = tmp.path().join("my-cool-app");
         std::fs::create_dir(&sub).unwrap();
-        init_args(sub.clone()).run().unwrap();
+        init_args(sub.clone())
+            .run(&CommandContext::for_test(None))
+            .unwrap();
         let toml = std::fs::read_to_string(sub.join("baml.toml")).unwrap();
         assert!(
             toml.contains("name = \"my-cool-app\""),
@@ -244,7 +270,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut args = init_args(tmp.path().to_path_buf());
         args.name = Some("explicit".to_string());
-        args.run().unwrap();
+        args.run(&CommandContext::for_test(None)).unwrap();
         let toml = std::fs::read_to_string(tmp.path().join("baml.toml")).unwrap();
         assert!(toml.contains("name = \"explicit\""));
     }
@@ -254,7 +280,9 @@ mod tests {
     fn init_refuses_to_clobber_existing_baml_toml() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("baml.toml"), "[package]\nname=\"prior\"\n").unwrap();
-        let err = init_args(tmp.path().to_path_buf()).run().unwrap_err();
+        let err = init_args(tmp.path().to_path_buf())
+            .run(&CommandContext::for_test(None))
+            .unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("already exists"), "got: {msg}");
 
@@ -276,7 +304,9 @@ mod tests {
         )
         .unwrap();
 
-        init_args(tmp.path().to_path_buf()).run().unwrap();
+        init_args(tmp.path().to_path_buf())
+            .run(&CommandContext::for_test(None))
+            .unwrap();
 
         let content = std::fs::read_to_string(tmp.path().join("baml_src/main.baml")).unwrap();
         assert_eq!(content, "// pre-existing content");
@@ -288,7 +318,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut args = init_args(tmp.path().to_path_buf());
         args.name = Some("bad name".to_string());
-        let err = args.run().unwrap_err();
+        let err = args.run(&CommandContext::for_test(None)).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("invalid character"), "got: {msg}");
     }
@@ -348,7 +378,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut args = init_args(tmp.path().to_path_buf());
         args.name = Some(r#"my"app"#.into());
-        let err = args.run().unwrap_err();
+        let err = args.run(&CommandContext::for_test(None)).unwrap_err();
         assert!(format!("{err}").contains("invalid character"));
     }
 
@@ -364,7 +394,9 @@ mod tests {
     fn new_creates_directory_and_scaffolds() {
         let tmp = tempfile::tempdir().unwrap();
         let target = tmp.path().join("brand-new-app");
-        new_args(target.clone()).run().unwrap();
+        new_args(target.clone())
+            .run(&CommandContext::for_test(None))
+            .unwrap();
         assert!(target.is_dir());
         let toml = std::fs::read_to_string(target.join("baml.toml")).unwrap();
         assert!(toml.contains("name = \"brand-new-app\""));
@@ -380,7 +412,9 @@ mod tests {
         let target = tmp.path().join("already-here");
         std::fs::create_dir(&target).unwrap();
 
-        let err = new_args(target).run().unwrap_err();
+        let err = new_args(target)
+            .run(&CommandContext::for_test(None))
+            .unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("already exists"), "got: {msg}");
         assert!(msg.contains("baml init"), "got: {msg}");
@@ -395,7 +429,9 @@ mod tests {
         let target = tmp.path().join("blocking-file");
         std::fs::write(&target, "").unwrap();
 
-        let err = new_args(target).run().unwrap_err();
+        let err = new_args(target)
+            .run(&CommandContext::for_test(None))
+            .unwrap_err();
         assert!(format!("{err}").contains("already exists"));
     }
 
@@ -407,7 +443,7 @@ mod tests {
         let target = tmp.path().join("brand-new-app");
         let mut args = new_args(target.clone());
         args.name = Some("renamed".into());
-        args.run().unwrap();
+        args.run(&CommandContext::for_test(None)).unwrap();
         let toml = std::fs::read_to_string(target.join("baml.toml")).unwrap();
         assert!(toml.contains("name = \"renamed\""));
     }
@@ -421,7 +457,7 @@ mod tests {
         let target = tmp.path().join("bad-name-test");
         let mut args = new_args(target.clone());
         args.name = Some("bad name".into());
-        let err = args.run().unwrap_err();
+        let err = args.run(&CommandContext::for_test(None)).unwrap_err();
         assert!(format!("{err}").contains("invalid character"));
         // The dir was created (we can't avoid that without a more
         // involved pre-check), but no manifest landed inside.

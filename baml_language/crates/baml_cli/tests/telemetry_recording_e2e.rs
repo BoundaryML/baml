@@ -86,7 +86,7 @@ testset "smoke" { test "ok" { assert.is_true(true) } }
     for count in 1..=2 {
         run(
             cli(temp.path(), &home)
-                .args(["run", "main", "--from"])
+                .args(["run", "main", "--project-dir"])
                 .arg(&project),
             true,
         );
@@ -96,28 +96,28 @@ testset "smoke" { test "ok" { assert.is_true(true) } }
     assert_recordings(&project, 3);
     run(
         cli(temp.path(), &home)
-            .args(["run", "-e", "1 + 2", "--from"])
+            .args(["run", "-e", "1 + 2", "--project-dir"])
             .arg(&project),
         true,
     );
     assert_recordings(&project, 4);
     run(
         cli(temp.path(), &home)
-            .args(["test", "--from"])
+            .args(["test", "--project-dir"])
             .arg(&project),
         true,
     );
     assert_recordings(&project, 5);
     run(
         cli(temp.path(), &home)
-            .args(["run", "fail", "--from"])
+            .args(["run", "fail", "--project-dir"])
             .arg(&project),
         false,
     );
     assert_recordings(&project, 6);
     run(
         cli(temp.path(), &home)
-            .args(["run", "main", "--from"])
+            .args(["run", "main", "--project-dir"])
             .arg(&project)
             .env("BAML_TELEMETRY", "off"),
         true,
@@ -159,7 +159,7 @@ BAML_TELEMETRY = "BAML_TELEMETRY"
         let binary = temp.path().join(format!("packed-{index}"));
         run(
             cli(temp.path(), &home)
-                .args(["pack", "--from"])
+                .args(["pack", "--project-dir"])
                 .arg(&source)
                 .arg("-o")
                 .arg(&binary)
@@ -269,7 +269,7 @@ fn packed_http_bodies_false_keeps_bodies_out_of_network_spans() {
         let binary = temp.path().join("packed");
         run(
             cli(temp.path(), &home)
-                .args(["pack", "--from"])
+                .args(["pack", "--project-dir"])
                 .arg(&source)
                 .arg("-o")
                 .arg(&binary)
@@ -313,7 +313,14 @@ fn packed_http_bodies_false_keeps_bodies_out_of_network_spans() {
 
         let query = |sql: &str| {
             let output = cli(temp.path(), &home)
-                .args(["query", "--local", "--format", "json", "--from"])
+                .args([
+                    "local",
+                    "recordings",
+                    "query",
+                    "--output-format",
+                    "json",
+                    "--project-dir",
+                ])
                 .arg(&home)
                 .arg(sql)
                 .output()

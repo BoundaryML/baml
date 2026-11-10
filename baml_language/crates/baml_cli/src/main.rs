@@ -1,9 +1,4 @@
 #![warn(clippy::disallowed_methods)]
-// TODO: This file has been simplified to remove baml_runtime/baml_log dependencies.
-
-// TODO: baml_runtime is disabled for now
-// use baml_runtime::RuntimeCliDefaults;
-
 use std::io::Write as _;
 
 /// The compiler workload is dominated by small short-lived allocations
@@ -16,12 +11,9 @@ use std::io::Write as _;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
-    // TODO: baml_log is disabled for now
-    // baml_log::init()?;
-
     if let Err(error) = warn_if_direct_invocation() {
         let _ = writeln!(std::io::stderr(), "error: {error}");
-        std::process::exit(baml_cli::ExitCode::Other.into());
+        std::process::exit(baml_cli::ExitCode::Failure.into());
     }
 
     let argv: Vec<String> = std::env::args().collect();
@@ -35,7 +27,7 @@ fn main() {
         Ok(code) => code,
         Err(e) => {
             baml_cli::reporter::print_anyhow_error(&e);
-            baml_cli::ExitCode::Other
+            baml_cli::ExitCode::Failure
         }
     };
     std::process::exit(exit_code.into());

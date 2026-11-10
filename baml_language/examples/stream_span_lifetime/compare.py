@@ -30,11 +30,11 @@ def main():
         for file in ["baml.toml", "main.baml"]:
             shutil.copyfile(HERE / file, project / file)
         run_env = dict(env, BAML_VERSION=args.nightly if name == "nightly" else local)
-        subprocess.run(command + ["run", "--project", str(project), "main",
-            "--agent-skill-check", "off", "--no-progress"], env=run_env, check=True)
+        subprocess.run(command + ["run", "--project-dir", str(project), "main",
+            "--agent-skill-check", "off"], env=run_env, check=True)
         # Read both formats with the updated local reader.
-        result = subprocess.run([local, "query", "--local", "--from", str(project),
-            "--agent-skill-check", "off", "--format", "json", SQL],
+        result = subprocess.run([local, "local", "recordings", "local", "recordings", "query", "--project-dir", str(project),
+            "--agent-skill-check", "off", "--output-format", "json", SQL],
             env=env, check=True, capture_output=True, text=True)
         (output / f"{name}.json").write_text(result.stdout)
         evidence = json.loads(result.stdout)

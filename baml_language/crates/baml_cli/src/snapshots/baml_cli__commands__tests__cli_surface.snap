@@ -1,0 +1,134 @@
+---
+source: crates/baml_cli/src/commands.rs
+expression: surface
+---
+baml
+  --agent-skill-check <MODE> [default: auto] [global] (hidden)
+  --color <WHEN> [global]
+  --diagnostic-format <FORMAT> [global]
+  --hyperlinks <WHEN> [global]
+  --output-format <FORMAT> [default: text] [global]
+  --output-preset <PRESET> [default: auto] [global]
+  --project-dir <PATH> [global]
+  -V, --version
+  -h, --help [global]
+  -q, --quiet [default: false] [global]
+baml new
+  --name <NAME>
+  <path>
+baml init
+  --name <NAME>
+  <path> [default: .]
+baml check
+  -F, --features <FEATURES>
+baml fmt
+  --check [default: false]
+  -n, --dry-run [default: false]
+  <paths>
+baml test
+  --list [default: false]
+  --log <LEVEL> [default: info] [env: BAML_LOG]
+  --max-concurrency <N>
+  --no-profile [default: false]
+  --profile <NAME>
+  --shutdown-timeout <DURATION> [default: 15s]
+  --test-timeout <DURATION> [default: 5m]
+  -F, --features <FEATURES>
+  -i, --include <INCLUDE>
+  -x, --exclude <EXCLUDE>
+baml run
+  --context <SOURCE> [env: BAML_CONTEXT]
+  --file <PATH>
+  --include-generated [default: false]
+  --list [default: false]
+  --log <LEVEL> [default: info] [env: BAML_LOG]
+  --log-file <LOG_FILE>
+  --shutdown-timeout <DURATION> [default: 15s]
+  -F, --features <FEATURES>
+  -e, --expression <EXPRESSION>
+  -f, --function <NAME>
+  <target>
+  <target_args>
+baml pack
+  --embed-telemetry [default: false]
+  --file <PATH>
+  --host-binary <PATH>
+  --rust [default: false]
+  --rust-build-dir <DIR>
+  --rust-profile <PROFILE> [default: release]
+  --rust-workspace <DIR>
+  --target <TRIPLE>
+  -F, --features <FEATURES>
+  -e, --expression <EXPR> (hidden)
+  -f, --function <NAME>
+  -o, --output <OUTPUT>
+  <target>
+baml generate
+  --embed-telemetry [default: false]
+  --show-all-skips [default: false]
+  -F, --features <FEATURES>
+  -o, --output-dir <PATH>
+baml generate add
+  --sdk-import-path <IMPORT_PATH>
+  <output_type>
+baml describe
+  --limit <N>
+  --search [default: false]
+  -F, --features <FEATURES>
+  <name>
+baml codequality
+  --all [default: false]
+  --files [default: false]
+  --functions [default: false]
+  --metrics <LIST>
+  <paths>
+baml playground
+  --file <PATH>
+  --no-open [default: false]
+  --port <PORT>
+  -F, --features <FEATURES>
+baml local
+baml local recordings
+baml local recordings query
+  --max-rows <N>
+  --max-wall <DURATION>
+  <sql>
+baml local recordings schema
+  <table>
+baml cloud
+  --env <ENV> [global]
+  --project <ORG/PROJECT> [global]
+baml cloud auth
+baml cloud auth login
+  --no-open [default: false]
+baml cloud auth status
+baml cloud auth logout
+baml cloud auth token (hidden)
+baml cloud recordings
+baml cloud recordings query
+  --max-rows <N>
+  --max-wall <DURATION>
+  <sql>
+baml cloud recordings schema
+  <table>
+baml query
+  --max-rows <N>
+  --max-wall <DURATION>
+  <sql>
+baml login
+  --no-open [default: false]
+baml logout
+baml ide
+baml ide install
+  --code [default: false]
+  --cursor [default: false]
+  --output-dir <PATH>
+baml agent
+baml agent install
+baml telemetry
+  <action> [default: status]
+baml help
+  <command>
+baml lsp
+  --workspace <PATH>
+baml __flush-telemetry (hidden)

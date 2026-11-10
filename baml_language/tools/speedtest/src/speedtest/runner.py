@@ -70,7 +70,7 @@ def build_baml(cli, workload, stage):
     shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
     out = project / "workload"
     start = time.perf_counter()
-    r = subprocess.run([str(cli), "--no-progress", "--color", "never", "pack", "speedtest_driver", "-o", str(out)],
+    r = subprocess.run([str(cli), "--color", "never", "pack", "speedtest_driver", "-o", str(out)],
                        cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
     seconds = time.perf_counter() - start
     if r.returncode != 0 or not out.exists():

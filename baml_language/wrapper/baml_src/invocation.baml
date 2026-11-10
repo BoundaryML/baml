@@ -369,14 +369,17 @@ class WrapperInvocation {
                 args = args.concat(raw.slice(index, raw.length()));
                 break;
             }
-            let flag = if (command != "query" && (arg == "--project" || arg.starts_with("--project="))) {
-                "--project"
+            // `--project-dir` is always the local path; `baml cloud ... --project`
+            // is a cloud handle the wrapper never reads.
+            let flag = if (arg == "--project-dir" || arg.starts_with("--project-dir=")) {
+                "--project-dir"
             } else {
                 ""
             };
             if (
                 !command
                     && [
+                        "--output-format",
                         "--output-preset",
                         "--color",
                         "--hyperlinks",
@@ -404,7 +407,7 @@ class WrapperInvocation {
                     ensure(!value.starts_with("-"), `${flag} requires a path`);
                 }
                 ensure(value != "", `${flag} requires a path`);
-                ensure(project == null, "--project may only be supplied once");
+                ensure(project == null, "--project-dir may only be supplied once");
                 project = value;
             } else {
                 if (!command && !arg.starts_with("-")) {

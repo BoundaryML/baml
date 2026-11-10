@@ -27,7 +27,7 @@ async fn cancelled_cloud_query_returns_the_cancellation_exit_code() {
             "--agent-skill-check",
             "off",
             "query",
-            "--format",
+            "--output-format",
             "json",
             "SELECT 1",
         ])

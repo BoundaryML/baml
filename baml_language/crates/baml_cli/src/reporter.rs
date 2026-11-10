@@ -14,7 +14,7 @@
 #![allow(clippy::print_stderr)]
 
 use std::{
-    sync::atomic::{AtomicBool, AtomicU8, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
     time::Instant,
 };
 
@@ -25,25 +25,13 @@ use indicatif::HumanDuration;
 const VERB_COLOR: Color = Color::TrueColor(0xA8, 0x55, 0xF7);
 
 static QUIET: AtomicBool = AtomicBool::new(false);
-static VERBOSE: AtomicU8 = AtomicU8::new(0);
 
-pub(crate) fn init(quiet: u8, verbose: u8) {
-    QUIET.store(quiet > 0, Ordering::Relaxed);
-    VERBOSE.store(verbose, Ordering::Relaxed);
-}
-
-pub(crate) fn verbose() -> bool {
-    VERBOSE.load(Ordering::Relaxed) > 0
+pub(crate) fn init(quiet: bool) {
+    QUIET.store(quiet, Ordering::Relaxed);
 }
 
 pub(crate) fn quiet() -> bool {
     QUIET.load(Ordering::Relaxed)
-}
-
-pub(crate) fn print_verbose(args: std::fmt::Arguments<'_>) {
-    if verbose() && !QUIET.load(Ordering::Relaxed) {
-        eprintln!("{args}");
-    }
 }
 
 pub(crate) fn accent_style() -> Style {
@@ -86,7 +74,7 @@ impl Reporter {
 
     /// Mark a new phase with a persistent cargo-style line.
     pub fn spin(&self, verb: &str, msg: impl AsRef<str>) {
-        if QUIET.load(Ordering::Relaxed) || !crate::output::policy().progress {
+        if QUIET.load(Ordering::Relaxed) || !crate::output::progress() {
             return;
         }
         eprintln!("{}", format_status(verb, msg.as_ref()));
@@ -104,14 +92,6 @@ impl Reporter {
         let elapsed = HumanDuration(self.started.elapsed());
         let line = format!("{} in {elapsed:#}", format_status(verb, msg.as_ref()));
         eprintln!("{line}");
-    }
-
-    /// Preserve the old call shape for diagnostic/error paths.
-    pub fn abandon(&self) {}
-
-    /// Run `f` and return whatever it returns.
-    pub fn suspend<R>(&self, f: impl FnOnce() -> R) -> R {
-        f()
     }
 }
 
@@ -155,7 +135,6 @@ pub fn print_anyhow_error(error: &anyhow::Error) {
 impl Reporter {
     /// Print an error through this reporter.
     pub fn error(&self, msg: impl std::fmt::Display) {
-        self.abandon();
         print_error(msg);
     }
 
@@ -165,7 +144,7 @@ impl Reporter {
     #[must_use]
     pub fn fatal(&self, msg: impl std::fmt::Display) -> crate::ExitCode {
         self.error(msg);
-        crate::ExitCode::Other
+        crate::ExitCode::Failure
     }
 
     /// Print a warning. Mirrors the formatting of [`print_warning`].

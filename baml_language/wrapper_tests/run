@@ -226,7 +226,7 @@ with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
         command = [
             str(target / ("baml-cli" + suffix)),
             "test",
-            "--project",
+            "--project-dir",
             str(repo / "baml_language/wrapper_tests"),
             "--max-concurrency",
             "1",

@@ -74,20 +74,17 @@ Shutdown options:
           [default: 15s]
 
 Global options:
-  -q, --quiet...
-          Suppress nonessential output
+      --project-dir <PATH>
+          Discover the BAML project from this path
 
-  -v, --verbose...
-          Increase diagnostic verbosity. Repeatable
+  -q, --quiet
+          Print no status or progress on stderr
+
+      --output-format <FORMAT>
+          What goes to stdout [default: text] [possible values: text, json, jsonl]
 
       --color <WHEN>
           Control ANSI colors [possible values: auto, always, never]
-
-      --no-progress
-          Disable progress output
-
-      --project <PATH>
-          Discover the BAML project from this path
 
       --output-preset <PRESET>
           Select output defaults [default: auto] [possible values: auto, human, agent]
@@ -120,5 +117,5 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --agent-skill-check, --from, --features, or --help. With no default profile,
+  --project-dir, --agent-skill-check, --features, or --help. With no default profile,
   all tests are selected.

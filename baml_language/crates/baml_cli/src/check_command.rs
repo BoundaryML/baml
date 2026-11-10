@@ -1,13 +1,18 @@
-use std::path::PathBuf;
+use std::io::{self, Write};
 
 use anyhow::Result;
 use baml_db::{
     CheckedWorld, ProjectDatabase, ProjectDiagnostics, SourceRoot, WorldHasErrors,
-    baml_compiler_diagnostics::{Diagnostic, render},
+    baml_compiler_diagnostics::{Diagnostic, Severity, render},
 };
 use clap::Args;
+use serde::Serialize;
 
-use crate::reporter::Reporter;
+use crate::{
+    ExitCode,
+    output::{Command, CommandContext, Outcome, Report, Style},
+    reporter::Reporter,
+};
 
 /// Check BAML source files for compiler errors.
 ///
@@ -20,30 +25,41 @@ Examples:
     baml check
 
   Check a specific project:
-    baml check --project ./my-project")]
+    baml check --project-dir ./my-project")]
 pub struct CheckArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 }
 
-impl CheckArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+/// What `baml check` found. The diagnostics themselves go to stderr.
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct CheckReport {
+    pub files: usize,
+    pub errors: usize,
+    pub warnings: usize,
+}
+
+impl Report for CheckReport {
+    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Command for CheckArgs {
+    type Output = CheckReport;
+
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<CheckReport>> {
         let reporter = Reporter::new();
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            cx.project_dir.as_deref(),
             crate::project_session::CacheUse::ReadWrite,
         )?;
         if session.is_empty() {
-            reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
                 session.root().display()
             ));
-            return Ok(crate::ExitCode::Other);
+            return Ok(Outcome::new(CheckReport::default(), ExitCode::Failure));
         }
         let file_count = session.file_count();
 
@@ -84,20 +100,28 @@ impl CheckArgs {
             // re-derivation is Salsa-memoized against the check just performed.
             cache.store_stdlib_diagnostics(db);
         }
+        let count = |severity| {
+            diagnostics
+                .iter()
+                .filter(|d| d.severity == severity)
+                .count()
+        };
+        let report = CheckReport {
+            files: file_count,
+            errors: count(Severity::Error),
+            warnings: count(Severity::Warning),
+        };
         if !diagnostics.is_empty() {
             let rendered = render_project_diagnostics(db, &diagnostics);
-            reporter.suspend(|| {
-                #[allow(clippy::print_stderr)]
-                {
-                    eprintln!("{rendered}");
-                }
-            });
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!("{rendered}");
+            }
         }
 
         // Every diagnostic is rendered above; the world's check is the verdict.
         let Ok(world) = CheckedWorld::check(&diagnostics, package) else {
-            reporter.abandon();
-            return Ok(crate::ExitCode::Other);
+            return Ok(Outcome::new(report, ExitCode::Failure));
         };
 
         // Seed the bytecode cache from this clean check — the same
@@ -128,14 +152,10 @@ impl CheckArgs {
                     Err(baml_db::CompileProgramError::Emit(
                         baml_db::baml_compiler2_emit::LoweringError::Internal(message),
                     )) => {
-                        reporter.suspend(|| {
-                            #[allow(clippy::print_stderr)]
-                            {
-                                eprintln!("error: internal compiler error: {message}");
-                            }
-                        });
-                        reporter.abandon();
-                        return Ok(crate::ExitCode::Other);
+                        crate::reporter::print_error(format_args!(
+                            "internal compiler error: {message}"
+                        ));
+                        return Ok(Outcome::new(report, ExitCode::Failure));
                     }
                     // Any other failed emit leaves the cache cold and is not
                     // an error.
@@ -145,7 +165,7 @@ impl CheckArgs {
         }
 
         reporter.finish("Finished", format!("checked {file_count} file(s)"));
-        Ok(crate::ExitCode::Success)
+        Ok(Outcome::ok(report))
     }
 }
 
@@ -156,10 +176,9 @@ pub(crate) fn checked_world<'db>(
     diagnostics: &ProjectDiagnostics<'db>,
     package: SourceRoot,
     context: &str,
-    reporter: &Reporter,
 ) -> Result<CheckedWorld<'db>> {
     CheckedWorld::check(diagnostics, package)
-        .map_err(|refused| refused_world_error(diagnostics.db(), &refused, context, reporter))
+        .map_err(|refused| refused_world_error(diagnostics.db(), &refused, context))
 }
 
 /// Renders a refused world's errors and returns the command's error.
@@ -167,10 +186,8 @@ pub(crate) fn refused_world_error(
     db: &ProjectDatabase,
     refused: &WorldHasErrors,
     context: &str,
-    reporter: &Reporter,
 ) -> anyhow::Error {
     let rendered = render_project_diagnostics(db, refused.errors());
-    reporter.abandon();
     #[expect(
         clippy::print_stderr,
         reason = "a refused compile's diagnostics are the command's error output"
@@ -196,7 +213,7 @@ pub(crate) fn render_project_diagnostics(
         file_paths.insert(file_id, source_file.path(db));
         source_files.insert(file_id, source_file);
     }
-    let config = crate::output::policy().diagnostic_render_config();
+    let config = crate::output::diagnostic_render_config();
     // Colorized human output classifies the offending sources through the
     // same compiler classifier the editor uses; every other preset renders
     // plain, so the highlighting work is skipped entirely.

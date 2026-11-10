@@ -13,7 +13,7 @@
 // binary's only entry point (no subcommand layer).
 //
 // Standalone single-file sources are loaded via `--file <PATH>`, which
-// is mutually exclusive with `--from <DIR>`. Without either, the project
+// is mutually exclusive with `--project-dir <DIR>`. Without either, the project
 // at the current directory is loaded.
 //
 // The output is the host binary (baml-pack-host) with a `PackEnvelope`
@@ -21,10 +21,11 @@
 // host extracts the envelope, initializes the engine, and invokes the
 // baked-in target with an auto-CLI parser driven by its signature.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(clippy::print_stderr)]
 
 use std::{
     collections::HashMap,
+    io::{self, Write},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -32,14 +33,16 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{ProjectDatabase, ProjectDiagnostics};
-use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
+use baml_exec::{PACK_SECTION_NAME, PackEnvelope, validate_help_param};
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
 use clap::Args;
+use serde::Serialize;
 use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
+    output::{Command, CommandContext, Outcome, Report, Style},
     project_load::{resolve_standalone_file, validate_file_project_flags, workspace_db},
     reporter::Reporter,
 };
@@ -89,7 +92,7 @@ pub struct PackArgs {
 
     /// Load one standalone source file instead of discovering a project.
     ///
-    /// Mutually exclusive with `--project`.
+    /// Mutually exclusive with `--project-dir`.
     #[arg(long, value_name = "PATH", help_heading = "Project options")]
     pub file: Option<PathBuf>,
 
@@ -153,21 +156,9 @@ pub struct PackArgs {
     )]
     pub host_binary: Option<PathBuf>,
 
-    #[arg(
-        long,
-        value_enum,
-        value_name = "FORMAT",
-        help = "Format returned values [default: json] [possible values: debug, json]",
-        hide_default_value = true,
-        hide_possible_values = true,
-        default_value_t = OutputFormat::Json,
-        help_heading = "Runtime options"
-    )]
-    pub output_format: OutputFormat,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
+    /// The global `--project-dir`, set by [`Command::run`].
+    #[arg(skip)]
+    pub project_dir: Option<PathBuf>,
 
     #[arg(short = 'e', long = "expression", value_name = "EXPR", hide = true)]
     pub expression: Option<String>,
@@ -191,13 +182,34 @@ struct ResolvedPackTarget {
     subcommand_name: String,
 }
 
-impl PackArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
-        let reporter = Reporter::new();
-        self.run_with_reporter(&reporter)
-    }
+/// The executable `baml pack` wrote.
+#[derive(Debug, Serialize)]
+pub(crate) struct Packed {
+    pub output: PathBuf,
+    /// The target triple the executable runs on.
+    pub target: String,
+    /// The packed entry points, by display name.
+    pub functions: Vec<String>,
+}
 
-    fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+impl Report for Packed {
+    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Command for PackArgs {
+    type Output = Packed;
+
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<Packed>> {
+        let mut args = self.clone();
+        args.project_dir.clone_from(&cx.project_dir);
+        args.run_with_reporter(&Reporter::new()).map(Outcome::ok)
+    }
+}
+
+impl PackArgs {
+    fn run_with_reporter(&self, reporter: &Reporter) -> Result<Packed> {
         self.validate_flags()?;
         let manifest = self.artifact_manifest()?;
         let mut telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
@@ -210,7 +222,7 @@ impl PackArgs {
             btel_settings::artifact::ArtifactKind::Pack,
         )?;
 
-        let (db, root, program, needs_format_hint) = self.load_and_compile(reporter)?;
+        let (db, root, program, needs_format_hint) = self.load_and_compile()?;
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
         // non-fatal warning so users learn to keep packaged
@@ -244,7 +256,6 @@ impl PackArgs {
                     subcommand_name: t.subcommand_name.clone(),
                 })
                 .collect(),
-            output_format: self.output_format,
             telemetry,
         };
 
@@ -317,7 +328,11 @@ impl PackArgs {
             "Finished",
             format!("{} [{label}, {}]", output_path.display(), target_triple),
         );
-        Ok(crate::ExitCode::Success)
+        Ok(Packed {
+            output: output_path,
+            target: target_triple.to_string(),
+            functions: targets.into_iter().map(|t| t.display_name).collect(),
+        })
     }
 
     /// Validate flag combinations the clap-side `Args` derive can't catch.
@@ -328,10 +343,10 @@ impl PackArgs {
                  pass a positional `<TARGET>` or `-f <NAME>` instead."
             );
         }
-        // `--file` and `--project` both name a source location. Reject the
+        // `--file` and `--project-dir` both name a source location. Reject the
         // combination up front instead of silently preferring one. Same rule
         // as `baml run`.
-        validate_file_project_flags(self.file.as_deref(), self.from.as_deref())?;
+        validate_file_project_flags(self.file.as_deref(), self.project_dir.as_deref())?;
         if let Some(target) = self.target.as_deref() {
             if looks_like_path(target) {
                 anyhow::bail!(
@@ -374,10 +389,7 @@ impl PackArgs {
         }
     }
 
-    fn load_and_compile(
-        &self,
-        reporter: &Reporter,
-    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
+    fn load_and_compile(&self) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
@@ -388,14 +400,13 @@ impl PackArgs {
                     &diagnostics,
                     package,
                     "cannot pack: compilation errors found",
-                    reporter,
                 )?;
                 crate::bytecode_cache::compile_program(&world, None)
                     .map_err(|e| anyhow!("compilation failed: {e}"))?
             };
             return Ok((db, package, program, needs_format_hint));
         }
-        self.load_and_compile_project(reporter)
+        self.load_and_compile_project()
     }
 
     /// The generated crate embeds the program its compiled bodies replace.
@@ -477,7 +488,7 @@ impl PackArgs {
                 .context("failed to copy the workspace's Cargo.lock")?;
         }
         let target_dir = build_dir.join("target");
-        let status = reporter.suspend(|| {
+        let status = {
             let mut cargo = std::process::Command::new("cargo");
             cargo
                 .arg("build")
@@ -508,10 +519,12 @@ impl PackArgs {
             if baml_env::os_var("RUST_MIN_STACK").is_none() {
                 cargo.env("RUST_MIN_STACK", (256usize << 20).to_string());
             }
+            // Cargo's own stdout must not mix into ours.
             cargo
+                .stdout(io::stderr())
                 .status()
-                .context("failed to run cargo; is it on PATH?")
-        })?;
+                .context("failed to run cargo; is it on PATH?")?
+        };
         if !status.success() {
             anyhow::bail!("cargo build of the generated host failed ({status})");
         }
@@ -532,7 +545,8 @@ impl PackArgs {
         if self.file.is_some() {
             return Ok(toml::Value::Table(toml::Table::new()));
         }
-        let Some(root) = crate::project_load::find_project_root_from(self.from.as_deref())? else {
+        let Some(root) = crate::project_load::find_project_root_from(self.project_dir.as_deref())?
+        else {
             return Ok(toml::Value::Table(toml::Table::new()));
         };
         let path = root.join("baml.toml");
@@ -561,10 +575,9 @@ impl PackArgs {
     /// Compiled bodies and bytecode must come from the same lowering.
     fn load_and_compile_project(
         &self,
-        reporter: &Reporter,
     ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            self.project_dir.as_deref(),
             if self.rust {
                 crate::project_session::CacheUse::Off
             } else {
@@ -609,7 +622,6 @@ impl PackArgs {
             &diagnostics,
             package,
             "cannot pack: compilation errors found",
-            reporter,
         )?;
         let program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
             .map_err(|e| anyhow!("compilation failed: {e}"))?;
@@ -688,7 +700,7 @@ impl PackArgs {
     fn resolve_output_basename(&self) -> Result<String> {
         if let Some(file) = self.file.as_deref() {
             // Keep `--file` hermetic: derive the name from the file path
-            // alone, never from `--from`/project markers. A path with no
+            // alone, never from `--project-dir`/project markers. A path with no
             // usable file-name component (no stem, e.g. `..`, or a non-UTF-8
             // name) can't be named automatically — bail rather than leak the
             // cwd's project context into a single-file pack.
@@ -703,7 +715,7 @@ impl PackArgs {
                     )
                 });
         }
-        crate::project_load::resolve_project_name(self.from.as_deref())
+        crate::project_load::resolve_project_name(self.project_dir.as_deref())
     }
 }
 
@@ -1007,8 +1019,7 @@ mod tests {
             rust_profile: RustProfile::Release,
             target_triple: None,
             host_binary: None,
-            output_format: OutputFormat::Json,
-            from: None,
+            project_dir: None,
             expression: None,
         }
     }
@@ -1030,13 +1041,13 @@ mod tests {
         assert_eq!(targets[0].subcommand_name, "main");
     }
 
-    /// `--file` + `--from` rejected (both name a source).
+    /// `--file` + `--project-dir` rejected (both name a source).
     #[test]
     fn test_pack_rejects_file_plus_explicit_from() {
         let mut args = pack_args();
         args.functions = vec!["main".into()];
         args.file = Some(PathBuf::from("a.baml"));
-        args.from = Some(PathBuf::from("./project"));
+        args.project_dir = Some(PathBuf::from("./project"));
         let err = args.validate_flags().unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
@@ -1048,7 +1059,7 @@ mod tests {
     fn test_pack_rejects_expression_mode() {
         let mut args = pack_args();
         args.expression = Some("2 + 2".to_string());
-        let err = args.run().unwrap_err();
+        let err = args.run_with_reporter(&Reporter::new()).unwrap_err();
         let msg = format!("{err}");
         assert!(
             msg.contains("not packageable"),
@@ -1299,23 +1310,6 @@ mod tests {
         validate_help_param(&engine, "user.main").unwrap();
     }
 
-    // ── Default flag values — BEP-027 §"What `baml pack` changes" ─────
-
-    /// Per BEP: "Default output format is `json`. `baml run` defaults to
-    /// `debug` because its primary reader is a human. Packaged binaries
-    /// default to `json` because they are production tools."
-    #[test]
-    fn test_pack_default_output_format_is_json() {
-        use clap::Parser;
-        #[derive(Parser)]
-        struct Wrapper {
-            #[command(flatten)]
-            args: PackArgs,
-        }
-        let parsed = Wrapper::try_parse_from(["baml-pack"]).unwrap();
-        assert!(matches!(parsed.args.output_format, OutputFormat::Json));
-    }
-
     #[test]
     fn test_rust_pack_rejects_cross_target_before_loading_project() {
         let host = release_host_target_triple().unwrap();
@@ -1327,8 +1321,8 @@ mod tests {
         args.target = Some("main".into());
         args.rust = true;
         args.target_triple = Some((*cross).into());
-        args.from = Some(PathBuf::from("/nonexistent/project"));
-        let error = args.run().unwrap_err();
+        args.project_dir = Some(PathBuf::from("/nonexistent/project"));
+        let error = args.run_with_reporter(&Reporter::new()).unwrap_err();
         let expected = if bex_engine::STACKFUL_FIBERS_SUPPORTED {
             "builds for this machine only"
         } else {
@@ -1413,7 +1407,7 @@ mod tests {
         )
         .unwrap();
         let mut args = pack_args();
-        args.from = Some(tmp.path().to_path_buf());
+        args.project_dir = Some(tmp.path().to_path_buf());
         assert_eq!(args.resolve_output_basename().unwrap(), "my-app");
     }
 
@@ -1440,7 +1434,7 @@ mod tests {
 
         let mut args = pack_args();
         args.file = Some(baml_file);
-        // `--from` is omitted, and file mode short-circuits project lookup.
+        // `--project-dir` is omitted, and file mode short-circuits project lookup.
         // Stem wins.
         assert_eq!(args.resolve_output_basename().unwrap(), "hello");
     }
@@ -1448,7 +1442,7 @@ mod tests {
     /// A `--file` path with no usable file-name component (here `..`, which
     /// has no `file_stem`) must error rather than fall back to the project
     /// name — `--file` stays hermetic. Even with a valid `baml.toml` in
-    /// `--from`, the result is an error, not the package name.
+    /// `--project-dir`, the result is an error, not the package name.
     #[test]
     fn test_pack_file_mode_nameless_errors_instead_of_consulting_project() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1459,7 +1453,7 @@ mod tests {
         .unwrap();
 
         let mut args = pack_args();
-        args.from = Some(tmp.path().to_path_buf());
+        args.project_dir = Some(tmp.path().to_path_buf());
         args.file = Some(PathBuf::from("..")); // no file_stem
 
         let err = args.resolve_output_basename().unwrap_err();
@@ -1583,7 +1577,6 @@ mod tests {
                 display_name: "main".to_string(),
                 subcommand_name: "main".to_string(),
             }],
-            output_format: OutputFormat::Json,
             telemetry: Default::default(),
         };
         let bytes =
@@ -1594,7 +1587,6 @@ mod tests {
         assert_eq!(decoded.targets.len(), 1);
         assert_eq!(decoded.targets[0].qualified_name, "user.main");
         assert_eq!(decoded.targets[0].subcommand_name, "main");
-        assert!(matches!(decoded.output_format, OutputFormat::Json));
     }
 
     // ── canonicalize_function_name ────────────────────────────────────
@@ -1639,9 +1631,8 @@ mod tests {
         std::fs::create_dir(tmp.path().join("baml_src")).unwrap();
 
         let mut args = pack_args();
-        args.from = Some(tmp.path().to_path_buf());
-        let reporter = Reporter::new();
-        let err = args.load_and_compile_project(&reporter).unwrap_err();
+        args.project_dir = Some(tmp.path().to_path_buf());
+        let err = args.load_and_compile_project().unwrap_err();
         assert!(
             format!("{err}").contains("no `.baml` files"),
             "expected no-files error; got: {err}",

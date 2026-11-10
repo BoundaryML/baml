@@ -1,7 +1,8 @@
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(clippy::print_stderr)]
 
 use std::{
     collections::HashMap,
+    io::{self, Write},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -19,61 +20,71 @@ use clap::{
     Args, Subcommand,
     builder::{PossibleValuesParser, TypedValueParser},
 };
+use serde::Serialize;
 use text_size::{TextRange, TextSize};
 use toml::Spanned;
 use toml_edit::{DocumentMut, Item, Table, value};
 
-use crate::{commands::release_version, reporter::Reporter};
+use crate::{
+    ExitCode,
+    commands::release_version,
+    output::{Command, CommandContext, Outcome, Report, Style},
+    reporter::Reporter,
+};
 
 mod package_name;
 
-#[derive(Debug, PartialEq, Eq)]
-struct GenerationPresentation {
-    details: Vec<String>,
-    status: Option<String>,
+/// What `baml generate` or `baml generate add` did.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub(crate) enum GenerateReport {
+    Generated {
+        generators: Vec<GeneratedSdk>,
+    },
+    Added {
+        generator: String,
+        manifest: PathBuf,
+    },
 }
 
-fn generation_presentation(
-    generator_name: &str,
-    count: usize,
-    output_dir: &Path,
-    identifier_renames: &[sdkgen_python_pydantic2::IdentifierRename],
-    quiet: bool,
-    verbose: bool,
-) -> GenerationPresentation {
-    if quiet {
-        return GenerationPresentation {
-            details: Vec::new(),
-            status: None,
-        };
-    }
+#[derive(Debug, Serialize)]
+pub(crate) struct GeneratedSdk {
+    pub name: String,
+    pub output_dir: PathBuf,
+    /// Every file in the SDK, relative to `output_dir`.
+    pub files: Vec<PathBuf>,
+    /// Identifiers renamed to be legal in the target language.
+    pub renames: Vec<IdentifierRename>,
+}
 
-    let details = if verbose {
-        identifier_renames
-            .iter()
-            .map(|rename| {
-                format!(
-                    "Renamed {} `{}`: `{}` → `{}` ({})",
-                    rename.kind, rename.fqn, rename.original, rename.generated, rename.reason,
-                )
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-    let rename_count = identifier_renames.len();
-    let rename_label = if rename_count == 1 {
+#[derive(Debug, Serialize)]
+pub(crate) struct IdentifierRename {
+    pub kind: String,
+    pub fqn: String,
+    pub original: String,
+    pub generated: String,
+    pub reason: String,
+}
+
+impl Report for GenerateReport {
+    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+fn generated_status(sdk: &GeneratedSdk) -> String {
+    let renames = sdk.renames.len();
+    let label = if renames == 1 {
         "identifier rename"
     } else {
         "identifier renames"
     };
-    GenerationPresentation {
-        details,
-        status: Some(format!(
-            "{generator_name} ({count} file(s), {rename_count} {rename_label} → {})",
-            output_dir.display()
-        )),
-    }
+    format!(
+        "{} ({} file(s), {renames} {label} → {})",
+        sdk.name,
+        sdk.files.len(),
+        sdk.output_dir.display()
+    )
 }
 
 /// Generate client code from BAML definitions.
@@ -88,7 +99,7 @@ Examples:
     baml generate
 
   Generate clients for a specific project:
-    baml generate --project ./my-project
+    baml generate --project-dir ./my-project
 
   Override the output directory:
     baml generate --output-dir ./generated")]
@@ -100,10 +111,6 @@ pub struct GenerateArgs {
 
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 
     /// Write each SDK to exactly this directory, overriding both
     /// `output_dir` and the directory `package_name` selects
@@ -125,6 +132,13 @@ pub struct GenerateArgs {
 #[derive(Subcommand, Clone, Debug)]
 pub enum GenerateCommand {
     /// Add a client generator to baml.toml.
+    #[command(after_long_help = "\
+Examples:
+  Add a Python client:
+    baml generate add python/pydantic2
+
+  Add a Go client:
+    baml generate add go --sdk-import-path example.com/app/baml_sdk")]
     Add(AddGeneratorArgs),
 }
 
@@ -132,10 +146,6 @@ pub enum GenerateCommand {
 pub struct AddGeneratorArgs {
     #[arg(value_name = "OUTPUT_TYPE", value_parser = add_output_type_parser())]
     pub output_type: OutputType,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 
     /// Go module import path for the generated baml_sdk package.
     #[arg(long, value_name = "IMPORT_PATH")]
@@ -164,10 +174,11 @@ struct GeneratorDef {
 }
 
 impl AddGeneratorArgs {
-    fn run(&self) -> Result<crate::ExitCode> {
-        let root = crate::project_load::find_project_root_from(self.from.as_deref())?.ok_or_else(
-            || anyhow!("no BAML project found; run `baml init` before adding a generator"),
-        )?;
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<GenerateReport>> {
+        let root = crate::project_load::find_project_root_from(cx.project_dir.as_deref())?
+            .ok_or_else(|| {
+                anyhow!("no BAML project found; run `baml init` before adding a generator")
+            })?;
         let toml_path = root.join("baml.toml");
         if !toml_path.is_file() {
             anyhow::bail!(
@@ -213,7 +224,10 @@ impl AddGeneratorArgs {
             "Added",
             format!("generator.{name} to {}", toml_path.display()),
         );
-        Ok(crate::ExitCode::Success)
+        Ok(Outcome::ok(GenerateReport::Added {
+            generator: name,
+            manifest: toml_path,
+        }))
     }
 }
 
@@ -280,35 +294,33 @@ fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(St
     Ok((document.to_string(), name))
 }
 
-impl GenerateArgs {
-    pub(crate) fn has_legacy_project(&self) -> bool {
-        self.from.is_some()
-            || matches!(
-                &self.command,
-                Some(GenerateCommand::Add(args)) if args.from.is_some()
-            )
-    }
+impl Command for GenerateArgs {
+    type Output = GenerateReport;
 
-    pub(crate) fn apply_project(&mut self, project: &Path) {
-        self.from = Some(project.to_path_buf());
-        if let Some(GenerateCommand::Add(args)) = &mut self.command {
-            args.from = Some(project.to_path_buf());
-        }
-    }
-
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<GenerateReport>> {
         if self.command.is_some() && self.telemetry.embed_telemetry {
             anyhow::bail!(
                 "`--embed-telemetry` applies to `baml generate`, which produces the SDK. Add the generator first, then run `baml generate --embed-telemetry`."
             );
         }
         match &self.command {
-            Some(GenerateCommand::Add(args)) => args.run(),
-            None => self.run_generate(),
+            Some(GenerateCommand::Add(args)) => args.run(cx),
+            None => self.run_generate(cx),
         }
     }
+}
 
-    fn run_generate(&self) -> Result<crate::ExitCode> {
+impl GenerateArgs {
+    fn run_generate(&self, cx: &CommandContext) -> Result<Outcome<GenerateReport>> {
+        let failed = || {
+            Ok(Outcome::new(
+                GenerateReport::Generated {
+                    generators: Vec::new(),
+                },
+                ExitCode::Failure,
+            ))
+        };
+        let mut sdks = Vec::new();
         let reporter = Reporter::new();
         reporter.status(
             "Generating",
@@ -318,16 +330,15 @@ impl GenerateArgs {
         // read-only session: warm seeds where they are provably faithful and
         // the parallel index prime, same as describe.
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            cx.project_dir.as_deref(),
             crate::project_session::CacheUse::ReadOnly,
         )?;
         if session.is_empty() {
-            reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
                 session.root().display()
             ));
-            return Ok(crate::ExitCode::Other);
+            return failed();
         }
         let _ = session.warm_prep();
         session.prime();
@@ -354,9 +365,8 @@ impl GenerateArgs {
                 &db,
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
             );
-            reporter.abandon();
             eprintln!("{rendered}");
-            return Ok(crate::ExitCode::Other);
+            return failed();
         }
 
         // Discover generator definitions from `baml.toml`'s
@@ -386,15 +396,13 @@ impl GenerateArgs {
                 &gen_diags,
                 &sources,
                 &file_paths,
-                &crate::output::policy().diagnostic_render_config(),
+                &crate::output::diagnostic_render_config(),
             );
-            reporter.abandon();
             eprintln!("{rendered}");
-            return Ok(crate::ExitCode::Other);
+            return failed();
         }
 
         if generators.is_empty() {
-            reporter.abandon();
             crate::reporter::print_error("no `[generator.<name>]` sections found in baml.toml");
             #[allow(clippy::print_stderr)]
             {
@@ -406,7 +414,7 @@ impl GenerateArgs {
                 eprintln!("  output_dir = \"../python\"");
                 eprintln!("  naming_convention = \"preserve-case\"");
             }
-            return Ok(crate::ExitCode::Other);
+            return failed();
         }
 
         let mut embedded_baml_toml = build_embedded_baml_toml(&from)?;
@@ -667,25 +675,25 @@ impl GenerateArgs {
                 )
             })?;
             let count = report.written_files.len();
-            let presentation = generation_presentation(
-                &generator.name,
-                count,
-                &output_dir,
-                &identifier_renames,
-                crate::reporter::quiet(),
-                crate::reporter::verbose(),
-            );
-            for detail in presentation.details {
-                crate::reporter::print_verbose(format_args!("{detail}"));
-            }
-
-            // Persistent status line in the scrollback — one per
-            // generator block. Matches cargo's `   Compiling foo
-            // v0.1.0` pattern: per-unit progress that sticks around
-            // above the spinner.
-            if let Some(status) = presentation.status {
-                reporter.status("Generated", status);
-            }
+            let sdk = GeneratedSdk {
+                name: generator.name.clone(),
+                output_dir: output_dir.clone(),
+                files: report.written_files,
+                renames: identifier_renames
+                    .into_iter()
+                    .map(|rename| IdentifierRename {
+                        kind: rename.kind,
+                        fqn: rename.fqn,
+                        original: rename.original,
+                        generated: rename.generated,
+                        reason: rename.reason.to_string(),
+                    })
+                    .collect(),
+            };
+            // One persistent status line per generator, like cargo's
+            // `   Compiling foo v0.1.0`.
+            reporter.status("Generated", generated_status(&sdk));
+            sdks.push(sdk);
             if self.output.is_none()
                 && generator.package_name.is_some()
                 && let Some(previous) =
@@ -703,13 +711,12 @@ impl GenerateArgs {
         }
 
         if total_files == 0 {
-            reporter.abandon();
             crate::reporter::print_error("no files generated (no supported generators found)");
-            return Ok(crate::ExitCode::Other);
+            return failed();
         }
 
         reporter.finish("Finished", format!("generated {total_files} file(s)"));
-        Ok(crate::ExitCode::Success)
+        Ok(Outcome::ok(GenerateReport::Generated { generators: sdks }))
     }
 }
 
@@ -1152,12 +1159,15 @@ fn to_text_range(span: std::ops::Range<usize>) -> TextRange {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use crate::output::CommandContext;
     use std::fs;
 
     use super::{
-        AddGeneratorArgs, Diagnostic, GenerateArgs, Generator, GeneratorDef, NamingConvention,
-        NamingSupport, OutputType, add_generator_to_manifest, build_embedded_baml_toml,
-        discover_generators, generation_presentation, is_valid_go_import_path,
+        AddGeneratorArgs, Diagnostic, GenerateArgs, GeneratedSdk, Generator, GeneratorDef,
+        IdentifierRename, NamingConvention, NamingSupport, OutputType, add_generator_to_manifest,
+        build_embedded_baml_toml, discover_generators, generated_status, is_valid_go_import_path,
         parse_add_output_type,
     };
 
@@ -1225,13 +1235,12 @@ naming_convention = "preserve-case"
                 telemetry: Default::default(),
                 command: None,
                 compiler: Default::default(),
-                from: Some(project.clone()),
                 output: None,
                 show_all_skips: false,
             }
-            .run_generate()
+            .run_generate(&CommandContext::for_test(Some(&project)))
             .unwrap();
-            assert!(matches!(result, crate::ExitCode::Success));
+            assert!(matches!(result.status, crate::ExitCode::Success));
             bytecodes
                 .push(fs::read(project.join("generated/baml_sdk/src/_inlinedbaml.bin")).unwrap());
         }
@@ -1242,35 +1251,23 @@ naming_convention = "preserve-case"
     }
 
     #[test]
-    fn identifier_rename_presentation_respects_normal_verbose_and_quiet_modes() {
-        let rename = sdkgen_python_pydantic2::IdentifierRename {
-            kind: "enum variant".to_string(),
-            fqn: "user.Choice.None".to_string(),
-            original: "None".to_string(),
-            generated: "None_".to_string(),
-            reason: sdkgen_python_pydantic2::IdentifierRenameReason::PythonKeyword,
+    fn generated_status_counts_files_and_renames() {
+        let sdk = GeneratedSdk {
+            name: "py".to_string(),
+            output_dir: PathBuf::from("generated"),
+            files: vec![PathBuf::from("a.py"); 4],
+            renames: vec![IdentifierRename {
+                kind: "enum variant".to_string(),
+                fqn: "user.Choice.None".to_string(),
+                original: "None".to_string(),
+                generated: "None_".to_string(),
+                reason: "Python keyword".to_string(),
+            }],
         };
-        let output = std::path::Path::new("generated");
-
-        let normal =
-            generation_presentation("py", 4, output, std::slice::from_ref(&rename), false, false);
-        assert!(normal.details.is_empty());
         assert_eq!(
-            normal.status.as_deref(),
-            Some("py (4 file(s), 1 identifier rename → generated)")
+            generated_status(&sdk),
+            "py (4 file(s), 1 identifier rename → generated)"
         );
-
-        let verbose =
-            generation_presentation("py", 4, output, std::slice::from_ref(&rename), false, true);
-        assert_eq!(
-            verbose.details,
-            ["Renamed enum variant `user.Choice.None`: `None` → `None_` (Python keyword)"]
-        );
-        assert_eq!(verbose.status, normal.status);
-
-        let quiet = generation_presentation("py", 4, output, &[rename], true, true);
-        assert!(quiet.details.is_empty());
-        assert_eq!(quiet.status, None);
     }
 
     fn go_manifest(threshold: Option<i64>) -> String {
@@ -1517,11 +1514,11 @@ naming_convention = "preserve-case"
             telemetry: Default::default(),
             command: None,
             compiler: Default::default(),
-            from: Some(project.to_path_buf()),
             output: None,
             show_all_skips: false,
         }
-        .run_generate()
+        .run_generate(&CommandContext::for_test(Some(project)))
+        .map(|outcome| outcome.status)
     }
 
     fn python_project(package_name: &str) -> tempfile::TempDir {
@@ -1629,7 +1626,12 @@ naming_convention = "preserve-case"
             assert!(sdk.contains(async_decl), "{sdk_file}: {sdk}");
             assert!(sdk.contains(sync_decl), "{sdk_file}: {sdk}");
             let mut text = Vec::new();
-            crate::describe_command::write_keyword(&mut text, topic).unwrap();
+            crate::describe_command::write_keyword(
+                &mut text,
+                &crate::paint::Painter::new(false, false),
+                topic,
+            )
+            .unwrap();
             let text = String::from_utf8(text).unwrap();
             let calls = text.matches(&format!("{name}(")).count();
             assert!(calls > 0, "{topic}: {text}");
@@ -1744,11 +1746,10 @@ naming_convention = "preserve-case"
             telemetry: Default::default(),
             command: None,
             compiler: Default::default(),
-            from: Some(project.path().to_path_buf()),
             output: Some(package.clone()),
             show_all_skips: false,
         }
-        .run_generate()
+        .run_generate(&CommandContext::for_test(Some(project.path())))
         .unwrap_err()
         .to_string();
 
@@ -1945,13 +1946,12 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
 
         let result = AddGeneratorArgs {
             output_type: OutputType::TypescriptNode,
-            from: Some(directory.path().to_path_buf()),
             sdk_import_path: None,
         }
-        .run()
+        .run(&CommandContext::for_test(Some(directory.path())))
         .unwrap();
 
-        assert!(matches!(result, crate::ExitCode::Success));
+        assert!(matches!(result.status, crate::ExitCode::Success));
         let updated = fs::read_to_string(directory.path().join("baml.toml")).unwrap();
         let manifest = baml_db::manifest::parse(&updated).unwrap();
         assert_eq!(

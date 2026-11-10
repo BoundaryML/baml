@@ -4,17 +4,21 @@
 //! palette (green for Enabled, red for Disabled, cyan for the docs URL),
 //! same output structure.
 
-// `println!` here is the primary UX of the subcommand: printing the current
-// status and confirmation of a state change. The workspace-wide ban on
-// `print*!` exists to catch stray debug prints, not to break intentional
-// user-facing output.
-#![allow(clippy::print_stdout)]
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 
 use anyhow::Result;
 use clap::{Args, ValueEnum};
 use console::style;
+use serde::Serialize;
 
-use crate::{ExitCode, telemetry};
+use crate::{
+    ExitCode,
+    output::{Command, CommandContext, Outcome, Report, Style},
+    telemetry,
+};
 
 /// `baml __flush-telemetry` — the hidden entry point for the detached
 /// child process that drains the on-disk telemetry queue (see
@@ -66,75 +70,75 @@ pub(crate) enum TelemetryAction {
     Disable,
 }
 
-impl TelemetryArgs {
-    pub(crate) fn run(&self) -> Result<ExitCode> {
-        let t = telemetry::Telemetry::load();
-        // Snapshot the pre-change state so `disable` can distinguish
-        // "already off" from "just turned off" (matches Next's UX).
-        let was_enabled = t.is_enabled();
+/// The telemetry preference after the action ran.
+#[derive(Debug, Serialize)]
+pub(crate) struct TelemetryStatus {
+    pub enabled: bool,
+    pub config: PathBuf,
+}
 
-        match self.action {
-            TelemetryAction::Status => {}
-            TelemetryAction::Enable => {
-                let path = t.set_enabled(true);
-                println!("{}", style("Success!").cyan());
-                if let Some(path) = &path {
-                    println!("Your preference has been saved to {}.", path.display());
-                }
-            }
-            TelemetryAction::Disable => {
-                let path = t.set_enabled(false);
-                if was_enabled {
-                    if let Some(path) = &path {
-                        println!(
-                            "{} Your preference has been saved to {}.",
-                            style("Success!").cyan(),
-                            path.display()
-                        );
-                    } else {
-                        println!("{}", style("Success!").cyan());
-                    }
-                } else {
-                    println!(
-                        "{}",
-                        style("BAML CLI telemetry is already disabled.").yellow()
-                    );
-                }
-            }
+/// Format matches Next.js's `nextTelemetry`: bold header, colored status,
+/// short body, cyan "Learn more" URL.
+impl Report for TelemetryStatus {
+    fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        writeln!(out, "{}", style("BAML CLI Telemetry").bold())?;
+        let status_word = if self.enabled {
+            style("Enabled").green().bold()
+        } else {
+            style("Disabled").red().bold()
+        };
+        writeln!(out, "\nStatus: {status_word}")?;
+        writeln!(out, "Config: {}", style(self.config.display()).dim())?;
+        if self.enabled {
+            writeln!(
+                out,
+                "\nBAML telemetry is completely anonymous. Thank you for participating!"
+            )?;
+        } else {
+            writeln!(
+                out,
+                "\nYou have opted out of BAML's anonymous telemetry program.\n\
+                 No data will be collected from your machine."
+            )?;
         }
-
-        // Re-load so the printed status reflects the post-change value.
-        let t = telemetry::Telemetry::load();
-        print_status(&t);
-        Ok(ExitCode::Success)
+        writeln!(
+            out,
+            "\nLearn more: {}",
+            style(telemetry::TELEMETRY_URL).cyan()
+        )
     }
 }
 
-/// Print the "Status: Enabled/Disabled" block plus a link to the docs page.
-/// Format matches Next.js's `nextTelemetry`: bold header, colored status,
-/// short body, cyan "Learn more" URL.
-fn print_status(t: &telemetry::Telemetry) {
-    let is_enabled = t.is_enabled();
-    println!();
-    println!("{}", style("BAML CLI Telemetry").bold());
-    let status_word = if is_enabled {
-        style("Enabled").green().bold().to_string()
-    } else {
-        style("Disabled").red().bold().to_string()
-    };
-    println!("\nStatus: {status_word}");
-    println!("Config: {}", style(t.config_path().display()).dim());
+impl Command for TelemetryArgs {
+    type Output = TelemetryStatus;
 
-    if is_enabled {
-        println!("\nBAML telemetry is completely anonymous. Thank you for participating!");
-    } else {
-        println!(
-            "\nYou have opted out of BAML's anonymous telemetry program.\n\
-             No data will be collected from your machine."
-        );
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<TelemetryStatus>> {
+        let t = telemetry::Telemetry::load();
+        let reporter = crate::reporter::Reporter::new();
+        // Snapshot the pre-change state so `disable` can distinguish
+        // "already off" from "just turned off" (matches Next's UX).
+        let was_enabled = t.is_enabled();
+        let saved = |path: Option<PathBuf>| match path {
+            Some(path) => reporter.status("Saved", path.display().to_string()),
+            None => reporter.warning("could not save the telemetry preference"),
+        };
+        match self.action {
+            TelemetryAction::Status => {}
+            TelemetryAction::Enable => saved(t.set_enabled(true)),
+            TelemetryAction::Disable if was_enabled => saved(t.set_enabled(false)),
+            TelemetryAction::Disable => {
+                t.set_enabled(false);
+                reporter.status("Unchanged", "BAML CLI telemetry is already disabled");
+            }
+        }
+
+        // Re-load so the reported status reflects the post-change value.
+        let t = telemetry::Telemetry::load();
+        Ok(Outcome::ok(TelemetryStatus {
+            enabled: t.is_enabled(),
+            config: t.config_path().to_path_buf(),
+        }))
     }
-
-    println!("\nLearn more: {}", style(telemetry::TELEMETRY_URL).cyan());
 }
 
 #[cfg(test)]

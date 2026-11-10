@@ -3,20 +3,20 @@ function root_help() -> null {
         `
             BAML
 
-            Usage: baml [--project <path>] <command> [args...]
+            Usage: baml [--project-dir <path>] <command> [args...]
 
             Wrapper commands:
               toolchain     Manage language toolchains
-              self-update   Update the wrapper executable
+              self update   Update the wrapper executable
 
             CLI commands (provided by the selected toolchain):
-              init, new, check, fmt, generate, test, run, pack, describe, query,
-              auth, feedback, ide, agent, playground, lsp, telemetry, clean, update, upgrade
+              new, init, check, fmt, test, run, pack, generate, describe, codequality,
+              playground, local, cloud, query, login, logout, ide, agent, telemetry, lsp
 
             Options:
-              --project <path>  Select a filesystem project
-              -h, --help       Show help
-              -V, --version    Report wrapper and selected CLI versions
+              --project-dir <path>  Select a filesystem project
+              -h, --help            Show help
+              -V, --version         Report wrapper and selected CLI versions
 
             Use baml help <command> for command help.
         `,
@@ -58,7 +58,7 @@ function help(command: string = "") -> null {
               uninstall <version>
 
             Selectors: canary, nightly, exact release version, or a local baml-cli path
-            Wrapper updates: baml self-update
+            Wrapper updates: baml self update
         `,
     );
     null
@@ -141,8 +141,8 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
         paths.management(args.slice(2, args.length()).concat(["--help"]));
         return null;
     }
-    if (args[0] == "help" && args.at(1) == "self-update") {
-        ensure(args.length() == 2, "usage: baml help self-update");
+    if (args[0] == "help" && args.at(1) == "self") {
+        ensure(args == ["help", "self", "update"], "usage: baml help self update");
         baml.io.println(SELF_UPDATE_HELP);
         return null;
     }
@@ -155,12 +155,16 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
             paths.management(args.slice(1, args.length()));
             return null;
         },
-        "self-update" => {
-            if (args == ["self-update", "--help"] || args == ["self-update", "-h"]) {
+        "self" => {
+            if (
+                args.length() == 1
+                    || ["--help", "-h"].includes(args[1])
+                    || ["--help", "-h"].includes(args.at(2) ?? "")
+            ) {
                 baml.io.println(SELF_UPDATE_HELP);
                 return null;
             }
-            ensure(args.length() == 1, "unexpected self-update arguments");
+            ensure(args == ["self", "update"], "usage: baml self update");
             return WrapperUpdater.update(
                 telemetry = paths.telemetry,
                 $trace = trace.span(inputs = false, output = false, error = false),
@@ -211,4 +215,4 @@ function previous_selector(original: string, global: bool) -> string {
     "not set"
 }
 
-const SELF_UPDATE_HELP = "baml self-update: update the wrapper executable independently of language toolchains; use baml toolchain status to check language updates";
+const SELF_UPDATE_HELP = "baml self update: update the wrapper executable independently of language toolchains; use baml toolchain status to check language updates";

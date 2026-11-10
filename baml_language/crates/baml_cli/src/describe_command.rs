@@ -1,13 +1,21 @@
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(clippy::print_stderr)]
 
-use std::path::PathBuf;
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_db::{ProjectDatabase, SourceRoot, baml_compiler2_hir};
 use baml_ide::{ResolvedTarget, SymbolDescription, describe};
 use clap::Args;
+use serde::Serialize;
 
-use crate::util::{line_number_at_offset, relative_path};
+use crate::{
+    ExitCode,
+    output::{Command, CommandContext, Outcome, OutputFormat, Report, Style},
+    util::{line_number_at_offset, relative_path},
+};
 
 /// Describe BAML symbols and language concepts.
 ///
@@ -45,55 +53,116 @@ pub struct DescribeArgs {
     /// Symbol, namespace, package, or keyword. Omit to list project symbols.
     pub name: Option<String>,
 
-    /// Deprecated alias for invoking `baml describe` without a name.
-    #[arg(long, hide_short_help = true)]
-    pub symbols: bool,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
-
-    /// Soft maximum number of output lines.
-    #[arg(long, default_value_t = 30, help_heading = "Output options")]
-    pub budget: usize,
-
-    /// Output results as JSON
-    #[arg(long, help_heading = "Output options")]
-    pub json: bool,
-
     /// Search names *and* docstrings for NAME, instead of resolving it.
     ///
     /// `describe` answers "what is this called"; `--search` answers "what does
     /// this", which is the question you have when you know the job and not the
     /// name: `baml describe --search 'read a file'`. Matching is on whole words
-    /// — of names and of docstrings — best first, so it finds a symbol whose
+    /// of names and of docstrings, best first, so it finds a symbol whose
     /// documentation uses your words even when its name does not.
     #[arg(long, help_heading = "Output options")]
     pub search: bool,
 
-    /// Most results to return from `--search`. At least 1.
+    /// How much text to show: search results, listing rows, or lines of one
+    /// description. Defaults to 30, except listings, which are complete.
+    /// `--output-format json` is never cut.
     ///
-    /// Bounded below because `--limit 0` truncated a full result set to nothing
-    /// and then reported "no symbol matches", which is a different answer.
+    /// With `--output-format json`, a package name (`root`, `baml`) exports
+    /// the whole package surface as one versioned document. Cross-package
+    /// references are self-describing ids like `T:baml.time.Duration`: the
+    /// prefix is the kind (`T:` type, `V:` value, `M:` method, `F:` field,
+    /// `E:` variant, `A:` associated type).
     #[arg(
         long,
-        default_value_t = 30,
         value_name = "N",
         value_parser = clap::value_parser!(u16).range(1..),
         help_heading = "Output options"
     )]
-    pub limit: u16,
+    pub limit: Option<u16>,
+}
 
-    /// Export a whole package's surface as one versioned JSON document
-    /// (NAME must be a package: `root`, `baml`, …). Cross-package references
-    /// are self-describing ids like `T:baml.time.Duration` — the prefix is
-    /// the kind (`T:` type, `V:` value, `M:` method, `F:` field, `E:`
-    /// variant, `A:` associated type; BAML's type and value namespaces are
-    /// distinct, so bare paths would be ambiguous). Export the referenced
-    /// package for a foreign id's full record. Filter with jq, e.g.
-    /// `… --export | jq '.items[] | select(.namespace == ["json"])'`.
-    #[arg(long, help_heading = "Output options")]
-    pub export: bool,
+/// Rows or lines shown in text mode when `--limit` is not given.
+const DEFAULT_LIMIT: u16 = 30;
+
+/// What `describe` found. Owns the database so text rendering can highlight
+/// source; JSON is never truncated.
+pub(crate) struct DescribeReport {
+    db: ProjectDatabase,
+    root: PathBuf,
+    limit: Option<usize>,
+    found: Found,
+}
+
+enum Found {
+    Nothing,
+    Search(Vec<baml_ide::SearchHit>),
+    Keyword(String),
+    Listing(Vec<baml_ide::ListingEntry>),
+    /// A whole package's surface, for `--output-format json`.
+    Export(serde_json::Value),
+    One(Box<SymbolDescription>),
+    Many(Vec<SymbolDescription>),
+}
+
+impl Serialize for DescribeReport {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let describe = |desc| description_to_json(&self.db, desc, usize::MAX, &self.root);
+        match &self.found {
+            Found::Nothing => serializer.serialize_unit(),
+            Found::Search(hits) => hits.serialize(serializer),
+            Found::Keyword(name) => render_keyword_json(name).serialize(serializer),
+            Found::Listing(entries) => listing_to_json(entries, &self.root).serialize(serializer),
+            Found::Export(export) => export.serialize(serializer),
+            Found::One(desc) => describe(desc).serialize(serializer),
+            Found::Many(descs) => serializer.collect_seq(descs.iter().map(describe)),
+        }
+    }
+}
+
+impl Report for DescribeReport {
+    fn text(&self, mut out: &mut dyn Write, style: &Style) -> io::Result<()> {
+        let limit = self.limit.unwrap_or(usize::from(DEFAULT_LIMIT));
+        match &self.found {
+            Found::Nothing | Found::Export(_) => Ok(()),
+            Found::Search(hits) => {
+                for hit in hits.iter().take(limit) {
+                    let summary = hit
+                        .summary
+                        .as_deref()
+                        .map(|s| format!("  // {s}"))
+                        .unwrap_or_default();
+                    writeln!(out, "{:<16} {:<40}{summary}", hit.kind, hit.path)?;
+                }
+                Ok(())
+            }
+            Found::Keyword(name) => write_keyword(&mut out, style, name),
+            Found::Listing(entries) => {
+                let shown = self.limit.map_or(entries.len(), |n| n.min(entries.len()));
+                write_listing(&mut out, style, &entries[..shown], &self.root)?;
+                if shown < entries.len() {
+                    writeln!(
+                        out,
+                        "... {} more (use `--limit {}` for all)",
+                        entries.len() - shown,
+                        entries.len()
+                    )?;
+                }
+                Ok(())
+            }
+            Found::One(desc) => {
+                write_description(&mut out, style, &self.db, desc, limit, &self.root)
+            }
+            Found::Many(descs) => {
+                for (i, desc) in descs.iter().enumerate() {
+                    if i > 0 {
+                        writeln!(out)?;
+                    }
+                    write_description(&mut out, style, &self.db, desc, limit, &self.root)?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Find FQNs across the packages `viewer` can name — its own and the ones it
@@ -308,209 +377,153 @@ fn resolve_unqualified_builtin_member<'db>(
     baml_ide::resolve_target(db, baml_pkg, name)
 }
 
-impl DescribeArgs {
-    /// Run the describe command and return the CLI exit code.
-    pub fn run(&self) -> Result<crate::ExitCode> {
+impl Command for DescribeArgs {
+    type Output = DescribeReport;
+
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<DescribeReport>> {
         // Introspection never requires a `baml.toml`: with no project, we
         // fall back to a stdlib-only "default state" so `baml describe
         // baml.String` works anywhere. An empty user-file set is therefore
-        // expected, not an error — unresolved names still surface through
+        // expected, not an error; unresolved names still surface through
         // the per-target "No symbol found" + did-you-mean paths below.
         let mut session = crate::project_session::ProjectSession::open_lenient(
-            self.from.as_deref(),
+            cx.project_dir.as_deref(),
             crate::project_session::CacheUse::ReadOnly,
         )?;
         // Warm seeds (no-delta only) + parallel index prime: describe queries
         // the whole-package aggregates, which otherwise derive serially.
         let _ = session.warm_prep();
         session.prime();
-        let (db, package, from) = (session.db, session.package, session.resolved.root);
-
-        // ── --symbols deprecation ───────────────────────────────────────────
-        if self.symbols {
-            eprintln!(
-                "warning: `--symbols` is deprecated. Use `baml describe` with no arguments instead."
-            );
-        }
-
+        let (db, package, root) = (session.db, session.package, session.resolved.root);
         let name = self.name.as_deref().unwrap_or("");
+        let json = cx.format != OutputFormat::Text;
+        let (found, status) = self.find(&db, package, name, json)?;
+        Ok(Outcome::new(
+            DescribeReport {
+                db,
+                root,
+                limit: self.limit.map(usize::from),
+                found,
+            },
+            status,
+        ))
+    }
+}
+
+impl DescribeArgs {
+    fn find(
+        &self,
+        db: &ProjectDatabase,
+        package: SourceRoot,
+        name: &str,
+        json: bool,
+    ) -> Result<(Found, ExitCode)> {
+        let not_found = || {
+            eprintln!("no symbol found: {name}");
+            print_did_you_mean(db, package, name);
+            Ok((Found::Nothing, ExitCode::Failure))
+        };
+        let found = |found| Ok((found, ExitCode::Success));
         // A listing is a menu of a package or namespace, so the stdlib's
-        // internal helpers stay out of it — by the same rule every other
+        // internal helpers stay out of it, by the same rule every other
         // surface uses: what the reader wrote decides.
         let listed_internals = baml_ide::Internals::for_query(name);
 
-        // ── --search: names and docstrings, rather than name resolution ─────
         if self.search {
-            // The user's package and every package it reaches by name — the
+            // The user's package and every package it reaches by name: the
             // ones a hit's path can address.
             let packages: Vec<SourceRoot> = std::iter::once(package)
                 .chain(
                     package
-                        .dependencies(&db)
+                        .dependencies(db)
                         .iter()
                         .map(|dependency| dependency.root),
                 )
                 .collect();
-            let hits =
-                baml_ide::search_ranked(&db, package, &packages, name, usize::from(self.limit));
-            if self.json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&hits)
-                        .unwrap_or_else(|_| unreachable!("search hits serialize"))
-                );
-            } else if hits.is_empty() {
+            let limit = usize::from(self.limit.unwrap_or(DEFAULT_LIMIT));
+            let hits = baml_ide::search_ranked(db, package, &packages, name, limit);
+            if hits.is_empty() {
                 // Not an error: "nothing does this" is a real answer about the
                 // standard library, and the caller asked a question rather than
                 // named something that should exist. Fall back to the name
-                // suggestions, which are fuzzy where this is literal — a query
+                // suggestions, which are fuzzy where this is literal: a query
                 // for `iterate` matches no docstring, because they all say
                 // "iterator", but it is close enough to a name to be offered.
-                println!("no symbol matches: {name}");
-                print_did_you_mean(&db, package, name);
-            } else {
-                for hit in &hits {
-                    let summary = hit
-                        .summary
-                        .as_deref()
-                        .map(|s| format!("  // {s}"))
-                        .unwrap_or_default();
-                    println!("{:<16} {:<40}{summary}", hit.kind, hit.path);
-                }
+                eprintln!("no symbol matches: {name}");
+                print_did_you_mean(db, package, name);
             }
-            return Ok(crate::ExitCode::Success);
+            return found(Found::Search(hits));
         }
 
-        // ── --export: the whole-package surface document ────────────────────
-        if self.export {
-            let Some(ResolvedTarget::Package(exported)) = dispatch(&db, package, name) else {
-                eprintln!(
-                    "error: `--export` takes a package name (`root`, `baml`, …), got `{name}`"
-                );
-                return Ok(crate::ExitCode::Other);
-            };
-            let export = baml_ide::export_package(&db, package, exported);
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&export)
-                    .unwrap_or_else(|_| unreachable!("export IR serializes"))
-            );
-            return Ok(crate::ExitCode::Success);
-        }
-
-        let target = dispatch(&db, package, name);
-
-        match target {
-            Some(ResolvedTarget::Keyword(ref kw)) => {
-                if self.json {
-                    let json = render_keyword_json(kw);
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&json)
-                            .context("failed to serialize keyword output as JSON")?
-                    );
-                } else {
-                    render_keyword(kw);
-                }
-                Ok(crate::ExitCode::Success)
+        match dispatch(db, package, name) {
+            Some(ResolvedTarget::Keyword(keyword)) => found(Found::Keyword(keyword.to_string())),
+            Some(ResolvedTarget::Package(listed)) if json => {
+                let export = baml_ide::export_package(db, package, listed);
+                found(Found::Export(serde_json::to_value(&export)?))
             }
-            Some(ResolvedTarget::Package(pkg)) => {
-                let entries = baml_ide::list_package_items(&db, package, pkg, listed_internals);
+            Some(ResolvedTarget::Package(listed)) => {
+                let entries = baml_ide::list_package_items(db, package, listed, listed_internals);
                 if entries.is_empty() {
                     eprintln!("no symbols found");
-                    return Ok(crate::ExitCode::Other);
-                }
-                if self.json {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
-                            .context("failed to serialize output as JSON")?
-                    );
-                } else {
-                    render_listing(&entries, &from);
+                    return Ok((Found::Nothing, ExitCode::Failure));
                 }
                 // Check for name collision: does the user also have an item
                 // matching the package name? Only hint when the bare name named
                 // a package the user's package reaches, not a user item.
                 let pkg_name = name.split('.').next().unwrap_or(name);
                 let names_dependency = baml_compiler2_hir::package::dependency_named(
-                    &db,
+                    db,
                     package,
                     &baml_db::Name::new(pkg_name),
                 )
                 .is_some();
-                if names_dependency && baml_ide::resolve_target(&db, package, pkg_name).is_some() {
-                    eprintln!();
+                if names_dependency && baml_ide::resolve_target(db, package, pkg_name).is_some() {
                     eprintln!(
                         "note: your project also defines `{pkg_name}`. \
                          Use `baml describe root.{pkg_name}` to see your definition."
                     );
                 }
-                Ok(crate::ExitCode::Success)
+                found(Found::Listing(entries))
             }
             Some(ResolvedTarget::Namespace {
                 package: listed,
                 ns_path,
             }) => {
-                let entries = baml_ide::list_namespace_items(
-                    &db,
-                    package,
-                    listed,
-                    &ns_path,
-                    listed_internals,
-                )
-                .unwrap_or_default();
+                let entries =
+                    baml_ide::list_namespace_items(db, package, listed, &ns_path, listed_internals)
+                        .unwrap_or_default();
                 if entries.is_empty() {
                     eprintln!("no symbols found in namespace");
-                    return Ok(crate::ExitCode::Other);
+                    return Ok((Found::Nothing, ExitCode::Failure));
                 }
-                if self.json {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
-                            .context("failed to serialize output as JSON")?
-                    );
-                } else {
-                    render_listing(&entries, &from);
-                }
-                Ok(crate::ExitCode::Success)
+                found(Found::Listing(entries))
             }
             Some(ResolvedTarget::Item(def)) => {
-                let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let Some(desc) = describe::describe_by_definition(&db, package, &files, def) else {
-                    eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, package, name);
-                    return Ok(crate::ExitCode::Other);
-                };
-                self.emit_description(&db, &desc, &from)?;
-                Ok(crate::ExitCode::Success)
+                let files = baml_compiler2_hir::compiler2_all_files(db);
+                match describe::describe_by_definition(db, package, &files, def) {
+                    Some(desc) => found(Found::One(Box::new(desc))),
+                    None => not_found(),
+                }
             }
             Some(ResolvedTarget::Member {
                 parent,
                 member_name,
             }) => {
-                let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let descs = describe::describe_item_member(
-                    &db,
+                let files = baml_compiler2_hir::compiler2_all_files(db);
+                let mut descs = describe::describe_item_member(
+                    db,
                     package,
                     &files,
                     parent,
                     member_name.as_str(),
                 );
-                match descs.as_slice() {
-                    [] => {
-                        eprintln!("no symbol found: {name}");
-                        print_did_you_mean(&db, package, name);
-                        Ok(crate::ExitCode::Other)
-                    }
-                    [desc] => {
-                        self.emit_description(&db, desc, &from)?;
-                        Ok(crate::ExitCode::Success)
-                    }
+                match descs.len() {
+                    0 => not_found(),
+                    1 => found(Found::One(Box::new(descs.remove(0)))),
                     // Several impls of the class provide a method of this
                     // name; each description carries its block's head, so
                     // show them all, exactly like an ambiguous bare name.
-                    _ => self.emit_descriptions(&db, &descs, &from),
+                    _ => found(Found::Many(descs)),
                 }
             }
             None => {
@@ -518,79 +531,23 @@ impl DescribeArgs {
                 // namespace of any package (`Point` declared under
                 // `shapes/`), or be a local (parameter, let binding). Scan
                 // the compiler-visible files and show every match.
-                let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let matches = describe::describe(&db, package, &files, name);
-
+                let files = baml_compiler2_hir::compiler2_all_files(db);
+                let matches = describe::describe(db, package, &files, name);
                 if matches.is_empty() {
-                    eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, package, name);
-                    return Ok(crate::ExitCode::Other);
+                    return not_found();
                 }
-
-                self.emit_descriptions(&db, &matches, &from)
+                found(Found::Many(matches))
             }
         }
-    }
-
-    /// Print several descriptions in the selected output mode: one JSON
-    /// array, or the rendered descriptions separated by blank lines.
-    fn emit_descriptions(
-        &self,
-        db: &ProjectDatabase,
-        descs: &[SymbolDescription],
-        project_root: &std::path::Path,
-    ) -> Result<crate::ExitCode> {
-        if self.json {
-            let documents: Vec<serde_json::Value> = descs
-                .iter()
-                .map(|desc| description_to_json(db, desc, self.budget, project_root))
-                .collect();
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&documents)
-                    .context("failed to serialize output as JSON")?
-            );
-            return Ok(crate::ExitCode::Success);
-        }
-
-        for (i, desc) in descs.iter().enumerate() {
-            if i > 0 {
-                println!();
-            }
-            render_description(db, desc, self.budget, project_root);
-        }
-
-        Ok(crate::ExitCode::Success)
-    }
-
-    /// Print one description in the selected output mode.
-    fn emit_description(
-        &self,
-        db: &ProjectDatabase,
-        desc: &SymbolDescription,
-        project_root: &std::path::Path,
-    ) -> Result<()> {
-        if self.json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&description_to_json(
-                    db,
-                    desc,
-                    self.budget,
-                    project_root
-                ))
-                .context("failed to serialize output as JSON")?
-            );
-        } else {
-            render_description(db, desc, self.budget, project_root);
-        }
-        Ok(())
     }
 }
 
 /// Render keyword documentation to a writer.
-pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result<()> {
-    let painter = crate::paint::Painter::stdout();
+pub fn write_keyword(
+    w: &mut impl std::io::Write,
+    painter: &crate::paint::Painter,
+    name: &str,
+) -> std::io::Result<()> {
     if let Some(doc) = baml_builtins2::language_topic(name) {
         writeln!(w, "{} — {}", painter.keyword(name), doc.summary)?;
         if let Some(ref syntax) = doc.syntax {
@@ -612,11 +569,6 @@ pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result
         }
     }
     Ok(())
-}
-
-/// Render keyword documentation to stdout.
-fn render_keyword(name: &str) {
-    let _ = write_keyword(&mut std::io::stdout(), name);
 }
 
 /// Render keyword documentation as JSON.
@@ -648,19 +600,10 @@ const SECTION_HEADER_COST: usize = 2;
 const CONTAINER_SECTION_COST: usize = 3;
 const LIST_ENTRY_COST: usize = 1;
 
-/// Render a SymbolDescription to stdout with budget-based output.
-pub fn render_description(
-    db: &ProjectDatabase,
-    desc: &SymbolDescription,
-    budget: usize,
-    project_root: &std::path::Path,
-) {
-    let _ = write_description(&mut std::io::stdout(), db, desc, budget, project_root);
-}
-
 /// Render a SymbolDescription to a writer with budget-based output.
 pub fn write_description(
     w: &mut impl std::io::Write,
+    painter: &crate::paint::Painter,
     db: &ProjectDatabase,
     desc: &SymbolDescription,
     budget: usize,
@@ -681,7 +624,6 @@ pub fn write_description(
     let definition_kind = desc.kind.definition_kind();
     let kind_str = definition_kind.as_str();
     let rel_path = relative_path(&file_path, project_root);
-    let painter = crate::paint::Painter::stdout();
     let colors = painter.enabled();
     let hl = crate::paint::Highlighter::new(db);
     let fqn_part = desc
@@ -754,7 +696,7 @@ pub fn write_description(
         let available_for_body = budget.saturating_sub(lines_used);
         lines_used += write_interface_body(
             w,
-            &painter,
+            painter,
             desc,
             members,
             implementations,
@@ -803,7 +745,7 @@ pub fn write_description(
                 writeln!(w)?;
                 writeln!(
                     w,
-                    "[INFO] showing {shown} of {total} lines; use `--budget {needed}` for full output",
+                    "[INFO] showing {shown} of {total} lines; use `--limit {needed}` for full output",
                     shown = shown_body_lines,
                     total = body_lines.len(),
                     needed = full_output_budget,
@@ -831,7 +773,7 @@ pub fn write_description(
         write_method_section(
             w,
             db,
-            &painter,
+            painter,
             project_root,
             "methods",
             instance_methods,
@@ -840,7 +782,7 @@ pub fn write_description(
         write_method_section(
             w,
             db,
-            &painter,
+            painter,
             project_root,
             "static_methods",
             static_methods,
@@ -859,7 +801,7 @@ pub fn write_description(
         let c_line = line_number_at_offset(c.file.text(db), c.name_span.start().into());
         write_kind_row(
             w,
-            &painter,
+            painter,
             c.kind,
             &c.name,
             &c_abs,
@@ -885,7 +827,7 @@ pub fn write_description(
             let dep_line = line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
             write_kind_row(
                 w,
-                &painter,
+                painter,
                 dep.kind,
                 &dep.name,
                 &dep_abs,
@@ -916,7 +858,7 @@ pub fn write_description(
                 elided += impl_row_cost(imp);
                 continue;
             }
-            let display = styled_declaration(&painter, &imp.display);
+            let display = styled_declaration(painter, &imp.display);
             match &imp.location {
                 Some(location) => {
                     let imp_abs = location.file.path(db);
@@ -946,7 +888,7 @@ pub fn write_description(
                     elided += LIST_ENTRY_COST;
                     continue;
                 }
-                writeln!(w, "    {}", styled_declaration(&painter, &binding))?;
+                writeln!(w, "    {}", styled_declaration(painter, &binding))?;
                 render_budget.consume(LIST_ENTRY_COST);
             }
             for m in &imp.methods {
@@ -955,7 +897,7 @@ pub fn write_description(
                     elided += unit_cost;
                     continue;
                 }
-                write_method_row(w, db, &painter, project_root, "    ", m)?;
+                write_method_row(w, db, painter, project_root, "    ", m)?;
                 render_budget.consume(unit_cost);
             }
         }
@@ -1227,7 +1169,7 @@ fn write_interface_body(
         writeln!(w)?;
         writeln!(
             w,
-            "[INFO] showing {printed} of {total} lines; use `--budget {full_output_budget}` for full output",
+            "[INFO] showing {printed} of {total} lines; use `--limit {full_output_budget}` for full output",
         )?;
         printed += 2;
     }
@@ -1269,7 +1211,7 @@ fn write_highlighted_body(
     writeln!(w)?;
     writeln!(
         w,
-        "[INFO] showing {} of {} lines; use `--budget {}` for full output",
+        "[INFO] showing {} of {} lines; use `--limit {}` for full output",
         head + tail + 1,
         lines.len(),
         full_output_budget,
@@ -1443,7 +1385,7 @@ fn write_elision_marker(
     if elided > 0 {
         writeln!(
             w,
-            "  \u{2026} {elided} more lines (re-run with a higher `--budget` to see more; use `--budget {full_output_budget}` for full output)"
+            "  \u{2026} {elided} more lines (re-run with a higher `--limit` to see more; use `--limit {full_output_budget}` for full output)"
         )?;
     }
     Ok(())
@@ -1572,23 +1514,18 @@ fn write_method_row(
     }
 }
 
-/// Render a flat listing of entries to stdout.
-fn render_listing(entries: &[baml_ide::ListingEntry], project_root: &std::path::Path) {
-    let _ = write_listing(&mut std::io::stdout(), entries, project_root);
-}
-
 /// Render a flat listing of entries to a writer.
 pub fn write_listing(
     w: &mut impl std::io::Write,
+    painter: &crate::paint::Painter,
     entries: &[baml_ide::ListingEntry],
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
-    let painter = crate::paint::Painter::stdout();
     for entry in entries {
         let abs = std::path::Path::new(&entry.file_path);
         let rel = relative_path(abs, project_root);
         let loc = painter.location(abs, &rel.display().to_string(), &entry.line.to_string());
-        write_symbol_row(w, &painter, "", entry.kind, &entry.fqn(), &loc)?;
+        write_symbol_row(w, painter, "", entry.kind, &entry.fqn(), &loc)?;
     }
     Ok(())
 }
@@ -1627,11 +1564,9 @@ fn write_kind_row(
 
 /// Convert listing entries to JSON array.
 fn listing_to_json(
-    db: &ProjectDatabase,
     entries: &[baml_ide::ListingEntry],
     project_root: &std::path::Path,
 ) -> Vec<serde_json::Value> {
-    let _ = db; // db not needed for listing JSON, but kept for consistency
     entries
         .iter()
         .map(|entry| {

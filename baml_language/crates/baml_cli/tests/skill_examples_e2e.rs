@@ -218,7 +218,7 @@ fn example_tests_pass() {
         let project = materialize(&skill);
         let output = Command::new(common::baml_cli())
             .arg("test")
-            .arg("--project")
+            .arg("--project-dir")
             .arg(project.path())
             .args(["--agent-skill-check", "off", "--color", "never"])
             .env("BAML_CLI_ALLOW_DIRECT", "1")

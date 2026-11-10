@@ -253,7 +253,8 @@ class WrapperTelemetry {
             }
             if (
                 [
-                    "--project",
+                    "--project-dir",
+                    "--output-format",
                     "--output-preset",
                     "--color",
                     "--hyperlinks",
@@ -276,7 +277,7 @@ class WrapperTelemetry {
         index = 0;
         if (tokens.at(index) == "help") {
             index += 1;
-            if (!["toolchain", "self-update"].includes(tokens.at(index) ?? "")) {
+            if (!["toolchain", "self"].includes(tokens.at(index) ?? "")) {
                 return "baml";
             }
         }
@@ -288,10 +289,12 @@ class WrapperTelemetry {
             }
             return "baml toolchain";
         }
+        if (command == "self") {
+            return "baml self update";
+        }
         if (
             [
                 "toolchain",
-                "self-update",
                 "check",
                 "run",
                 "test",
@@ -303,15 +306,15 @@ class WrapperTelemetry {
                 "new",
                 "pack",
                 "describe",
+                "codequality",
+                "local",
+                "cloud",
                 "query",
-                "auth",
-                "feedback",
+                "login",
+                "logout",
                 "ide",
                 "agent",
                 "telemetry",
-                "clean",
-                "update",
-                "upgrade",
             ]
                 .includes(command)
         ) {

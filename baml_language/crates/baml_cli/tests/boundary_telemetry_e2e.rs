@@ -79,8 +79,8 @@ fn assert_api_key_rejection(
     // is compared in full; unit tests independently pin each specific saved-login state.
     let expected = [
         "Unset BOUNDARY_API_KEY to use your saved Boundary login.",
-        "Unset BOUNDARY_API_KEY, then run `baml auth login`.",
-        "Your saved login could not be read. Unset BOUNDARY_API_KEY, then run `baml auth login` to restore user authentication.",
+        "Unset BOUNDARY_API_KEY, then run `baml cloud auth login`.",
+        "Your saved login could not be read. Unset BOUNDARY_API_KEY, then run `baml cloud auth login` to restore user authentication.",
     ].map(|login_recovery| format!(r#"{prefix}: Boundary rejected BOUNDARY_API_KEY (401).
   Endpoint: {endpoint}
 
@@ -387,7 +387,7 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
         &[
             "query",
             "SELECT COUNT(*) AS recordings FROM processes",
-            "--format",
+            "--output-format",
             "json",
         ],
     );
@@ -406,7 +406,7 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
         &[
             "query",
             "SELECT COUNT(*) FROM processes",
-            "--format",
+            "--output-format",
             "json",
         ],
     );
@@ -415,7 +415,14 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
         temp.path(),
         &server.uri(),
         "local",
-        &["query", "SELECT 1", "--project", "acme/app"],
+        &[
+            "cloud",
+            "recordings",
+            "query",
+            "SELECT 1",
+            "--project",
+            "acme/app",
+        ],
     );
     assert!(!output.status.success());
     assert_eq!(
@@ -423,7 +430,7 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
             .lines()
             .find(|line| line.starts_with("error: "))
             .unwrap(),
-        r#"error: BOUNDARY_API_KEY=local selects local recordings; unset BOUNDARY_API_KEY to use --project or --environment for a cloud query"#
+        "error: BOUNDARY_API_KEY=local selects local recordings; unset it to query Boundary Cloud"
     );
 
     assert!(server.received_requests().await.unwrap().is_empty());
@@ -645,7 +652,7 @@ async fn initial_telemetry_rejection_preserves_the_public_api_message() {
 #[test]
 fn cloud_configuration_errors_share_diagnostics_without_exposing_invalid_url_credentials() {
     let temp = fixture("function main() -> int { 7 }\n");
-    for args in [&["query", "SELECT 1"][..], &["auth", "login"][..]] {
+    for args in [&["query", "SELECT 1"][..], &["cloud", "auth", "login"][..]] {
         let output = execute_case(
             temp.path(),
             "https://user:private-password@example.test",
@@ -909,7 +916,7 @@ fn corrupt_saved_login_errors_for_query_and_execution_but_explicit_local_recordi
   Endpoint: {endpoint}
 
   To continue, choose one:
-    • Remove the invalid saved login: run `baml auth logout`, then `baml auth login`.
+    • Remove the invalid saved login: run `baml cloud auth logout`, then `baml cloud auth login`.
     • Set BOUNDARY_API_KEY to a valid API key.
 {recovery}
 

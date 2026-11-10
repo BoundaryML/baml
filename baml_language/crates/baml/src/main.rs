@@ -174,18 +174,16 @@ fn invocation_paths(args: &[String]) -> Result<(Vec<String>, InvocationPaths)> {
             management.extend_from_slice(&args[index..]);
             break;
         }
-        let flag =
-            if command != Some("query") && (arg == "--project" || arg.starts_with("--project=")) {
-                Some("--project")
-            } else {
-                None
-            };
+        // `--project-dir` is always the local path; `baml cloud ... --project`
+        // is a cloud handle the wrapper never reads.
+        let flag = (arg == "--project-dir" || arg.starts_with("--project-dir="))
+            .then_some("--project-dir");
         // Skip values of CLI-global output options when finding the command.
-        // In particular, `query --project` is a cloud handle, not a source path.
         if command.is_none()
             && matches!(
                 arg.as_str(),
-                "--output-preset"
+                "--output-format"
+                    | "--output-preset"
                     | "--color"
                     | "--hyperlinks"
                     | "--diagnostic-format"
@@ -305,28 +303,28 @@ fn resolve_toolchain(
 
 const ROOT_HELP: &str = "BAML
 
-Usage: baml [--project <path>] <command> [args...]
+Usage: baml [--project-dir <path>] <command> [args...]
 
 Wrapper commands:
   toolchain     Manage language toolchains
-  self-update   Update the wrapper executable
+  self update   Update the wrapper executable
 
 CLI commands (provided by the selected toolchain):
-  init, new, check, fmt, generate, test, run, pack, describe, query,
-  auth, feedback, ide, agent, playground, lsp, telemetry, clean, update, upgrade
+  new, init, check, fmt, test, run, pack, generate, describe, codequality,
+  playground, local, cloud, query, login, logout, ide, agent, telemetry, lsp
 
 Options:
-  --project <path>  Select a filesystem project
-  -h, --help       Show help
-  -V, --version    Report wrapper and selected CLI versions
+  --project-dir <path>  Select a filesystem project
+  -h, --help            Show help
+  -V, --version         Report wrapper and selected CLI versions
 
 Use baml help <command> for command help.
 ";
 
-const SELF_UPDATE_HELP: &str = r#"BAML wrapper self-update
+const SELF_UPDATE_HELP: &str = r#"BAML wrapper self update
 
 Usage:
-  baml self-update
+  baml self update
 
 Updates the wrapper binary only. It never installs or changes the active
 language toolchain. Package-manager-managed wrappers refuse self-update and
@@ -399,8 +397,11 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
                 args.remove(0);
                 args.push("--help".to_string());
             }
-            Some("self-update") => {
-                anyhow::ensure!(args.len() == 2, "usage: baml help self-update");
+            Some("self") => {
+                anyhow::ensure!(
+                    args.len() == 3 && args[2] == "update",
+                    "usage: baml help self update"
+                );
                 print!("{SELF_UPDATE_HELP}");
                 return Ok(0);
             }
@@ -414,14 +415,16 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
         args.remove(0);
         return toolchain(args, &paths).map(|()| 0);
     }
-    if args.first().map(String::as_str) == Some("self-update") {
-        if args.get(1).is_some_and(|arg| is_help_arg(arg)) {
+    if args.first().map(String::as_str) == Some("self") {
+        if args.get(1).is_none_or(|arg| is_help_arg(arg))
+            || args.get(2).is_some_and(|arg| is_help_arg(arg))
+        {
             print!("{SELF_UPDATE_HELP}");
             return Ok(0);
         }
-        if args.len() > 1 {
+        if args.get(1).map(String::as_str) != Some("update") || args.len() > 2 {
             return Err(anyhow!(
-                "usage: baml self-update\nunexpected arguments: {}",
+                "usage: baml self update\nunexpected arguments: {}",
                 args[1..].join(" ")
             ));
         }

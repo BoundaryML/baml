@@ -8,10 +8,10 @@ work="${RUNNER_TEMP:?}/baml-action"
 mkdir -p "$work"
 
 # CI is not an agent, and its logs have no terminal to color or animate.
-flags=(--agent-skill-check off --color never --no-progress)
+flags=(--agent-skill-check off --color never)
 
 run_check() {
-  baml "${flags[@]}" --project "$project" check
+  baml "${flags[@]}" --project-dir "$project" check
 }
 
 run_fmt() {
@@ -23,7 +23,7 @@ run_fmt() {
     echo "::error::baml fmt --check is not available in BAML $(baml --version 2>/dev/null); use a newer toolchain or set fmt: false"
     return 1
   fi
-  baml "${flags[@]}" --project "$project" fmt --check
+  baml "${flags[@]}" --project-dir "$project" fmt --check
 }
 
 run_test() {
@@ -32,7 +32,7 @@ run_test() {
     args+=(--profile "$INPUT_TEST_PROFILE")
   fi
   local status=0
-  baml "${flags[@]}" --project "$project" "${args[@]}" || status=$?
+  baml "${flags[@]}" --project-dir "$project" "${args[@]}" || status=$?
   # 5 is `baml test`'s "no tests were found".
   if [[ $status -eq 5 ]]; then
     echo "::notice::baml test found no tests in $project"
@@ -43,7 +43,7 @@ run_test() {
 
 measure() {
   local dir="$1" out="$2"
-  baml "${flags[@]}" --project "$dir" codequality --output-format json >"$out"
+  baml "${flags[@]}" --project-dir "$dir" codequality --output-format json >"$out"
 }
 
 # Prints the base branch's report path, or nothing if the base can't be
@@ -109,7 +109,7 @@ run_codequality() {
 
   if [[ -z "${PR_NUMBER:-}" ]]; then
     local table="$work/codequality.txt"
-    baml "${flags[@]}" --project "$project" codequality | tee "$table"
+    baml "${flags[@]}" --project-dir "$project" codequality | tee "$table"
     {
       echo "### Code quality"
       echo
@@ -131,7 +131,7 @@ run_codequality() {
   # The renderer is a BAML project pinned to its own toolchain, so drop
   # setup-baml's BAML_TOOLCHAIN and let its baml.toml choose.
   status="$(env -u BAML_TOOLCHAIN BAML_TELEMETRY=off \
-    baml "${flags[@]}" --project "$GITHUB_ACTION_PATH/codequality" run main -- \
+    baml "${flags[@]}" --project-dir "$GITHUB_ACTION_PATH/codequality" run main -- \
     ${base_args[@]+"${base_args[@]}"} \
     --head "$work/head.json" \
     --out "$summary" \

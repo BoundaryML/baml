@@ -789,7 +789,7 @@ testset "configuration validation" {
     test "project option requires value" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["--project"];
+        let args = ["--project-dir"];
         let result = fixture.run(candidate, args);
         root.harness.require(!result.ok(), "invalid project flags succeeded");
         root.harness.require(
@@ -801,7 +801,7 @@ testset "configuration validation" {
     test "project option requires existing project" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["--project", "../absent", "check"];
+        let args = ["--project-dir", "../absent", "check"];
         let result = fixture.run(candidate, args);
         root.harness.require(!result.ok(), "invalid project flags succeeded");
         root.harness.require(
@@ -813,7 +813,7 @@ testset "configuration validation" {
     test "duplicate project option is rejected" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["--project", ".", "--project", ".", "check"];
+        let args = ["--project-dir", ".", "--project-dir", ".", "check"];
         let result = fixture.run(candidate, args);
         root.harness.require(!result.ok(), "invalid project flags succeeded");
         root.harness.require(

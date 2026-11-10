@@ -327,7 +327,7 @@ fn file_uri(path: &Path) -> String {
 /// Owns the color decision for one output stream and produces colored-or-plain
 /// text accordingly.
 ///
-/// Construct [`Painter::stdout`] / [`Painter::stderr`] so the decision matches
+/// Construct stdout painters through the output context and [`Painter::stderr`] so the decision matches
 /// where the text is written; call sites then never branch on color and the
 /// helpers never have to guess which stream they're feeding (which previously
 /// risked leaking codes into a redirected sibling stream).
@@ -337,22 +337,16 @@ pub struct Painter {
 }
 
 impl Painter {
-    /// Painter for stdout-bound output.
-    pub fn stdout() -> Self {
-        let policy = crate::output::policy().stdout;
-        Self {
-            color: policy.color,
-            hyperlinks: policy.hyperlinks,
-        }
+    /// Built by the output module only: stdout painters come from
+    /// [`crate::output::Context`], stderr ones from
+    /// [`crate::output::stderr_painter`].
+    pub(crate) fn new(color: bool, hyperlinks: bool) -> Self {
+        Self { color, hyperlinks }
     }
 
     /// Painter for stderr-bound output.
     pub fn stderr() -> Self {
-        let policy = crate::output::policy().stderr;
-        Self {
-            color: policy.color,
-            hyperlinks: policy.hyperlinks,
-        }
+        crate::output::stderr_painter()
     }
 
     /// Whether this stream renders color. Also gates the verbatim-vs-cleaned body

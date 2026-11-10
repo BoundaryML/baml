@@ -9,7 +9,7 @@ testset "wrapper self update" {
             defer { fixture.close(); }
             fixture.manage(
                 candidate,
-                ["self-update"],
+                ["self", "update"],
                 success = false,
                 diagnostic = "package manager",
             );
@@ -39,7 +39,7 @@ testset "wrapper self update" {
             };
             fixture.wrapper_archive(mode = "valid");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self-update"], success = true);
+            fixture.manage(copy, ["self", "update"], success = true);
             fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
             let attempts = 0;
             while (attempts < 100) {
@@ -83,7 +83,7 @@ testset "wrapper self update" {
             fixture.wrapper_archive(mode = "valid");
             fixture.write("server/wrapper.json.status", "500");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self-update"], success = false);
+            fixture.manage(copy, ["self", "update"], success = false);
             fixture.check(copy, BASE_VERSION);
             root.harness.require(
                 fixture.read(CHANNEL_STATE_FILE) == state
@@ -111,7 +111,7 @@ testset "wrapper self update" {
             };
             fixture.wrapper_archive(mode = "checksum");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            let result = fixture.manage(copy, ["self-update"], success = false);
+            let result = fixture.manage(copy, ["self", "update"], success = false);
             root.harness.require(
                 fixture.requests().includes(
                     if (fixture.windows) {
@@ -150,7 +150,7 @@ testset "wrapper self update" {
                     self_update: true,
                 };
                 fixture.wrapper_archive(mode = "not-executable");
-                fixture.manage(copy, ["self-update"]);
+                fixture.manage(copy, ["self", "update"]);
                 fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
                 let output = fixture.run(copy, ["check"]);
                 root.harness.require(
@@ -185,7 +185,7 @@ testset "wrapper self update" {
                 fixture.chmod(".", "555");
                 defer { fixture.chmod(".", "755"); }
                 let state = fixture.read(CHANNEL_STATE_FILE);
-                fixture.manage(copy, ["self-update"], success = false);
+                fixture.manage(copy, ["self", "update"], success = false);
                 root.harness.require(
                     fixture.requests().includes("/wrapper.tar.gz"),
                     "staging failure happened before archive download",
@@ -238,7 +238,7 @@ testset "wrapper self update" {
             };
             fixture.wrapper_archive(mode = "valid");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self-update"], success = true);
+            fixture.manage(copy, ["self", "update"], success = true);
             fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
             let attempts = 0;
             while (attempts < 100) {

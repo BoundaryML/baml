@@ -87,7 +87,7 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
     command = [
         str(args.cli.resolve()),
         "pack",
-        "--from",
+        "--project-dir",
         str(project),
         "main",
         "--output",

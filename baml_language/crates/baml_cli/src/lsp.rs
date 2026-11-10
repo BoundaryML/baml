@@ -4,6 +4,11 @@ use anyhow::Result;
 use baml_lsp_server::run_server;
 use clap::Args;
 
+use crate::{
+    ExitCode,
+    output::{CommandContext, RawCommand},
+};
+
 /// Start a BAML language server over standard input and output.
 ///
 /// Editor integrations normally start this command automatically. Use one or
@@ -23,9 +28,10 @@ pub struct LanguageServerArgs {
     pub workspace: Vec<PathBuf>,
 }
 
-impl LanguageServerArgs {
-    pub fn run(&self) -> Result<()> {
+/// The language server speaks its protocol on stdin and stdout.
+impl RawCommand for LanguageServerArgs {
+    fn run(&self, _cx: &CommandContext) -> Result<ExitCode> {
         run_server(self.workspace.clone())?;
-        Ok(())
+        Ok(ExitCode::Success)
     }
 }
