@@ -2,6 +2,7 @@
 
 import bamlMark from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
 import bamlWhite from '@boundaryml/brand/logo/svg/baml-primary-white.svg';
+import { RotateCcw } from 'lucide-react';
 import Image from 'next/image';
 import {
   type CSSProperties,
@@ -15,72 +16,253 @@ import { Card, Frame } from './kit';
 import { MarkTile } from './mark';
 import { MARKS, type Mark } from './marks';
 
-// The v4 hero diagram: where each toolchain reaches, from build to production. The languages fill
-// Build and Test, then hand everything past the deploy line to separate products, drawn as grids of
+// The v4 hero diagram: where each toolchain reaches, from build to production. Four columns on each
+// side of the line: the language itself, then Build, Test, and Publish, which the languages fill; past
+// the deploy line they hand everything to separate products, drawn as grids of
 // their logos, which appear one stage at a time. Deploy is a labelled line in a gap of its own, so the
 // cells on either side of it never touch. BAML's row is the one thing that crosses it: a single bar that
 // narrows to a thick neck over the line, and a line runs from its end back to Build. It is drawn with
 // the parts from /diagram-styles, so the style button can show it in any of that board's styles.
 
-const BEFORE = ['Build', 'Test'];
-const AFTER = ['Trace', 'Dashboards', 'Alerts', 'Feature flags'];
+const BEFORE = ['Build', 'Test', 'Release'];
+const AFTER = ['Trace', 'Dashboards', 'Alerts', 'More'];
 const STAGES = [...BEFORE, ...AFTER];
+// Shorter stage names for the phone's narrow name column.
+const SHORT: Record<string, string> = { Dashboards: 'Metrics' };
 
-export const PRODUCTS: Mark[][] = [
+// Past the line every tool is there once, in its stage's column, and each language takes its own
+// journey through them: one tool per stage, drawn as a line as the lap crosses production. `ROUTES`
+// is each language's pick in each stage, as an index into that stage's `TOOLS`.
+const TOOLS: Mark[][] = [
   [MARKS.datadog, MARKS.honeycomb, MARKS.langsmith, MARKS.logfire],
-  [MARKS.grafana, MARKS.datadog, MARKS.metabase],
-  [MARKS.sentry, MARKS.pagerduty, MARKS.datadog],
-  [MARKS.launchdarkly, MARKS.statsig, MARKS.posthog],
+  [MARKS.grafana, MARKS.metabase, MARKS.posthog],
+  [MARKS.sentry, MARKS.pagerduty],
+  [MARKS.launchdarkly, MARKS.statsig, MARKS.temporal, MARKS.cloudflare],
+];
+// The ways the production side can be drawn, compared on /tracker-lab. `web`: every tool once, in
+// columns of different lengths, with curving lines. `transit`: every stage has a slot per language
+// row, tools sit in those slots, and each line runs level out of its own row, jogging only where it
+// picks a tool in another row.
+export const PRODUCTIONS = [
+  'web',
+  'transit',
+  'tangle',
+  'fill',
+  'reveal',
+  'shuffle',
+] as const;
+export type Production = (typeof PRODUCTIONS)[number];
+
+// The transit layout's slots: one per language row in each stage, some left empty.
+const SLOTS: (Mark | null)[][] = [
+  [MARKS.datadog, MARKS.honeycomb, MARKS.langsmith, MARKS.logfire],
+  [MARKS.grafana, MARKS.metabase, MARKS.posthog, null],
+  [MARKS.sentry, null, MARKS.pagerduty, null],
+  [MARKS.launchdarkly, MARKS.statsig, MARKS.temporal, MARKS.cloudflare],
+];
+// Each language's slot in each stage: C runs straight, the others jog.
+const LINES: number[][] = [
+  [0, 0, 0, 0],
+  [2, 1, 0, 1],
+  [1, 0, 2, 2],
+  [3, 2, 2, 3],
 ];
 
-type Test = { command: string } | { marks: Mark[] } | { own: true };
+// A route through the transit slots: the language row it leaves from and its slot in each stage.
+type Route = { from: number; picks: number[] };
+const ONE_EACH: Route[] = LINES.map((picks, from) => ({ from, picks }));
+// The tangle: three routes out of every row, so the many combinations show, not one each.
+const TANGLE: Route[] = [
+  [0, [0, 0, 0, 0]],
+  [0, [1, 1, 2, 1]],
+  [0, [0, 2, 0, 3]],
+  [1, [2, 1, 0, 1]],
+  [1, [1, 0, 2, 0]],
+  [1, [3, 2, 2, 2]],
+  [2, [1, 0, 2, 2]],
+  [2, [2, 2, 0, 3]],
+  [2, [0, 1, 2, 0]],
+  [3, [3, 2, 2, 3]],
+  [3, [2, 1, 0, 2]],
+  [3, [3, 0, 0, 1]],
+].map(([from, picks]) => ({ from: from as number, picks: picks as number[] }));
 
-// Each language is named, with no logo, since C's logo is just the letter again. `short` is the name
-// on a phone, where the column is narrow. `year` is when the language first appeared, shown faintly
-// under its name.
+// The fill take: each language row's picks in each stage, popped into a cell of empty squares.
+const PICKS: Mark[][][] = [
+  [[MARKS.datadog], [MARKS.grafana], [MARKS.pagerduty], [MARKS.launchdarkly]],
+  [
+    [MARKS.honeycomb, MARKS.langsmith],
+    [MARKS.metabase],
+    [MARKS.sentry],
+    [MARKS.statsig, MARKS.temporal],
+  ],
+  [
+    [MARKS.datadog, MARKS.logfire],
+    [MARKS.grafana, MARKS.datadog],
+    [MARKS.pagerduty],
+    [MARKS.posthog],
+  ],
+  [
+    [MARKS.honeycomb],
+    [MARKS.metabase],
+    [MARKS.sentry, MARKS.datadog],
+    [MARKS.cloudflare],
+  ],
+];
+const SQUARES = 3;
+// The shuffle take: once every product is revealed, it cycles through the languages, each beat
+// lighting one project's stack and dimming the rest of the pool.
+const SHUFFLE_BEAT_MS = 1500;
+
+/** The shuffle's pick out of `n` options for slot `slot` on beat `beat`: scrambled, but the same
+ *  every time for the same beat, so a render never flickers. */
+function pickOf(beat: number, slot: number, n: number) {
+  const h = Math.imul(beat * 31 + slot * 17 + 7, 2654435761) >>> 0;
+  return (h >>> 8) % n;
+}
+
+// The shuffle's highlighting stays quiet. Every tool rests muted, from the start, and only a pick
+// comes up to full strength and grows a touch; the rows not in focus fade a little.
+const UNPICKED = 0.45;
+const PICK_GROW = 'scale(1.12)';
+const UNFOCUSED = 0.8;
+
+// The reveal take: the original columns of products, the boxes there from the start.
+const ZONED: Mark[][][] = [
+  [
+    [MARKS.datadog, MARKS.honeycomb],
+    [MARKS.langsmith, MARKS.logfire],
+  ],
+  [[MARKS.grafana, MARKS.datadog, MARKS.metabase]],
+  [[MARKS.sentry, MARKS.pagerduty, MARKS.datadog]],
+  [
+    [MARKS.launchdarkly, MARKS.statsig, MARKS.posthog],
+    [MARKS.temporal, MARKS.cloudflare],
+  ],
+];
+
+// Where a stage splits into more than one box, what a box is, labelled in its corner. A box that is
+// just its stage, like Trace's first, needs none.
+const ZONE_NAMES: (string | null)[][] = [
+  [null, 'AI traces'],
+  [null],
+  [null],
+  ['Feature flags', 'Durable execution'],
+];
+
+/** How far the lap is through past-the-line stage `i`, 0 to 1. */
+const stageAt = (p: number, i: number) => clamp(p - BEFORE.length - i);
+
+const ROUTES: number[][] = [
+  // C: Datadog, Grafana, PagerDuty, LaunchDarkly
+  [0, 0, 1, 0],
+  // TypeScript: LangSmith, Metabase, Sentry, Statsig
+  [2, 1, 0, 1],
+  // Go: Honeycomb, Grafana, PagerDuty, Temporal
+  [1, 0, 1, 2],
+  // Rust: Logfire, PostHog, Sentry, Cloudflare
+  [3, 2, 0, 3],
+];
+// Every product past the line, counted once.
+const PRODUCT_COUNT = new Set(TOOLS.flat().map((m) => m.name)).size;
+
+// A step a language covers: a command it ships, the separate tools people pick between, or nothing
+// of its own.
+type Step = { command: string } | { marks: Mark[] } | { own: true };
+
+// Each language, with how far its own toolchain reaches: `unified` steps from Build on are one tool,
+// drawn as one block with the language, labelled `tool`. The rest are separate cells: a command, the
+// tools people pick between, or an empty dashed cell where there is nothing of its own. `steps` are
+// Build, Test, and Publish.
 const LANGUAGES: {
-  build: string;
+  logo: Mark;
   name: string;
-  short: string;
-  test: Test;
-  year: number;
+  steps: [Step, Step, Step];
+  tool?: string;
+  unified: number;
 }[] = [
-  { build: 'cc', name: 'C', short: 'C', test: { own: true }, year: 1972 },
   {
-    build: 'tsc',
-    name: 'TypeScript',
-    short: 'TS',
-    test: { marks: [MARKS.jest, MARKS.vitest, MARKS.mocha] },
-    year: 2012,
+    logo: MARKS.c,
+    name: 'C',
+    steps: [{ command: 'cc' }, { own: true }, { own: true }],
+    tool: 'cc',
+    unified: 1,
   },
   {
-    build: 'go build',
+    logo: MARKS.typescript,
+    name: 'TypeScript',
+    steps: [
+      { marks: [MARKS.vite, MARKS.webpack, MARKS.esbuild] },
+      { marks: [MARKS.jest, MARKS.vitest, MARKS.mocha] },
+      { marks: [MARKS.npm, MARKS.pnpm, MARKS.yarn] },
+    ],
+    unified: 0,
+  },
+  {
+    logo: MARKS.go,
     name: 'Go',
-    short: 'Go',
-    test: { command: 'go test' },
-    year: 2009,
+    steps: [{ command: 'go build' }, { command: 'go test' }, { own: true }],
+    tool: 'go',
+    unified: 2,
+  },
+  {
+    logo: MARKS.rust,
+    name: 'Rust',
+    steps: [
+      { command: 'cargo build' },
+      { command: 'cargo test' },
+      { command: 'cargo publish' },
+    ],
+    tool: 'cargo',
+    unified: 3,
   },
 ];
+
+// The phone's columns: the stage names, one per language, BAML, and the line back to build.
+const BAML_COL = LANGUAGES.length + 2;
 
 const BAML = [
   'baml check',
   'baml test',
+  'baml pack',
   'baml query',
   'baml dashboard',
   'baml alerts',
-  'baml flags',
+  'and more',
 ];
 
-const FILL_MS = 6000;
-const HOLD_MS = 3400;
-const LAP_MS = FILL_MS + HOLD_MS;
-// Once BAML's bar is full, a band of light crosses it, starting just after the fill lands.
-const SWEEP_AT = FILL_MS + 150;
-const SWEEP_MS = 1400;
+// The lap: the claim that no stack has gone past deploy sits over the diagram from the start, with
+// the languages' bars already full. The products past the line pop in, then "Until now.", and only
+// then does BAML's row pop in and fill.
+// Kept for the runner, which no longer runs: how long the old fill took.
+const FILL_MS = 5000;
+const PROD_AT = 500;
+const UNTIL_AT = PROD_AT + 1600;
+const BAML_AT = UNTIL_AT + 700;
+const BAML_MS = 1800;
+const FULL_AT = BAML_AT + BAML_MS;
+// It plays once. Once the Improve line has drawn, the story is done and a Replay button shows.
+const DONE_AT = FULL_AT + 1700;
+// Kept for the runner, which no longer runs: the length of the old looping lap.
+const LAP_MS = FULL_AT + 3400;
+// From then on a glimmer keeps circling BAML's loop: across the bar, then back along the Improve
+// line to build, a short rest, and around again.
+// The cycle's timing is in home.css, in the `tracker-glint-*` keyframes.
 
 const MUTED = 'rgb(from var(--ds-ink) r g b / 0.55)';
+
+/** BAML's row pops in once "Until now." has landed: a fade and a short rise, opacity and transform only. */
+function popIn(on: boolean): CSSProperties {
+  return {
+    opacity: on ? 1 : 0,
+    transform: on ? 'translate3d(0, 0, 0)' : 'translate3d(0, 10px, 0)',
+    transition: on
+      ? 'opacity 500ms ease-out, transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+      : 'none',
+  };
+}
 const GRID =
-  'grid grid-cols-[52px_repeat(2,minmax(0,1fr))_14px_repeat(4,minmax(0,1fr))] md:grid-cols-[132px_repeat(2,minmax(0,1fr))_48px_repeat(4,minmax(0,1fr))] gap-x-1 md:gap-x-2 items-center';
+  'grid grid-cols-[52px_repeat(3,minmax(0,1fr))_14px_repeat(4,minmax(0,1fr))] md:grid-cols-[repeat(4,minmax(0,1fr))_48px_repeat(4,minmax(0,1fr))] gap-x-1 md:gap-x-2 items-center';
 // Row and padding sizes are variables set by .tracker in home.css, which shrinks them on short screens.
 const ROW = 'h-(--tracker-row)';
 
@@ -693,31 +875,47 @@ const SKID_PX = 40;
 const FADE_AT = LAP_MS - 700;
 const FADE_MS = 400;
 
-/** Milliseconds into the lap, every frame while `frame` is on screen, and whether the lap is held
- *  still. Off screen the lap pauses where it is, so the diagram costs nothing while it's scrolled
- *  away. Under reduced motion it holds at the end of the fill. */
+/** Milliseconds since the diagram started, every frame while `frame` is on screen, whether it is
+ *  held still, and a `replay` that starts it over. Off screen the clock pauses where it is, so the
+ *  diagram costs nothing while it's scrolled away. Under reduced motion it holds at the end. */
 function useLap(frame: RefObject<HTMLElement | null>) {
   const [t, setT] = useState(0);
   const [still, setStill] = useState(false);
+  const clock = useRef(0);
+  // Bumped by `replay`, which starts the clock again from 0.
+  const [run, setRun] = useState(0);
+  const replay = () => {
+    clock.current = 0;
+    setT(0);
+    setRun((n) => n + 1);
+  };
   useEffect(() => {
+    void run;
     const el = frame.current;
     if (!el) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setT(FILL_MS + 1);
+      setT(DONE_AT + 1);
       setStill(true);
       return;
     }
     let id = 0;
     let last = 0;
-    let lap = 0;
+    // It plays once: at DONE_AT the clock stops and the diagram stops re-rendering. The glimmer
+    // that runs from then on is a CSS animation.
     const tick = (now: number) => {
-      if (last) lap = (lap + Math.min(now - last, 100)) % LAP_MS;
+      if (last) clock.current += Math.min(now - last, 100);
       last = now;
-      setT(lap);
+      if (clock.current >= DONE_AT) {
+        clock.current = DONE_AT;
+        setT(DONE_AT);
+        id = 0;
+        return;
+      }
+      setT(clock.current);
       id = requestAnimationFrame(tick);
     };
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && !id) {
+      if (entry.isIntersecting && !id && clock.current < DONE_AT) {
         last = 0;
         id = requestAnimationFrame(tick);
       } else if (!entry.isIntersecting && id) {
@@ -730,8 +928,8 @@ function useLap(frame: RefObject<HTMLElement | null>) {
       cancelAnimationFrame(id);
       observer.disconnect();
     };
-  }, [frame]);
-  return { still, t };
+  }, [frame, run]);
+  return { replay, still, t };
 }
 
 /** Whether the screen is at least 640px wide, or null before the page has loaded, when both of the
@@ -806,6 +1004,8 @@ function barPath(
 type Shape = {
   a: number;
   b: number;
+  /** Where the stages start: past the Language column, which holds BAML's logo. */
+  lead: number;
   d: string;
   h: number;
   /** The logo's lamb, relative to the bar: the middle of its feet and its height. */
@@ -818,17 +1018,17 @@ type Shape = {
 
 /** How far along the bar the fill has reached when the lap has filled `p` stages, in pixels. Each
  *  side of the deploy line moves at its own stages' pace, and the neck fills quickly in between. */
-function reach(p: number, { a, b, len }: Shape) {
+function reach(p: number, { a, b, lead, len }: Shape) {
   const n = BEFORE.length;
-  if (p <= n) return (p / n) * a;
+  if (p <= n) return lead + (p / n) * (a - lead);
   if (p <= n + 0.2) return a + ((p - n) / 0.2) * (b - a);
   return b + ((p - n - 0.2) / (AFTER.length - 0.2)) * (len - b);
 }
 
 /** The inverse of `reach`: how many stages the lap has filled when the fill is `x` pixels along. */
-function stagesAt(x: number, { a, b, len }: Shape) {
+function stagesAt(x: number, { a, b, lead, len }: Shape) {
   const n = BEFORE.length;
-  if (x <= a) return (x / a) * n;
+  if (x <= a) return (Math.max(0, x - lead) / (a - lead)) * n;
   if (x <= b) return n + ((x - a) / (b - a)) * 0.2;
   return n + 0.2 + ((x - b) / (len - b)) * (AFTER.length - 0.2);
 }
@@ -971,7 +1171,7 @@ function BamlBar({
   home,
   p,
   style,
-  sweep,
+  glim,
   t,
   vertical = false,
 }: {
@@ -979,7 +1179,8 @@ function BamlBar({
   home?: RefObject<HTMLElement | null>;
   p: number;
   style?: CSSProperties;
-  sweep: number;
+  /** Whether the glimmer circles the loop. */
+  glim: boolean;
   t?: number;
   vertical?: boolean;
 }) {
@@ -1005,10 +1206,13 @@ function BamlBar({
           getComputedStyle(bar).getPropertyValue('--ds-card-radius'),
         ) || 0,
       );
-      // The bar starts at the first stage's track; the neck runs from the end of Test to the start
-      // of Trace, gaps included.
-      const a = tracks[1] + gap + tracks[2];
-      const b = a + gap + tracks[3] + gap;
+      // The bar starts at the first stage's track; the neck runs from the end of the last stage
+      // before the line to the start of Trace, gaps included.
+      // The bar starts in the Language column, where BAML's logo sits; the fill starts past it.
+      const lead = tracks[0] + gap;
+      let a = tracks[0];
+      for (let i = 1; i <= BEFORE.length; i++) a += gap + tracks[i];
+      const b = a + gap + tracks[BEFORE.length + 1] + gap;
       // The logo's lamb, measured from the bar so the runner can start exactly on top of it.
       const lamb = home?.current?.getBoundingClientRect();
       const box = bar.getBoundingClientRect();
@@ -1030,6 +1234,7 @@ function BamlBar({
               y: lamb.bottom - box.top,
             }
           : null,
+        lead,
         len,
         size: Math.min(RUNNER_MAX, Math.max(RUNNER_MIN, room)),
         w,
@@ -1050,6 +1255,19 @@ function BamlBar({
   // The size of one cell of the logomark's grid in the runner.
   const cell = (shape?.size ?? RUNNER_MIN) / 38;
 
+  // Where the Improve line joins the bar, as insets from its ends. On the wide bar the line spans
+  // the stages with a 4% margin; on the phone's it starts 18px into the first stage and ends 18px
+  // before the bar's end.
+  const delay = useGlintDelay(glim);
+  const loop: CSSProperties | undefined = shape?.len
+    ? vertical
+      ? { bottom: 18, top: shape.lead + 18 }
+      : {
+          left: shape.lead + 0.04 * (shape.len - shape.lead),
+          right: 0.04 * (shape.len - shape.lead),
+        }
+    : undefined;
+
   const inner = (
     <>
       <span
@@ -1062,21 +1280,18 @@ function BamlBar({
           transition: 'background-color 400ms',
         }}
       />
+      {/* The glimmer runs only between where the Improve line joins the bar, so the light comes in
+          from the line at build, runs the pipe, and leaves into the line at the end: one circuit. */}
       <span
         aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          opacity: sweep > 0 && sweep < 1 ? 1 : 0,
-          transform: vertical
-            ? `translateY(${-18 + sweep * 118}%)`
-            : `translateX(${-18 + sweep * 118}%)`,
-        }}
+        className={`absolute inset-0 pointer-events-none opacity-0 ${glim && delay ? (vertical ? 'tracker-glint-down' : 'tracker-glint-across') : ''}`}
+        style={{ ...loop, animationDelay: delay }}
       >
         <span
-          className={`absolute left-0 top-0 ${vertical ? 'inset-x-0 h-[18%]' : 'inset-y-0 w-[18%]'}`}
+          className={`absolute left-0 top-0 ${vertical ? 'inset-x-0 h-[10%]' : 'inset-y-0 w-[10%]'}`}
           style={{
-            background: `linear-gradient(${vertical ? 180 : 90}deg, transparent, rgb(from var(--ds-accent-ink) r g b / 0.4), transparent)`,
-            filter: 'blur(4px)',
+            background: `linear-gradient(${vertical ? 180 : 90}deg, transparent, rgb(from var(--ds-accent-ink) r g b / 0.6), transparent)`,
+            filter: 'blur(3px)',
           }}
         />
       </span>
@@ -1087,7 +1302,7 @@ function BamlBar({
     <div
       className={vertical ? 'relative self-stretch' : `relative ${ROW}`}
       ref={ref}
-      style={style ?? { gridColumn: '2 / -1' }}
+      style={style ?? { gridColumn: '1 / -1' }}
     >
       {shape?.len ? (
         <>
@@ -1162,37 +1377,676 @@ function Command({ children, lit }: { children: string; lit?: boolean }) {
   );
 }
 
+/** The reveal: it lands once BAML's bar has crossed the line and filled, right above that bar. */
+function Until({ on, size = 'text-[15px]' }: { on: boolean; size?: string }) {
+  return (
+    <span
+      className={`${size} font-medium text-(--ds-accent-ink) transition-opacity duration-500`}
+      style={{ opacity: on ? 1 : 0 }}
+    >
+      Until now.
+    </span>
+  );
+}
+
+/** The glimmer's cycle, which home.css's `tracker-glint-*` keyframes also run on. */
+const GLINT_MS = 3200;
+
+/** A negative animation delay that puts a glimmer animation starting now at the same point in its
+ *  cycle as every other one, wherever the page clock is: the bar's half and the Improve line's half
+ *  stay in step even when one mounts later than the other. Fixed once per start, so a re-render
+ *  doesn't move it. */
+function useGlintDelay(on: boolean) {
+  const [delay, setDelay] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!on) {
+      setDelay(undefined);
+      return;
+    }
+    const now = Number(document.timeline.currentTime ?? performance.now());
+    setDelay(`${-(now % GLINT_MS)}ms`);
+  }, [on]);
+  return delay;
+}
+
+/** The glimmer on its way back along the Improve line: a dash of light that runs the whole line,
+ *  corners and all, from BAML's last stage back to build, timed by CSS to follow the bar's sweep.
+ *  The line is measured so its corners keep their radius. `vertical` is the phone's line, which
+ *  opens to the left. */
+function Return({ on, vertical }: { on: boolean; vertical?: boolean }) {
+  const box = useRef<SVGSVGElement>(null);
+  const delay = useGlintDelay(on);
+  const [size, setSize] = useState<{ h: number; w: number } | null>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      const { height: h, width: w } = el.getBoundingClientRect();
+      setSize({ h, w });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  let d = '';
+  if (size) {
+    const { h, w } = size;
+    // Half the 1px border in, so the light sits on the line.
+    const e = 0.5;
+    if (vertical) {
+      const rr = 10;
+      d = `M 0 ${h - e} H ${w - e - rr} A ${rr} ${rr} 0 0 0 ${w - e} ${h - e - rr} V ${e + rr} A ${rr} ${rr} 0 0 0 ${w - e - rr} ${e} H 0`;
+    } else {
+      const rr = 12;
+      d = `M ${w - e} 0 V ${h - e - rr} A ${rr} ${rr} 0 0 1 ${w - e - rr} ${h - e} H ${e + rr} A ${rr} ${rr} 0 0 1 ${e} ${h - e - rr} V 0`;
+    }
+  }
+  return (
+    // An absolutely placed <svg> keeps its default 300 by 150 size whatever its insets, so a span
+    // takes the line's box and the svg fills it.
+    <span
+      aria-hidden
+      className={`absolute pointer-events-none ${vertical ? 'inset-y-[18px] -left-1.5 right-0.5' : 'inset-0'}`}
+    >
+      <svg className="absolute inset-0 size-full overflow-visible" ref={box}>
+        <title>The glimmer on the Improve line</title>
+        {on && d && delay && (
+          <path
+            className="tracker-glint-return"
+            d={d}
+            fill="none"
+            pathLength={100}
+            stroke="var(--ds-accent-ink)"
+            strokeLinecap="round"
+            strokeWidth={2}
+            style={{ animationDelay: delay }}
+          />
+        )}
+      </svg>
+    </span>
+  );
+}
+
+/** How big a language's logo is drawn: Go's is a wide wordmark, so it gets more room. */
+const logoSize = (lang: { name: string }, size: number) =>
+  lang.name === 'Go' ? Math.round(size * 1.5) : size;
+
+/** A language's logo, in the ink color. */
+function LangLogo({ mark, size }: { mark: Mark; size: number }) {
+  return (
+    // biome-ignore lint/a11y/noSvgWithoutTitle: decorative, the language's name is beside it
+    <svg
+      aria-hidden
+      className="shrink-0"
+      fill="currentColor"
+      height={size}
+      viewBox={mark.viewBox ?? '0 0 24 24'}
+      width={size}
+    >
+      <path d={mark.path} />
+    </svg>
+  );
+}
+
+/** A step a language covers with several separate tools: each tool in its own outlined square,
+ *  side by side, so the cell reads as a fragmented ecosystem rather than one tool. Below 768px
+ *  the logos don't fit, so it is one empty dashed cell like the others. */
+function Tools({
+  marks,
+  merged,
+  pick = null,
+  quiet,
+  style,
+}: {
+  marks: Mark[];
+  /** One dashed box for all the tools, like the products past the line, instead of a square each. */
+  merged?: boolean;
+  /** The shuffle's look: every tool muted until it's the pick. */
+  quiet?: boolean;
+  /** The tool this stack is using, brought up to full strength; null leaves them all muted. */
+  pick?: number | null;
+  style: CSSProperties;
+}) {
+  return (
+    <div
+      className={`${ROW} grid grid-flow-col auto-cols-fr gap-1 ${merged ? 'rounded-(--ds-card-radius) border border-dashed border-(--ds-line) px-1' : 'max-md:rounded-(--ds-card-radius) max-md:border max-md:border-dashed max-md:border-(--ds-line)'}`}
+      style={style}
+    >
+      {marks.map((m, i) => (
+        <div
+          className={`hidden md:flex items-center justify-center text-(--ds-ink)/80 transition-[opacity,transform] duration-300 ease-out ${merged ? '' : 'rounded-(--ds-card-radius) border border-dashed border-(--ds-line)'}`}
+          key={m.name}
+          style={
+            quiet
+              ? {
+                  opacity: pick === i ? 1 : UNPICKED,
+                  transform: pick === i ? PICK_GROW : 'scale(1)',
+                }
+              : undefined
+          }
+        >
+          <MarkTile mark={m} size={18} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** How far along its journey each language's line has drawn, 0 to 1, when the lap has filled `p`
+ *  stages. The rows start a beat apart, so the lines read as separate journeys. */
+function journeyAt(p: number, row: number) {
+  const lag = row * 0.25;
+  return clamp(
+    (p - BEFORE.length - lag) / (AFTER.length - (LANGUAGES.length - 1) * 0.25),
+  );
+}
+
+/** The transit take on production: a slot per language row in every stage, tools in the slots, and
+ *  each language's line running level out of its own row from the deploy line, jogging in the gaps
+ *  between stages only where it picks a tool in another row. `lead` is how far before the first
+ *  stage the lines start, so they leave from the deploy line. */
+function Transit({
+  className = '',
+  faint,
+  gap,
+  lead,
+  p,
+  routes = ONE_EACH,
+  style,
+  vertical,
+}: {
+  className?: string;
+  /** Thin, quiet lines, for many routes at once. */
+  faint?: boolean;
+  gap: number;
+  lead: number;
+  p: number;
+  routes?: Route[];
+  style: CSSProperties;
+  vertical?: boolean;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [paths, setPaths] = useState<string[]>([]);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (!rect.width) return;
+      // Each slot's entry and exit along the journey, and its middle across it.
+      const slot = (lane: number, row: number) => {
+        const b = el
+          .querySelector(`[data-slot="${lane}-${row}"]`)
+          ?.getBoundingClientRect();
+        if (!b) return null;
+        return vertical
+          ? {
+              c: b.left + b.width / 2 - rect.left,
+              in: b.top - rect.top,
+              out: b.bottom - rect.top,
+            }
+          : {
+              c: b.top + b.height / 2 - rect.top,
+              in: b.left - rect.left,
+              out: b.right - rect.left,
+            };
+      };
+      setPaths(
+        routes.map(({ from, picks: line }) => {
+          const first = slot(0, from);
+          if (!first) return '';
+          const pt = (m: number, c: number) =>
+            vertical ? `${c} ${m}` : `${m} ${c}`;
+          let m = -lead;
+          let c = first.c;
+          let d = `M ${pt(m, c)}`;
+          line.forEach((pick, lane) => {
+            const to = slot(lane, pick);
+            if (!to) return;
+            if (Math.abs(to.c - c) < 0.5) {
+              d += ` L ${pt(to.in, to.c)}`;
+            } else {
+              // A jog in the gap before the stage: level, a smooth S, level.
+              const mid = (m + to.in) / 2;
+              const half = Math.min((to.in - m) / 2, 18);
+              d += ` L ${pt(mid - half, c)} C ${pt(mid, c)} ${pt(mid, to.c)} ${pt(mid + half, to.c)} L ${pt(to.in, to.c)}`;
+            }
+            d += ` L ${pt(to.out, to.c)}`;
+            m = to.out;
+            c = to.c;
+          });
+          return d;
+        }),
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [lead, vertical, routes]);
+
+  // Routes from the same row start a beat apart.
+  const drawn = routes.map(({ from }, i) => {
+    const nth = routes.slice(0, i).filter((r) => r.from === from).length;
+    return journeyAt(p - nth * 0.3, from);
+  });
+  const lit = (lane: number, row: number) =>
+    routes.some(
+      ({ picks }, i) =>
+        picks[lane] === row && drawn[i] >= (lane + 0.5) / AFTER.length,
+    );
+  return (
+    <div className={`relative ${className}`} ref={box} style={style}>
+      <svg
+        aria-hidden
+        className="absolute inset-0 size-full overflow-visible pointer-events-none"
+      >
+        <title>Each language's route through production</title>
+        {paths.map((d, row) => (
+          <path
+            d={d}
+            fill="none"
+            // biome-ignore lint/suspicious/noArrayIndexKey: one path per language, in order
+            key={row}
+            pathLength={1}
+            stroke={`rgb(from var(--ds-ink) r g b / ${faint ? 0.28 : 0.55})`}
+            strokeDasharray="1 1"
+            strokeDashoffset={1 - drawn[row]}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={faint ? 1.25 : 2}
+          />
+        ))}
+      </svg>
+      <div
+        className={`relative grid h-full ${vertical ? 'grid-rows-4' : 'grid-cols-4'}`}
+        style={{ gap }}
+      >
+        {SLOTS.map((slots, lane) => (
+          <div
+            className={`grid ${vertical ? 'grid-cols-4' : 'grid-rows-4'}`}
+            key={AFTER[lane]}
+            style={{ gap }}
+          >
+            {slots.map((m, row) => (
+              <span
+                className={`grid place-items-center ${vertical ? 'py-1' : 'px-[18%]'}`}
+                // biome-ignore lint/suspicious/noArrayIndexKey: slots are fixed, one per language row
+                key={row}
+              >
+                <span
+                  className="grid size-full place-items-center rounded-(--ds-card-radius) border border-dashed bg-(--ds-ground) transition-[border-color,background-color] duration-500"
+                  data-slot={`${lane}-${row}`}
+                  style={{
+                    background: lit(lane, row)
+                      ? 'color-mix(in srgb, var(--ds-ground), var(--ds-ink) 10%)'
+                      : undefined,
+                    borderColor: lit(lane, row)
+                      ? 'rgb(from var(--ds-ink) r g b / 0.5)'
+                      : m
+                        ? 'var(--ds-line)'
+                        : 'rgb(from var(--ds-line) r g b / 0.5)',
+                    borderStyle: lit(lane, row) ? 'solid' : 'dashed',
+                  }}
+                >
+                  {m && <MarkTile mark={m} size={vertical ? 13 : 18} />}
+                </span>
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The fill take: a cell for every language in every stage, each a padded box of empty squares,
+ *  like TypeScript's tool cells. As the lap reaches a stage, each row's picks pop into its squares,
+ *  the rows a beat apart; the squares left over stay empty. */
+function Squares({
+  className = '',
+  gap,
+  p,
+  style,
+}: {
+  className?: string;
+  gap: number;
+  p: number;
+  style: CSSProperties;
+}) {
+  return (
+    <div className={`grid grid-cols-4 ${className}`} style={{ ...style, gap }}>
+      {AFTER.map((stage, lane) => (
+        <div className="grid grid-rows-4" key={stage} style={{ gap }}>
+          {LANGUAGES.map((lang, row) => {
+            const at = stageAt(p, lane + row * 0.12);
+            const picks = PICKS[row][lane];
+            return (
+              <div
+                className="grid grid-cols-3 gap-1 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) p-1"
+                key={lang.name}
+              >
+                {Array.from({ length: SQUARES }, (_, k) => {
+                  const m = picks[k];
+                  const on = !!m && at >= 0.25 + k * 0.3;
+                  return (
+                    <span
+                      className="grid place-items-center rounded-[5px] border transition-[background-color,border-color] duration-300"
+                      // biome-ignore lint/suspicious/noArrayIndexKey: fixed squares in a cell
+                      key={k}
+                      style={{
+                        background: on
+                          ? 'rgb(from var(--ds-ink) r g b / 0.1)'
+                          : 'transparent',
+                        borderColor: on
+                          ? 'rgb(from var(--ds-ink) r g b / 0.3)'
+                          : 'rgb(from var(--ds-ink) r g b / 0.08)',
+                        borderStyle: on ? 'solid' : 'dashed',
+                      }}
+                    >
+                      {m && (
+                        <span
+                          className="grid place-items-center transition-[opacity,transform] duration-300 ease-out"
+                          style={{
+                            opacity: on ? 1 : 0,
+                            transform: on ? 'scale(1)' : 'scale(0.6)',
+                          }}
+                        >
+                          <MarkTile mark={m} size={16} />
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The reveal take: the original columns, every stage's boxes there from the start, and the logos
+ *  inside popping in one at a time as the lap reaches the stage. */
+function Reveal({
+  className = '',
+  gap,
+  p,
+  picks = null,
+  quiet,
+  style,
+  vertical,
+}: {
+  /** The shuffle's look: every product rests muted, and only the stack's picks come up. */
+  quiet?: boolean;
+  /** The phone's layout: each stage a row, its boxes side by side, without the boxes' labels. */
+  vertical?: boolean;
+  className?: string;
+  /** The stack being shown: one tool per stage at full strength, the rest of the pool faded; null shows
+   *  the whole pool alike. */
+  picks?: Mark[] | null;
+  gap: number;
+  p: number;
+  style: CSSProperties;
+}) {
+  return (
+    <div
+      className={`grid ${vertical ? 'grid-rows-4' : 'grid-cols-4'} ${className}`}
+      style={{ ...style, gap }}
+    >
+      {ZONED.map((zones, lane) => {
+        const at = stageAt(p, lane);
+        const all = zones.flat();
+        return (
+          <div
+            className={`flex ${vertical ? 'flex-row' : 'flex-col'}`}
+            key={AFTER[lane]}
+            style={{ gap }}
+          >
+            {zones.map((marks, z) => (
+              <div
+                className={`relative flex flex-1 flex-wrap content-center items-center justify-center rounded-(--ds-card-radius) border border-dashed border-(--ds-line) text-(--ds-ink)/75 ${vertical ? 'gap-1.5 px-1' : 'gap-3 px-2 pt-3'}`}
+                key={marks[0].name}
+              >
+                {!vertical && ZONE_NAMES[lane][z] && (
+                  <span
+                    className="absolute left-2 top-1.5 text-[10.5px] leading-none"
+                    style={{ color: MUTED }}
+                  >
+                    {ZONE_NAMES[lane][z]}
+                  </span>
+                )}
+                {marks.map((m) => {
+                  const k = all.indexOf(m);
+                  const on = at >= 0.15 + (k / all.length) * 0.75;
+                  const picked = picks !== null && picks[lane] === m;
+                  const lit = quiet ? picked : picks === null || picked;
+                  return (
+                    <span
+                      className="grid place-items-center transition-[opacity,transform] duration-300 ease-out"
+                      key={m.name}
+                      style={{
+                        opacity: on ? (lit ? 1 : UNPICKED) : 0,
+                        transform: on
+                          ? quiet && picked
+                            ? PICK_GROW
+                            : 'scale(1)'
+                          : 'scale(0.6)',
+                      }}
+                    >
+                      <MarkTile
+                        mark={m}
+                        size={vertical ? 13 : zones.length > 1 ? 20 : 22}
+                      />
+                    </span>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Production: every tool once, in its stage's lane, and a line per language through the tools it
+ *  picks, drawn as `p` crosses the stages. Lanes run across in columns on the wide diagram and down
+ *  in rows on the phone (`vertical`). Each line starts level with its language's row (or column)
+ *  and curves from tool to tool. Tools a line has reached light up; the rest stay dim. */
+function Journeys({
+  className = '',
+  gap,
+  p,
+  style,
+  vertical,
+}: {
+  className?: string;
+  /** The gap between lanes and between language rows, in pixels. */
+  gap: number;
+  p: number;
+  style: CSSProperties;
+  vertical?: boolean;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [paths, setPaths] = useState<string[]>([]);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (!rect.width) return;
+      const cross = vertical ? rect.width : rect.height;
+      const n = LANGUAGES.length;
+      const band = (cross - gap * (n - 1)) / n;
+      const at = (tile: Element) => {
+        const b = tile.getBoundingClientRect();
+        const x = b.left + b.width / 2 - rect.left;
+        const y = b.top + b.height / 2 - rect.top;
+        return vertical ? [y, x] : [x, y];
+      };
+      const tiles = (lane: number, i: number) =>
+        el.querySelector(`[data-tile="${lane}-${i}"]`);
+      setPaths(
+        ROUTES.map((route, row) => {
+          // Main axis along the journey, cross axis across the languages.
+          const pts: number[][] = [[-gap, row * (band + gap) + band / 2]];
+          route.forEach((pick, lane) => {
+            const t = tiles(lane, pick);
+            if (t) pts.push(at(t));
+          });
+          let d = '';
+          pts.forEach(([m, c], i) => {
+            const [x, y] = vertical ? [c, m] : [m, c];
+            if (i === 0) {
+              d = `M ${x} ${y}`;
+              return;
+            }
+            const [pm, pc] = pts[i - 1];
+            const mid = (pm + m) / 2;
+            d += vertical
+              ? ` C ${pc} ${mid} ${c} ${mid} ${c} ${m}`
+              : ` C ${mid} ${pc} ${mid} ${c} ${m} ${c}`;
+          });
+          return d;
+        }),
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [gap, vertical]);
+
+  const drawn = ROUTES.map((_, row) => journeyAt(p, row));
+  // A tool lights once a line has reached it: roughly when the line is that far through its stages.
+  const lit = (lane: number, i: number) =>
+    ROUTES.some(
+      (route, row) =>
+        route[lane] === i && drawn[row] >= (lane + 0.5) / AFTER.length,
+    );
+  return (
+    <div className={`relative ${className}`} ref={box} style={style}>
+      <svg
+        aria-hidden
+        className="absolute inset-0 size-full overflow-visible pointer-events-none"
+      >
+        <title>Each language's journey through production</title>
+        {paths.map((d, row) => (
+          <path
+            d={d}
+            fill="none"
+            // biome-ignore lint/suspicious/noArrayIndexKey: one path per language, in order
+            key={row}
+            pathLength={1}
+            stroke="rgb(from var(--ds-ink) r g b / 0.5)"
+            strokeDasharray="1 1"
+            strokeDashoffset={1 - drawn[row]}
+            strokeLinecap="round"
+            strokeWidth={1.5}
+          />
+        ))}
+      </svg>
+      <div
+        className={`relative grid h-full ${vertical ? 'grid-rows-4' : 'grid-cols-4'}`}
+        style={{ gap }}
+      >
+        {TOOLS.map((tools, lane) => (
+          <div
+            className={`flex ${vertical ? 'flex-row' : 'flex-col'} items-center justify-around`}
+            key={AFTER[lane]}
+          >
+            {tools.map((m, i) => (
+              <span
+                className={`grid place-items-center rounded-(--ds-card-radius) border border-dashed bg-(--ds-ground) transition-[opacity,border-color] duration-500 ${vertical ? 'size-7' : 'size-10'}`}
+                data-tile={`${lane}-${i}`}
+                key={m.name}
+                style={{
+                  borderColor: lit(lane, i)
+                    ? 'rgb(from var(--ds-ink) r g b / 0.45)'
+                    : 'var(--ds-line)',
+                  opacity: lit(lane, i) ? 1 : 0.45,
+                }}
+              >
+                <MarkTile mark={m} size={vertical ? 13 : 18} />
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** The lap's state at one moment, shared by the wide diagram and the phone's. */
 type Lap = {
   back: boolean;
+  /** Which take on the production side to draw. */
+  production: Production;
+  /** Whether the glimmer circles BAML's loop. */
+  glim: boolean;
+  /** Whether BAML's row has popped in. */
+  baml: boolean;
+  /** How many stages BAML's bar has filled, in stage widths. */
+  q: number;
+  until: boolean;
   deployed: boolean;
   full: boolean;
   handed: boolean;
   lineColor: string;
   p: number;
-  shown: (i: number) => boolean;
   style: string;
-  sweep: number;
 };
 
 // The phone's diagram turns the wide one on its side: stages run down the rows, the languages and
 // BAML across the columns. The columns are the stage names, the three languages, BAML, and a narrow
-// one for the line back from feature flags to build. The rows are the column heads, Build and Test,
+// one for the line back from the last stage to build. The rows are the column heads, Build and Test,
 // the deploy line, then the four stages past it; `column` numbers them the same way.
 const VGRID =
-  'grid grid-cols-[68px_repeat(3,minmax(0,1fr))_92px_12px] grid-rows-[32px_repeat(2,32px)_20px_repeat(4,32px)] gap-1.5';
+  'grid grid-cols-[60px_repeat(4,minmax(0,1fr))_56px_22px] grid-rows-[32px_repeat(3,32px)_20px_repeat(4,36px)] gap-1.5';
+
+/** A cell for a step with no single tool: small gray boxes packed together, lighting up as the lap
+ *  reaches them. Logos don't fit in a phone's cell, so the pile says it instead. */
+function Pile({
+  fill,
+  row,
+  lane,
+}: {
+  fill: number;
+  lane: number;
+  row: number;
+}) {
+  return (
+    <span
+      className="grid grid-cols-2 grid-rows-2 gap-0.5 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) p-0.5"
+      style={{ gridColumn: lane, gridRow: row }}
+    >
+      {[0, 1, 2, 3].map((i) => (
+        <span
+          className="rounded-[2px] bg-(--ds-ink)/25 transition-opacity duration-300"
+          key={i}
+          style={{ opacity: fill > i / 4 ? 1 : 0.3 }}
+        />
+      ))}
+    </span>
+  );
+}
 
 /** The hero diagram on a phone, with BAML's bar filling from the top down. */
 function Vertical({
   back,
+  production,
+  glim,
+  baml,
   deployed,
   full,
-  handed,
   lineColor,
   p,
-  shown,
+  q,
   style,
-  sweep,
+  until,
 }: Lap) {
   const deployRow = column(BEFORE.length) - 1;
   return (
@@ -1200,25 +2054,43 @@ function Vertical({
     // style's, which would round them into pills.
     <div className="sm:hidden [--ds-card-radius:5px]">
       <div className={`${VGRID} relative`}>
-        {LANGUAGES.map((lang, i) => (
-          <span
-            className="self-center text-center text-[13px] text-(--ds-ink)/80"
-            key={lang.name}
-            style={{ gridColumn: i + 2, gridRow: 1 }}
-          >
-            {lang.short}
-          </span>
-        ))}
         <span
-          className="self-center justify-self-center"
-          style={{ gridColumn: 5, gridRow: 1 }}
+          className="self-center text-[12px] leading-tight"
+          style={{ color: MUTED, gridColumn: 1, gridRow: 1 }}
+        >
+          Language
+        </span>
+        {/* Each language and the steps its own toolchain covers, as one block down its column. */}
+        {LANGUAGES.map((lang, i) => (
+          <Card
+            className="relative overflow-hidden flex flex-col items-center text-(--ds-ink)/85"
+            key={lang.name}
+            style={{
+              gridColumn: i + 2,
+              gridRow: `1 / span ${lang.unified + 1}`,
+            }}
+          >
+            {lang.unified > 0 && (
+              <Fill fill={clamp(p / lang.unified)} vertical />
+            )}
+            <span className="relative flex h-8 shrink-0 items-center">
+              <LangLogo mark={lang.logo} size={logoSize(lang, 14)} />
+            </span>
+            <span className="sr-only">{lang.name}</span>
+          </Card>
+        ))}
+        {/* BAML's logo sits at the top of its bar, which runs from the language row down, at about
+            the size of the languages' logos beside it. */}
+        <span
+          className="relative z-10 flex self-center justify-self-center"
+          style={{ gridColumn: BAML_COL, gridRow: 1, ...popIn(baml) }}
         >
           <Image
             alt="BAML"
-            className="h-8 w-auto"
-            height={32}
+            className="h-[17px] w-auto"
+            height={17}
             src={bamlMark}
-            width={27}
+            width={14}
           />
         </span>
 
@@ -1230,14 +2102,14 @@ function Vertical({
               color: MUTED,
               gridColumn: 1,
               gridRow: column(i),
-              opacity: i < BEFORE.length || shown(i - BEFORE.length) ? 1 : 0,
+              opacity: 1,
             }}
           >
-            {s}
+            {SHORT[s] ?? s}
           </span>
         ))}
 
-        {/* The deploy line, across the languages and through BAML's neck. */}
+        {/* The deploy line, across the languages only: BAML's row comes in after it. */}
         <span
           className="self-center font-mono text-[11px] transition-colors duration-500"
           style={{
@@ -1253,79 +2125,96 @@ function Vertical({
           className="self-center h-0 border-t-2 border-dashed transition-[border-color] duration-500"
           style={{
             borderColor: lineColor,
-            gridColumn: '2 / 6',
+            gridColumn: `2 / ${BAML_COL}`,
             gridRow: deployRow,
           }}
         />
 
         {LANGUAGES.map((lang, i) => (
           <Fragment key={lang.name}>
-            <Card
-              className="relative overflow-hidden"
-              style={{ gridColumn: i + 2, gridRow: column(0) }}
-            >
-              <Fill fill={clamp(p)} vertical />
-            </Card>
-            {'command' in lang.test ? (
-              <Card
-                className="relative overflow-hidden"
-                style={{ gridColumn: i + 2, gridRow: column(1) }}
-              >
-                <Fill fill={clamp(p - 1)} vertical />
-              </Card>
-            ) : (
-              // No test tool of its own: a dashed cell, like the products past the line.
-              <span
-                className="rounded-(--ds-card-radius) border border-dashed border-(--ds-line)"
-                style={{ gridColumn: i + 2, gridRow: column(1) }}
-              />
+            {lang.steps.map((step, k) =>
+              k < lang.unified ? null : 'command' in step ? (
+                <Card
+                  className="relative overflow-hidden"
+                  key={BEFORE[k]}
+                  style={{ gridColumn: i + 2, gridRow: column(k) }}
+                >
+                  <Fill fill={clamp(p - k)} vertical />
+                </Card>
+              ) : 'marks' in step ? (
+                <Pile
+                  fill={clamp(p - k)}
+                  key={BEFORE[k]}
+                  lane={i + 2}
+                  row={column(k)}
+                />
+              ) : (
+                // Nothing of its own: a dashed cell, like the products past the line.
+                <span
+                  className="rounded-(--ds-card-radius) border border-dashed border-(--ds-line)"
+                  key={BEFORE[k]}
+                  style={{ gridColumn: i + 2, gridRow: column(k) }}
+                />
+              ),
             )}
           </Fragment>
         ))}
 
-        {PRODUCTS.map((marks, i) => (
-          <div
-            className="flex items-center justify-center gap-1.5 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) text-(--ds-ink)/75 transition-opacity duration-500"
-            key={AFTER[i]}
+        {production === 'transit' || production === 'tangle' ? (
+          <Transit
+            faint={production === 'tangle'}
+            gap={6}
+            lead={13}
+            p={p}
+            routes={production === 'tangle' ? TANGLE : ONE_EACH}
             style={{
-              gridColumn: '2 / 5',
-              gridRow: column(BEFORE.length + i),
-              opacity: shown(i) ? 1 : 0,
+              gridColumn: `2 / ${BAML_COL}`,
+              gridRow: `${column(BEFORE.length)} / span ${AFTER.length}`,
             }}
-          >
-            {marks.map((m) => (
-              <MarkTile key={m.name} mark={m} size={16} />
-            ))}
-          </div>
-        ))}
+            vertical
+          />
+        ) : production === 'reveal' || production === 'shuffle' ? (
+          <Reveal
+            gap={6}
+            p={p}
+            style={{
+              gridColumn: `2 / ${BAML_COL}`,
+              gridRow: `${column(BEFORE.length)} / span ${AFTER.length}`,
+            }}
+            vertical
+          />
+        ) : (
+          <Journeys
+            gap={6}
+            p={p}
+            style={{
+              gridColumn: `2 / ${BAML_COL}`,
+              gridRow: `${column(BEFORE.length)} / span ${AFTER.length}`,
+            }}
+            vertical
+          />
+        )}
 
         <BamlBar
           full={full}
+          glim={glim}
           key={style}
-          p={p}
-          style={{ gridColumn: 5, gridRow: `${column(0)} / -1` }}
-          sweep={sweep}
+          p={q}
+          style={{
+            gridColumn: BAML_COL,
+            gridRow: '1 / -1',
+            ...popIn(baml),
+          }}
           vertical
         />
-        {BAML.map((command, i) => (
-          <span
-            className="self-center text-center font-mono text-[10px] text-(--ds-accent-ink) whitespace-nowrap pointer-events-none transition-opacity duration-300"
-            key={command}
-            style={{
-              gridColumn: 5,
-              gridRow: column(i),
-              opacity: clamp(p - i) > 0.4 ? 1 : 0.35,
-            }}
-          >
-            {command}
-          </span>
-        ))}
+        {/* No commands on a phone: there isn't room, and the point is the one lit bar running the
+            whole way down beside the languages' broken-up columns. */}
 
-        {/* BAML's line runs back up from feature flags to build. */}
+        {/* BAML's line runs back up from the end of its column to build. */}
         <span
           aria-hidden
           className="relative"
-          style={{ gridColumn: 6, gridRow: `${column(0)} / -1` }}
+          style={{ gridColumn: BAML_COL + 1, gridRow: `${column(0)} / -1` }}
         >
           <span
             className="absolute inset-y-[18px] -left-1.5 right-0.5 rounded-r-[10px] border border-l-0 border-(--ds-accent)"
@@ -1339,42 +2228,96 @@ function Vertical({
                 : 'none',
             }}
           />
-          <span
-            className="absolute right-0.5 top-1/2 translate-x-1/2 -translate-y-1/2 rotate-180 py-2 bg-(--ds-ground) text-[11px] text-(--ds-accent-ink) [writing-mode:vertical-rl] transition-opacity duration-500"
-            style={{ opacity: back ? 1 : 0 }}
-          >
-            Improve
-          </span>
+          <Return on={glim} vertical />
+        </span>
+        {/* Inside the loop, level with the deploy line and just inside the loop's line. */}
+        <span
+          className="relative self-center justify-self-end mr-2 rotate-180 text-[11px] leading-none text-(--ds-accent-ink) [writing-mode:vertical-rl] whitespace-nowrap transition-opacity duration-500"
+          style={{
+            gridColumn: BAML_COL + 1,
+            gridRow: deployRow,
+            opacity: back ? 1 : 0,
+          }}
+        >
+          Improve
         </span>
       </div>
-      <p
-        className="mt-3 text-[11.5px] transition-opacity duration-500"
-        style={{ color: MUTED, opacity: handed ? 1 : 0 }}
-      >
-        Each logo past deploy is a separate product with its own SDK.
+      <p className="mt-3">
+        <Until on={until} />
       </p>
     </div>
   );
 }
 
-/** The v4 hero diagram in the given /diagram-styles style, played as a looping lap from build to
- *  production. */
-export default function Tracker({ style }: { style: string }) {
+/** The v4 hero diagram in the given /diagram-styles style, played once from build to production,
+ *  with a Replay button at the end and a glimmer circling BAML's loop from then on. */
+export default function Tracker({
+  production = 'reveal',
+  style,
+}: {
+  production?: Production;
+  style: string;
+}) {
   const root = useRef<HTMLDivElement>(null);
   const lamb = useRef<HTMLImageElement>(null);
-  const { still, t } = useLap(root);
+  const { replay, still, t } = useLap(root);
+  // The deploy line runs from under its label to the bottom of the language rows, measured.
+  const rows = useRef<HTMLDivElement>(null);
+  const line = useRef<HTMLDivElement>(null);
+  const [deployH, setDeployH] = useState<number | null>(null);
   // Only the layout on screen renders once the width is known, so each frame updates one, not two.
   const wide = useWide();
+  useEffect(() => {
+    const from = line.current;
+    const to = rows.current;
+    if (!wide || !from || !to) return;
+    const measure = () =>
+      setDeployH(
+        to.getBoundingClientRect().bottom - from.getBoundingClientRect().top,
+      );
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(to);
+    return () => observer.disconnect();
+  }, [wide]);
   // How many stages the lap has filled, in stage widths.
-  const p = ease(clamp(t / FILL_MS)) * STAGES.length;
-  const deployed = p >= BEFORE.length;
-  const handed = p >= BEFORE.length + 0.3;
-  const back = t >= FILL_MS + 300;
-  const full = t >= FILL_MS;
-  // Where the light is across the bar, from 0 to 1. Under reduced motion it never starts.
-  const sweep = t > SWEEP_AT ? ease(clamp((t - SWEEP_AT) / SWEEP_MS)) : 0;
-  // Past the line, each stage's products appear as the lap reaches that stage, one after another.
-  const shown = (i: number) => p >= BEFORE.length + i + 0.15;
+  // The development side starts full; the production side pops in all at once.
+  const p = t >= PROD_AT ? STAGES.length : BEFORE.length;
+  const deployed = true;
+  const handed = t >= PROD_AT;
+  const until = t >= UNTIL_AT;
+  const baml = t >= BAML_AT;
+  const q = ease(clamp((t - BAML_AT) / BAML_MS)) * STAGES.length;
+  const back = t >= FULL_AT + 300;
+  const full = t >= FULL_AT;
+  const done = t >= DONE_AT;
+  // Once it has played, a glimmer circles BAML's loop. Under reduced motion it never starts.
+  const glim = done && !still;
+  // The shuffle take's project: once every product is revealed, one language at a time.
+  const revealed = p >= STAGES.length;
+  // Each beat is one stack: a language, and one tool picked in every stage it doesn't cover itself.
+  const [beat, setBeat] = useState<number | null>(null);
+  useEffect(() => {
+    if (production !== 'shuffle' || still || !revealed) {
+      setBeat(null);
+      return;
+    }
+    let n = 0;
+    setBeat(0);
+    const id = setInterval(() => {
+      n += 1;
+      setBeat(n);
+    }, SHUFFLE_BEAT_MS);
+    return () => clearInterval(id);
+  }, [production, still, revealed]);
+  const focus = beat === null ? null : beat % LANGUAGES.length;
+  const stack =
+    beat === null
+      ? null
+      : ZONED.map((zones, lane) => {
+          const pool = zones.flat();
+          return pool[pickOf(beat, lane, pool.length)];
+        });
   const lineColor = deployed
     ? 'var(--ds-accent)'
     : 'rgb(from var(--ds-ink) r g b / 0.45)';
@@ -1384,29 +2327,55 @@ export default function Tracker({ style }: { style: string }) {
       className={`tracker ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3`}
       ref={root}
     >
-      <Frame label="Where each toolchain reaches. C builds with cc and leaves testing to you. TypeScript builds with tsc and tests with Jest, Vitest, or Mocha. Go builds and tests with go build and go test. Past deploy, each of them hands tracing, dashboards, alerts, and feature flags to 11 separate products. BAML covers every stage itself, and a line runs from production back to build, labelled Improve.">
+      <Frame label="Where each toolchain reaches. C builds with cc and leaves testing to you. TypeScript builds with Vite, webpack, or esbuild, and tests with Jest, Vitest, or Mocha. Go builds and tests with go build and go test, and leaves releasing to you. Rust builds, tests, and releases with cargo. Past deploy, every team mixes and matches its own separate products for tracing, dashboards, alerts, and more, no two alike. BAML covers build, test, release, query, dashboards, alerts, and more itself, and a line runs from production back to build, labelled Improve.">
         {/* Cards take a smaller corner radius than the style's, so they read as boxes, not pills. */}
         <div className="relative p-(--tracker-pad) [--ds-card-radius:8px]">
+          {!still && (
+            <button
+              aria-hidden={!done}
+              className="focus-ring absolute right-2 bottom-2 sm:right-auto sm:left-(--tracker-pad) sm:bottom-3 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-(--ds-line) px-3 py-1 text-[12.5px] text-(--ds-ink)/75 transition-[opacity,color,border-color] duration-500 hover:border-(--ds-accent) hover:text-(--ds-accent-ink)"
+              onClick={replay}
+              style={{
+                opacity: done ? 1 : 0,
+                pointerEvents: done ? 'auto' : 'none',
+              }}
+              tabIndex={done ? 0 : -1}
+              type="button"
+            >
+              <RotateCcw aria-hidden className="size-3.5" />
+              Replay
+            </button>
+          )}
+          {/* The claim the diagram makes, over it from the start; "Until now." answers it below. */}
+          <p className="mb-3 md:mb-5 text-center text-[14px] md:text-[18px] lg:text-[20px] font-medium leading-snug text-(--ds-ink)">
+            No single stack has ever gone past deploy.
+          </p>
           {wide !== true && (
             <Vertical
               back={back}
+              baml={baml}
               deployed={deployed}
               full={full}
+              glim={glim}
               handed={handed}
               lineColor={lineColor}
               p={p}
-              shown={shown}
+              production={production}
+              q={q}
               style={style}
-              sweep={sweep}
+              until={until}
             />
           )}
           {wide !== false && (
             <div className="relative hidden sm:block">
-              {/* The deploy line, drawn once from under its label to the bottom of BAML's row, in the gap
-                column, so it runs through every row without touching the cells on either side. */}
+              {/* The deploy line, drawn once from under its label to the bottom of the language rows, in
+                the gap column, so it runs through them without touching the cells on either side. It
+                stops there: the callout sits under it, and BAML's row comes after. */}
               <div
                 aria-hidden
-                className={`${GRID} absolute inset-x-0 top-(--tracker-head) bottom-[calc(var(--tracker-ret)+6px)] md:bottom-[calc(var(--tracker-ret)+8px)] pointer-events-none`}
+                className={`${GRID} absolute inset-x-0 top-(--tracker-head) pointer-events-none`}
+                ref={line}
+                style={{ height: deployH ?? undefined }}
               >
                 <span
                   className="justify-self-center self-stretch w-0 border-l-2 border-dashed transition-[border-color] duration-500"
@@ -1418,23 +2387,40 @@ export default function Tracker({ style }: { style: string }) {
                 />
               </div>
 
-              <div className={`${GRID} h-(--tracker-head)`}>
+              <div className={`${GRID} h-(--tracker-head) mb-1.5 md:mb-2.5`}>
                 <span
                   className="justify-self-center font-mono text-[11px] md:text-[13px] whitespace-nowrap transition-colors duration-500"
                   style={{
                     color: deployed ? 'var(--ds-accent-ink)' : MUTED,
                     gridColumn: column(BEFORE.length) - 1,
+                    gridRow: 1,
                   }}
                 >
                   deploy
                 </span>
+                {/* A labelled rule across exactly the columns it heads. */}
                 <span
-                  className="hidden md:block justify-self-center text-[15px] font-medium text-(--ds-ink)"
+                  className="hidden md:flex items-center gap-3 text-[15px] font-medium text-(--ds-ink)"
                   style={{
-                    gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                    gridColumn: `1 / span ${BEFORE.length + 1}`,
+                    gridRow: 1,
                   }}
                 >
+                  <span className="h-px flex-1 bg-(--ds-line)" />
+                  Development
+                  <span className="h-px flex-1 bg-(--ds-line)" />
+                </span>
+                {/* A labelled rule across exactly the columns it heads. */}
+                <span
+                  className="hidden md:flex items-center gap-3 text-[15px] font-medium text-(--ds-ink)"
+                  style={{
+                    gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                    gridRow: 1,
+                  }}
+                >
+                  <span className="h-px flex-1 bg-(--ds-line)" />
                   Production
+                  <span className="h-px flex-1 bg-(--ds-line)" />
                 </span>
               </div>
 
@@ -1443,14 +2429,19 @@ export default function Tracker({ style }: { style: string }) {
                 className={`${GRID} mb-2 md:mb-3 text-[12.5px] md:text-[14px]`}
                 style={{ color: MUTED }}
               >
+                <span
+                  className="hidden md:block text-center truncate"
+                  style={{ gridColumn: 1 }}
+                >
+                  Language
+                </span>
                 {STAGES.map((s, i) => (
                   <span
                     className="hidden md:block text-center truncate transition-opacity duration-500"
                     key={s}
                     style={{
                       gridColumn: column(i),
-                      opacity:
-                        i < BEFORE.length || shown(i - BEFORE.length) ? 1 : 0,
+                      opacity: 1,
                     }}
                   >
                     {s}
@@ -1458,13 +2449,15 @@ export default function Tracker({ style }: { style: string }) {
                 ))}
                 <span
                   className="md:hidden"
-                  style={{ gridColumn: '2 / span 2' }}
+                  style={{ gridColumn: `1 / span ${BEFORE.length + 1}` }}
                 >
-                  Before
+                  Development
                 </span>
                 <span
                   className="md:hidden"
-                  style={{ gridColumn: '5 / span 4' }}
+                  style={{
+                    gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                  }}
                 >
                   In production
                 </span>
@@ -1472,82 +2465,142 @@ export default function Tracker({ style }: { style: string }) {
 
               <div className="relative flex flex-col gap-1.5 md:gap-2">
                 {/* One grid for the language rows, so each product column can span all three. */}
-                <div className={`${GRID} gap-y-1.5 md:gap-y-2`}>
+                <div className={`${GRID} gap-y-1.5 md:gap-y-2`} ref={rows}>
                   {LANGUAGES.map((lang, i) => (
                     <Fragment key={lang.name}>
-                      <div
-                        className="flex items-center gap-2 min-w-0 text-(--ds-ink)/80"
-                        style={{ gridColumn: 1, gridRow: i + 1 }}
-                      >
-                        <span className="md:hidden text-[14px]">
-                          {lang.short}
-                        </span>
-                        <span className="hidden md:flex flex-col min-w-0 leading-tight">
-                          <span className="text-[15px] truncate">
-                            {lang.name}
-                          </span>
-                          <span className="text-[12px] text-faint">
-                            {lang.year}
-                          </span>
-                        </span>
-                      </div>
-
+                      {/* The language and the steps its own toolchain covers, as one block. */}
                       <Card
-                        className={`relative ${ROW} overflow-hidden`}
-                        style={{ gridColumn: column(0), gridRow: i + 1 }}
+                        className={`relative ${ROW} overflow-hidden flex items-center min-w-0 text-(--ds-ink)/85 transition-[box-shadow,opacity] duration-300`}
+                        style={{
+                          gridColumn: `1 / span ${lang.unified + 1}`,
+                          gridRow: i + 1,
+                          opacity:
+                            focus === null || focus === i ? 1 : UNFOCUSED,
+                        }}
                       >
-                        <Fill fill={clamp(p)} />
-                        <Command>{lang.build}</Command>
-                      </Card>
-
-                      {'command' in lang.test ? (
-                        <Card
-                          className={`relative ${ROW} overflow-hidden`}
-                          style={{ gridColumn: column(1), gridRow: i + 1 }}
-                        >
-                          <Fill fill={clamp(p - 1)} />
-                          <Command>{lang.test.command}</Command>
-                        </Card>
-                      ) : (
-                        // No test tool of its own: a dashed cell, like the products past the line. On a
-                        // phone it stays, empty, so every language row has a build and a test cell.
-                        <div
-                          className={`${ROW} flex items-center justify-center gap-2.5 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) text-[12.5px] text-center text-(--ds-ink)/80 *:max-md:hidden`}
+                        {lang.unified > 0 && (
+                          <Fill fill={clamp(p / lang.unified)} />
+                        )}
+                        <span
+                          className="relative flex shrink-0 justify-center"
                           style={{
-                            gridColumn: column(1),
-                            gridRow: i + 1,
-                            ...('own' in lang.test ? { color: MUTED } : {}),
+                            width: `${100 / (lang.unified + 1)}%`,
                           }}
                         >
-                          {'own' in lang.test ? (
-                            <span>Bring your own</span>
-                          ) : (
-                            lang.test.marks.map((m) => (
-                              <MarkTile key={m.name} mark={m} size={18} />
-                            ))
-                          )}
-                        </div>
+                          <LangLogo
+                            mark={lang.logo}
+                            size={logoSize(lang, 20)}
+                          />
+                          <span className="sr-only">{lang.name}</span>
+                        </span>
+                        {lang.tool && (
+                          <span className="relative flex-1 text-center font-mono text-[12px] md:text-[13px] text-(--ds-ink)/80">
+                            {lang.tool}
+                          </span>
+                        )}
+                      </Card>
+                      {lang.steps.map((step, k) =>
+                        k < lang.unified ? null : 'command' in step ? (
+                          <Card
+                            className={`relative ${ROW} overflow-hidden transition-opacity duration-300`}
+                            key={BEFORE[k]}
+                            style={{
+                              gridColumn: column(k),
+                              gridRow: i + 1,
+                              opacity:
+                                focus === null || focus === i ? 1 : UNFOCUSED,
+                            }}
+                          >
+                            <Fill fill={clamp(p - k)} />
+                            <Command>{step.command}</Command>
+                          </Card>
+                        ) : 'marks' in step ? (
+                          <Tools
+                            key={BEFORE[k]}
+                            marks={step.marks}
+                            merged={
+                              production === 'shuffle' ||
+                              production === 'reveal'
+                            }
+                            pick={
+                              beat !== null && focus === i
+                                ? pickOf(beat, 10 + k, step.marks.length)
+                                : null
+                            }
+                            quiet={production === 'shuffle'}
+                            style={{
+                              gridColumn: column(k),
+                              gridRow: i + 1,
+                              opacity:
+                                focus === null || focus === i ? 1 : UNFOCUSED,
+                              transition: 'opacity 300ms',
+                            }}
+                          />
+                        ) : (
+                          // Nothing of its own: an empty dashed cell, like the products past the line.
+                          <div
+                            className={`${ROW} rounded-(--ds-card-radius) border border-dashed border-(--ds-line) transition-opacity duration-300`}
+                            key={BEFORE[k]}
+                            style={{
+                              gridColumn: column(k),
+                              gridRow: i + 1,
+                              opacity:
+                                focus === null || focus === i ? 1 : UNFOCUSED,
+                            }}
+                          />
+                        ),
                       )}
                     </Fragment>
                   ))}
 
-                  {/* Past the line, each stage is a set of separate products, the same for every language. */}
-                  {PRODUCTS.map((marks, i) => (
-                    <div
-                      className="self-stretch hidden md:flex flex-wrap content-center items-center justify-center gap-3 px-2 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) transition-[opacity,translate] duration-500 text-(--ds-ink)/75"
-                      key={AFTER[i]}
+                  {/* Past the line, each language row mixes and matches its own products. */}
+                  {/* Past the line, every tool once, and each language's own journey through them. */}
+                  {production === 'transit' || production === 'tangle' ? (
+                    <Transit
+                      className="hidden md:block self-stretch"
+                      faint={production === 'tangle'}
+                      gap={8}
+                      lead={32}
+                      p={p}
+                      routes={production === 'tangle' ? TANGLE : ONE_EACH}
                       style={{
-                        gridColumn: column(BEFORE.length + i),
+                        gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
                         gridRow: `1 / span ${LANGUAGES.length}`,
-                        opacity: shown(i) ? 1 : 0,
-                        translate: shown(i) ? '0 0' : '0 6px',
                       }}
-                    >
-                      {marks.map((m) => (
-                        <MarkTile key={m.name} mark={m} size={22} />
-                      ))}
-                    </div>
-                  ))}
+                    />
+                  ) : production === 'fill' ? (
+                    <Squares
+                      className="hidden md:grid self-stretch"
+                      gap={8}
+                      p={p}
+                      style={{
+                        gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                        gridRow: `1 / span ${LANGUAGES.length}`,
+                      }}
+                    />
+                  ) : production === 'reveal' || production === 'shuffle' ? (
+                    <Reveal
+                      className="hidden md:grid self-stretch"
+                      gap={8}
+                      p={p}
+                      picks={stack}
+                      quiet={production === 'shuffle'}
+                      style={{
+                        gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                        gridRow: `1 / span ${LANGUAGES.length}`,
+                      }}
+                    />
+                  ) : (
+                    <Journeys
+                      className="hidden md:block self-stretch"
+                      gap={8}
+                      p={p}
+                      style={{
+                        gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                        gridRow: `1 / span ${LANGUAGES.length}`,
+                      }}
+                    />
+                  )}
                   <p
                     className="self-stretch md:hidden flex items-center justify-center rounded-(--ds-card-radius) border border-dashed border-(--ds-line) px-1 text-center text-[11.5px] transition-opacity duration-500"
                     style={{
@@ -1557,71 +2610,69 @@ export default function Tracker({ style }: { style: string }) {
                       opacity: handed ? 1 : 0,
                     }}
                   >
-                    11 separate products
+                    {PRODUCT_COUNT} separate products
                   </p>
                 </div>
 
-                <div className={`${GRID} tracker-caption`}>
-                  <p
-                    className="hidden md:block text-center text-[12.5px] md:text-[13px] pt-0.5 transition-opacity duration-500"
-                    style={{
-                      color: MUTED,
-                      gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
-                      opacity: shown(AFTER.length - 1) ? 1 : 0,
-                    }}
-                  >
-                    Separate products, each with its own SDK
-                  </p>
-                </div>
+                {/* The point of the whole diagram, centered across it, which BAML's bar under it
+                answers. */}
+                <p className="hidden md:block pt-3 text-center leading-snug">
+                  <Until on={until} size="text-[18px] lg:text-[20px]" />
+                </p>
 
-                <div className={`${GRID} relative mt-1 md:mt-2`}>
-                  {/* BAML's logo at the brand's 32px minimum: the logomark fits the phone's narrow name
-                  column, the primary logo the wide one. Every diagram style is dark, so both are white.
-                  The lamb is drawn on its own, over the primary logo with the logo's lamb clipped
-                  away, so it can dim while its copy runs along the bar. It sits where the primary
-                  logo draws it: 68.01% across and 31.7px tall. It dims only from 768px up: below
-                  that the logomark is the whole logo, so it stays whole. */}
-                  <div className="flex items-center min-w-0">
-                    <span
-                      aria-label="BAML"
-                      className="relative flex"
-                      role="img"
-                    >
-                      <Image
-                        alt=""
-                        className="hidden md:block h-8 w-auto [clip-path:inset(0_33%_0_0)]"
-                        height={32}
-                        src={bamlWhite}
-                        width={83}
-                      />
-                      <Image
-                        alt=""
-                        className="h-8 w-auto md:absolute md:top-0 md:left-[68.01%] md:h-[31.7px] md:opacity-(--lamb-home)"
-                        height={32}
-                        ref={lamb}
-                        src={bamlMark}
-                        style={
-                          {
-                            '--lamb-home':
-                              still || !LAMB_RUNS ? 1 : homeOpacity(t),
-                          } as CSSProperties
-                        }
-                        width={27}
-                      />
-                    </span>
-                  </div>
+                <div
+                  className={`${GRID} relative mt-(--tracker-gap)`}
+                  style={popIn(baml)}
+                >
                   <BamlBar
                     full={full}
+                    glim={glim}
                     home={lamb}
                     key={style}
-                    p={p}
-                    sweep={sweep}
+                    p={q}
                     t={still || !LAMB_RUNS ? undefined : t}
                   />
                   {/* The commands sit over the block, in the same columns as the stages above them. */}
                   <div
                     className={`${GRID} absolute inset-0 pointer-events-none`}
                   >
+                    {/* BAML's logo sits in the bar itself, in the Language column: BAML is the
+                    language and the rest of the stack, one block. The logo is at the brand's 32px
+                    minimum; the logomark fits the phone's narrow column, the primary logo the wide
+                    one. The lamb is drawn on its own, over the primary logo with the logo's lamb
+                    clipped away, at 68.01% across and 31.7px tall, where the primary logo draws it. */}
+                    <span
+                      className="flex items-center justify-center"
+                      style={{ gridColumn: 1, gridRow: 1 }}
+                    >
+                      <span
+                        aria-label="BAML"
+                        className="relative flex"
+                        role="img"
+                      >
+                        <Image
+                          alt=""
+                          className="hidden md:block h-8 w-auto [clip-path:inset(0_33%_0_0)]"
+                          height={32}
+                          src={bamlWhite}
+                          width={83}
+                        />
+                        <Image
+                          alt=""
+                          className="h-8 w-auto md:absolute md:top-0 md:left-[68.01%] md:h-[31.7px] md:opacity-(--lamb-home)"
+                          height={32}
+                          ref={lamb}
+                          src={bamlMark}
+                          style={
+                            {
+                              '--lamb-home':
+                                still || !LAMB_RUNS ? 1 : homeOpacity(t),
+                            } as CSSProperties
+                          }
+                          width={27}
+                        />
+                      </span>
+                    </span>
                     {BAML.map((command, i) => (
                       <span
                         className={`${ROW} min-w-0 transition-opacity duration-300`}
@@ -1629,7 +2680,7 @@ export default function Tracker({ style }: { style: string }) {
                         style={{
                           gridColumn: column(i),
                           gridRow: 1,
-                          opacity: clamp(p - i) > 0.4 ? 1 : 0.35,
+                          opacity: clamp(q - i) > 0.4 ? 1 : 0.35,
                         }}
                       >
                         <Command lit>{command}</Command>
@@ -1638,11 +2689,12 @@ export default function Tracker({ style }: { style: string }) {
                   </div>
                 </div>
 
-                {/* BAML's row runs back from feature flags to build. */}
+                {/* BAML's row runs back from its last stage to build. */}
                 <div aria-hidden className={`${GRID} h-(--tracker-ret)`}>
+                  {/* Pulled up over the gap above, so the line's ends meet the bar's underside. */}
                   <div
-                    className="relative self-start h-[70%] mx-[4%]"
-                    style={{ gridColumn: '2 / -1' }}
+                    className="relative self-start -mt-1.5 md:-mt-2 h-[calc(70%+6px)] md:h-[calc(70%+8px)] mx-[4%]"
+                    style={{ gridColumn: '2 / -1', gridRow: 1 }}
                   >
                     <span
                       className="absolute inset-0 rounded-b-[12px] border border-t-0 border-(--ds-accent)"
@@ -1657,13 +2709,20 @@ export default function Tracker({ style }: { style: string }) {
                           : 'none',
                       }}
                     />
-                    <span
-                      className="absolute left-1/2 bottom-0 translate-y-1/2 -translate-x-1/2 px-3 bg-(--ds-ground) text-[12.5px] md:text-[14px] text-(--ds-accent-ink) transition-opacity duration-500"
-                      style={{ opacity: back ? 1 : 0 }}
-                    >
-                      Improve
-                    </span>
+                    <Return on={glim} />
                   </div>
+                  {/* Inside the loop, right under the deploy line and sitting just on the loop's line,
+                      so it names the line: production feeding back into development. */}
+                  <span
+                    className="self-start -mt-1.5 md:-mt-2 h-[calc(70%+6px)] md:h-[calc(70%+8px)] pb-1.5 flex items-end justify-self-center whitespace-nowrap text-[12.5px] md:text-[13px] leading-none text-(--ds-accent-ink) transition-opacity duration-500"
+                    style={{
+                      gridColumn: column(BEFORE.length) - 1,
+                      gridRow: 1,
+                      opacity: back ? 1 : 0,
+                    }}
+                  >
+                    Improve
+                  </span>
                 </div>
               </div>
             </div>

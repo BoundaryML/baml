@@ -11,7 +11,7 @@ import './globals.css';
 // theme) and loads ./globals.css. Pages other than the homepage and the blog use PageShell
 // (components/home/page-shell.tsx) for the homepage's nav and footer.
 
-const TITLE = 'Boundary | The unified software stack for agents';
+const TITLE = 'Boundary | The hyperobservable software stack';
 const DESCRIPTION =
   'BAML is one toolchain from the compiler to production. Build, test, trace, query, and alert on your code with tools that all read the same types.';
 

@@ -1,8 +1,6 @@
-import boundaryMark from '@boundaryml/brand/logo/svg/boundary-logomark-white.svg';
-import boundaryWhite from '@boundaryml/brand/logo/svg/boundary-primary-white.svg';
-import Image from 'next/image';
 import Link from 'next/link';
 import { section } from './analytics';
+import { BoundaryLogo, BoundaryMark } from './boundary-logo';
 import { BOOK } from './links';
 import { LINKS, WRAP } from './ui';
 
@@ -23,22 +21,11 @@ export default function Nav({ current }: { current?: 'blog' }) {
         className={`${WRAP} h-[72px] flex items-center justify-between gap-6`}
       >
         <Link aria-label="Boundary home" className="tap shrink-0" href="/">
-          <Image
-            alt="Boundary"
-            className="hidden sm:block h-8 w-auto"
-            height={32}
-            priority
-            src={boundaryWhite}
-            width={187}
-          />
-          <Image
-            alt="Boundary"
-            className="sm:hidden h-8 w-auto"
-            height={32}
-            priority
-            src={boundaryMark}
-            width={51}
-          />
+          <BoundaryLogo className="hidden sm:block h-12 w-auto text-white" />
+          <span className="sm:hidden text-white">
+            <BoundaryMark className="h-10 w-auto" />
+            <span className="sr-only">Boundary</span>
+          </span>
         </Link>
 
         {/* Below sm the gaps and the button's padding tighten so the bar fits a 360px phone, and below 360px
@@ -78,7 +65,7 @@ export default function Nav({ current }: { current?: 'blog' }) {
 }
 
 // The repository's GitHub star count, rounded. Update it by hand as it grows.
-const STARS = '9.5k';
+export const STARS = '9.5k';
 
 /** GitHub's mark, from Simple Icons, in the text colour so it follows the link's hover. */
 function GitHubMark() {

@@ -22,7 +22,7 @@ export const FIXES = [
 export function classifySource(rules: string[]) {
   const lines = [
     'function classify(text: string) -> Verdict {',
-    '  client: "openai/gpt-6-luna"',
+    '  client: openai.ResponsesClient.new(model = "gpt-6-luna")',
     '  prompt: `',
     '    Classify this support ticket.',
     ...rules.map((r) => `    ${r}`),

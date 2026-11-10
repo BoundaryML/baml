@@ -1,6 +1,5 @@
-import boundaryMark from '@boundaryml/brand/logo/svg/boundary-logomark-white.svg';
-import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
+import { BoundaryMark } from './boundary-logo';
 import { BOOK } from './links';
 import { MarkTile } from './mark';
 import { MARKS } from './marks';
@@ -9,25 +8,28 @@ import { RED } from './story';
 import { Button } from './ui';
 
 // Section 5, Deploy: where program data goes, as one figure. The app fans out into three streams of
-// program data (AI calls, profiles, and errors), each a small card with its own figure. The streams
+// program data (AI calls, traces, and errors), each a small card with its own figure. The streams
 // fan back in to Boundary Cloud's data lake, and the terminal reads the lake with SQL. On wide screens
 // it runs left to right; below that it stacks top to bottom.
 
 /** An end of the figure: an icon in a tile, with a name and an optional line under it. A node with a
  *  logo is a Boundary product, so its name is set lowercase in Geist SemiBold, like the Boundary
  *  wordmark, instead of in Geist Pixel, which the brand keeps for captions and BAML. */
-function Node({
+export function Node({
   detail,
   icon,
   lit,
   mark,
   name,
+  product = !!mark,
 }: {
-  detail?: string;
+  detail?: ReactNode;
   icon: ReactNode;
   lit?: boolean;
   mark?: ReactNode;
   name: string;
+  // Sets the name like the Boundary wordmark even when the logo is drawn in the tile instead.
+  product?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center text-center">
@@ -37,7 +39,7 @@ function Node({
         {icon}
       </div>
       <p
-        className={`mt-3 flex items-baseline gap-2 whitespace-nowrap text-head ${mark ? 'font-sans font-semibold text-[17px] leading-none tracking-[-0.01em]' : 'v4-caption'}`}
+        className={`mt-3 flex items-baseline gap-2 whitespace-nowrap text-head ${product ? 'font-sans font-semibold text-[17px] leading-none tracking-[-0.01em]' : 'v4-caption'}`}
       >
         {mark}
         {name}
@@ -53,7 +55,7 @@ function Node({
 
 /** A labelled link between two parts of the figure. It runs down on narrow screens; with `across`, it
  *  runs left to right on wide ones. */
-function Link({ across, label }: { across?: boolean; label?: string }) {
+export function Link({ across, label }: { across?: boolean; label?: string }) {
   return (
     <div
       aria-hidden
@@ -83,20 +85,31 @@ const ROW_GAP = 12;
  *  line that joins the three rows. `out` fans from the app to the streams, with the vertical line on the
  *  left and arrows into each stream; `in` fans from the streams to the lake, with the vertical line on
  *  the right and one arrow, from the middle row, into the lake. */
-function Fan({ dir, row }: { dir: 'in' | 'out'; row: 0 | 1 | 2 }) {
+export function Fan({
+  dir,
+  inGrid,
+  joined = 1,
+  row,
+}: {
+  dir: 'in' | 'out';
+  // Keeps the fan in the figure's grid at any width.
+  inGrid?: boolean;
+  joined?: number;
+  row: 0 | 1 | 2;
+}) {
   const top = row === 0 ? '50%' : 0;
   const bottom = row === 2 ? '50%' : -ROW_GAP;
 
   return (
     <div
       aria-hidden
-      className="fan relative hidden xl:block"
+      className={`fan relative ${inGrid ? '' : 'hidden xl:block'}`}
       data-row={row}
       style={{ gridColumn: dir === 'out' ? 2 : 4, gridRow: row + 1 }}
     >
       <span
         className={`absolute w-px bg-clover/70 ${dir === 'out' ? 'left-0' : 'right-0'}`}
-        style={{ bottom, top }}
+        style={{ bottom, opacity: joined, top }}
       />
       <span className="fan-h absolute inset-x-0 top-1/2 h-px bg-clover/70">
         {dir === 'out' && <Arrowhead />}
@@ -106,7 +119,7 @@ function Fan({ dir, row }: { dir: 'in' | 'out'; row: 0 | 1 | 2 }) {
 }
 
 /** An arrowhead pointing right, at the right end of a horizontal line. */
-function Arrowhead() {
+export function Arrowhead() {
   return (
     <span className="absolute -right-px top-1/2 -translate-y-1/2 size-0 border-y-[4px] border-l-[6px] border-y-transparent border-l-clover" />
   );
@@ -132,7 +145,7 @@ function Icon({ children }: { children: ReactNode }) {
 }
 
 /** An app window with code in it. */
-const APP = (
+export const APP = (
   <Icon>
     <rect height={32} rx={4} width={40} x={4} y={8} />
     <path d="M4 16h40" />
@@ -141,7 +154,7 @@ const APP = (
 );
 
 /** A database. */
-const LAKE = (
+export const LAKE = (
   <Icon>
     <ellipse cx={24} cy={11} rx={15} ry={5} />
     <path d="M9 11v26c0 2.8 6.7 5 15 5s15-2.2 15-5V11" />
@@ -292,6 +305,68 @@ const STACK = [
   ['route', 'triage.baml:31'],
 ];
 
+/** The three streams of program data, as cards. `inGrid` keeps them in the figure's grid at any width. */
+export function Streams({ inGrid }: { inGrid?: boolean }) {
+  return (
+    <div className={inGrid ? 'contents' : 'flex flex-col gap-3 xl:contents'}>
+      <Stream
+        body="The provider, model, tokens, and cost of every AI call, next to its arguments and result."
+        row={0}
+        title="AI calls"
+      >
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2.5 items-center">
+          {CALLS.map((c, i) => (
+            <div
+              className="contents"
+              key={c.model}
+              style={{ '--i': i } as CSSProperties}
+            >
+              <span className="replay text-ink">
+                <MarkTile mark={c.mark} size={18} />
+              </span>
+              <span className="replay min-w-0">
+                <span className="block truncate text-ink-2">{c.model}</span>
+                <span className="block text-[11px] text-muted">
+                  {c.tokens} tokens
+                </span>
+              </span>
+              <span className="replay tabular-nums text-clover">{c.cost}</span>
+            </div>
+          ))}
+        </div>
+      </Stream>
+      <Stream body="How long every function took." row={1} title="Traces">
+        <FlameChart />
+      </Stream>
+      <Stream
+        body="Where each error started and how it moved up the stack, without changing code."
+        row={2}
+        title="Errors"
+      >
+        <div className="leading-[1.8]">
+          <p
+            className="replay flex items-center gap-2"
+            style={{ '--i': 0, color: RED } as CSSProperties}
+          >
+            <span className="error-dot size-1.5 rounded-full bg-current" />
+            ParseError in parse
+          </p>
+          {STACK.map(([fn, where], i) => (
+            <p
+              className="replay flex justify-between gap-3 pl-3.5"
+              key={fn}
+              style={{ '--i': i + 1 } as CSSProperties}
+            >
+              <span className="text-ink-2">at {fn}</span>
+              <span className="truncate text-muted">{where}</span>
+            </p>
+          ))}
+        </div>
+      </Stream>
+    </div>
+  );
+}
+
 export default function Deploy() {
   return (
     <Phase
@@ -318,68 +393,7 @@ export default function Deploy() {
         <Fan dir="out" row={1} />
         <Fan dir="out" row={2} />
 
-        <div className="flex flex-col gap-3 xl:contents">
-          <Stream
-            body="The provider, model, tokens, and cost of every AI call, next to its arguments and result."
-            row={0}
-            title="AI calls"
-          >
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2.5 items-center">
-              {CALLS.map((c, i) => (
-                <div
-                  className="contents"
-                  key={c.model}
-                  style={{ '--i': i } as CSSProperties}
-                >
-                  <span className="replay text-ink">
-                    <MarkTile mark={c.mark} size={18} />
-                  </span>
-                  <span className="replay min-w-0">
-                    <span className="block truncate text-ink-2">{c.model}</span>
-                    <span className="block text-[11px] text-muted">
-                      {c.tokens} tokens
-                    </span>
-                  </span>
-                  <span className="replay tabular-nums text-clover">
-                    {c.cost}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Stream>
-          <Stream
-            body="How long every function took. It costs so little that Boundary Cloud doesn't charge for it."
-            row={1}
-            title="Profiles"
-          >
-            <FlameChart />
-          </Stream>
-          <Stream
-            body="Where each error started and how it moved up the stack, without changing code."
-            row={2}
-            title="Errors"
-          >
-            <div className="leading-[1.8]">
-              <p
-                className="replay flex items-center gap-2"
-                style={{ '--i': 0, color: RED } as CSSProperties}
-              >
-                <span className="error-dot size-1.5 rounded-full bg-current" />
-                ParseError in parse
-              </p>
-              {STACK.map(([fn, where], i) => (
-                <p
-                  className="replay flex justify-between gap-3 pl-3.5"
-                  key={fn}
-                  style={{ '--i': i + 1 } as CSSProperties}
-                >
-                  <span className="text-ink-2">at {fn}</span>
-                  <span className="truncate text-muted">{where}</span>
-                </p>
-              ))}
-            </div>
-          </Stream>
-        </div>
+        <Streams />
 
         <Link />
         <Fan dir="in" row={0} />
@@ -405,15 +419,7 @@ export default function Deploy() {
               detail="A data lake hosted by us, in your cloud, or on your machine"
               icon={LAKE}
               lit
-              mark={
-                <Image
-                  alt=""
-                  className="h-[12px] w-auto"
-                  height={12}
-                  src={boundaryMark}
-                  width={19}
-                />
-              }
+              mark={<BoundaryMark className="h-[16px] w-auto" />}
               name="boundary cloud"
             />
           </div>

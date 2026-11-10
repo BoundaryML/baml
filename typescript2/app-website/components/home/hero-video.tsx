@@ -148,7 +148,8 @@ export function Window({
             <span className="size-2.5 rounded-full bg-white/15" key={d} />
           ))}
         </span>
-        <span className="absolute inset-x-0 text-center font-mono text-[12px] text-white/50 pointer-events-none">
+        {/* The file name sits after the window buttons, where an editor puts its tab. */}
+        <span className="ml-4 font-mono text-[12px] text-white/50">
           {title}
         </span>
       </div>
@@ -609,7 +610,7 @@ export function source(prompt: string, rule?: string) {
     'type Label = "billing" | "bug" | "other";',
     '',
     'function classify(ticket: string) -> Label {',
-    '    client: "openai/gpt-6-luna"',
+    '    client: openai.ResponsesClient.new(model = "gpt-6-luna")',
     '    prompt: `',
     `        ${prompt}`,
     ...(rule === undefined ? [] : [`        ${rule}`]),

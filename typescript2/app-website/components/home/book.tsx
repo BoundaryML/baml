@@ -24,12 +24,14 @@ export default function Book() {
       <div className="relative v3-wrap mx-auto px-(--frame-pad) py-20 md:py-32 flex max-md:flex-col max-md:items-start items-center justify-between gap-10">
         <div className="max-w-[560px]">
           <h2 className="v4-h2" id="book">
-            Get access to the BAML stack.
+            When humans wrote code, it was okay to move in days or weeks.
           </h2>
           <p className="mt-6 v4-body text-ink">
-            The stack is in private beta. Book a 45-minute call with the
-            founders, and we'll set you up.
+            Now AI writes it.{' '}
+            <span className="text-clover">Hyperobservability</span> gets you the
+            speed. Incredible products are still your job.
           </p>
+          <p className="mt-4 v4-body text-ink">The stack is in private beta.</p>
           <div className="mt-8">
             <Button href={BOOK}>Get early access</Button>
           </div>

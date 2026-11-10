@@ -25,20 +25,23 @@ export default function Hero() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) hero-top pb-10 md:pb-14">
         <h1 className="v4-h1 hero-title max-w-[13em]" id="hero-title">
-          The <span className="whitespace-nowrap">hyper-observable</span>{' '}
-          programming language
+          The{' '}
+          <span
+            className="whitespace-nowrap text-clover"
+            style={{ fontFamily: 'var(--font-geist-pixel)' }}
+          >
+            hyperobservable
+          </span>{' '}
+          software stack
         </h1>
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6 mt-5 md:mt-7">
           <p className="grow basis-[26rem] max-w-[36rem] v4-body text-ink-2">
-            BAML is a programming language with built-in telemetry. Replace 10+
-            separate tools with one toolchain that helps agents test, trace,
-            query data, build alerts, and more.
+            Replace 10+ disjoint tools with one unified toolchain that helps
+            agents through your entire software development lifecycle.
+            Incrementally adoptable.
           </p>
           <div className="flex flex-wrap gap-2.5">
             <Button href={BOOK}>Get early access</Button>
-            <Button href="#how" variant="secondary">
-              See how it works
-            </Button>
           </div>
         </div>
 
