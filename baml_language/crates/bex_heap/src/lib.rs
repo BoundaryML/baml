@@ -62,6 +62,7 @@
 
 mod accessor;
 mod chunked_vec;
+mod descriptor;
 mod functions;
 mod gc;
 pub mod gc_policy;
@@ -69,12 +70,19 @@ mod gc_profile;
 mod heap;
 mod heap_debugger;
 mod heap_guard;
+mod object_trace;
+mod root_source;
+pub mod space;
 mod tlab;
 
 // Re-export types from bex_external_types for convenience
 pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
 pub use bex_external_types::{BexExternalValue, Handle, WeakHeapRef};
 pub use bex_vm_types::PermitProof;
+pub use descriptor::{
+    DescId, Descriptor, DescriptorError, DescriptorTable, ElemKind, FinalizerId, Header, Kind,
+    OBJECT_DESC, RawKind, RustHooks, SlotKind, TaggedKind, TaggedSlot, TypeId,
+};
 pub use gc::GcStats;
 #[cfg(feature = "gc_profiling")]
 pub use gc_profile::GcHeapSnapshot;
@@ -86,4 +94,6 @@ pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use heap_guard::{
     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,
 };
+pub use root_source::{BothRoots, ConservativeRanges, NoRoots, PreciseRoots, RootSource};
+pub use space::small::{ClassOccupancy, SIZE_CLASSES};
 pub use tlab::{Reservation, SETTLE_QUANTUM, Tlab, TlabHolder};
