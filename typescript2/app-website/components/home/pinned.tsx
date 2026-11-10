@@ -68,7 +68,8 @@ export function Pinned({
 const ease = (k: number) => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
 
 /** Whether the reader asked for less motion. */
-function useReducedMotion() {
+/** Whether the visitor asked for less motion, kept current if they change it. */
+export function useReducedMotion() {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -99,6 +100,23 @@ export function useInView(ref: RefObject<HTMLElement | null>) {
     return () => io.disconnect();
   }, [ref]);
   return seen;
+}
+
+/** Whether the element is on screen right now. Unlike `useInView` it keeps watching, so a loop gated
+ *  on it pauses when the reader scrolls away and resumes when they come back. */
+export function useVisible(ref: RefObject<HTMLElement | null>) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setVisible(entry.isIntersecting),
+      { rootMargin: '0px 0px -25% 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref]);
+  return visible;
 }
 
 /** A value that eases to `target` over `ms` whenever the target changes. Under reduced motion it jumps. */

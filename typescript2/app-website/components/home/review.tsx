@@ -13,7 +13,14 @@ import {
 } from 'react-icons/si';
 import { section } from '@/components/home/analytics';
 import { BAML_LOGO, LAMB_PATHS } from '@/components/home/lamb';
-import { Hyper, sweep, useInView, useTween } from '@/components/home/pinned';
+import {
+  Hyper,
+  sweep,
+  useInView,
+  useReducedMotion,
+  useTween,
+  useVisible,
+} from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 
 // Can agents write good BAML? Real tooling output throughout: the errors come from `baml check`, the
@@ -258,6 +265,7 @@ function Errors() {
             const on = i === at;
             return (
               <button
+                aria-pressed={on}
                 className={`relative h-11 whitespace-nowrap px-2.5 text-[14px] sm:px-3.5 sm:text-[15px] transition-colors ${on ? 'text-white' : 'text-white/50 hover:text-white/80'}`}
                 key={name}
                 onClick={() => setAt(i)}
@@ -349,6 +357,7 @@ function Speed() {
         <div className="flex flex-wrap items-center border-b border-white/10 px-2">
           {KINDS.map((kind, i) => (
             <button
+              aria-pressed={i === at}
               className={`relative h-11 px-3.5 text-[15px] transition-colors ${i === at ? 'text-white' : 'text-white/50 hover:text-white/80'}`}
               key={kind.name}
               onClick={() => setAt(i)}
@@ -371,7 +380,7 @@ function Speed() {
             const ratio = c.s < base ? base / c.s : c.s / base;
             return (
               <div
-                className={`grid grid-cols-[150px_minmax(0,1fr)_70px_104px] items-center gap-3 ${lit ? 'rounded-lg bg-clover/10 -mx-2 px-2 py-1.5' : ''}`}
+                className={`grid grid-cols-[104px_minmax(0,1fr)_60px] items-center gap-x-3 gap-y-1 sm:grid-cols-[150px_minmax(0,1fr)_70px_104px] sm:gap-y-3 ${lit ? 'rounded-lg bg-clover/10 -mx-2 px-2 py-1.5' : ''}`}
                 key={c.name}
               >
                 <CompilerName name={c.name} />
@@ -382,13 +391,14 @@ function Speed() {
                   />
                 </span>
                 <p
-                  className={`text-right font-mono text-[15px] tabular-nums ${lit ? 'text-clover' : 'text-white/70'}`}
+                  className={`text-right font-mono text-[13px] tabular-nums sm:text-[15px] ${lit ? 'text-clover' : 'text-white/70'}`}
                 >
                   {c.s >= 1
                     ? `${c.s.toFixed(2)} s`
                     : `${Math.round(c.s * 1000)} ms`}
                 </p>
-                <p className="text-right whitespace-nowrap font-display text-[17px] font-medium tabular-nums text-head">
+                {/* On a phone the ratio takes its own line under the row, so it's never clipped. */}
+                <p className="col-span-3 whitespace-nowrap text-right font-display text-[15px] font-medium tabular-nums text-head sm:col-span-1 sm:text-[17px]">
                   {lit ? (
                     <span className="text-[15px] font-normal text-clover">
                       baseline
@@ -520,6 +530,7 @@ function Run() {
         <div className="flex flex-wrap items-center border-b border-white/10 px-2">
           {RUNS.map((item, i) => (
             <button
+              aria-pressed={i === at}
               className={`relative h-11 px-3.5 text-[15px] transition-colors ${i === at ? 'text-white' : 'text-white/50 hover:text-white/80'}`}
               key={item.name}
               onClick={() => setAt(i)}
@@ -947,15 +958,21 @@ function Story() {
   const ref = useRef<HTMLDivElement>(null);
   const dot = useRef<HTMLSpanElement>(null);
   const seen = useInView(ref);
+  // The loop runs only while the figure is on screen, and not at all for reduced motion, where the
+  // steps change only when picked.
+  const visible = useVisible(ref);
+  const reduce = useReducedMotion();
   const [stage, setStage] = useState(0);
   // A click holds its step while the pointer stays on the figure; leaving lets the loop carry on.
   const [held, setHeld] = useState(false);
   const at = useRef(0);
-  at.current = stage;
+  useEffect(() => {
+    at.current = stage;
+  }, [stage]);
   useEffect(() => {
     const el = dot.current;
     if (!el) return;
-    if (!seen || held) {
+    if (!visible || held || reduce) {
       el.style.opacity = '0';
       return;
     }
@@ -984,7 +1001,7 @@ function Story() {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [seen, held]);
+  }, [visible, held, reduce]);
   // `Comment` reads its progress through `sweep`, so each stage's point is mapped back through it.
   // Back to the first step it jumps, so the wrap doesn't play the whole story in reverse.
   const p = useTween(0.04 + STAGES[stage].at * 0.9, 1200, stage === 0);

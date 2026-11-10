@@ -2324,8 +2324,10 @@ export default function Tracker({
 
   return (
     <div
-      className={`tracker ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3`}
+      className={`tracker ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3 outline-none`}
       ref={root}
+      // Takes focus when Replay hides itself, so keyboard focus never sits on a hidden button.
+      tabIndex={-1}
     >
       <Frame label="Where each toolchain reaches. C builds with cc and leaves testing to you. TypeScript builds with Vite, webpack, or esbuild, and tests with Jest, Vitest, or Mocha. Go builds and tests with go build and go test, and leaves releasing to you. Rust builds, tests, and releases with cargo. Past deploy, every team mixes and matches its own separate products for tracing, dashboards, alerts, and more, no two alike. BAML covers build, test, release, query, dashboards, alerts, and more itself, and a line runs from production back to build, labelled Improve.">
         {/* Cards take a smaller corner radius than the style's, so they read as boxes, not pills. */}
@@ -2334,7 +2336,11 @@ export default function Tracker({
             <button
               aria-hidden={!done}
               className="focus-ring absolute right-2 bottom-2 sm:right-auto sm:left-(--tracker-pad) sm:bottom-3 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-(--ds-line) px-3 py-1 text-[12.5px] text-(--ds-ink)/75 transition-[opacity,color,border-color] duration-500 hover:border-(--ds-accent) hover:text-(--ds-accent-ink)"
-              onClick={replay}
+              onClick={() => {
+                if (!done) return;
+                root.current?.focus({ preventScroll: true });
+                replay();
+              }}
               style={{
                 opacity: done ? 1 : 0,
                 pointerEvents: done ? 'auto' : 'none',

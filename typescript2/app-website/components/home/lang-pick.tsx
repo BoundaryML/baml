@@ -49,12 +49,15 @@ export function LangIcon({
 const KEY = 'boundary-sdk-lang';
 const EVENT = 'boundary-sdk-lang';
 
+// The choice for this page load, for when storage is blocked or full and can't hold it.
+let memory = 0;
+
 function read() {
   try {
     const i = SDK_LANGS.findIndex((l) => l.name === localStorage.getItem(KEY));
-    return i < 0 ? 0 : i;
+    return i < 0 ? memory : i;
   } catch {
-    return 0;
+    return memory;
   }
 }
 
@@ -72,6 +75,7 @@ export function usePinnedLang(): [number, (i: number) => void] {
     };
   }, []);
   const setAt = useCallback((i: number) => {
+    memory = i;
     setLocal(i);
     try {
       localStorage.setItem(KEY, SDK_LANGS[i].name);

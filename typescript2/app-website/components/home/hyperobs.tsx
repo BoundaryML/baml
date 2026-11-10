@@ -1021,6 +1021,9 @@ function ChatWindow({
               return (
                 <div
                   className="will-change-[opacity,transform] transition-[opacity,transform] delay-100 duration-400 ease-out motion-reduce:transition-none"
+                  // Not arrived yet: out of the tab order and the accessibility tree, so keyboard
+                  // focus can't scroll it into view early and screen readers don't read ahead.
+                  inert={!on}
                   key={`${item.when}-${item.kind}`}
                   style={{
                     height: fullHeight(item),

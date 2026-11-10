@@ -7,6 +7,7 @@ import {
   SDK_LANGS,
   usePinnedLang,
 } from '@/components/home/lang-pick';
+import { useReducedMotion } from '@/components/home/pinned';
 
 // How BAML runs, for the /adopt page's last section and anyone who wants the detail: what
 // `baml generate` makes, where the runtime lives in each target and language, and what happens at
@@ -15,13 +16,15 @@ import {
 
 /** Steps forward on a timer, looping, unless the reader prefers less motion. */
 export function useBeat(count: number, ms: number) {
+  const reduce = useReducedMotion();
   const [beat, setBeat] = useState(0);
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (reduce) return;
     const timer = setInterval(() => setBeat((b) => (b + 1) % count), ms);
     return () => clearInterval(timer);
-  }, [count, ms]);
-  return beat;
+  }, [count, ms, reduce]);
+  // Under reduced motion, the last beat: every diagram's finished, fully shown state.
+  return reduce ? count - 1 : beat;
 }
 
 // ---------- I: the architecture, with things drawn inside the things they live in ----------
@@ -1400,6 +1403,7 @@ function TargetPicker({
     <div className="inline-flex rounded-full border border-white/15 p-1">
       {TARGETS.map((t, i) => (
         <button
+          aria-pressed={i === at}
           className={`focus-ring cursor-pointer rounded-full px-3 py-1 text-[13px] transition-colors ${i === at ? 'bg-clover text-black' : 'text-ink-2 hover:text-head'}`}
           key={t.name}
           onClick={() => setAt(i)}

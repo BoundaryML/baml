@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { Phase } from './phase';
-import { useInView } from './pinned';
+import { useReducedMotion, useVisible } from './pinned';
 import { ramp } from './scroll';
 
 // Section 7, Improve: what's coming, as one collage a dot steps through. HyperReload's tile is an
@@ -708,17 +708,22 @@ const FEATURES: {
 function Collage() {
   const ref = useRef<HTMLDivElement>(null);
   const dot = useRef<HTMLSpanElement>(null);
-  const seen = useInView(ref);
+  // The loop runs only while the collage is on screen, and not at all for reduced motion, where
+  // every tile shows its last frame.
+  const visible = useVisible(ref);
+  const reduce = useReducedMotion();
   const [stage, setStage] = useState(0);
   const [held, setHeld] = useState(false);
   // How far the lit feature has played, 0 to 1. Features that aren't lit show their last frame.
   const [t, setT] = useState(1);
   const at = useRef(0);
-  at.current = stage;
+  useEffect(() => {
+    at.current = stage;
+  }, [stage]);
   useEffect(() => {
     const el = dot.current;
     if (!el) return;
-    if (!seen || held) {
+    if (!visible || held || reduce) {
       el.style.opacity = '0';
       setT(1);
       return;
@@ -747,7 +752,7 @@ function Collage() {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [seen, held]);
+  }, [visible, held, reduce]);
   const pick = (i: number) => {
     setHeld(true);
     setStage(i);
