@@ -1,5 +1,6 @@
-//! Allowlisted environment metadata for BCS process recordings. No environment
-//! values, hostname, command line, paths or user identity are copied here.
+//! Allowlisted environment metadata for BCS process recordings. `AI_AGENT` names
+//! the harness explicitly; named-marker contents, hostname, command line, paths
+//! and user identity are not copied here.
 
 use std::{ffi::OsString, sync::OnceLock};
 
@@ -64,7 +65,7 @@ fn collect(system: &System, mut read: impl FnMut(&str) -> Option<OsString>) -> C
             ("os_distro", system.distro.as_deref().and_then(text)),
             ("architecture", text(std::env::consts::ARCH)),
             ("is_ci", Some(ContextValue::Bool(is_ci))),
-            ("agent_harness", agent.and_then(text)),
+            ("agent_harness", agent.as_deref().and_then(text)),
         ]
         .into_iter()
         .map(|(key, value)| (format!("baml.environment.{key}"), value))
@@ -86,13 +87,13 @@ mod tests {
     }
 
     #[test]
-    /// The complete allowlist preserves scalar types and never copies marker
+    /// The complete allowlist preserves scalar types and never copies named-marker
     /// values or reads unrelated environment variables.
     fn schema_is_explicit_and_values_keep_their_types() {
         let context = Context::default().with_patch(&collect(&platform(), |name| match name {
             "CI" => Some("true".into()),
             "CODEX_SANDBOX" => Some("private-session-marker".into()),
-            baml_env::agent::DISABLE_AGENT_DETECTION_ENV | "CLAUDECODE" => None,
+            baml_env::agent::DISABLE_AGENT_DETECTION_ENV | "CLAUDECODE" | "AI_AGENT" => None,
             _ => panic!("unexpected environment lookup: {name}"),
         }));
         let metadata = context.metadata();
@@ -160,17 +161,34 @@ mod tests {
     }
 
     #[test]
-    /// Telemetry consumes the shared detector's generic label and escape hatch.
+    /// Telemetry consumes the shared detector's explicit name and escape hatch.
     fn shared_detector_override_and_generic_marker_reach_metadata() {
-        for (disabled, expected) in [("true", None), ("false", Some("unknown"))] {
+        for (disabled, expected) in [("true", None), ("false", Some("custom-harness"))] {
             let patch = collect(&platform(), |name| match name {
                 baml_env::agent::DISABLE_AGENT_DETECTION_ENV => Some(disabled.into()),
-                "AI_AGENT" => Some("secret-harness-name".into()),
+                "AI_AGENT" => Some(" custom-harness ".into()),
+                "CODEX_SANDBOX" => Some("private-marker-value".into()),
                 _ => None,
             });
             assert_eq!(
                 patch.metadata["baml.environment.agent_harness"],
                 expected.map(|value| ContextValue::String(value.into()))
+            );
+        }
+    }
+
+    #[test]
+    /// Explicit harness names remain bounded metadata; malformed names are
+    /// omitted without disrupting collection of the other environment fields.
+    fn malformed_explicit_harness_names_are_omitted() {
+        for value in ["x".repeat(129), "bad\nname".to_owned()] {
+            let patch = collect(&platform(), |name| {
+                (name == "AI_AGENT").then(|| value.clone().into())
+            });
+            assert_eq!(patch.metadata["baml.environment.agent_harness"], None);
+            assert_eq!(
+                patch.metadata["baml.environment.os"],
+                Some(ContextValue::String("Linux".into()))
             );
         }
     }

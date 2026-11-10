@@ -19,6 +19,10 @@ use std::{
 // Inline because the published Rust bridge compiles this file through a symlink.
 pub mod agent {
     //! Coding-agent signals shared by CLI output policy and runtime telemetry.
+    //!
+    //! Reuses the Vercel-derived detector from BAML PR #4726, including its
+    //! review fixes for non-Unicode named markers:
+    //! <https://github.com/BoundaryML/baml/blob/3c89421458a11134544a6d7f1a4e5ee9d2b0b1e3/baml_language/crates/baml_cli/src/output.rs>
 
     use std::ffi::OsString;
 
@@ -27,30 +31,28 @@ pub mod agent {
     /// Dev escape hatch used by hooks and task runners launched inside an agent.
     pub const DISABLE_AGENT_DETECTION_ENV: &str = "DEV_BAML_CLI_DISABLE_AGENT_DETECTION";
 
-    // Keep specific harness markers ahead of generic agent markers. Values can be
-    // session IDs, paths or credentials: only these fixed labels may leave here.
+    // Named markers can contain session IDs, paths or credentials: only their
+    // presence is used. AI_AGENT is handled separately as an explicit name.
     const AGENT_ENV_VARS: &[(&str, &str)] = &[
-        ("CLAUDECODE", "claude-code"),
+        ("CLAUDECODE", "claude"),
         ("CODEX_SANDBOX", "codex"),
         ("PI_CODING_AGENT", "pi"),
         ("OPENCODE_CLIENT", "opencode"),
         ("CURSOR_TRACE_ID", "cursor"),
         ("REPL_ID", "replit"),
-        ("AI_AGENT", "unknown"),
-        ("AGENT", "unknown"),
     ];
 
-    /// The detected harness, or `unknown` when only a generic agent marker is set.
-    /// Preserves the CLI's marker semantics: nonempty Unicode values other than `0`
-    /// indicate an agent (including `false`); no marker values are returned.
-    pub fn detect() -> Result<Option<&'static str>, EnvError> {
+    /// The explicit `AI_AGENT` name, a known harness label, or `unknown` for
+    /// the boolean-ish `AGENT` compatibility marker. Named marker values are
+    /// never reported; they need only be nonempty and different from `0`.
+    pub fn detect() -> Result<Option<String>, EnvError> {
         detect_with(super::os_var)
     }
 
     /// Injectable form of [`detect`], without changing process environment.
     pub fn detect_with(
         mut read: impl FnMut(&str) -> Option<OsString>,
-    ) -> Result<Option<&'static str>, EnvError> {
+    ) -> Result<Option<String>, EnvError> {
         if super::bool_from(
             DISABLE_AGENT_DETECTION_ENV,
             read(DISABLE_AGENT_DETECTION_ENV),
@@ -58,12 +60,27 @@ pub mod agent {
         {
             return Ok(None);
         }
-        Ok(AGENT_ENV_VARS.iter().find_map(|(name, harness)| {
-            read(name)
-                .and_then(|value| value.into_string().ok())
-                .is_some_and(|value| !value.is_empty() && value != "0")
-                .then_some(*harness)
-        }))
+        // AI_AGENT follows @vercel/detect-agent: its value names the harness
+        // and takes precedence over inherited markers from a parent harness.
+        if let Some(name) = read("AI_AGENT")
+            .and_then(|value| value.into_string().ok())
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty() && value != "0")
+        {
+            return Ok(Some(name));
+        }
+
+        // Named markers do not need Unicode decoding: their contents never
+        // become a reported name. Preserve the reviewed PR #4726 behavior.
+        for &(variable, harness) in AGENT_ENV_VARS {
+            if read(variable).is_some_and(|value| !value.is_empty() && value != "0") {
+                return Ok(Some(harness.to_owned()));
+            }
+        }
+
+        Ok(read("AGENT")
+            .filter(|value| !value.is_empty() && value != "0")
+            .map(|_| "unknown".to_owned()))
     }
 
     #[cfg(test)]
@@ -71,13 +88,15 @@ pub mod agent {
         use super::*;
 
         #[test]
-        /// Each legacy marker yields only its fixed label, with unchanged
-        /// empty/zero/false handling and no disclosure of the marker's value.
+        /// Each named marker yields only its fixed label, with empty/zero
+        /// handling and no disclosure of the marker's value.
         fn every_existing_marker_has_a_bounded_label() {
             for &(marker, label) in AGENT_ENV_VARS {
                 assert_eq!(
-                    detect_with(|name| (name == marker).then(|| "private-session-value".into())),
-                    Ok(Some(label))
+                    detect_with(|name| (name == marker).then(|| "private-session-value".into()))
+                        .unwrap()
+                        .as_deref(),
+                    Some(label)
                 );
                 for value in ["", "0"] {
                     assert_eq!(
@@ -88,27 +107,53 @@ pub mod agent {
             }
             assert_eq!(detect_with(|_| None), Ok(None));
             assert_eq!(
-                detect_with(|name| (name == "AGENT").then(|| "false".into())),
-                Ok(Some("unknown"))
+                detect_with(|name| (name == "AGENT").then(|| "false".into()))
+                    .unwrap()
+                    .as_deref(),
+                Some("unknown")
             );
         }
 
         #[test]
-        /// Named harness markers outrank generic ones and resolve overlapping
-        /// specific markers deterministically.
-        fn specific_harness_wins_over_generic_markers() {
+        /// The explicit `AI_AGENT` name outranks inherited named markers, while
+        /// overlapping named markers retain the reviewed deterministic order.
+        fn explicit_harness_wins_over_named_markers() {
             assert_eq!(
-                detect_with(
-                    |name| matches!(name, "AI_AGENT" | "CURSOR_TRACE_ID").then(|| "1".into())
-                ),
-                Ok(Some("cursor"))
+                detect_with(|name| match name {
+                    "AI_AGENT" => Some(" custom-harness ".into()),
+                    "CURSOR_TRACE_ID" => Some("private-session-value".into()),
+                    _ => None,
+                })
+                .unwrap()
+                .as_deref(),
+                Some("custom-harness")
             );
             assert_eq!(
                 detect_with(
                     |name| matches!(name, "CLAUDECODE" | "CODEX_SANDBOX").then(|| "1".into())
-                ),
-                Ok(Some("claude-code"))
+                )
+                .unwrap()
+                .as_deref(),
+                Some("claude")
             );
+        }
+
+        #[test]
+        /// Empty, whitespace-only or zero explicit names fall through to named
+        /// markers; AGENT provides a final unknown-harness fallback.
+        fn empty_explicit_names_fall_back_to_markers() {
+            for value in ["", "  ", "0", " 0 "] {
+                assert_eq!(
+                    detect_with(|name| match name {
+                        "AI_AGENT" => Some(value.into()),
+                        "CODEX_SANDBOX" | "AGENT" => Some("1".into()),
+                        _ => None,
+                    })
+                    .unwrap()
+                    .as_deref(),
+                    Some("codex")
+                );
+            }
         }
 
         #[test]
@@ -130,12 +175,16 @@ pub mod agent {
 
         #[cfg(unix)]
         #[test]
-        /// Unreadable marker values cannot classify a harness or cause an error.
-        fn non_unicode_markers_are_ignored() {
+        /// Named markers still classify a harness without decoding their values;
+        /// a non-Unicode explicit name falls through to those markers.
+        fn non_unicode_named_markers_still_detect_harness() {
             use std::os::unix::ffi::OsStringExt as _;
             assert_eq!(
-                detect_with(|name| (name == "CLAUDECODE").then(|| OsString::from_vec(vec![0xff]))),
-                Ok(None)
+                detect_with(|name| matches!(name, "AI_AGENT" | "CODEX_SANDBOX")
+                    .then(|| OsString::from_vec(vec![0xff])))
+                .unwrap()
+                .as_deref(),
+                Some("codex")
             );
         }
     }
