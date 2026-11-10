@@ -1,8 +1,8 @@
 # Telemetry
 
-BAML collects completely anonymous telemetry data about general usage.
-Participation in this anonymous program is optional, and you may opt out
-if you'd not like to share any information.
+The BAML CLI and toolchain wrappers collect anonymous telemetry about general usage. Participation in this usage-analytics program is optional, and you may opt out if you would not like to share it.
+
+The usage-analytics description and assurances below apply to CLI/wrapper usage events. User-configured BCS runtime recording is a separate path that can contain caller-provided trace and context data. Its automatic environment metadata, including the explicit `AI_AGENT` property and its collection limits, is described in [BCS environment metadata](#bcs-environment-metadata).
 
 ## Why is telemetry collected?
 
@@ -39,15 +39,9 @@ This list is regularly audited to ensure its accuracy.
 
 ## What about sensitive data (e.g. secrets)?
 
-We do not collect any metrics which may contain sensitive data.
+The anonymous CLI/wrapper usage analytics described above selects coarse usage and environment fields instead of taking a general environment snapshot. It does not intentionally read credential variables or record command arguments, file paths, source contents, prompts, model responses, API keys, logs, or serialized errors.
 
-This includes, but is not limited to: environment variables, file paths,
-contents of files, BAML source code, prompts, model responses, API keys,
-logs, or serialized errors.
-
-We take privacy and security seriously. The data we collect is completely
-anonymous, not traceable to the source, and only meaningful in aggregate
-form. No data we collect is personally identifiable.
+These usage events use a random anonymous identity and salted project hash for aggregate product analysis. This usage-analytics policy does not describe user-configured BCS recordings: their trace/context values and explicit `AI_AGENT` name can contain caller-provided data. In particular, a bounded `AI_AGENT` value can be transmitted even if a path or credential is placed there; the bounds are not secret redaction. See [BCS environment metadata](#bcs-environment-metadata) for that separate policy.
 
 ## Will this data be shared?
 
@@ -56,6 +50,8 @@ only share de-identified data in the aggregate for business purposes such
 as marketing.
 
 ## How do I opt out?
+
+The CLI commands and `DO_NOT_TRACK` control in this section disable CLI/wrapper usage analytics. They do not disable separately configured BCS runtime recording. Set `BAML_TELEMETRY=off` to disable BCS runtime recording; see [BCS environment metadata](#bcs-environment-metadata) for its independent configuration and limits.
 
 You may opt out by running `baml telemetry disable`:
 
