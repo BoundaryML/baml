@@ -571,14 +571,19 @@ fn build_args(vm: &mut BexVm, receiver: &Receiver, args: &[Arg]) -> Vec<Value> {
         .collect()
 }
 
+/// Run `case` through the VM's `Value` glue: its outcome and the receiver
+/// afterwards.
+fn run_vm(vm: &mut BexVm, case: &Case, receiver: &Receiver, args: &[Arg]) -> (Outcome, String) {
+    let vm_args = build_args(vm, receiver, args);
+    let vm_result = (case.glue)(vm, &vm_args);
+    (vm_outcome(vm, vm_result), dump(vm, vm_args[0]))
+}
+
 /// Run `case` both ways from identical receivers; return the outcome and
 /// the receiver afterwards for each side.
 fn run(case: &Case, receiver: &Receiver, args: &[Arg]) -> [(Outcome, String); 2] {
     let mut vm = test_vm(Vec::new());
-    let vm_args = build_args(&mut vm, receiver, args);
-    let vm_result = (case.glue)(&mut vm, &vm_args);
-    let vm_side = (vm_outcome(&vm, vm_result), dump(&vm, vm_args[0]));
-
+    let vm_side = run_vm(&mut vm, case, receiver, args);
     let adapter_args = build_args(&mut vm, receiver, args);
     let adapter_result = (case.adapter)(&mut VmModel::new(&mut vm), &adapter_args);
     let adapter_side = (
@@ -912,4 +917,70 @@ fn a_generic_argument_must_fit_the_receiver_slot() {
         })
     );
     assert!(<ObjPtr as Elem>::from_tagged(Tagged::Int(1), SlotKind::Ptr).is_err());
+}
+
+// ── Interpreter outputs pinned across the move to shared bodies ──────────
+
+/// What the interpreter's glue produced for every case above, recorded from
+/// the `Value` bodies these builtins had before they became generic.
+const GOLDEN: &str = include_str!("vm_glue_golden.txt");
+
+fn string_receivers() -> Vec<Receiver> {
+    STRINGS
+        .iter()
+        .map(|&text| Receiver {
+            name: format!("{text:?}"),
+            build: Box::new(move |vm| lit(vm, Lit::Str(text))),
+            sample: Lit::Null,
+        })
+        .collect()
+}
+
+fn record_vm_glue() -> String {
+    let suites = [
+        (LIST_CASES, fixture_receivers(LISTS, list)),
+        (MAP_CASES, fixture_receivers(MAPS, map)),
+        (STRING_CASES, string_receivers()),
+    ];
+    let mut lines = Vec::new();
+    for (cases, receivers) in &suites {
+        for case in *cases {
+            for receiver in receivers {
+                for args in arg_lists(case.args) {
+                    let mut vm = test_vm(Vec::new());
+                    let (outcome, after) = run_vm(&mut vm, case, receiver, &args);
+                    let name = &receiver.name;
+                    lines.push(format!(
+                        "{} {name} {args:?} => {outcome:?} | {after}",
+                        case.path
+                    ));
+                }
+            }
+        }
+    }
+    for fixture in LISTS {
+        let mut vm = test_vm(Vec::new());
+        let array = list(&mut vm, fixture);
+        let mapped = vm_map(&mut vm, array);
+        lines.push(format!(
+            "baml.Array.map {:?} => {}",
+            fixture.elems,
+            dump(&vm, mapped)
+        ));
+    }
+    lines.join("\n") + "\n"
+}
+
+#[test]
+fn vm_glue_outputs_are_unchanged() {
+    let actual = record_vm_glue();
+    if std::env::var_os("BLESS_VM_GLUE").is_some() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/adapters/vm_glue_golden.txt"
+        );
+        std::fs::write(path, &actual).unwrap();
+        return;
+    }
+    assert_eq!(actual, GOLDEN);
 }
