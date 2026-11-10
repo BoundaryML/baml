@@ -662,11 +662,16 @@ const FEATURES: {
     says: (
       <>
         Milliseconds are too slow, megabytes too big.
-        {/* Below sm each column is as wide as its own text: in equal thirds "infrastructure" ran
-            out of its column and past the card's padding. */}
-        <span className="mt-2 grid grid-cols-[auto_auto_auto] justify-between gap-2 sm:grid-cols-3 sm:justify-normal">
+        {/* Equal thirds where there is room, but a stat is never narrower than its own text: in
+            fixed thirds "infrastructure" ran out of its column and past the card's padding. Where
+            even that doesn't fit (the cards sit two across from sm to lg, about 200px each here),
+            the last stat wraps to a line of its own. */}
+        <span className="mt-2 flex flex-wrap gap-2">
           {SANDBOX_STATS.map(([value, label]) => (
-            <span className="flex flex-col" key={label}>
+            <span
+              className="flex flex-1 flex-col whitespace-nowrap"
+              key={label}
+            >
               <span className="font-display text-[20px] font-medium leading-none text-clover">
                 {value}
               </span>
@@ -834,7 +839,9 @@ function Collage() {
                   or a long status never squeezes the other. */}
               <div className="px-4 pt-4">
                 {f.status && (
-                  <p className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] uppercase tracking-wider">
+                  // On a touch screen the row sits 4px further from the title, which is the room the
+                  // link's and the title's touch targets need to meet without overlapping.
+                  <p className="mb-2 pointer-coarse:mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] uppercase tracking-wider">
                     <span className="flex items-center gap-1.5 text-ink-2">
                       <span
                         className={`size-1.5 rounded-full ${STAGE[f.status.label] ?? 'bg-white/30'}`}
@@ -846,7 +853,11 @@ function Collage() {
                     )}
                     {f.status.links?.map((l) => (
                       <a
-                        className="tap focus-ring rounded-md normal-case tracking-normal text-clover hover:underline"
+                        // The link is 17px tall. On a touch screen its target grows to 39px: up
+                        // through the card's top padding, and 6px down, which is where the
+                        // title's target starts. Not the .tap overlay: that is centered, so it
+                        // reached 14px down into the title and took taps meant for it.
+                        className="focus-ring rounded-md normal-case tracking-normal text-clover hover:underline pointer-coarse:relative pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-top-4 pointer-coarse:before:-bottom-1.5 pointer-coarse:before:content-['']"
                         href={l.href}
                         key={l.href}
                         rel="noopener noreferrer"
@@ -858,8 +869,10 @@ function Collage() {
                   </p>
                 )}
                 <button
-                  // Taller on a touch screen, pulled back by its margins so the card's rhythm holds.
-                  className="focus-ring flex cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-md text-left font-display text-[17px] font-medium text-head md:text-[18px] pointer-coarse:py-2 pointer-coarse:-my-2"
+                  // Taller on a touch screen (42px), pulled back by its margins so the card keeps
+                  // its rhythm. The top margin stops 6px below the status row, where the link's
+                  // target ends.
+                  className="focus-ring flex cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-md text-left font-display text-[17px] font-medium text-head md:text-[18px] pointer-coarse:py-2 pointer-coarse:-mt-1.5 pointer-coarse:-mb-2"
                   onClick={() => pick(i)}
                   type="button"
                 >
