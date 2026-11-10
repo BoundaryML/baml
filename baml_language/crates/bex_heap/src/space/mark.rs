@@ -8,7 +8,7 @@ use super::{
     RegionKind, block::BlockHeader, cell_bytes, cell_of, large::LargeSpace, pool::BlockPool,
     region_base, region_kind, small::SmallSpace,
 };
-use crate::descriptor::{DescriptorTable, Header, Kind, RUST_PAYLOAD_OFFSET, trace_slots};
+use crate::descriptor::{DescriptorTable, Header, RUST_PAYLOAD_OFFSET, Trace, trace_slots};
 
 /// What a mark found live: cells and the bytes they occupy.
 #[derive(Clone, Copy, Debug, Default)]
@@ -193,13 +193,15 @@ impl<'a> Marker<'a> {
     unsafe fn trace(&mut self, cell: usize) {
         // SAFETY: allocated, so its header is written.
         let descriptor = self.descriptors.get(unsafe { Header::at(cell) }.descriptor);
-        match descriptor.kind {
+        match descriptor.trace {
             // SAFETY: a Rust value sits right after the header.
-            Kind::Rust(hooks) => unsafe {
+            Trace::Rust(hooks) => unsafe {
                 (hooks.trace)((cell + RUST_PAYLOAD_OFFSET) as *const u8, &mut self.stack);
             },
             // SAFETY: laid out by `descriptor`.
-            _ => unsafe { trace_slots(descriptor, cell, cell_bytes(cell), &mut self.stack) },
+            Trace::Slots => unsafe {
+                trace_slots(descriptor, cell, cell_bytes(cell), &mut self.stack)
+            },
         }
     }
 

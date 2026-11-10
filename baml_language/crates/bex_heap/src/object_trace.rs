@@ -1,4 +1,4 @@
-//! The VM `Object` enum as a [`Kind::Rust`](crate::Kind::Rust) cell: how its
+//! The VM `Object` enum as a [`Trace::Rust`](crate::Trace::Rust) cell: how its
 //! pointers are found, how it is dropped and how its outside storage is
 //! measured. This is the enum-specific tracing the copying collector used,
 //! unchanged, behind the descriptor hooks.

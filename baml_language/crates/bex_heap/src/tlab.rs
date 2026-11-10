@@ -18,7 +18,7 @@ use indexmap::IndexMap;
 use crate::{
     BexHeap,
     descriptor::{
-        DescId, HEADER_BYTES, Header, OBJECT_CELL_BYTES, OBJECT_DESC, RUST_PAYLOAD_OFFSET,
+        DescriptorId, HEADER_BYTES, Header, OBJECT_CELL_BYTES, OBJECT_DESC, RUST_PAYLOAD_OFFSET,
     },
     space::{
         GRANULE_BYTES, LARGE_OBJECT_THRESHOLD,
@@ -135,7 +135,7 @@ impl Tlab {
     ///
     /// # Panics
     /// If `bytes` is smaller than the descriptor's size.
-    pub fn alloc_zeroed(&mut self, descriptor: DescId, bytes: usize) -> NonNull<u8> {
+    pub fn alloc_zeroed(&mut self, descriptor: DescriptorId, bytes: usize) -> NonNull<u8> {
         let size = self.heap.descriptors().get(descriptor).size as usize;
         assert!(
             bytes >= size,
@@ -151,7 +151,7 @@ impl Tlab {
     /// Place a cell for `bytes` (granule-aligned) and write its header.
     /// Returns the cell and its size, `bytes` rounded to its size class.
     #[inline]
-    fn alloc_cell(&mut self, descriptor: DescId, bytes: usize) -> (usize, usize) {
+    fn alloc_cell(&mut self, descriptor: DescriptorId, bytes: usize) -> (usize, usize) {
         debug_assert!(bytes.is_multiple_of(GRANULE_BYTES));
         if bytes > LARGE_OBJECT_THRESHOLD {
             return (self.alloc_large(descriptor, bytes), bytes);
@@ -184,7 +184,7 @@ impl Tlab {
 
     /// A cell above the large-object threshold, allocated on its own. The
     /// caller spends it.
-    fn alloc_large(&mut self, descriptor: DescId, cell_bytes: usize) -> usize {
+    fn alloc_large(&mut self, descriptor: DescriptorId, cell_bytes: usize) -> usize {
         let cell = self.heap.large.lock().alloc(cell_bytes);
         // SAFETY: a fresh large cell of `cell_bytes`.
         unsafe { (cell as *mut Header).write(Header::new(descriptor, cell_bytes, true)) };

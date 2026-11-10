@@ -1,7 +1,7 @@
 //! The space itself: start bitmap, conservative lookup, size classes and
 //! free lists, large objects, descriptor-driven tracing and the counters.
 
-use std::{ops::Range, sync::Arc};
+use std::{borrow::Cow, ops::Range, sync::Arc};
 
 use bex_vm_types::{HeapPtr, Object};
 
@@ -14,8 +14,8 @@ use super::{
     small::{SIZE_CLASSES, cell_size, class_of},
 };
 use crate::{
-    BexHeap, ConservativeRanges, DescId, Descriptor, ElemKind, Kind, SlotKind, TaggedKind,
-    TaggedSlot, Tlab,
+    BexHeap, ConservativeRanges, Descriptor, DescriptorId, ElemKind, Kind, SlotKind, TaggedKind,
+    TaggedSlot, Tlab, Trace,
     descriptor::{HEADER_BYTES, Header, OBJECT_CELL_BYTES},
     object_trace::heap_ptr_at,
 };
@@ -23,11 +23,12 @@ use crate::{
 /// A node: two pointer slots and one tagged slot.
 const NODE: Descriptor = Descriptor {
     kind: Kind::Instance,
+    trace: Trace::Slots,
     size: 48,
     elems: None,
-    ptr_slots: &[8, 16],
-    tagged_slots: &[24],
-    slot_kinds: &[SlotKind::Ptr, SlotKind::Ptr, SlotKind::Tagged16],
+    ptr_slots: Cow::Borrowed(&[8, 16]),
+    tagged_slots: Cow::Borrowed(&[24]),
+    slot_kinds: Cow::Borrowed(&[SlotKind::Ptr, SlotKind::Ptr, SlotKind::Tagged16]),
     type_id: 1,
     finalizer: None,
 };
@@ -37,11 +38,12 @@ const NODE_TAGGED: usize = 24;
 /// A backing store of pointers after a 16-byte prefix.
 const BACKING: Descriptor = Descriptor {
     kind: Kind::Backing,
+    trace: Trace::Slots,
     size: 16,
     elems: Some(ElemKind::Ptr),
-    ptr_slots: &[],
-    tagged_slots: &[],
-    slot_kinds: &[],
+    ptr_slots: Cow::Borrowed(&[]),
+    tagged_slots: Cow::Borrowed(&[]),
+    slot_kinds: Cow::Borrowed(&[]),
     type_id: 2,
     finalizer: None,
 };
@@ -53,8 +55,8 @@ const MEDIUM_BYTES: usize = 2 * 1024;
 
 struct Fixture {
     heap: Arc<BexHeap>,
-    node: DescId,
-    backing: DescId,
+    node: DescriptorId,
+    backing: DescriptorId,
 }
 
 fn fixture() -> Fixture {

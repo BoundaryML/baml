@@ -27,7 +27,7 @@ use bex_vm_types::{HeapPtr, Object};
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState,
-    descriptor::{DescId, Descriptor, DescriptorError, DescriptorTable},
+    descriptor::{Descriptor, DescriptorError, DescriptorId, DescriptorTable},
     space::{
         BLOCK_BYTES, block::BlockHeader, cell_of, large::LargeSpace, mark::is_cell_marked,
         small::SmallSpace,
@@ -378,7 +378,7 @@ impl BexHeap {
     pub fn register_descriptor(
         &mut self,
         descriptor: Descriptor,
-    ) -> Result<DescId, DescriptorError> {
+    ) -> Result<DescriptorId, DescriptorError> {
         self.descriptors.register(descriptor)
     }
 

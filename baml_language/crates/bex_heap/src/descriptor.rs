@@ -4,19 +4,23 @@
 //! the heap's [`DescriptorTable`]. A descriptor says where the cell's
 //! pointers are, either as byte offsets of pointer and tagged slots (the
 //! shared object format of the runtime design) or, for an object that is
-//! still a Rust value, as hooks into Rust code ([`Kind::Rust`]). Descriptor
+//! still a Rust value, as hooks into Rust code ([`Trace::Rust`]). Descriptor
 //! IDs never change after allocation.
+//!
+//! The object-kind, slot-kind and element-kind names are PR B's
+//! ([`bex_vm_types::layout`]): the builtin adapters and the collector read
+//! the same descriptor.
 //!
 //! The VM's `Object` enum is one such Rust value: every VM allocation is a
 //! cell of descriptor [`OBJECT_DESC`], whose hooks call the enum-specific
 //! tracing in [`crate::object_trace`].
 
-use bex_vm_types::{HeapPtr, Meter, Object};
+use std::borrow::Cow;
+
+pub use bex_vm_types::layout::{DescriptorId, ElemKind, Kind, RawKind, SlotKind};
+use bex_vm_types::{HeapPtr, Meter, Object, RealizedTy};
 
 use crate::space::{GRANULE_BYTES, granule_align};
-
-/// Index into a heap's [`DescriptorTable`].
-pub type DescId = u32;
 /// Reflection identity of the type a descriptor lays out.
 pub type TypeId = u32;
 /// Index of the finalizer a descriptor's objects run when they die.
@@ -26,7 +30,7 @@ pub type FinalizerId = u32;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Header {
-    pub descriptor: DescId,
+    pub descriptor: DescriptorId,
     /// Reserved for the object format: cleanup latch, finalizer registered,
     /// pinned. The collector does not read them.
     pub flags: u16,
@@ -39,7 +43,7 @@ pub(crate) const HEADER_BYTES: usize = size_of::<Header>();
 const _: () = assert!(HEADER_BYTES == 8);
 
 impl Header {
-    pub(crate) fn new(descriptor: DescId, cell_bytes: usize, large: bool) -> Self {
+    pub(crate) fn new(descriptor: DescriptorId, cell_bytes: usize, large: bool) -> Self {
         let granules = if large {
             0
         } else {
@@ -69,25 +73,17 @@ impl Header {
     }
 }
 
-/// What kind of object a descriptor lays out. The slot-described kinds are
-/// the names PR B's `bex_vm_types::layout::Kind` uses.
+/// How the collector finds a cell's pointers.
 #[derive(Clone, Copy, Debug)]
-pub enum Kind {
-    Instance,
-    List,
-    Backing,
-    Map,
-    Str,
-    Closure,
-    Future,
-    Bytes,
-    Opaque,
+pub enum Trace {
+    /// From the descriptor's slot offsets and element kind.
+    Slots,
     /// A Rust value placed after the header. Its pointers are found, its
     /// destructor run and its outside storage measured by Rust code.
     Rust(&'static RustHooks),
 }
 
-/// Rust code for a [`Kind::Rust`] object. Each takes a pointer to the value,
+/// Rust code for a [`Trace::Rust`] object. Each takes a pointer to the value,
 /// just after the header.
 #[derive(Debug)]
 pub struct RustHooks {
@@ -97,42 +93,6 @@ pub struct RustHooks {
     pub drop: unsafe fn(*mut u8),
     /// Report what the value keeps alive outside its cell.
     pub measure: unsafe fn(*mut u8, &mut Meter),
-}
-
-/// How repeated elements after an object's fixed part are stored.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ElemKind {
-    /// Eight raw bytes: no pointers.
-    Raw8,
-    /// An eight-byte pointer, zero for none.
-    Ptr,
-    /// A [`TaggedSlot`].
-    Tagged16,
-}
-
-impl ElemKind {
-    pub const fn stride(self) -> usize {
-        match self {
-            Self::Raw8 | Self::Ptr => 8,
-            Self::Tagged16 => size_of::<TaggedSlot>(),
-        }
-    }
-}
-
-/// What a raw slot holds, so the interpreter can box it back into a value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RawKind {
-    Int,
-    Float,
-    Bool,
-}
-
-/// How the interpreter reads one declared field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SlotKind {
-    Raw(RawKind),
-    Ptr,
-    Tagged16,
 }
 
 /// The tag of a [`TaggedSlot`].
@@ -159,20 +119,21 @@ pub struct TaggedSlot {
 const _: () = assert!(size_of::<TaggedSlot>() == 16);
 
 /// How the collector reads one kind of cell.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Descriptor {
     pub kind: Kind,
+    pub trace: Trace,
     /// Bytes from the cell start (header included): the whole object for a
     /// fixed object, the part before the first element when `elems` is set.
     pub size: u32,
     /// Elements repeat from `size` to the end of the cell.
     pub elems: Option<ElemKind>,
     /// Byte offsets, from the cell start, of pointer slots.
-    pub ptr_slots: &'static [u32],
+    pub ptr_slots: Cow<'static, [u32]>,
     /// Byte offsets, from the cell start, of [`TaggedSlot`]s.
-    pub tagged_slots: &'static [u32],
+    pub tagged_slots: Cow<'static, [u32]>,
     /// The interpreter's view, in declaration order.
-    pub slot_kinds: &'static [SlotKind],
+    pub slot_kinds: Cow<'static, [SlotKind]>,
     pub type_id: TypeId,
     pub finalizer: Option<FinalizerId>,
 }
@@ -188,16 +149,59 @@ pub enum DescriptorError {
     RustWithSlots,
 }
 
+/// Bytes of a raw or pointer slot, and the alignment of every slot.
+const WORD_BYTES: usize = 8;
+
 impl Descriptor {
-    /// A descriptor for a Rust value of type `T`.
+    /// A descriptor for a Rust value of type `T`, opaque to builtins.
     pub const fn rust<T>(hooks: &'static RustHooks, type_id: TypeId) -> Self {
         Self {
-            kind: Kind::Rust(hooks),
+            kind: Kind::Opaque,
+            trace: Trace::Rust(hooks),
             size: (HEADER_BYTES + size_of::<T>()) as u32,
             elems: None,
-            ptr_slots: &[],
-            tagged_slots: &[],
-            slot_kinds: &[],
+            ptr_slots: Cow::Borrowed(&[]),
+            tagged_slots: Cow::Borrowed(&[]),
+            slot_kinds: Cow::Borrowed(&[]),
+            type_id,
+            finalizer: None,
+        }
+    }
+
+    /// A fixed object of `kind` whose fields have the types `fields`, laid
+    /// out after the header in declaration order. Each field's slot is
+    /// [`SlotKind::of_type`]'s, the one mapping from types to slots.
+    pub fn for_fields(kind: Kind, fields: &[RealizedTy], type_id: TypeId) -> Self {
+        let slot_kinds: Vec<SlotKind> = fields.iter().map(SlotKind::of_type).collect();
+        let offsets: Vec<usize> = slot_kinds
+            .iter()
+            .scan(HEADER_BYTES, |next, slot| {
+                let offset = *next;
+                *next += slot.elem_kind().stride();
+                Some(offset)
+            })
+            .collect();
+        let offsets_of = |wanted: ElemKind| -> Vec<u32> {
+            slot_kinds
+                .iter()
+                .zip(&offsets)
+                .filter(|(slot, _)| slot.elem_kind() == wanted)
+                .map(|(_, &offset)| u32::try_from(offset).expect("object size fits u32"))
+                .collect()
+        };
+        let size = HEADER_BYTES
+            + slot_kinds
+                .iter()
+                .map(|slot| slot.elem_kind().stride())
+                .sum::<usize>();
+        Self {
+            kind,
+            trace: Trace::Slots,
+            size: u32::try_from(size).expect("object size fits u32"),
+            elems: None,
+            ptr_slots: Cow::Owned(offsets_of(ElemKind::Ptr)),
+            tagged_slots: Cow::Owned(offsets_of(ElemKind::Tagged16)),
+            slot_kinds: Cow::Owned(slot_kinds),
             type_id,
             finalizer: None,
         }
@@ -209,12 +213,12 @@ impl Descriptor {
         }
         let has_slots =
             !self.ptr_slots.is_empty() || !self.tagged_slots.is_empty() || self.elems.is_some();
-        if matches!(self.kind, Kind::Rust(_)) && has_slots {
+        if matches!(self.trace, Trace::Rust(_)) && has_slots {
             return Err(DescriptorError::RustWithSlots);
         }
         let slots = [
-            (self.ptr_slots, 8),
-            (self.tagged_slots, size_of::<TaggedSlot>()),
+            (&self.ptr_slots, WORD_BYTES),
+            (&self.tagged_slots, size_of::<TaggedSlot>()),
         ];
         let bad = slots.iter().find_map(|(offsets, width)| {
             offsets
@@ -226,11 +230,13 @@ impl Descriptor {
     }
 
     fn slot_fits(&self, offset: usize, width: usize) -> bool {
-        offset >= HEADER_BYTES && offset.is_multiple_of(8) && offset + width <= self.size as usize
+        offset >= HEADER_BYTES
+            && offset.is_multiple_of(WORD_BYTES)
+            && offset + width <= self.size as usize
     }
 }
 
-/// Every descriptor a heap knows, by [`DescId`]. Entry [`OBJECT_DESC`] is
+/// Every descriptor a heap knows, by [`DescriptorId`]. Entry [`OBJECT_DESC`] is
 /// always the VM's `Object`.
 pub struct DescriptorTable {
     descriptors: Vec<Descriptor>,
@@ -244,16 +250,16 @@ impl DescriptorTable {
     }
 
     /// Add `descriptor`, returning its ID.
-    pub fn register(&mut self, descriptor: Descriptor) -> Result<DescId, DescriptorError> {
+    pub fn register(&mut self, descriptor: Descriptor) -> Result<DescriptorId, DescriptorError> {
         descriptor.validate()?;
-        let id = DescId::try_from(self.descriptors.len()).expect("descriptor table overflow");
+        let id = u32::try_from(self.descriptors.len()).expect("descriptor table overflow");
         self.descriptors.push(descriptor);
-        Ok(id)
+        Ok(DescriptorId(id))
     }
 
     #[inline]
-    pub fn get(&self, id: DescId) -> &Descriptor {
-        &self.descriptors[id as usize]
+    pub fn get(&self, id: DescriptorId) -> &Descriptor {
+        &self.descriptors[id.0 as usize]
     }
 
     pub fn len(&self) -> usize {
@@ -266,7 +272,7 @@ impl DescriptorTable {
 }
 
 /// The descriptor of every VM `Object` cell.
-pub const OBJECT_DESC: DescId = 0;
+pub const OBJECT_DESC: DescriptorId = DescriptorId(0);
 
 /// Bytes from a cell's start to a Rust value inside it.
 pub(crate) const RUST_PAYLOAD_OFFSET: usize = HEADER_BYTES;
@@ -314,11 +320,11 @@ pub(crate) unsafe fn trace_slots(
     cell_bytes: usize,
     out: &mut Vec<HeapPtr>,
 ) {
-    for &offset in descriptor.ptr_slots {
+    for &offset in descriptor.ptr_slots.iter() {
         // SAFETY: validated in bounds when the descriptor was registered.
         push_word(unsafe { *((cell + offset as usize) as *const usize) }, out);
     }
-    for &offset in descriptor.tagged_slots {
+    for &offset in descriptor.tagged_slots.iter() {
         // SAFETY: validated in bounds when the descriptor was registered.
         unsafe { push_tagged(cell + offset as usize, out) };
     }
@@ -343,33 +349,62 @@ pub(crate) unsafe fn trace_slots(
 mod tests {
     use super::*;
 
+    fn instance(ptr_slots: &'static [u32], tagged_slots: &'static [u32]) -> Descriptor {
+        Descriptor {
+            kind: Kind::Instance,
+            trace: Trace::Slots,
+            size: 32,
+            elems: None,
+            ptr_slots: Cow::Borrowed(ptr_slots),
+            tagged_slots: Cow::Borrowed(tagged_slots),
+            slot_kinds: Cow::Borrowed(&[SlotKind::Ptr, SlotKind::Ptr, SlotKind::Raw(RawKind::Int)]),
+            type_id: 1,
+            finalizer: None,
+        }
+    }
+
     #[test]
     fn registration_validates_slot_offsets() {
         let mut table = DescriptorTable::new();
-        let ok = Descriptor {
-            kind: Kind::Instance,
-            size: 32,
-            elems: None,
-            ptr_slots: &[8, 16],
-            tagged_slots: &[],
-            slot_kinds: &[SlotKind::Ptr, SlotKind::Ptr, SlotKind::Raw(RawKind::Int)],
-            type_id: 1,
-            finalizer: None,
-        };
-        assert_eq!(table.register(ok), Ok(1));
-        let overlaps_header = Descriptor {
-            ptr_slots: &[0],
-            ..ok
-        };
+        assert_eq!(table.register(instance(&[8, 16], &[])), Ok(DescriptorId(1)));
         assert_eq!(
-            table.register(overlaps_header),
-            Err(DescriptorError::BadSlot(0))
+            table.register(instance(&[0], &[])),
+            Err(DescriptorError::BadSlot(0)),
+            "overlaps the header"
         );
-        let overruns = Descriptor {
-            tagged_slots: &[24],
-            ..ok
-        };
-        assert_eq!(table.register(overruns), Err(DescriptorError::BadSlot(24)));
+        assert_eq!(
+            table.register(instance(&[], &[24])),
+            Err(DescriptorError::BadSlot(24)),
+            "overruns the object"
+        );
         assert_eq!(table.len(), 2);
+    }
+
+    /// Fields are laid out after the header in declaration order, each in
+    /// the slot PR B's `SlotKind::of_type` gives its type.
+    #[test]
+    fn field_layout_follows_the_slot_table() {
+        let union = RealizedTy::Union(Box::new([RealizedTy::Int, RealizedTy::String]));
+        let fields = [
+            RealizedTy::Int,
+            RealizedTy::String,
+            union,
+            RealizedTy::Float,
+        ];
+        let descriptor = Descriptor::for_fields(Kind::Instance, &fields, 7);
+        assert_eq!(
+            *descriptor.slot_kinds,
+            [
+                SlotKind::Raw(RawKind::Int),
+                SlotKind::Ptr,
+                SlotKind::Tagged16,
+                SlotKind::Raw(RawKind::Float),
+            ]
+        );
+        assert_eq!(*descriptor.ptr_slots, [16]);
+        assert_eq!(*descriptor.tagged_slots, [24]);
+        assert_eq!(descriptor.size, 48);
+        let mut table = DescriptorTable::new();
+        assert!(table.register(descriptor).is_ok());
     }
 }

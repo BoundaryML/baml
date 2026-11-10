@@ -6,7 +6,7 @@ use bex_vm_types::Meter;
 use super::{
     GRANULE_BYTES, block::BlockHeader, large::LargeSpace, mark::is_cell_marked, small::SmallSpace,
 };
-use crate::descriptor::{DescriptorTable, Header, Kind, OBJECT_DESC, RUST_PAYLOAD_OFFSET};
+use crate::descriptor::{DescriptorTable, Header, OBJECT_DESC, RUST_PAYLOAD_OFFSET, Trace};
 
 /// What a sweep kept and reclaimed.
 #[derive(Clone, Copy, Debug, Default)]
@@ -80,7 +80,7 @@ unsafe fn drop_cell(descriptors: &DescriptorTable, cell: usize) {
     // SAFETY: allocated, so its header is written.
     let id = unsafe { Header::at(cell) }.descriptor;
     debug_assert!(!unsafe { is_cell_marked(cell) });
-    let Kind::Rust(hooks) = descriptors.get(id).kind else {
+    let Trace::Rust(hooks) = descriptors.get(id).trace else {
         return;
     };
     let payload = (cell + RUST_PAYLOAD_OFFSET) as *mut u8;
@@ -103,7 +103,10 @@ unsafe fn drop_cell(descriptors: &DescriptorTable, cell: usize) {
 /// `cell` is allocated and no mutator runs.
 unsafe fn measure_cell(descriptors: &DescriptorTable, cell: usize, census: &mut Meter) {
     // SAFETY: allocated, so its header is written.
-    let Kind::Rust(hooks) = descriptors.get(unsafe { Header::at(cell) }.descriptor).kind else {
+    let Trace::Rust(hooks) = descriptors
+        .get(unsafe { Header::at(cell) }.descriptor)
+        .trace
+    else {
         return;
     };
     // SAFETY: forwarded to the caller.

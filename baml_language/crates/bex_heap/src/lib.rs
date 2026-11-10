@@ -45,8 +45,8 @@ pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
 pub use bex_external_types::{BexExternalValue, Handle, WeakHeapRef};
 pub use bex_vm_types::PermitProof;
 pub use descriptor::{
-    DescId, Descriptor, DescriptorError, DescriptorTable, ElemKind, FinalizerId, Header, Kind,
-    OBJECT_DESC, RawKind, RustHooks, SlotKind, TaggedKind, TaggedSlot, TypeId,
+    Descriptor, DescriptorError, DescriptorId, DescriptorTable, ElemKind, FinalizerId, Header,
+    Kind, OBJECT_DESC, RawKind, RustHooks, SlotKind, TaggedKind, TaggedSlot, Trace, TypeId,
 };
 pub use gc::{GcStats, Restamp};
 #[cfg(feature = "gc_profiling")]
