@@ -433,6 +433,7 @@ dependencies = [
  "baml_base",
  "baml_builtins2",
  "baml_compiler2_ast",
+ "baml_compiler2_mir",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
  "baml_compiler_parser",

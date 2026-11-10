@@ -5,6 +5,8 @@ mod codegen_panics;
 mod extract;
 mod lang_item;
 mod rust_ident;
+pub mod triage;
+mod triage_table;
 mod types;
 
 pub use codegen::{generate_native_trait, generate_native_trait_for};
