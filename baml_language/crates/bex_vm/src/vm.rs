@@ -93,13 +93,14 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Finalizable, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, UnaryOp, Value, Variant,
-    VmGlobals,
+    BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, InstanceRef, Object, ObjectIndex,
+    ObjectPool, ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, UnaryOp, Value,
+    Variant, VmGlobals,
     bytecode::{self, Instruction},
+    object_format::{Access, SlotValue},
+    types::SharedKind,
     types::{
-        BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
-        TypeValue,
+        BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Type, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -120,14 +121,12 @@ use crate::{
 /// anywhere else meanwhile is `get_object_mut`'s contract, not this guard's.
 ///
 /// On drop it also keeps the collector's finalizable list complete (BEP-042):
-/// an object the edit turned into an instance of a class with a `cleanup`
-/// finalizer is registered, and a class the edit gave a finalizer invalidates
-/// the list, since its existing instances were never registered.
+/// a class the edit gave a finalizer invalidates the list, since its existing
+/// instances were never registered.
 pub struct ObjectMut<'a> {
     object: &'a mut Object,
     debt: &'a bex_vm_types::AllocDebt,
     before: usize,
-    ptr: HeapPtr,
     heap: &'a BexHeap,
     finalizable_before: Finalizable,
 }
@@ -140,9 +139,7 @@ impl ObjectMut<'_> {
     }
 
     fn finalizable(object: &Object) -> Finalizable {
-        // SAFETY: the VM holds a heap permit while it mutates an object, so
-        // an instance's class object is live.
-        unsafe { Finalizable::of(object) }
+        Finalizable::of(object)
     }
 }
 
@@ -170,11 +167,8 @@ impl Drop for ObjectMut<'_> {
         };
         self.debt.add(delta);
 
-        self.heap.note_rewrite(
-            self.ptr,
-            self.finalizable_before,
-            Self::finalizable(self.object),
-        );
+        self.heap
+            .note_rewrite(self.finalizable_before, Self::finalizable(self.object));
     }
 }
 
@@ -479,6 +473,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         }))
     }
@@ -505,35 +500,6 @@ pub(crate) mod tests {
         assert_eq!(vm.heap.take_pending_finalizers(), vec![(older, finalizer)]);
     }
 
-    /// An edit through `get_object_mut` that turns an object into an instance
-    /// of a class with a finalizer registers it, so the collection finalizes
-    /// it without rebuilding the list.
-    #[test]
-    fn an_edit_that_makes_a_finalizable_instance_registers_it() {
-        let mut vm = test_vm(vec![]);
-        let finalizer = vm.tlab.alloc_string("cleanup".to_string());
-        let class = vm.tlab.alloc(class_object(Some(finalizer)));
-        // A runtime class with a finalizer joins the heap, as a graft does.
-        vm.heap.note_finalizable_class();
-        let placeholder = vm.tlab.alloc_string("placeholder".to_string());
-
-        // SAFETY: single-threaded test; nothing else reaches the placeholder.
-        unsafe {
-            *vm.get_object_mut(placeholder) = Object::Instance(bex_vm_types::types::Instance::new(
-                class,
-                Box::new([]),
-                vec![],
-            ));
-        }
-
-        // SAFETY: single-threaded test; no VM is executing.
-        let _ = unsafe { vm.heap.collect_garbage(&[]) };
-        assert_eq!(
-            vm.heap.take_pending_finalizers(),
-            vec![(placeholder, finalizer)]
-        );
-    }
-
     fn test_vm_on(
         heap: Arc<BexHeap>,
         dynamic_dispatch: Arc<crate::package_load::DynDispatchTables>,
@@ -547,6 +513,7 @@ pub(crate) mod tests {
             cur_pc: 0,
             heap: Arc::clone(&heap),
             early_yield: early_yield_for_test(),
+            float_boxes: std::sync::Mutex::new(Tlab::new(Arc::clone(&heap))),
             tlab: Tlab::new(heap),
             globals: VmGlobals::Owned(GlobalPool::new()),
             pending_globals: None,
@@ -1279,6 +1246,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
@@ -1338,6 +1306,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
         vm.pending_call_type_args = vec![bex_vm_types::RealizedTy::Class(
@@ -1588,6 +1557,11 @@ pub struct BexVm {
 
     /// Thread-local allocation buffer (exclusive to this VM).
     pub tlab: Tlab,
+
+    /// Boxes floats read out of slots where the VM is only borrowed (see
+    /// [`Self::box_slot`]): a second allocator of this VM's, locked because a
+    /// shared borrow cannot reach `tlab`.
+    float_boxes: std::sync::Mutex<Tlab>,
 
     /// Global variables.
     ///
@@ -2307,15 +2281,12 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
-                Object::Instance(instance) => {
-                    let class_obj = unsafe { instance.class.get() };
-                    let Object::Class(class) = class_obj else {
-                        unreachable!("Instance.class does not point to a Class object")
-                    };
-                    // An instance dispatches on its class's head identity; the
-                    // primitive arms above are raw tags in the same space.
-                    class.type_tag.as_i64()
-                }
+                // An instance dispatches on its class's head identity; the
+                // primitive arms above are raw tags in the same space.
+                Object::Shared(SharedKind::Instance) => unsafe { InstanceRef::new_unchecked(ptr) }
+                    .class_def()
+                    .type_tag
+                    .as_i64(),
             }
         }
     }
@@ -2413,6 +2384,7 @@ impl BexVm {
         // Each BexThread owns a VM, including the main thread. Its stack limit
         // is independent of the shared heap and every other thread's stacks.
         let budget = ThreadStackBudget::default();
+        let float_boxes = std::sync::Mutex::new(Tlab::new_empty(Arc::clone(&heap)));
         Self {
             frames: FrameStack::new(budget.clone()),
             pending_entry_frame_panic: None,
@@ -2421,6 +2393,7 @@ impl BexVm {
             cur_pc: 0,
             heap,
             early_yield,
+            float_boxes,
             tlab,
             globals,
             pending_globals: None,
@@ -2971,8 +2944,8 @@ impl BexVm {
         let handle = self
             .as_instance(&value)
             .ok()
-            .filter(|i| !i.fields.is_empty())
-            .map(|i| i.load_field(0))
+            .and_then(|i| i.try_load(0))
+            .map(SlotValue::expect_value)
             .ok_or("invalid trace configuration")?;
         let (options, reserved_id, reservation) = if let Ok(options) =
             self.as_rust_data::<TraceOptionsData>(&handle)
@@ -3014,7 +2987,8 @@ impl BexVm {
         let handle = self
             .as_instance(&value)
             .ok()
-            .and_then(|instance| (!instance.fields.is_empty()).then(|| instance.load_field(0)));
+            .and_then(|instance| instance.try_load(0))
+            .map(SlotValue::expect_value);
         let Some(handle) = handle else {
             return Err(
                 self.trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan")
@@ -3224,7 +3198,7 @@ impl BexVm {
     /// The error a `baml.errors.Context` describes.
     fn context_error(&self, context: Value) -> Result<Value, VmInternalError> {
         let instance = self.as_instance(&context)?;
-        Ok(crate::package_baml::view::errors::Context { instance }.error())
+        Ok(crate::package_baml::view::errors::Context::new(instance).error())
     }
 
     /// The trace a `baml.errors.Context` records, as the unwinder reports it
@@ -3233,15 +3207,13 @@ impl BexVm {
         use crate::package_baml::view::errors;
 
         let instance = self.as_instance(&context)?;
-        let stack_trace = errors::Context { instance }.stack_trace();
+        let stack_trace = errors::Context::new(instance).stack_trace();
         let instance = self.as_instance(&stack_trace)?;
-        errors::StackTrace { instance }
+        errors::StackTrace::new(instance)
             .frames(self)
             .iter()
             .map(|frame| {
-                let frame = errors::StackFrame {
-                    instance: self.as_instance(frame)?,
-                };
+                let frame = errors::StackFrame::new(self.as_instance(frame)?);
                 Ok(StackFrame {
                     function_name: frame.function_name(self).to_string(),
                     file_path: frame.file(self).to_string(),
@@ -3260,7 +3232,7 @@ impl BexVm {
     ) -> Result<Value, VmInternalError> {
         let (stack_trace, cause) = {
             let instance = self.as_instance(&source)?;
-            let source = crate::package_baml::view::errors::Context { instance };
+            let source = crate::package_baml::view::errors::Context::new(instance);
             (
                 source.stack_trace(),
                 source.cause(self).unwrap_or(Value::NULL),
@@ -3507,10 +3479,8 @@ impl BexVm {
     /// declaration, never one that merely renders under the same name.
     pub fn is_panic(&self, value: Value) -> bool {
         value.as_object_ptr().is_some_and(|ptr| {
-            matches!(
-                self.get_object(ptr),
-                Object::Instance(instance) if self.panic_class_ptrs.contains(&instance.class)
-            )
+            self.instance_at(ptr)
+                .is_some_and(|instance| self.panic_class_ptrs.contains(&instance.class()))
         })
     }
 
@@ -3522,10 +3492,8 @@ impl BexVm {
     /// Whether `value` is a panic of exactly `class`, by the class's identity.
     pub fn is_panic_of(&self, value: Value, class: PanicClass) -> bool {
         value.as_object_ptr().is_some_and(|ptr| {
-            matches!(
-                self.get_object(ptr),
-                Object::Instance(instance) if instance.class == self.panic_class_ptrs[class as usize]
-            )
+            self.instance_at(ptr)
+                .is_some_and(|instance| instance.class() == self.panic_class_ptrs[class as usize])
         })
     }
 
@@ -3533,12 +3501,9 @@ impl BexVm {
     /// by its class's identity.
     pub fn is_cancelled_panic(&self, value: Value) -> bool {
         value.as_object_ptr().is_some_and(|ptr| {
-            matches!(
-                self.get_object(ptr),
-                Object::Instance(instance)
-                    if self.panic_class_ptrs.get(PanicClass::Cancelled as usize)
-                        == Some(&instance.class)
-            )
+            self.instance_at(ptr).is_some_and(|instance| {
+                self.panic_class_ptrs.get(PanicClass::Cancelled as usize) == Some(&instance.class())
+            })
         })
     }
 
@@ -3744,7 +3709,6 @@ impl BexVm {
             finalizable_before: ObjectMut::finalizable(object),
             object,
             debt: self.tlab.alloc_debt(),
-            ptr,
             heap: &self.heap,
         }
     }
@@ -4067,7 +4031,7 @@ impl BexVm {
             } => {
                 let class_ptr = self.idx_to_ptr(*class_obj);
                 match value.as_object_ptr() {
-                    Some(val_ptr) => match self.get_object(val_ptr) {
+                    Some(val_ptr) => match self.instance_at(val_ptr) {
                         // Class-pointer identity (above) fixes the class; each
                         // type arg is then related *invariantly* through the
                         // canonical algebra (BAML generics are invariant). No
@@ -4078,17 +4042,18 @@ impl BexVm {
                         // the invariant relation already holds — the retired
                         // guard needed a covariant band-aid only because it
                         // could not see that membership.
-                        Object::Instance(inst) if inst.class == class_ptr => {
+                        Some(inst) if inst.class() == class_ptr => {
+                            let class_type_args = inst.type_args();
                             debug_assert_eq!(
                                 type_args_templates.len(),
-                                inst.class_type_args.len(),
+                                class_type_args.len(),
                                 "Class should have consistent number of generic parameters",
                             );
-                            if type_args_templates.len() != inst.class_type_args.len() {
+                            if type_args_templates.len() != class_type_args.len() {
                                 return Ok(false);
                             }
                             for (template, actual) in
-                                type_args_templates.iter().zip(&inst.class_type_args)
+                                type_args_templates.iter().zip(class_type_args)
                             {
                                 if !crate::type_match::class_type_arg_matches(
                                     self,
@@ -4115,7 +4080,9 @@ impl BexVm {
                     // from `Status`.
                     Ok(match value.as_object_ptr() {
                         Some(val_ptr) => match self.get_object(val_ptr) {
-                            Object::Instance(instance) => instance.class == expected_ptr,
+                            Object::Shared(SharedKind::Instance) => self
+                                .instance_at(val_ptr)
+                                .is_some_and(|instance| instance.class() == expected_ptr),
                             Object::Variant(variant) => variant.enm == expected_ptr,
                             _ => false,
                         },
@@ -4447,39 +4414,31 @@ impl BexVm {
         if value.is_null() {
             return Some(ConcreteRealizedTy::Null);
         }
-        Some(match self.get_object(value.as_object_ptr()?) {
+        let ptr = value.as_object_ptr()?;
+        Some(match self.get_object(ptr) {
             Object::Float(_) => ConcreteRealizedTy::Float,
             Object::Bigint(_) => ConcreteRealizedTy::Bigint,
             Object::String(_) => ConcreteRealizedTy::String,
             Object::Uint8Array(_) => ConcreteRealizedTy::Uint8Array,
-            Object::Instance(inst) => match self.get_object(inst.class) {
-                Object::Class(class) => {
-                    // Media values are `Object::Instance`s of the std media classes
-                    // (`baml.media.{Image,Audio,Video,Pdf}`), but their concrete
-                    // type is the `image`/`audio`/… primitive
-                    // (`ConcreteRealizedTy::Media`) — which is how the impl registry
-                    // keys `implement I for image`. Return that, not the class.
-                    if let Some(kind) = self
-                        .stdlib_heads
-                        .media_kind(bex_vm_types::TypeHead::new(inst.class, class.type_tag))
-                    {
-                        ConcreteRealizedTy::Media(kind)
-                    } else {
-                        debug_assert_eq!(inst.class_type_args.len(), class.generic_param_count);
-                        // A generic instance's stored `class_type_args` are already
-                        // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
-                        // `ConcreteRealizedTy::Class` argument list.
-                        ConcreteRealizedTy::Class(
-                            bex_vm_types::TypeHead::new(inst.class, class.type_tag),
-                            inst.class_type_args.clone(),
-                        )
-                    }
+            Object::Shared(SharedKind::Instance) => {
+                let inst = self.instance_at(ptr)?;
+                let class = inst.class_def();
+                let head = bex_vm_types::TypeHead::new(inst.class(), class.type_tag);
+                // Media values are instances of the std media classes
+                // (`baml.media.{Image,Audio,Video,Pdf}`), but their concrete
+                // type is the `image`/`audio`/… primitive
+                // (`ConcreteRealizedTy::Media`) — which is how the impl registry
+                // keys `implement I for image`. Return that, not the class.
+                if let Some(kind) = self.stdlib_heads.media_kind(head) {
+                    ConcreteRealizedTy::Media(kind)
+                } else {
+                    debug_assert_eq!(inst.type_args().len(), class.generic_param_count);
+                    // A generic instance's stored type args are already
+                    // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
+                    // `ConcreteRealizedTy::Class` argument list.
+                    ConcreteRealizedTy::Class(head, inst.type_args().into())
                 }
-                other => unreachable!(
-                    "Instance.class must point to a Class, found {:?}",
-                    ObjectType::of(other)
-                ),
-            },
+            }
             Object::Variant(v) => match self.get_object(v.enm) {
                 Object::Enum(e) => {
                     ConcreteRealizedTy::Enum(bex_vm_types::TypeHead::new(v.enm, e.type_tag))
@@ -4491,7 +4450,7 @@ impl BexVm {
             },
             // A `type` value's concrete type is the `reflect.Type` metatype
             // itself. The nine kind views are ordinary wrapper classes whose
-            // instances take the `Object::Instance` arm above; nothing about a
+            // instances take the instance arm above; nothing about a
             // type value's membership depends on classifying its payload.
             Object::Type(_) => ConcreteRealizedTy::Type,
             // Arrays/maps carry their element/key/value types, so the faithful
@@ -4592,14 +4551,12 @@ impl BexVm {
     /// class name on every method call. Runtime-built classes stay off this
     /// cache because their dispatch tables are live.
     fn static_virtual_receiver_key(&self, value: Value) -> Option<StaticVirtualReceiverKey> {
-        if let Some(ptr) = value.as_object_ptr()
-            && let Object::Instance(instance) = self.get_object(ptr)
-            && let Object::Class(class) = self.get_object(instance.class)
-            && self.heap.is_compile_time_ptr(instance.class)
+        if let Some(instance) = self.instance_of(&value)
+            && self.heap.is_compile_time_ptr(instance.class())
         {
             return Some(StaticVirtualReceiverKey::Class {
-                type_tag: class.type_tag.as_i64(),
-                type_args: instance.class_type_args.clone(),
+                type_tag: instance.class_def().type_tag.as_i64(),
+                type_args: instance.type_args().into(),
             });
         }
         self.value_concrete_ty(value)
@@ -4700,10 +4657,9 @@ impl BexVm {
             return HeapPtr::null();
         };
         let owner = match self.get_object(ptr) {
-            Object::Instance(instance) => match self.get_object(instance.class) {
-                Object::Class(class) => class.owner.package(),
-                _ => None,
-            },
+            Object::Shared(SharedKind::Instance) => self
+                .instance_at(ptr)
+                .and_then(|instance| instance.class_def().owner.package()),
             Object::Variant(variant) => match self.get_object(variant.enm) {
                 Object::Enum(enm) => enm.owner.package(),
                 _ => None,
@@ -6021,7 +5977,7 @@ impl BexVm {
         holder: &Value,
         field: usize,
     ) -> Result<Arc<T>, VmInternalError> {
-        let handle = self.as_instance(holder)?.load_field(field);
+        let handle = self.as_instance(holder)?.load(field).expect_value();
         let Some(ptr) = handle.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
                 expected: Type::Object(ObjectType::RustData),
@@ -6045,24 +6001,80 @@ impl BexVm {
         }
     }
 
-    /// Extract an `&Instance` from a `Value` carrying a heap-object pointer.
+    /// The instance a `Value` points to.
     ///
     /// Used by generated glue code to construct `view::` structs.
-    pub fn as_instance(&self, value: &Value) -> Result<&Instance, VmInternalError> {
-        let Some(ptr) = value.as_object_ptr() else {
-            return Err(VmInternalError::TypeError {
+    pub fn as_instance(&self, value: &Value) -> Result<InstanceRef, VmInternalError> {
+        self.instance_of(value)
+            .ok_or_else(|| VmInternalError::TypeError {
                 expected: Type::Object(ObjectType::Instance),
                 got: self.type_of(value),
-            });
-        };
-        let obj = self.get_object(ptr);
-        match obj {
-            Object::Instance(instance) => Ok(instance),
-            _ => Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::Instance),
-                got: self.type_of(value),
-            }),
-        }
+            })
+    }
+
+    /// The instance `value` points to, if it is one.
+    #[inline]
+    pub fn instance_of(&self, value: &Value) -> Option<InstanceRef> {
+        let ptr = value.as_object_ptr()?;
+        self.instance_at(ptr)
+    }
+
+    /// The instance at `ptr`, if it is one.
+    #[inline]
+    pub fn instance_at(&self, ptr: HeapPtr) -> Option<InstanceRef> {
+        // SAFETY: the VM holds a heap permit, so a pointer it holds is live.
+        unsafe { InstanceRef::of(ptr) }
+    }
+
+    /// The instance at `ptr`, which the caller has seen is one (its object
+    /// reads as [`Object::Shared`]).
+    ///
+    /// # Panics
+    /// If it is not an instance.
+    #[track_caller]
+    pub fn expect_instance(&self, ptr: HeapPtr) -> InstanceRef {
+        self.instance_at(ptr)
+            .unwrap_or_else(|| panic!("expected an instance at {ptr:?}"))
+    }
+
+    /// A slot's contents as a local: a float is boxed, as every float local
+    /// is.
+    #[inline]
+    pub fn slot_value(&mut self, value: SlotValue) -> Value {
+        value.into_value(|float| Value::object(self.tlab.alloc_float(float)))
+    }
+
+    /// [`Self::slot_value`] for a VM that is only borrowed: a float is boxed
+    /// by the VM's second allocator. For walkers (rendering, encoding,
+    /// snapshots) that read a field without the VM to themselves; the
+    /// interpreter's own loads use `slot_value`.
+    pub fn box_slot(&self, value: SlotValue) -> Value {
+        value.into_value(|float| {
+            let mut boxes = self
+                .float_boxes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            Value::object(boxes.alloc_float(float))
+        })
+    }
+
+    /// Every field of `instance`, in declaration order, as values; float
+    /// fields are boxed (see [`Self::box_slot`]).
+    pub fn field_values(&self, instance: InstanceRef) -> Vec<Value> {
+        instance
+            .fields()
+            .map(|value| self.box_slot(value))
+            .collect()
+    }
+
+    /// Field `idx` of `instance` as a value; a float field is boxed (see
+    /// [`Self::box_slot`]).
+    ///
+    /// # Panics
+    /// Past the last field.
+    #[track_caller]
+    pub fn field(&self, instance: InstanceRef, idx: usize) -> Value {
+        self.box_slot(instance.load(idx))
     }
 
     fn real_local_count_for_frame(
@@ -6244,20 +6256,12 @@ impl BexVm {
         let nanos = Value::object(self.tlab.alloc(Object::Bigint(std::sync::Arc::new(
             num_bigint::BigInt::from(duration.as_nanos()),
         ))));
-        Value::object(self.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Box::new([]),
-            vec![nanos],
-        ))))
+        Value::object(self.tlab.alloc_instance(class_ptr, vec![nanos]))
     }
 
     pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.error_class_ptrs[class as usize];
-        let instance_ptr = self.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Box::new([]),
-            fields,
-        )));
+        let instance_ptr = self.tlab.alloc_instance(class_ptr, fields);
         Value::object(instance_ptr)
     }
 
@@ -6549,11 +6553,7 @@ impl BexVm {
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
     pub fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.panic_class_ptrs[class as usize];
-        let instance_ptr = self.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Box::new([]),
-            fields,
-        )));
+        let instance_ptr = self.tlab.alloc_instance(class_ptr, fields);
         Value::object(instance_ptr)
     }
 
@@ -6843,7 +6843,7 @@ impl BexVm {
                     .is_some_and(|hook| hook.frame == depth && hook.evaluating)
             {
                 let cancelled = self.as_instance(&exception_value).is_ok_and(|instance| {
-                    instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
+                    instance.class() == self.panic_class_ptrs[PanicClass::Cancelled as usize]
                 });
                 if !cancelled {
                     let finish = frame_function
@@ -7937,6 +7937,50 @@ impl BexVm {
         result
     }
 
+    /// The instance an instance operand points to.
+    fn instance_operand(&self, value: Value) -> Result<InstanceRef, VmError> {
+        let ptr = self.as_object_ptr(value, ObjectType::Instance)?;
+        self.instance_at(ptr).ok_or_else(|| {
+            VmInternalError::TypeError {
+                expected: ObjectType::Instance.into(),
+                got: ObjectType::of(self.get_object(ptr)).into(),
+            }
+            .into()
+        })
+    }
+
+    /// `LoadField`: field `idx` of the instance `value`, as a local.
+    #[inline]
+    fn load_field_op(
+        &mut self,
+        value: Value,
+        idx: usize,
+        access: Access,
+    ) -> Result<Value, VmError> {
+        let instance = self.instance_operand(value)?;
+        match instance.try_load_with(idx, access) {
+            Some(slot) => Ok(self.slot_value(slot)),
+            None => Err(self.invalid_field_access_error(idx, instance.field_len())),
+        }
+    }
+
+    /// `StoreField`: store `new_value` to field `idx` of the instance `value`.
+    #[inline]
+    fn store_field_op(
+        &mut self,
+        value: Value,
+        idx: usize,
+        new_value: Value,
+        access: Access,
+    ) -> Result<(), VmError> {
+        let instance = self.instance_operand(value)?;
+        if idx >= instance.field_len() {
+            return Err(self.invalid_field_access_error(idx, instance.field_len()));
+        }
+        instance.store_with(idx, new_value, access);
+        Ok(())
+    }
+
     fn init_spread(
         &mut self,
         dest_value: Value,
@@ -7946,56 +7990,33 @@ impl BexVm {
         let dest_ptr = self.as_object_ptr(dest_value, ObjectType::Instance)?;
         let source_ptr = self.as_object_ptr(source_value, ObjectType::Instance)?;
 
-        let copied_fields = {
-            let Object::Instance(source) = self.get_object(source_ptr) else {
-                return Err(VmInternalError::TypeError {
+        let instance = |ptr: HeapPtr| {
+            self.instance_at(ptr)
+                .ok_or_else(|| VmInternalError::TypeError {
                     expected: ObjectType::Instance.into(),
-                    got: ObjectType::of(self.get_object(source_ptr)).into(),
-                }
-                .into());
-            };
-            let Object::Instance(dest) = self.get_object(dest_ptr) else {
-                return Err(VmInternalError::TypeError {
-                    expected: ObjectType::Instance.into(),
-                    got: ObjectType::of(self.get_object(dest_ptr)).into(),
-                }
-                .into());
-            };
-
-            let mut copied_fields = Vec::with_capacity(field_copy_set.fields.len());
-            let mut invalid_field_access = None;
-            for copy in &field_copy_set.fields {
-                if dest.try_load_field(copy.dest).is_none() {
-                    invalid_field_access = Some((copy.dest, dest.field_len()));
-                    break;
-                }
-                let Some(new_value) = source.try_load_field(copy.source) else {
-                    invalid_field_access = Some((copy.source, source.field_len()));
-                    break;
-                };
-                copied_fields.push((copy.dest, new_value));
-            }
-            if let Some((index, field_count)) = invalid_field_access {
-                return Err(self.invalid_field_access_error(index, field_count));
-            }
-
-            copied_fields
+                    got: ObjectType::of(self.get_object(ptr)).into(),
+                })
         };
+        let source = instance(source_ptr)?;
+        let dest = instance(dest_ptr)?;
 
-        for (dest_field, new_value) in copied_fields {
-            let store_error = {
-                let Object::Instance(dest) = self.get_object(dest_ptr) else {
-                    unreachable!("destination instance already type-checked above");
-                };
-                (dest_field >= dest.field_len()).then_some(dest.field_len())
-            };
-            if let Some(length) = store_error {
-                return Err(self.invalid_field_access_error(dest_field, length));
+        // Every index is checked before any field is written.
+        for copy in &field_copy_set.fields {
+            for (index, of) in [(copy.dest, dest), (copy.source, source)] {
+                if index >= of.field_len() {
+                    return Err(self.invalid_field_access_error(index, of.field_len()));
+                }
             }
-            let Object::Instance(dest) = self.get_object(dest_ptr) else {
-                unreachable!("destination instance already type-checked above");
-            };
-            dest.store_field(dest_field, new_value);
+        }
+        // Every source field is read before any is written, as the source
+        // may be the destination.
+        let copied: Vec<(usize, SlotValue)> = field_copy_set
+            .fields
+            .iter()
+            .map(|copy| (copy.dest, source.load(copy.source)))
+            .collect();
+        for (dest_field, value) in copied {
+            dest.store_slot_value(dest_field, value, Access::Shared);
         }
 
         Ok(())
@@ -8059,9 +8080,11 @@ impl BexVm {
             fields
         };
 
-        Ok(Value::object(self.tlab.alloc(Object::Instance(
-            Instance::new(class_ptr, class_type_args, fields),
-        ))))
+        Ok(Value::object(self.tlab.alloc_instance_with_type_args(
+            class_ptr,
+            class_type_args,
+            fields,
+        )))
     }
 
     /// Load the function object for the given frame.
@@ -8474,7 +8497,7 @@ impl BexVm {
         self.as_instance(&value).is_ok_and(|instance| {
             self.error_class_ptrs
                 .get(ErrorClass::Context as usize)
-                .is_some_and(|class| *class == instance.class)
+                .is_some_and(|class| *class == instance.class())
         })
     }
 
@@ -8484,19 +8507,20 @@ impl BexVm {
         let Some(ptr) = value.as_object_ptr() else {
             return InvocationOutcome::Errored;
         };
-        let Object::Instance(instance) = self.get_object(ptr) else {
+        let Some(instance) = self.instance_at(ptr) else {
             return InvocationOutcome::Errored;
         };
+        let class_ptr = instance.class();
         let is = |panic: PanicClass| {
             self.panic_class_ptrs
                 .get(panic as usize)
-                .is_some_and(|class| *class == instance.class)
+                .is_some_and(|class| *class == class_ptr)
         };
         // Exit ends the process on purpose: the frames it unwinds were
         // stopped, not failed.
         if is(PanicClass::Cancelled) || is(PanicClass::Exit) {
             InvocationOutcome::Cancelled
-        } else if self.panic_class_ptrs.contains(&instance.class) {
+        } else if self.panic_class_ptrs.contains(&class_ptr) {
             InvocationOutcome::Panicked
         } else {
             InvocationOutcome::Errored
@@ -9694,28 +9718,12 @@ impl BexVm {
                     OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
-                        let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                        let load_result = {
-                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Instance.into(),
-                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                                }
-                                .into());
-                            };
-                            if op == OpCode::LoadFieldLocal {
-                                instance.try_load_field_relaxed(idx)
-                            } else {
-                                instance.try_load_field(idx)
-                            }
-                            .ok_or_else(|| instance.field_len())
+                        let access = if op == OpCode::LoadFieldLocal {
+                            Access::ThreadLocal
+                        } else {
+                            Access::Shared
                         };
-                        let value = match load_result {
-                            Ok(value) => value,
-                            Err(length) => {
-                                return Err(self.invalid_field_access_error(idx, length));
-                            }
-                        };
+                        let value = self.load_field_op(top, idx, access)?;
                         self.push_stack(value)?;
                     }
 
@@ -9723,29 +9731,12 @@ impl BexVm {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let new_value = self.stack.ensure_pop();
                         let instance_value = self.stack.ensure_pop();
-                        let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
-
-                        let store_error = {
-                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Instance.into(),
-                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                                }
-                                .into());
-                            };
-                            (idx >= instance.field_len()).then_some(instance.field_len())
-                        };
-                        if let Some(length) = store_error {
-                            return Err(self.invalid_field_access_error(idx, length));
-                        }
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            unreachable!("already type-checked above");
-                        };
-                        if op == OpCode::StoreFieldLocal {
-                            instance.store_field_relaxed(idx, new_value);
+                        let access = if op == OpCode::StoreFieldLocal {
+                            Access::ThreadLocal
                         } else {
-                            instance.store_field(idx, new_value);
-                        }
+                            Access::Shared
+                        };
+                        self.store_field_op(instance_value, idx, new_value, access)?;
                     }
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
@@ -9765,25 +9756,7 @@ impl BexVm {
                             &iface_args,
                             field_index,
                         )?;
-                        let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
-                        let load_result = {
-                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Instance.into(),
-                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                                }
-                                .into());
-                            };
-                            instance
-                                .try_load_field(slot)
-                                .ok_or_else(|| instance.field_len())
-                        };
-                        let value = match load_result {
-                            Ok(value) => value,
-                            Err(length) => {
-                                return Err(self.invalid_field_access_error(slot, length));
-                            }
-                        };
+                        let value = self.load_field_op(receiver, slot, Access::Shared)?;
                         self.push_stack(value)?;
                     }
 
@@ -9799,48 +9772,14 @@ impl BexVm {
                             &iface_args,
                             field_index,
                         )?;
-                        let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
-                        let store_error = {
-                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Instance.into(),
-                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                                }
-                                .into());
-                            };
-                            (slot >= instance.field_len()).then_some(instance.field_len())
-                        };
-                        if let Some(length) = store_error {
-                            return Err(self.invalid_field_access_error(slot, length));
-                        }
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            unreachable!("already type-checked above");
-                        };
-                        instance.store_field(slot, new_value);
+                        self.store_field_op(receiver, slot, new_value, Access::Shared)?;
                     }
 
                     OpCode::InitField => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let new_value = self.stack.ensure_pop();
                         let instance_value = self.stack.ensure_pop();
-                        let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
-                        let store_error = {
-                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Instance.into(),
-                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                                }
-                                .into());
-                            };
-                            (idx >= instance.field_len()).then_some(instance.field_len())
-                        };
-                        if let Some(length) = store_error {
-                            return Err(self.invalid_field_access_error(idx, length));
-                        }
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            unreachable!("already type-checked above");
-                        };
-                        instance.store_field(idx, new_value);
+                        self.store_field_op(instance_value, idx, new_value, Access::Shared)?;
                         self.push_stack(instance_value)?;
                     }
 
@@ -9936,23 +9875,15 @@ impl BexVm {
                             self.pop_type_args(ntypeargs)?.tys.into()
                         };
 
-                        let Object::Class(class) = self.get_object(class_ptr) else {
+                        if !matches!(self.get_object(class_ptr), Object::Class(_)) {
                             return Err(VmInternalError::TypeError {
                                 expected: ObjectType::Class.into(),
                                 got: ObjectType::of(self.get_object(class_ptr)).into(),
                             }
                             .into());
-                        };
-                        let mut fields = Vec::with_capacity(class.fields.len());
-                        fields.resize(class.fields.len(), Value::NULL);
-                        let instance_ptr =
-                            self.tlab
-                                .alloc(Object::Instance(bex_vm_types::types::Instance::new(
-                                    class_ptr,
-                                    class_type_args,
-                                    fields,
-                                )));
-                        self.push_stack(Value::object(instance_ptr))?;
+                        }
+                        let instance = self.tlab.alloc_instance_cell(class_ptr, class_type_args);
+                        self.push_stack(Value::object(instance.ptr()))?;
                     }
 
                     OpCode::InitInstance => {
@@ -12106,6 +12037,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             early_yield: _,
             // Its cached cursor is layout, not a pointer; see `relocated`.
             tlab: _,
+            float_boxes: _,
             globals,
             pending_globals: _,
             // The shared tables name compile-time objects only (the static
@@ -12272,6 +12204,10 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // its payload balance, which the collection's census now covers,
         // is stale.
         self.tlab.invalidate();
+        self.float_boxes
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .invalidate();
     }
 }
 

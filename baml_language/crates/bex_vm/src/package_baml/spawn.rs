@@ -73,10 +73,10 @@ impl CancelTokenState {
 /// optional argument).
 pub fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<CancellationSource>> {
     let instance = vm.as_instance(&value).ok()?;
-    if instance.class != vm.lang_object(crate::lang_items::BAML_SPAWN_CANCEL_TOKEN) {
+    if instance.class() != vm.lang_object(crate::lang_items::BAML_SPAWN_CANCEL_TOKEN) {
         return None;
     }
-    let handle = instance.load_field(0);
+    let handle = vm.field(instance, 0);
     let state = vm.as_rust_data::<CancelTokenState>(&handle).ok()?;
     Some(state.sources().collect())
 }
@@ -185,10 +185,7 @@ pub struct SpawnLaunch {
 
 /// The callable a launch `plan` (a `baml.spawn.Plan<T, E>` instance) runs.
 pub fn plan_body(vm: &BexVm, plan: Value) -> Result<HeapPtr, VmInternalError> {
-    let body = view::spawn::Plan {
-        instance: vm.as_instance(&plan)?,
-    }
-    .body();
+    let body = view::spawn::Plan::new(vm.as_instance(&plan)?).body();
     body.as_object_ptr()
         .ok_or_else(|| VmInternalError::TypeError {
             expected: ObjectType::Closure.into(),
@@ -200,13 +197,13 @@ pub fn plan_body(vm: &BexVm, plan: Value) -> Result<HeapPtr, VmInternalError> {
 pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalError> {
     let body = plan_body(vm, plan)?;
     let instance = vm.as_instance(&plan)?;
-    let [returns, throws] = &*instance.class_type_args else {
+    let [returns, throws] = instance.type_args() else {
         return Err(VmInternalError::InvalidArgumentCount {
             expected: 2,
-            got: instance.class_type_args.len(),
+            got: instance.type_args().len(),
         });
     };
-    let plan = view::spawn::Plan { instance };
+    let plan = view::spawn::Plan::new(instance);
     let limits = plan
         .limits(vm)
         .iter()
@@ -242,7 +239,7 @@ fn alloc_limit(vm: &mut BexVm, inner: Arc<LimitInner>) -> Value {
 
 /// The shared admission state behind a `baml.spawn.Limit` value.
 fn limit_inner(vm: &BexVm, limit: Value) -> Result<Arc<LimitInner>, VmInternalError> {
-    let handle = vm.as_instance(&limit)?.load_field(0);
+    let handle = vm.as_instance(&limit)?.load(0).expect_value();
     let mismatch = || VmInternalError::TypeError {
         expected: ObjectType::RustData.into(),
         got: vm.type_of(&handle),

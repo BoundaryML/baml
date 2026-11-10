@@ -14,9 +14,7 @@ impl BamlClassErrorsStackTrace for PackageBamlImpl {
                 let frame_instance = vm
                     .as_instance(frame_value)
                     .expect("StackFrame: expected Instance");
-                view::errors::StackFrame {
-                    instance: frame_instance,
-                }
+                view::errors::StackFrame::new(frame_instance)
             })
             .collect();
 

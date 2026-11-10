@@ -13,6 +13,7 @@ use crate::{
     errors::{VmBamlError, VmRustFnError},
     package_baml::PackageBamlImpl,
 };
+use bex_vm_types::types::SharedKind;
 
 impl super::BamlNamespaceToml for PackageBamlImpl {}
 
@@ -22,7 +23,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
             Ok(table) => {
                 let value = convert_toml_value(vm, ::toml::Value::Table(table))?;
                 let source = Value::object(vm.alloc_string(s.clone()));
-                vm.as_instance(&value)?.store_field(1, source);
+                vm.as_instance(&value)?.store(1, source);
                 Ok(value)
             }
             Err(e) => Err(VmRustFnError::thrown_fresh(make_toml_parse_error(
@@ -33,7 +34,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
     }
 
     fn _to_string_impl(vm: &mut BexVm, table: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
-        let source = vm.as_instance(table)?.load_field(1);
+        let source = vm.as_instance(table)?.load(1).expect_value();
         let mut document = if source.is_null() {
             DocumentMut::new()
         } else {
@@ -234,15 +235,16 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
             .map(|v| snapshot(vm, v, active))
             .collect::<Result<Vec<_>, _>>()
             .map(Node::Array),
-        Object::Instance(instance) => {
-            let class = instance.class;
+        Object::Shared(SharedKind::Instance) => {
+            let instance = vm.expect_instance(ptr);
+            let class = instance.class();
             if class == vm.lang_object(crate::lang_items::BAML_TOML_TABLE) {
                 let items = vm
-                    .as_map(&instance.load_field(0))?
+                    .as_map(&vm.field(instance, 0))?
                     .iter()
                     .map(|(k, v)| Ok((vm.as_string(k)?.to_string(), snapshot(vm, *v, active)?)))
                     .collect::<Result<IndexMap<_, _>, VmRustFnError>>()?;
-                let names = instance.load_field(2);
+                let names = vm.field(instance, 2);
                 let renamed = if names.is_null() {
                     IndexMap::new()
                 } else {
@@ -262,18 +264,18 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
             } else {
                 let text = if class == vm.lang_object(crate::lang_items::BAML_TIME_PLAIN_DATE) {
                     <PackageBamlImpl as BamlClassTimePlainDate>::_to_string_impl(
-                        &view::time::PlainDate { instance },
+                        &view::time::PlainDate::new(instance),
                     )?
                 } else if class == vm.lang_object(crate::lang_items::BAML_TIME_PLAIN_DATE_TIME) {
                     <PackageBamlImpl as BamlClassTimePlainDateTime>::_to_string_impl(
-                        &view::time::PlainDateTime { instance },
+                        &view::time::PlainDateTime::new(instance),
                     )?
                 } else if class == vm.lang_object(crate::lang_items::BAML_TIME_PLAIN_TIME) {
                     <PackageBamlImpl as BamlClassTimePlainTime>::_to_string_impl(
-                        &view::time::PlainTime { instance },
+                        &view::time::PlainTime::new(instance),
                     )
                 } else if class == vm.lang_object(crate::lang_items::BAML_TIME_ZONED_DATE_TIME) {
-                    let zoned = view::time::ZonedDateTime { instance };
+                    let zoned = view::time::ZonedDateTime::new(instance);
                     // TOML has offsets, not IANA zone identifiers. Named zones
                     // serialize as UTC while preserving the absolute instant.
                     let offset = zoned._offset_ns(vm).unwrap_or(0);

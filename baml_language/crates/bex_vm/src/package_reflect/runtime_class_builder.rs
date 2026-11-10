@@ -179,7 +179,7 @@ fn lock_state<'a>(handle: &'a BuilderHandle, vm: &BexVm) -> MeteredGuard<'a, Bui
 /// a class that merely renders under the same name is not it.
 fn is_instance_of(vm: &BexVm, value: Value, class: baml_base::LangItem) -> bool {
     vm.as_instance(&value)
-        .is_ok_and(|instance| vm.lang_declaration(class) == Some(instance.class))
+        .is_ok_and(|instance| vm.lang_declaration(class) == Some(instance.class()))
 }
 
 fn builder_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, BuilderHandle), String> {
@@ -193,7 +193,7 @@ fn builder_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, BuilderHandle), S
         .as_instance(&value)
         .map_err(|_| "builder is not an instance".to_string())?;
     let handle = vm
-        .as_rust_data::<BuilderHandle>(&instance.load_field(0))
+        .as_rust_data::<BuilderHandle>(&vm.field(instance, 0))
         .map_err(|_| "builder has invalid native state".to_string())?
         .clone();
     Ok((ptr, handle))
@@ -210,7 +210,7 @@ fn pending_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, PendingHandle), S
         .as_instance(&value)
         .map_err(|_| "pending type is not an instance".to_string())?;
     let handle = *vm
-        .as_rust_data::<PendingHandle>(&instance.load_field(0))
+        .as_rust_data::<PendingHandle>(&vm.field(instance, 0))
         .map_err(|_| "pending type has invalid native state".to_string())?;
     Ok((ptr, handle))
 }
@@ -248,14 +248,14 @@ fn instance_array_field(vm: &BexVm, value: Value, index: usize) -> Result<Vec<Va
     let instance = vm
         .as_instance(&value)
         .map_err(|_| "expected an instance".to_string())?;
-    vm.as_array(&instance.load_field(index))
+    vm.as_array(&vm.field(instance, index))
         .map(|array| array.to_vec())
         .map_err(|_| "native roots field is not an array".to_string())
 }
 
 fn instance_field(vm: &BexVm, value: Value, index: usize) -> Result<Value, String> {
     vm.as_instance(&value)
-        .map(|instance| instance.load_field(index))
+        .map(|instance| vm.field(instance, index))
         .map_err(|_| "expected an instance".to_string())
 }
 
@@ -269,7 +269,7 @@ fn store_instance_field(
         .as_instance(&value)
         .map_err(|_| "expected an instance".to_string())?;
     instance
-        .try_store_field(index, field)
+        .try_store_with(index, field, bex_vm_types::object_format::Access::Shared)
         .map_err(|_| "native instance field index is invalid".to_string())?;
     Ok(())
 }
@@ -1003,6 +1003,7 @@ fn build_group(
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
         let ty = bex_vm_types::RealizedTy::Class(

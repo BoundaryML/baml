@@ -51,11 +51,10 @@ async fn package_functions(
     let active = inactive.acquire().await;
     let pointer = engine.resolve_handle(active.proof(), handle).unwrap();
     // SAFETY: the active permit prevents collection; the handle roots the wrapper.
-    let Object::Instance(wrapper) = (unsafe { pointer.get() }) else {
-        panic!("not a package wrapper")
-    };
+    let wrapper = unsafe { bex_vm_types::InstanceRef::of(pointer) }.expect("not a package wrapper");
     let pointer = wrapper
-        .load_field(0)
+        .load(0)
+        .expect_value()
         .as_object_ptr()
         .expect("package payload");
     // SAFETY: the wrapper roots its package payload under the same permit.

@@ -24,6 +24,7 @@ use super::{
     BamlNamespaceReflect, PackageReflectImpl, copy,
 };
 use crate::{BexVm, package_load::StdlibClass};
+use bex_vm_types::types::SharedKind;
 
 #[derive(Clone, Debug)]
 struct InterfaceWitness {
@@ -56,7 +57,7 @@ fn witness_state(vm: &BexVm, value: Value) -> Result<InterfaceWitness, String> {
     let instance = vm
         .as_instance(&value)
         .map_err(|_| "implementations must contain reflect.interface.Implementation values")?;
-    let Object::Class(class) = vm.get_object(instance.class) else {
+    let Object::Class(class) = vm.get_object(instance.class()) else {
         unreachable!("Instance.class must point to Object::Class")
     };
     if !vm
@@ -65,7 +66,7 @@ fn witness_state(vm: &BexVm, value: Value) -> Result<InterfaceWitness, String> {
     {
         return Err("implementations must contain reflect.interface.Implementation values".into());
     }
-    vm.as_rust_data::<InterfaceWitness>(&instance.load_field(0))
+    vm.as_rust_data::<InterfaceWitness>(&vm.field(instance, 0))
         .cloned()
         .map_err(|_| "invalid reflect.interface.Implementation handle".into())
 }
@@ -403,6 +404,7 @@ fn mint_class(
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        layout: Default::default(),
         redact: false,
     })));
     // The head is built off the declaration that was just allocated, so the
@@ -714,10 +716,10 @@ impl BamlClassClass for PackageReflectImpl {
             return Err(fail_non_instance(vm));
         };
         let (field_value, class_name) = {
-            let Object::Instance(instance) = vm.get_object(instance_ptr) else {
+            let Some(instance) = vm.instance_at(instance_ptr) else {
                 return Err(fail_non_instance(vm));
             };
-            let Object::Class(class) = vm.get_object(instance.class) else {
+            let Object::Class(class) = vm.get_object(instance.class()) else {
                 unreachable!("Instance.class must point to Object::Class")
             };
             let Some(index) = class
@@ -734,7 +736,7 @@ impl BamlClassClass for PackageReflectImpl {
                 ));
             };
             (
-                instance.load_field(index),
+                vm.field(instance, index),
                 class.name().display_name().to_string(),
             )
         };
@@ -1575,10 +1577,10 @@ pub(super) struct WithMetaRow {
 
 /// Read `value` as a `reflect.WithMeta` wrapper. `None` when it is not one.
 pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaRow, String>> {
-    let Object::Instance(instance) = vm.get_object(value.as_object_ptr()?) else {
+    let Some(instance) = vm.instance_at(value.as_object_ptr()?) else {
         return None;
     };
-    let Object::Class(class) = vm.get_object(instance.class) else {
+    let Object::Class(class) = vm.get_object(instance.class()) else {
         unreachable!("Instance.class must point to Object::Class")
     };
     if !vm
@@ -1588,7 +1590,7 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
         return None;
     }
     let optional_string = |index| {
-        let value = instance.load_field(index);
+        let value = vm.field(instance, index);
         if value.is_null() {
             Ok(None)
         } else {
@@ -1599,7 +1601,7 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
     };
     let read = || {
         let other = vm
-            .as_string_map(&instance.load_field(4))
+            .as_string_map(&vm.field(instance, 4))
             .map_err(|_| "reflect.WithMeta.other must be map<string, string>".to_string())?
             .iter()
             .map(|(key, value)| {
@@ -1609,7 +1611,7 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
             })
             .collect::<Result<IndexMap<_, _>, _>>()?;
         Ok(WithMetaRow {
-            payload: instance.load_field(0),
+            payload: vm.field(instance, 0),
             alias: optional_string(1)?,
             description: optional_string(2)?,
             docstring: optional_string(3)?,
@@ -1703,13 +1705,13 @@ pub(crate) fn check_kind_invariant(
 /// (no kind check — callers that accept `reflect.TypeView` accept any kind).
 pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
     let ptr = value.as_object_ptr()?;
-    let Object::Instance(instance) = vm.get_object(ptr) else {
+    let Some(instance) = vm.instance_at(ptr) else {
         return None;
     };
     let is_view = baml_type::type_kind::TypeKind::ALL
         .iter()
-        .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class));
-    is_view.then(|| instance.fields[0].load())
+        .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class()));
+    is_view.then(|| vm.field(instance, 0))
 }
 
 /// The `Object::Type` value a kind-view instance wraps (`_ty`, its sole
@@ -1723,10 +1725,10 @@ pub(crate) fn view_type_value(
     let ptr = view
         .as_object_ptr()
         .unwrap_or_else(|| unreachable!("kind-view receiver must be an instance"));
-    let Object::Instance(instance) = vm.get_object(ptr) else {
+    let Some(instance) = vm.instance_at(ptr) else {
         unreachable!("kind-view receiver must be an Object::Instance")
     };
-    check_kind_invariant(vm, instance.fields[0].load(), expected)
+    check_kind_invariant(vm, vm.field(instance, 0), expected)
 }
 
 fn reflected_class(
@@ -2011,8 +2013,9 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
             skip: false,
             json_rename: None,
         }),
-        Object::Instance(instance) => {
-            let Object::Class(class) = vm.get_object(instance.class) else {
+        Object::Shared(SharedKind::Instance) => {
+            let instance = vm.expect_instance(ptr);
+            let Object::Class(class) = vm.get_object(instance.class()) else {
                 unreachable!("Instance.class must point to Object::Class")
             };
             if !vm
@@ -2024,17 +2027,17 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 );
             }
             let name = vm
-                .as_string(&instance.load_field(0))
+                .as_string(&vm.field(instance, 0))
                 .map_err(|_| "reflect.enum.Value.name must be a string")?
                 .to_string();
-            let meta_value = instance.load_field(1);
+            let meta_value = vm.field(instance, 1);
             let Some(meta_ptr) = meta_value.as_object_ptr() else {
                 return Err("reflect.enum.Value.meta must be reflect.Meta".into());
             };
-            let Object::Instance(meta) = vm.get_object(meta_ptr) else {
+            let Some(meta) = vm.instance_at(meta_ptr) else {
                 return Err("reflect.enum.Value.meta must be reflect.Meta".into());
             };
-            let Object::Class(meta_class) = vm.get_object(meta.class) else {
+            let Object::Class(meta_class) = vm.get_object(meta.class()) else {
                 unreachable!("Instance.class must point to Object::Class")
             };
             if !vm
@@ -2044,7 +2047,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 return Err("reflect.enum.Value.meta must be reflect.Meta".into());
             }
             let optional_string = |index| {
-                let value = meta.load_field(index);
+                let value = vm.field(meta, index);
                 if value.is_null() {
                     Ok(None)
                 } else {
@@ -2054,7 +2057,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 }
             };
             let other = vm
-                .as_string_map(&meta.load_field(3))
+                .as_string_map(&vm.field(meta, 3))
                 .map_err(|_| "reflect.Meta.other must be map<string, string>".to_string())?
                 .iter()
                 .map(|(key, value)| {
@@ -2065,7 +2068,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 .collect::<Result<IndexMap<_, _>, _>>()?;
             // A row read back from `values()` keeps its skip flag, so
             // rebuilding an enum from reflected rows does not unskip a variant.
-            let skip = meta.load_field(4).as_bool().unwrap_or(false);
+            let skip = vm.field(meta, 4).as_bool().unwrap_or(false);
             Ok(EnumVariant {
                 name,
                 alias: optional_string(0)?,

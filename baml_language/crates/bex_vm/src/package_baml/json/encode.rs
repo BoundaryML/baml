@@ -43,6 +43,7 @@ use crate::{
     errors::{VmInternalError, VmRustFnError},
     package_baml::{Continuation, NativeCallResult, make_to_json_callee},
 };
+use bex_vm_types::types::SharedKind;
 
 /// How the structural walk writes a value: the names fields and variants go
 /// by, and whether a class field holding `null` is written. A `baml.ToJson`
@@ -225,13 +226,16 @@ impl ToJsonCache {
             Object::Uint8Array(_) => OverrideKey::Uint8Array,
             Object::Array(array) => OverrideKey::List((*array.element_ty).clone()),
             Object::Map(map) => OverrideKey::Map((*map.key_ty).clone(), (*map.value_ty).clone()),
-            Object::Instance(instance) => match vm.get_object(instance.class) {
-                Object::Class(class) => OverrideKey::Instance(
-                    TypeHead::new(instance.class, class.type_tag),
-                    instance.class_type_args.clone(),
-                ),
-                _ => return has_to_json_override(vm, value),
-            },
+            Object::Shared(SharedKind::Instance) => {
+                let instance = vm.expect_instance(ptr);
+                match vm.get_object(instance.class()) {
+                    Object::Class(class) => OverrideKey::Instance(
+                        TypeHead::new(instance.class(), class.type_tag),
+                        instance.type_args().into(),
+                    ),
+                    _ => return has_to_json_override(vm, value),
+                }
+            }
             Object::Variant(variant) => match vm.get_object(variant.enm) {
                 Object::Enum(enm) => OverrideKey::Variant(TypeHead::new(variant.enm, enm.type_tag)),
                 _ => return has_to_json_override(vm, value),
@@ -315,22 +319,25 @@ fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
             .into_iter()
             .map(|(_, value)| value)
             .collect(),
-        Object::Instance(instance) => match vm.get_object(instance.class) {
-            Object::Class(class)
-                if vm
-                    .stdlib_heads()
-                    .media_kind(TypeHead::new(instance.class, class.type_tag))
-                    .is_none() =>
-            {
-                instance
-                    .field_values()
-                    .zip(&class.fields)
-                    .filter(|(value, field)| options.writes_field(field, *value))
-                    .map(|(value, _)| value)
-                    .collect()
+        Object::Shared(SharedKind::Instance) => {
+            let instance = vm.expect_instance(ptr);
+            match vm.get_object(instance.class()) {
+                Object::Class(class)
+                    if vm
+                        .stdlib_heads()
+                        .media_kind(TypeHead::new(instance.class(), class.type_tag))
+                        .is_none() =>
+                {
+                    vm.field_values(instance)
+                        .into_iter()
+                        .zip(&class.fields)
+                        .filter(|(value, field)| options.writes_field(field, *value))
+                        .map(|(value, _)| value)
+                        .collect()
+                }
+                _ => Vec::new(),
             }
-            _ => Vec::new(),
-        },
+        }
         _ => Vec::new(),
     }
 }
@@ -670,7 +677,10 @@ impl Walker<'_, '_> {
             Object::Bigint(_) => Shape::Bigint,
             Object::Array(values) => Shape::Array(values.to_vec()),
             Object::Map(_) => Shape::Map,
-            Object::Instance(instance) => Shape::Instance(instance.class),
+            Object::Shared(SharedKind::Instance) => {
+                let instance = vm.expect_instance(ptr);
+                Shape::Instance(instance.class())
+            }
             Object::Variant(variant) => Shape::Variant(variant.enm, variant.index),
             Object::Uint8Array(_) => Shape::Unserializable(
                 "uint8array requires explicit encoding (use to_base64() or to_hex())",
@@ -907,21 +917,23 @@ impl Walker<'_, '_> {
         if let Some(plan) = plan {
             self.plans.insert(class, plan);
         }
-        let (Object::Instance(instance), Object::Class(declaration)) =
-            (vm.get_object(ptr), vm.get_object(class))
+        let (Some(instance), Object::Class(declaration)) =
+            (vm.instance_at(ptr), vm.get_object(class))
         else {
             unreachable!("the instance and its class were just read")
         };
         // A `@json.fallback` class is the object it was read from.
-        let fallback = instance
-            .field_values()
+        let fields = vm.field_values(instance);
+        let fallback = fields
+            .iter()
+            .copied()
             .zip(&declaration.fields)
             .find_map(|(value, field)| field.json_fallback.then_some(value));
         if let Some(raw) = fallback {
             return self.visit(vm, raw, false, sink);
         }
-        let mut children: Vec<(Option<Slot>, Value)> = instance
-            .field_values()
+        let mut children: Vec<(Option<Slot>, Value)> = fields
+            .into_iter()
             .zip(&declaration.fields)
             .enumerate()
             .filter(|(_, (value, field))| self.options.writes_field(field, *value))

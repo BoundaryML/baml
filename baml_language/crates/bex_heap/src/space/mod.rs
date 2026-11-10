@@ -80,7 +80,11 @@ pub(crate) unsafe fn cell_bytes(cell: usize) -> usize {
     // SAFETY: forwarded to the caller.
     match unsafe { region_kind(region_base(cell)) } {
         // SAFETY: an allocated small cell has a written header.
-        RegionKind::Block => unsafe { crate::descriptor::Header::at(cell) }.cell_bytes(),
+        RegionKind::Block => {
+            use crate::descriptor::CellHeader;
+            // SAFETY: as above.
+            unsafe { crate::descriptor::Header::at(cell) }.cell_bytes()
+        }
         // SAFETY: an allocated large cell has a live prefix.
         RegionKind::Large => unsafe { large::LargeSpace::cell_bytes(cell) },
     }

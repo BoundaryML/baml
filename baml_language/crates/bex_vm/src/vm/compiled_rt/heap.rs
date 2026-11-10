@@ -3,6 +3,7 @@
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, Object, ObjectType, RealizedTy, Value,
+    object_format::Access,
     types::{Closure, Type},
 };
 
@@ -256,16 +257,16 @@ impl BexVm {
         let Some(ptr) = instance.as_object_ptr() else {
             return Err(self.type_error(ObjectType::Instance, instance));
         };
-        let Object::Instance(object) = self.get_object(ptr) else {
+        let Some(object) = self.instance_at(ptr) else {
             return Err(self.type_error(ObjectType::Instance, instance));
         };
-        let loaded = if THREAD_LOCAL {
-            object.try_load_field_relaxed(idx)
+        let access = if THREAD_LOCAL {
+            Access::ThreadLocal
         } else {
-            object.try_load_field(idx)
+            Access::Shared
         };
-        match loaded {
-            Some(value) => Ok(value),
+        match object.try_load_with(idx, access) {
+            Some(value) => Ok(self.slot_value(value)),
             None => {
                 let length = object.field_len();
                 Err(self.invalid_field_access_boxed(idx, length))
@@ -306,19 +307,19 @@ impl BexVm {
         let Some(obj_ptr) = instance.as_object_ptr() else {
             return Err(self.type_error(ObjectType::Instance, instance));
         };
-        let Object::Instance(object) = self.get_object(obj_ptr) else {
+        let Some(object) = self.instance_at(obj_ptr) else {
             return Err(self.type_error(ObjectType::Instance, instance));
         };
         let length = object.field_len();
         if idx >= length {
             return Err(self.invalid_field_access_boxed(idx, length));
         }
-
-        if THREAD_LOCAL {
-            object.store_field_relaxed(idx, new_value);
+        let access = if THREAD_LOCAL {
+            Access::ThreadLocal
         } else {
-            object.store_field(idx, new_value);
-        }
+            Access::Shared
+        };
+        object.store_with(idx, new_value, access);
         Ok(())
     }
 
@@ -367,10 +368,8 @@ impl BexVm {
     #[inline]
     #[must_use]
     pub fn is_instance_of(&self, value: Value, class: HeapPtr) -> bool {
-        match value.as_object_ptr().map(|ptr| self.get_object(ptr)) {
-            Some(Object::Instance(instance)) => instance.class == class,
-            _ => false,
-        }
+        self.instance_of(&value)
+            .is_some_and(|instance| instance.class() == class)
     }
 
     #[inline]

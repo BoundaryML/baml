@@ -3,7 +3,7 @@ use std::sync::Arc;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-    ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
+    ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure,
     Uint8ArrayContainer, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
@@ -36,8 +36,11 @@ pub enum Object {
     /// Class object.
     Class(Box<Class>),
 
-    /// Class instance object.
-    Instance(Instance),
+    /// What [`HeapPtr::get`](crate::HeapPtr::get) shows for an object in the
+    /// shared object format (`crate::object_format`): no enum holds it, so
+    /// this names its kind and the object is read through its view
+    /// ([`InstanceRef`](crate::types::InstanceRef)). Never stored in a cell.
+    Shared(SharedKind),
 
     /// Enum object.
     Enum(Box<Enum>),
@@ -136,6 +139,24 @@ pub enum Object {
     Sentinel(crate::types::SentinelKind),
 }
 
+/// The kinds of object in the shared object format, as [`Object::Shared`]
+/// names them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SharedKind {
+    Instance,
+}
+
+impl SharedKind {
+    /// The marker [`HeapPtr::get`](crate::HeapPtr::get) returns for an
+    /// object of this kind.
+    pub(crate) fn marker(self) -> &'static Object {
+        static INSTANCE: Object = Object::Shared(SharedKind::Instance);
+        match self {
+            SharedKind::Instance => &INSTANCE,
+        }
+    }
+}
+
 const _: () = assert!(
     std::mem::size_of::<Object>() <= 64,
     "Object enum size regression — expected <= 64 bytes"
@@ -149,7 +170,7 @@ impl Object {
     #[must_use]
     pub fn is_first_class_value(&self) -> bool {
         match self {
-            Object::Instance(_)
+            Object::Shared(_)
             | Object::Variant(_)
             | Object::Function(_)
             | Object::Closure(_)
@@ -219,7 +240,7 @@ impl Object {
             | Object::Type(_)
             | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Instance(_)
+            | Object::Shared(_)
             | Object::Variant(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
@@ -252,7 +273,7 @@ impl Object {
             | Object::Type(_)
             | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Instance(_)
+            | Object::Shared(_)
             | Object::Variant(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
@@ -306,7 +327,8 @@ enum ObjectWire {
     Interface(Box<InterfaceDef>),
     ImplRule(Box<RuntimeImplRule>),
     Class(Box<Class>),
-    Instance(Instance),
+    // Reserved tag: instances are runtime objects in the shared format.
+    Instance,
     Enum(Box<Enum>),
     TypeAlias(Box<TypeAliasDef>),
     Variant(Variant),
@@ -354,7 +376,12 @@ impl BorshSerialize for Object {
             }
             Self::ImplRule(v) => ObjectWire::ImplRule(v.clone()),
             Self::Class(v) => ObjectWire::Class(v.clone()),
-            Self::Instance(v) => ObjectWire::Instance(v.clone()),
+            Self::Shared(kind) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("a runtime {kind:?} has no wire form"),
+                ));
+            }
             Self::Enum(v) => ObjectWire::Enum(v.clone()),
             Self::TypeAlias(v) => ObjectWire::TypeAlias(v.clone()),
             Self::Variant(v) => ObjectWire::Variant(v.clone()),
@@ -413,7 +440,12 @@ impl BorshDeserialize for Object {
             ObjectWire::Interface(v) => Self::Interface(v),
             ObjectWire::ImplRule(v) => Self::ImplRule(v),
             ObjectWire::Class(v) => Self::Class(v),
-            ObjectWire::Instance(v) => Self::Instance(v),
+            ObjectWire::Instance => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "instances are runtime objects and have no wire form",
+                ));
+            }
             ObjectWire::Enum(v) => Self::Enum(v),
             ObjectWire::TypeAlias(v) => Self::TypeAlias(v),
             ObjectWire::Variant(v) => Self::Variant(v),
@@ -449,7 +481,7 @@ impl std::fmt::Display for Object {
             Object::Package(_) => write!(f, "<package>"),
             Object::ImplRule(_) => write!(f, "<impl_rule>"),
             Object::Class(class) => class.fmt(f),
-            Object::Instance(instance) => instance.fmt(f),
+            Object::Shared(SharedKind::Instance) => write!(f, "<instance>"),
             Object::Enum(enm) => enm.fmt(f),
             Object::TypeAlias(alias) => alias.fmt(f),
             Object::Variant(value) => value.fmt(f),
@@ -534,7 +566,7 @@ impl ObjectType {
 
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
-            Object::Instance(_) => Self::Instance,
+            Object::Shared(SharedKind::Instance) => Self::Instance,
             Object::Enum(_) => Self::Enum,
             Object::TypeAlias(_) => Self::TypeAlias,
             Object::Variant(_) => Self::Enum,

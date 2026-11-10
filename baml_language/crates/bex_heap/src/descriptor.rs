@@ -15,10 +15,13 @@
 //! cell of descriptor [`OBJECT_DESC`], whose hooks call the enum-specific
 //! tracing in [`crate::object_trace`].
 
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap, sync::OnceLock};
 
 pub use bex_vm_types::layout::{DescriptorId, ElemKind, Kind, RawKind, SlotKind};
-use bex_vm_types::{HeapPtr, Meter, Object, RealizedTy};
+use bex_vm_types::{
+    HeapPtr, InstanceLayout, Meter, Object, RealizedTy, object_format::FIRST_INSTANCE_DESC,
+};
+use parking_lot::Mutex;
 
 use crate::space::{GRANULE_BYTES, granule_align};
 /// Reflection identity of the type a descriptor lays out.
@@ -26,50 +29,42 @@ pub type TypeId = u32;
 /// Index of the finalizer a descriptor's objects run when they die.
 pub type FinalizerId = u32;
 
-/// The first eight bytes of every cell.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Header {
-    pub descriptor: DescriptorId,
-    /// Reserved for the object format: cleanup latch, finalizer registered,
-    /// pinned. The collector does not read them.
-    pub flags: u16,
-    /// Cell size in granules for a small cell; zero for a large one, whose
-    /// size the large-object space records.
-    granules: u16,
+pub use bex_vm_types::object_format::{HEADER_BYTES, Header, OBJECT_DESC, TaggedKind, TaggedSlot};
+
+/// What the heap reads and writes of a [`Header`] beyond the object format.
+pub(crate) trait CellHeader {
+    /// The header of `cell`.
+    ///
+    /// # Safety
+    /// `cell` is an allocated cell.
+    unsafe fn at<'a>(cell: usize) -> &'a Header;
+
+    /// The header of a fresh cell of `cell_bytes`.
+    fn for_cell(descriptor: DescriptorId, cell_bytes: usize, large: bool) -> Header;
+
+    /// Size of a small cell. Zero for a large one.
+    fn cell_bytes(&self) -> usize;
 }
 
-pub(crate) const HEADER_BYTES: usize = size_of::<Header>();
-const _: () = assert!(HEADER_BYTES == 8);
+impl CellHeader for Header {
+    #[inline]
+    unsafe fn at<'a>(cell: usize) -> &'a Header {
+        // SAFETY: forwarded to the caller.
+        unsafe { &*(cell as *const Header) }
+    }
 
-impl Header {
-    pub(crate) fn new(descriptor: DescriptorId, cell_bytes: usize, large: bool) -> Self {
+    fn for_cell(descriptor: DescriptorId, cell_bytes: usize, large: bool) -> Header {
         let granules = if large {
             0
         } else {
             u16::try_from(cell_bytes / GRANULE_BYTES).expect("small cells fit a u16 granule count")
         };
-        Self {
-            descriptor,
-            flags: 0,
-            granules,
-        }
+        Header::new(descriptor, granules)
     }
 
-    /// The header of `cell`.
-    ///
-    /// # Safety
-    /// `cell` is an allocated cell.
     #[inline]
-    pub(crate) unsafe fn at<'a>(cell: usize) -> &'a Self {
-        // SAFETY: forwarded to the caller.
-        unsafe { &*(cell as *const Self) }
-    }
-
-    /// Size of a small cell. Zero for a large one.
-    #[inline]
-    pub(crate) fn cell_bytes(&self) -> usize {
-        usize::from(self.granules) * GRANULE_BYTES
+    fn cell_bytes(&self) -> usize {
+        usize::from(self.granules()) * GRANULE_BYTES
     }
 }
 
@@ -94,29 +89,6 @@ pub struct RustHooks {
     /// Report what the value keeps alive outside its cell.
     pub measure: unsafe fn(*mut u8, &mut Meter),
 }
-
-/// The tag of a [`TaggedSlot`].
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TaggedKind {
-    Locked = 0,
-    Ptr = 1,
-    Int = 2,
-    Float = 3,
-    Bool = 4,
-    Null = 5,
-}
-
-/// A slot that may hold a pointer or a scalar: `SafeValue` in the design.
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct TaggedSlot {
-    pub kind: u8,
-    pub _pad: [u8; 7],
-    pub payload: u64,
-}
-
-const _: () = assert!(size_of::<TaggedSlot>() == 16);
 
 /// How the collector reads one kind of cell.
 #[derive(Clone, Debug)]
@@ -207,6 +179,22 @@ impl Descriptor {
         }
     }
 
+    /// The descriptor of instances laid out by `layout`: the class and type
+    /// pointers and the declared fields' slots.
+    pub fn for_instance(layout: &InstanceLayout) -> Self {
+        Self {
+            kind: Kind::Instance,
+            trace: Trace::Slots,
+            size: u32::try_from(layout.size()).expect("object size fits u32"),
+            elems: None,
+            ptr_slots: Cow::Owned(layout.ptr_offsets()),
+            tagged_slots: Cow::Owned(layout.tagged_offsets()),
+            slot_kinds: Cow::Owned(layout.fields().iter().map(|slot| slot.kind).collect()),
+            type_id: layout.descriptor().0,
+            finalizer: None,
+        }
+    }
+
     fn validate(&self) -> Result<(), DescriptorError> {
         if (self.size as usize) < HEADER_BYTES {
             return Err(DescriptorError::SmallerThanHeader(self.size));
@@ -236,43 +224,118 @@ impl Descriptor {
     }
 }
 
-/// Every descriptor a heap knows, by [`DescriptorId`]. Entry [`OBJECT_DESC`] is
-/// always the VM's `Object`.
+/// Every descriptor a heap knows, by [`DescriptorId`].
+///
+/// IDs below [`FIRST_INSTANCE_DESC`] are fixed by the object format: entry
+/// [`OBJECT_DESC`] is always the VM's `Object`. Instance layouts are added at
+/// run time, when a class allocates its first instance, and are interned by
+/// their slots so every class with the same layout shares one ID: compiled
+/// code and the interpreter derive the same ID from the same slot kinds.
+///
+/// Reads take no lock: entries live in segments that never move, each set
+/// once. Additions take `interned`.
 pub struct DescriptorTable {
-    descriptors: Vec<Descriptor>,
+    fixed: Vec<Option<Descriptor>>,
+    segments: [OnceLock<Box<[OnceLock<Descriptor>]>>; SEGMENTS],
+    /// Instance layouts by their slots, and the next free dynamic index.
+    interned: Mutex<(HashMap<InstanceKey, DescriptorId>, u32)>,
+}
+
+/// An instance layout's identity: its slot kinds and whether it carries type
+/// arguments.
+type InstanceKey = (Vec<SlotKind>, bool);
+
+/// Segment `k` holds `FIRST_SEGMENT << k` entries.
+const SEGMENTS: usize = 24;
+const FIRST_SEGMENT: u32 = 64;
+
+/// The segment and index of dynamic entry `index`.
+fn locate(index: u32) -> (usize, usize) {
+    let shifted = index + FIRST_SEGMENT;
+    let segment = (u32::BITS - 1 - shifted.leading_zeros()) - FIRST_SEGMENT.trailing_zeros();
+    let start = (FIRST_SEGMENT << segment) - FIRST_SEGMENT;
+    (segment as usize, (index - start) as usize)
 }
 
 impl DescriptorTable {
     pub(crate) fn new() -> Self {
+        let mut fixed = vec![None; FIRST_INSTANCE_DESC.0 as usize];
+        fixed[OBJECT_DESC.0 as usize] = Some(OBJECT_DESCRIPTOR);
         Self {
-            descriptors: vec![OBJECT_DESCRIPTOR],
+            fixed,
+            segments: [const { OnceLock::new() }; SEGMENTS],
+            interned: Mutex::new((HashMap::new(), 0)),
         }
     }
 
-    /// Add `descriptor`, returning its ID.
-    pub fn register(&mut self, descriptor: Descriptor) -> Result<DescriptorId, DescriptorError> {
+    /// Add `descriptor` at the next dynamic ID.
+    pub fn register(&self, descriptor: Descriptor) -> Result<DescriptorId, DescriptorError> {
         descriptor.validate()?;
-        let id = u32::try_from(self.descriptors.len()).expect("descriptor table overflow");
-        self.descriptors.push(descriptor);
-        Ok(DescriptorId(id))
+        let mut interned = self.interned.lock();
+        Ok(self.push(&mut interned.1, descriptor))
+    }
+
+    /// The ID of the instance layout with `kinds` (and type arguments when
+    /// `has_type_args`), registering it on first use.
+    pub fn intern_instance(&self, kinds: &[SlotKind], has_type_args: bool) -> InstanceLayout {
+        let mut interned = self.interned.lock();
+        let (by_key, next) = &mut *interned;
+        let key = (kinds.to_vec(), has_type_args);
+        if let Some(&id) = by_key.get(&key) {
+            return InstanceLayout::new(id, kinds, has_type_args);
+        }
+        let id = DescriptorId(FIRST_INSTANCE_DESC.0 + *next);
+        let layout = InstanceLayout::new(id, kinds, has_type_args);
+        let descriptor = Descriptor::for_instance(&layout);
+        descriptor
+            .validate()
+            .expect("an instance layout makes a valid descriptor");
+        let pushed = self.push(next, descriptor);
+        debug_assert_eq!(pushed, id);
+        by_key.insert(key, id);
+        layout
+    }
+
+    fn push(&self, next: &mut u32, descriptor: Descriptor) -> DescriptorId {
+        let index = *next;
+        let (segment, slot) = locate(index);
+        let entries = self.segments[segment].get_or_init(|| {
+            (0..(FIRST_SEGMENT << segment))
+                .map(|_| OnceLock::new())
+                .collect()
+        });
+        assert!(
+            entries[slot].set(descriptor).is_ok(),
+            "descriptor slot set twice"
+        );
+        *next += 1;
+        DescriptorId(FIRST_INSTANCE_DESC.0 + index)
     }
 
     #[inline]
     pub fn get(&self, id: DescriptorId) -> &Descriptor {
-        &self.descriptors[id.0 as usize]
+        if id.0 < FIRST_INSTANCE_DESC.0 {
+            return self.fixed[id.0 as usize]
+                .as_ref()
+                .unwrap_or_else(|| panic!("no fixed descriptor {id:?}"));
+        }
+        let (segment, slot) = locate(id.0 - FIRST_INSTANCE_DESC.0);
+        self.segments[segment]
+            .get()
+            .and_then(|entries| entries[slot].get())
+            .unwrap_or_else(|| panic!("no descriptor {id:?}"))
     }
 
+    /// Fixed and dynamic descriptors registered.
     pub fn len(&self) -> usize {
-        self.descriptors.len()
+        let fixed = self.fixed.iter().flatten().count();
+        fixed + self.interned.lock().1 as usize
     }
 
     pub fn is_empty(&self) -> bool {
-        self.descriptors.is_empty()
+        self.len() == 0
     }
 }
-
-/// The descriptor of every VM `Object` cell.
-pub const OBJECT_DESC: DescriptorId = DescriptorId(0);
 
 /// Bytes from a cell's start to a Rust value inside it.
 pub(crate) const RUST_PAYLOAD_OFFSET: usize = HEADER_BYTES;
@@ -298,15 +361,16 @@ fn push_word(word: usize, out: &mut Vec<HeapPtr>) {
     }
 }
 
-/// Push a tagged slot's payload when it holds a pointer.
+/// Push the pointer a slot holds, if any.
 ///
 /// # Safety
-/// `slot` addresses a readable [`TaggedSlot`].
-unsafe fn push_tagged(slot: usize, out: &mut Vec<HeapPtr>) {
+/// `slot` addresses a readable slot of `kind`.
+unsafe fn push_slot(slot: usize, kind: ElemKind, out: &mut Vec<HeapPtr>) {
     // SAFETY: forwarded to the caller.
-    let slot = unsafe { &*(slot as *const TaggedSlot) };
-    if slot.kind == TaggedKind::Ptr as u8 {
-        push_word(slot.payload as usize, out);
+    if let Some(bits) =
+        unsafe { bex_vm_types::object_format::slot_pointer(slot as *const u8, kind) }
+    {
+        push_word(bits as usize, out);
     }
 }
 
@@ -320,28 +384,25 @@ pub(crate) unsafe fn trace_slots(
     cell_bytes: usize,
     out: &mut Vec<HeapPtr>,
 ) {
-    for &offset in descriptor.ptr_slots.iter() {
-        // SAFETY: validated in bounds when the descriptor was registered.
-        push_word(unsafe { *((cell + offset as usize) as *const usize) }, out);
-    }
-    for &offset in descriptor.tagged_slots.iter() {
-        // SAFETY: validated in bounds when the descriptor was registered.
-        unsafe { push_tagged(cell + offset as usize, out) };
+    let slots = [
+        (&descriptor.ptr_slots, ElemKind::Ptr),
+        (&descriptor.tagged_slots, ElemKind::Tagged16),
+    ];
+    for (offsets, kind) in slots {
+        for &offset in offsets.iter() {
+            // SAFETY: validated in bounds when the descriptor was registered.
+            unsafe { push_slot(cell + offset as usize, kind, out) };
+        }
     }
     let Some(elems) = descriptor.elems else {
         return;
     };
-    let elements = (descriptor.size as usize..cell_bytes).step_by(elems.stride());
-    match elems {
-        ElemKind::Raw8 => {}
+    if elems == ElemKind::Raw8 {
+        return;
+    }
+    for offset in (descriptor.size as usize..cell_bytes).step_by(elems.stride()) {
         // SAFETY: each element lies inside the cell.
-        ElemKind::Ptr => elements.for_each(|offset| {
-            push_word(unsafe { *((cell + offset) as *const usize) }, out);
-        }),
-        // SAFETY: each element lies inside the cell.
-        ElemKind::Tagged16 => {
-            elements.for_each(|offset| unsafe { push_tagged(cell + offset, out) })
-        }
+        unsafe { push_slot(cell + offset, elems, out) };
     }
 }
 
@@ -365,8 +426,11 @@ mod tests {
 
     #[test]
     fn registration_validates_slot_offsets() {
-        let mut table = DescriptorTable::new();
-        assert_eq!(table.register(instance(&[8, 16], &[])), Ok(DescriptorId(1)));
+        let table = DescriptorTable::new();
+        assert_eq!(
+            table.register(instance(&[8, 16], &[])),
+            Ok(FIRST_INSTANCE_DESC)
+        );
         assert_eq!(
             table.register(instance(&[0], &[])),
             Err(DescriptorError::BadSlot(0)),
@@ -404,7 +468,7 @@ mod tests {
         assert_eq!(*descriptor.ptr_slots, [16]);
         assert_eq!(*descriptor.tagged_slots, [24]);
         assert_eq!(descriptor.size, 48);
-        let mut table = DescriptorTable::new();
+        let table = DescriptorTable::new();
         assert!(table.register(descriptor).is_ok());
     }
 }

@@ -2,7 +2,10 @@
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
 use std::borrow::Cow;
 
-use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind};
+use bex_vm_types::{
+    HeapPtr, InstanceRef, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind,
+    object_format::SlotValue, types::SharedKind,
+};
 use btel_snapshot::{
     Builder, Carried, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType,
     RedactionReason, Reserved, Shaper, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
@@ -50,6 +53,23 @@ impl Scratch {
     pub(super) fn shaper(&mut self) -> &mut Shaper {
         &mut self.shaper
     }
+    /// A slot's contents as the capture holds them: a float as
+    /// [`Self::add`] holds a boxed one, without boxing it.
+    fn add_slot(
+        &mut self,
+        leaves: &mut Leaves<'_>,
+        value: SlotValue,
+        depth: usize,
+    ) -> SnapshotValue {
+        match value {
+            SlotValue::Value(value) => self.add(leaves, value, depth),
+            SlotValue::Float(_) if leaves.limits().max_depth.is_some_and(|max| depth > max) => {
+                SnapshotValue::Truncated(Limit::Depth)
+            }
+            SlotValue::Float(float) => SnapshotValue::Float(float),
+        }
+    }
+
     /// The value as the capture holds it. An object gets its identity here
     /// and its content later, so that what it holds can name it.
     fn add(&mut self, leaves: &mut Leaves<'_>, value: Value, depth: usize) -> SnapshotValue {
@@ -119,7 +139,11 @@ impl Scratch {
             // A class declared redacted is withheld whole: nothing of the
             // instance enters the capture, which records only that it was.
             // SAFETY: the class lives under the same heap permit.
-            Object::Instance(instance) if matches!(unsafe { instance.class.get() }, Object::Class(class) if class.redact) => {
+            Object::Shared(SharedKind::Instance)
+                if unsafe { InstanceRef::new_unchecked(ptr) }
+                    .class_def()
+                    .redact =>
+            {
                 SnapshotValue::Redacted(RedactionReason::Declared)
             }
             _ => {
@@ -175,22 +199,21 @@ impl Scratch {
                         )
                     })
                 }
-                Object::Instance(instance) => {
-                    let class = Value::object(instance.class);
+                Object::Shared(SharedKind::Instance) => {
+                    // SAFETY: the marker is only shown for an instance.
+                    let instance = unsafe { InstanceRef::new_unchecked(ptr) };
+                    let class = Value::object(instance.class());
                     match self.add(&mut b.leaves(), class, depth + 1) {
                         SnapshotValue::Object(declaration) => {
-                            // SAFETY: class lives under the same heap permit.
-                            let Object::Class(class) = (unsafe { instance.class.get() }) else {
-                                unreachable!("instance class")
-                            };
+                            let class = instance.class_def();
                             // A generic instance's type arguments; most have none.
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
-                                if instance.class_type_args.is_empty() {
+                                if instance.type_args().is_empty() {
                                     SmallVec::new()
                                 } else {
                                     let mut leaves = b.leaves();
                                     instance
-                                        .class_type_args
+                                        .type_args()
                                         .iter()
                                         .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
                                         .collect()
@@ -205,7 +228,7 @@ impl Scratch {
                                     let value = if field.redact {
                                         SnapshotValue::Redacted(RedactionReason::Declared)
                                     } else {
-                                        self.add(leaves, instance.load_field(at), depth + 1)
+                                        self.add_slot(leaves, instance.load(at), depth + 1)
                                     };
                                     (field.name.as_str().into(), value)
                                 },
@@ -889,6 +912,7 @@ mod tests {
             generic_param_count: 1,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
@@ -949,10 +973,7 @@ mod tests {
         );
         let snapshot = capture(&[Value::object(map)]);
         unsafe {
-            let Object::Instance(instance) = instance.get() else {
-                unreachable!()
-            };
-            instance.store_field(0, Value::int(99));
+            InstanceRef::new_unchecked(instance).store(0, Value::int(99));
             let Object::Map(map) = map.get() else {
                 unreachable!()
             };
@@ -1056,6 +1077,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact,
         })))
     }

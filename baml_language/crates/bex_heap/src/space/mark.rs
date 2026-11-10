@@ -1,5 +1,6 @@
 //! Marking: from roots, set the side-table mark bit of every reachable cell.
 
+use crate::descriptor::CellHeader as _;
 use std::ops::Range;
 
 use bex_vm_types::HeapPtr;

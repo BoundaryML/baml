@@ -102,10 +102,6 @@ fn trace_variant(obj: &Object, worklist: &mut Vec<HeapPtr>) {
             let data = unsafe { map.data_unchecked() };
             push_values(worklist, data.keys().chain(data.values()).copied());
         }
-        Object::Instance(inst) => {
-            worklist.push(inst.class);
-            push_values(worklist, inst.field_values());
-        }
         Object::Closure(closure) => {
             worklist.push(closure.function);
             push_values(worklist, closure.captures.iter().copied());
@@ -157,6 +153,7 @@ fn trace_variant(obj: &Object, worklist: &mut Vec<HeapPtr>) {
         // not a heap object) and a `Box<RuntimeTy>` (no `HeapPtr`s). A `type`
         // value is exactly the type it denotes: every edge it has is a head.
         Object::Tombstone
+        | Object::Shared(_)
         | Object::HostClosure(_)
         | Object::String(_)
         | Object::Bigint(_)

@@ -24,6 +24,7 @@ use std::sync::Arc;
 
 use baml_type::MediaKind;
 use bex_heap::TlabHolder;
+use bex_vm_types::types::SharedKind;
 use bex_vm_types::{
     BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind,
     types::{Array, Map, Object},
@@ -702,7 +703,10 @@ fn build_media(
 pub(crate) fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<bex_vm_types::MediaValue>> {
     let ptr = value.as_object_ptr()?;
     let (class, data_value) = match vm.get_object(ptr) {
-        Object::Instance(inst) => (inst.class, inst.fields.first()?.load()),
+        Object::Shared(SharedKind::Instance) => {
+            let inst = vm.expect_instance(ptr);
+            (inst.class(), vm.box_slot(inst.try_load(0)?))
+        }
         _ => return None,
     };
     let class_head = match vm.get_object(class) {

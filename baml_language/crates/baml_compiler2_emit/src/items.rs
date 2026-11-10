@@ -168,6 +168,7 @@ pub(crate) fn build_class_object<'db>(
         generic_param_count: class.generic_params.len(),
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        layout: Default::default(),
     }
 }
 

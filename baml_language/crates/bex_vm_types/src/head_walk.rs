@@ -130,11 +130,6 @@ macro_rules! walk_object_heads {
                 Object::Function(func) => $func_walk(func, f),
                 Object::TypeAlias(alias) => alias.definition.$visit(f),
                 Object::Type(value) => value.ty.$visit(f),
-                Object::Instance(instance) => {
-                    for arg in &$($mut)? *instance.class_type_args {
-                        arg.$visit(f);
-                    }
-                }
                 Object::Closure(closure) => {
                     for arg in &$($mut)? *closure.captured_type_args {
                         arg.$visit(f);
@@ -173,8 +168,8 @@ macro_rules! walk_object_heads {
                 | Object::Bigint(_)
                 | Object::Uint8Array(_)
                 | Object::RustData(_)
+                | Object::Shared(_)
                 | Object::Tombstone
-
                 | Object::Float(_) => {}
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => {}

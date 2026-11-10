@@ -33,7 +33,9 @@ function Compute(n: int) -> int {
     i
 }
 function ChurnAndWait() -> int {
-    let n = Churn(1000000);
+    // A `Node` is a 32-byte cell: 3M of them spend three times the 32 MiB
+    // budget floor, so the call collects before it sleeps.
+    let n = Churn(3000000);
     baml.sys.sleep(baml.time.Duration.from_milliseconds(30000n));
     n
 }

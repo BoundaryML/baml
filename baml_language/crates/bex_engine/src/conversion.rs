@@ -517,29 +517,28 @@ impl BexEngine {
                 })
             }
 
-            Object::Instance(instance) => {
-                let Object::Class(class) = (unsafe { instance.class.get() }) else {
-                    panic!("Instance.class should point to a Class object")
-                };
+            Object::Shared(bex_vm_types::types::SharedKind::Instance) => {
+                let instance = vm.expect_instance(ptr);
+                let class = instance.class_def();
                 debug_assert_eq!(
                     class.fields.len(),
-                    instance.fields.len(),
+                    instance.field_len(),
                     "Class '{}' has {} fields but instance has {} fields",
                     class.name(),
                     class.fields.len(),
-                    instance.fields.len(),
+                    instance.field_len(),
                 );
                 let ty = || {
                     to_annotation(&bex_vm_types::RealizedTy::Class(
-                        bex_vm_types::TypeHead::new(instance.class, class.type_tag),
-                        instance.class_type_args.clone(),
+                        bex_vm_types::TypeHead::new(instance.class(), class.type_tag),
+                        instance.type_args().into(),
                     ))
                 };
                 match class.crossing() {
                     ClassCrossing::Fields => Ok(BexExternalValue::Instance {
                         class_name: class.name().to_string(),
                         type_args: instance
-                            .class_type_args
+                            .type_args()
                             .iter()
                             .map(to_annotation)
                             .collect::<Result<Vec<_>, _>>()?,
@@ -584,7 +583,7 @@ impl BexEngine {
                             .position(|field| {
                                 field.name == bex_external_types::MEDIA_WRAPPER_DATA_FIELD
                             })
-                            .and_then(|slot| instance.fields[slot].load().as_object_ptr())
+                            .and_then(|slot| vm.field(instance, slot).as_object_ptr())
                             .and_then(|data| match unsafe { data.get() } {
                                 Object::RustData(arc) => {
                                     bex_external_types::try_convert_rust_data(arc)
@@ -728,7 +727,7 @@ impl BexEngine {
     /// arguments.
     fn instance_fields(
         &self,
-        instance: &bex_vm_types::Instance,
+        instance: bex_vm_types::InstanceRef,
         class: &bex_vm_types::Class,
         vm: &BexVm,
         permit: PermitProof<'_>,
@@ -736,12 +735,12 @@ impl BexEngine {
         class
             .fields
             .iter()
-            .zip(instance.fields.iter())
+            .zip(instance.fields())
             .map(|(field, slot)| {
                 // An instance is fully bound, so its field types are realized.
                 let field_type = field
                     .field_template
-                    .substitute(&instance.class_type_args, vm)
+                    .substitute(instance.type_args(), vm)
                     .map_err(|error| {
                         EngineError::VmInternalError(
                             bex_vm::errors::VmInternalError::TypeSubstitution {
@@ -755,7 +754,7 @@ impl BexEngine {
                 Ok((
                     field.name.clone(),
                     self.convert_vm_value_to_external_with_type(
-                        slot.load(),
+                        vm.box_slot(slot),
                         &field_type,
                         vm,
                         permit,
@@ -1790,9 +1789,11 @@ fn find_matching_union_member(
                             .iter()
                             .find(|member| matches!(member, bex_vm_types::RealizedTy::String))
                     }),
-                Object::Instance(inst) => {
-                    let class_obj = unsafe { inst.class.get() };
-                    if let Object::Class(class) = class_obj {
+                Object::Shared(bex_vm_types::types::SharedKind::Instance) => {
+                    // SAFETY: the marker is only shown for an instance.
+                    let inst = unsafe { bex_vm_types::InstanceRef::new_unchecked(ptr) };
+                    {
+                        let class = inst.class_def();
                         // Compare both class name and type args.  When the
                         // union member has empty type args (e.g. a bare `Foo`)
                         // it matches any instance of `Foo` regardless of its
@@ -1800,21 +1801,19 @@ fn find_matching_union_member(
                         // for `Foo<int> | Foo`.  When type args are present
                         // on the union member they must equal the instance's
                         // class_type_args exactly.
-                        let head = bex_vm_types::TypeHead::new(inst.class, class.type_tag);
+                        let head = bex_vm_types::TypeHead::new(inst.class(), class.type_tag);
                         members.iter().find(|m| {
                             matches!(m, bex_vm_types::RealizedTy::Class(tn, expected_args)
                                 if *tn == head
                                 && (expected_args.is_empty()
-                                    || (expected_args.len() == inst.class_type_args.len()
+                                    || (expected_args.len() == inst.type_args().len()
                                         && expected_args
                                             .iter()
-                                            .zip(inst.class_type_args.iter())
+                                            .zip(inst.type_args().iter())
                                             .all(|(e, a)| {
                                                 e == a
                                             }))))
                         })
-                    } else {
-                        None
                     }
                 }
                 Object::Variant(variant) => {
@@ -2058,6 +2057,7 @@ mod outbound_selection_tests {
                 generic_param_count: 0,
                 owner,
                 telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                layout: Default::default(),
                 redact: false,
             })))
         }

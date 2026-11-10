@@ -299,7 +299,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(..) => {}
         // Runtime-only heap shapes, unreachable in a compiled pool.
-        Object::Instance(..)
+        Object::Shared(..)
         | Object::Variant(..)
         | Object::Closure(..)
         | Object::BoundMethod(..)

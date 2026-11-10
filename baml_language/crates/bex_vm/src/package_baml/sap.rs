@@ -36,7 +36,7 @@ use bex_sap::{
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, RealizedTy, RootHaver, RootVisitor, TyTemplate, TypeHead,
-    types::{Class, Instance, Object, Value},
+    types::{Class, Object, Value},
 };
 use indexmap::IndexMap;
 use sys_types::DefKey;
@@ -79,11 +79,9 @@ impl BamlNamespaceSap for PackageBamlImpl {
         let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model, has_shapes });
         let data = Value::object(vm.alloc_rust_data(data));
         let class = vm.lang_object(crate::lang_items::BAML_SAP_PARSE_CACHE);
-        let cache = vm.tlab.alloc(Object::Instance(Instance::new(
-            class,
-            Box::new([target]),
-            vec![data],
-        )));
+        let cache = vm
+            .tlab
+            .alloc_instance_with_type_args(class, Box::new([target]), vec![data]);
         Ok(Value::object(cache))
     }
 
@@ -1504,13 +1502,13 @@ fn build_function(vm: &BexVm) -> Result<HeapPtr, VmRustFnError> {
 /// `from_llm_output` threw.
 fn refusal(vm: &BexVm, value: Value) -> Option<String> {
     let ptr = value.as_object_ptr()?;
-    let Object::Instance(instance) = vm.get_object(ptr) else {
+    let Some(instance) = vm.instance_at(ptr) else {
         return None;
     };
-    if instance.class != vm.lang_object(crate::lang_items::BAML_SAP_REJECTED) {
+    if instance.class() != vm.lang_object(crate::lang_items::BAML_SAP_REJECTED) {
         return None;
     }
-    let message = instance.load_field(0);
+    let message = vm.field(instance, 0);
     Some(
         vm.as_string(&message)
             .map(|message| message.as_str().to_string())

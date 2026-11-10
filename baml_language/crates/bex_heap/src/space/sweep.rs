@@ -1,6 +1,7 @@
 //! Sweeping: drop every unmarked cell and clear its start bit, measure the
 //! marked, then let the size-class policy rebuild free lists.
 
+use crate::descriptor::CellHeader as _;
 use bex_vm_types::Meter;
 
 use super::{

@@ -6,7 +6,7 @@ use std::{
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, ObjectType, RootHaver, RootVisitor, ValueKind,
-    types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
+    types::{Array, Map, Object, Value},
 };
 
 use super::{
@@ -21,6 +21,8 @@ use crate::{
     BexVm, VmPanic,
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
+use bex_vm_types::object_format::SlotValue;
+use bex_vm_types::types::SharedKind;
 
 impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError> {
@@ -156,7 +158,10 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn _cleanup_begin(vm: &BexVm, value: &Value) -> bool {
         match value.as_object_ptr() {
             Some(ptr) => match vm.get_object(ptr) {
-                Object::Instance(inst) => inst.cleaned.begin(),
+                Object::Shared(SharedKind::Instance) => {
+                    let inst = vm.expect_instance(ptr);
+                    inst.begin_cleanup()
+                }
                 _ => true,
             },
             None => true,
@@ -290,7 +295,10 @@ pub(super) fn collect_to_string_overrides(
             .into_iter()
             .flat_map(|(key, value)| [key, value])
             .collect(),
-        Object::Instance(inst) => inst.fields.iter().map(AtomicValueSlot::load).collect(),
+        Object::Shared(SharedKind::Instance) => {
+            let inst = vm.expect_instance(ptr);
+            vm.field_values(inst)
+        }
         _ => Vec::new(),
     };
     for v in children {
@@ -547,8 +555,9 @@ enum DisplaySnap {
     Seq(Vec<Value>, bool),
     /// A map whose keys and values are rendered recursively.
     Entries(Vec<(Value, Value)>, bool),
-    /// A class instance — `ClassName { field: value, ... }`.
-    Instance(String, Vec<(String, Value)>, bool),
+    /// A class instance — `ClassName { field: value, ... }`. Fields are
+    /// read out of their slots, floats unboxed.
+    Instance(String, Vec<(String, SlotValue)>, bool),
 }
 
 const DIAGNOSTIC_RENDER_MAX_DEPTH: usize = 32;
@@ -681,6 +690,22 @@ fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
 /// `pending[state.counter]` is exactly the next override node — so the check is a
 /// pointer compare, not a per-node global lookup. With an empty `pending` this is
 /// a pure structural walk.
+/// [`render_to_sink`] for a nested slot's contents: a float renders as a boxed
+/// one would, without being boxed.
+fn render_slot_to_sink(
+    vm: &BexVm,
+    value: SlotValue,
+    depth: usize,
+    state: &mut StringRenderState<'_>,
+    sink: &mut impl StructuralRenderSink,
+) {
+    match value {
+        SlotValue::Value(value) => render_to_sink(vm, value, true, depth, state, sink),
+        SlotValue::Float(_) if !state.consume_node(depth) => sink.push_text(TRUNCATED_RENDER),
+        SlotValue::Float(float) => sink.push_text(&bex_vm_types::format_float(float)),
+    }
+}
+
 pub(super) fn render_to_sink(
     vm: &BexVm,
     value: Value,
@@ -768,9 +793,10 @@ pub(super) fn render_to_sink(
                 map.len() > limit,
             )
         }
-        Object::Instance(inst) => {
-            let limit = state.snapshot_child_limit(inst.fields.len());
-            let (class_name, paired) = match vm.get_object(inst.class) {
+        Object::Shared(SharedKind::Instance) => {
+            let inst = vm.expect_instance(ptr);
+            let limit = state.snapshot_child_limit(inst.field_len());
+            let (class_name, paired) = match vm.get_object(inst.class()) {
                 Object::Class(class) => {
                     let name = if state.qualified_class_names {
                         class.name().to_string()
@@ -778,10 +804,8 @@ pub(super) fn render_to_sink(
                         class.path.name.to_string()
                     };
                     let fields = inst
-                        .fields
-                        .iter()
+                        .fields()
                         .take(limit)
-                        .map(AtomicValueSlot::load)
                         .enumerate()
                         .map(|(i, v)| {
                             let field_name = class
@@ -796,7 +820,7 @@ pub(super) fn render_to_sink(
                 }
                 _ => (String::new(), Vec::new()),
             };
-            DisplaySnap::Instance(class_name, paired, inst.fields.len() > limit)
+            DisplaySnap::Instance(class_name, paired, inst.field_len() > limit)
         }
         Object::Variant(var) => {
             let name = match vm.get_object(var.enm) {
@@ -888,7 +912,7 @@ pub(super) fn render_to_sink(
                     }
                     sink.push_text(name);
                     sink.push_text(": ");
-                    render_to_sink(vm, *value, true, depth + 1, state, sink);
+                    render_slot_to_sink(vm, *value, depth + 1, state, sink);
                     rendered_count += 1;
                 }
                 if truncated {
@@ -1000,22 +1024,22 @@ fn deep_copy_value_recursive(
                     placeholder_ptr
                 }
 
-                Object::Instance(instance) => {
+                Object::Shared(SharedKind::Instance) => {
+                    let instance = vm.expect_instance(ptr);
                     // The copy starts with every field null and is filled slot by
                     // slot: a field may reach back to this instance.
-                    let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-                        instance.class,
-                        instance.class_type_args.to_vec().into_boxed_slice(),
-                        vec![Value::NULL; instance.fields.len()],
-                    )));
+                    let placeholder_ptr = vm
+                        .tlab
+                        .alloc_instance_cell(instance.class(), instance.type_args().into())
+                        .ptr();
                     copied_objects.insert(ptr, placeholder_ptr);
 
-                    for (slot, field) in instance.field_values().enumerate() {
+                    for (slot, field) in vm.field_values(instance).into_iter().enumerate() {
                         let copied = deep_copy_value_recursive(vm, field, copied_objects)?;
-                        let Object::Instance(copy) = vm.get_object(placeholder_ptr) else {
+                        let Some(copy) = vm.instance_at(placeholder_ptr) else {
                             unreachable!("the placeholder was allocated as an instance")
                         };
-                        copy.store_field(slot, copied);
+                        copy.store(slot, copied);
                     }
                     placeholder_ptr
                 }

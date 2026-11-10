@@ -411,6 +411,7 @@ mod tests {
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
             telemetry_definition: DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         }))
     }

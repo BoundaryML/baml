@@ -4,6 +4,7 @@ use bex_vm_types::{HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, Value, V
 
 use super::{Continuation, ImplResolver, NativeCallResult};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};
+use bex_vm_types::types::SharedKind;
 
 enum Work {
     Value(Value, bool),
@@ -150,20 +151,21 @@ impl HashDriver {
                                 }
                                 continue;
                             }
-                            Object::Instance(instance) => {
-                                let Object::Class(class) = vm.get_object(instance.class) else {
-                                    return panic("Invalid class while hashing");
+                            Object::Shared(SharedKind::Instance) => {
+                                let Some(instance) = vm.instance_at(ptr) else {
+                                    return panic("Invalid instance while hashing");
                                 };
+                                let class = instance.class_def();
                                 let mut bytes = framed(9, &class.type_tag.as_i64().to_le_bytes());
                                 bytes.extend_from_slice(
-                                    &(instance.fields.len() as u64).to_le_bytes(),
+                                    &(instance.field_len() as u64).to_le_bytes(),
                                 );
+                                let fields = vm.field_values(instance);
                                 self.pending.extend(
-                                    instance
-                                        .fields
-                                        .iter()
+                                    fields
+                                        .into_iter()
                                         .rev()
-                                        .map(|field| Work::Value(field.load(), true)),
+                                        .map(|field| Work::Value(field, true)),
                                 );
                                 bytes
                             }

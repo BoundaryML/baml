@@ -93,6 +93,17 @@ pub enum BexValue<'a> {
     HeapPtr(&'a HeapPtr),
     Value(&'a Value),
     OwnedValue(Value),
+    /// A float read out of a raw or tagged slot, unboxed.
+    Float(f64),
+}
+
+impl From<bex_vm_types::object_format::SlotValue> for BexValue<'_> {
+    fn from(value: bex_vm_types::object_format::SlotValue) -> Self {
+        match value {
+            bex_vm_types::object_format::SlotValue::Value(value) => BexValue::OwnedValue(value),
+            bex_vm_types::object_format::SlotValue::Float(float) => BexValue::Float(float),
+        }
+    }
 }
 
 impl<'a> From<&'a BexExternalValue> for BexValue<'a> {
@@ -106,7 +117,7 @@ pub enum BexClass<'a> {
         name: &'a String,
         fields: &'a indexmap::IndexMap<String, BexExternalValue>,
     },
-    Value(&'a bex_vm_types::Class, &'a bex_vm_types::Instance),
+    Value(&'a bex_vm_types::Class, bex_vm_types::InstanceRef),
 }
 
 impl<'a> BexClass<'a> {
@@ -126,14 +137,13 @@ impl<'a> BexClass<'a> {
                     .ok_or_else(|| AccessError::FieldNotFound {
                         expected: name.to_string(),
                     })?;
-                let field = instance
-                    .fields
-                    .get(field_idx)
-                    .ok_or_else(|| AccessError::FieldNotFound {
-                        expected: name.to_string(),
-                    })?
-                    .load();
-                Ok(BexValue::OwnedValue(field))
+                let field =
+                    instance
+                        .try_load(field_idx)
+                        .ok_or_else(|| AccessError::FieldNotFound {
+                            expected: name.to_string(),
+                        })?;
+                Ok(field.into())
             }
         }
     }
@@ -146,6 +156,7 @@ impl<'a> BexValue<'a> {
             BexValue::HeapPtr(ptr) => ptr.to_string(),
             BexValue::Value(value) => value.to_string(),
             BexValue::OwnedValue(value) => value.to_string(),
+            BexValue::Float(float) => float.to_string(),
         }
     }
 
@@ -333,20 +344,13 @@ impl<'a> BexValue<'a> {
                 })
             }
             other => other.as_object("instance", heap, permit, |ptr| {
-                let obj = unsafe { ptr.get() };
-                let Object::Instance(instance) = obj else {
+                let Some(instance) = (unsafe { bex_vm_types::InstanceRef::of(*ptr) }) else {
                     return Err(AccessError::TypeMismatch {
                         expected: "instance",
-                        actual: obj.to_string(),
+                        actual: unsafe { ptr.get() }.to_string(),
                     });
                 };
-                let class_obj = unsafe { instance.class.get() };
-                let Object::Class(class) = class_obj else {
-                    return Err(AccessError::TypeMismatch {
-                        expected: "class",
-                        actual: class_obj.to_string(),
-                    });
-                };
+                let class = instance.class_def();
                 if class.name().display_name().as_str() != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
@@ -619,7 +623,49 @@ fn owned_inner(
             }
         }
         BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, lossy),
+        BexValue::Float(float) => Ok(BexExternalValue::Float(float)),
     }
+}
+
+/// An instance as an owned external value: its class name, nameable type
+/// arguments and every field.
+fn convert_instance(
+    instance: bex_vm_types::InstanceRef,
+    heap: &BexHeap,
+    lossy: bool,
+) -> Result<BexExternalValue, AccessError> {
+    let class = instance.class_def();
+    let fields = class
+        .fields
+        .iter()
+        .zip(instance.fields())
+        .map(|(field, slot)| Ok((field.name.clone(), owned_inner(slot.into(), heap, lossy)?)))
+        .collect::<Result<_, _>>()?;
+    // Instances store realized class type args, which the external boundary
+    // carries as annotations.
+    let type_args = instance
+        .type_args()
+        .iter()
+        .map(|arg| {
+            arg.try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)
+                .or_else(|head| {
+                    // Lossy mode (traces) degrades the one unnameable argument
+                    // to `unknown` instead of discarding the whole value tree.
+                    if lossy {
+                        return Ok(bex_external_types::WireTy::unknown());
+                    }
+                    Err(AccessError::TypeMismatch {
+                        expected: "a nameable type argument",
+                        actual: head.to_string(),
+                    })
+                })
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(BexExternalValue::Instance {
+        class_name: class.name().to_string(),
+        type_args,
+        fields,
+    })
 }
 
 fn convert_object(
@@ -693,50 +739,13 @@ fn convert_object(
                     .collect::<Result<_, _>>()?,
             })
         }
-        Object::Instance(instance) => {
-            let class_obj = unsafe { instance.class.get() };
-            let Object::Class(class) = class_obj else {
-                return Err(AccessError::TypeMismatch {
-                    expected: "class",
-                    actual: class_obj.to_string(),
-                });
-            };
-            let fields = class
-                .fields
-                .iter()
-                .zip(instance.fields.iter())
-                .map(|(field, slot)| {
-                    Ok((
-                        field.name.clone(),
-                        owned_inner(BexValue::OwnedValue(slot.load()), heap, lossy)?,
-                    ))
-                })
-                .collect::<Result<_, _>>()?;
-            Ok(BexExternalValue::Instance {
-                class_name: class.name().to_string(),
-                // Instances store realized class type args, which the external
-                // boundary carries as annotations.
-                type_args: instance
-                    .class_type_args
-                    .iter()
-                    .map(|arg| {
-                        arg.try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)
-                            .or_else(|head| {
-                                // Lossy mode (traces) degrades the one
-                                // unnameable argument to `unknown` instead of
-                                // discarding the whole value tree.
-                                if lossy {
-                                    return Ok(bex_external_types::WireTy::unknown());
-                                }
-                                Err(AccessError::TypeMismatch {
-                                    expected: "a nameable type argument",
-                                    actual: head.to_string(),
-                                })
-                            })
-                    })
-                    .collect::<Result<_, _>>()?,
-                fields,
-            })
+        Object::Shared(bex_vm_types::types::SharedKind::Instance) => {
+            // SAFETY: the marker is only shown for an instance.
+            convert_instance(
+                unsafe { bex_vm_types::InstanceRef::new_unchecked(heap_ptr) },
+                heap,
+                lossy,
+            )
         }
         Object::Variant(variant) => {
             let variant_obj = unsafe { variant.enm.get() };

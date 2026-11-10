@@ -516,7 +516,7 @@ impl Descriptors for ValueModel<'_> {
                 value: self.slot_of(&map.value_ty),
             },
             Object::String(_) => Shape::Str,
-            Object::Instance(_) => Shape::Other(Kind::Instance),
+            Object::Shared(_) => Shape::Other(Kind::Instance),
             Object::Closure(_) => Shape::Other(Kind::Closure),
             Object::Future(_) => Shape::Other(Kind::Future),
             Object::Uint8Array(_) => Shape::Other(Kind::Bytes),

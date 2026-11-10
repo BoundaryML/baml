@@ -2,7 +2,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
 use crate::{
-    AtomicValueSlot, CleanupLatch, HeapPtr, ObjectIndex, RuntimeTy, Value, types::TypeValue,
+    HeapPtr, ObjectIndex, RuntimeTy,
+    types::{InstanceLayout, TypeValue},
 };
 
 /// A field within a runtime class, carrying type and schema metadata.
@@ -17,11 +18,11 @@ pub struct ClassField {
     pub name: String,
     /// Used by paths that don't care about parametric class type-args
     /// (codegen, `sys_ops` walking, output-format rendering).  For typed
-    /// runtime walking against an `Instance::class_type_args` binding, use
+    /// runtime walking against an instance's type arguments, use
     /// `field_template` and call `substitute` on it instead.
     pub field_type: RuntimeTy,
     /// Field-type template with `TypeArgRef(N)` leaves for class-level
-    /// generic params (`N` indexes into `Instance::class_type_args`).
+    /// generic params (`N` indexes into the instance's type arguments).
     ///
     /// Populated by emit using the enclosing class's `generic_params`.  For
     /// non-generic classes this is a fully-realized template (no `TypeArgRef`).
@@ -56,6 +57,30 @@ pub struct ClassField {
     /// reflection reads back the definitions it carried, not just its shape.
     #[borsh(skip)]
     pub runtime_type: Option<TypeValue>,
+}
+
+impl ClassField {
+    /// A plain field: `name` of type `ty`, with no attributes.
+    pub fn new(name: impl Into<String>, ty: crate::RealizedTy) -> Self {
+        Self {
+            name: name.into(),
+            field_type: RuntimeTy::from(ty.clone()),
+            field_template: crate::TyTemplate::from(ty),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            skip: false,
+            stream_done: false,
+            must_exist: false,
+            json_rename: None,
+            json_flatten: false,
+            json_fallback: false,
+            json_omit_null: false,
+            redact: false,
+            runtime_type: None,
+        }
+    }
 }
 
 /// Runtime class representation.
@@ -136,6 +161,11 @@ pub struct Class {
     /// recorded capture that names it and dropped with the class.
     #[borsh(skip)]
     pub telemetry_definition: btel_types::DefinitionCell,
+
+    /// How this class's instances are laid out, set when the heap allocates
+    /// the first one (it registers the layout's descriptor).
+    #[borsh(skip)]
+    pub layout: std::sync::OnceLock<InstanceLayout>,
 }
 
 /// One inherent method of a [`Class`]: the pooled function on the wire, bound
@@ -189,98 +219,5 @@ impl Class {
 impl std::fmt::Display for Class {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<class {}>", self.name())
-    }
-}
-
-/// Runtime instance representation.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub struct Instance {
-    /// Pointer to the class object in the heap.
-    pub class: HeapPtr,
-
-    /// Resolved class-level type args at construction time.  Empty when the
-    /// class is non-generic.  De Bruijn-ordered to match
-    /// `enclosing_generic_params()`: index 0 = first class param, etc.
-    ///
-    /// Boxed (immutable after construction) rather than a `Vec` so `Instance`
-    /// stays within `Object`'s 64-byte budget once the `cleaned` latch is added
-    /// — matching the existing `Box<[RuntimeTy]>` convention for type-arg lists.
-    pub class_type_args: Box<[crate::RealizedTy]>,
-
-    /// Fields are accessed by index. No string lookups. Each slot is atomic so
-    /// racing field reads/writes across `spawn` fibers cannot become a Rust
-    /// data race.
-    pub fields: Vec<AtomicValueSlot>,
-
-    /// BEP-042 `cleanup` run-once latch. `false` for a fresh instance; flipped
-    /// `true` by the first `cleanup` invocation (explicit, `defer`, or the GC
-    /// finalizer). Only classes with a `cleanup` method ever read or write it;
-    /// for every other instance it is an inert `false`.
-    pub cleaned: CleanupLatch,
-}
-
-impl Instance {
-    pub fn new(
-        class: HeapPtr,
-        class_type_args: Box<[crate::RealizedTy]>,
-        fields: Vec<Value>,
-    ) -> Self {
-        Self {
-            class,
-            class_type_args,
-            fields: fields.into_iter().map(AtomicValueSlot::new).collect(),
-            cleaned: CleanupLatch::new(false),
-        }
-    }
-
-    #[inline]
-    pub fn field_len(&self) -> usize {
-        self.fields.len()
-    }
-
-    #[inline]
-    pub fn try_load_field(&self, idx: usize) -> Option<Value> {
-        self.fields.get(idx).map(AtomicValueSlot::load)
-    }
-
-    #[inline]
-    pub fn load_field(&self, idx: usize) -> Value {
-        self.fields[idx].load()
-    }
-
-    /// [`Self::try_load_field`] on an instance no other thread can reach.
-    #[inline]
-    pub fn try_load_field_relaxed(&self, idx: usize) -> Option<Value> {
-        self.fields.get(idx).map(AtomicValueSlot::load_relaxed)
-    }
-
-    #[inline]
-    pub fn try_store_field(&self, idx: usize, value: Value) -> Result<(), usize> {
-        let Some(field) = self.fields.get(idx) else {
-            return Err(self.fields.len());
-        };
-        field.store(value);
-        Ok(())
-    }
-
-    #[inline]
-    pub fn store_field(&self, idx: usize, value: Value) {
-        self.fields[idx].store(value);
-    }
-
-    /// [`Self::store_field`] on an instance no other thread can reach.
-    #[inline]
-    pub fn store_field_relaxed(&self, idx: usize, value: Value) {
-        self.fields[idx].store_relaxed(value);
-    }
-
-    pub fn field_values(&self) -> impl Iterator<Item = Value> + '_ {
-        self.fields.iter().map(AtomicValueSlot::load)
-    }
-}
-
-impl std::fmt::Display for Instance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<instance of {:p}>", self.class.as_ptr())
     }
 }

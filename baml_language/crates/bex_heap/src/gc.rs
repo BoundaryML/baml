@@ -24,13 +24,14 @@
 //! no compile-time object holds a pointer to a collectible one; debug builds
 //! check it at each compile-time object marking reaches.
 
+use crate::descriptor::CellHeader as _;
 use std::collections::HashMap;
 
 use bex_vm_types::{FutureRead, HeapPtr, Object, RootHaverExt};
 
 use crate::{
     BexHeap, HeapGuard,
-    descriptor::{OBJECT_DESC, RUST_PAYLOAD_OFFSET},
+    descriptor::{HEADER_BYTES, OBJECT_DESC, RUST_PAYLOAD_OFFSET},
     root_source::{BothRoots, PreciseRoots, RootSource},
     space::{block::BlockHeader, large::LargeSpace, mark::Marker, pool::BlockPool, sweep::sweep},
 };
@@ -175,15 +176,32 @@ impl BexHeap {
         large: &LargeSpace,
         mut visit: impl FnMut(*mut Object),
     ) {
+        // SAFETY: forwarded to the caller.
+        unsafe {
+            Self::for_each_runtime_cell(pool, large, |cell| {
+                // SAFETY: every listed cell is allocated with a written header.
+                if crate::Header::at(cell).descriptor == OBJECT_DESC {
+                    visit((cell + RUST_PAYLOAD_OFFSET) as *mut Object);
+                }
+            });
+        }
+    }
+
+    /// Every allocated runtime cell, whatever its format, in the order of
+    /// [`Self::for_each_runtime_object`].
+    ///
+    /// # Safety
+    /// No mutator runs.
+    pub(crate) unsafe fn for_each_runtime_cell(
+        pool: &BlockPool,
+        large: &LargeSpace,
+        visit: impl FnMut(usize),
+    ) {
         let small = pool.blocks().iter().flat_map(|&base| {
             // SAFETY: the pool's blocks are initialized.
             unsafe { BlockHeader::at(base) }.cells(base)
         });
-        small
-            .chain(large.cells())
-            // SAFETY: every listed cell is allocated with a written header.
-            .filter(|&cell| unsafe { crate::Header::at(cell) }.descriptor == OBJECT_DESC)
-            .for_each(|cell| visit((cell + RUST_PAYLOAD_OFFSET) as *mut Object));
+        small.chain(large.cells()).for_each(visit);
     }
 
     /// BEP-042: the dead, not-yet-cleaned instances of classes with a
@@ -235,17 +253,11 @@ impl BexHeap {
     /// `ptr` and its class are intact objects.
     unsafe fn uncleaned_finalizer(ptr: HeapPtr) -> Option<HeapPtr> {
         // SAFETY: forwarded to the caller.
-        let Object::Instance(instance) = (unsafe { ptr.get() }) else {
-            return None;
-        };
-        if instance.cleaned.is_cleaned() {
+        let instance = unsafe { bex_vm_types::InstanceRef::of(ptr) }?;
+        if instance.is_cleaned() {
             return None; // explicit/`defer` already cleaned it — SuppressFinalize
         }
-        // SAFETY: forwarded to the caller.
-        let Object::Class(class) = (unsafe { instance.class.get() }) else {
-            return None;
-        };
-        class.cleanup()
+        instance.class_def().cleanup()
     }
 
     /// BEP-042: if an existing class gained a finalizer since the last
@@ -261,10 +273,13 @@ impl BexHeap {
         finalizable.instances.clear();
         // SAFETY: forwarded to the caller.
         unsafe {
-            Self::for_each_runtime_object(pool, large, |object| {
+            Self::for_each_runtime_cell(pool, large, |cell| {
+                let ptr = self.make_heap_ptr((cell + HEADER_BYTES) as *mut Object);
                 // SAFETY: an allocated object whose class is intact.
-                if Self::needs_finalizer_registration(&*object) {
-                    finalizable.instances.push(self.make_heap_ptr(object));
+                if let Some(instance) = bex_vm_types::InstanceRef::of(ptr)
+                    && Self::needs_finalizer_registration(instance)
+                {
+                    finalizable.instances.push(ptr);
                 }
             });
         }
@@ -624,6 +639,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         }))];
         let debug = HeapDebuggerConfig {
@@ -1231,7 +1247,10 @@ mod tests {
         // Allocate a class (leaf), a string (leaf), then an instance referencing both
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestClass")),
-            fields: vec![],
+            fields: vec![
+                bex_vm_types::ClassField::new("s", RealizedTy::string()),
+                bex_vm_types::ClassField::new("n", RealizedTy::int()),
+            ],
             description: None,
             alias: None,
             docstring: None,
@@ -1244,6 +1263,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
@@ -1257,18 +1277,13 @@ mod tests {
         // collected_count may be non-zero due to unused TLAB chunk slots
 
         let inst_ptr = new_roots[0];
-        let Object::Instance(inst) = (unsafe { inst_ptr.get() }) else {
-            panic!("not instance")
-        };
-        assert_eq!(inst.fields.len(), 2);
-        assert!(inst.load_field(0).is_object());
-        assert_eq!(inst.load_field(1), Value::int(42));
+        let inst = unsafe { bex_vm_types::InstanceRef::of(inst_ptr) }.expect("an instance");
+        assert_eq!(inst.field_len(), 2);
+        assert!(inst.load(0).expect_value().is_object());
+        assert_eq!(inst.load(1).expect_value(), Value::int(42));
 
         // Verify class is accessible through the instance
-        let Object::Class(c) = (unsafe { inst.class.get() }) else {
-            panic!("not class")
-        };
-        assert_eq!(c.path.name.as_str(), "TestClass");
+        assert_eq!(inst.class_def().path.name.as_str(), "TestClass");
     }
 
     #[test]
@@ -1496,6 +1511,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
 
@@ -1647,6 +1663,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
@@ -1992,7 +2009,7 @@ mod tests {
         use baml_type::Name;
         use bex_vm_types::{
             Class, Enum,
-            types::{Cell, Closure, Instance, Variant},
+            types::{Cell, Closure, Variant},
         };
 
         let heap = BexHeap::new(vec![]);
@@ -2037,7 +2054,7 @@ mod tests {
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("T")),
-            fields: vec![],
+            fields: vec![bex_vm_types::ClassField::new("leaf", RealizedTy::string())],
             description: None,
             alias: None,
             docstring: None,
@@ -2050,13 +2067,10 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
-        let instance_container = tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Box::new([]),
-            vec![Value::object(leaf_string)],
-        )));
+        let instance_container = tlab.alloc_instance(class_ptr, vec![Value::object(leaf_string)]);
 
         // --- Container: Object::Variant ---
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
@@ -2151,10 +2165,9 @@ mod tests {
         assert_eq!(s, "cell_value");
 
         // Instance: fields[0] should be the (forwarded) leaf string.
-        let Object::Instance(inst) = (unsafe { new_roots[4].get() }) else {
-            panic!("new_roots[4] not Instance")
-        };
-        let Some(inst_leaf) = inst.fields.first().and_then(|v| v.load().as_object_ptr()) else {
+        let inst = unsafe { bex_vm_types::InstanceRef::of(new_roots[4]) }
+            .expect("new_roots[4] not Instance");
+        let Some(inst_leaf) = inst.load(0).expect_value().as_object_ptr() else {
             panic!("instance.fields[0] not Object")
         };
         let Object::String(s) = (unsafe { inst_leaf.get() }) else {
@@ -2283,6 +2296,103 @@ mod tests {
     }
 
     /// A class whose `cleanup` method is `finalizer`, or with no finalizer.
+    /// A class whose fields have `fields`' types and `generic_params` type
+    /// parameters.
+    fn class_with_fields(
+        fields: Vec<(&str, bex_vm_types::RealizedTy)>,
+        generic_params: usize,
+    ) -> Object {
+        let Object::Class(mut class) = class_object(None) else {
+            unreachable!("class_object builds a class")
+        };
+        class.fields = fields
+            .into_iter()
+            .map(|(name, ty)| bex_vm_types::ClassField::new(name, ty))
+            .collect();
+        class.generic_param_count = generic_params;
+        class.type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        Object::Class(class)
+    }
+
+    /// Fields live in their declared slots: an `int` and a `float` raw, a
+    /// union tagged, a class reference as a pointer. Each reads back as
+    /// stored, floats unboxed, and a collection keeps what the pointer and
+    /// tagged slots reach and nothing a raw slot happens to hold.
+    #[test]
+    fn instance_fields_live_in_their_declared_slots() {
+        use bex_vm_types::{InstanceRef, object_format::SlotValue};
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let union = bex_vm_types::RealizedTy::Union(Box::new([
+            bex_vm_types::RealizedTy::Int,
+            bex_vm_types::RealizedTy::String,
+        ]));
+        let class = tlab.alloc(class_with_fields(
+            vec![
+                ("n", bex_vm_types::RealizedTy::Int),
+                ("x", bex_vm_types::RealizedTy::Float),
+                ("u", union),
+                ("s", bex_vm_types::RealizedTy::String),
+            ],
+            0,
+        ));
+        let by_tag = tlab.alloc_string("reached through the tagged slot");
+        let by_ptr = tlab.alloc_string("reached through the pointer slot");
+        let float = tlab.alloc_float(2.5);
+        let ptr = tlab.alloc_instance(
+            class,
+            vec![
+                Value::int(7),
+                Value::object(float),
+                Value::object(by_tag),
+                Value::object(by_ptr),
+            ],
+        );
+        let instance = unsafe { InstanceRef::of(ptr) }.expect("an instance");
+        assert_eq!(instance.load(0), SlotValue::Value(Value::int(7)));
+        assert_eq!(instance.load(1), SlotValue::Float(2.5));
+        assert_eq!(instance.layout().size(), 8 + 8 + 8 + 8 + 16 + 8);
+
+        let (stats, _, _) = unsafe { heap.collect_garbage(&[ptr]) };
+        // The instance, its class and the two strings; the float box was
+        // only an argument, unboxed into the raw slot.
+        assert_eq!(stats.live_count, 4);
+        assert_eq!(instance.load(2), SlotValue::Value(Value::object(by_tag)));
+        assert_eq!(instance.load(3), SlotValue::Value(Value::object(by_ptr)));
+
+        instance.store(2, Value::int(-3));
+        instance.store_float(1, -0.5, bex_vm_types::object_format::Access::Shared);
+        assert_eq!(instance.load(2), SlotValue::Value(Value::int(-3)));
+        assert_eq!(instance.load(1), SlotValue::Float(-0.5));
+    }
+
+    /// A generic instance keeps its type arguments in a type object its
+    /// type slot points to, which the collector keeps alive.
+    #[test]
+    fn a_generic_instance_keeps_its_type_arguments() {
+        use bex_vm_types::InstanceRef;
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let class = tlab.alloc(class_with_fields(
+            vec![("value", bex_vm_types::RealizedTy::Unknown)],
+            1,
+        ));
+        let value = Value::object(tlab.alloc_float(1.5));
+        let ptr = tlab.alloc_instance_with_type_args(
+            class,
+            Box::new([bex_vm_types::RealizedTy::Float]),
+            vec![value],
+        );
+        let (stats, _, _) = unsafe { heap.collect_garbage(&[ptr]) };
+        // The instance, its class and its type object.
+        assert_eq!(stats.live_count, 3);
+        let instance = unsafe { InstanceRef::of(ptr) }.expect("an instance");
+        assert_eq!(instance.type_args(), [bex_vm_types::RealizedTy::Float]);
+        assert_eq!(instance.load(0).as_float(), Some(1.5));
+    }
+
     fn class_object(finalizer: Option<HeapPtr>) -> Object {
         use baml_type::Name;
         use bex_vm_types::{Class, ClassMethodDef, ObjectIndex};
@@ -2314,6 +2424,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         }))
     }
@@ -2378,10 +2489,9 @@ mod tests {
         let pending = heap.take_pending_finalizers();
         assert_eq!(pending, vec![(instance, finalizer)]);
         // The engine runs `cleanup`, which latches the instance.
-        let Object::Instance(finalized) = (unsafe { pending[0].0.get() }) else {
-            panic!("a finalizer seed is an instance");
-        };
-        assert!(finalized.cleaned.begin());
+        let finalized = unsafe { bex_vm_types::InstanceRef::of(pending[0].0) }
+            .expect("a finalizer seed is an instance");
+        assert!(finalized.begin_cleanup());
 
         unsafe { heap.collect_garbage(&[]) };
         assert!(heap.take_pending_finalizers().is_empty());
@@ -2412,52 +2522,6 @@ mod tests {
         assert_eq!(heap.take_pending_finalizers(), vec![(older, finalizer)]);
     }
 
-    /// Publishing an instance of a class with a finalizer registers it, as
-    /// allocating one does.
-    #[test]
-    fn a_published_finalizable_instance_is_finalized() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-        let finalizer = tlab.alloc_string("cleanup".to_string());
-        let class = tlab.alloc(class_object(Some(finalizer)));
-        heap.note_finalizable_class();
-        let reservation = tlab.reserve();
-        // SAFETY: no collection has run since the reservation.
-        let instance = unsafe {
-            tlab.publish(
-                reservation,
-                Object::Instance(bex_vm_types::types::Instance::new(
-                    class,
-                    Box::new([]),
-                    vec![],
-                )),
-            )
-        };
-
-        let _ = unsafe { heap.collect_garbage(&[]) };
-        assert_eq!(heap.take_pending_finalizers(), vec![(instance, finalizer)]);
-    }
-
-    /// An instance can name a class that is still only reserved; it is
-    /// allocated against the tombstone, so nothing registers it. Publishing
-    /// the class with a finalizer invalidates the list, and the next
-    /// collection finds the instance.
-    #[test]
-    fn publishing_a_class_with_a_finalizer_finds_its_earlier_instances() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-        let finalizer = tlab.alloc_string("cleanup".to_string());
-        let reservation = tlab.reserve();
-        let early = tlab.alloc_instance(reservation.ptr(), vec![]);
-        assert!(finalizable_entries(&heap).is_empty());
-
-        // SAFETY: no collection has run since the reservation.
-        unsafe { tlab.publish(reservation, class_object(Some(finalizer))) };
-
-        let _ = unsafe { heap.collect_garbage(&[]) };
-        assert_eq!(heap.take_pending_finalizers(), vec![(early, finalizer)]);
-    }
-
     /// Seeds come back in address order, whatever order the instances were
     /// registered in.
     #[test]
@@ -2468,6 +2532,9 @@ mod tests {
         let finalizer = low.alloc_string("cleanup".to_string());
         let class = low.alloc(class_object(Some(finalizer)));
         heap.note_finalizable_class();
+        // `low` takes a block for instance cells first.
+        let plain = low.alloc(class_object(None));
+        let _ = low.alloc_instance(plain, vec![]);
         // `high` takes the next block, so its cells come after `low`'s, but
         // it registers its instance first.
         let late = high.alloc_instance(class, vec![]);

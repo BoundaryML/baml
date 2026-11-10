@@ -41,6 +41,7 @@ use super::{
     resolve,
 };
 use crate::BexVm;
+use bex_vm_types::types::SharedKind;
 
 // ── int ───────────────────────────────────────────────────────────────────
 
@@ -547,7 +548,8 @@ impl EqualsDriver {
                 step(x.index == y.index)
             }
             (Object::Variant(_), _) => Cmp::NotEqual,
-            (Object::Instance(x), Object::Instance(y)) => {
+            (Object::Shared(SharedKind::Instance), Object::Shared(SharedKind::Instance)) => {
+                let (x, y) = (vm.expect_instance(pa), vm.expect_instance(pb));
                 // Different concrete type (class or generic instantiation) ⇒ never equal.
                 // `Equals.eq(self, other: Self)` requires the same `Self`, so differing
                 // `class_type_args` (`Box<int>` vs `Box<string>`) is unequal up front.
@@ -555,10 +557,10 @@ impl EqualsDriver {
                 // order-insensitively (`Box<int | string>` is the same `Self` as
                 // `Box<string | int>`) — the same notion of "same instantiation" the
                 // resolver and reflection use.
-                if x.class != y.class
+                if x.class() != y.class()
                     || !resolve::ImplResolver::new(vm)
-                        .ty_args_equivalent(&x.class_type_args, &y.class_type_args)
-                    || x.fields.len() != y.fields.len()
+                        .ty_args_equivalent(x.type_args(), y.type_args())
+                    || x.field_len() != y.field_len()
                 {
                     return Cmp::NotEqual;
                 }
@@ -577,12 +579,12 @@ impl EqualsDriver {
                     Some(Err(e)) => return Cmp::Error(e),
                     Some(Ok(None)) | None => {}
                 }
-                for (fx, fy) in x.fields.iter().zip(y.fields.iter()) {
-                    self.stack.push((fx.load(), fy.load()));
+                for (fx, fy) in x.fields().zip(y.fields()) {
+                    self.stack.push((vm.box_slot(fx), vm.box_slot(fy)));
                 }
                 Cmp::Continue
             }
-            (Object::Instance(_), _) => Cmp::NotEqual,
+            (Object::Shared(SharedKind::Instance), _) => Cmp::NotEqual,
 
             (Object::BoundMethod(x), Object::BoundMethod(y)) => {
                 // The same *value*, not an equivalent one: the same method on
@@ -740,15 +742,12 @@ impl Continuation for EqualsDriver {
 /// `None` for any other object kind (only instances/enums implement `Equals`).
 fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
     match vm.get_object(ptr) {
-        Object::Instance(inst) => {
-            let (class_ptr, type_args) = (inst.class, inst.class_type_args.to_vec());
-            match vm.get_object(class_ptr) {
-                Object::Class(class) => Some(RealizedTy::Class(
-                    bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
-                    type_args.into(),
-                )),
-                _ => None,
-            }
+        Object::Shared(SharedKind::Instance) => {
+            let inst = vm.instance_at(ptr)?;
+            Some(RealizedTy::Class(
+                bex_vm_types::TypeHead::new(inst.class(), inst.class_def().type_tag),
+                inst.type_args().into(),
+            ))
         }
         Object::Variant(v) => match vm.get_object(v.enm) {
             Object::Enum(e) => Some(RealizedTy::Enum(bex_vm_types::TypeHead::new(

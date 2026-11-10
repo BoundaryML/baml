@@ -330,9 +330,7 @@ macro_rules! impl_aead_class {
                 // `DecryptionFailure` instance, which cannot coexist with that
                 // borrow.
                 let opened = {
-                    let view = view::crypto::$class {
-                        instance: vm.as_instance(cipher)?,
-                    };
+                    let view = view::crypto::$class::new(vm.as_instance(cipher)?);
                     open(
                         &$algorithm,
                         &view._cipher::<AeadCipher<$cipher>>(vm).0,

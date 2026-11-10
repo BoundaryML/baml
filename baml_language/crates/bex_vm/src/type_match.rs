@@ -173,7 +173,7 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
         | Object::Interface(_)
         | Object::ImplRule(_)
         | Object::Class(_)
-        | Object::Instance(_)
+        | Object::Shared(_)
         | Object::Enum(_)
         | Object::TypeAlias(_)
         | Object::Variant(_)

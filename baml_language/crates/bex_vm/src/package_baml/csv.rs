@@ -38,8 +38,8 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    MeteredGuard, MeteredMutex, RetainedFootprint, ValueKind,
-    types::{Instance, Object, Value},
+    InstanceRef, MeteredGuard, MeteredMutex, RetainedFootprint, ValueKind,
+    types::{Object, SharedKind, Value},
 };
 use indexmap::IndexMap;
 use time::{
@@ -291,7 +291,7 @@ fn options_err(vm: &mut BexVm, message: impl Into<String>) -> VmRustFnError {
 /// declaration provides the name → index mapping).
 fn field_by_name(vm: &BexVm, inst_val: Value, name: &str) -> Result<Value, VmRustFnError> {
     let inst = vm.as_instance(&inst_val)?;
-    let class_ptr = inst.class;
+    let class_ptr = inst.class();
     let idx = match vm.get_object(class_ptr) {
         Object::Class(c) => c.fields.iter().position(|f| f.name == name),
         _ => None,
@@ -299,7 +299,7 @@ fn field_by_name(vm: &BexVm, inst_val: Value, name: &str) -> Result<Value, VmRus
     .ok_or_else(|| VmInternalError::MissingNativeFunction {
         name: format!("csv options field `{name}` not found"),
     })?;
-    Ok(inst.load_field(idx))
+    Ok(vm.field(inst, idx))
 }
 
 fn opt_string(vm: &BexVm, v: Value) -> Result<Option<String>, VmRustFnError> {
@@ -1691,9 +1691,11 @@ fn decode_record_to_instance(
         }
     }
 
-    Ok(Value::object(vm.tlab.alloc(Object::Instance(
-        Instance::new(class_ptr, type_args.clone(), field_values),
-    ))))
+    Ok(Value::object(vm.tlab.alloc_instance_with_type_args(
+        class_ptr,
+        type_args.clone(),
+        field_values,
+    )))
 }
 
 fn current_type_arg(vm: &mut BexVm, who: &str) -> Result<bex_vm_types::RealizedTy, VmRustFnError> {
@@ -1923,8 +1925,8 @@ fn format_float(f: f64) -> String {
     }
 }
 
-fn plaindate_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
-    let days = view::time::PlainDate { instance: inst }._days();
+fn plaindate_cell_text(inst: InstanceRef) -> Result<String, CellTextErr> {
+    let days = view::time::PlainDate::new(inst)._days();
     let date = super::time::date_for_days(days, "csv cell")
         .map_err(|_| CellTextErr::Unsupported("PlainDate out of range".to_string()))?;
     let mut out = String::new();
@@ -1932,8 +1934,8 @@ fn plaindate_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
     Ok(out)
 }
 
-fn plaindatetime_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
-    let nanos = view::time::PlainDateTime { instance: inst }._nanoseconds();
+fn plaindatetime_cell_text(inst: InstanceRef) -> Result<String, CellTextErr> {
+    let nanos = view::time::PlainDateTime::new(inst)._nanoseconds();
     let dt = super::time::civil_datetime(&nanos, "csv cell")
         .map_err(|_| CellTextErr::Unsupported("PlainDateTime out of range".to_string()))?;
     let mut out = String::new();
@@ -1949,8 +1951,8 @@ fn plaindatetime_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
     Ok(out)
 }
 
-fn instant_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
-    let nanos = view::time::Instant { instance: inst }._nanoseconds();
+fn instant_cell_text(inst: InstanceRef) -> Result<String, CellTextErr> {
+    let nanos = view::time::Instant::new(inst)._nanoseconds();
     let nanos = i128::try_from(&*nanos)
         .map_err(|_| CellTextErr::Unsupported("Instant out of range".to_string()))?;
     let dt = OffsetDateTime::from_unix_timestamp_nanos(nanos)
@@ -1981,18 +1983,15 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
                     CellTextErr::Unsupported("unresolvable enum variant".to_string())
                 })?
             }
-            Object::Instance(inst) => {
+            Object::Shared(SharedKind::Instance) => {
                 // Match the instance's class against the stdlib time classes
                 // by head — an integer compare per cell, with no name rendered
                 // and no package-index lookup.
-                let class_head = match vm.get_object(inst.class) {
-                    Object::Class(class) => bex_vm_types::TypeHead::new(inst.class, class.type_tag),
-                    _ => {
-                        return Err(CellTextErr::Unsupported(
-                            "value is not representable as a CSV cell".to_string(),
-                        ));
-                    }
-                };
+                let inst = vm.instance_at(ptr).ok_or_else(|| {
+                    CellTextErr::Unsupported("value is not representable as a CSV cell".to_string())
+                })?;
+                let class_head =
+                    bex_vm_types::TypeHead::new(inst.class(), inst.class_def().type_tag);
                 match vm.stdlib_heads().time_class(class_head) {
                     Some(TimeClass::Instant) => instant_cell_text(inst)?,
                     Some(TimeClass::PlainDate) => plaindate_cell_text(inst)?,
@@ -2031,7 +2030,7 @@ fn row_fields(vm: &BexVm, row: Value) -> Result<(Vec<String>, Vec<Value>), ErrIn
             "write_row target is not a class instance; CSV writes flat classes",
         )
     })?;
-    let names = match vm.get_object(inst.class) {
+    let names = match vm.get_object(inst.class()) {
         Object::Class(c) => c.fields.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
         _ => {
             return Err(ErrInfo::new(
@@ -2040,7 +2039,7 @@ fn row_fields(vm: &BexVm, row: Value) -> Result<(Vec<String>, Vec<Value>), ErrIn
             ));
         }
     };
-    let values = (0..names.len()).map(|i| inst.load_field(i)).collect();
+    let values = (0..names.len()).map(|i| vm.field(inst, i)).collect();
     Ok((names, values))
 }
 
@@ -2700,7 +2699,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
                     .map(|row| match vm.as_instance(row) {
                         Ok(inst) => {
                             let values: Vec<Value> =
-                                (0..headers.len()).map(|i| inst.load_field(i)).collect();
+                                (0..headers.len()).map(|i| vm.field(inst, i)).collect();
                             values.iter().map(|v| md_value_text(vm, *v, true)).collect()
                         }
                         Err(_) => vec!["<unrepresentable>".to_string(); headers.len()],

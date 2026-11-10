@@ -1,7 +1,7 @@
 //! Unit tests for Phase 8: `Instance::class_type_args` and method-frame seeding.
 //!
 //! These tests exercise:
-//! - `Object::Instance` carrying `class_type_args` (8.1)
+//! - an instance carrying its class type args (8.1)
 //! - `AllocInstance { ntypeargs }` populating `class_type_args` from the stack (8.2)
 //! - A method-like function body reading `TypeArgRef(0)` when the frame has
 //!   been seeded with `[RuntimeTy::int()]` (simulating the 8.5 path) (8.5)
@@ -119,9 +119,10 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         type_tag: baml_type::typetag::TypeTag::from_i64(100),
         cleanup: None,
         methods: indexmap::IndexMap::new(),
-        generic_param_count: 0,
+        generic_param_count: 1,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        layout: Default::default(),
         redact: false,
     })));
 
@@ -149,16 +150,12 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
     let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
-    match vm.get_object(inst_ptr) {
-        Object::Instance(inst) => {
-            assert_eq!(
-                inst.class_type_args.to_vec(),
-                vec![RealizedTy::int()],
-                "Instance::class_type_args should equal [RealizedTy::int()]"
-            );
-        }
-        other => panic!("expected Object::Instance, got {other:?}"),
-    }
+    let inst = vm.instance_at(inst_ptr).expect("expected an instance");
+    assert_eq!(
+        inst.type_args().to_vec(),
+        vec![RealizedTy::int()],
+        "Instance::class_type_args should equal [RealizedTy::int()]"
+    );
 }
 
 /// `AllocInstance { class_obj, ntypeargs: 0 }` should leave `class_type_args` empty.
@@ -181,6 +178,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        layout: Default::default(),
         redact: false,
     })));
 
@@ -203,15 +201,11 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
-    match vm.get_object(inst_ptr) {
-        Object::Instance(inst) => {
-            assert!(
-                inst.class_type_args.is_empty(),
-                "monomorphic Instance::class_type_args should be empty"
-            );
-        }
-        other => panic!("expected Object::Instance, got {other:?}"),
-    }
+    let inst = vm.instance_at(inst_ptr).expect("expected an instance");
+    assert!(
+        inst.type_args().is_empty(),
+        "monomorphic Instance::class_type_args should be empty"
+    );
 }
 
 // ─── 8.5 ── frame.type_args seeded from receiver class_type_args ─────────────
@@ -245,7 +239,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RealizedTy::int()]; // receiver.class_type_args = [int]
+            bf.type_args = vec![RealizedTy::int()]; // receiver.type_args() = [int]
         } else {
             panic!("entry frame should be Bytecode");
         }

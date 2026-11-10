@@ -266,9 +266,7 @@ fn reads(vm: &BexVm, operation: SysOp, receiver: Value, field: &str) -> Option<N
 /// An instance's field, by name.
 fn instance_field(vm: &BexVm, value: Value, name: &str) -> Option<Value> {
     let instance = vm.as_instance(&value).ok()?;
-    let Object::Class(class) = vm.get_object(instance.class) else {
-        return None;
-    };
+    let class = instance.class_def();
     let index = class.fields.iter().position(|field| field.name == name)?;
-    instance.try_load_field(index)
+    Some(vm.box_slot(instance.try_load(index)?))
 }

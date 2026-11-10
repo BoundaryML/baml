@@ -1,6 +1,7 @@
 //! The space itself: start bitmap, conservative lookup, size classes and
 //! free lists, large objects, descriptor-driven tracing and the counters.
 
+use crate::descriptor::CellHeader as _;
 use std::{borrow::Cow, ops::Range, sync::Arc};
 
 use bex_vm_types::{HeapPtr, Object};
@@ -60,7 +61,7 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
-    let mut heap = BexHeap::build_unsealed_default(vec![]);
+    let heap = BexHeap::build_unsealed_default(vec![]);
     let node = heap.register_descriptor(NODE).unwrap();
     let backing = heap.register_descriptor(BACKING).unwrap();
     Fixture {
@@ -312,17 +313,18 @@ fn slot_descriptors_trace_pointers_and_tagged_pointers_only() {
     let scalar_lookalike = tlab.alloc_string("only looks like a pointer");
     let node = tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr() as usize;
     let other = tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr() as usize;
-    let tagged = |kind: TaggedKind, ptr: HeapPtr| TaggedSlot {
-        kind: kind as u8,
-        _pad: [0; 7],
-        payload: ptr.as_ptr() as u64,
+    // A tagged slot is a tag byte, padding, then the payload word.
+    let tagged = |slot: usize, kind: TaggedKind, ptr: HeapPtr| unsafe {
+        (slot as *mut u8).write(kind as u8);
+        ((slot + 8) as *mut u64).write(ptr.as_ptr() as u64);
     };
+    const _: () = assert!(size_of::<TaggedSlot>() == 16);
     // SAFETY: slots of the fresh node cells.
     unsafe {
         write_word(node, NODE_LEFT, left.as_ptr() as usize);
-        ((node + NODE_TAGGED) as *mut TaggedSlot).write(tagged(TaggedKind::Ptr, by_tag));
-        ((other + NODE_TAGGED) as *mut TaggedSlot).write(tagged(TaggedKind::Int, scalar_lookalike));
     }
+    tagged(node + NODE_TAGGED, TaggedKind::Ptr, by_tag);
+    tagged(other + NODE_TAGGED, TaggedKind::Int, scalar_lookalike);
     // SAFETY: no mutator runs.
     let (stats, _, _) = unsafe {
         f.heap

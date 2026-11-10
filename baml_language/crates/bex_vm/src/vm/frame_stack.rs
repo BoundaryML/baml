@@ -344,10 +344,10 @@ mod tests {
                 panic!("entry allocation refusal must propagate as a BAML panic")
             };
             assert!(trace.is_empty());
-            let Object::Instance(instance) = vm.get_object(value.as_object_ptr().unwrap()) else {
+            let Some(instance) = vm.instance_at(value.as_object_ptr().unwrap()) else {
                 panic!("expected panic instance")
             };
-            let Object::Class(class) = vm.get_object(instance.class) else {
+            let Object::Class(class) = vm.get_object(instance.class()) else {
                 panic!("expected panic class")
             };
             assert_eq!(class.path.to_string(), "panics.AllocFailure");
@@ -377,10 +377,10 @@ mod tests {
         let Err(VmError::ThrownUnhandled { value, .. }) = vm.exec() else {
             panic!("host-result allocation refusal must propagate as a BAML panic")
         };
-        let Object::Instance(instance) = vm.get_object(value.as_object_ptr().unwrap()) else {
+        let Some(instance) = vm.instance_at(value.as_object_ptr().unwrap()) else {
             panic!("expected panic instance")
         };
-        let Object::Class(class) = vm.get_object(instance.class) else {
+        let Object::Class(class) = vm.get_object(instance.class()) else {
             panic!("expected panic class")
         };
         assert_eq!(class.path.to_string(), "panics.AllocFailure");

@@ -116,8 +116,6 @@ pub(crate) struct FinalizableInstances {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Finalizable {
     Neither,
-    /// An instance of a class with a `cleanup` finalizer.
-    Instance,
     /// A class with a `cleanup` finalizer.
     Class,
 }
@@ -127,13 +125,29 @@ impl Finalizable {
     ///
     /// # Safety
     ///
-    /// As for [`BexHeap::needs_finalizer_registration`].
-    pub unsafe fn of(object: &Object) -> Self {
+    /// None: an instance is never rewritten in place (it is not an
+    /// `Object`), so only a class can change what it is.
+    pub fn of(object: &Object) -> Self {
         match object {
             Object::Class(class) if class.cleanup.is_some() => Self::Class,
-            // SAFETY: the caller guarantees an instance's class object is live.
-            _ if unsafe { BexHeap::needs_finalizer_registration(object) } => Self::Instance,
             _ => Self::Neither,
+        }
+    }
+}
+
+/// A compile-time object with the header every heap object has, so a
+/// pointer to it reads its format like any other (`HeapPtr::format`).
+#[repr(C)]
+struct CompileTimeCell {
+    header: bex_vm_types::object_format::Header,
+    object: Object,
+}
+
+impl CompileTimeCell {
+    fn new(object: Object) -> Self {
+        Self {
+            header: bex_vm_types::object_format::Header::new(crate::OBJECT_DESC, 0),
+            object,
         }
     }
 }
@@ -151,7 +165,7 @@ impl Finalizable {
 pub struct BexHeap {
     /// Compile-time objects (never collected).
     /// These are permanent: functions, classes, enums, string literals.
-    compile_time: Vec<Object>,
+    compile_time: Vec<CompileTimeCell>,
     pub(crate) functions: btel_types::FunctionLookup<HeapPtr>,
     pub(crate) span_definitions: std::sync::Mutex<HashMap<String, btel_types::FunctionId>>,
 
@@ -335,16 +349,19 @@ impl BexHeap {
     ) -> Self {
         // Resolve bytecode constants for all Function objects before sealing.
         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
-        Self::resolve_function_constants(&mut compile_time_objects);
-
         // BEP-042: precompute whether any class opts into a `cleanup` finalizer,
         // so the per-collection finalizer scan can be skipped when none do.
         let has_finalizable_classes = compile_time_objects
             .iter()
             .any(|o| matches!(o, Object::Class(c) if c.cleanup.is_some()));
+        let mut compile_time: Vec<CompileTimeCell> = compile_time_objects
+            .drain(..)
+            .map(CompileTimeCell::new)
+            .collect();
+        Self::resolve_function_constants(&mut compile_time);
 
         Self {
-            compile_time: compile_time_objects,
+            compile_time,
             functions: btel_types::FunctionLookup::default(),
             span_definitions: std::sync::Mutex::default(),
             small: parking_lot::Mutex::new(SmallSpace::default()),
@@ -376,7 +393,7 @@ impl BexHeap {
     /// Add a descriptor before the heap is [sealed](Self::seal). Entry
     /// [`OBJECT_DESC`](crate::OBJECT_DESC) is always the VM's `Object`.
     pub fn register_descriptor(
-        &mut self,
+        &self,
         descriptor: Descriptor,
     ) -> Result<DescriptorId, DescriptorError> {
         self.descriptors.register(descriptor)
@@ -394,7 +411,7 @@ impl BexHeap {
         // and its pointers remain stable for the lifetime of the sealed heap.
         for index in 0..self.compile_time.len() {
             let ptr = self.compile_time_ptr(index);
-            if let Object::Function(function) = &mut self.compile_time[index] {
+            if let Object::Function(function) = &mut self.compile_time[index].object {
                 function.telemetry_function_id = Some(
                     self.functions
                         .register_static(ptr, &function.telemetry_registration)
@@ -416,7 +433,7 @@ impl BexHeap {
     ///
     /// Panics if `index` is out of bounds.
     pub fn set_compile_time_object(&mut self, index: usize, object: Object) {
-        self.compile_time[index] = object;
+        self.compile_time[index].object = object;
     }
 
     /// A compile-time object, mutably, before the heap is [sealed](Self::seal):
@@ -427,7 +444,7 @@ impl BexHeap {
     ///
     /// Panics if `index` is out of bounds.
     pub fn compile_time_object_mut(&mut self, index: usize) -> &mut Object {
-        &mut self.compile_time[index]
+        &mut self.compile_time[index].object
     }
 
     /// Resolve every pooled `ObjectIndex` operand into a `HeapPtr` before the
@@ -436,12 +453,12 @@ impl BexHeap {
     ///
     /// Converts ConstValue (compile-time, with ObjectIndex) to Value (runtime, with HeapPtr).
     /// Must be called before wrapping in Arc since we need mutable access.
-    fn resolve_function_constants(objects: &mut [Object]) {
+    fn resolve_function_constants(cells: &mut [CompileTimeCell]) {
         // First, compute pointers for all objects (they're at stable positions in the slice)
-        let base_ptr = objects.as_ptr();
+        let base_ptr = cells.as_ptr();
 
         let resolve_idx = |idx: bex_vm_types::ObjectIndex| -> bex_vm_types::HeapPtr {
-            let ptr = unsafe { base_ptr.add(idx.into_raw()) as *mut Object };
+            let ptr = unsafe { &raw const (*base_ptr.add(idx.into_raw())).object }.cast_mut();
             #[cfg(feature = "heap_debug")]
             unsafe {
                 bex_vm_types::HeapPtr::from_ptr(ptr, 0)
@@ -452,7 +469,7 @@ impl BexHeap {
             }
         };
 
-        for obj in objects.iter_mut() {
+        for obj in cells.iter_mut().map(|cell| &mut cell.object) {
             if let Object::Function(func) = obj {
                 // Resolve each constant, converting ObjectIndex to HeapPtr.
                 // ConstValue::Type is NOT pre-resolved here — it must be
@@ -515,12 +532,12 @@ impl BexHeap {
         let tags: Vec<Option<baml_type::typetag::TypeTag>> = self
             .compile_time
             .iter()
-            .map(Self::declaration_tag)
+            .map(|cell| Self::declaration_tag(&cell.object))
             .collect();
         let ptrs: Vec<HeapPtr> = (0..self.compile_time.len())
             .map(|index| self.compile_time_ptr(index))
             .collect();
-        for object in &mut self.compile_time {
+        for object in self.compile_time.iter_mut().map(|cell| &mut cell.object) {
             bex_vm_types::head_walk::visit_object_heads_mut(object, &mut |head| {
                 if head.is_resolved() {
                     return;
@@ -534,7 +551,7 @@ impl BexHeap {
             });
         }
         let mut unbound: Vec<String> = Vec::new();
-        for object in &self.compile_time {
+        for object in self.compile_time.iter().map(|cell| &cell.object) {
             bex_vm_types::head_walk::visit_object_heads(object, &mut |head| {
                 if head.is_resolved() {
                     return;
@@ -574,7 +591,7 @@ impl BexHeap {
         let undispatchable: Vec<String> = self
             .compile_time
             .iter()
-            .filter_map(|object| match object {
+            .filter_map(|cell| match &cell.object {
                 Object::Function(function) => Some(function),
                 _ => None,
             })
@@ -615,7 +632,7 @@ impl BexHeap {
     /// Borrow a compile-time object. These slots are immutable after sealing
     /// and are never moved or collected.
     pub(crate) fn compile_time_object(&self, index: usize) -> &Object {
-        &self.compile_time[index]
+        &self.compile_time[index].object
     }
 
     /// Get the compile-time boundary index (alias for compile_time_len).
@@ -634,10 +651,7 @@ impl BexHeap {
         if self.compile_time.is_empty() {
             return false;
         }
-        let raw_ptr = ptr.as_ptr() as *const Object;
-        let start = self.compile_time.as_ptr();
-        let end = unsafe { start.add(self.compile_time.len()) };
-        raw_ptr >= start && raw_ptr < end
+        self.compile_time_range().contains(&(ptr.as_ptr() as usize))
     }
 
     /// Addresses of the compile-time objects.
@@ -658,7 +672,7 @@ impl BexHeap {
             "compile-time index {index} out of bounds (len={})",
             self.compile_time.len()
         );
-        let raw_ptr = &self.compile_time[index] as *const Object as *mut Object;
+        let raw_ptr = (&raw const self.compile_time[index].object).cast_mut();
         // SAFETY: The pointer is valid and points to a compile-time object
         // that will never be moved or deallocated.
         unsafe { self.make_heap_ptr(raw_ptr) }
@@ -808,34 +822,35 @@ impl BexHeap {
         self.has_finalizable_classes.store(true, Ordering::Release);
     }
 
-    /// BEP-042: whether `object` is an instance of a class with a `cleanup`
-    /// finalizer, and so belongs in the collector's finalizable list.
-    ///
-    /// # Safety
-    ///
-    /// If `object` is an instance, its class pointer must name a live object:
-    /// the caller holds a heap permit, or is the collector before it sweeps.
-    #[inline]
-    pub unsafe fn needs_finalizer_registration(object: &Object) -> bool {
-        let Object::Instance(instance) = object else {
-            return false;
-        };
-        // SAFETY: the caller guarantees the class object is live.
-        matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
+    /// BEP-042: whether `instance` is an instance of a class with a
+    /// `cleanup` finalizer, and so belongs in the collector's finalizable
+    /// list.
+    pub fn needs_finalizer_registration(instance: bex_vm_types::InstanceRef) -> bool {
+        instance.class_def().cleanup.is_some()
+    }
+
+    /// How `class`'s instances are laid out, registering the layout's
+    /// descriptor with the first instance.
+    pub fn instance_layout<'c>(
+        &self,
+        class: &'c bex_vm_types::Class,
+    ) -> &'c bex_vm_types::InstanceLayout {
+        class.layout.get_or_init(|| {
+            let (kinds, has_type_args) = bex_vm_types::InstanceLayout::plan(class);
+            self.descriptors.intern_instance(&kinds, has_type_args)
+        })
     }
 
     /// BEP-042: keep the finalizable list complete after the object at `ptr`
     /// was rewritten in place, from an object that was `before` to one that
-    /// is `after`. An object that became a finalizable instance is
-    /// registered. One that became a class with a finalizer invalidates the
+    /// is `after`. One that became a class with a finalizer invalidates the
     /// list: instances of it may already exist, unregistered, since an
     /// instance is checked against its class only when it is allocated.
-    pub fn note_rewrite(&self, ptr: HeapPtr, before: Finalizable, after: Finalizable) {
+    pub fn note_rewrite(&self, before: Finalizable, after: Finalizable) {
         if after == before {
             return;
         }
         match after {
-            Finalizable::Instance => self.register_finalizable(ptr),
             Finalizable::Class => self.invalidate_finalizable_instances(),
             Finalizable::Neither => {}
         }

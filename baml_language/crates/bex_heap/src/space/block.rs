@@ -4,6 +4,7 @@ use super::{
     BLOCK_BYTES, GRANULE_BYTES, GRANULES_PER_BLOCK, LARGE_OBJECT_THRESHOLD, RegionKind,
     bitmap::Bitmap, granule_align, small::BlockMeta,
 };
+use crate::descriptor::CellHeader as _;
 use crate::descriptor::Header;
 
 const GRANULE_WORDS: usize = GRANULES_PER_BLOCK / u64::BITS as usize;

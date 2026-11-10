@@ -10,15 +10,17 @@
 use std::{ptr::NonNull, sync::Arc};
 
 use bex_vm_types::{
-    AllocDebt, HeapPtr, Meter, Object, Value,
-    types::{Array, Instance, Map, Variant},
+    AllocDebt, Class, HeapPtr, InstanceRef, Meter, Object, RealizedTy, TypeHead, Value,
+    object_format::Access,
+    types::{Array, Map, TypeValue, Variant},
 };
 use indexmap::IndexMap;
 
 use crate::{
     BexHeap,
     descriptor::{
-        DescriptorId, HEADER_BYTES, Header, OBJECT_CELL_BYTES, OBJECT_DESC, RUST_PAYLOAD_OFFSET,
+        CellHeader, DescriptorId, HEADER_BYTES, Header, OBJECT_CELL_BYTES, OBJECT_DESC,
+        RUST_PAYLOAD_OFFSET,
     },
     space::{
         GRANULE_BYTES, LARGE_OBJECT_THRESHOLD,
@@ -106,12 +108,6 @@ impl Tlab {
     pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
         self.charge(&mut obj);
 
-        // BEP-042: an instance of a class with a finalizer joins the
-        // collector's finalizable list. Checked before the write moves `obj`.
-        // SAFETY: the allocating VM holds a heap permit, so an instance's
-        // class object is live.
-        let finalizable = unsafe { BexHeap::needs_finalizer_registration(&obj) };
-
         let (cell, _) = self.alloc_cell(OBJECT_DESC, OBJECT_CELL_BYTES);
         let payload = (cell + RUST_PAYLOAD_OFFSET) as *mut Object;
         // SAFETY: a fresh cell of this allocator's, sized and aligned for an
@@ -122,11 +118,7 @@ impl Tlab {
         self.heap.record_alloc();
 
         // SAFETY: the pointer names the object just written.
-        let ptr = unsafe { self.heap.make_heap_ptr(payload) };
-        if finalizable {
-            self.heap.register_finalizable(ptr);
-        }
-        ptr
+        unsafe { self.heap.make_heap_ptr(payload) }
     }
 
     /// Allocate a zeroed cell of `bytes` laid out by `descriptor`, with its
@@ -167,7 +159,7 @@ impl Tlab {
             BlockHeader::at(block)
                 .starts
                 .set(BlockHeader::granule(block, cell));
-            (cell as *mut Header).write(Header::new(descriptor, cell_bytes, false));
+            (cell as *mut Header).write(Header::for_cell(descriptor, cell_bytes, false));
         }
         (cell, cell_bytes)
     }
@@ -187,7 +179,7 @@ impl Tlab {
     fn alloc_large(&mut self, descriptor: DescriptorId, cell_bytes: usize) -> usize {
         let cell = self.heap.large.lock().alloc(cell_bytes);
         // SAFETY: a fresh large cell of `cell_bytes`.
-        unsafe { (cell as *mut Header).write(Header::new(descriptor, cell_bytes, true)) };
+        unsafe { (cell as *mut Header).write(Header::for_cell(descriptor, cell_bytes, true)) };
         cell
     }
 
@@ -222,9 +214,7 @@ impl Tlab {
     /// `reservation` must come from a TLAB of this heap.
     pub unsafe fn publish(&mut self, reservation: Reservation, mut obj: Object) -> HeapPtr {
         self.charge(&mut obj);
-        // SAFETY: the publishing VM holds a heap permit, so an instance's
-        // class object is live.
-        let finalizable = unsafe { crate::Finalizable::of(&obj) };
+        let finalizable = crate::Finalizable::of(&obj);
         let ptr = reservation.ptr;
         // SAFETY: the caller guarantees the slot is still the one reserved. It
         // holds a tombstone, which nothing reads: the only references to it are
@@ -238,7 +228,7 @@ impl Tlab {
         // Publishing rewrites the tombstone in place, so the finalizable list
         // hears of it as of any other rewrite.
         self.heap
-            .note_rewrite(ptr, crate::Finalizable::Neither, finalizable);
+            .note_rewrite(crate::Finalizable::Neither, finalizable);
         ptr
     }
 
@@ -303,17 +293,76 @@ impl Tlab {
         self.alloc_instance_with_type_args(class, Box::new([]), fields)
     }
 
-    /// Allocate an instance object carrying its concrete class type args (De
-    /// Bruijn order). Used by the inbound FFI path to land a generic instance's
-    /// wire-supplied `type_args` into `Object::Instance::class_type_args`.
-    #[inline]
+    /// Allocate an instance carrying its concrete class type args (De Bruijn
+    /// order), its fields stored in declaration order. Fields past the end of
+    /// `fields` stay null.
     pub fn alloc_instance_with_type_args(
         &mut self,
         class: HeapPtr,
-        type_args: Box<[bex_vm_types::RealizedTy]>,
+        type_args: Box<[RealizedTy]>,
         fields: Vec<Value>,
     ) -> HeapPtr {
-        self.alloc(Object::Instance(Instance::new(class, type_args, fields)))
+        let instance = self.alloc_instance_cell(class, type_args);
+        for (idx, value) in fields.into_iter().enumerate() {
+            instance.store_with(idx, value, Access::ThreadLocal);
+        }
+        instance.ptr()
+    }
+
+    /// Allocate an instance of `class` whose fields are all null (zero), for
+    /// the caller to store before it publishes the instance.
+    pub fn alloc_instance_cell(
+        &mut self,
+        class: HeapPtr,
+        type_args: Box<[RealizedTy]>,
+    ) -> InstanceRef {
+        // SAFETY: the allocating mutator holds a heap permit, so the class is
+        // live.
+        let Object::Class(class_def) = (unsafe { class.get() }) else {
+            panic!("an instance of a non-class object {class:?}");
+        };
+        let layout = self.heap.instance_layout(class_def);
+        let type_object = layout
+            .has_type_args()
+            .then(|| self.alloc_type_args(class, class_def, type_args));
+        let cell = self.alloc_zeroed(layout.descriptor(), layout.size());
+        // SAFETY: the payload of a fresh cell of the class's layout.
+        let ptr = unsafe {
+            self.heap
+                .make_heap_ptr(cell.as_ptr().add(HEADER_BYTES).cast::<Object>())
+        };
+        // SAFETY: a fresh cell of the class's layout; the type object exists
+        // exactly when the layout has type arguments.
+        let instance = unsafe { InstanceRef::init(ptr, class, type_object) };
+        // BEP-042: an instance of a class with a finalizer joins the
+        // collector's finalizable list.
+        if BexHeap::needs_finalizer_registration(instance) {
+            self.heap.register_finalizable(ptr);
+        }
+        instance
+    }
+
+    /// The type object a generic instance points to: its class applied to
+    /// `type_args`.
+    fn alloc_type_args(
+        &mut self,
+        class: HeapPtr,
+        class_def: &Class,
+        type_args: Box<[RealizedTy]>,
+    ) -> HeapPtr {
+        debug_assert_eq!(type_args.len(), class_def.generic_param_count);
+        let head = TypeHead::new(class, class_def.type_tag);
+        self.alloc_type(TypeValue::new(RealizedTy::Class(head, type_args)))
+    }
+
+    /// A copy of `source`, a fresh instance of its class with the same type
+    /// arguments and field slots. Floats are copied unboxed.
+    pub fn alloc_instance_copy(&mut self, source: InstanceRef) -> InstanceRef {
+        let copy = self.alloc_instance_cell(source.class(), source.type_args().into());
+        for idx in 0..source.field_len() {
+            copy.store_slot_value(idx, source.load(idx), Access::ThreadLocal);
+        }
+        copy
     }
 
     /// Allocate a variant object.
@@ -491,6 +540,16 @@ pub trait TlabHolder {
 
     fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
         self.tlab_mut().alloc_instance(class, fields)
+    }
+
+    fn alloc_instance_with_type_args(
+        &mut self,
+        class: HeapPtr,
+        type_args: Box<[RealizedTy]>,
+        fields: Vec<Value>,
+    ) -> HeapPtr {
+        self.tlab_mut()
+            .alloc_instance_with_type_args(class, type_args, fields)
     }
 
     fn alloc_variant(&mut self, enm: HeapPtr, index: usize) -> HeapPtr {
@@ -743,6 +802,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         })));
 
@@ -750,16 +810,10 @@ mod tests {
         let fields = vec![Value::int(10), Value::int(20)];
         let instance_ptr = tlab.alloc_instance(class_ptr, fields);
 
-        unsafe {
-            match instance_ptr.get() {
-                Object::Instance(inst) => {
-                    assert_eq!(inst.class, class_ptr);
-                    assert_eq!(inst.fields.len(), 2);
-                    assert_eq!(inst.load_field(0), Value::int(10));
-                }
-                _ => panic!("Expected Instance"),
-            }
-        }
+        let inst = unsafe { InstanceRef::of(instance_ptr) }.expect("an instance");
+        assert_eq!(inst.class(), class_ptr);
+        assert_eq!(inst.field_len(), 2);
+        assert_eq!(inst.load(0).expect_value(), Value::int(10));
     }
 
     #[test]

@@ -362,15 +362,10 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
     match object {
         Object::String(string) => format!("{string:?}"),
         // This one's a bit tricky to print.
-        Object::Instance(instance) => {
+        Object::Shared(bex_vm_types::types::SharedKind::Instance) => {
             // SAFETY: During debug display, we assume the pointer is valid
-            let class = unsafe { instance.class.get() };
-            match class {
-                Object::Class(class) => format!("<{} instance>", class.name()),
-                // This will most likely never happen, but we're trying not
-                // to panic.
-                other => format!("<{other} instance>"),
-            }
+            let instance = unsafe { bex_vm_types::InstanceRef::new_unchecked(ptr) };
+            format!("<{} instance>", instance.class_def().name())
         }
 
         Object::Variant(variant) => {

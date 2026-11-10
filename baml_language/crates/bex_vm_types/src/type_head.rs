@@ -475,6 +475,21 @@ mod tests {
         }
     }
 
+    /// An object with the header every heap object has, for a test that
+    /// reads a declaration through its pointer.
+    #[repr(C)]
+    struct Headed {
+        _header: crate::object_format::Header,
+        object: crate::Object,
+    }
+
+    fn headed(object: crate::Object) -> Box<Headed> {
+        Box::new(Headed {
+            _header: crate::object_format::Header::new(crate::object_format::OBJECT_DESC, 0),
+            object,
+        })
+    }
+
     fn head(slot: &mut crate::Object, tag: i64) -> TypeHead {
         TypeHead::new(ptr_to(slot), TypeTag::from_i64(tag))
     }
@@ -614,10 +629,11 @@ mod tests {
 
         // A class's name is its path under its package's display name, so the
         // class needs a package to be `demo.Person`.
-        let mut package = crate::Object::Package(Box::new(crate::types::Package::empty(
+        let package = crate::Object::Package(Box::new(crate::types::Package::empty(
             baml_base::Name::new("demo"),
         )));
-        let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
+        let mut package = headed(package);
+        let declaration = crate::Object::Class(Box::new(crate::types::Class {
             path: crate::types::LocalName::new(vec![], baml_base::Name::new("Person")),
             fields: vec![],
             description: None,
@@ -630,11 +646,13 @@ mod tests {
             cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: crate::types::Owner::Package(ptr_to(&mut package)),
+            owner: crate::types::Owner::Package(ptr_to(&mut package.object)),
             telemetry_definition: crate::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         }));
 
+        let mut declaration = headed(declaration);
         let mut head = TypeHead::unresolved(TypeTag::of_static_index(0));
         let unresolved: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]));
         assert_eq!(
@@ -642,7 +660,7 @@ mod tests {
             format!("<unresolved type #{}>", head.tag().as_i64()),
         );
 
-        head.resolve(ptr_to(&mut declaration));
+        head.resolve(ptr_to(&mut declaration.object));
         let ty: RealizedTy<TypeHead> =
             RealizedTy::List(Box::new(RealizedTy::Class(head, Box::new([]))));
         assert_eq!(ty.to_string(), "demo.Person[]");
@@ -659,7 +677,7 @@ mod tests {
         use baml_type::RealizedTy;
 
         let type_tag = TypeTag::fresh_dynamic();
-        let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
+        let declaration = crate::Object::Class(Box::new(crate::types::Class {
             path: crate::types::LocalName::new(vec![], baml_base::Name::new("Widget")),
             fields: vec![],
             description: None,
@@ -674,9 +692,11 @@ mod tests {
             generic_param_count: 0,
             owner: crate::types::Owner::anonymous(),
             telemetry_definition: crate::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         }));
-        let head = TypeHead::new(ptr_to(&mut declaration), type_tag);
+        let mut declaration = headed(declaration);
+        let head = TypeHead::new(ptr_to(&mut declaration.object), type_tag);
 
         assert_eq!(head.declared_name(), None);
         assert!(head.to_name().is_err());

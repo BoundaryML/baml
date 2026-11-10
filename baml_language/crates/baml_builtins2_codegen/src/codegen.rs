@@ -248,11 +248,23 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     // Struct definition
     writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
     writeln!(out, "{indent}pub struct {class_name}<'a> {{").unwrap();
-    writeln!(out, "{inner}pub instance: &'a Instance,").unwrap();
+    writeln!(out, "{inner}pub instance: bex_vm_types::InstanceRef,").unwrap();
+    writeln!(out, "{inner}_vm: std::marker::PhantomData<&'a BexVm>,").unwrap();
     writeln!(out, "{indent}}}\n").unwrap();
 
     // Impl block with typed accessors
     writeln!(out, "{indent}impl<'a> {class_name}<'a> {{").unwrap();
+    writeln!(
+        out,
+        "{inner}pub fn new(instance: bex_vm_types::InstanceRef) -> Self {{"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "{inner2}Self {{ instance, _vm: std::marker::PhantomData }}"
+    )
+    .unwrap();
+    writeln!(out, "{inner}}}\n").unwrap();
 
     for field in &def.fields {
         let raw_name = &field.name;
@@ -267,7 +279,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_rust_data::<T>(&self.instance.load_field({}))",
+                    "{inner2}vm.as_rust_data::<T>(&self.instance.load({}).expect_value())",
                     field.index
                 )
                 .unwrap();
@@ -282,7 +294,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}self.instance.load_field({}).as_int()",
+                    "{inner2}self.instance.load({}).expect_value().as_int()",
                     field.index
                 )
                 .unwrap();
@@ -297,35 +309,22 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
+                    "{inner2}self.instance.load({}).as_float()",
                     field.index
                 )
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    Some(ptr) => match unsafe {{ ptr.get() }} {{"
+                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{raw_name}: expected Float\"))"
                 )
                 .unwrap();
-                writeln!(out, "{inner2}        bex_vm_types::Object::Float(f) => *f,").unwrap();
-                writeln!(
-                    out,
-                    "{inner2}        _ => panic!(\"{class_name}.{raw_name}: expected Float\"),"
-                )
-                .unwrap();
-                writeln!(out, "{inner2}    }},").unwrap();
-                writeln!(
-                    out,
-                    "{inner2}    None => panic!(\"{class_name}.{raw_name}: expected Float\"),"
-                )
-                .unwrap();
-                writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Bool => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> bool {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}self.instance.load_field({}).as_bool()",
+                    "{inner2}self.instance.load({}).expect_value().as_bool()",
                     field.index
                 )
                 .unwrap();
@@ -345,7 +344,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_string(&self.instance.load_field({}))",
+                    "{inner2}vm.as_string(&self.instance.load({}).expect_value())",
                     field.index
                 )
                 .unwrap();
@@ -364,7 +363,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_array(&self.instance.load_field({}))",
+                    "{inner2}vm.as_array(&self.instance.load({}).expect_value())",
                     field.index
                 )
                 .unwrap();
@@ -383,7 +382,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_map(&self.instance.load_field({}))",
+                    "{inner2}vm.as_map(&self.instance.load({}).expect_value())",
                     field.index
                 )
                 .unwrap();
@@ -405,7 +404,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}if self.instance.load_field({}).is_null() {{",
+                    "{inner2}if self.instance.load({}) == bex_vm_types::object_format::SlotValue::Value(bex_vm_types::Value::NULL) {{",
                     field.index
                 )
                 .unwrap();
@@ -425,7 +424,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
+                    "{inner2}match self.instance.load({}).expect_value().as_object_ptr() {{",
                     field.index
                 )
                 .unwrap();
@@ -453,14 +452,29 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
-            // Generic, Named, Media, Null — fallback to a copied Value.
+            // A generic field may hold a float, which leaves its slot boxed.
+            BamlType::Generic(_) => {
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}(&self, vm: &BexVm) -> bex_vm_types::Value {{"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}vm.field(self.instance, {})", field.index).unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
+            }
+            // Named, Media, Null — fallback to a copied Value.
             _ => {
                 writeln!(
                     out,
                     "{inner}pub fn {field_name}(&self) -> bex_vm_types::Value {{"
                 )
                 .unwrap();
-                writeln!(out, "{inner2}self.instance.load_field({})", field.index).unwrap();
+                writeln!(
+                    out,
+                    "{inner2}self.instance.load({}).expect_value()",
+                    field.index
+                )
+                .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
         }
@@ -480,36 +494,30 @@ fn view_optional_type_and_expr(
         BamlType::Int => (
             "Option<i64>".to_string(),
             format!(
-                "self.instance.load_field({field_index}).as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
+                "self.instance.load({field_index}).expect_value().as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
             ),
         ),
         BamlType::Float => (
             "Option<f64>".to_string(),
             format!(
-                "{{ \
-                    let Some(ptr) = self.instance.load_field({field_index}).as_object_ptr() \
-                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
-                    let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
-                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
-                    *f \
-                }}"
+                "self.instance.load({field_index}).as_float().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Float\"))"
             ),
         ),
         BamlType::Bool => (
             "Option<bool>".to_string(),
             format!(
-                "self.instance.load_field({field_index}).as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
+                "self.instance.load({field_index}).expect_value().as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
             ),
         ),
         BamlType::String => (
             "Option<&'v str>".to_string(),
             format!(
-                "vm.as_string(&self.instance.load_field({field_index})).expect(\"{class_name}.{field_name}: expected String\")"
+                "vm.as_string(&self.instance.load({field_index}).expect_value()).expect(\"{class_name}.{field_name}: expected String\")"
             ),
         ),
         _ => (
             "Option<bex_vm_types::Value>".to_string(),
-            format!("self.instance.load_field({field_index})"),
+            format!("self.instance.load({field_index}).expect_value()"),
         ),
     }
 }
@@ -1467,7 +1475,7 @@ fn emit_immut_receiver_extraction_indented(
             if needs_owned {
                 // `//baml:mut_vm` media methods: pass the raw `Value` copy so the
                 // `vm` borrow is released before the mutable-vm call.  The view
-                // struct (`view::media::Cls`) holds `&Instance` which borrows `vm`
+                // struct (`view::media::Cls`) borrows `vm` for its lifetime
                 // and cannot coexist with `&mut BexVm`.
                 writeln!(out, "{indent}let {name} = &args[{idx}];").unwrap();
             } else {
@@ -1478,7 +1486,7 @@ fn emit_immut_receiver_extraction_indented(
                 .unwrap();
                 writeln!(
                     out,
-                    "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
+                    "{indent}let {name} = view::media::{cls}::new(__instance);"
                 )
                 .unwrap();
             }
@@ -1494,11 +1502,7 @@ fn emit_immut_receiver_extraction_indented(
                 "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
             )
             .unwrap();
-            writeln!(
-                out,
-                "{indent}let {name} = {view_path} {{ instance: __instance }};"
-            )
-            .unwrap();
+            writeln!(out, "{indent}let {name} = {view_path}::new(__instance);").unwrap();
         }
         _ => {
             let rhs = receiver_immut_extraction_expr(
@@ -2708,8 +2712,8 @@ mod tests {
             "missing Pdf view struct:\n{output}"
         );
         assert!(
-            output.contains("pub instance: &'a Instance"),
-            "Pdf view should hold &Instance:\n{output}"
+            output.contains("pub instance: bex_vm_types::InstanceRef"),
+            "Pdf view should hold an InstanceRef:\n{output}"
         );
         // _data accessor downcasts to any payload type.
         assert!(

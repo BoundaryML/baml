@@ -7360,8 +7360,9 @@ impl BexEngine {
             };
             let package_ptr = match vm.get_object(wrapper_ptr) {
                 Object::Package(_) => wrapper_ptr,
-                Object::Instance(wrapper) => {
-                    wrapper.load_field(0).as_object_ptr().ok_or_else(|| {
+                Object::Shared(bex_vm_types::types::SharedKind::Instance) => {
+                    let wrapper = vm.expect_instance(wrapper_ptr);
+                    vm.field(wrapper, 0).as_object_ptr().ok_or_else(|| {
                         EngineError::TypeMismatch {
                             message: format!(
                                 "Package.compile dependency `{alias}` is not initialized"
@@ -7429,10 +7430,12 @@ impl BexEngine {
             .ok_or_else(|| invalid("Session.eval receiver is not an instance".to_string()))?;
         let package_ptr = match vm.get_object(wrapper_ptr) {
             Object::Package(_) => wrapper_ptr,
-            Object::Instance(wrapper) => wrapper
-                .load_field(0)
-                .as_object_ptr()
-                .ok_or_else(|| invalid("Session is not initialized".to_string()))?,
+            Object::Shared(bex_vm_types::types::SharedKind::Instance) => {
+                let wrapper = vm.expect_instance(wrapper_ptr);
+                vm.field(wrapper, 0)
+                    .as_object_ptr()
+                    .ok_or_else(|| invalid("Session is not initialized".to_string()))?
+            }
             _ => {
                 return Err(invalid(
                     "Session.eval receiver is not an instance".to_string(),
@@ -8166,6 +8169,7 @@ mod type_identity_tests {
                 generic_param_count: 0,
                 owner: bex_vm_types::types::Owner::anonymous(),
                 telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                layout: Default::default(),
                 redact: false,
             })));
         let head = bex_vm_types::TypeHead::new(class, tag);
@@ -8292,6 +8296,7 @@ mod type_identity_tests {
                     generic_param_count: 0,
                     owner: bex_vm_types::types::Owner::anonymous(),
                     telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                    layout: Default::default(),
                     redact: false,
                 })));
         let original = source_thread

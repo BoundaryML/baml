@@ -3,7 +3,7 @@
 //! charged to the innermost span. Read natively, so it needs no value capture
 //! and works whether or not the invoke is a span.
 
-use bex_vm_types::{Object, Value, ValueKind};
+use bex_vm_types::{Object, Value, ValueKind, object_format::SlotValue};
 use btel_records::ModelUsage;
 
 use crate::BexVm;
@@ -27,7 +27,7 @@ impl BexVm {
     /// One entry per call in `turn.calls` that reported usage. Child turns are
     /// not read: each was charged when its own invoke returned.
     fn turn_usage(&self, turn: Value) -> Vec<ModelUsage> {
-        let Some(calls) = self.field(turn, "calls") else {
+        let Some(calls) = self.field_named(turn, "calls") else {
             return Vec::new();
         };
         let Ok(calls) = self.as_array(&calls) else {
@@ -37,17 +37,19 @@ impl BexVm {
         calls
             .into_iter()
             .filter_map(|call| {
-                let usage = self.field(call, "usage").filter(|usage| !usage.is_null())?;
+                let usage = self
+                    .field_named(call, "usage")
+                    .filter(|usage| !usage.is_null())?;
                 let count = |name: &str| {
-                    self.field(usage, name)
+                    self.field_named(usage, name)
                         .and_then(|value| match value.kind() {
                             ValueKind::Int(n) => u64::try_from(n).ok(),
                             _ => None,
                         })
                 };
-                let key = self.field(call, "resolved_model")?;
+                let key = self.field_named(call, "resolved_model")?;
                 let text = |name: &str| {
-                    self.field(key, name).and_then(|value| {
+                    self.field_named(key, name).and_then(|value| {
                         self.as_string(&value).ok().map(|s| Box::from(s.as_str()))
                     })
                 };
@@ -65,12 +67,13 @@ impl BexVm {
             .collect()
     }
 
-    fn field(&self, value: Value, name: &str) -> Option<Value> {
+    fn field_named(&self, value: Value, name: &str) -> Option<Value> {
         let instance = self.as_instance(&value).ok()?;
-        let Object::Class(class) = self.get_object(instance.class) else {
+        let Object::Class(class) = self.get_object(instance.class()) else {
             return None;
         };
         let index = class.fields.iter().position(|field| field.name == name)?;
-        instance.try_load_field(index)
+        // Usage records hold ints, strings and records, never floats.
+        instance.try_load(index).map(SlotValue::expect_value)
     }
 }

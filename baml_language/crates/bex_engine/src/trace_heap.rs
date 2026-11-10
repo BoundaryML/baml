@@ -15,6 +15,9 @@ use std::{
 
 use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
 use bex_heap::{BexHeap, PermitProof};
+use bex_vm_types::InstanceRef;
+use bex_vm_types::object_format::SlotValue;
+use bex_vm_types::types::SharedKind;
 use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
 
 /// A structured-log snapshot could not allocate its owned value graph.
@@ -321,6 +324,20 @@ impl TraceSnapshotBuilder {
         }
     }
 
+    /// [`Self::copy_value`] for a slot's contents: a float is copied as a
+    /// boxed one would be.
+    fn copy_slot(
+        &mut self,
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
+        value: SlotValue,
+    ) -> Result<TraceValueRef, CopyError> {
+        match value {
+            SlotValue::Value(value) => self.copy_value(heap, permit, value),
+            SlotValue::Float(float) => self.alloc(TraceValue::Float(float)),
+        }
+    }
+
     fn copy_object(
         &mut self,
         heap: &BexHeap,
@@ -330,7 +347,7 @@ impl TraceSnapshotBuilder {
         let object = unsafe { ptr.get() };
         let tracks_recursion = matches!(
             object,
-            Object::Array(_) | Object::Map(_) | Object::Instance(_)
+            Object::Array(_) | Object::Map(_) | Object::Shared(_)
         );
         if tracks_recursion && self.in_progress.contains(&ptr) {
             return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
@@ -389,17 +406,19 @@ impl TraceSnapshotBuilder {
                     self.alloc(TraceValue::Map(entries))
                 }
             }
-            Object::Instance(instance) => {
-                let class_object = unsafe { instance.class.get() };
-                if let Object::Class(class) = class_object {
+            Object::Shared(SharedKind::Instance) => {
+                // SAFETY: the marker is only shown for an instance.
+                let instance = unsafe { InstanceRef::new_unchecked(ptr) };
+                {
+                    let class = instance.class_def();
                     let mut fields = Self::vec_with_capacity(class.fields.len())?;
-                    for (field, slot) in class.fields.iter().zip(instance.fields.iter()) {
+                    for (field, slot) in class.fields.iter().zip(instance.fields()) {
                         let name = Self::copy_str(&field.name)?;
-                        let value = self.copy_value(heap, permit, slot.load())?;
+                        let value = self.copy_slot(heap, permit, slot)?;
                         fields.push((name, value));
                     }
-                    let mut type_args = Self::vec_with_capacity(instance.class_type_args.len())?;
-                    for type_arg in &instance.class_type_args {
+                    let mut type_args = Self::vec_with_capacity(instance.type_args().len())?;
+                    for type_arg in instance.type_args() {
                         // A snapshot is display data: a compiled declaration
                         // by name, a runtime declaration by its label.
                         let Ok(annotated) =
@@ -427,11 +446,6 @@ impl TraceSnapshotBuilder {
                         type_args,
                         fields,
                     })
-                } else {
-                    self.omitted(
-                        TraceOmissionReason::InvalidRuntimeValue,
-                        "instance class pointer did not point at a class",
-                    )
                 }
             }
             Object::Variant(variant) => {
@@ -574,7 +588,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         | Object::Uint8Array(_)
         | Object::Array(_)
         | Object::Map(_)
-        | Object::Instance(_)
+        | Object::Shared(_)
         | Object::Variant(_)
         | Object::Float(_) => "unsupported value",
     }

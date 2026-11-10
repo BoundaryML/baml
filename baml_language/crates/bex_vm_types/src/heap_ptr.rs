@@ -122,10 +122,16 @@ impl HeapPtr {
     /// - The pointer must still be valid (object not collected by GC)
     /// - No other thread is writing to this object
     /// - With `heap_debug`: epoch must match current heap epoch
+    ///
+    /// An object in the shared object format reads as its
+    /// [`Object::Shared`] marker; read it through its view.
     #[inline]
     pub unsafe fn get(self) -> &'static Object {
         // SAFETY: Caller guarantees pointer validity and aliasing rules
-        unsafe { &*self.ptr }
+        match unsafe { self.format() } {
+            crate::object_format::Format::Object => unsafe { &*self.ptr },
+            crate::object_format::Format::Instance => crate::types::SharedKind::Instance.marker(),
+        }
     }
 
     /// Dereference to get a mutable reference to the object.
@@ -135,8 +141,17 @@ impl HeapPtr {
     /// - The pointer must still be valid (object not collected by GC)
     /// - No other thread is accessing this object
     /// - With `heap_debug`: epoch must match current heap epoch
+    ///
+    /// # Panics
+    /// For an object in the shared object format, which no enum holds.
     #[inline]
     pub unsafe fn get_mut(self) -> &'static mut Object {
+        assert_eq!(
+            // SAFETY: forwarded to the caller.
+            unsafe { self.format() },
+            crate::object_format::Format::Object,
+            "only an `Object` enum cell can be rewritten in place"
+        );
         // SAFETY: Caller guarantees pointer validity and exclusive access
         unsafe { &mut *self.ptr }
     }

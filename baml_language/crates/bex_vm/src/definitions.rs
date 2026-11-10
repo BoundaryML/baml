@@ -205,6 +205,7 @@ mod tests {
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            layout: Default::default(),
             redact: false,
         };
 

@@ -3,10 +3,7 @@
 
 use bex_heap::TlabHolder;
 use bex_str::BexStr;
-use bex_vm_types::{
-    ArrayReadGuard, MapReadGuard,
-    types::{Instance, Value},
-};
+use bex_vm_types::{ArrayReadGuard, MapReadGuard, types::Value};
 
 use crate::{
     BexVm,
@@ -43,9 +40,9 @@ impl BamlPackageTesting for PackageTestingImpl {
     fn _test_name_count(vm: &BexVm, entries: &[Value], full_name: &BexStr) -> i64 {
         registration_name_count(
             entries.iter().map(|entry| {
-                view::TestRegistration {
-                    instance: vm.as_instance(entry).expect("TestRegistration instance"),
-                }
+                view::TestRegistration::new(
+                    vm.as_instance(entry).expect("TestRegistration instance"),
+                )
                 .name(vm)
             }),
             full_name,
@@ -55,9 +52,9 @@ impl BamlPackageTesting for PackageTestingImpl {
     fn _testset_name_count(vm: &BexVm, entries: &[Value], full_name: &BexStr) -> i64 {
         registration_name_count(
             entries.iter().map(|entry| {
-                view::TestSetRegistration {
-                    instance: vm.as_instance(entry).expect("TestSetRegistration instance"),
-                }
+                view::TestSetRegistration::new(
+                    vm.as_instance(entry).expect("TestSetRegistration instance"),
+                )
                 .name(vm)
             }),
             full_name,

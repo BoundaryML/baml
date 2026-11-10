@@ -17,10 +17,7 @@ use std::sync::Arc;
 
 use baml_type::MediaKind;
 use bex_heap::TlabHolder;
-use bex_vm_types::{
-    BexStr, Object, RealizedTy, TypeHead, Value,
-    types::{Array, Instance},
-};
+use bex_vm_types::{BexStr, Object, RealizedTy, TypeHead, Value, types::Array};
 
 use super::{
     MediaFields,
@@ -317,11 +314,11 @@ impl TextDecoder<'_, '_> {
             };
             values.push(value);
         }
-        Ok(Value::object(vm.alloc(Object::Instance(Instance::new(
+        Ok(Value::object(vm.alloc_instance_with_type_args(
             plan.class,
             plan.type_args.clone(),
             values,
-        )))))
+        )))
     }
 
     /// A media value from its tagged object.
