@@ -6,6 +6,20 @@ use sys_native::SysOpsExt;
 const SOURCE: &str = r#"
 class Node { value int }
 function Tiny(n: int) -> Node { Node { value: n } }
+function Short(n: int) -> Node {
+    // Straight-line code, no loop: nothing in the call polls the budget.
+    let scratch: Node[] = [
+        Node { value: 0 }, Node { value: 1 }, Node { value: 2 }, Node { value: 3 }, Node { value: 4 }, Node { value: 5 }, Node { value: 6 }, Node { value: 7 },
+        Node { value: 8 }, Node { value: 9 }, Node { value: 10 }, Node { value: 11 }, Node { value: 12 }, Node { value: 13 }, Node { value: 14 }, Node { value: 15 },
+        Node { value: 16 }, Node { value: 17 }, Node { value: 18 }, Node { value: 19 }, Node { value: 20 }, Node { value: 21 }, Node { value: 22 }, Node { value: 23 },
+        Node { value: 24 }, Node { value: 25 }, Node { value: 26 }, Node { value: 27 }, Node { value: 28 }, Node { value: 29 }, Node { value: 30 }, Node { value: 31 },
+        Node { value: 32 }, Node { value: 33 }, Node { value: 34 }, Node { value: 35 }, Node { value: 36 }, Node { value: 37 }, Node { value: 38 }, Node { value: 39 },
+        Node { value: 40 }, Node { value: 41 }, Node { value: 42 }, Node { value: 43 }, Node { value: 44 }, Node { value: 45 }, Node { value: 46 }, Node { value: 47 },
+        Node { value: 48 }, Node { value: 49 }, Node { value: 50 }, Node { value: 51 }, Node { value: 52 }, Node { value: 53 }, Node { value: 54 }, Node { value: 55 },
+        Node { value: 56 }, Node { value: 57 }, Node { value: 58 }, Node { value: 59 }, Node { value: 60 }, Node { value: 61 }, Node { value: 62 }, Node { value: 63 },
+    ];
+    Node { value: n + scratch.length() - 64 }
+}
 function Read(node: Node) -> int { node.value }
 function Churn(n: int) -> int {
     let i = 0;
@@ -87,11 +101,15 @@ async fn call(engine: &Arc<BexEngine>, name: &str, args: Vec<Ext>, copy: bool) -
         .unwrap()
 }
 
+// A call too short to reach a poll leaves its spending for the next entry.
+// Each `Short` call allocates a few kilobytes: spending counts the cells a
+// call allocated, so calls allocating one object each would need hundreds
+// of thousands of calls to exhaust a 32 MiB budget.
 #[tokio::test]
 async fn short_calls_service_pressure_on_next_entry() {
     let engine = engine();
     for n in 0..30_000 {
-        let result = call(&engine, "Tiny", vec![Ext::Int(n)], true).await;
+        let result = call(&engine, "Short", vec![Ext::Int(n)], true).await;
         let Ext::Instance { fields, .. } = result else {
             panic!("expected copied instance")
         };
@@ -386,14 +404,14 @@ async fn completed_bridge_call_leaves_debt_for_next_entry_and_preserves_its_hand
     let engine = engine();
     let mut n = 0;
     let retained = loop {
-        let value = call(&engine, "Tiny", vec![Ext::Int(n)], false).await;
+        let value = call(&engine, "Short", vec![Ext::Int(n)], false).await;
         if engine.heap().should_gc() {
             break value;
         }
         n += 1;
         assert!(
             n < 30_000,
-            "short-call reservations must eventually exhaust the budget"
+            "short calls' allocation must eventually exhaust the budget"
         );
     };
     assert_eq!(engine.heap().gc_budget().full_collections, 0);

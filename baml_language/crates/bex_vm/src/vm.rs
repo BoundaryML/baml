@@ -501,11 +501,8 @@ pub(crate) mod tests {
         }
 
         // SAFETY: single-threaded test; no VM is executing.
-        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
-        assert_eq!(
-            vm.heap.take_pending_finalizers(),
-            vec![(forwarding[&older], forwarding[&finalizer])]
-        );
+        let _ = unsafe { vm.heap.collect_garbage(&[]) };
+        assert_eq!(vm.heap.take_pending_finalizers(), vec![(older, finalizer)]);
     }
 
     /// An edit through `get_object_mut` that turns an object into an instance
@@ -530,10 +527,10 @@ pub(crate) mod tests {
         }
 
         // SAFETY: single-threaded test; no VM is executing.
-        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
+        let _ = unsafe { vm.heap.collect_garbage(&[]) };
         assert_eq!(
             vm.heap.take_pending_finalizers(),
-            vec![(forwarding[&placeholder], forwarding[&finalizer])]
+            vec![(placeholder, finalizer)]
         );
     }
 
@@ -1202,8 +1199,8 @@ pub(crate) mod tests {
 
         assert_eq!(stats.live_count, 1);
         assert!(
-            forwarding.contains_key(&trampoline),
-            "active trampoline function must be forwarded by GC"
+            ::bex_vm_types::Survival::survived(&*vm.heap, trampoline),
+            "active trampoline function must survive GC"
         );
 
         let heap = Arc::clone(&vm.heap);
@@ -1212,7 +1209,7 @@ pub(crate) mod tests {
         let moved_trampoline = trampoline_ptr(&vm);
         assert!(
             matches!(vm.get_object(moved_trampoline), Object::Function(f) if f.name() == "$entry::test_native" && f.telemetry_function_id.is_none()),
-            "frame should point at the moved trampoline function after forwarding"
+            "frame should still point at the trampoline function after GC"
         );
 
         let result = vm.exec().expect("native trampoline should execute");
@@ -1246,7 +1243,7 @@ pub(crate) mod tests {
             "returned trampoline function must not remain rooted"
         );
 
-        let (stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        let (stats, _remapped_roots, _) = unsafe { vm.heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 0);
         assert!(
@@ -1254,8 +1251,8 @@ pub(crate) mod tests {
             "GC should collect the unrooted trampoline function"
         );
         assert!(
-            !forwarding.contains_key(&trampoline),
-            "unrooted trampoline function must not be forwarded after return"
+            !::bex_vm_types::Survival::survived(&*vm.heap, trampoline),
+            "unrooted trampoline function must not survive after return"
         );
     }
 
@@ -1300,10 +1297,11 @@ pub(crate) mod tests {
         );
 
         let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
-        let moved = forwarding
-            .get(&class_ptr)
-            .copied()
-            .expect("the frame type argument's declaration must survive collection");
+        assert!(
+            ::bex_vm_types::Survival::survived(&*vm.heap, class_ptr),
+            "the frame type argument's declaration must survive collection"
+        );
+        let moved = class_ptr;
         let heap = Arc::clone(&vm.heap);
         vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
@@ -1355,10 +1353,11 @@ pub(crate) mod tests {
         );
 
         let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
-        let moved = forwarding
-            .get(&class_ptr)
-            .copied()
-            .expect("the pending native type argument must survive collection");
+        assert!(
+            ::bex_vm_types::Survival::survived(&*vm.heap, class_ptr),
+            "the pending native type argument must survive collection"
+        );
+        let moved = class_ptr;
         let heap = Arc::clone(&vm.heap);
         vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
@@ -2392,12 +2391,11 @@ impl BexVm {
         telemetry: Option<TelemetryState>,
         trace_scope: btel_types::RecordingId,
     ) -> Self {
-        // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
-        // which the engine reaches only after the VM has been registered as a
+        // Defer taking the first block until the first `tlab.alloc`, which
+        // the engine reaches only after the VM has been registered as a
         // permit holder via `HeapPermitManager::new_permit` and a permit is
-        // active. Eagerly calling `Tlab::new` here would reserve a chunk
-        // *before* registration, leaving the cursor stale across any GC that
-        // fires in the engine's pre-permit window.
+        // active. Eagerly calling `Tlab::new` here would take a block
+        // *before* registration, outside the pause protocol.
         let tlab = Tlab::new_empty(Arc::clone(&heap));
 
         // `error_class_ptrs` / `panic_class_ptrs` / `stdlib_heads` are resolved
@@ -12270,11 +12268,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
     }
 
     fn relocated(&mut self) {
-        // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
-        // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
-        // now point into a region the heap will hand out to other VMs as a
-        // fresh chunk. Drop them so the next allocation refills from the
-        // post-GC cursor.
+        // Objects did not move and the TLAB's blocks are still its own; only
+        // its payload balance, which the collection's census now covers,
+        // is stale.
         self.tlab.invalidate();
     }
 }

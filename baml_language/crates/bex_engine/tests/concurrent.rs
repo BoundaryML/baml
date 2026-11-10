@@ -175,13 +175,12 @@ async fn test_heap_stats_during_concurrent_execution() {
 
     let final_stats = engine.heap_stats();
 
-    // Should have allocated TLAB chunks for concurrent VMs
-    // Note: Each VM gets its own TLAB, so we expect at least 3 chunks
+    // Each VM allocates in blocks of its own; blocks are never given back.
     assert!(
-        final_stats.tlab_chunks >= initial_stats.tlab_chunks,
-        "Expected TLAB chunks to be allocated (initial: {}, final: {})",
-        initial_stats.tlab_chunks,
-        final_stats.tlab_chunks
+        final_stats.blocks >= initial_stats.blocks,
+        "Expected blocks to be allocated (initial: {}, final: {})",
+        initial_stats.blocks,
+        final_stats.blocks
     );
 }
 

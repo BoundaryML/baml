@@ -608,10 +608,8 @@ impl RootHaver for FutureManagerInner {
     }
 
     fn relocated(&mut self) {
-        // Drop the cached TLAB cursor — GC has swapped semispaces and our
-        // `alloc_ptr`/`alloc_limit` now point into a region the heap will
-        // hand out as a fresh chunk. The next `alloc_future` must refill
-        // from the post-GC cursor. Mirrors `BexVm::relocated`.
+        // Tell the TLAB a collection ran, so it drops its stale payload
+        // balance. Mirrors `BexVm::relocated`.
         self.tlab.invalidate();
     }
 }

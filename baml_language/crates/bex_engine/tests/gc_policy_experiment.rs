@@ -294,9 +294,9 @@ fn compare_gc_policy() {
         let start = Instant::now();
         for call in 0..calls {
             if workload == "burst" && call == calls / 2 { kept.clear(); }
-            let stats = engine.heap_stats();
-            let nursery_slots = stats.tlab_chunks * engine.heap().tlab_size();
-            let nursery_bytes = nursery_slots * slot_size;
+            // Bytes allocated since the last collection, as the heap's own
+            // budget counts them.
+            let nursery_bytes = usize::try_from(engine.heap().gc_budget().bytes_since_full_gc).unwrap_or(0);
             let call_start = Instant::now();
             if policy.due(nursery_bytes) {
                 let gc_start = Instant::now();
@@ -420,8 +420,8 @@ fn profile_json(_: &bex_heap::GcStats) -> serde_json::Value {
 fn profile_json(stats: &bex_heap::GcStats) -> serde_json::Value {
     let p = &stats.profile;
     serde_json::json!({
-        "before_generations":p.before.generation_slots, "after_generations":p.after.generation_slots,
-        "before_capacity":p.before.capacity_slots, "after_capacity":p.after.capacity_slots,
+        "before_objects":p.before.objects, "after_objects":p.after.objects,
+        "before_blocks":p.before.blocks, "after_blocks":p.after.blocks,
         "actual_new_objects":p.before.new_objects, "roots":p.roots,
         "prepare_ms":p.prepare.as_secs_f64()*1000.0, "trace_ms":p.trace.as_secs_f64()*1000.0,
         "keepalive_ms":p.keepalive.as_secs_f64()*1000.0, "fixup_ms":p.fixup.as_secs_f64()*1000.0,

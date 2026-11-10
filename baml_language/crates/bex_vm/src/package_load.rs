@@ -942,18 +942,16 @@ mod tests {
             64,
             "dead owners must sweep their rules"
         );
-        let forwarded_owner = forwarding
-            .get(&owners[0])
-            .copied()
-            .expect("live owner must be forwarded");
+        // Objects never move: the live owner is where it was.
+        let live_owner = owners[0];
         assert!(
-            !tables.rules_for_class(forwarded_owner).is_empty(),
-            "live owner pointers must follow relocation"
+            !tables.rules_for_class(live_owner).is_empty(),
+            "a live owner keeps its rules"
         );
         assert_eq!(
-            tables.rules_of_class(interface, forwarded_owner),
-            tables.rules_for_class(forwarded_owner),
-            "the per-class index must follow relocation too"
+            tables.rules_of_class(interface, live_owner),
+            tables.rules_for_class(live_owner),
+            "the per-class index keeps them too"
         );
         for rule in tables.rules_of(interface) {
             #[expect(unsafe_code, reason = "reading a just-forwarded pointer")]

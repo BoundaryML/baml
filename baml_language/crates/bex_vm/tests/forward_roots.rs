@@ -1,12 +1,10 @@
 //! Tests for `<BexVm as RootHaver>::forward_roots`.
 //!
 //! The engine's GC coordinator calls `forward_roots` on every parked VM
-//! after a generational collection. Beyond rewriting heap pointers, this
-//! hook is also responsible for invalidating the VM's TLAB — after GC, the
-//! heap-wide `gen0_next_chunk` cursor is reset, so the VM's cached
-//! `alloc_ptr`/`alloc_limit` now point into a region that the heap will
-//! hand out as a fresh chunk to the next allocator. Skipping invalidation
-//! either panics on out-of-bounds writes or corrupts another VM's chunk.
+//! after a collection. The collector does not move objects, so the hook's
+//! work is to drop weak references to the dead and to tell the VM's TLAB a
+//! collection ran; the TLAB's current blocks stay valid, since nothing else
+//! can be handed a block it owns.
 
 use std::{
     collections::HashMap,
@@ -27,22 +25,19 @@ fn make_vm() -> BexVm {
 }
 
 #[test]
-fn forward_roots_invalidates_tlab() {
+fn forward_roots_keeps_the_tlab_blocks() {
     let mut vm = make_vm();
-    // `Tlab::new_empty` defers chunk reservation until first alloc, so a
-    // fresh VM has an invalid TLAB by construction. Force a refill by
-    // allocating once, then verify `forward_roots` invalidates it.
+    // `Tlab::new_empty` defers taking a block until first alloc.
     let _ = vm.tlab.alloc_string("force_refill".to_string());
     assert!(
         vm.tlab.is_valid(),
-        "TLAB should hold a chunk after the first allocation"
+        "TLAB should hold a block after the first allocation"
     );
+    let remaining = vm.tlab.remaining();
 
     vm.forward_roots(&mut ForwardRoots::new(&HashMap::new(), &NothingCollected));
-    assert!(
-        !vm.tlab.is_valid(),
-        "TLAB must be invalidated by forward_roots so the next alloc refills"
-    );
+    assert!(vm.tlab.is_valid(), "objects never move, so the block stays");
+    assert_eq!(vm.tlab.remaining(), remaining);
 }
 
 #[test]

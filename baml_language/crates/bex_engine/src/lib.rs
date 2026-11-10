@@ -33,17 +33,15 @@
 //! 2. **Park**: running VMs release their permits at the next safepoint; new
 //!    `call_function` invocations block in `HeapPermitManager::new_permit`
 //!    because the manager's holders mutex is held by the GC.
-//! 3. **Collect roots**: [`HeapGuard`] iterates the live permit holders (via
-//!    weak references) and walks each one's `RootHaver::visit_roots` with a
-//!    recording visitor, unioned with `BexHeap::collect_handle_roots` for
-//!    FFI-held objects.
-//! 4. **GC**: `BexHeap::collect_garbage` runs under the guard; produces a
-//!    forwarding map.
-//! 5. **Fixup**: `HeapGuard` walks each parked holder's `visit_roots` again
-//!    with a forwarding visitor, then calls its `RootHaver::relocated`; the
-//!    `BexVm` impl invalidates the VM's TLAB so post-GC allocations refill
-//!    from the new Gen0 cursor.
-//! 6. **Resume**: dropping the `HeapGuard` releases the semaphore; parked
+//! 3. **Collect**: `BexHeap::collect_paused` takes the [`HeapGuard`], walks
+//!    each live permit holder's `RootHaver::visit_roots` with a recording
+//!    visitor, unions that with the handle table, then marks and sweeps.
+//!    Objects never move.
+//! 4. **Fixup**: `HeapGuard` walks each parked holder's `visit_roots` again,
+//!    dropping weak references to dead objects, then calls its
+//!    `RootHaver::relocated`; the `BexVm` impl tells its TLAB a collection
+//!    ran, which discards its stale payload balance.
+//! 5. **Resume**: dropping the `HeapGuard` releases the semaphore; parked
 //!    VMs re-acquire and continue.
 //!
 //! ## Safety Invariants
@@ -52,8 +50,8 @@
 //!   [`ActiveHeapPermit`]. GC cannot start until every active permit has
 //!   been released.
 //! - Handles are registered in `BexHeap::handles` before any GC could
-//!   observe them, and the write lock on that table serializes against
-//!   GC's `update_handles`.
+//!   observe them, and the handle table's lock serializes against the
+//!   collector reading it.
 //! - New `call_function` invocations block on the holders mutex during
 //!   GC, so no fresh permit enters circulation mid-collection.
 //! - No VM ever runs outside a permit. The `$init` VMs that populate the
@@ -214,10 +212,10 @@ impl Drop for ParkRequestGuard {
 
 /// Aborts the process if a collection unwinds.
 ///
-/// A collection moves survivors out of from-space, so from its first move until
-/// every root has been forwarded, parked VMs hold pointers to vacated slots.
-/// Unwinding out of that window would release the [`HeapGuard`] and resume
-/// those VMs on a heap they can no longer read, so a panic there is fatal.
+/// A collection sweeps the dead, so from the sweep until every weak root has
+/// been forwarded, parked holders may still name reclaimed cells. Unwinding
+/// out of that window would release the [`HeapGuard`] and resume them on a
+/// heap they can no longer read, so a panic there is fatal.
 struct AbortOnCollectionUnwind;
 
 impl Drop for AbortOnCollectionUnwind {
@@ -1052,9 +1050,9 @@ type ExtractedEnumDefinitions = (
 /// - **No global mutable state**: BAML has no global variables, so independent
 ///   function calls cannot race with each other.
 ///
-/// - **TLAB isolation**: Each VM allocates into its own exclusive heap region.
-///   The only synchronization is atomic TLAB chunk allocation (rare operation,
-///   approximately once per 1024 allocations).
+/// - **TLAB isolation**: Each VM allocates into blocks it owns exclusively,
+///   one per size class. The only synchronization is taking or returning a
+///   block (once per 32 KiB block of a class).
 ///
 /// - **Lock-free field writes**: Object field mutations are direct memory writes
 ///   with no locking overhead, enabled by TLAB exclusivity during execution.
@@ -3193,7 +3191,7 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
 
-        // Boxed so a collection's state (roots, forwarding map, statistics) is
+        // Boxed so a collection's state (roots, mark stack, statistics) is
         // not laid out inside every call's future: this is awaited from the VM
         // event loop, and a collection is rare and already allocates.
         Box::pin(self.collect_garbage_parked(reason, heap_guard, cycle)).await
@@ -3210,67 +3208,44 @@ impl BexEngine {
         let cleanup_version = self.bex_work.cleanup_version();
         cycle.parked();
 
-        // Collect roots from handles (objects returned to external code)
-        let mut all_roots = self.heap.collect_handle_roots();
-
-        heap_guard.collect_roots(&mut all_roots);
-
         tracing::debug!(
-            "GC: {} total roots from {} handles and {} parked heap permits",
-            all_roots.len(),
+            "GC: {} handles and {} parked heap permits",
             self.heap.stats().active_handles,
             heap_guard.num_permits(),
         );
 
-        cycle.roots_scanned();
-
-        // From the first evacuated object until every root is forwarded and
-        // verified, the heap is unusable by anyone but this collection.
+        // From the start of the sweep until every weak root is forwarded, a
+        // root may name reclaimed memory; the heap is unusable by anyone but
+        // this collection.
         let abort_on_unwind = AbortOnCollectionUnwind;
 
-        // Run GC — always returns the forwarding map so we can update parked VM stacks.
-        let (mut stats, _remapped_roots, forwarding) =
-            unsafe { self.heap.collect_garbage(&all_roots) };
+        // Roots come from the handle table and every parked holder in the
+        // registry. Nothing moves; `restamp` is empty unless `heap_debug`.
+        let (mut stats, restamp) = self
+            .heap
+            .collect_paused(&mut heap_guard, &mut bex_heap::NoRoots);
 
+        cycle.roots_scanned();
         cycle.heap_done();
 
-        // Bug H, check 1 (heap_debug only): every pointer the GC was told
-        // about (`all_roots`) must end up in the forwarding map. If a
-        // holder's `collect_roots` produces a pointer the GC's BFS does
-        // not reach, the subsequent `forward_roots` will leave a stale
-        // reference behind. This assertion turns that silent class of
-        // bug into an immediate panic during stress tests.
-        #[cfg(feature = "heap_debug")]
-        for &ptr in &all_roots {
-            assert!(
-                forwarding.contains_key(&ptr),
-                "heap_debug: post-GC integrity sweep — root {ptr:?} was not \
-                 reached by the GC BFS (collect_roots produced it but it is \
-                 not in the forwarding map)"
-            );
-        }
+        // Drop weak references to the dead from every parked holder (and
+        // re-stamp strong ones under `heap_debug`). Every holder is still
+        // parked: the `HeapGuard` holds every permit and the holders mutex
+        // until it is dropped below.
+        heap_guard.forward_roots(&mut bex_vm_types::ForwardRoots::new(&restamp, &*self.heap));
 
-        // Update all parked VM stacks with forwarding pointers and invalidate TLABs.
-        // Every holder is still parked: the `HeapGuard` holds every permit and
-        // the holders mutex until it is dropped below.
-        heap_guard.forward_roots(&mut bex_vm_types::ForwardRoots::new(
-            &forwarding,
-            &*self.heap,
-        ));
-
-        // Bug H, check 3 (heap_debug only): after `forward_roots`, no
-        // holder root should still point into the inactive (former
-        // active) space. If any does, `forward_roots` missed it — the
-        // stale pointer would dereference into freed/poisoned memory.
+        // Bug H, check 3 (heap_debug only): after `forward_roots`, no holder
+        // root may name a reclaimed object. If one does, the root scan missed
+        // it and the pointer now names freed or reused memory.
         #[cfg(feature = "heap_debug")]
         {
             let mut roots_after = self.heap.collect_handle_roots();
             heap_guard.collect_roots(&mut roots_after);
             for &ptr in &roots_after {
                 assert!(
-                    !self.heap.debug_ptr_in_inactive(ptr),
-                    "heap_debug: post-forward_roots — root {ptr:?} still points \
-                     into the inactive space (forward_roots missed it)"
+                    !self.heap.debug_ptr_is_reclaimed(ptr),
+                    "heap_debug: post-forward_roots — root {ptr:?} names a reclaimed \
+                     object (the root scan missed it)"
                 );
             }
         }
@@ -3281,7 +3256,7 @@ impl BexEngine {
         drop(abort_on_unwind);
 
         // Root object-valued errors into handles before releasing the GC
-        // guard. The raw queue values are post-copy pointers and must survive
+        // guard. The raw queue values are heap pointers and must survive
         // the await needed to reacquire an ordinary permit for deep-copying.
         let unhandled_spawn_errors = self
             .heap
@@ -3308,7 +3283,7 @@ impl BexEngine {
             .extend(unhandled_spawn_errors);
 
         // BEP-042: root the finalizer queue the same way, for the same reason.
-        // The raw pairs are post-copy pointers; `drain_finalizers` runs after
+        // The raw pairs are heap pointers; `drain_finalizers` runs after
         // the guard is released and awaits, and an explicit collection can
         // run in between. Handles are roots and are fixed up by it.
         let pending_finalizers = self

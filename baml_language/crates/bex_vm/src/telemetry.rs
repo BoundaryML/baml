@@ -2169,8 +2169,8 @@ mod tests {
         ));
         assert_eq!(definitions(&state), before);
         let moved = CallPathKey {
-            visible_caller: Some(forwarding[&caller]),
-            callee: forwarding[&callee],
+            visible_caller: Some(caller),
+            callee,
             ..key
         };
         assert_eq!(

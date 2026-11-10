@@ -2411,17 +2411,19 @@ class Fresh {}
         register_class_witnesses(&mut vm, class.ptr(), rules);
         let rule = vm.dynamic_dispatch.rules_for_class(class.ptr())[0];
 
-        // Root only the class, as an instance would. A major collection moves
-        // every survivor, so the rule appears in the forwarding map iff the
-        // class kept it alive.
+        // Root only the class, as an instance would: the rule survives iff
+        // the class kept it alive.
         let heap = Arc::clone(&vm.heap);
         let mut index = crate::package_load::DynDispatchRoot::new(Arc::clone(&vm.dynamic_dispatch));
         let (_, _, forwarding) = unsafe { heap.collect_garbage(&[class.ptr()]) };
-        assert!(forwarding.contains_key(&rule), "the class owns its rule");
+        assert!(
+            bex_vm_types::Survival::survived(&*heap, rule),
+            "the class owns its rule"
+        );
         vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(index.tables.rule_count(), 1);
-        let moved = TypeHead::new(forwarding[&class.ptr()], class.tag());
+        let moved = TypeHead::new(class.ptr(), class.tag());
         assert!(
             crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
                 &class_ty(moved),
