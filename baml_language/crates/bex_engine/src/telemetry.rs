@@ -500,6 +500,9 @@ impl TelemetryRecording {
         Arc::clone(&self.exit)
     }
 
+    /// Assemble process identity and its captured context. Cloud recordings add
+    /// allowlisted environment metadata and omit arguments/sources; local
+    /// recordings retain the caller's context and existing debugging details.
     fn process(
         &self,
         launch_context: &btel_types::context::Context,
@@ -1253,6 +1256,8 @@ mod source_privacy_tests {
     use super::*;
 
     #[test]
+    /// Cloud process snapshots gain environment metadata without source text;
+    /// local snapshots retain their sources and unmodified launch context.
     fn cloud_recordings_exclude_sources_while_local_recordings_remain_readable() {
         let sources = vec![(
             "main.baml".to_owned(),

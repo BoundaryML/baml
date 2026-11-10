@@ -42,6 +42,8 @@ fn whole_map(
         .collect()
 }
 
+/// Decode an entire context snapshot into its identity and scalar metadata,
+/// rejecting truncated maps so propagation assertions cannot silently pass.
 pub(super) fn metadata(
     snapshot: &DecodedSnapshot,
 ) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {

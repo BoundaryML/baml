@@ -28,6 +28,8 @@ const SOURCE: &str =
     include_str!("../../baml_tests/baml_src/ns_cloud_telemetry/cloud_telemetry.baml");
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+/// Follow actual BCS upload references under snapshot pressure to verify
+/// automatic process metadata and unchanged per-invocation context delivery.
 async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressure() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

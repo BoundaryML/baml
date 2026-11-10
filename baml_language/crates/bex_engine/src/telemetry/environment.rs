@@ -19,6 +19,8 @@ pub(super) fn context(launch: &Context) -> Context {
     launch.with_patch(&collect(SYSTEM.get_or_init(system), baml_env::os_var))
 }
 
+/// Probe native OS information, retaining only the version and distribution
+/// alongside the normalized target OS name; unknown details stay absent.
 fn system() -> System {
     let info = os_info::get();
     System {
@@ -40,6 +42,8 @@ fn system() -> System {
     }
 }
 
+/// Build the fixed scalar schema from selected system fields, exact CI status
+/// and the shared detector. Optional omissions also remove caller spoofing.
 fn collect(system: &System, mut read: impl FnMut(&str) -> Option<OsString>) -> ContextPatch {
     let text = |value: &str| {
         // Missing or implausible probe results are omitted, never fatal. Bound
@@ -82,6 +86,8 @@ mod tests {
     }
 
     #[test]
+    /// The complete allowlist preserves scalar types and never copies marker
+    /// values or reads unrelated environment variables.
     fn schema_is_explicit_and_values_keep_their_types() {
         let context = Context::default().with_patch(&collect(&platform(), |name| match name {
             "CI" => Some("true".into()),
@@ -107,6 +113,8 @@ mod tests {
     }
 
     #[test]
+    /// Only the literal standard CI value enables the flag; other values
+    /// collapse to false instead of being transmitted as provider names.
     fn ci_means_exactly_true_and_never_contains_the_raw_value() {
         for (value, expected) in [
             (None, false),
@@ -130,6 +138,8 @@ mod tests {
     }
 
     #[test]
+    /// Unknown, oversized and invalid optional values are omitted without
+    /// turning metadata collection into an SDK startup failure.
     fn missing_platform_values_and_malformed_override_are_best_effort() {
         let mut system = platform();
         system.version = Some(String::new());
@@ -150,6 +160,7 @@ mod tests {
     }
 
     #[test]
+    /// Telemetry consumes the shared detector's generic label and escape hatch.
     fn shared_detector_override_and_generic_marker_reach_metadata() {
         for (disabled, expected) in [("true", None), ("false", Some("unknown"))] {
             let patch = collect(&platform(), |name| match name {
@@ -165,6 +176,8 @@ mod tests {
     }
 
     #[test]
+    /// Reserved environment fields are authoritative only in the recorded copy;
+    /// explicit identity and unrelated caller metadata survive unchanged.
     fn automatic_fields_preserve_unrelated_metadata_and_identity() {
         let launch = Context::default().with_patch(&ContextPatch {
             metadata: [

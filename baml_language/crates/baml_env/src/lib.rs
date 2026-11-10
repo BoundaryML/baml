@@ -71,6 +71,8 @@ pub mod agent {
         use super::*;
 
         #[test]
+        /// Each legacy marker yields only its fixed label, with unchanged
+        /// empty/zero/false handling and no disclosure of the marker's value.
         fn every_existing_marker_has_a_bounded_label() {
             for &(marker, label) in AGENT_ENV_VARS {
                 assert_eq!(
@@ -92,6 +94,8 @@ pub mod agent {
         }
 
         #[test]
+        /// Named harness markers outrank generic ones and resolve overlapping
+        /// specific markers deterministically.
         fn specific_harness_wins_over_generic_markers() {
             assert_eq!(
                 detect_with(
@@ -108,6 +112,8 @@ pub mod agent {
         }
 
         #[test]
+        /// The dev override accepts shared boolean spellings while retaining
+        /// the CLI's error for an invalid setting.
         fn escape_hatch_retains_strict_cli_validation() {
             for value in ["true", "1", "on", "YES"] {
                 assert_eq!(
@@ -124,6 +130,7 @@ pub mod agent {
 
         #[cfg(unix)]
         #[test]
+        /// Unreadable marker values cannot classify a harness or cause an error.
         fn non_unicode_markers_are_ignored() {
             use std::os::unix::ffi::OsStringExt as _;
             assert_eq!(

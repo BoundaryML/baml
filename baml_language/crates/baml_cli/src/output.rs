@@ -310,6 +310,8 @@ fn resolve_hyperlinks(choice: HyperlinkChoice, is_terminal: bool) -> bool {
     }
 }
 
+/// Capture the shared agent signal and each stream's terminal capabilities
+/// before resolving output presets and the agent skill-check policy.
 fn output_signals() -> Result<OutputSignals, baml_env::EnvError> {
     Ok(OutputSignals {
         running_in_agent: baml_env::agent::detect()?.is_some(),
