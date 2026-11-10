@@ -1,12 +1,19 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { SiClaude, SiGithub } from 'react-icons/si';
 import { section } from '@/components/home/analytics';
 import { Highlight } from '@/components/home/code';
 import { LAMB_PATHS } from '@/components/home/lamb';
 import { Panel } from '@/components/home/phase';
-import { Hyper, Pinned, sweep } from '@/components/home/pinned';
+import { Hyper, Pinned } from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 
 // ---------- the code and the traces ----------
@@ -376,27 +383,6 @@ function Waterfall({
   );
 }
 
-function Stat({
-  label,
-  tone,
-  value,
-}: {
-  label: string;
-  tone?: string;
-  value: string;
-}) {
-  return (
-    <p className="flex items-baseline gap-2">
-      <span
-        className={`font-display font-medium text-[28px] tabular-nums tracking-[-0.02em] ${tone ?? 'text-head'}`}
-      >
-        {value}
-      </span>
-      <span className="text-[14px] text-muted">{label}</span>
-    </p>
-  );
-}
-
 // ---------- the code, side by side, the left side building as you scroll ----------
 
 const STEP_GAP = 0.28;
@@ -544,7 +530,7 @@ function SideBySide() {
 
 // ---------- slow vs fast decisions, as two team chats ----------
 
-function SideName({ lit }: { lit?: boolean }) {
+export function SideName({ lit }: { lit?: boolean }) {
   return lit ? (
     <p className="v4-h3">
       <Hyper>Hyperobservability</Hyper>
@@ -554,22 +540,10 @@ function SideName({ lit }: { lit?: boolean }) {
   );
 }
 
-/** How many days the question has been open: counting while it waits, then the day it was decided. */
-function Days({ day, lit }: { day: number; lit: boolean }) {
-  const value = lit ? 1 : dayNumber(day);
-  return (
-    <Stat
-      label={value === 1 ? 'day' : 'days'}
-      tone={lit ? 'text-clover' : 'text-head'}
-      value={String(value)}
-    />
-  );
-}
-
 // Illustrative days in November 2026, which starts on a Monday the 2nd.
 const FIRST_DATE = 2;
 
-type Msg = [
+export type Msg = [
   from: string,
   time: string,
   text: string,
@@ -577,7 +551,7 @@ type Msg = [
 ];
 
 /** A pull request a message links to, shown the way chat apps unfurl a GitHub link. */
-type PullRequest = {
+export type PullRequest = {
   additions: number;
   deletions: number;
   files: number;
@@ -586,45 +560,76 @@ type PullRequest = {
   title: string;
 };
 
-// Claude's pull request on the left: the metrics nobody recorded before the question came up.
-const METRICS_PR: PullRequest = {
-  additions: 48,
+// Claude's pull request on the left: tracing inside the tool, which nobody added before the question.
+const TRACING_PR: PullRequest = {
+  additions: 52,
   deletions: 2,
   files: 3,
   number: 1287,
   repo: 'acme/support-agent',
-  title: "Trace the agent's tool calls and retries",
+  title: 'Trace issue_refund and its retries',
 };
 
 /** One calendar day of both teams' chats. */
-type ThreadDay = { day: number; hyper: Msg[]; obs: Msg[] };
+export type ThreadDay = { day: number; hyper: Msg[]; obs: Msg[] };
 
 const DECIDES = { decides: true };
 
-// Both teams ask Claude the same question on Monday evening: the support agent is slow, but only for
-// some tickets. On the right, every call the agent made was recorded, so Claude finds the slow ones at
-// once. On the left, the averages look fine and nothing traced the agent's tool calls, so Claude adds
-// tracing and then has to wait for a slow ticket to come in, which it finally catches on the ninth day.
-const ASK = '@claude the support agent is slow on some tickets, not all. Why?';
+// Both teams ask Claude the same question on Monday evening: the support agent refunded a customer
+// twice. The model asked for one refund through the issue_refund tool; the bug is inside the tool,
+// where the client gave up on a slow POST at 30s and sent it again. On the right everything the agent
+// ran was recorded, so Claude finds it, and the 23 other customers it hit, in minutes, and the fix
+// ships that night. On the left the LLM trace shows one tool call and nothing inside it, so Claude
+// adds tracing and waits for it to happen again, which it does on the ninth day. Nobody can say who
+// else it hit, because none of that was recorded.
 const THREAD: ThreadDay[] = [
   {
     day: 0,
     hyper: [
-      ['Vaibhav', '6:12 PM', ASK],
       [
-        'Claude',
+        'Vaibhav',
         '6:12 PM',
-        'Only PDF tickets. The parse tool times out, then retries.',
+        '@claude the support agent refunded a customer twice. How?',
       ],
-      ['Vaibhav', '6:14 PM', 'Cap the retries 👍', DECIDES],
-    ],
-    obs: [
-      ['Vaibhav', '6:12 PM', ASK],
       [
         'Claude',
         '6:13 PM',
-        "Averages look fine, and we don't trace tool calls. Adding it.",
+        'The model called the `issue_refund` tool once. The AI part is fine.',
       ],
+      [
+        'Claude',
+        '6:13 PM',
+        'Inside the tool, `POST /refunds` took 31s. The client retried at 30s, and both went through.',
+      ],
+      [
+        'Claude',
+        '6:14 PM',
+        'Same thing hit 23 customers since October 3. $4,180 in all.',
+      ],
+      [
+        'Vaibhav',
+        '6:15 PM',
+        'Make refunds idempotent, then email those 23 👍',
+        DECIDES,
+      ],
+      [
+        'Claude',
+        '8:40 PM',
+        'Fix is through CI and deployed. Emailed all 23 customers.',
+      ],
+    ],
+    obs: [
+      [
+        'Vaibhav',
+        '6:12 PM',
+        '@claude the support agent refunded a customer twice. How?',
+      ],
+      [
+        'Claude',
+        '6:13 PM',
+        'The LLM trace shows one issue_refund tool call. Inside the tool, nothing is traced.',
+      ],
+      ['Claude', '6:14 PM', "I'll add tracing inside the tool."],
     ],
   },
   {
@@ -634,18 +639,22 @@ const THREAD: ThreadDay[] = [
       [
         'Claude',
         '9:21 AM',
-        'Opened a PR with the new metrics.',
-        { pr: METRICS_PR },
+        'Opened a PR to trace refunds.',
+        { pr: TRACING_PR },
       ],
-      ['Claude', '10:40 AM', 'Merged. Waiting for a slow ticket ⏳'],
+      ['Claude', '10:40 AM', 'Merged. Waiting for another double refund ⏳'],
     ],
   },
   {
     day: 4,
     hyper: [],
     obs: [
-      ['Vaibhav', '4:30 PM', '@claude any news?'],
-      ['Claude', '4:31 PM', "It's rare. Haven't caught a slow one yet."],
+      ['Vaibhav', '2:05 PM', 'Finance found two more 😬'],
+      [
+        'Claude',
+        '2:09 PM',
+        "Checked the traces: no new double refunds since Tuesday. Finance's two must be older, from before we traced. Still waiting ⏳",
+      ],
     ],
   },
   {
@@ -655,27 +664,50 @@ const THREAD: ThreadDay[] = [
       [
         'Claude',
         '9:40 AM',
-        'Caught one. PDF tickets: the parse tool times out, then retries.',
+        'Caught one. Inside `issue_refund`, `POST /refunds` took 31s. The client retried at 30s.',
       ],
-      ['Vaibhav', '9:52 AM', 'Cap the retries 👍', DECIDES],
+      ['Vaibhav', '9:45 AM', 'How many customers did it hit before this?'],
+      [
+        'Claude',
+        '9:46 AM',
+        "Can't tell. We weren't recording then. Finance would have to dig through the payment records.",
+      ],
+      [
+        'Vaibhav',
+        '9:52 AM',
+        'Make refunds idempotent, and ask finance who else got two 👍',
+        DECIDES,
+      ],
+      [
+        'Claude',
+        '12:20 PM',
+        'Fix is through CI and deployed. Finance is still working on the list.',
+      ],
     ],
   },
 ];
 
-// A little past the left team's decision on day 8, so its star burst finishes.
+// Just past the left team's fix on day 8, so its star burst finishes.
 const THREAD_DAYS = 9.2;
-// Where the right team's chat sits: just past its decision on day 0.
+// Where the right team's chat sits: just past its fix on day 0.
 const HYPER_DAY = 1.2;
 
 /** The day number a reader sees, counting the day of the question as day 1. */
-const dayNumber = (day: number) =>
-  Math.min(9, Math.max(1, Math.floor(day - 0.3) + 1));
+const dayNumber = (day: number) => Math.max(1, Math.floor(day - 0.3) + 1);
 
-type Skin = 'slack' | 'teams';
+export type Skin = 'slack' | 'teams';
 
-const FULL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const FULL_DAYS = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
 
-type ChatItem = { when: number } & (
+export type ChatItem = { when: number } & (
   | { kind: 'date'; label: string }
   | {
       decides: boolean;
@@ -690,8 +722,8 @@ type ChatItem = { when: number } & (
 );
 
 /** One side's chat in order, with a date only on days something was said. */
-function chatItems(lit: boolean): ChatItem[] {
-  return THREAD.flatMap((r): ChatItem[] => {
+export function chatItems(thread: ThreadDay[], lit: boolean): ChatItem[] {
+  return thread.flatMap((r): ChatItem[] => {
     const msgs = lit ? r.hyper : r.obs;
     if (msgs.length === 0) return [];
     const date: ChatItem = {
@@ -720,7 +752,7 @@ function chatItems(lit: boolean): ChatItem[] {
   });
 }
 
-const CHATS = { hyper: chatItems(true), obs: chatItems(false) };
+const CHATS = { hyper: chatItems(THREAD, true), obs: chatItems(THREAD, false) };
 
 const PEOPLE: Record<string, { photo: string; x: string }> = {
   Vaibhav: { photo: '/profile-vbv.jpeg', x: 'https://x.com/vaibcode' },
@@ -820,12 +852,20 @@ function Reaction({ react }: { react: string }) {
   );
 }
 
-/** A message's text with @claude set like a chat app sets a mention. */
+/** A message's text with @claude set like a chat app sets a mention, and `code` set as code. */
 function Mentions({ text }: { text: string }) {
   return (
     <>
-      {text.split(/(@claude)/).map((part, i) =>
-        part === '@claude' ? (
+      {text.split(/(@claude|`[^`]+`)/).map((part, i) =>
+        part.startsWith('`') ? (
+          <code
+            className="rounded-[3px] border border-white/10 bg-white/[0.06] px-1 font-mono text-[0.88em] text-[#e8912d]"
+            // biome-ignore lint/suspicious/noArrayIndexKey: a fixed split of one string
+            key={i}
+          >
+            {part.slice(1, -1)}
+          </code>
+        ) : part === '@claude' ? (
           <span
             className="rounded-[3px] bg-[#1d9bd1]/20 px-0.5 font-medium text-[#4fb6e8]"
             // biome-ignore lint/suspicious/noArrayIndexKey: a fixed split of one string
@@ -981,12 +1021,15 @@ function fullHeight(item: ChatItem) {
 const arrived = (day: number, item: ChatItem) => day >= item.when + 0.05;
 
 /** A chat window. New messages take up room at the bottom, pushing older ones up and out of view. */
-function ChatWindow({
+export function ChatWindow({
   day,
+  height = 'h-[clamp(330px,calc(100vh-300px),580px)]',
   items,
   skin,
 }: {
   day: number;
+  // The height of the messages, as a class.
+  height?: string;
   items: ChatItem[];
   skin: Skin;
 }) {
@@ -1017,7 +1060,7 @@ function ChatWindow({
             message that hasn't arrived yet sits below the bottom edge; as it arrives the list moves
             up by its height, pushing older messages out of view at the top. Nothing is laid out
             again while it moves, so it stays smooth. */}
-        <div className="relative h-[clamp(330px,calc(100vh-300px),580px)] overflow-hidden">
+        <div className={`relative ${height} overflow-hidden`}>
           <div
             className="absolute inset-x-0 bottom-0 will-change-transform transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             style={{
@@ -1063,42 +1106,479 @@ function ChatWindow({
   );
 }
 
+// ---------- the two chats on one timeline ----------
+
+// One thing that happened on a side's timeline. `at` is when it shows, on the chats' clock, in days
+// from Monday; `pos` is where it's drawn, when that differs, for the right side, whose hours would
+// otherwise be a hairline. An answer and its shipped fix are joined by the same green line.
+type TimelineEvent = {
+  at: number;
+  // Right-aligned, for labels near the end of the lane.
+  end?: boolean;
+  kind: 'event' | 'answer' | 'shipped';
+  label: string;
+  pos?: number;
+  side: 'above' | 'below';
+  sub?: string;
+};
+
+// A stretch spent only waiting on someone else, in amber. `open` runs off the end of the timeline.
+type Wait = {
+  count?: boolean;
+  from: number;
+  label: string;
+  open?: boolean;
+  sub?: string;
+  to: number;
+};
+
+const LANES: Record<'hyper' | 'obs', TimelineEvent[]> = {
+  hyper: [
+    {
+      at: 0.65,
+      kind: 'answer',
+      label: 'Answered in 3 minutes',
+      pos: 0.15,
+      side: 'above',
+      sub: 'Decided: make refunds idempotent',
+    },
+    {
+      at: 0.78,
+      kind: 'shipped',
+      label: 'Fix shipped after CI, 8:40 PM',
+      pos: 0.5,
+      side: 'below',
+      sub: 'All 23 customers emailed',
+    },
+  ],
+  obs: [
+    {
+      at: 0.4,
+      kind: 'event',
+      label: 'Asked',
+      pos: 0.15,
+      side: 'above',
+      sub: 'Inside the tool isn’t traced',
+    },
+    {
+      at: 1.53,
+      kind: 'event',
+      label: 'Tracing merged',
+      side: 'below',
+      sub: 'Now wait for a repeat',
+    },
+    {
+      at: 4.4,
+      kind: 'event',
+      label: 'Finance finds 2 more',
+      side: 'above',
+      sub: 'From before the tracing',
+    },
+    {
+      at: 8.6,
+      end: true,
+      kind: 'answer',
+      label: 'Caught one',
+      pos: 8.25,
+      side: 'above',
+      sub: 'Decided: make refunds idempotent',
+    },
+    {
+      at: 8.75,
+      end: true,
+      kind: 'shipped',
+      label: 'Fix shipped after CI, 12:20 PM',
+      pos: 8.6,
+      side: 'below',
+      sub: 'Customers not emailed',
+    },
+  ],
+};
+
+const WAITS: Wait[] = [
+  { count: true, from: 1.53, label: 'Waiting for data', to: 8.25 },
+  {
+    from: 8.85,
+    label: 'Waiting on finance',
+    open: true,
+    sub: 'to identify the rest of the customers',
+    to: 11,
+  },
+];
+
+// Monday the 2nd through Thursday the 12th: the left side's nine days, and finance after them.
+const SPAN = 11;
+// How long it plays the first time it comes into view.
+const PLAY_MS = 24000;
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const AMBER = '#f5c451';
+const CLOVER = 'var(--color-clover, #8be39b)';
+const LABEL_W = '11rem';
+
+const posOf = (e: TimelineEvent) => e.pos ?? e.at;
+const at = (x: number) => `${(Math.max(0, Math.min(x, SPAN)) / SPAN) * 100}%`;
+
+/** A stretch of waiting: amber and striped, with what it's waiting on. It grows as the clock runs. */
+function WaitBand({ day, w }: { day: number; w: Wait }) {
+  if (day <= w.from) return null;
+  const until = Math.min(day, w.to);
+  const n = Math.max(1, Math.round(until - w.from));
+  return (
+    <div
+      className={`absolute inset-y-2.5 rounded-lg border border-[#f5c451]/40 ${w.open ? 'rounded-r-none border-r-0' : ''}`}
+      style={{
+        background:
+          'repeating-linear-gradient(135deg, rgb(245 196 81 / 0.14) 0 7px, rgb(245 196 81 / 0.05) 7px 14px)',
+        left: at(w.from),
+        width: at(until - w.from),
+      }}
+    >
+      {(until - w.from > 0.6 || w.open) && (
+        <span className="absolute top-2.5 left-2.5 flex flex-col items-start gap-1">
+          <span
+            className="whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold text-black"
+            style={{ background: AMBER }}
+          >
+            {w.label}
+            {w.count && `: ${n} ${n === 1 ? 'day' : 'days'}`}
+          </span>
+          {w.sub && (
+            <span
+              className="w-[8.5rem] text-[11.5px] leading-snug"
+              style={{ color: AMBER }}
+            >
+              {w.sub}
+            </span>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** One thing that happened: a dot on the lane's line, and a small card above or below it. */
+function Pin({ day, e }: { day: number; e: TimelineEvent }) {
+  const green = e.kind !== 'event';
+  return (
+    <div
+      className={`absolute top-1/2 transition-opacity duration-500 ${day >= e.at ? 'opacity-100' : 'opacity-0'}`}
+      style={{ left: at(posOf(e)) }}
+    >
+      <span
+        className={`absolute top-0 left-0 block -translate-x-1/2 -translate-y-1/2 rounded-full ${green ? 'size-3' : 'size-2.5'}`}
+        style={{
+          background: green ? CLOVER : 'rgb(255 255 255 / 0.85)',
+          boxShadow: green
+            ? '0 0 0 4px rgb(10 11 13), 0 0 14px rgb(139 227 155 / 0.6)'
+            : '0 0 0 4px rgb(10 11 13)',
+        }}
+      />
+      <div
+        className={`absolute whitespace-nowrap rounded-md border bg-[#101114] px-2 py-1 leading-tight shadow-[0_4px_16px_rgb(0_0_0/0.4)] ${green ? 'border-clover/30' : 'border-white/10'} ${e.side === 'above' ? 'bottom-3' : 'top-3'} ${e.end ? 'right-0 -mr-2 text-right' : 'left-0 -ml-2'}`}
+      >
+        <p
+          className={`text-[12.5px] font-medium ${green ? 'text-clover' : 'text-head'}`}
+        >
+          {e.label}
+        </p>
+        {e.sub && <p className="mt-0.5 text-[11.5px] text-muted">{e.sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** What a side's lane says about itself, at this point on the clock. */
+function laneStatus(events: TimelineEvent[], day: number, lit: boolean) {
+  const answer = events.find((e) => e.kind === 'answer');
+  const shipped = events.find((e) => e.kind === 'shipped');
+  if (day < 0.15) return '';
+  if (!answer || day < answer.at) return `open, day ${dayNumber(day)}`;
+  if (!shipped || day < shipped.at)
+    return lit
+      ? 'answered in 3 minutes'
+      : `answered on day ${dayNumber(answer.at)}`;
+  return lit
+    ? 'shipped the same night'
+    : `shipped on day ${dayNumber(shipped.at)}`;
+}
+
+/** Both sides on one calendar from Monday November 2, and the section's only control: drag anywhere
+ *  on it, or use the arrow keys, and the chats above it move to that moment. */
+function Timeline({
+  day,
+  onReplay,
+  onScrub,
+}: {
+  day: number;
+  onReplay: () => void;
+  onScrub: (day: number) => void;
+}) {
+  const track = useRef<HTMLDivElement>(null);
+  const toDay = (clientX: number) => {
+    const r = track.current?.getBoundingClientRect();
+    if (!r) return day;
+    return Math.max(0, Math.min(SPAN, ((clientX - r.left) / r.width) * SPAN));
+  };
+  // The same day the chats count, which turns over a little into each column.
+  const today = Math.min(SPAN - 1, dayNumber(day) - 1);
+  return (
+    <div className="mt-6 overflow-x-auto">
+      <div
+        className="relative min-w-[780px] select-none overflow-hidden rounded-2xl border border-white/10"
+        style={{
+          background:
+            'linear-gradient(180deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.015))',
+        }}
+      >
+        {/* the ruler */}
+        <div
+          className="grid h-11 border-b border-white/[0.07]"
+          style={{ gridTemplateColumns: `${LABEL_W} minmax(0, 1fr)` }}
+        >
+          <div className="flex items-center px-5">
+            <button
+              className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-full px-2 py-1 text-[12px] text-muted transition-colors hover:bg-white/10 hover:text-head"
+              onClick={onReplay}
+              type="button"
+            >
+              <span aria-hidden>↺</span> Replay
+            </button>
+          </div>
+          <div className="relative mr-6">
+            {Array.from({ length: SPAN }, (_, d) => (
+              <span
+                className={`absolute inset-y-0 flex items-center justify-center font-mono text-[11.5px] ${d === today ? 'text-head' : d % 7 >= 5 ? 'text-muted/45' : 'text-muted'}`}
+                // biome-ignore lint/suspicious/noArrayIndexKey: one per day
+                key={d}
+                style={{ left: at(d), width: at(1) }}
+              >
+                {WEEKDAYS[d % 7]} {FIRST_DATE + d}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* the lanes */}
+        {[false, true].map((lit) => {
+          const events = lit ? LANES.hyper : LANES.obs;
+          const first = events[0];
+          const last = events.at(-1);
+          const answer = events.find((e) => e.kind === 'answer');
+          const shipped = events.find((e) => e.kind === 'shipped');
+          return (
+            <div
+              className="grid border-b border-white/[0.07] last:border-b-0"
+              key={String(lit)}
+              style={{ gridTemplateColumns: `${LABEL_W} minmax(0, 1fr)` }}
+            >
+              <div className="flex flex-col justify-center gap-1 px-5">
+                <span
+                  className={`text-[14px] font-medium ${lit ? 'text-clover' : 'text-head'}`}
+                >
+                  {lit ? 'Hyperobservability' : 'Observability'}
+                </span>
+                <span className="font-mono text-[11.5px] text-muted">
+                  {laneStatus(events, day, lit)}
+                </span>
+              </div>
+              <div className="relative mr-6 h-[148px]">
+                {/* the weekend */}
+                {Array.from({ length: SPAN }, (_, d) =>
+                  d % 7 >= 5 ? (
+                    <span
+                      className="absolute inset-y-0 bg-white/[0.022]"
+                      // biome-ignore lint/suspicious/noArrayIndexKey: one per day
+                      key={d}
+                      style={{ left: at(d), width: at(1) }}
+                    />
+                  ) : null,
+                )}
+                {/* the question, open from when it's asked to the last thing on the lane */}
+                {first && last && (
+                  <span
+                    className="absolute top-1/2 h-[2px] -translate-y-1/2 bg-white/15"
+                    style={{
+                      left: at(posOf(first)),
+                      width: at(posOf(last) - posOf(first)),
+                    }}
+                  />
+                )}
+                {!lit &&
+                  WAITS.map((w) => <WaitBand day={day} key={w.label} w={w} />)}
+                {/* the answer to the shipped fix: the same green line on both sides */}
+                {answer && shipped && day >= answer.at && (
+                  <span
+                    className="absolute top-1/2 h-[3px] -translate-y-1/2 rounded-full transition-[width] duration-500"
+                    style={{
+                      background: CLOVER,
+                      boxShadow: '0 0 12px rgb(139 227 155 / 0.5)',
+                      left: at(posOf(answer)),
+                      width: at(
+                        day >= shipped.at ? posOf(shipped) - posOf(answer) : 0,
+                      ),
+                    }}
+                  />
+                )}
+                {events.map((e) => (
+                  <Pin day={day} e={e} key={e.label} />
+                ))}
+                {lit && last && day >= last.at && (
+                  <p
+                    className="absolute top-1/2 -translate-y-1/2 text-[13px] text-muted"
+                    style={{ left: at(2.2) }}
+                  >
+                    Nothing left to wait for.
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* now: the future is dimmed, and dragging anywhere moves it */}
+        <div
+          aria-label="Day"
+          aria-valuemax={SPAN}
+          aria-valuemin={0}
+          aria-valuenow={Math.round(day * 10) / 10}
+          aria-valuetext={`${FULL_DAYS[today % 7]}, November ${FIRST_DATE + today}`}
+          className="focus-ring absolute top-0 bottom-0 cursor-ew-resize touch-none"
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 1 : 0.25;
+            if (e.key === 'ArrowRight') onScrub(Math.min(SPAN, day + step));
+            else if (e.key === 'ArrowLeft') onScrub(Math.max(0, day - step));
+            else if (e.key === 'Home') onScrub(0);
+            else if (e.key === 'End') onScrub(SPAN);
+            else return;
+            e.preventDefault();
+          }}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            onScrub(toDay(e.clientX));
+          }}
+          onPointerMove={(e) => {
+            if (e.currentTarget.hasPointerCapture(e.pointerId))
+              onScrub(toDay(e.clientX));
+          }}
+          ref={track}
+          role="slider"
+          style={{ left: LABEL_W, right: '1.5rem' }}
+          tabIndex={0}
+        >
+          <span
+            className="pointer-events-none absolute top-11 bottom-0 right-0 bg-[#0a0b0d]/60"
+            style={{ left: at(day) }}
+          />
+          <span
+            className="pointer-events-none absolute top-9 bottom-0 w-px bg-white/70"
+            style={{ left: at(day) }}
+          />
+          <span
+            className="pointer-events-none absolute top-[9px] -translate-x-1/2 rounded-full bg-white px-2.5 py-[3px] font-mono text-[11px] font-semibold whitespace-nowrap text-black shadow-[0_2px_10px_rgb(0_0_0/0.5)]"
+            style={{ left: at(day) }}
+          >
+            {WEEKDAYS[today % 7]} {FIRST_DATE + today}
+          </span>
+        </div>
+      </div>
+      <p className="mt-2.5 text-[12.5px] text-muted">
+        Drag across the timeline to move through the days.
+      </p>
+    </div>
+  );
+}
+
+/** Time to a decision: minutes on the right, and on the left, the days it's been waiting. */
+function Decided({ day, lit }: { day: number; lit: boolean }) {
+  const value = lit
+    ? '3 minutes'
+    : day >= THREAD_DAYS - 0.4
+      ? `${dayNumber(day)} days`
+      : `still waiting, day ${dayNumber(day)}`;
+  return (
+    <p className="text-right leading-tight">
+      <span className="block text-[12px] text-muted">Time to a decision</span>
+      <span
+        className={`font-mono text-[18px] tabular-nums ${lit ? 'text-clover' : 'text-head'}`}
+      >
+        {value}
+      </span>
+    </p>
+  );
+}
+
+/** The two chats over one timeline. It plays once, the first time it comes into view; after that
+ *  the timeline is the control. */
 function Threads() {
   const [skin, setSkin] = useState<Skin>('slack');
   useEffect(() => {
     // The easter egg: Windows gets Teams, and everyone else gets Slack.
     if (/Windows/i.test(navigator.userAgent)) setSkin('teams');
   }, []);
+  const [day, setDay] = useState(0);
+  const raf = useRef(0);
+  const box = useRef<HTMLDivElement>(null);
+  const play = useCallback(() => {
+    cancelAnimationFrame(raf.current);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDay(SPAN);
+      return;
+    }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - start) / PLAY_MS);
+      setDay(k * SPAN);
+      if (k < 1) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+  }, []);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        io.disconnect();
+        play();
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      cancelAnimationFrame(raf.current);
+    };
+  }, [play]);
   return (
-    <Pinned length="300vh">
-      {(p) => {
-        // One clock for both chats, played one after the other: the right decides by day 1, and
-        // only then does the left start its nine days.
-        const scrolled = sweep(p) * (HYPER_DAY + THREAD_DAYS);
-        return (
-          <div className="grid md:grid-cols-2 gap-x-6 gap-y-8">
-            {[false, true].map((lit) => {
-              const day = lit
-                ? Math.min(HYPER_DAY, scrolled)
-                : Math.max(0, scrolled - HYPER_DAY);
-              return (
-                <div className="min-w-0" key={String(lit)}>
-                  <div className="mb-3 flex items-baseline justify-between gap-4">
-                    <SideName lit={lit} />
-                    <Days day={day} lit={lit} />
-                  </div>
-                  <ChatWindow
-                    day={day}
-                    items={lit ? CHATS.hyper : CHATS.obs}
-                    skin={skin}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        );
-      }}
-    </Pinned>
+    <div ref={box}>
+      <div className="grid gap-x-6 gap-y-8 md:grid-cols-2">
+        {[false, true].map((lit) => {
+          const d = lit ? Math.min(HYPER_DAY, day) : Math.min(THREAD_DAYS, day);
+          return (
+            <div className="min-w-0" key={String(lit)}>
+              <div className="mb-3 flex items-end justify-between gap-4">
+                <SideName lit={lit} />
+                <Decided day={d} lit={lit} />
+              </div>
+              <ChatWindow
+                day={d}
+                height="h-[clamp(200px,calc(100vh-690px),340px)]"
+                items={lit ? CHATS.hyper : CHATS.obs}
+                skin={skin}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <Timeline
+        day={day}
+        onReplay={play}
+        onScrub={(d) => {
+          cancelAnimationFrame(raf.current);
+          setDay(d);
+        }}
+      />
+    </div>
   );
 }
 
