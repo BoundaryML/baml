@@ -29,7 +29,7 @@ use std::{
 };
 
 use baml_sdkgen_types::ProgramDescriptor;
-use baml_type::{Int63, MediaKind, Name, TypeName};
+use baml_type::{ConcreteMediaKind, Int63, Name, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
     CffiHandleTableEntry, HANDLE_TABLE, HostKey, TableKey, WireHandle,
@@ -415,27 +415,22 @@ impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
             }
             LeafKind::Media(kind) => {
                 let payload: BamlValueMedia = match kind {
-                    MediaKind::Image => obj
+                    ConcreteMediaKind::Image => obj
                         .cast::<media::BamlImage>()?
                         .borrow()
                         .wire_payload(self.py)?,
-                    MediaKind::Audio => obj
+                    ConcreteMediaKind::Audio => obj
                         .cast::<media::BamlAudio>()?
                         .borrow()
                         .wire_payload(self.py)?,
-                    MediaKind::Video => obj
+                    ConcreteMediaKind::Video => obj
                         .cast::<media::BamlVideo>()?
                         .borrow()
                         .wire_payload(self.py)?,
-                    MediaKind::Pdf => obj
+                    ConcreteMediaKind::Pdf => obj
                         .cast::<media::BamlPdf>()?
                         .borrow()
                         .wire_payload(self.py)?,
-                    MediaKind::Generic => {
-                        return Err(PyTypeError::new_err(
-                            "a Python media value always has a kind",
-                        ));
-                    }
                 };
                 Ok((LeafWire::Media(payload), None))
             }
@@ -493,16 +488,16 @@ impl<'py> PyValue<'_, 'py> {
             return Ok(Some(LeafKind::Handle));
         }
         if obj.is_instance_of::<media::BamlImage>() {
-            return Ok(Some(LeafKind::Media(MediaKind::Image)));
+            return Ok(Some(LeafKind::Media(ConcreteMediaKind::Image)));
         }
         if obj.is_instance_of::<media::BamlAudio>() {
-            return Ok(Some(LeafKind::Media(MediaKind::Audio)));
+            return Ok(Some(LeafKind::Media(ConcreteMediaKind::Audio)));
         }
         if obj.is_instance_of::<media::BamlVideo>() {
-            return Ok(Some(LeafKind::Media(MediaKind::Video)));
+            return Ok(Some(LeafKind::Media(ConcreteMediaKind::Video)));
         }
         if obj.is_instance_of::<media::BamlPdf>() {
-            return Ok(Some(LeafKind::Media(MediaKind::Pdf)));
+            return Ok(Some(LeafKind::Media(ConcreteMediaKind::Pdf)));
         }
         if self.is_a(&self.cx.baml_type) {
             return Ok(Some(LeafKind::TypeValue));

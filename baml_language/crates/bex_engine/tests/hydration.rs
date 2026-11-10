@@ -11,7 +11,9 @@ use std::sync::Arc;
 
 use baml_type::TypeName;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
-use bex_external_types::{BexExternalAdt, MediaKind, WireFunctionParamTy, WireHead, WireTy};
+use bex_external_types::{
+    BexExternalAdt, ConcreteMediaKind, WireFunctionParamTy, WireHead, WireTy,
+};
 use bex_resource_types::{HostValueArc, HostValueKind};
 use common::compile_for_engine;
 use indexmap::IndexMap;
@@ -335,7 +337,7 @@ async fn media_lands_as_its_kind() {
         function width(x: image) -> int { 1 }
     "#;
     let picture = BexExternalValue::Adt(BexExternalAdt::Media(bex_vm_types::MediaValue::from_url(
-        MediaKind::Image,
+        ConcreteMediaKind::Image,
         "https://example.test/p.png",
         Some("image/png"),
     )));
@@ -344,7 +346,7 @@ async fn media_lands_as_its_kind() {
         BexExternalValue::Int(1)
     );
     let clip = BexExternalValue::Adt(BexExternalAdt::Media(bex_vm_types::MediaValue::from_url(
-        MediaKind::Audio,
+        ConcreteMediaKind::Audio,
         "https://example.test/a.mp3",
         Some("audio/mpeg"),
     )));

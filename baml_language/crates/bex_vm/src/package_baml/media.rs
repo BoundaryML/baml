@@ -1,4 +1,4 @@
-use baml_type::MediaKind;
+use baml_type::ConcreteMediaKind;
 
 use super::{
     BamlClassMediaAudio, BamlClassMediaImage, BamlClassMediaPdf, BamlClassMediaVideo,
@@ -36,7 +36,7 @@ impl BamlClassMediaPdf for PackageBamlImpl {
     fn from_url(url: &bex_str::BexStr, mime_type: Option<&bex_str::BexStr>) -> copy::media::Pdf {
         copy::media::Pdf {
             payload: bex_vm_types::MediaValue::from_url(
-                MediaKind::Pdf,
+                ConcreteMediaKind::Pdf,
                 url.as_str(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
@@ -50,7 +50,7 @@ impl BamlClassMediaPdf for PackageBamlImpl {
     ) -> copy::media::Pdf {
         copy::media::Pdf {
             payload: bex_vm_types::MediaValue::from_file_content(
-                MediaKind::Pdf,
+                ConcreteMediaKind::Pdf,
                 file.as_str(),
                 base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
@@ -59,7 +59,7 @@ impl BamlClassMediaPdf for PackageBamlImpl {
     }
 
     fn infer_mime_type(source: &bex_str::BexStr) -> bex_str::BexStr {
-        bex_vm_types::media::mime_for(source.as_str(), MediaKind::Pdf).into()
+        bex_vm_types::media::mime_for(source.as_str(), ConcreteMediaKind::Pdf).into()
     }
 
     fn from_base64(
@@ -68,7 +68,7 @@ impl BamlClassMediaPdf for PackageBamlImpl {
     ) -> copy::media::Pdf {
         copy::media::Pdf {
             payload: bex_vm_types::MediaValue::from_base64(
-                MediaKind::Pdf,
+                ConcreteMediaKind::Pdf,
                 base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
@@ -101,7 +101,7 @@ impl BamlClassMediaAudio for PackageBamlImpl {
     fn from_url(url: &bex_str::BexStr, mime_type: Option<&bex_str::BexStr>) -> copy::media::Audio {
         copy::media::Audio {
             payload: bex_vm_types::MediaValue::from_url(
-                MediaKind::Audio,
+                ConcreteMediaKind::Audio,
                 url.as_str(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
@@ -115,7 +115,7 @@ impl BamlClassMediaAudio for PackageBamlImpl {
     ) -> copy::media::Audio {
         copy::media::Audio {
             payload: bex_vm_types::MediaValue::from_file_content(
-                MediaKind::Audio,
+                ConcreteMediaKind::Audio,
                 file.as_str(),
                 base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
@@ -124,7 +124,7 @@ impl BamlClassMediaAudio for PackageBamlImpl {
     }
 
     fn infer_mime_type(source: &bex_str::BexStr) -> bex_str::BexStr {
-        bex_vm_types::media::mime_for(source.as_str(), MediaKind::Audio).into()
+        bex_vm_types::media::mime_for(source.as_str(), ConcreteMediaKind::Audio).into()
     }
 
     fn from_base64(
@@ -133,7 +133,7 @@ impl BamlClassMediaAudio for PackageBamlImpl {
     ) -> copy::media::Audio {
         copy::media::Audio {
             payload: bex_vm_types::MediaValue::from_base64(
-                MediaKind::Audio,
+                ConcreteMediaKind::Audio,
                 base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
@@ -166,7 +166,7 @@ impl BamlClassMediaVideo for PackageBamlImpl {
     fn from_url(url: &bex_str::BexStr, mime_type: Option<&bex_str::BexStr>) -> copy::media::Video {
         copy::media::Video {
             payload: bex_vm_types::MediaValue::from_url(
-                MediaKind::Video,
+                ConcreteMediaKind::Video,
                 url.as_str(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
@@ -180,7 +180,7 @@ impl BamlClassMediaVideo for PackageBamlImpl {
     ) -> copy::media::Video {
         copy::media::Video {
             payload: bex_vm_types::MediaValue::from_file_content(
-                MediaKind::Video,
+                ConcreteMediaKind::Video,
                 file.as_str(),
                 base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
@@ -189,7 +189,7 @@ impl BamlClassMediaVideo for PackageBamlImpl {
     }
 
     fn infer_mime_type(source: &bex_str::BexStr) -> bex_str::BexStr {
-        bex_vm_types::media::mime_for(source.as_str(), MediaKind::Video).into()
+        bex_vm_types::media::mime_for(source.as_str(), ConcreteMediaKind::Video).into()
     }
 
     fn from_base64(
@@ -198,7 +198,7 @@ impl BamlClassMediaVideo for PackageBamlImpl {
     ) -> copy::media::Video {
         copy::media::Video {
             payload: bex_vm_types::MediaValue::from_base64(
-                MediaKind::Video,
+                ConcreteMediaKind::Video,
                 base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
@@ -231,7 +231,7 @@ impl BamlClassMediaImage for PackageBamlImpl {
     fn from_url(url: &bex_str::BexStr, mime_type: Option<&bex_str::BexStr>) -> copy::media::Image {
         copy::media::Image {
             payload: bex_vm_types::MediaValue::from_url(
-                MediaKind::Image,
+                ConcreteMediaKind::Image,
                 url.as_str(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
@@ -245,7 +245,7 @@ impl BamlClassMediaImage for PackageBamlImpl {
     ) -> copy::media::Image {
         copy::media::Image {
             payload: bex_vm_types::MediaValue::from_file_content(
-                MediaKind::Image,
+                ConcreteMediaKind::Image,
                 file.as_str(),
                 base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
@@ -254,7 +254,7 @@ impl BamlClassMediaImage for PackageBamlImpl {
     }
 
     fn infer_mime_type(source: &bex_str::BexStr) -> bex_str::BexStr {
-        bex_vm_types::media::mime_for(source.as_str(), MediaKind::Image).into()
+        bex_vm_types::media::mime_for(source.as_str(), ConcreteMediaKind::Image).into()
     }
 
     fn from_base64(
@@ -263,7 +263,7 @@ impl BamlClassMediaImage for PackageBamlImpl {
     ) -> copy::media::Image {
         copy::media::Image {
             payload: bex_vm_types::MediaValue::from_base64(
-                MediaKind::Image,
+                ConcreteMediaKind::Image,
                 base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),

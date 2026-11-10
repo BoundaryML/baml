@@ -192,8 +192,16 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
         case .audio: media.kind = .audio
         case .video: media.kind = .video
         case .pdf: media.kind = .pdf
-        case .generic: media.kind = .generic
         }
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.media = media
+        return BamlTypeDescriptor(ty)
+    }
+
+    /// The media type `media`, which admits media of every kind.
+    public static var anyMedia: BamlTypeDescriptor {
+        var media = BamlBridge_Cffi_V1_BamlTyMedia()
+        media.kind = .generic
         var ty = BamlBridge_Cffi_V1_BamlTy()
         ty.media = media
         return BamlTypeDescriptor(ty)

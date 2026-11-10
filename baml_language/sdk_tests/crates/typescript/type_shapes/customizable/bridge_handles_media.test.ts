@@ -4,7 +4,7 @@ import {
   BamlImage,
   BamlPdf,
   BamlVideo,
-  _seedGenericMediaHandle,
+  _seedMediaHandle,
 } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import { isTestRuntime } from "./test_runtime.js";
@@ -30,8 +30,8 @@ describe("bridge handles and media — key ownership", () => {
   });
 
   it("bridge_handles_media_clones_ordinary_owners_and_wire_keys_independently", () => {
-    const [key, handleType] = _seedGenericMediaHandle();
-    expect(handleType).toBe(10);
+    const [key, handleType] = _seedMediaHandle();
+    expect(handleType).toBe(6);
     const owner = new BamlHandle(key, handleType);
     const clone = owner.clone();
     const wireKeyOne = owner._cloneKeyForWire();
@@ -56,7 +56,7 @@ describe("bridge handles and media — key ownership", () => {
   });
 
   it("bridge_handles_media_rejects_an_invalid_ordinary_key_only_when_an_operation_resolves_it", () => {
-    const invalid = new BamlHandle({ low: 0x7fff_fffe, high: 0 }, 10);
+    const invalid = new BamlHandle({ low: 0x7fff_fffe, high: 0 }, 6);
     expect(invalid.key).toEqual({ low: 0x7fff_fffe, high: 0 });
     expect(() => invalid.clone()).toThrow(/invalid handle/);
     if (isWebRuntime) expect(releaseForWeb(invalid)).toBe(false);
@@ -76,8 +76,8 @@ describe("bridge handles and media — key ownership", () => {
   });
 
   it("bridge_handles_media_exposes_stable_seed_tags", () => {
-    const [mediaKey, mediaType] = _seedGenericMediaHandle();
-    expect(mediaType).toBe(10);
+    const [mediaKey, mediaType] = _seedMediaHandle();
+    expect(mediaType).toBe(6);
     if (isWebRuntime) {
       expect(releaseForWeb(new BamlHandle(mediaKey, mediaType))).toBe(true);
     }

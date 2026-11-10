@@ -3573,7 +3573,7 @@ mod tests {
                 pdf.clone(),
                 class(
                     &pdf,
-                    baml_sdkgen_types::ClassCrossing::Media(baml_base::MediaKind::Pdf),
+                    baml_sdkgen_types::ClassCrossing::Media(baml_base::ConcreteMediaKind::Pdf),
                     &[],
                     Vec::new(),
                 ),

@@ -424,6 +424,28 @@ static void TestMediaContentReadFromAFileKeepsItsName() {
   Require(!baml::image::from_base64("aGk=").name(), "base64 media has a name");
 }
 
+// A media value always has a kind: the type `media` admits each one, and a
+// payload naming none is refused.
+static void TestMediaValuesHaveAKind() {
+  namespace pb = baml::detail::pb;
+  pb::BamlOutboundValue value;
+  value.mutable_media_value()->set_media(pb::AUDIO);
+  value.mutable_media_value()->set_base64("aGk=");
+  Require(
+      baml::codec<baml::media>::decode(value).kind() == baml::media_kind::audio,
+      "media lost its kind");
+  for (int raw : {0, 5, 42}) {
+    value.mutable_media_value()->set_media(static_cast<pb::MediaTypeEnum>(raw));
+    bool threw = false;
+    try {
+      (void)baml::codec<baml::media>::decode(value);
+    } catch (const baml::error&) {
+      threw = true;
+    }
+    Require(threw, "media without a kind decoded");
+  }
+}
+
 static void RunTest(const char* name, void (*test)()) {
   std::fprintf(stderr, "running %s\n", name);
   std::fflush(stderr);
@@ -864,6 +886,7 @@ int main() {
           TestTypedSpecStreamAndPortableValueCodecs);
   RunTest("media reads files now and keeps their names",
           TestMediaContentReadFromAFileKeepsItsName);
+  RunTest("media values have a kind", TestMediaValuesHaveAKind);
   RunTest("unhandled_spawn_error_uses_host_default",
           TestUnhandledSpawnErrorUsesHostDefault);
   RunTest("type values cross as their one spelling",

@@ -38,7 +38,7 @@ import initWasm, {
   sendWebHostValueAgain,
   _testWebHostValueCount,
   _testWebHostValueRegistered,
-  seedGenericMediaHandle as seedWasmGenericMediaHandle,
+  seedMediaHandle as seedWasmMediaHandle,
   shutdownRuntime as shutdownWasmRuntime,
   stageRuntimeBytecode,
   stageRuntimeSources,
@@ -212,7 +212,6 @@ const HANDLE_MEDIA_IMAGE = 6;
 const HANDLE_MEDIA_AUDIO = 7;
 const HANDLE_MEDIA_VIDEO = 8;
 const HANDLE_MEDIA_PDF = 9;
-const HANDLE_MEDIA_GENERIC = 10;
 const HANDLE_HOST_VALUE_CALLABLE = 15;
 const HANDLE_HOST_VALUE_OPAQUE = 16;
 const MEDIA_IMAGE = 1;
@@ -591,6 +590,6 @@ export function completeHostCallThrow(callId: number, value: unknown, isPanic: b
     catch (error) { throw wrapNativeError(error); }
     finally { if (completed) finishHostCall(callId); }
 }
-export function _seedGenericMediaHandle(): [HandleKey, number] {
-  return [keyFromBigint(seedWasmGenericMediaHandle()), HANDLE_MEDIA_GENERIC];
+export function _seedMediaHandle(): [HandleKey, number] {
+  return [keyFromBigint(seedWasmMediaHandle()), HANDLE_MEDIA_IMAGE];
 }

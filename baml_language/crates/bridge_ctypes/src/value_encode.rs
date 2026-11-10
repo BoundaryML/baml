@@ -439,15 +439,14 @@ fn selected_union_option_index(
 }
 
 fn media_kind_to_proto_enum(
-    kind: bex_project::MediaKind,
+    kind: bex_project::ConcreteMediaKind,
 ) -> crate::baml_bridge::cffi::MediaTypeEnum {
-    use crate::baml_bridge::cffi::MediaTypeEnum as E;
+    use crate::baml_bridge::cffi::MediaTypeEnum;
     match kind {
-        bex_project::MediaKind::Image => E::Image,
-        bex_project::MediaKind::Audio => E::Audio,
-        bex_project::MediaKind::Video => E::Video,
-        bex_project::MediaKind::Pdf => E::Pdf,
-        bex_project::MediaKind::Generic => E::Other,
+        bex_project::ConcreteMediaKind::Image => MediaTypeEnum::Image,
+        bex_project::ConcreteMediaKind::Audio => MediaTypeEnum::Audio,
+        bex_project::ConcreteMediaKind::Video => MediaTypeEnum::Video,
+        bex_project::ConcreteMediaKind::Pdf => MediaTypeEnum::Pdf,
     }
 }
 
@@ -842,7 +841,7 @@ mod tests {
     #[test]
     fn artifact_safe_media_stays_durable_data() {
         let media = MediaValue::new(
-            bex_project::MediaKind::Image,
+            bex_project::ConcreteMediaKind::Image,
             MediaContent::Url {
                 url: "https://example.com/img.png".to_string(),
                 base64_data: None,
@@ -862,7 +861,7 @@ mod tests {
     #[test]
     fn portable_boundary_never_boxes_media_or_prompt_as_handles() {
         let media = Arc::new(MediaValue::new(
-            bex_project::MediaKind::Image,
+            bex_project::ConcreteMediaKind::Image,
             MediaContent::Base64 {
                 base64_data: "aW1hZ2U=".into(),
                 name: None,
@@ -902,7 +901,7 @@ mod tests {
         use crate::baml_bridge::cffi::baml_value_media::Value;
 
         let named = MediaValue::from_file_content(
-            bex_project::MediaKind::Pdf,
+            bex_project::ConcreteMediaKind::Pdf,
             "/reports/q3.pdf",
             "JVBERi0xLjc=".into(),
             None,
@@ -917,7 +916,11 @@ mod tests {
             ("q3.pdf", "JVBERi0xLjc=")
         );
 
-        let plain = MediaValue::from_base64(bex_project::MediaKind::Image, "aW1hZ2U=".into(), None);
+        let plain = MediaValue::from_base64(
+            bex_project::ConcreteMediaKind::Image,
+            "aW1hZ2U=".into(),
+            None,
+        );
         assert_eq!(
             bex_media_to_proto_media(&plain).value,
             Some(Value::Base64("aW1hZ2U=".to_string()))

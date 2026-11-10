@@ -13,13 +13,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use baml_base::MediaKind;
+use baml_base::ConcreteMediaKind;
 use bex_str::BexStr;
 
 // Do not clone. Only clone as `Arc<MediaValue>`.
 #[derive(Debug)]
 pub struct MediaValue {
-    pub kind: MediaKind,
+    pub kind: ConcreteMediaKind,
     mime_type: RwLock<Option<String>>,
     // `UnsafeCell` because `MediaContent` is mutated through
     // `write_content`. Access is guarded by `content_rw_lock`; the
@@ -84,7 +84,7 @@ impl std::hash::Hash for MediaValue {
 }
 
 impl MediaValue {
-    pub fn new(kind: MediaKind, content: MediaContent, mime_type: Option<String>) -> Self {
+    pub fn new(kind: ConcreteMediaKind, content: MediaContent, mime_type: Option<String>) -> Self {
         Self {
             content_rw_lock: RwLock::new(()),
             kind,
@@ -97,7 +97,7 @@ impl MediaValue {
     /// `Baml{Image,Video,Audio,Pdf}.from_url` static constructors on
     /// the bridge side and by the corresponding `BamlClassMedia*` VM
     /// trait impls.
-    pub fn from_url(kind: MediaKind, url: &str, mime_type: Option<&str>) -> Arc<Self> {
+    pub fn from_url(kind: ConcreteMediaKind, url: &str, mime_type: Option<&str>) -> Arc<Self> {
         Arc::new(Self::new(
             kind,
             MediaContent::Url {
@@ -113,7 +113,7 @@ impl MediaValue {
     /// the value's name, and its MIME type is `mime_type` or else what that
     /// name implies ([`mime_for`]). Nothing is read here.
     pub fn from_file_content(
-        kind: MediaKind,
+        kind: ConcreteMediaKind,
         file: &str,
         base64: BexStr,
         mime_type: Option<&str>,
@@ -136,7 +136,11 @@ impl MediaValue {
     /// Construct an `Arc<MediaValue>` from a base64 payload. The payload is
     /// held by handle: passing a clone of an existing `BexStr` shares its
     /// storage.
-    pub fn from_base64(kind: MediaKind, base64: BexStr, mime_type: Option<&str>) -> Arc<Self> {
+    pub fn from_base64(
+        kind: ConcreteMediaKind,
+        base64: BexStr,
+        mime_type: Option<&str>,
+    ) -> Arc<Self> {
         Arc::new(Self::new(
             kind,
             MediaContent::Base64 {
@@ -214,9 +218,9 @@ pub enum MediaContent {
 /// The MIME type that `source`, a file name or URL, implies for media of
 /// `kind`: by its extension, or the kind's usual type when the extension says
 /// nothing. The one table of its kind: hosts and BAML code both ask here.
-pub fn mime_for(source: &str, kind: MediaKind) -> &'static str {
+pub fn mime_for(source: &str, kind: ConcreteMediaKind) -> &'static str {
     // Containers that hold audio as well as video go by the kind.
-    let audio = matches!(kind, MediaKind::Audio);
+    let audio = matches!(kind, ConcreteMediaKind::Audio);
     match extension(source).to_ascii_lowercase().as_str() {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
@@ -238,11 +242,10 @@ pub fn mime_for(source: &str, kind: MediaKind) -> &'static str {
         "mkv" => "video/x-matroska",
         "pdf" => "application/pdf",
         _ => match kind {
-            MediaKind::Image => "image/png",
-            MediaKind::Audio => "audio/mpeg",
-            MediaKind::Video => "video/mp4",
-            MediaKind::Pdf => "application/pdf",
-            MediaKind::Generic => "application/octet-stream",
+            ConcreteMediaKind::Image => "image/png",
+            ConcreteMediaKind::Audio => "audio/mpeg",
+            ConcreteMediaKind::Video => "video/mp4",
+            ConcreteMediaKind::Pdf => "application/pdf",
         },
     }
 }
@@ -346,7 +349,7 @@ mod tests {
     #[test]
     fn test_media_value_mime_type_roundtrip() {
         let media = MediaValue::new(
-            MediaKind::Image,
+            ConcreteMediaKind::Image,
             MediaContent::Base64 {
                 base64_data: "abc".into(),
                 name: None,
@@ -400,11 +403,11 @@ mod tests {
     #[test]
     fn from_url_constructs_arc_with_correct_kind() {
         let arc = MediaValue::from_url(
-            MediaKind::Pdf,
+            ConcreteMediaKind::Pdf,
             "https://example/x.pdf",
             Some("application/pdf"),
         );
-        assert_eq!(arc.kind, MediaKind::Pdf);
+        assert_eq!(arc.kind, ConcreteMediaKind::Pdf);
         assert_eq!(arc.url().as_deref(), Some("https://example/x.pdf"));
         assert!(arc.name().is_none());
         assert_eq!(arc.mime_type().as_deref(), Some("application/pdf"));
@@ -412,8 +415,9 @@ mod tests {
 
     #[test]
     fn from_base64_constructs_arc() {
-        let arc = MediaValue::from_base64(MediaKind::Audio, "Zm9v".into(), Some("audio/wav"));
-        assert_eq!(arc.kind, MediaKind::Audio);
+        let arc =
+            MediaValue::from_base64(ConcreteMediaKind::Audio, "Zm9v".into(), Some("audio/wav"));
+        assert_eq!(arc.kind, ConcreteMediaKind::Audio);
         assert_eq!(arc.base64().as_str(), "Zm9v");
         assert!(arc.url().is_none());
         assert!(arc.name().is_none());
@@ -426,9 +430,13 @@ mod tests {
         let BexStr::Flat(source) = &payload else {
             panic!("expected a heap-backed payload, got {payload:?}")
         };
-        let plain = MediaValue::from_base64(MediaKind::Image, payload.clone(), None);
-        let named =
-            MediaValue::from_file_content(MediaKind::Image, "cat.png", payload.clone(), None);
+        let plain = MediaValue::from_base64(ConcreteMediaKind::Image, payload.clone(), None);
+        let named = MediaValue::from_file_content(
+            ConcreteMediaKind::Image,
+            "cat.png",
+            payload.clone(),
+            None,
+        );
         for read in [plain.base64(), plain.base64(), named.base64()] {
             let BexStr::Flat(shared) = &read else {
                 panic!("expected a heap-backed payload, got {read:?}")
@@ -440,7 +448,8 @@ mod tests {
 
     #[test]
     fn base64_is_empty_without_a_payload() {
-        let media = MediaValue::from_url(MediaKind::Image, "https://example.test/x.png", None);
+        let media =
+            MediaValue::from_url(ConcreteMediaKind::Image, "https://example.test/x.png", None);
         assert!(media.base64().is_empty());
         media.read_content(|content| assert_eq!(content.base64_data(), None));
     }
@@ -448,7 +457,7 @@ mod tests {
     #[test]
     fn content_read_from_a_file_is_named_by_its_base_name() {
         let media = MediaValue::from_file_content(
-            MediaKind::Pdf,
+            ConcreteMediaKind::Pdf,
             "/reports/Q3.PDF",
             "JVBERi0xLjc=".into(),
             None,
@@ -459,7 +468,7 @@ mod tests {
         assert_eq!(media.mime_type().as_deref(), Some("application/pdf"));
         // A MIME type that is given is kept.
         let given = MediaValue::from_file_content(
-            MediaKind::Image,
+            ConcreteMediaKind::Image,
             "/tmp/photo.jpg",
             "abc".into(),
             Some("image/x-custom"),
@@ -467,17 +476,22 @@ mod tests {
         assert_eq!(given.mime_type().as_deref(), Some("image/x-custom"));
         assert_eq!(given.name().as_deref(), Some("photo.jpg"));
         // An inferred MIME type goes by the name, not by the directories above it.
-        let nested =
-            MediaValue::from_file_content(MediaKind::Pdf, "/scans.png/q3.pdf", "abc".into(), None);
+        let nested = MediaValue::from_file_content(
+            ConcreteMediaKind::Pdf,
+            "/scans.png/q3.pdf",
+            "abc".into(),
+            None,
+        );
         assert_eq!(nested.mime_type().as_deref(), Some("application/pdf"));
         assert_eq!(nested.name().as_deref(), Some("q3.pdf"));
         // Only content read from a file has a name.
         assert_eq!(
-            MediaValue::from_url(MediaKind::Image, "https://example.test/a.png", None).name(),
+            MediaValue::from_url(ConcreteMediaKind::Image, "https://example.test/a.png", None)
+                .name(),
             None
         );
         assert_eq!(
-            MediaValue::from_base64(MediaKind::Image, "abc".into(), None).name(),
+            MediaValue::from_base64(ConcreteMediaKind::Image, "abc".into(), None).name(),
             None
         );
     }
@@ -485,54 +499,65 @@ mod tests {
     #[test]
     fn a_mime_type_goes_by_the_extension_then_by_the_kind() {
         for (source, kind, expected) in [
-            ("photo.JPG", MediaKind::Image, "image/jpeg"),
-            ("photo.jpeg", MediaKind::Image, "image/jpeg"),
-            ("a.webp", MediaKind::Image, "image/webp"),
-            ("a.gif", MediaKind::Image, "image/gif"),
-            ("a.svg", MediaKind::Image, "image/svg+xml"),
-            ("a.wav", MediaKind::Audio, "audio/wav"),
-            ("a.mp3", MediaKind::Audio, "audio/mpeg"),
-            ("a.flac", MediaKind::Audio, "audio/flac"),
-            ("a.ogg", MediaKind::Audio, "audio/ogg"),
-            ("a.webm", MediaKind::Audio, "audio/webm"),
-            ("a.webm", MediaKind::Video, "video/webm"),
-            ("a.mov", MediaKind::Video, "video/quicktime"),
-            ("a.mp4", MediaKind::Audio, "audio/mp4"),
-            ("a.mp4", MediaKind::Video, "video/mp4"),
-            ("a.avi", MediaKind::Video, "video/x-msvideo"),
-            ("a.mkv", MediaKind::Audio, "audio/x-matroska"),
-            ("a.mkv", MediaKind::Video, "video/x-matroska"),
-            ("a.pdf", MediaKind::Pdf, "application/pdf"),
+            ("photo.JPG", ConcreteMediaKind::Image, "image/jpeg"),
+            ("photo.jpeg", ConcreteMediaKind::Image, "image/jpeg"),
+            ("a.webp", ConcreteMediaKind::Image, "image/webp"),
+            ("a.gif", ConcreteMediaKind::Image, "image/gif"),
+            ("a.svg", ConcreteMediaKind::Image, "image/svg+xml"),
+            ("a.wav", ConcreteMediaKind::Audio, "audio/wav"),
+            ("a.mp3", ConcreteMediaKind::Audio, "audio/mpeg"),
+            ("a.flac", ConcreteMediaKind::Audio, "audio/flac"),
+            ("a.ogg", ConcreteMediaKind::Audio, "audio/ogg"),
+            ("a.webm", ConcreteMediaKind::Audio, "audio/webm"),
+            ("a.webm", ConcreteMediaKind::Video, "video/webm"),
+            ("a.mov", ConcreteMediaKind::Video, "video/quicktime"),
+            ("a.mp4", ConcreteMediaKind::Audio, "audio/mp4"),
+            ("a.mp4", ConcreteMediaKind::Video, "video/mp4"),
+            ("a.avi", ConcreteMediaKind::Video, "video/x-msvideo"),
+            ("a.mkv", ConcreteMediaKind::Audio, "audio/x-matroska"),
+            ("a.mkv", ConcreteMediaKind::Video, "video/x-matroska"),
+            ("a.pdf", ConcreteMediaKind::Pdf, "application/pdf"),
             // The extension wins over the kind.
-            ("a.pdf", MediaKind::Image, "application/pdf"),
+            ("a.pdf", ConcreteMediaKind::Image, "application/pdf"),
             // Only the last extension of the last segment counts.
-            ("photo.png.pdf", MediaKind::Pdf, "application/pdf"),
-            ("/scans.png/report.pdf", MediaKind::Pdf, "application/pdf"),
-            ("/scans.png/report", MediaKind::Pdf, "application/pdf"),
-            ("C:\\scans.png\\report", MediaKind::Audio, "audio/mpeg"),
+            ("photo.png.pdf", ConcreteMediaKind::Pdf, "application/pdf"),
+            (
+                "/scans.png/report.pdf",
+                ConcreteMediaKind::Pdf,
+                "application/pdf",
+            ),
+            (
+                "/scans.png/report",
+                ConcreteMediaKind::Pdf,
+                "application/pdf",
+            ),
+            (
+                "C:\\scans.png\\report",
+                ConcreteMediaKind::Audio,
+                "audio/mpeg",
+            ),
             // An extension is matched whole.
-            ("photo.avif", MediaKind::Image, "image/png"),
-            ("a.pngx", MediaKind::Audio, "audio/mpeg"),
+            ("photo.avif", ConcreteMediaKind::Image, "image/png"),
+            ("a.pngx", ConcreteMediaKind::Audio, "audio/mpeg"),
             // A URL's query and fragment are not part of its path.
             (
                 "https://example.test/a.gif?as=.png#x.jpg",
-                MediaKind::Image,
+                ConcreteMediaKind::Image,
                 "image/gif",
             ),
             (
                 "https://example.test/a?as=.png",
-                MediaKind::Video,
+                ConcreteMediaKind::Video,
                 "video/mp4",
             ),
             // A file name's `?` and `#` are part of it.
-            ("what?.pdf", MediaKind::Image, "application/pdf"),
-            ("a#1.gif", MediaKind::Image, "image/gif"),
+            ("what?.pdf", ConcreteMediaKind::Image, "application/pdf"),
+            ("a#1.gif", ConcreteMediaKind::Image, "image/gif"),
             // No extension that says anything: the kind's usual type.
-            ("", MediaKind::Image, "image/png"),
-            ("notes.txt", MediaKind::Audio, "audio/mpeg"),
-            ("clip", MediaKind::Video, "video/mp4"),
-            ("scan", MediaKind::Pdf, "application/pdf"),
-            ("blob", MediaKind::Generic, "application/octet-stream"),
+            ("", ConcreteMediaKind::Image, "image/png"),
+            ("notes.txt", ConcreteMediaKind::Audio, "audio/mpeg"),
+            ("clip", ConcreteMediaKind::Video, "video/mp4"),
+            ("scan", ConcreteMediaKind::Pdf, "application/pdf"),
         ] {
             assert_eq!(mime_for(source, kind), expected, "{source} as {kind}");
         }

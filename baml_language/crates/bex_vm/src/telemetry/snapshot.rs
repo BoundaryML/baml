@@ -662,11 +662,10 @@ mod tests {
             declared_crossing: baml_type::ClassCrossing::Media(media.kind),
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Media")),
             body: bex_vm_types::ClassBody::RustType(match media.kind {
-                baml_base::MediaKind::Image => baml_base::RustPayloadKind::Image,
-                baml_base::MediaKind::Audio => baml_base::RustPayloadKind::Audio,
-                baml_base::MediaKind::Pdf => baml_base::RustPayloadKind::Pdf,
-                baml_base::MediaKind::Video => baml_base::RustPayloadKind::Video,
-                baml_base::MediaKind::Generic => unreachable!("a test media value has a kind"),
+                baml_base::ConcreteMediaKind::Image => baml_base::RustPayloadKind::Image,
+                baml_base::ConcreteMediaKind::Audio => baml_base::RustPayloadKind::Audio,
+                baml_base::ConcreteMediaKind::Pdf => baml_base::RustPayloadKind::Pdf,
+                baml_base::ConcreteMediaKind::Video => baml_base::RustPayloadKind::Video,
             }),
             description: None,
             alias: None,
@@ -782,18 +781,18 @@ mod tests {
         let sources: [Arc<MediaValue>; 3] = [
             // Content that was read from a file: only its name is kept.
             MediaValue::from_file_content(
-                baml_type::MediaKind::Image,
+                baml_type::ConcreteMediaKind::Image,
                 "/photos/2026/cat.png",
                 payload.clone(),
                 None,
             ),
             MediaValue::from_url(
-                baml_type::MediaKind::Pdf,
+                baml_type::ConcreteMediaKind::Pdf,
                 "https://example.test/report.pdf",
                 Some("application/pdf"),
             ),
             MediaValue::from_base64(
-                baml_type::MediaKind::Audio,
+                baml_type::ConcreteMediaKind::Audio,
                 payload.clone(),
                 Some("audio/wav"),
             ),
@@ -837,7 +836,7 @@ mod tests {
         };
         assert_eq!(
             (kind, mime_type),
-            (baml_type::MediaKind::Image, Some("image/png"))
+            (baml_type::ConcreteMediaKind::Image, Some("image/png"))
         );
         assert_eq!(snapshot.label(path).as_str(), "cat.png");
         assert_eq!(snapshot.string(content).as_str(), payload.as_str());
@@ -846,7 +845,7 @@ mod tests {
         };
         assert_eq!(
             (kind, mime_type),
-            (baml_type::MediaKind::Pdf, Some("application/pdf"))
+            (baml_type::ConcreteMediaKind::Pdf, Some("application/pdf"))
         );
         assert_eq!(
             snapshot.label(url).as_str(),
@@ -857,7 +856,7 @@ mod tests {
         };
         assert_eq!(
             (kind, mime_type),
-            (baml_type::MediaKind::Audio, Some("audio/wav"))
+            (baml_type::ConcreteMediaKind::Audio, Some("audio/wav"))
         );
         let bex_str::BexStr::Flat(captured) = snapshot.string(data) else {
             panic!("expected the payload's own handle")
@@ -928,7 +927,7 @@ mod tests {
         };
         let image = |vm: &mut crate::BexVm, length: usize| {
             let media = MediaValue::from_base64(
-                baml_type::MediaKind::Image,
+                baml_type::ConcreteMediaKind::Image,
                 bex_str::BexStr::from("A".repeat(length)),
                 None,
             );
@@ -1312,7 +1311,7 @@ mod tests {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let media = || {
             MediaValue::from_base64(
-                baml_type::MediaKind::Image,
+                baml_type::ConcreteMediaKind::Image,
                 "c2VjcmV0LWltYWdl".into(),
                 Some("image/png"),
             )
@@ -1523,7 +1522,7 @@ mod tests {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let raw = "https://example.test/report.pdf?key=secret";
         let clean = "https://example.test/report.pdf?key=sha256:0123";
-        let media = MediaValue::from_url(baml_type::MediaKind::Pdf, raw, None);
+        let media = MediaValue::from_url(baml_type::ConcreteMediaKind::Pdf, raw, None);
         let message = format!("GET {raw} failed");
         let values = [
             Value::object(vm.tlab.alloc_string(message.as_str())),

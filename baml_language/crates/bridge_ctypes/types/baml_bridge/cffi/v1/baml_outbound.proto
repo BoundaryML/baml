@@ -167,15 +167,17 @@ message BamlValueUnionVariant {
 // BamlMedia definitions
 // -----------------------------------------------------------------------------
 
-// We need to handle BamlMediaType. Since one variant is "Other(String)",
-// we represent it as a message with an enum tag and an optional string.
+// The kind of a media value. A media value always has one of these kinds;
+// the media type that admits any of them is `BAML_TY_MEDIA_KIND_GENERIC`.
 enum MediaTypeEnum {
   MEDIA_TYPE_UNSPECIFIED = 0;
   IMAGE = 1;
   AUDIO = 2;
   PDF = 3;
   VIDEO = 4;
-  OTHER = 5;
+  // Formerly OTHER: no media value has a generic kind.
+  reserved 5;
+  reserved "OTHER";
 }
 
 message BamlValueMedia {

@@ -1797,7 +1797,6 @@ export namespace baml_bridge {
                 ADT_MEDIA_AUDIO = 7,
                 ADT_MEDIA_VIDEO = 8,
                 ADT_MEDIA_PDF = 9,
-                ADT_MEDIA_GENERIC = 10,
                 ADT_PROMPT_AST = 11,
                 ADT_TAGGED_HEAP_HANDLE = 14,
                 HOST_VALUE_CALLABLE = 15,
@@ -5964,8 +5963,7 @@ export namespace baml_bridge {
                 IMAGE = 1,
                 AUDIO = 2,
                 PDF = 3,
-                VIDEO = 4,
-                OTHER = 5
+                VIDEO = 4
             }
 
             /** Properties of a BamlValueMedia. */

@@ -60,7 +60,6 @@ BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_IMAGE == 1, "media discriminant drifted"
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_AUDIO == 2, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_PDF == 3, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_VIDEO == 4, "media discriminant drifted");
-BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_GENERIC == 5, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_UNSPECIFIED == 0, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_UNTAGGED_BEX_HEAP == 2, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_FUNCTION_REF == 5, "handle discriminant drifted");
@@ -68,7 +67,6 @@ BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_IMAGE == 6, "handle discriminant 
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_AUDIO == 7, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_VIDEO == 8, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_PDF == 9, "handle discriminant drifted");
-BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_GENERIC == 10, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_PROMPT_AST == 11, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_TAGGED_HEAP_HANDLE == 14, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_HOST_VALUE_CALLABLE == 15, "handle discriminant drifted");

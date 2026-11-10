@@ -13,7 +13,6 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::AdtMediaAudio => "audio",
         BamlHandleType::AdtMediaVideo => "video",
         BamlHandleType::AdtMediaPdf => "pdf",
-        BamlHandleType::AdtMediaGeneric => "media",
         BamlHandleType::AdtPromptAst => "prompt_ast",
         BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
         BamlHandleType::AdtFunctionSpec => "function_spec",

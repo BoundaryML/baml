@@ -27,7 +27,7 @@ mod handle;
 mod host_outcome;
 mod json_alias;
 mod runtime_ty_identity;
-pub use baml_type::MediaKind;
+pub use baml_type::{ConcreteMediaKind, MediaKind};
 pub use bex_external_value::{
     AnnotationTy, AsBexExternalValue, BexExternalAdt, BexExternalValue, CancelTokenCapability,
     RuntimeTy, TaggedHeapHandleKind, TraceControl, TypeName, UnionMetadata, WireFunctionParamTy,

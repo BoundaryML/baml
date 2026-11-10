@@ -184,11 +184,11 @@ impl Drop for BamlPyHandle {
     }
 }
 
-/// Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
+/// Test-only: seed an `Adt(Media(image))` entry through the shared CFFI API.
 #[gen_stub_pyfunction]
 #[pyfunction]
-pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
-    let parts = handle_cffi::seed_generic_media_handle();
+pub fn _seed_media_handle() -> PyResult<(u64, u64)> {
+    let parts = handle_cffi::seed_media_handle();
     Ok((parts.key, parts.handle_type as u64))
 }
 

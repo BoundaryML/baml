@@ -302,13 +302,10 @@ impl RustPayload {
     /// The payload of a media value, under the variant its kind names.
     pub fn media(value: payload::Media) -> Self {
         match value.kind {
-            baml_base::MediaKind::Image => Self::Image(value),
-            baml_base::MediaKind::Audio => Self::Audio(value),
-            baml_base::MediaKind::Pdf => Self::Pdf(value),
-            baml_base::MediaKind::Video => Self::Video(value),
-            baml_base::MediaKind::Generic => {
-                unreachable!("a media value is built with a kind of its own, never `Generic`")
-            }
+            baml_base::ConcreteMediaKind::Image => Self::Image(value),
+            baml_base::ConcreteMediaKind::Audio => Self::Audio(value),
+            baml_base::ConcreteMediaKind::Pdf => Self::Pdf(value),
+            baml_base::ConcreteMediaKind::Video => Self::Video(value),
         }
     }
 

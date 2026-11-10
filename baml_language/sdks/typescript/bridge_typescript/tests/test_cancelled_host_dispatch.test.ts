@@ -3,7 +3,7 @@ import { makeHostCallableDispatch } from '../dist/proto.js';
 import {
     _discardHostCallArgs,
     _handleRefcount,
-    _seedGenericMediaHandle,
+    _seedMediaHandle,
     _seedHeapHandle,
 } from '../dist/native.js';
 
@@ -11,7 +11,7 @@ const { BamlToHostCall, BamlHandleType } = baml_bridge.cffi.v1;
 
 describe('cancelled host dispatch wire ownership', () => {
     test('an expired dispatch releases its args without running user code', () => {
-        const [key, handleType] = _seedGenericMediaHandle();
+        const [key, handleType] = _seedMediaHandle();
         const callback = vi.fn();
         const args = Buffer.from(BamlToHostCall.encode({
             args: [{ value: { handleValue: { key, handleType } } }],
@@ -23,7 +23,7 @@ describe('cancelled host dispatch wire ownership', () => {
     });
 
     test('discard walks lists, maps, classes and unions', () => {
-        const owners = [0, 1, 2, 3].map(() => _seedGenericMediaHandle());
+        const owners = [0, 1, 2, 3].map(() => _seedMediaHandle());
         const values = owners.map(([key, handleType]) => ({ handleValue: { key, handleType } }));
         const args = Buffer.from(BamlToHostCall.encode({ args: [
             { value: { listValue: { items: [values[0]] } } },
@@ -36,7 +36,7 @@ describe('cancelled host dispatch wire ownership', () => {
     });
 
     test('borrowed host keys do not release a coincident native key', () => {
-        const [key, handleType] = _seedGenericMediaHandle();
+        const [key, handleType] = _seedMediaHandle();
         const args = Buffer.from(BamlToHostCall.encode({ args: [
             { value: { handleValue: { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE } } },
             { value: { handleValue: { key, handleType: BamlHandleType.HOST_VALUE_OPAQUE } } },

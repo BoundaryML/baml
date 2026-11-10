@@ -7,14 +7,14 @@ import Foundation
 /// reads a file, are generated engine calls. Building a value from a URL
 /// or from content needs no engine, and is what these do.
 public enum BamlMedia {
-    /// Raw values are `BamlCffiMediaKind` — the canonical V1 ABI values
-    /// (shared with the protobuf `MediaTypeEnum`; zero is reserved).
+    /// The kind of a media value. Raw values are `BamlCffiMediaKind` — the
+    /// canonical V1 ABI values (shared with the protobuf `MediaTypeEnum`;
+    /// zero and five are reserved).
     public enum Kind: Int32, Sendable {
         case image = 1
         case audio = 2
         case pdf = 3
         case video = 4
-        case generic = 5
     }
 
     /// What a media value is built from.

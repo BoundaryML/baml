@@ -1783,6 +1783,10 @@ class WireCodecTest {
         // Handle-backed media.
         assertTrue(ProtoReader.armMatchesValue(pdf, ovHandle(1, ADT_MEDIA_PDF)));
         assertFalse(ProtoReader.armMatchesValue(image, ovHandle(1, ADT_MEDIA_PDF)));
+        assertTrue(ProtoReader.armMatchesValue(anyMedia, ovHandle(1, ADT_MEDIA_PDF)));
+        // A media value has a concrete kind: no other kind is media.
+        assertFalse(ProtoReader.armMatchesValue(anyMedia, ovMedia(5)));
+        assertFalse(ProtoReader.armMatchesValue(anyMedia, ovHandle(1, 10)));
 
         BamlType callable = BamlType.function(
                 List.of(new BamlType.Param(null, BamlType.INT, false)), BamlType.INT, BamlType.NEVER);

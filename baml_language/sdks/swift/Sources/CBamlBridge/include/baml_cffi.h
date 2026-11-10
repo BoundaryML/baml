@@ -57,13 +57,16 @@
  * Revision 6: host-value keys are counted. The release callback takes
  * `(host_value_key, count)` and gives back that many references; an
  * outbound host value carries a `HOST_VALUE_PIN` row the host releases.
+ *
+ * Revision 6 also reserves media kind 5 and handle type 10: a media value
+ * always has a concrete kind.
  */
 #define BAML_API_V1_ABI_VERSION 6
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
  *
- * Values 1, 3, 4 and 13 are permanently reserved. Host-value handle keys use their
+ * Values 1, 3, 4, 10 and 13 are permanently reserved. Host-value handle keys use their
  * own registry and release callback rather than `handle_release`.
  */
 enum BamlCffiHandleType
@@ -78,7 +81,6 @@ enum BamlCffiHandleType
   BAML_CFFI_HANDLE_TYPE_MEDIA_AUDIO = 7,
   BAML_CFFI_HANDLE_TYPE_MEDIA_VIDEO = 8,
   BAML_CFFI_HANDLE_TYPE_MEDIA_PDF = 9,
-  BAML_CFFI_HANDLE_TYPE_MEDIA_GENERIC = 10,
   BAML_CFFI_HANDLE_TYPE_PROMPT_AST = 11,
   BAML_CFFI_HANDLE_TYPE_TAGGED_HEAP_HANDLE = 14,
   BAML_CFFI_HANDLE_TYPE_HOST_VALUE_CALLABLE = 15,
@@ -97,7 +99,8 @@ typedef int32_t BamlCffiHandleType;
  * Valid `media_kind` values for media constructors.
  *
  * These values are shared with the V1 protobuf `MediaTypeEnum` wire contract.
- * Zero is not a constructible media kind.
+ * Zero is not a constructible media kind, and 5 is permanently reserved: a
+ * media value always has one of the kinds below.
  */
 enum BamlCffiMediaKind
 #ifdef __cplusplus
@@ -109,7 +112,6 @@ enum BamlCffiMediaKind
   BAML_CFFI_MEDIA_KIND_AUDIO = 2,
   BAML_CFFI_MEDIA_KIND_PDF = 3,
   BAML_CFFI_MEDIA_KIND_VIDEO = 4,
-  BAML_CFFI_MEDIA_KIND_GENERIC = 5,
 };
 #ifndef __cplusplus
 typedef int32_t BamlCffiMediaKind;

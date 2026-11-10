@@ -28,7 +28,6 @@ const HANDLE_TYPE_NAMES: Record<BamlHandleType, string> = {
   [BamlHandleType.ADT_MEDIA_AUDIO]: 'audio',
   [BamlHandleType.ADT_MEDIA_VIDEO]: 'video',
   [BamlHandleType.ADT_MEDIA_PDF]: 'pdf',
-  [BamlHandleType.ADT_MEDIA_GENERIC]: 'media',
   [BamlHandleType.ADT_PROMPT_AST]: 'prompt_ast',
   [BamlHandleType.ADT_TAGGED_HEAP_HANDLE]: 'tagged_heap_handle',
   [BamlHandleType.HOST_VALUE_CALLABLE]: 'host_value_callable',
@@ -86,7 +85,6 @@ const MEDIA_TYPE_NAMES: Record<number, BamlJsMedia['media_type']> = {
   [MediaTypeEnum.AUDIO]: 'audio',
   [MediaTypeEnum.PDF]: 'pdf',
   [MediaTypeEnum.VIDEO]: 'video',
-  [MediaTypeEnum.OTHER]: 'other',
 };
 
 function mediaTypeName(mt: MediaTypeEnum): BamlJsMedia['media_type'] {

@@ -9,7 +9,7 @@ use std::{
     fmt,
 };
 
-use baml_base::MediaKind;
+use baml_base::ConcreteMediaKind;
 use baml_sdkgen_types::{ClassCrossing, Name, Symbol, SymbolPool};
 
 use crate::{
@@ -1222,13 +1222,12 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
     }
 }
 
-fn media_component(kind: MediaKind) -> &'static str {
+fn media_component(kind: ConcreteMediaKind) -> &'static str {
     match kind {
-        MediaKind::Image => "Image",
-        MediaKind::Audio => "Audio",
-        MediaKind::Video => "Video",
-        MediaKind::Pdf => "Pdf",
-        MediaKind::Generic => "Media",
+        ConcreteMediaKind::Image => "Image",
+        ConcreteMediaKind::Audio => "Audio",
+        ConcreteMediaKind::Video => "Video",
+        ConcreteMediaKind::Pdf => "Pdf",
     }
 }
 

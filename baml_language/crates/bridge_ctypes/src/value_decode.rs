@@ -23,8 +23,8 @@ use std::{
 };
 
 use bex_project::{
-    BexExternalAdt, BexExternalValue, Bounded, HostKey, HostValueArc, HostValueKind, MediaKind,
-    MediaValue, PromptAst, PromptAstSimple, WireHead, WireTy,
+    BexExternalAdt, BexExternalValue, Bounded, ConcreteMediaKind, HostKey, HostValueArc,
+    HostValueKind, MediaValue, PromptAst, PromptAstSimple, WireHead, WireTy,
 };
 use indexmap::IndexMap;
 
@@ -536,15 +536,12 @@ fn shape(node: &'static str, expected: &'static str, stated: &WireTy) -> CtypesE
 
 fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, CtypesError> {
     let kind = match MediaTypeEnum::try_from(media.media) {
-        Ok(MediaTypeEnum::Image) => MediaKind::Image,
-        Ok(MediaTypeEnum::Audio) => MediaKind::Audio,
-        Ok(MediaTypeEnum::Video) => MediaKind::Video,
-        Ok(MediaTypeEnum::Pdf) => MediaKind::Pdf,
-        Ok(MediaTypeEnum::Other) => MediaKind::Generic,
+        Ok(MediaTypeEnum::Image) => ConcreteMediaKind::Image,
+        Ok(MediaTypeEnum::Audio) => ConcreteMediaKind::Audio,
+        Ok(MediaTypeEnum::Video) => ConcreteMediaKind::Video,
+        Ok(MediaTypeEnum::Pdf) => ConcreteMediaKind::Pdf,
         Ok(MediaTypeEnum::MediaTypeUnspecified) | Err(_) => {
-            return Err(CtypesError::InternalError(
-                "portable media payload has no valid media kind".to_string(),
-            ));
+            return Err(CtypesError::MediaKindInvalid(media.media));
         }
     };
     let mime_type = media.mime_type.as_deref();
@@ -762,7 +759,7 @@ mod tests {
         InboundValue {
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: key.get(),
-                handle_type: BamlHandleType::AdtMediaGeneric as i32,
+                handle_type: BamlHandleType::AdtMediaImage as i32,
             })),
             ..Default::default()
         }
@@ -771,7 +768,7 @@ mod tests {
     /// Any engine row a test can mint without a heap: a media value.
     fn media_row() -> CffiHandleTableEntry {
         CffiHandleTableEntry::Adt(crate::TableAdt::Media(MediaValue::from_url(
-            MediaKind::Generic,
+            ConcreteMediaKind::Image,
             "https://example.com/",
             None,
         )))
@@ -927,7 +924,7 @@ mod tests {
         let engine = InboundValue {
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: 0,
-                handle_type: BamlHandleType::AdtMediaGeneric as i32,
+                handle_type: BamlHandleType::AdtMediaImage as i32,
             })),
             ..Default::default()
         };
@@ -1270,9 +1267,44 @@ mod tests {
             let PromptAstSimple::Media(media) = parts[1].as_ref() else {
                 panic!("expected media in the second prompt part")
             };
-            assert_eq!(media.kind, MediaKind::Image);
+            assert_eq!(media.kind, ConcreteMediaKind::Image);
             assert_eq!(media.mime_type().as_deref(), Some("image/png"));
             assert_eq!(media.base64().as_str(), "aW1hZ2U=");
+        }
+    }
+
+    #[test]
+    fn media_without_a_kind_of_its_own_is_refused_at_top_level_and_in_a_prompt() {
+        // 5 is the reserved generic kind; 0 is unspecified; 99 is no member.
+        for kind in [5, MediaTypeEnum::MediaTypeUnspecified as i32, 99] {
+            let media = BamlValueMedia {
+                media: kind,
+                mime_type: None,
+                value: Some(baml_value_media::Value::Url(
+                    "https://example.test/a.png".to_string(),
+                )),
+            };
+            let in_prompt = BamlValuePromptAst {
+                value: Some(PromptAstVariant::Simple(BamlValuePromptAstSimple {
+                    value: Some(PromptAstSimpleVariant::Media(media.clone())),
+                })),
+            };
+            for value in [
+                InboundValueVariant::MediaValue(media),
+                InboundValueVariant::PromptAstValue(in_prompt),
+            ] {
+                let refused = inbound_to_external(
+                    InboundValue {
+                        value_type: None,
+                        value: Some(value),
+                    },
+                    &CffiHandleTable::new(),
+                );
+                assert!(
+                    matches!(refused, Err(CtypesError::MediaKindInvalid(k)) if k == kind),
+                    "{refused:?}"
+                );
+            }
         }
     }
 

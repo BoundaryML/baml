@@ -50,7 +50,6 @@ public final class BamlHandle implements AutoCloseable {
     public static final int ADT_MEDIA_AUDIO = 7;
     public static final int ADT_MEDIA_VIDEO = 8;
     public static final int ADT_MEDIA_PDF = 9;
-    public static final int ADT_MEDIA_GENERIC = 10;
     public static final int HOST_VALUE_CALLABLE = 15;
     public static final int HOST_VALUE_OPAQUE = 16;
     public static final int ADT_RUNTIME_VALUE = 18;

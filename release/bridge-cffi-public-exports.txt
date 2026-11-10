@@ -1,5 +1,5 @@
-__testonly_seed_generic_media
 __testonly_seed_heap_handle
+__testonly_seed_media
 baml_get_api_v1
 baml_handle_clone
 baml_handle_release

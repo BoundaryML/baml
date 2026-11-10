@@ -14,7 +14,7 @@ import {
     BamlInvalidArgumentError,
     BamlPanic,
     BamlPrompt,
-    _seedGenericMediaHandle,
+    _seedMediaHandle,
 } from '../dist/index.js';
 
 import { _handleRefcount, releaseHostValueKey } from '../dist/native.js';
@@ -43,7 +43,7 @@ describe('decodeCallResult — portable prompt AST', () => {
 
 describe('decodeCallResult — FunctionSpec capability', () => {
     test('the dedicated handle tag decodes to BamlFunctionSpec', () => {
-        const [key] = _seedGenericMediaHandle();
+        const [key] = _seedMediaHandle();
         const spec = decodeCallResult(encodeResult({
             ok: { handleValue: { key, handleType: 17 } },
         }));
@@ -110,7 +110,7 @@ describe('decodeCallResult — thrown value carries structured detail', () => {
 
 describe('decodeCallResult — pinned host values', () => {
     test('a host value in a result releases its pin once read', () => {
-        const [pin] = _seedGenericMediaHandle();
+        const [pin] = _seedMediaHandle();
         const key = { low: 0x7fff_0002, high: 0 };
         const decoded = decodeCallResult(encodeResult({
             ok: { handleValue: { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE, pin } },
@@ -122,7 +122,7 @@ describe('decodeCallResult — pinned host values', () => {
     test('a host error rehydrates while its pin is held, and the pin is released', () => {
         const raised = new Error('pinned');
         const key = registerHostOpaque(raised);
-        const [pin] = _seedGenericMediaHandle();
+        const [pin] = _seedMediaHandle();
         try {
             const bytes = encodeResult({
                 error: {

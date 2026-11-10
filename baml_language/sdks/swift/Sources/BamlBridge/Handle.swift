@@ -77,7 +77,7 @@ extension BamlHandle {
         case .hostValueCallable, .hostValueOpaque:
             return .host
         case .handleUnspecified, .untaggedBexHeap, .functionRef, .adtMediaImage,
-            .adtMediaAudio, .adtMediaVideo, .adtMediaPdf, .adtMediaGeneric, .adtPromptAst,
+            .adtMediaAudio, .adtMediaVideo, .adtMediaPdf, .adtPromptAst,
             .adtTaggedHeapHandle, .adtFunctionSpec, .adtRuntimeValue, .invocationState,
             .traceReservation, .hostValuePin, .UNRECOGNIZED:
             return .engine

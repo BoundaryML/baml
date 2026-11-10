@@ -202,7 +202,7 @@ fn album(b: &mut Builder, content: &str) -> V {
         object(
             b,
             O::Media {
-                kind: baml_type::MediaKind::Image,
+                kind: baml_type::ConcreteMediaKind::Image,
                 mime_type,
                 source,
             },

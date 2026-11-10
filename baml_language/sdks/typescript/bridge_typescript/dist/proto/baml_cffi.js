@@ -5389,7 +5389,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
              * @property {number} ADT_MEDIA_AUDIO=7 ADT_MEDIA_AUDIO value
              * @property {number} ADT_MEDIA_VIDEO=8 ADT_MEDIA_VIDEO value
              * @property {number} ADT_MEDIA_PDF=9 ADT_MEDIA_PDF value
-             * @property {number} ADT_MEDIA_GENERIC=10 ADT_MEDIA_GENERIC value
              * @property {number} ADT_PROMPT_AST=11 ADT_PROMPT_AST value
              * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
              * @property {number} HOST_VALUE_CALLABLE=15 HOST_VALUE_CALLABLE value
@@ -5409,7 +5408,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 values[valuesById[7] = "ADT_MEDIA_AUDIO"] = 7;
                 values[valuesById[8] = "ADT_MEDIA_VIDEO"] = 8;
                 values[valuesById[9] = "ADT_MEDIA_PDF"] = 9;
-                values[valuesById[10] = "ADT_MEDIA_GENERIC"] = 10;
                 values[valuesById[11] = "ADT_PROMPT_AST"] = 11;
                 values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
                 values[valuesById[15] = "HOST_VALUE_CALLABLE"] = 15;
@@ -5596,7 +5594,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 7:
                         case 8:
                         case 9:
-                        case 10:
                         case 11:
                         case 14:
                         case 15:
@@ -5672,10 +5669,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "ADT_MEDIA_PDF":
                     case 9:
                         message.handleType = 9;
-                        break;
-                    case "ADT_MEDIA_GENERIC":
-                    case 10:
-                        message.handleType = 10;
                         break;
                     case "ADT_PROMPT_AST":
                     case 11:
@@ -15077,7 +15070,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 7:
                         case 8:
                         case 9:
-                        case 10:
                         case 11:
                         case 14:
                         case 15:
@@ -15161,10 +15153,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "ADT_MEDIA_PDF":
                     case 9:
                         message.handleType = 9;
-                        break;
-                    case "ADT_MEDIA_GENERIC":
-                    case 10:
-                        message.handleType = 10;
                         break;
                     case "ADT_PROMPT_AST":
                     case 11:
@@ -17325,7 +17313,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
              * @property {number} AUDIO=2 AUDIO value
              * @property {number} PDF=3 PDF value
              * @property {number} VIDEO=4 VIDEO value
-             * @property {number} OTHER=5 OTHER value
              */
             v1.MediaTypeEnum = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
@@ -17334,7 +17321,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 values[valuesById[2] = "AUDIO"] = 2;
                 values[valuesById[3] = "PDF"] = 3;
                 values[valuesById[4] = "VIDEO"] = 4;
-                values[valuesById[5] = "OTHER"] = 5;
                 return values;
             })();
 
@@ -17573,7 +17559,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 2:
                         case 3:
                         case 4:
-                        case 5:
                             break;
                         }
                     if (message.mimeType != null && message.hasOwnProperty("mimeType")) {
@@ -17650,10 +17635,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "VIDEO":
                     case 4:
                         message.media = 4;
-                        break;
-                    case "OTHER":
-                    case 5:
-                        message.media = 5;
                         break;
                     }
                     if (object.mimeType != null)

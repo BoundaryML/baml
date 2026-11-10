@@ -21,7 +21,7 @@ use std::{
     sync::{Arc, Mutex, Once, OnceLock},
 };
 
-use bex_project::{MediaKind, MediaValue};
+use bex_project::{ConcreteMediaKind, MediaValue};
 use bridge_cffi::handle_cffi::media_kind_from_proto;
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, TableKey};
 use jni::{
@@ -852,7 +852,7 @@ fn media_from<'local>(
     value: JString<'local>,
     mime: JString<'local>,
     ctx: &str,
-    make: impl FnOnce(MediaKind, &str, Option<&str>) -> Arc<MediaValue>,
+    make: impl FnOnce(ConcreteMediaKind, &str, Option<&str>) -> Arc<MediaValue>,
 ) -> jlong {
     let Some(media_kind) = media_kind_from_proto(kind) else {
         throw_runtime_exception(env, &format!("{ctx}: unsupported media kind {kind}"));
