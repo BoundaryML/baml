@@ -1,13 +1,13 @@
-//! Thread-Local Allocation Buffer (TLAB) for per-VM allocation.
+//! Per-mutator allocation: each mutator (a VM, the future manager) owns one
+//! block per size class and takes cells from it, so the common path takes no
+//! lock and touches no shared state.
 //!
-//! Each VM owns a bump-allocated region. Reservations begin at 32 slots and grow
-//! to 1024 as the VM allocates. Reserved slots spend the GC budget when they are
-//! reserved; what each object keeps alive outside its slot is measured as it is
-//! allocated and kept in a local balance, which is settled with the budget in
-//! quanta, at every refill, when the owner asks, and when the TLAB is dropped.
-//! Ordinary yields preserve unused capacity.
+//! Every cell spends its size of the GC budget, and what each object keeps
+//! alive outside its cell is measured as it is allocated. Both go into a
+//! local balance, settled with the budget in quanta, whenever the allocator
+//! takes a new block, when the owner asks, and when the allocator is dropped.
 
-use std::sync::Arc;
+use std::{ptr::NonNull, sync::Arc};
 
 use bex_vm_types::{
     AllocDebt, HeapPtr, Meter, Object, Value,
@@ -15,79 +15,36 @@ use bex_vm_types::{
 };
 use indexmap::IndexMap;
 
-use crate::BexHeap;
-
-/// A reserved chunk of heap space for TLAB allocation.
-#[derive(Clone, Copy, Debug)]
-pub struct TlabChunk {
-    /// Start index (inclusive).
-    pub start: usize,
-    /// End index (exclusive).
-    pub end: usize,
-}
-
-impl TlabChunk {
-    /// Get the size of this chunk.
-    pub fn size(&self) -> usize {
-        self.end - self.start
-    }
-}
+use crate::{
+    BexHeap,
+    descriptor::{
+        DescId, HEADER_BYTES, Header, OBJECT_CELL_BYTES, OBJECT_DESC, RUST_PAYLOAD_OFFSET,
+    },
+    space::{
+        GRANULE_BYTES, LARGE_OBJECT_THRESHOLD,
+        block::BlockHeader,
+        granule_align, region_base,
+        small::{SmallAllocator, cell_size},
+    },
+};
 
 /// Payload bytes an allocator may hold unsettled before it settles with the
 /// shared budget. Settling is one shared atomic update, so this bounds both
 /// how often that happens and how far spending can lag behind allocation.
 pub const SETTLE_QUANTUM: isize = 64 * 1024;
 
-/// Thread-Local Allocation Buffer for a BEX VM.
+/// A mutator's allocation buffer.
 ///
-/// A TLAB provides fast, lock-free allocation within an exclusive heap region.
-/// This is the same strategy used by the JVM, CLR, and Go runtime.
+/// Small cells come from the current block of their size class (see
+/// [`crate::space::small`]); large cells are allocated individually.
 ///
-/// # Allocation Strategy
-///
-/// ```text
-/// TLAB Memory Layout:
-///
-/// ┌────────────────────────────────────────────────────────────┐
-/// │ [used] [used] [used] [free] [free] [free] ... [free]      │
-/// │ ◄─── allocated ────► ◄────── available ─────────────►     │
-/// │                      ▲                               ▲     │
-/// │                 alloc_ptr                      alloc_limit │
-/// └────────────────────────────────────────────────────────────┘
-/// ```
-///
-/// # Performance
-///
-/// Object placement uses an exclusive bump pointer. Reservations update the shared
-/// allocation budget; no collection runs here.
-/// Refill reserves another region from the heap.
-///
-/// # Example
-///
-/// ```ignore
-/// let heap = BexHeap::new(compile_time_objects);
-/// let mut tlab = Tlab::new(Arc::clone(&heap));
-///
-/// // Fast allocation - just bumps pointer
-/// let ptr1 = tlab.alloc_string("hello".to_string());
-/// let ptr2 = tlab.alloc_array(bex_vm_types::RealizedTy::int(), vec![Value::int(1), Value::int(2)]);
-///
-/// // When chunk exhausted, refill gets a new region
-/// for _ in 0..2000 {
-///     tlab.alloc_string("item".to_string()); // Auto-refills as needed
-/// }
-/// ```
+/// Objects never move, so a collection leaves the buffer valid: the owned
+/// blocks stay owned, their free lists rebuilt by the sweep.
 pub struct Tlab {
-    /// Next allocation index within current chunk.
-    alloc_ptr: usize,
-
-    /// End of current chunk (exclusive).
-    alloc_limit: usize,
+    small: SmallAllocator,
 
     /// Reference to the shared heap.
     heap: Arc<BexHeap>,
-
-    next_chunk_size: usize,
 
     /// Payload bytes allocated (less released) since the last settlement.
     debt: AllocDebt,
@@ -103,43 +60,23 @@ pub struct Tlab {
 }
 
 impl Tlab {
-    /// Create a new TLAB with an initial chunk eagerly reserved from the
-    /// heap.
+    /// Create an allocator and take its first block now.
     ///
-    /// **Avoid in production code paths.** Reserving a chunk here happens
-    /// outside any [`HeapPermitManager`](crate::HeapPermitManager) permit;
-    /// if a concurrent GC clears Gen0 before the caller registers as a
-    /// holder and acquires its permit, this TLAB's cursor is left pointing
-    /// into a freed/cleared region. Subsequent allocations panic with
-    /// `index N out of bounds (len=0)` (debug) or segfault (release).
-    ///
+    /// **Avoid in production code paths.** Taking a block here happens
+    /// outside any [`HeapPermitManager`](crate::HeapPermitManager) permit.
     /// Permit-managed holders (`BexVm`, `FutureManagerInner`, …) must use
-    /// [`Tlab::new_empty`] so the first refill happens under a held permit.
-    /// `Tlab::new` is retained for standalone heap tests that exercise
-    /// TLAB mechanics without the permit infrastructure (those tests
-    /// guarantee single-threaded access).
+    /// [`Tlab::new_empty`] so the first block is taken under a held permit.
+    /// `Tlab::new` is retained for standalone heap tests.
     pub fn new(heap: Arc<BexHeap>) -> Self {
         let mut tlab = Self::new_empty(heap);
-        tlab.refill();
+        tlab.small.prepare(&tlab.heap.small, OBJECT_CELL_BYTES);
         tlab
     }
 
-    /// Create a TLAB without allocating an initial chunk.
-    ///
-    /// The first allocation will trigger a refill. This is the right
-    /// constructor for permit-managed holders: it defers the
-    /// `alloc_tlab_chunk` call until the holder has been registered with
-    /// [`HeapPermitManager`](crate::HeapPermitManager) and acquired its
-    /// permit, so a concurrent GC cannot strand the TLAB cursor.
+    /// Create an allocator that takes its first block on first allocation.
     pub fn new_empty(heap: Arc<BexHeap>) -> Self {
         Self {
-            alloc_ptr: 0,
-            alloc_limit: 0,
-
-            // Zero marks the first reservation, so the first size is repeated:
-            // 32, 32, 64, ... gives aligned cumulative reservations of
-            // 32, 64, 128, ... rather than 32, 96, 224, ... .
-            next_chunk_size: 0,
+            small: SmallAllocator::default(),
             debt: AllocDebt::new(),
             debt_epoch: heap.gc_budget().full_collections,
             budget_crossed: false,
@@ -147,27 +84,27 @@ impl Tlab {
         }
     }
 
-    /// Charge `obj`'s footprint to this allocator's account.
+    /// Charge `obj`'s footprint, its cell included, to this allocator's
+    /// account.
     fn charge(&mut self, obj: &mut Object) {
         let mut charge = Meter::charge();
         obj.measure(&mut charge);
-        self.debt.grow(charge.total());
+        self.spend(OBJECT_CELL_BYTES + charge.total());
+    }
+
+    /// Add `bytes` to the balance, settling it once it reaches a quantum.
+    #[inline]
+    fn spend(&mut self, bytes: usize) {
+        self.debt.grow(bytes);
         if self.debt.balance().unsigned_abs() >= SETTLE_QUANTUM.unsigned_abs() {
             self.flush_alloc_debt();
         }
     }
 
     /// Allocate an object, returning a HeapPtr to it.
-    ///
-    /// This is the fast path - just bump the pointer and write.
-    /// If the current chunk is exhausted, refill from the heap.
     #[inline]
     pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
         self.charge(&mut obj);
-
-        if self.alloc_ptr >= self.alloc_limit {
-            self.refill();
-        }
 
         // BEP-042: an instance of a class with a finalizer joins the
         // collector's finalizable list. Checked before the write moves `obj`.
@@ -175,28 +112,83 @@ impl Tlab {
         // class object is live.
         let finalizable = unsafe { BexHeap::needs_finalizer_registration(&obj) };
 
-        let global_idx = self.alloc_ptr;
-        self.alloc_ptr += 1;
+        let (cell, _) = self.alloc_cell(OBJECT_DESC, OBJECT_CELL_BYTES);
+        let payload = (cell + RUST_PAYLOAD_OFFSET) as *mut Object;
+        // SAFETY: a fresh cell of this allocator's, sized and aligned for an
+        // `Object` after its header.
+        unsafe { payload.write(obj) };
 
-        // Convert global index to runtime-relative index for writing to active space
-        let runtime_idx = global_idx - self.heap.compile_time_len();
-
-        // SAFETY: This TLAB has exclusive access to indices in [chunk.start, chunk.end)
-        // and we've ensured alloc_ptr < alloc_limit after potential refill.
-        // ChunkedVec guarantees stable pointers during concurrent growth.
-        // The returned pointer names the slot just written in Gen0.
-        let ptr = unsafe { self.heap.write_runtime_object(runtime_idx, obj) };
-
-        // Track allocation for GC profiling
         #[cfg(feature = "gc_profiling")]
         self.heap.record_alloc();
 
-        // SAFETY: The pointer is valid and points to a valid object we just wrote
-        let ptr = unsafe { self.heap.make_heap_ptr(ptr) };
+        // SAFETY: the pointer names the object just written.
+        let ptr = unsafe { self.heap.make_heap_ptr(payload) };
         if finalizable {
             self.heap.register_finalizable(ptr);
         }
         ptr
+    }
+
+    /// Allocate a zeroed cell of `bytes` laid out by `descriptor`, with its
+    /// header written. Returns the cell's address. The caller fills it in
+    /// before the next safepoint.
+    ///
+    /// # Panics
+    /// If `bytes` is smaller than the descriptor's size.
+    pub fn alloc_zeroed(&mut self, descriptor: DescId, bytes: usize) -> NonNull<u8> {
+        let size = self.heap.descriptors().get(descriptor).size as usize;
+        assert!(
+            bytes >= size,
+            "a cell of {bytes} bytes for a {size}-byte descriptor"
+        );
+        let (cell, cell_bytes) = self.alloc_cell(descriptor, granule_align(bytes));
+        self.spend(cell_bytes);
+        // SAFETY: a fresh cell of `cell_bytes`; the header stays intact.
+        unsafe { ((cell + HEADER_BYTES) as *mut u8).write_bytes(0, cell_bytes - HEADER_BYTES) };
+        NonNull::new(cell as *mut u8).expect("cells are never at address zero")
+    }
+
+    /// Place a cell for `bytes` (granule-aligned) and write its header.
+    /// Returns the cell and its size, `bytes` rounded to its size class.
+    #[inline]
+    fn alloc_cell(&mut self, descriptor: DescId, bytes: usize) -> (usize, usize) {
+        debug_assert!(bytes.is_multiple_of(GRANULE_BYTES));
+        if bytes > LARGE_OBJECT_THRESHOLD {
+            return (self.alloc_large(descriptor, bytes), bytes);
+        }
+        let cell_bytes = cell_size(bytes);
+        let cell = match self.small.try_alloc(cell_bytes) {
+            Some(cell) => cell,
+            None => self.alloc_small_slow(cell_bytes),
+        };
+        let block = region_base(cell);
+        // SAFETY: a cell this allocator just took from a block it owns.
+        unsafe {
+            BlockHeader::at(block)
+                .starts
+                .set(BlockHeader::granule(block, cell));
+            (cell as *mut Header).write(Header::new(descriptor, cell_bytes, false));
+        }
+        (cell, cell_bytes)
+    }
+
+    /// The class's current block is full: the size-class policy finds
+    /// another. Taking a block is when the balance settles.
+    #[cold]
+    #[inline(never)]
+    fn alloc_small_slow(&mut self, cell_bytes: usize) -> usize {
+        let cell = self.small.alloc_slow(&self.heap.small, cell_bytes);
+        self.flush_alloc_debt();
+        cell
+    }
+
+    /// A cell above the large-object threshold, allocated on its own. The
+    /// caller spends it.
+    fn alloc_large(&mut self, descriptor: DescId, cell_bytes: usize) -> usize {
+        let cell = self.heap.large.lock().alloc(cell_bytes);
+        // SAFETY: a fresh large cell of `cell_bytes`.
+        unsafe { (cell as *mut Header).write(Header::new(descriptor, cell_bytes, true)) };
+        cell
     }
 
     /// Assign a fresh telemetry identity without registering a weak reference.
@@ -369,31 +361,13 @@ impl Tlab {
     pub fn alloc_bound_method(&mut self, method: bex_vm_types::BoundMethod) -> HeapPtr {
         self.alloc(Object::BoundMethod(method))
     }
-
-    /// Get a new chunk from the heap (cold path).
-    #[cold]
-    fn refill(&mut self) {
-        let size = if self.next_chunk_size == 0 {
-            self.heap.tlab_size()
-        } else {
-            self.next_chunk_size
-        };
-        let (chunk, crossed) = self.heap.alloc_tlab_chunk_sized(size, self.debt.take());
-        self.budget_crossed |= crossed;
-        self.next_chunk_size = if self.next_chunk_size == 0 {
-            size
-        } else {
-            size.saturating_mul(2).min(self.heap.max_tlab_size)
-        };
-        self.alloc_ptr = chunk.start;
-        self.alloc_limit = chunk.end;
-    }
 }
 
 impl Tlab {
-    /// Get the remaining capacity in the current chunk.
+    /// Bytes of `Object` cells the current block of their class can still
+    /// take. Walks that block's free list.
     pub fn remaining(&self) -> usize {
-        self.alloc_limit.saturating_sub(self.alloc_ptr)
+        self.small.room_for(OBJECT_CELL_BYTES) * OBJECT_CELL_BYTES
     }
 
     /// Get a reference to the heap.
@@ -401,18 +375,17 @@ impl Tlab {
         &self.heap
     }
 
-    /// Invalidate this TLAB, forcing a refill on next allocation.
-    /// Called by GC after swapping spaces.
+    /// A collection ran. Objects do not move, so the owned blocks stay
+    /// valid; only the balance can be stale.
     pub fn invalidate(&mut self) {
-        self.alloc_limit = 0;
-        self.alloc_ptr = 0;
         // A full collection counted everything this balance covers.
         let full_collections = self.heap.gc_budget().full_collections;
-        if full_collections != self.debt_epoch {
-            self.debt.take();
-            self.debt_epoch = full_collections;
-            self.budget_crossed = false;
+        if full_collections == self.debt_epoch {
+            return;
         }
+        self.debt.take();
+        self.debt_epoch = full_collections;
+        self.budget_crossed = false;
     }
 
     /// The local balance of payload bytes, for callers that charge growth or
@@ -433,9 +406,9 @@ impl Tlab {
         std::mem::take(&mut self.budget_crossed)
     }
 
-    /// Check if this TLAB is valid (has an allocated chunk).
+    /// Whether the current block of the `Object` class has room for another.
     pub fn is_valid(&self) -> bool {
-        self.alloc_limit > self.alloc_ptr
+        self.small.room_for(OBJECT_CELL_BYTES) > 0
     }
 
     /// Read an object by HeapPtr.
@@ -446,13 +419,13 @@ impl Tlab {
     /// - Caller must ensure no concurrent writes to this object
     pub unsafe fn get_object(&self, idx: HeapPtr) -> &Object {
         // SAFETY: Caller ensures no concurrent writes
-        // Delegate to heap's get_object
         unsafe { self.heap.get_object(idx) }
     }
 }
 
 impl Drop for Tlab {
     fn drop(&mut self) {
+        self.small.release(&mut self.heap.small.lock());
         // What this allocator spent must not vanish with it.
         self.flush_alloc_debt();
     }
@@ -460,11 +433,7 @@ impl Drop for Tlab {
 
 impl std::fmt::Debug for Tlab {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Tlab")
-            .field("alloc_ptr", &self.alloc_ptr)
-            .field("alloc_limit", &self.alloc_limit)
-            .field("remaining", &self.remaining())
-            .finish()
+        f.debug_struct("Tlab").field("small", &self.small).finish()
     }
 }
 
@@ -556,73 +525,46 @@ pub trait TlabHolder {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[cfg(feature = "heap_debug")]
-    #[test]
-    fn test_tlab_canary_panics_on_clobber() {
-        use std::panic::{AssertUnwindSafe, catch_unwind};
-
-        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
-
-        let debug = HeapDebuggerConfig {
-            enabled: true,
-            verify: HeapVerifyMode::Off,
-        };
-        let heap = BexHeap::with_tlab_size_and_debug(vec![], 4, debug);
-
-        let _chunk = heap.alloc_tlab_chunk();
-
-        let ct_len = heap.compile_time_len();
-        let canary_idx = ct_len + heap.tlab_size();
-        let runtime_idx = canary_idx - ct_len;
-        unsafe {
-            let gen0 = &*heap.gen0.get();
-            gen0.set(
-                runtime_idx,
-                Object::String(bex_str::BexStr::from("clobbered")),
-            );
-        }
-
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            let _ = heap.alloc_tlab_chunk();
-        }));
-        assert!(result.is_err());
-    }
+    use crate::descriptor::OBJECT_CELL_BYTES;
 
     #[test]
     fn test_tlab_alloc_single() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
+        let before = tlab.remaining();
 
         let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from("hello")));
-        assert_eq!(tlab.remaining(), 99);
+        assert_eq!(tlab.remaining(), before - OBJECT_CELL_BYTES);
     }
 
     #[test]
     fn test_tlab_alloc_multiple() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
+        let before = tlab.remaining();
 
         for i in 0..10 {
             let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!("obj{i}"))));
         }
-        assert_eq!(tlab.remaining(), 90);
+        assert_eq!(tlab.remaining(), before - 10 * OBJECT_CELL_BYTES);
     }
 
+    /// Filling the block moves allocation to another block.
     #[test]
     fn test_tlab_refill() {
-        let heap = BexHeap::with_tlab_size(vec![], 5);
-        let mut tlab = Tlab::new(heap);
-
-        // Allocate 5 objects (fills first chunk)
-        for i in 0..5 {
-            let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!("obj{i}"))));
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let first = tlab.alloc_float(0.0);
+        while tlab.remaining() >= OBJECT_CELL_BYTES {
+            tlab.alloc_float(1.0);
         }
-        assert_eq!(tlab.remaining(), 0);
-
-        // Next allocation triggers refill
-        let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from("obj5")));
-        assert_eq!(tlab.remaining(), 4);
+        let next = tlab.alloc_float(2.0);
+        assert_ne!(
+            crate::space::region_base(first.as_ptr() as usize),
+            crate::space::region_base(next.as_ptr() as usize),
+            "a full block hands allocation to the next one"
+        );
+        assert!(matches!(unsafe { next.get() }, Object::Float(f) if *f == 2.0));
     }
 
     #[test]
@@ -631,7 +573,7 @@ mod tests {
             Object::String(bex_str::BexStr::from("builtin1")),
             Object::String(bex_str::BexStr::from("builtin2")),
         ];
-        let heap = BexHeap::with_tlab_size(compile_time, 100);
+        let heap = BexHeap::new(compile_time);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // First runtime allocation must land outside the compile-time region.
@@ -644,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_multiple_tlabs_no_overlap() {
-        let heap = BexHeap::with_tlab_size(vec![], 10);
+        let heap = BexHeap::new(vec![]);
         let heap2 = Arc::clone(&heap);
 
         let mut tlab1 = Tlab::new(Arc::clone(&heap));
@@ -660,7 +602,7 @@ mod tests {
 
     #[test]
     fn test_tlab_read_object() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
 
         let ptr = tlab.alloc(Object::String(bex_str::BexStr::from("test_value")));
@@ -677,7 +619,7 @@ mod tests {
 
     #[test]
     fn test_alloc_string() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
 
         let ptr = tlab.alloc_string("hello world");
@@ -692,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_alloc_array() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
 
         let values = vec![Value::int(1), Value::int(2), Value::int(3)];
@@ -711,7 +653,7 @@ mod tests {
 
     #[test]
     fn test_alloc_map() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
 
         let mut map = IndexMap::new();
@@ -742,7 +684,7 @@ mod tests {
         use bex_vm_types::types::Class;
 
         // First allocate a class object
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
 
         // Simulate a class at index 0
@@ -824,7 +766,7 @@ mod tests {
     fn test_alloc_variant() {
         use bex_vm_types::types::Enum;
 
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
 
         // Simulate an enum at index 0
@@ -891,57 +833,35 @@ mod tests {
     // - Concurrent TLAB allocation patterns
     // ========================================================================
 
-    /// Tests TLAB invalidation and refill after GC.
-    ///
-    /// This simulates what happens when GC runs and invalidates a VM's TLAB:
-    /// 1. VM allocates objects via TLAB
-    /// 2. GC runs, moves objects to new space, invalidates TLAB
-    /// 3. VM continues allocating (TLAB refills from new space)
-    ///
+    /// A collection leaves the allocator's blocks valid: objects do not
+    /// move, so allocation continues where it was.
     #[test]
-    fn test_miri_tlab_invalidation_and_refill() {
-        let heap = BexHeap::with_tlab_size(vec![], 10);
+    fn test_miri_tlab_survives_collection() {
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        // Allocate some objects before GC
         let obj1 = tlab.alloc_string("before_gc_1".to_string());
         let obj2 = tlab.alloc_string("before_gc_2".to_string());
+        let remaining = tlab.remaining();
 
-        assert!(tlab.is_valid());
-
-        let (stats, _remapped, _forwarding) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
+        let (stats, _, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
         assert_eq!(stats.live_count, 2);
 
-        // Invalidate TLAB (what bex_engine does after GC)
+        // What bex_engine does after GC.
         tlab.invalidate();
-
-        assert!(!tlab.is_valid());
-        assert_eq!(tlab.remaining(), 0);
-
-        // Continue allocating - TLAB should refill from new space
-        let obj3 = tlab.alloc_string("after_gc_1".to_string());
-        let obj4 = tlab.alloc_string("after_gc_2".to_string());
-
         assert!(tlab.is_valid());
+        assert_eq!(tlab.remaining(), remaining);
 
-        // Verify new objects are accessible
-        unsafe {
-            match obj3.get() {
-                Object::String(s) => assert_eq!(s, "after_gc_1"),
-                _ => panic!("Expected String"),
-            }
-            match obj4.get() {
-                Object::String(s) => assert_eq!(s, "after_gc_2"),
-                _ => panic!("Expected String"),
-            }
-        }
+        let obj3 = tlab.alloc_string("after_gc_1".to_string());
+        assert!(matches!(unsafe { obj1.get() }, Object::String(s) if s == "before_gc_1"));
+        assert!(matches!(unsafe { obj3.get() }, Object::String(s) if s == "after_gc_1"));
     }
 
     /// A reservation's address is where its object is published, and the
     /// object is charged when it is published, not when the slot is reserved.
     #[test]
     fn publish_lands_at_the_reserved_address() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
         let reservation = tlab.reserve();
         let ptr = reservation.ptr();
@@ -965,7 +885,7 @@ mod tests {
     /// A reservation dropped unpublished is garbage like any other slot.
     #[test]
     fn an_unpublished_reservation_is_reclaimed() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let live = tlab.alloc_string("live".to_string());
         drop(tlab.reserve());
@@ -980,7 +900,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "the collector reached a tombstone")]
     fn collecting_a_reachable_reservation_panics() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let reservation = tlab.reserve();
         // SAFETY: deliberately breaks `publish`'s protocol by rooting the
@@ -1000,7 +920,7 @@ mod tests {
     fn test_miri_concurrent_tlab_allocation() {
         use std::thread;
 
-        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let heap = BexHeap::new(vec![]);
 
         // Spawn threads that each get their own TLAB and allocate
         let handles: Vec<_> = (0..4)
@@ -1079,7 +999,7 @@ mod tests {
         use std::thread;
 
         // Small TLAB size to force frequent refills
-        let heap = BexHeap::with_tlab_size(vec![], 5);
+        let heap = BexHeap::new(vec![]);
 
         let handles: Vec<_> = (0..3)
             .map(|thread_id| {
@@ -1119,19 +1039,14 @@ mod tests {
         // Verify all 60 objects (3 threads × 20 objects) are accessible
         assert_eq!(seen.len(), 60);
     }
-    /// Several threads allocate through their own TLABs while gen0 grows
-    /// across several chunk-directory slots (slot `s` holds `2^s` chunks of
-    /// 4096 objects). Allocation resolves its slot without a lock, so this is
-    /// the race the directory must survive: one thread's refill publishes a
-    /// new chunk while the others write and resolve slots in published ones.
-    /// Every object must read back intact afterwards.
+    /// Several threads allocate through their own TLABs while the pool
+    /// carves more than one slab of blocks: taking a block is the only
+    /// shared step, and every object must read back intact afterwards.
     #[test]
-    fn concurrent_allocation_while_gen0_grows_across_directory_slots() {
+    fn concurrent_allocation_while_the_pool_grows() {
         const THREADS: usize = 4;
-        // At least 3 full chunks of slots, so gen0 reaches directory slot 2.
-        const PER_THREAD: usize = if cfg!(miri) { 3_100 } else { 6_000 };
-        // Small TLABs make every thread refill, and so grow gen0, often.
-        let heap = BexHeap::with_tlab_size(vec![], 16);
+        const PER_THREAD: usize = if cfg!(miri) { 1_000 } else { 6_000 };
+        let heap = BexHeap::new(vec![]);
         let threads: Vec<_> = (0..THREADS)
             .map(|thread| {
                 let heap = Arc::clone(&heap);
@@ -1151,19 +1066,14 @@ mod tests {
             .flat_map(|thread| thread.join().expect("an allocating thread panicked"))
             .collect();
 
-        // SAFETY: every allocating thread has joined and no collection ran.
-        let gen0 = unsafe { heap.gen0_ref() };
-        assert!(
-            gen0.num_chunks() >= 4,
-            "gen0 should span directory slots 0..=2, has {} chunks",
-            gen0.num_chunks()
-        );
+        if !cfg!(miri) {
+            assert!(heap.stats().blocks > 32, "more than one slab was carved");
+        }
         for (key, ptr) in allocated {
-            assert!(gen0.contains_ptr(ptr.as_ptr()));
-            // SAFETY: the allocating thread wrote this slot and has joined.
+            // SAFETY: the allocating thread wrote this cell and has joined.
             match unsafe { ptr.get() } {
                 Object::Float(value) => assert_eq!(*value, f64::from(key)),
-                other => panic!("slot for {key} holds {other:?}"),
+                other => panic!("cell for {key} holds {other:?}"),
             }
         }
     }

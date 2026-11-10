@@ -32,22 +32,24 @@ mod enabled {
     /// Storage counts, not payload bytes or a measurement of reachability.
     #[derive(Clone, Debug, Default)]
     pub struct GcHeapSnapshot {
-        /// Reserved/occupied slots in Gen0 and Gen2 respectively.
-        pub generation_slots: [usize; 2],
-        /// Backing capacity in Gen0, Gen2, scratch respectively.
-        pub capacity_slots: [usize; 3],
-        /// Actual TLAB allocations since the previous collection (excludes holes).
+        /// Runtime objects allocated and not yet swept, dead ones included.
+        pub objects: usize,
+        /// Blocks carved, and how many of them are free.
+        pub blocks: [usize; 2],
+        /// Objects above the large-object threshold.
+        pub large_objects: usize,
+        /// Actual TLAB allocations since the previous collection.
         pub new_objects: usize,
     }
 
     impl GcHeapSnapshot {
-        /// Caller must hold exclusive GC access; generations can move otherwise.
+        /// Caller must hold exclusive GC access.
         pub(crate) unsafe fn capture(heap: &BexHeap) -> Self {
-            // SAFETY: caller holds exclusive GC access.
-            let spaces = unsafe { [heap.gen0_ref(), heap.gen2_ref(), heap.inactive_ref()] };
+            let stats = heap.stats();
             Self {
-                generation_slots: [spaces[0].len(), spaces[1].len()],
-                capacity_slots: spaces.map(|space| space.capacity()),
+                objects: stats.runtime_objects,
+                blocks: [stats.blocks, stats.free_blocks],
+                large_objects: stats.large_objects,
                 new_objects: heap.allocs_since_gc(),
             }
         }
@@ -85,18 +87,21 @@ mod enabled {
 
     impl GcProfiler {
         /// Caller must hold exclusive heap access through `finish`.
-        pub(crate) unsafe fn start(heap: &BexHeap, roots: usize) -> Self {
+        pub(crate) unsafe fn start(heap: &BexHeap) -> Self {
             let start = Instant::now();
             Self {
                 profile: GcProfile {
                     // SAFETY: caller holds exclusive heap access.
                     before: unsafe { GcHeapSnapshot::capture(heap) },
-                    roots,
                     ..Default::default()
                 },
                 start,
                 last: start,
             }
+        }
+
+        pub(crate) fn set_roots(&mut self, roots: usize) {
+            self.profile.roots = roots;
         }
 
         pub(crate) fn finish_phase(&mut self, phase: HeapPhase) {
@@ -177,28 +182,28 @@ mod enabled {
         use crate::Tlab;
 
         #[test]
-        fn reports_allocations_separately_from_reserved_slots() {
-            let heap = BexHeap::with_tlab_size(vec![], 16);
+        fn reports_allocations_and_objects() {
+            let heap = BexHeap::new(vec![]);
             let mut tlab = Tlab::new(heap.clone());
             let live = tlab.alloc_string("live");
             tlab.alloc_string("dead");
             // SAFETY: this standalone heap has no concurrent holders.
             let (first, roots, _) = unsafe { heap.collect_garbage(&[live]) };
-            assert_eq!(first.profile.before.generation_slots, [16, 0]);
+            assert_eq!(first.profile.before.objects, 2);
             assert_eq!(first.profile.before.new_objects, 2);
-            assert_eq!(first.profile.after.generation_slots, [0, 1]);
+            assert_eq!(first.profile.after.objects, 1);
             assert_eq!(first.profile.after.new_objects, 0);
-            assert_eq!(first.collected_count, 15); // 1 dead object + 14 holes.
+            assert_eq!(first.collected_count, 1);
             assert_eq!(first.profile.roots, 1);
             let p = &first.profile;
             assert!(
                 p.heap_total
                     >= p.prepare + p.trace + p.keepalive + p.fixup + p.reclaim + p.bookkeeping
             );
-            // SAFETY: roots were forwarded by the preceding collection; no mutator.
+            // SAFETY: no mutator; `roots` survived the preceding collection.
             let (second, _, _) = unsafe { heap.collect_garbage(&roots) };
-            assert_eq!(second.profile.before.generation_slots, [0, 1]);
-            assert_eq!(second.profile.after.generation_slots, [0, 1]);
+            assert_eq!(second.profile.before.objects, 1);
+            assert_eq!(second.profile.after.objects, 1);
         }
     }
 }
@@ -217,10 +222,12 @@ mod disabled {
     impl NoopGcProfiler {
         /// Same exclusive-access contract as the enabled implementation.
         #[inline]
-        pub(crate) unsafe fn start(_: &BexHeap, _: usize) -> Self {
+        pub(crate) unsafe fn start(_: &BexHeap) -> Self {
             Self
         }
         #[inline]
+        pub(crate) fn set_roots(&mut self, _: usize) {}
+
         pub(crate) fn finish_phase(&mut self, _: HeapPhase) {}
         /// Same exclusive-access contract as the enabled implementation.
         #[inline]

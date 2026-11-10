@@ -69,15 +69,6 @@ impl BexHeap {
     }
 
     #[inline]
-    pub(crate) fn record_tlab_canary(&self, _idx: usize) {}
-
-    #[inline]
-    pub(crate) fn clear_tlab_canaries(&self) {}
-
-    #[inline]
-    pub(crate) fn debug_verify_tlab_canaries(&self) {}
-
-    #[inline]
     pub(crate) fn bump_epoch(&self) -> u32 {
         self.debug_state().bump_epoch()
     }
@@ -85,20 +76,6 @@ impl BexHeap {
     #[allow(dead_code)]
     pub(crate) fn heap_epoch(&self) -> u32 {
         self.debug_state().epoch()
-    }
-
-    pub(crate) fn placeholder_object(&self) -> Object {
-        Object::String(bex_str::BexStr::empty())
-    }
-
-    pub(crate) fn tlab_canary_object(&self, _chunk_start: usize, _chunk_end: usize) -> Object {
-        Object::String(bex_str::BexStr::empty())
-    }
-
-    pub(crate) fn finalize_inactive_space(&self) {
-        unsafe {
-            (*self.inactive.get()).clear();
-        }
     }
 
     #[inline]

@@ -1,12 +1,6 @@
-use std::sync::{
-    Mutex,
-    atomic::{AtomicU32, Ordering},
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 
-use bex_vm_types::{
-    FutureRead, HeapPtr, Object, Value,
-    types::{ObjectType, SentinelKind},
-};
+use bex_vm_types::{FutureRead, HeapPtr, Object, Value};
 
 use crate::BexHeap;
 
@@ -58,7 +52,6 @@ impl HeapDebuggerConfig {
 pub(crate) struct HeapDebuggerState {
     config: HeapDebuggerConfig,
     epoch: AtomicU32,
-    tlab_canaries: Mutex<Vec<usize>>,
 }
 
 impl HeapDebuggerState {
@@ -66,7 +59,6 @@ impl HeapDebuggerState {
         Self {
             config,
             epoch: AtomicU32::new(0),
-            tlab_canaries: Mutex::new(Vec::new()),
         }
     }
 
@@ -81,90 +73,11 @@ impl HeapDebuggerState {
     pub(crate) fn epoch(&self) -> u32 {
         self.epoch.load(Ordering::Acquire)
     }
-
-    pub(crate) fn record_tlab_canary(&self, idx: usize) {
-        let mut canaries = self
-            .tlab_canaries
-            .lock()
-            .expect("tlab canaries lock poisoned");
-        canaries.push(idx);
-    }
-
-    pub(crate) fn clear_tlab_canaries(&self) {
-        let mut canaries = self
-            .tlab_canaries
-            .lock()
-            .expect("tlab canaries lock poisoned");
-        canaries.clear();
-    }
-
-    pub(crate) fn tlab_canaries(&self) -> Vec<usize> {
-        let canaries = self
-            .tlab_canaries
-            .lock()
-            .expect("tlab canaries lock poisoned");
-        canaries.clone()
-    }
 }
 
 impl BexHeap {
     pub fn debug_config(&self) -> &HeapDebuggerConfig {
         self.debug_state().config()
-    }
-
-    pub(crate) fn record_tlab_canary(&self, idx: usize) {
-        let debug = self.debug_state().config();
-        if !debug.enabled {
-            return;
-        }
-        self.debug_state().record_tlab_canary(idx);
-    }
-
-    pub(crate) fn clear_tlab_canaries(&self) {
-        let debug = self.debug_state().config();
-        if !debug.enabled {
-            return;
-        }
-        self.debug_state().clear_tlab_canaries();
-    }
-
-    pub(crate) fn debug_verify_tlab_canaries(&self) {
-        let debug = self.debug_state().config();
-        if !debug.enabled {
-            return;
-        }
-
-        let canaries = self.debug_state().tlab_canaries();
-        if canaries.is_empty() {
-            return;
-        }
-
-        let ct_len = self.compile_time_len();
-        let runtime_len = self.len().saturating_sub(ct_len);
-        let max_index = ct_len + runtime_len;
-
-        unsafe {
-            let gen0 = &*self.gen0.get();
-            for raw in canaries {
-                assert!(
-                    raw >= ct_len,
-                    "tlab canary out of bounds: idx={raw} ct_len={ct_len}"
-                );
-                assert!(
-                    raw < max_index,
-                    "tlab canary out of bounds: idx={raw} max={max_index}"
-                );
-                let runtime_idx = raw - ct_len;
-                let obj = &gen0[runtime_idx];
-                match obj {
-                    Object::Sentinel(SentinelKind::TlabCanary { .. }) => {}
-                    _ => {
-                        let obj_type = ObjectType::of(obj);
-                        panic!("tlab canary clobbered: idx={raw} obj_type={obj_type:?}");
-                    }
-                }
-            }
-        }
     }
 
     pub fn verify_quick(&self) {
@@ -186,16 +99,6 @@ impl BexHeap {
     }
 
     fn verify_quick_impl(&self) {
-        let next_chunk = self.next_chunk_value();
-        let runtime_len = self.len().saturating_sub(self.compile_time_len());
-        assert!(
-            next_chunk <= runtime_len,
-            "heap next_chunk out of bounds: next_chunk={next_chunk} runtime_len={runtime_len}"
-        );
-
-        let ct_len = self.compile_time_len();
-        let _max_index = ct_len + runtime_len;
-
         let handles = self.handles.read().expect("handles lock poisoned");
         for (handle_key, idx) in handles.iter() {
             let ptr_addr = idx.as_ptr() as usize;
@@ -207,8 +110,6 @@ impl BexHeap {
             // The epoch check in debug_assert_valid_index provides safety guarantees
             let _ = ptr_addr; // Silence unused warning - we verified it's not null
         }
-
-        self.debug_verify_tlab_canaries();
     }
 
     fn verify_full_impl(&self) {
@@ -220,16 +121,22 @@ impl BexHeap {
             self.verify_object_invariants(idx, obj, ct_len);
         }
 
-        // Verify all runtime objects in Gen0 (the active nursery)
-        unsafe {
-            let gen0 = &*self.gen0.get();
-            for (runtime_idx, obj) in gen0.iter().enumerate() {
-                let ptr = gen0.get_ptr(runtime_idx);
-                let idx = HeapPtr::from_ptr(ptr, self.heap_epoch());
-                if self.debug_handle_runtime_sentinel(idx, obj, ct_len) {
-                    continue;
-                }
-                self.verify_object_invariants(idx, obj, ct_len);
+        // Verify every runtime object. The objects are gathered first: the
+        // checks look pointers up in the space, which takes its locks.
+        let mut objects = Vec::new();
+        {
+            let small = self.small.lock();
+            let large = self.large.lock();
+            // SAFETY: verification runs with every mutator parked.
+            unsafe {
+                Self::for_each_runtime_object(small.pool(), &large, |object| objects.push(object));
+            }
+        }
+        for object in objects {
+            // SAFETY: allocated, and every mutator is parked.
+            unsafe {
+                let idx = HeapPtr::from_ptr(object, self.heap_epoch());
+                self.verify_object_invariants(idx, &*object, ct_len);
             }
         }
 
@@ -239,38 +146,6 @@ impl BexHeap {
             let obj = unsafe { self.get_object(*idx) };
             if let Object::Sentinel(_) | Object::Tombstone = obj {
                 panic!("handle points to sentinel: handle_key={handle_key} idx={idx:?}");
-            }
-        }
-    }
-
-    fn debug_handle_runtime_sentinel(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) -> bool {
-        let kind = match obj {
-            Object::Sentinel(kind) => kind,
-            // Holds right after a collection, the only time this runs: between
-            // collections an unpublished `Reservation` legitimately leaves a
-            // tombstone in gen0.
-            Object::Tombstone => panic!("tombstone in active space: idx={idx:?}"),
-            _ => return false,
-        };
-
-        match kind {
-            SentinelKind::Uninit => true,
-            SentinelKind::TlabCanary {
-                chunk_start,
-                chunk_end,
-            } => {
-                // With HeapPtr we can't easily do index-based validation
-                // Just verify the canary structure is self-consistent
-                assert!(
-                    *chunk_start < *chunk_end,
-                    "tlab canary start >= end: chunk_start={chunk_start} chunk_end={chunk_end}"
-                );
-                assert!(
-                    *chunk_end - *chunk_start == self.tlab_size(),
-                    "tlab canary size mismatch: chunk_start={chunk_start} chunk_end={chunk_end} tlab_size={}",
-                    self.tlab_size()
-                );
-                true
             }
         }
     }
@@ -383,46 +258,49 @@ impl BexHeap {
 
         // Check the pointer is not null
         assert!(!idx.as_ptr().is_null(), "heap pointer is null");
-
-        // Check epoch matches
-        let current_epoch = self.heap_epoch();
-        let idx_epoch = idx.epoch();
         assert!(
-            idx_epoch == current_epoch,
-            "heap pointer epoch mismatch: idx_epoch={idx_epoch} heap_epoch={current_epoch} ptr={:?}",
+            self.debug_ptr_is_allocated(idx),
+            "heap pointer names no allocated object: ptr={:?}",
             idx.as_ptr()
         );
+
+        // No epoch equality is asserted. Epochs still stamp every pointer the
+        // heap mints, and each collection re-stamps the roots and handles it
+        // saw (its `Restamp` map), so a pointer's epoch says which collection
+        // last vouched for it. But objects never move, so a pointer stored in
+        // an object is never rewritten and legitimately outlives its epoch:
+        // liveness is checked above, against the space, instead.
+    }
+
+    /// Whether `ptr` names a compile-time object or an allocated cell. Reads
+    /// only the space's tables, never the object.
+    pub fn debug_ptr_is_allocated(&self, ptr: HeapPtr) -> bool {
+        use crate::space::{block::BlockHeader, cell_of};
+        if self.is_compile_time_ptr(ptr) {
+            return true;
+        }
+        let cell = cell_of(ptr.as_ptr() as usize);
+        if let Some(base) = self.small.lock().pool().block_containing(cell) {
+            // SAFETY: an initialized block; only its tables are read.
+            let header = unsafe { BlockHeader::at(base) };
+            return header.starts.get(BlockHeader::granule(base, cell));
+        }
+        self.large.lock().contains_cell(cell)
     }
 
     pub(crate) fn bump_epoch(&self) -> u32 {
         self.debug_state().bump_epoch()
     }
 
+    /// Whether `ptr`'s object was reclaimed: a root still naming one after
+    /// the roots were forwarded was missed by the root scan.
+    pub fn debug_ptr_is_reclaimed(&self, ptr: HeapPtr) -> bool {
+        !self.debug_ptr_is_allocated(ptr)
+    }
+
     #[allow(dead_code)]
     pub(crate) fn heap_epoch(&self) -> u32 {
         self.debug_state().epoch()
-    }
-
-    pub(crate) fn placeholder_object(&self) -> Object {
-        Object::Sentinel(SentinelKind::Uninit)
-    }
-
-    pub(crate) fn tlab_canary_object(&self, chunk_start: usize, chunk_end: usize) -> Object {
-        Object::Sentinel(SentinelKind::TlabCanary {
-            chunk_start,
-            chunk_end,
-        })
-    }
-
-    /// Keep the old space's chunks alive but drop everything in them, so a
-    /// read through a stale pointer finds a tombstone instead of freed memory.
-    pub(crate) fn finalize_inactive_space(&self) {
-        unsafe {
-            let space = &mut *self.inactive.get();
-            for slot in space.iter_mut() {
-                *slot = Object::Tombstone;
-            }
-        }
     }
 
     pub(crate) fn debug_assert_not_sentinel(&self, obj: &Object) {

@@ -1,7 +1,5 @@
 //! Function identity lookup owned by the engine's heap. Dynamic entries are
-//! weak: they never participate in tracing and are repaired/pruned by GC.
-
-use std::collections::HashMap;
+//! weak: they never participate in tracing and are pruned by GC.
 
 use bex_vm_types::{HeapPtr, Object, PermitProof};
 use btel_types::{FunctionId, FunctionMetadata, FunctionMetadataTable};
@@ -88,8 +86,8 @@ impl BexHeap {
         FunctionMetadataTable { functions }
     }
 
-    /// Metadata for compile-time functions only. They are never moved or
-    /// collected after sealing, so no permit is needed. Sorted by ID; dynamic
+    /// Metadata for compile-time functions only. They are never collected
+    /// after sealing, so no permit is needed. Sorted by ID; dynamic
     /// functions (runtime-compiled or grafted) are absent.
     pub fn static_function_metadata(&self) -> FunctionMetadataTable {
         let functions = (0..self.compile_time_len())
@@ -100,17 +98,5 @@ impl BexHeap {
             .collect::<Vec<_>>();
         debug_assert!(functions.is_sorted_by_key(|f| f.function_id));
         FunctionMetadataTable { functions }
-    }
-
-    /// Only called at the GC safepoint, after tracing/finalizer preservation
-    /// and before swapping or destroying from-space. Never marks anything live.
-    pub(crate) fn update_function_lookup(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        self.functions.retain_dynamic(|ptr| {
-            let Some(&new_ptr) = forwarding.get(ptr) else {
-                return false;
-            };
-            *ptr = new_ptr;
-            true
-        });
     }
 }

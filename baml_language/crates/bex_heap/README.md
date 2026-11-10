@@ -1,190 +1,85 @@
 # BEX Heap
 
-Shared memory management with semi-space copying garbage collection for the BEX runtime.
+Shared memory management for the BEX runtime: a non-moving mark-sweep
+collector with size-class allocation, behind the engine's heap handles,
+permits and root registry.
 
-## Architecture Overview
-
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│                              BexEngine                                    │
-│  • Owns BexHeap via Arc                                                   │
-│  • Coordinates GC via epoch-based safepoints                              │
-│  • call_function(&self) enables concurrent execution                      │
-└───────────────────────────────────────────────────────────────────────────┘
-                  │ clones heap Arc, creates VM per call
-                  ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                               BexVm (per-call)                            │
-│  • Receives: BexHeap (cloned Arc)                                         │
-│  • Owns: TLAB for lock-free allocation                                    │
-│  • Uses: ObjectIndex internally                                           │
-└───────────────────────────────────────────────────────────────────────────┘
-                  │ allocates via TLAB
-                  ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                          BexHeap (Shared via Arc)                         │
-├───────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │              compile_time: Vec<Object>                              │  │
-│  │  [0] [1] [2] ... [N-1]                                              │  │
-│  │   │   │   │       │                                                 │  │
-│  │   ↓   ↓   ↓       ↓                                                 │  │
-│  │  Fn  Cls Enum   ...     ← PERMANENT (functions, classes, enums)     │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                               ▲                                           │
-│                    compile_time_boundary = N                              │
-│                               ▼                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │          spaces[active]: ChunkedVec<Object>                         │  │
-│  │  [N] [N+1] [N+2] ...                                                │  │
-│  │   │    │     │                                                      │  │
-│  │   ↓    ↓     ↓                                                      │  │
-│  │  Arr  Map  Inst   ...   ← RUNTIME (arrays, maps, instances)         │  │
-│  │                                                                     │  │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐                                │  │
-│  │  │ TLAB 1  │ │ TLAB 2  │ │ TLAB 3  │  ← Per-VM allocation chunks    │  │
-│  │  └─────────┘ └─────────┘ └─────────┘                                │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │          spaces[inactive]: ChunkedVec<Object>                       │  │
-│  │                   (empty until GC copies here)                      │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-│  handles: RwLock<HashMap<key, ObjectIndex>>  ← FFI boundary / GC roots    │
-│  active_space: AtomicUsize (0 or 1)                                       │
-│                                                                           │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
-## Object Indexing
-
-Objects are referenced via `ObjectIndex` (a `usize` with optional epoch for debug):
+## Layout
 
 ```
-ObjectIndex(raw)
-      │
-      ▼
-┌─────────────────┐
-│ raw < ct_len?   │
-└────────┬────────┘
-    YES  │  NO
-    ↓    │  ↓
-compile_time[raw]  │  spaces[active][raw - ct_len]
+compile_time: Vec<Object>         permanent: functions, classes, enums, literals
+
+blocks (32 KiB, block-aligned, carved from 1 MiB slabs), one size class each
+┌──────────────┬──────────┬──────────┬──────────┬─────┬──────────────┐
+│ header       │ cell     │ free ──┐ │ cell     │ ... │ unused tail  │
+│  starts      │          │ (next) │ │          │     │              │
+│  marks       │          │        ▼ │          │     │              │
+│  class, free │          │          │          │     │              │
+└──────────────┴──────────┴──────────┴──────────┴─────┴──────────────┘
+
+large objects (cells > 8 KiB): one block-aligned allocation each, prefix + cell
 ```
 
-## TLAB Allocation (Fast Path)
+Every allocation is a *cell*: an 8-byte `Header` naming a `Descriptor`,
+then the object. A pointer to an object names a byte in its cell's first
+granule, so masking the low four bits finds the cell and masking to the block
+size finds the side tables: an object-start bitmap and a mark bitmap, one bit
+per 16-byte granule.
 
-Each VM gets exclusive access to a TLAB chunk for lock-free allocation:
+The VM's 64-byte `Object` enum is one descriptor (`OBJECT_DESC`), an 80-byte
+cell whose tracing calls the enum-specific code in `object_trace.rs`. Other
+descriptors describe objects by pointer-slot and tagged-slot offsets and
+repeated elements, the shared object format the next PRs move the VM onto.
 
-```
-tlab.alloc(obj)
-      │
-      ▼
-┌───────────────────────┐
-│ alloc_ptr >= limit?   │
-└───────────┬───────────┘
-      YES   │   NO
-      ↓     │   ↓
-  refill()  │   1. global_idx = alloc_ptr
-  (atomic   │   2. alloc_ptr += 1
-   chunk    │   3. write object to heap
-   reserve) │   4. return ObjectIndex
-```
+## Allocation
 
-- **Fast path**: Single pointer bump, no locks
-- **Cold path**: Atomic `fetch_add` to reserve next chunk (~every 1024 allocations)
+`space/small.rs` is the small-object policy, behind one seam: Go-style size
+classes (`SIZE_CLASSES`, 16 bytes to 8 KiB). A block holds one class; its
+empty slots form a free list threaded through them. Each mutator owns a
+`Tlab` holding one current block per class and takes cells from it without
+locking; only taking or giving back a block locks. Cells above 8 KiB go to
+the large-object space. Every cell spends its size of the GC budget.
 
-## Semi-Space Garbage Collection
+## Collection
 
-Cheney-style copying collector that alternates between two spaces:
+Stop-the-world under the `HeapGuard` pause, never moving anything:
 
-```
-BEFORE GC:                           AFTER GC:
-┌─────────────────────┐              ┌─────────────────────┐
-│ spaces[0] (ACTIVE)  │              │ spaces[0] (INACTIVE)│
-│ [A][B][C][D][E][F]  │              │      (cleared)      │
-│  ↑       ↑          │              │                     │
-│  └───────┴── roots  │              │                     │
-└─────────────────────┘              └─────────────────────┘
-┌─────────────────────┐              ┌─────────────────────┐
-│ spaces[1] (INACTIVE)│              │ spaces[1] (ACTIVE)  │
-│      (empty)        │              │ [A'][C']            │
-│                     │              │   ↑                 │
-│                     │              │   └── compacted     │
-└─────────────────────┘              └─────────────────────┘
+1. Roots: the handle table, every holder in the root registry
+   (`collect_paused`), and any `RootSource`: precise pointers, or word ranges
+   scanned conservatively (an interior pointer keeps its whole object; a word
+   outside every cell is ignored).
+2. Mark: set the side-table mark bit of every reachable cell.
+3. Keep alive: unobserved spawn errors and dead finalizable instances, with
+   everything they reach.
+4. Weak entries (function lookup, finalizable list) of dead objects are
+   dropped; the engine then forwards the registry, which drops weak caches.
+5. Sweep: drop every unmarked cell and clear its start bit; free dead large
+   objects; rebuild each block's free list; return empty blocks to the
+   shared pool, where any class can take them.
 
-B, D, E, F collected (garbage)
-```
+The budget for the next collection is `max(32 MiB, 4 × live bytes)`, live
+bytes being the survivors' cells plus what they keep alive outside them.
+`HeapStats::heap_bytes` over `HeapStats::live_bytes` is the fragmentation
+ratio; `BexHeap::class_occupancy` breaks blocks and cells down by class.
 
-### Collection Algorithm
+## Handles
 
-1. **Initialize**: Clear inactive space, create forwarding map
-2. **BFS Trace**: Starting from roots (VM stacks + handles)
-   - Skip if already forwarded or compile-time
-   - Copy live object to inactive space
-   - Record `forwarding[old_idx] = new_idx`
-   - Add object's references to worklist
-3. **Fix References**: Update all ObjectIndex fields in copied objects
-4. **Swap Spaces**: Atomic `active_space.store(to_space)`
-5. **Update Handles**: Remap handle table using forwarding map
-6. **Invalidate TLABs**: Force VMs to refill from new space
+External code holds opaque handles; the handle table is always a root, and
+since objects never move a handle's pointer never changes. Under
+`heap_debug`, each collection re-stamps surviving pointers with a new epoch
+(the `Restamp` map), so a pointer the collection never saw still fails the
+epoch check.
 
-## ChunkedVec: Stable Pointer Storage
+## Concurrency
 
-ChunkedVec stores objects in fixed-size chunks (4096 elements) to prevent pointer invalidation during concurrent growth:
+| Component | Mechanism |
+|-----------|-----------|
+| Cells and free list of an owned block | Written only by the owning mutator, or by the collector while all mutators are parked |
+| Block pool and class lists, large objects | `parking_lot::Mutex`, taken per block or large allocation |
+| Handles | `RwLock<HashMap>` |
+| Collection | `HeapPermitManager` pause: every permit drained, registry locked |
 
-```
-Vec (problematic):              ChunkedVec (safe):
-┌──────────────────┐            Chunk 0: ┌──────────────┐
-│ [obj0][obj1]...  │                     │ [obj0][obj1] │ ← never moves
-└──────────────────┘                     └──────────────┘
-        │                       Chunk 1: ┌──────────────┐
-        ↓ resize                         │ [obj4096]... │ ← appended
-┌───────────────────────┐                └──────────────┘
-│ [obj0][obj1]... (NEW) │
-└───────────────────────┘
-  ↑ old pointers invalid!       Index N → chunk[N/4096][N%4096]
-```
-
-This fixed a race condition where concurrent TLAB refills could invalidate pointers held by other VMs.
-
-## Handle-Based FFI
-
-External code interacts through opaque handles that serve as GC roots:
-
-```
-External Code                        Heap
-┌─────────────────┐                 ┌──────────────────────────┐
-│  Handle         │  slab_key       │  handles: HashMap        │
-│  ┌───────────┐  │                 │  ┌────────────────────┐  │
-│  │ key: 42   │──┼────────────────►│  │ 42: ObjectIndex(N) │  │
-│  │ heap: Arc │  │                 │  └────────┬───────────┘  │
-│  └───────────┘  │                 │           │              │
-│                 │                 │           ▼              │
-│                 │                 │  [N]: Array([...])       │
-└─────────────────┘                 │       ↑                  │
-                                    │       └── protected      │
-                                    │           from GC        │
-                                    └──────────────────────────┘
-```
-
-After GC, handles are updated via the forwarding map to point to new locations.
-
-## Concurrency Model
-
-| Component | Mechanism | Purpose |
-|-----------|-----------|---------|
-| Object storage | `UnsafeCell<ChunkedVec>` + TLAB exclusivity | Lock-free writes within reserved regions |
-| Active space | `AtomicUsize` | Atomic space swaps during GC |
-| TLAB chunks | `AtomicUsize::fetch_add` | Lock-free chunk reservation |
-| Handles | `RwLock<HashMap>` | Concurrent reads, exclusive GC updates |
-| GC coordination | Epoch-based safepoints | VMs park at await points for collection |
-
-### Safety Invariants
-
-1. **TLAB exclusivity**: Each VM's TLAB region is never accessed by other VMs
-2. **Safepoint GC**: Collection only runs when all old-epoch VMs are parked
-3. **ChunkedVec stability**: Growing never moves existing elements
-4. **Frozen global slots**: global variables are written only by `$init`, then frozen into `SharedGlobals`, which the collector traces and forwards as a root holder. The heap values they hold are shared by every VM, and their mutation goes through the same synchronized containers (`LazyBiasedMutex` arrays/maps, atomic instance field slots) as values shared with a `spawn`ed task
+Global variables are written only by `$init`, then frozen into
+`SharedGlobals`, which the collector traces as a root holder. Their mutation
+goes through the same synchronized containers (`LazyBiasedMutex` arrays and
+maps, atomic instance field slots) as values shared with a `spawn`ed task.

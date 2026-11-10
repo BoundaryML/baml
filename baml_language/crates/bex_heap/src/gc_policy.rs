@@ -1,9 +1,9 @@
 //! Allocation spending requests a full collection at the next VM safe point.
 //!
 //! This is headroom between collections, not a hard heap or RSS limit. Spending
-//! is the heap's net growth since the last full collection: reserved object
-//! slots (including unused TLAB capacity) plus the memory objects keep alive
-//! outside their slots, as reported by [`Object::measure`](bex_vm_types::Object::measure).
+//! is the heap's net growth since the last full collection: the cells
+//! allocated (at their size class) and the memory objects keep alive outside
+//! their cells, as reported by [`Object::measure`](bex_vm_types::Object::measure).
 //! Each allocator keeps a local balance and settles it here in quanta, so a
 //! running VM can hold a bounded amount of unsettled spending. Storage shared
 //! between objects is charged by every object that references it, so spending
@@ -17,8 +17,6 @@ use crate::BexHeap;
 
 pub(crate) const MIN_FULL_BUDGET: usize = 32 * 1024 * 1024;
 const LIVE_HEADROOM: usize = 4;
-pub(crate) const FIRST_TLAB_SLOTS: usize = 32;
-pub(crate) const MAX_TLAB_SLOTS: usize = 1024;
 /// Number of existing VM control-flow checks between pressure/park polls.
 pub const POLL_INTERVAL: u64 = 4096;
 
@@ -82,10 +80,9 @@ impl AllocationBudget {
         isize::try_from(budget).unwrap_or(isize::MAX)
     }
 
-    /// Called with all mutators parked, after full collection has moved
-    /// survivors. `live_bytes` is what the survivors occupy: their slots and
-    /// what they keep alive outside them. Collector moves are not allocation
-    /// spending.
+    /// Called with all mutators parked, after a full collection. `live_bytes`
+    /// is what the survivors occupy: their cells and what they keep alive
+    /// outside them.
     pub(crate) fn after_full(&self, live_bytes: usize) {
         self.spent.store(0, Ordering::Relaxed);
         self.budget.store(
@@ -115,12 +112,12 @@ impl BexHeap {
 
 #[cfg(test)]
 mod tests {
-    use bex_vm_types::Object;
-
     use super::*;
-    use crate::Tlab;
+    use crate::{Tlab, descriptor::OBJECT_CELL_BYTES};
 
     const BUDGET: isize = MIN_FULL_BUDGET as isize;
+    /// What one `Object` cell spends.
+    const CELL: isize = OBJECT_CELL_BYTES as isize;
 
     #[test]
     fn full_budget_tracks_spending_and_live_headroom() {
@@ -189,7 +186,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap.clone());
         tlab.alloc_uint8array(vec![0; 1000]);
-        assert_eq!(tlab.alloc_debt().balance(), 1000);
+        assert_eq!(tlab.alloc_debt().balance(), CELL + 1000);
         // SAFETY: single-threaded heap with no surviving roots.
         unsafe {
             heap.collect_garbage(&[]);
@@ -199,48 +196,44 @@ mod tests {
         assert_eq!(heap.gc_budget().bytes_since_full_gc, 0);
     }
 
+    /// Every cell spends its class size; taking a block settles the balance.
     #[test]
-    fn reservations_grow_without_wasting_alignment_slots() {
+    fn cells_spend_their_size() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
-        for i in 1usize..=4096 {
-            tlab.alloc_string("inline");
-            let slots = if i <= 1024 {
-                i.next_power_of_two().max(32)
-            } else {
-                i.div_ceil(1024) * 1024
-            };
-            assert_eq!(
-                heap.gc_budget().bytes_since_full_gc,
-                (slots * size_of::<Object>()) as isize
-            );
-        }
         tlab.alloc_string("inline");
         assert_eq!(
             heap.gc_budget().bytes_since_full_gc,
-            (5120 * size_of::<Object>()) as isize
+            CELL,
+            "the first cell took a block, which settled it"
         );
+        for _ in 0..10 {
+            tlab.alloc_string("inline");
+        }
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, CELL);
+        tlab.flush_alloc_debt();
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, 11 * CELL);
     }
 
+    /// A collection does not move objects, so the allocator keeps its block;
+    /// the sweep puts the block's dead cells on its free list for reuse.
     #[test]
-    fn collection_invalidates_capacity_but_preserves_reservation_growth() {
+    fn a_collection_keeps_the_block_and_frees_its_dead_cells() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
         for _ in 0..65 {
             tlab.alloc_string("inline");
         }
-        assert_eq!(tlab.remaining(), 63);
+        let remaining = tlab.remaining();
         // SAFETY: single-threaded heap with no surviving roots.
         unsafe {
             heap.collect_garbage(&[]);
         }
         tlab.invalidate();
+        assert_eq!(tlab.remaining(), remaining + 65 * OBJECT_CELL_BYTES);
         tlab.alloc_string("inline");
-        assert_eq!(tlab.remaining(), 127);
-        assert_eq!(
-            heap.gc_budget().bytes_since_full_gc,
-            (128 * size_of::<Object>()) as isize
-        );
+        drop(tlab);
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, CELL);
     }
 
     /// Payload spends the budget as soon as it is allocated: one buffer the
@@ -269,42 +262,40 @@ mod tests {
         }
         tlab.flush_alloc_debt();
         let spent = heap.gc_budget().bytes_since_full_gc;
-        let slots = (32 * size_of::<Object>()) as isize;
-        assert_eq!(spent, slots + 8 * whole + 8 * 127);
+        assert_eq!(spent, 16 * CELL + 8 * whole + 8 * 127);
         assert!(!heap.should_gc());
     }
 
-    /// A payload too small to settle on its own is settled when the TLAB
-    /// refills, when its owner asks, and when the TLAB is dropped. The TLAB
-    /// starts with a chunk, so the first allocation does not refill.
+    /// A balance too small to settle on its own is settled when the TLAB
+    /// takes a block, when its owner asks, and when the TLAB is dropped. The
+    /// TLAB starts with a block, so the first allocation does not take one.
     #[test]
     fn small_payloads_settle_at_refill_on_request_and_on_drop() {
+        const SMALL: isize = CELL + 10;
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap.clone());
         tlab.alloc_uint8array(vec![0; 1000]);
-        let slots = (32 * size_of::<Object>()) as isize;
-        assert_eq!(heap.gc_budget().bytes_since_full_gc, slots);
-        assert_eq!(tlab.alloc_debt().balance(), 1000);
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, 0);
+        assert_eq!(tlab.alloc_debt().balance(), CELL + 1000);
 
         tlab.flush_alloc_debt();
-        assert_eq!(heap.gc_budget().bytes_since_full_gc, slots + 1000);
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, CELL + 1000);
         assert_eq!(tlab.alloc_debt().balance(), 0);
 
-        for _ in 0..32 {
+        let mut filled = 0;
+        while tlab.is_valid() {
             tlab.alloc_uint8array(vec![0; 10]);
+            filled += 1;
         }
-        // The 33rd allocation refills, settling the 320 bytes with the slots.
-        assert_eq!(
-            heap.gc_budget().bytes_since_full_gc,
-            slots + 1000 + (32 * size_of::<Object>()) as isize + 320
-        );
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, CELL + 1000);
+        // This allocation takes a new block, settling everything with it.
+        tlab.alloc_uint8array(vec![0; 10]);
+        let settled = CELL + 1000 + (filled + 1) * SMALL;
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, settled);
 
         tlab.alloc_uint8array(vec![0; 10]);
         drop(tlab);
-        assert_eq!(
-            heap.gc_budget().bytes_since_full_gc,
-            slots + 1000 + (32 * size_of::<Object>()) as isize + 330
-        );
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, settled + SMALL);
     }
 
     /// The budget after a full collection covers the survivors' payload, not

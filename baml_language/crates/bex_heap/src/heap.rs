@@ -1,20 +1,20 @@
 //! Unified heap for BEX virtual machine.
 //!
-//! The heap stores all objects in a single `Vec<Object>` with:
-//! - Compile-time objects at indices 0..compile_time_boundary (permanent)
-//! - Runtime objects at indices compile_time_boundary.. (collectible)
+//! Compile-time objects (functions, classes, enums, literals) live in a
+//! permanent `Vec<Object>`. Runtime objects live in cells of a non-moving
+//! mark-region space ([`crate::space`]), allocated by per-mutator
+//! [`Tlab`](crate::Tlab)s and reclaimed by [`BexHeap::collect`].
 //!
 //! # Thread Safety
 //!
-//! The heap uses `UnsafeCell<Vec<Object>>` for lock-free field writes.
-//! Safety is ensured by:
-//! - TLABs give each VM exclusive write access to its allocation region
+//! - Each mutator allocates in blocks it owns; taking and returning a block
+//!   is the only allocation step that locks.
 //! - BAML has no global mutable variables, so independent calls can't race
 //! - GC only runs when all VMs are at safepoints (yielded)
 
 use std::{
-    cell::UnsafeCell,
     collections::HashMap,
+    ops::Range,
     sync::{
         Arc, Mutex, RwLock, Weak,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -25,17 +25,22 @@ use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object};
 
-use crate::{HeapDebuggerConfig, HeapDebuggerState, chunked_vec::ChunkedVec, tlab::TlabChunk};
+use crate::{
+    HeapDebuggerConfig, HeapDebuggerState,
+    descriptor::{DescId, Descriptor, DescriptorError, DescriptorTable},
+    space::{
+        BLOCK_BYTES, block::BlockHeader, cell_of, large::LargeSpace, mark::is_cell_marked,
+        small::SmallSpace,
+    },
+};
 
-/// Which generation of the heap an object lives in.
+/// Where an object lives. Objects never move, so this never changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Generation {
     /// Permanent compile-time objects (never collected).
     CompileTime,
-    /// Gen0 nursery — new allocations land here.
-    Gen0,
-    /// Gen2 old generation — long-lived objects.
-    Gen2,
+    /// The collected mark-region space.
+    Runtime,
 }
 
 /// Error payload preserved from an unreachable, never-observed spawned
@@ -50,30 +55,6 @@ pub struct UnhandledSpawnError {
     pub cancelled: bool,
 }
 
-/// Default TLAB chunk size (number of object slots).
-///
-/// This is the number of object slots each VM gets when it requests a new TLAB.
-/// When a VM exhausts its TLAB, it atomically reserves the next `tlab_size` slots.
-///
-/// # Relationship to ChunkedVec chunk size
-///
-/// The underlying storage uses `ChunkedVec` with `DEFAULT_CHUNK_SIZE` (4096).
-/// For optimal memory locality, TLAB size should divide evenly into the chunk size:
-///
-/// - `DEFAULT_CHUNK_SIZE = 4096` (storage chunks)
-/// - `DEFAULT_TLAB_SIZE = 32` (TLAB allocation unit)
-/// - Result: 128 initial reservations fit per storage chunk
-///
-/// This isn't strictly required (TLABs can span chunk boundaries), but aligned
-/// TLABs have better cache behavior since all objects in a TLAB are contiguous.
-pub const DEFAULT_TLAB_SIZE: usize = crate::gc_policy::FIRST_TLAB_SLOTS;
-
-// Compile-time assertion that default TLAB size divides evenly into chunk size
-const _: () = assert!(
-    crate::chunked_vec::DEFAULT_CHUNK_SIZE.is_multiple_of(DEFAULT_TLAB_SIZE),
-    "DEFAULT_TLAB_SIZE should divide evenly into DEFAULT_CHUNK_SIZE for optimal alignment"
-);
-
 /// Statistics about heap usage.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HeapStats {
@@ -81,14 +62,25 @@ pub struct HeapStats {
     pub total_objects: usize,
     /// Compile-time objects (permanent).
     pub compile_time_objects: usize,
-    /// Runtime objects (collectible).
+    /// Runtime objects allocated and not yet reclaimed, dead ones included.
     pub runtime_objects: usize,
     /// Number of active handles.
     pub active_handles: usize,
-    /// Gen0 reservations in default-sized TLAB units (rounded up).
-    pub tlab_chunks: usize,
-    /// Exact Gen0 reservations, including unused slots and debug canaries.
-    pub reserved_slots: usize,
+    /// Blocks carved from the system, free ones included.
+    pub blocks: usize,
+    /// Empty blocks in the shared pool, available to any size class.
+    pub free_blocks: usize,
+    /// Objects above the large-object threshold.
+    pub large_objects: usize,
+    /// Bytes held from the system: every block plus every large object.
+    pub reserved_bytes: usize,
+    /// Bytes the heap occupies for objects: every block dedicated to a size
+    /// class, plus every large object. Over `live_bytes`, this is the
+    /// fragmentation a long run accumulates.
+    pub heap_bytes: usize,
+    /// Bytes of the cells the last collection found live, large ones
+    /// included. Zero before the first collection.
+    pub live_bytes: usize,
 }
 
 /// BEP-042: the instances a collection checks for finalization, so it need not
@@ -109,10 +101,9 @@ pub struct HeapStats {
 ///   instance whose class changes.
 /// - [`BexHeap::invalidate_finalizable_instances`], when a rewrite gives a
 ///   class a finalizer: instances of it may exist, unregistered, so the next
-///   collection rebuilds the list from a walk of every generation, before it
-///   moves anything.
-/// - Every collection, which moves entries to their new addresses and drops
-///   the dead.
+///   collection rebuilds the list from a walk of every object before it
+///   marks anything.
+/// - Every collection, which drops the entries of dead instances.
 #[derive(Default)]
 pub(crate) struct FinalizableInstances {
     pub(crate) instances: Vec<HeapPtr>,
@@ -152,17 +143,6 @@ impl Finalizable {
 /// All heap-allocated objects live here. The heap is shared across
 /// all VM instances via `Arc<BexHeap>`.
 ///
-/// # Generational Layout
-///
-/// The heap uses three `ChunkedVec<Object>` spaces plus the compile-time pool:
-/// - `compile_time`: Permanent objects (functions, classes, enums) - never collected
-/// - `gen0`: the nursery — all new TLAB allocations land here
-/// - `gen2`: the old generation — every survivor of a collection
-/// - `inactive`: Scratch space used as copy destination during a collection
-///
-/// Every collection is a full one: live objects are copied from gen0+gen2 into
-/// inactive, then inactive is swapped with gen2, and gen0 is cleared.
-///
 /// # Example
 ///
 /// ```ignore
@@ -175,31 +155,20 @@ pub struct BexHeap {
     pub(crate) functions: btel_types::FunctionLookup<HeapPtr>,
     pub(crate) span_definitions: std::sync::Mutex<HashMap<String, btel_types::FunctionId>>,
 
-    /// Gen0 nursery — all TLAB allocations land here.
-    /// Uses ChunkedVec for stable pointers during concurrent access.
-    ///
-    /// # Why ChunkedVec?
-    ///
-    /// With a regular Vec, if one VM is writing to an element while another
-    /// VM triggers a resize (via TLAB chunk allocation), the Vec may reallocate
-    /// and invalidate the first VM's pointer - that's undefined behavior.
-    ///
-    /// ChunkedVec stores objects in fixed-size chunks. Growing adds new chunks
-    /// without moving existing data, so pointers remain stable even during
-    /// concurrent growth.
-    pub(crate) gen0: UnsafeCell<ChunkedVec<Object>>,
+    /// Blocks of the mark-region space and the small-object policy's lists.
+    /// Locked to take or return a block, and by a collection for its whole
+    /// pause.
+    pub(crate) small: parking_lot::Mutex<SmallSpace>,
 
-    /// Gen2 old generation — long-lived objects.
-    pub(crate) gen2: UnsafeCell<ChunkedVec<Object>>,
+    /// Bytes the last collection found live: survivors' cells, large ones
+    /// included. Excludes what objects keep alive outside the heap.
+    pub(crate) live_bytes: AtomicUsize,
 
-    /// Inactive scratch space — copy destination during full GC.
-    pub(crate) inactive: UnsafeCell<ChunkedVec<Object>>,
+    /// Objects above the large-object threshold.
+    pub(crate) large: parking_lot::Mutex<LargeSpace>,
 
-    /// Next TLAB chunk start index within Gen0.
-    ///
-    /// When a VM needs a new TLAB, it atomically increments this by the
-    /// chunk size to reserve its region.
-    gen0_next_chunk: AtomicUsize,
+    /// How to read each kind of cell. Fixed once the heap is sealed.
+    descriptors: DescriptorTable,
 
     /// Handle table for external/FFI boundary.
     ///
@@ -235,21 +204,20 @@ pub struct BexHeap {
     next_handle_key: AtomicUsize,
 
     /// BEP-042: instances whose `cleanup` finalizer must run after the current
-    /// collection. Populated during a collection (`copy_collection`) when a
-    /// dead-but-not-yet-cleaned instance of a class with a finalizer is
-    /// discovered and kept alive; the pointers are the
-    /// **new** (post-copy) locations. Taken by the engine via
+    /// collection. Populated during a collection when a dead-but-not-yet-cleaned
+    /// instance of a class with a finalizer is discovered and kept alive.
+    /// Taken by the engine via
     /// [`take_pending_finalizers`](Self::take_pending_finalizers) inside the same
     /// pause and rooted as handles there, so they never outlive the pause as raw
     /// pointers.
     ///
-    /// Each entry pairs the instance's post-copy `HeapPtr` with its class's
+    /// Each entry pairs the instance's `HeapPtr` with its class's
     /// `cleanup` function, read off the class by the GC while it has the
     /// class in hand — so the engine drain needs no heap read to dispatch.
     pending_finalizers: Mutex<Vec<(HeapPtr, HeapPtr)>>,
 
     /// Unobserved errors discovered while collecting unreachable futures.
-    /// Entries contain post-copy values and are drained before execution
+    /// Entries are drained before execution
     /// resumes or another collection runs.
     pending_unhandled_spawn_errors: Mutex<Vec<UnhandledSpawnError>>,
 
@@ -267,19 +235,9 @@ pub struct BexHeap {
     /// [`FinalizableInstances`].
     pub(crate) finalizable: Mutex<FinalizableInstances>,
 
-    /// TLAB chunk size for new allocations.
-    tlab_size: usize,
-    pub(crate) max_tlab_size: usize,
     pub(crate) gc_policy: crate::gc_policy::AllocationBudget,
     root_release_epoch: AtomicUsize,
     gc_activity: Arc<tokio::sync::Notify>,
-
-    /// Lock for growing Gen0 (rare operation).
-    ///
-    /// Only held during Vec resizing when a TLAB chunk allocation needs to grow
-    /// the backing storage. This doesn't affect fast-path allocation which is
-    /// lock-free within a TLAB.
-    growth_lock: Mutex<()>,
 
     /// Actual object allocations since last GC (profiling only). A shared
     /// counter every allocation would write, so it exists only in builds
@@ -292,28 +250,33 @@ pub struct BexHeap {
 }
 
 // SAFETY: BexHeap is Send + Sync because:
-// - objects: UnsafeCell is accessed safely via TLAB exclusivity and growth_lock
-// - compile_time_boundary: immutable after construction
-// - next_chunk: AtomicUsize is thread-safe
+// - compile_time: immutable after sealing
+// - blocks / large: behind mutexes; a block's cells are written only by the
+//   mutator owning the block, or by the collector while every mutator is
+//   parked
 // - handles: RwLock<HashMap> is thread-safe
-// - tlab_size: immutable after construction
-// - growth_lock: Mutex is thread-safe
 unsafe impl Send for BexHeap {}
 unsafe impl Sync for BexHeap {}
 
-/// A pointer absent from the forwarding map is live iff it names the
-/// compile-time region, which is never collected, or the survivor space
-/// (Gen2). Every collection moves each survivor into a buffer allocated while
-/// everything it moved them from still existed, then frees that, so no dead
-/// pointer can name the new Gen2; and a pointer this forwarding pass already
-/// repointed lands there, which keeps a verdict the same however often one
-/// pass visits the pointer.
+/// After a collection, an object survived iff it is compile-time (never
+/// collected) or the collection marked it. A dead object's cell was swept:
+/// its start bit is gone (a small cell) or its allocation freed (a large
+/// one), so the verdict is read from the block tables and large-object set,
+/// never from the dead object's memory.
 impl bex_vm_types::Survival for BexHeap {
     fn survived(&self, ptr: HeapPtr) -> bool {
-        match self.generation_of(ptr) {
-            Generation::CompileTime | Generation::Gen2 => true,
-            Generation::Gen0 => false,
+        if self.is_compile_time_ptr(ptr) {
+            return true;
         }
+        let cell = cell_of(ptr.as_ptr() as usize);
+        if let Some(base) = self.small.lock().pool().block_containing(cell) {
+            // SAFETY: an initialized block; only its tables are read.
+            let header = unsafe { BlockHeader::at(base) };
+            let granule = BlockHeader::granule(base, cell);
+            return header.starts.get(granule) && header.marks.get(granule);
+        }
+        // SAFETY: a member of the large-object set is allocated.
+        self.large.lock().contains_cell(cell) && unsafe { is_cell_marked(cell) }
     }
 }
 
@@ -351,22 +314,9 @@ impl BexHeap {
         Self::build_unsealed_default(compile_time_objects).seal()
     }
 
-    /// Create a new heap with custom TLAB size.
-    pub fn with_tlab_size(compile_time_objects: Vec<Object>, tlab_size: usize) -> Arc<Self> {
-        Self::with_tlab_size_and_debug(
-            compile_time_objects,
-            tlab_size,
-            HeapDebuggerConfig::from_env(),
-        )
-    }
-
     /// Create a new heap with explicit debug configuration.
-    pub fn with_tlab_size_and_debug(
-        compile_time_objects: Vec<Object>,
-        tlab_size: usize,
-        debug: HeapDebuggerConfig,
-    ) -> Arc<Self> {
-        Self::build_unsealed(compile_time_objects, tlab_size, debug).seal()
+    pub fn with_debug(compile_time_objects: Vec<Object>, debug: HeapDebuggerConfig) -> Arc<Self> {
+        Self::build_unsealed(compile_time_objects, debug).seal()
     }
 
     /// Build the heap but **don't** seal it behind the shared `Arc` yet.
@@ -381,7 +331,6 @@ impl BexHeap {
     /// `compile_time_ptr`, then calls [`Self::seal`].
     pub fn build_unsealed(
         mut compile_time_objects: Vec<Object>,
-        tlab_size: usize,
         debug: HeapDebuggerConfig,
     ) -> Self {
         // Resolve bytecode constants for all Function objects before sealing.
@@ -398,10 +347,10 @@ impl BexHeap {
             compile_time: compile_time_objects,
             functions: btel_types::FunctionLookup::default(),
             span_definitions: std::sync::Mutex::default(),
-            gen0: UnsafeCell::new(ChunkedVec::new()),
-            gen2: UnsafeCell::new(ChunkedVec::new()),
-            inactive: UnsafeCell::new(ChunkedVec::new()),
-            gen0_next_chunk: AtomicUsize::new(0),
+            small: parking_lot::Mutex::new(SmallSpace::default()),
+            live_bytes: AtomicUsize::new(0),
+            large: parking_lot::Mutex::new(LargeSpace::default()),
+            descriptors: DescriptorTable::new(),
             handles: RwLock::new(HashMap::new()),
             handles_by_ptr: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
@@ -409,28 +358,33 @@ impl BexHeap {
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes: AtomicBool::new(has_finalizable_classes),
             finalizable: Mutex::new(FinalizableInstances::default()),
-            tlab_size,
-            max_tlab_size: tlab_size,
             gc_policy: crate::gc_policy::AllocationBudget::new(),
             root_release_epoch: AtomicUsize::new(0),
             gc_activity: Arc::new(tokio::sync::Notify::new()),
-            growth_lock: Mutex::new(()),
             #[cfg(feature = "gc_profiling")]
             allocs_since_gc: AtomicUsize::new(0),
             debug_state: HeapDebuggerState::new(debug),
         }
     }
 
-    /// [`Self::build_unsealed`] with the default TLAB size and env-derived debug
-    /// config (the same defaults [`Self::new`] uses).
+    /// [`Self::build_unsealed`] with the env-derived debug config (the same
+    /// default [`Self::new`] uses).
     pub fn build_unsealed_default(compile_time_objects: Vec<Object>) -> Self {
-        let mut heap = Self::build_unsealed(
-            compile_time_objects,
-            DEFAULT_TLAB_SIZE,
-            HeapDebuggerConfig::from_env(),
-        );
-        heap.max_tlab_size = crate::gc_policy::MAX_TLAB_SLOTS;
-        heap
+        Self::build_unsealed(compile_time_objects, HeapDebuggerConfig::from_env())
+    }
+
+    /// Add a descriptor before the heap is [sealed](Self::seal). Entry
+    /// [`OBJECT_DESC`](crate::OBJECT_DESC) is always the VM's `Object`.
+    pub fn register_descriptor(
+        &mut self,
+        descriptor: Descriptor,
+    ) -> Result<DescId, DescriptorError> {
+        self.descriptors.register(descriptor)
+    }
+
+    /// How to read each kind of cell.
+    pub fn descriptors(&self) -> &DescriptorTable {
+        &self.descriptors
     }
 
     /// Freeze the heap behind the shared `Arc`. Compile-time slots can no
@@ -686,6 +640,12 @@ impl BexHeap {
         raw_ptr >= start && raw_ptr < end
     }
 
+    /// Addresses of the compile-time objects.
+    pub(crate) fn compile_time_range(&self) -> Range<usize> {
+        let range = self.compile_time.as_ptr_range();
+        range.start as usize..range.end as usize
+    }
+
     /// Get a HeapPtr to a compile-time object by index.
     ///
     /// # Panics
@@ -704,161 +664,14 @@ impl BexHeap {
         unsafe { self.make_heap_ptr(raw_ptr) }
     }
 
-    /// Get a shared reference to Gen0 (the nursery / active allocation space).
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure no concurrent mutations to Gen0.
-    #[inline]
-    pub unsafe fn gen0_ref(&self) -> &ChunkedVec<Object> {
-        // SAFETY: Caller ensures no concurrent mutations
-        unsafe { &*self.gen0.get() }
-    }
-
-    /// Get a mutable reference to Gen0.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure exclusive access (e.g., at a GC safepoint).
-    #[inline]
-    #[expect(clippy::mut_from_ref, reason = "interior mutability via UnsafeCell")]
-    pub(crate) unsafe fn gen0_mut(&self) -> &mut ChunkedVec<Object> {
-        // SAFETY: Caller ensures exclusive access
-        unsafe { &mut *self.gen0.get() }
-    }
-
-    /// Get a shared reference to Gen2.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure no concurrent mutations to Gen2.
-    #[inline]
-    pub(crate) unsafe fn gen2_ref(&self) -> &ChunkedVec<Object> {
-        // SAFETY: Caller ensures no concurrent mutations
-        unsafe { &*self.gen2.get() }
-    }
-
-    /// Get a mutable reference to Gen2.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure exclusive access (e.g., at a GC safepoint).
-    #[inline]
-    #[expect(clippy::mut_from_ref, reason = "interior mutability via UnsafeCell")]
-    #[cfg(test)]
-    pub(crate) unsafe fn gen2_mut(&self) -> &mut ChunkedVec<Object> {
-        // SAFETY: Caller ensures exclusive access
-        unsafe { &mut *self.gen2.get() }
-    }
-
-    /// Get a shared reference to the inactive (copy-destination) space.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure no concurrent mutations to inactive.
-    #[inline]
-    pub(crate) unsafe fn inactive_ref(&self) -> &ChunkedVec<Object> {
-        // SAFETY: Caller ensures no concurrent mutations
-        unsafe { &*self.inactive.get() }
-    }
-
-    /// Get a mutable reference to the inactive space.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure exclusive access (e.g., at a GC safepoint).
-    #[inline]
-    #[expect(clippy::mut_from_ref, reason = "interior mutability via UnsafeCell")]
-    pub(crate) unsafe fn inactive_mut(&self) -> &mut ChunkedVec<Object> {
-        // SAFETY: Caller ensures exclusive access
-        unsafe { &mut *self.inactive.get() }
-    }
-
-    /// Determine which generation an object pointer belongs to.
-    ///
-    /// Only compile-time and Gen2 are checked directly; anything else is
-    /// classified as `Generation::Gen0` by fallback. Every valid `HeapPtr` lives
-    /// in exactly one of those three spaces, so the fallback is correct.
-    ///
-    /// # Concurrency
-    ///
-    /// Safe under concurrent Gen0 growth (another VM's TLAB refill): Gen2 only
-    /// grows at GC safepoints, so its chunk layout is stable during mutator
-    /// execution and safe to scan without synchronization. Gen0 is the only
-    /// space that grows concurrently, and we deliberately never inspect it — a
-    /// Gen0 pointer falls through to the `Generation::Gen0` fallback.
+    /// Which space `ptr` lives in.
     #[inline]
     pub fn generation_of(&self, ptr: HeapPtr) -> Generation {
         if self.is_compile_time_ptr(ptr) {
-            return Generation::CompileTime;
+            Generation::CompileTime
+        } else {
+            Generation::Runtime
         }
-        let raw_ptr = ptr.as_ptr() as *const Object;
-        // SAFETY: Gen2's chunk layout only changes at GC safepoints, so reading
-        // it here — even from a concurrent mutator — cannot race with a
-        // chunk-Vec reallocation.
-        unsafe {
-            if Self::ptr_in_chunked_vec(&*self.gen2.get(), raw_ptr) {
-                return Generation::Gen2;
-            }
-        }
-        Generation::Gen0
-    }
-
-    /// Check whether a raw pointer falls within any chunk of a `ChunkedVec`.
-    ///
-    /// # Safety
-    ///
-    /// When `vec` comes from a generation's `UnsafeCell`, the caller must keep
-    /// that generation from being swapped/cleared by GC while it is borrowed
-    /// (a heap permit or exclusive GC access). `ChunkedVec` itself synchronizes
-    /// access to its storage descriptors, including concurrent growth.
-    #[inline]
-    unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
-        vec.contains_ptr(raw_ptr)
-    }
-
-    /// Bug H, check 3 helper (heap_debug only): is `ptr` inside the
-    /// inactive (former active) space?
-    ///
-    /// Used by the engine's post-`forward_roots` integrity sweep to detect
-    /// stale references the GC failed to forward. The inactive space's
-    /// chunks still exist (their slots have been overwritten with
-    /// `Object::Tombstone` in heap_debug builds), so checking
-    /// `ptr_in_chunked_vec` against `inactive` is safe even after
-    /// `finalize_inactive_space` has run.
-    #[cfg(feature = "heap_debug")]
-    pub fn debug_ptr_in_inactive(&self, ptr: HeapPtr) -> bool {
-        let raw = ptr.as_ptr() as *const Object;
-        // SAFETY: GC has parked all permits before the engine calls this.
-        unsafe { Self::ptr_in_chunked_vec(&*self.inactive.get(), raw) }
-    }
-
-    /// Locate a raw pointer within a `ChunkedVec`, returning `(chunk_idx, offset_in_chunk)`.
-    ///
-    /// Returns `None` if the pointer is not within any chunk of `vec`.
-    ///
-    /// # Safety
-    ///
-    /// Must only be called at safepoints or with appropriate external synchronization.
-    #[inline]
-    pub(crate) unsafe fn locate_in_chunked_vec(
-        vec: &ChunkedVec<Object>,
-        raw_ptr: *const Object,
-    ) -> Option<(usize, usize)> {
-        // `num_chunks` and `chunk_start_ptr` are lock-free reads of the
-        // ChunkedVec's append-only chunk directory, safe under concurrent growth.
-        let num_chunks = vec.num_chunks();
-        for chunk_idx in 0..num_chunks {
-            // SAFETY: `chunk_idx < num_chunks` by loop bound.
-            let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
-            let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
-            if raw_ptr >= chunk_start && raw_ptr < chunk_end {
-                // SAFETY: Both pointers are within the same allocated chunk.
-                let offset = unsafe { raw_ptr.offset_from(chunk_start) as usize };
-                return Some((chunk_idx, offset));
-            }
-        }
-        None
     }
 
     /// Monotonic change token for GC roots disappearing, including after
@@ -879,143 +692,25 @@ impl BexHeap {
         Arc::clone(&self.gc_activity)
     }
 
-    /// Get the TLAB chunk size.
-    pub fn tlab_size(&self) -> usize {
-        self.tlab_size
-    }
-
-    /// Write an object at the given runtime index in Gen0 (the active nursery).
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure:
-    /// 1. **Write exclusivity**: Only write to indices within your TLAB's
-    ///    exclusive region (`tlab.alloc_ptr..tlab.alloc_limit`)
-    /// 2. **Index validity**: The index must be < Gen0's current length
-    ///
-    /// # Why This API?
-    ///
-    /// ChunkedVec provides stable pointers - growing the storage never moves
-    /// existing elements. This eliminates the data race that occurred with
-    /// Vec, where one thread's pointer could be invalidated by another
-    /// thread's resize operation.
-    ///
-    /// Production VMs (JVM, CLR, V8, Go) all use direct memory access for
-    /// field writes. The "lock-free" property comes from:
-    ///
-    /// - **TLABs**: Each VM has exclusive write access to its allocation region
-    /// - **No globals**: BAML has no global mutable state, preventing races
-    /// - **Safepoint GC**: Collection only runs when no VMs are executing
-    /// - **ChunkedVec**: Growing never moves existing elements
-    ///
-    /// Returns a pointer to the written slot.
-    #[inline]
-    pub(crate) unsafe fn write_runtime_object(
-        &self,
-        runtime_idx: usize,
-        obj: Object,
-    ) -> *mut Object {
-        // SAFETY: Caller ensures exclusive access to this index.
-        // ChunkedVec's set() is internally safe for concurrent access to different indices.
-        // All TLAB allocations target Gen0.
-        unsafe { (*self.gen0.get()).set(runtime_idx, obj) }
-    }
-
-    /// Get the current number of objects in the heap (compile-time + all
-    /// runtime generations).
-    #[cfg(any(test, feature = "heap_debug"))]
+    /// Get the current number of objects in the heap (compile-time plus
+    /// runtime, dead runtime objects not yet swept included).
+    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
-        // SAFETY: Reading len is safe on each space (AtomicUsize loads).
-        let runtime_len = unsafe { (*self.gen0.get()).len() + (*self.gen2.get()).len() };
-        self.compile_time.len() + runtime_len
+        self.compile_time.len() + self.runtime_objects()
     }
 
-    /// Allocate a new TLAB chunk from Gen0 (the nursery).
-    ///
-    /// This method is thread-safe. Multiple VMs can request chunks
-    /// concurrently - each gets a unique, non-overlapping region.
-    ///
-    /// # Thread Safety
-    ///
-    /// Uses `fetch_add` with `SeqCst` ordering to ensure each caller
-    /// gets a unique chunk range, even under concurrent access. The
-    /// growth_lock protects the ChunkedVec resize operation.
-    ///
-    /// # Why This Is Now Safe
-    ///
-    /// With ChunkedVec, growing the storage adds new chunks without moving
-    /// existing data. So even if one VM is writing to an existing element
-    /// while another VM triggers growth here, there's no data race - the
-    /// existing element's memory location doesn't change.
-    ///
-    /// Returns a `TlabChunk` describing the exclusive region for the VM.
-    /// The VM can then allocate objects within this region without locks.
-    pub fn alloc_tlab_chunk(&self) -> TlabChunk {
-        self.alloc_tlab_chunk_sized(self.tlab_size, 0).0
-    }
-
-    /// Reserve `size` slots and settle `payload` bytes of the caller's
-    /// balance with them. Returns the chunk and whether the settlement
-    /// crossed the budget.
-    pub(crate) fn alloc_tlab_chunk_sized(&self, size: usize, payload: isize) -> (TlabChunk, bool) {
-        assert!(size > 0);
-        let slots = isize::try_from(size.saturating_mul(size_of::<Object>())).unwrap_or(isize::MAX);
-        let crossed = self.gc_policy.adjust(slots.saturating_add(payload));
-        self.debug_verify_tlab_canaries();
-
-        let use_canary = self.debug_config().enabled;
-        let canary_slots = if use_canary { 1 } else { 0 };
-
-        // Atomically reserve a chunk range within Gen0
-        let step = size + canary_slots;
-        let runtime_start = self.gen0_next_chunk.fetch_add(step, Ordering::SeqCst);
-        let runtime_end = runtime_start + size;
-        let reserve_end = runtime_end + canary_slots;
-
-        // The chunk-allocation policy mutex still serializes the
-        // fetch_add → resize → canary-write critical section as a unit.
-        // (`ChunkedVec` growth is safe against concurrent `set` callers on
-        // its own, so this is not load-bearing for memory safety — but it
-        // keeps one grower at a time and keeps the canary write paired with
-        // the resize that produced its slot.)
-        let _guard = self.growth_lock.lock().unwrap();
-
-        let ct_len = self.compile_time.len();
-        // SAFETY: `&*self.gen0.get()` produces a `&ChunkedVec<Object>`.
-        // ChunkedVec growth only appends to its chunk directory and never
-        // moves published storage, so this shared reference is sound to hold
-        // concurrently with other readers and growers; per-element
-        // exclusivity is gated separately by `UnsafeCell` + caller-side TLAB
-        // regions.
-        let gen0 = unsafe { &*self.gen0.get() };
-        if gen0.len() < reserve_end {
-            gen0.resize_with(reserve_end, || {
-                // Placeholder object - will be overwritten by TLAB alloc
-                self.placeholder_object()
-            });
-        }
-        if use_canary {
-            let chunk_start = ct_len + runtime_start;
-            let chunk_end = ct_len + runtime_end;
-            // SAFETY: `runtime_end` is within the freshly-grown range; the
-            // canary slot is exclusive to this chunk reservation.
-            unsafe {
-                gen0.set(runtime_end, self.tlab_canary_object(chunk_start, chunk_end));
-            }
-        }
-
-        // Return global indices (compile_time_len + runtime indices)
-        if use_canary {
-            let canary_idx = ct_len + runtime_end;
-            self.record_tlab_canary(canary_idx);
-        }
-        (
-            TlabChunk {
-                start: ct_len + runtime_start,
-                end: ct_len + runtime_end,
-            },
-            crossed,
-        )
+    /// Runtime cells allocated and not yet swept.
+    fn runtime_objects(&self) -> usize {
+        let blocks: usize = self
+            .small
+            .lock()
+            .pool()
+            .blocks()
+            .iter()
+            // SAFETY: the pool's blocks are initialized; only counts are read.
+            .map(|&base| unsafe { BlockHeader::at(base) }.starts.count_ones())
+            .sum();
+        blocks + self.large.lock().len()
     }
 
     /// Read an object by HeapPtr (direct pointer dereference).
@@ -1035,26 +730,32 @@ impl BexHeap {
         obj
     }
 
+    /// Blocks, capacity and allocated cells of every size class, in
+    /// [`SIZE_CLASSES`](crate::SIZE_CLASSES) order.
+    pub fn class_occupancy(&self) -> Vec<crate::ClassOccupancy> {
+        self.small.lock().occupancy()
+    }
+
     /// Get statistics about heap usage.
     pub fn stats(&self) -> HeapStats {
-        // SAFETY: Reading len is safe on each space (AtomicUsize loads).
-        let (gen0_len, gen2_len) = unsafe { ((*self.gen0.get()).len(), (*self.gen2.get()).len()) };
         let ct_len = self.compile_time.len();
-        let runtime = gen0_len + gen2_len;
-        let total = ct_len + runtime;
-
-        let tlab_chunks = self
-            .gen0_next_chunk
-            .load(Ordering::Relaxed)
-            .div_ceil(self.tlab_size);
-
+        let runtime = self.runtime_objects();
+        let small = self.small.lock().stats();
+        let (large_objects, large_bytes) = {
+            let large = self.large.lock();
+            (large.len(), large.bytes())
+        };
         HeapStats {
-            total_objects: total,
+            total_objects: ct_len + runtime,
             compile_time_objects: ct_len,
             runtime_objects: runtime,
             active_handles: self.handles.read().expect("handles lock poisoned").len(),
-            tlab_chunks,
-            reserved_slots: self.gen0_next_chunk.load(Ordering::Relaxed),
+            blocks: small.blocks,
+            free_blocks: small.free_blocks,
+            large_objects,
+            reserved_bytes: small.blocks * BLOCK_BYTES + large_bytes,
+            heap_bytes: small.in_use_bytes + large_bytes,
+            live_bytes: self.live_bytes.load(Ordering::Relaxed),
         }
     }
 
@@ -1081,59 +782,23 @@ impl BexHeap {
         self.allocs_since_gc.load(Ordering::Relaxed)
     }
 
-    /// Reset the Gen0 TLAB allocation pointer (called by GC after collection).
-    pub(crate) fn reset_next_chunk(&self, new_value: usize) {
-        self.gen0_next_chunk.store(new_value, Ordering::Release);
-    }
-
-    #[cfg(feature = "heap_debug")]
-    pub(crate) fn next_chunk_value(&self) -> usize {
-        self.gen0_next_chunk.load(Ordering::Acquire)
-    }
-
     pub(crate) fn debug_state(&self) -> &HeapDebuggerState {
         &self.debug_state
     }
 
-    /// Update handle entries after GC.
-    ///
-    /// Updates handles to point to new object locations. Invalidates handles
-    /// Rewrite every handle's `HeapPtr` through the forwarding map after GC.
-    ///
-    /// Handles are GC roots by contract — the engine always feeds
-    /// [`collect_handle_roots`](Self::collect_handle_roots) into the GC root
-    /// set — so every handle target *must* appear in `forwarding` (either
-    /// relocated or identity-mapped). A missing entry means the caller broke
-    /// the contract; we panic rather than silently invalidate and expose the
-    /// caller to dangling pointers.
-    pub fn update_handles(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        // Validate every handle under a read lock first. A panic while the
-        // write guard is held would poison the `RwLock` and then cascade into
-        // a double-panic when the panicking `Handle`'s destructor tries to
-        // release its slab key through `self.handles.write()` during unwind.
-        {
-            let handles = self.handles.read().expect("handles lock poisoned");
-            for (&key, ptr) in handles.iter() {
-                assert!(
-                    forwarding.contains_key(ptr),
-                    "handle {key} with ptr {ptr:?} was not in the GC forwarding map — \
-                     handles must be passed as GC roots via `collect_handle_roots`"
-                );
-            }
+    /// Re-stamp handle pointers after a collection (see
+    /// [`Restamp`](crate::gc::Restamp)). Handles are roots, so every handle
+    /// target survived; nothing moved, so the reverse index is untouched.
+    pub(crate) fn update_handles(&self, restamp: &HashMap<HeapPtr, HeapPtr>) {
+        if restamp.is_empty() {
+            return;
         }
-        // Safe to mutate now; every entry is guaranteed to be in `forwarding`.
         let mut handles = self.handles.write().expect("handles lock poisoned");
         for ptr in handles.values_mut() {
-            *ptr = forwarding[ptr];
+            if let Some(&stamped) = restamp.get(ptr) {
+                *ptr = stamped;
+            }
         }
-        // The reverse index is keyed by the pointers that just moved, so it is
-        // rebuilt rather than mutated in place. Keys are untouched: a handle's
-        // identity does not change when its object does.
-        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
-        *by_ptr = std::mem::take(&mut *by_ptr)
-            .into_iter()
-            .map(|(ptr, entry)| (forwarding[&ptr], entry))
-            .collect();
     }
 
     /// BEP-042: a class with a `cleanup` finalizer now lives on this heap — a
@@ -1149,8 +814,7 @@ impl BexHeap {
     /// # Safety
     ///
     /// If `object` is an instance, its class pointer must name a live object:
-    /// the caller holds a heap permit, or is the collector before it moves
-    /// anything.
+    /// the caller holds a heap permit, or is the collector before it sweeps.
     #[inline]
     pub unsafe fn needs_finalizer_registration(object: &Object) -> bool {
         let Object::Instance(instance) = object else {
@@ -1190,7 +854,7 @@ impl BexHeap {
 
     /// BEP-042: an existing class gained a `cleanup` finalizer. Its older
     /// instances were never registered, so the next collection rebuilds the
-    /// finalizable list from a walk of every generation.
+    /// finalizable list from a walk of every object.
     pub fn invalidate_finalizable_instances(&self) {
         self.has_finalizable_classes.store(true, Ordering::Release);
         self.finalizable
@@ -1199,8 +863,8 @@ impl BexHeap {
             .stale = true;
     }
 
-    /// BEP-042: record an instance and its class's `cleanup` function (both by
-    /// post-copy `HeapPtr`), to be finalized after the current collection.
+    /// BEP-042: record an instance and its class's `cleanup` function, to be
+    /// finalized after the current collection.
     /// Called by the GC when it discovers and keeps alive a dead, not-yet-cleaned
     /// instance of a class with a finalizer.
     pub(crate) fn push_pending_finalizer(&self, instance: HeapPtr, cleanup: HeapPtr) {
@@ -1298,14 +962,28 @@ impl BexHeap {
 
 impl std::fmt::Debug for BexHeap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // SAFETY: Reading lens is safe (AtomicUsize loads)
-        let (gen0_len, gen2_len) = unsafe { ((*self.gen0.get()).len(), (*self.gen2.get()).len()) };
+        let stats = self.stats();
         f.debug_struct("BexHeap")
-            .field("compile_time_len", &self.compile_time.len())
-            .field("gen0_len", &gen0_len)
-            .field("gen2_len", &gen2_len)
-            .field("tlab_size", &self.tlab_size)
+            .field("compile_time_len", &stats.compile_time_objects)
+            .field("runtime_objects", &stats.runtime_objects)
+            .field("blocks", &stats.blocks)
+            .field("large_objects", &stats.large_objects)
             .finish()
+    }
+}
+
+impl Drop for BexHeap {
+    /// Drop every runtime object still allocated: they own Rust storage
+    /// (strings, vectors, host values) that must be released with the heap.
+    fn drop(&mut self) {
+        let small = self.small.get_mut();
+        let large = self.large.get_mut();
+        // SAFETY: `&mut self`: no mutator or collector can run.
+        unsafe {
+            Self::for_each_runtime_object(small.pool(), large, |object| {
+                std::ptr::drop_in_place(object);
+            });
+        }
     }
 }
 
@@ -1489,54 +1167,23 @@ mod tests {
     }
 
     #[test]
-    fn test_alloc_tlab_chunk() {
-        let heap = BexHeap::with_tlab_size(vec![], 100);
-
-        // With no compile-time objects, global indices start at 0
-        let chunk1 = heap.alloc_tlab_chunk();
-        assert_eq!(chunk1.start, 0); // compile_time_len(0) + runtime_start(0)
-        assert_eq!(chunk1.end, 100); // compile_time_len(0) + runtime_end(100)
-
-        let chunk2 = heap.alloc_tlab_chunk();
-        assert_eq!(chunk2.start, 100); // compile_time_len(0) + runtime_start(100)
-        assert_eq!(chunk2.end, 200);
-
-        // Heap should have grown to accommodate chunks
-        assert!(heap.len() >= 200);
-    }
-
-    #[test]
-    fn test_alloc_tlab_chunk_with_compile_time() {
-        let compile_time: Vec<Object> =
-            vec![Object::String("ct1".into()), Object::String("ct2".into())];
-        let heap = BexHeap::with_tlab_size(compile_time, 100);
-
-        // With 2 compile-time objects, global indices start at 2
-        let chunk1 = heap.alloc_tlab_chunk();
-        assert_eq!(chunk1.start, 2); // compile_time_len(2) + runtime_start(0)
-        assert_eq!(chunk1.end, 102); // compile_time_len(2) + runtime_end(100)
-
-        let chunk2 = heap.alloc_tlab_chunk();
-        assert_eq!(chunk2.start, 102); // compile_time_len(2) + runtime_start(100)
-        assert_eq!(chunk2.end, 202);
-    }
-
-    #[test]
     fn test_heap_stats() {
         let compile_time: Vec<Object> = vec![Object::String("builtin".into())];
-        let heap = BexHeap::with_tlab_size(compile_time, 50);
+        let heap = BexHeap::new(compile_time);
 
         let stats = heap.stats();
         assert_eq!(stats.compile_time_objects, 1);
         assert_eq!(stats.total_objects, 1);
         assert_eq!(stats.runtime_objects, 0);
+        assert_eq!(stats.blocks, 0);
 
-        // Allocate a TLAB chunk
-        let _chunk = heap.alloc_tlab_chunk();
-
+        let mut tlab = crate::Tlab::new(Arc::clone(&heap));
+        tlab.alloc_string("runtime");
         let stats = heap.stats();
-        assert_eq!(stats.tlab_chunks, 1);
-        assert!(stats.total_objects >= 51); // Expanded for TLAB
+        assert_eq!(stats.runtime_objects, 1);
+        assert_eq!(stats.total_objects, 2);
+        assert!(stats.blocks > 0);
+        assert_eq!(stats.reserved_bytes, stats.blocks * BLOCK_BYTES);
     }
 
     // Note: Handle tests removed as they require HeapPtr creation which depends
