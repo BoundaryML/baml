@@ -1,6 +1,5 @@
-import boundaryWhite from '@boundaryml/brand/logo/svg/boundary-primary-white.svg';
-import Image from 'next/image';
 import { section } from './analytics';
+import { BoundaryLogo } from './boundary-logo';
 import { BOOK } from './links';
 import { LANES, LEFT, LINKS, WRAP } from './ui';
 
@@ -31,13 +30,7 @@ export default function Footer() {
       <div className={`${WRAP} pt-20 pb-10 flex flex-col gap-16 lg:gap-[72px]`}>
         <div className={LANES}>
           <div className={`${LEFT} flex flex-col gap-[18px]`}>
-            <Image
-              alt="Boundary"
-              className="self-start h-10 w-auto"
-              height={40}
-              src={boundaryWhite}
-              width={234}
-            />
+            <BoundaryLogo className="self-start h-[62px] w-auto text-white" />
           </div>
           {/* Three nowrap columns at 72px gaps need more room than the 528px copy lane leaves
               them at 1024, and the overflow put a horizontal scrollbar on the whole page. They go
