@@ -1,0 +1,84 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[grouping.baml:1:14]
+ 1 │ type Comma = (int, string)
+   ·              ┬
+   ·              ╰── Parenthesized types contain one type; parameter lists require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[grouping.baml:2:17]
+ 2 │ type Trailing = (int,)
+   ·                 ┬
+   ·                 ╰── Parenthesized types contain one type; parameter lists require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[grouping.baml:3:14]
+ 3 │ type Named = (x: int)
+   ·              ┬
+   ·              ╰── Named parameters in type expression require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[grouping.baml:5:23]
+ 5 │ type AtEof = string | (x?: int)
+   ·                       ┬
+   ·                       ╰── Named parameters in type expression require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[literal.baml:1:19]
+ 1 │ type Scalar = true<MissingType>
+   ·                   ┬
+   ·                   ╰── literal types cannot have type arguments or associated-type bindings
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[literal.baml:2:27]
+ 2 │ type InUnion = int | false<MissingType>
+   ·                           ┬
+   ·                           ╰── literal types cannot have type arguments or associated-type bindings
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[literal.baml:3:31]
+ 3 │ type Nested = map<string, true<Item = MissingType>[]>
+   ·                               ┬
+   ·                               ╰── literal types cannot have type arguments or associated-type bindings
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[upcast.baml:3:33]
+ 3 │ function extra() -> I { C {}.as<I, MissingType> }
+   ·                                 ┬
+   ·                                 ╰── upcast requires one target type: `.as<Interface>`
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[upcast.baml:4:33]
+ 4 │ function empty() -> I { C {}.as<> }
+   ·                                 ┬
+   ·                                 ╰── upcast requires one target type: `.as<Interface>`
+   ╰────

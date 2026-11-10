@@ -171,9 +171,25 @@ impl KnownKind for FunctionTypeReturnType {
 #[derive(Debug)]
 pub struct ParenType {
     pub open_paren: t::LParen,
-    /// Will have a [`SyntaxKind::FUNCTION_TYPE_PARAM`] with a [`SyntaxKind::TYPE_EXPR`] inside for some reason
     pub ty: Box<Type>,
     pub close_paren: t::RParen,
+}
+
+impl FromCST for ParenType {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::PAREN_TYPE)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let open_paren = it.expect_parse()?;
+        let ty = Box::new(it.expect_parse()?);
+        let close_paren = it.expect_parse()?;
+        it.expect_end()?;
+        Ok(Self {
+            open_paren,
+            ty,
+            close_paren,
+        })
+    }
 }
 
 impl PrintMultiLine for ParenType {
@@ -456,6 +472,14 @@ impl UnionTypeMember {
     fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let first = it.expect_next("a type")?;
         match first.kind() {
+            SyntaxKind::PAREN_TYPE => Ok(UnionTypeMember::Paren(ParenType::from_cst(first)?)),
+            SyntaxKind::LITERAL_TYPE => {
+                let node = StrongAstError::assert_is_node(first)?;
+                let mut literal = SyntaxNodeIter::new(&node);
+                let ty = Self::take_base_type(&mut literal)?;
+                literal.expect_end()?;
+                Ok(ty)
+            }
             SyntaxKind::FUNCTION_TYPE => {
                 Ok(UnionTypeMember::Function(FunctionType::from_cst(first)?))
             }
@@ -501,45 +525,11 @@ impl UnionTypeMember {
                         },
                     ));
                 }
-                let mut params = Vec::new();
-                let close_paren = loop {
-                    let Some(elem) = it.next() else {
-                        return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
-                    };
-                    match elem.kind() {
-                        SyntaxKind::R_PAREN => {
-                            break t::RParen::from_cst(elem)?;
-                        }
-                        SyntaxKind::FUNCTION_TYPE_PARAM => {
-                            let param = FunctionTypeParam::from_cst(elem)?;
-                            let comma = it
-                                .next_if_kind(SyntaxKind::COMMA)
-                                .map(t::Comma::from_cst)
-                                .transpose()?;
-                            params.push((param, comma));
-                        }
-                        _ => {
-                            return Err(StrongAstError::UnexpectedKindDesc {
-                                expected_desc: "FUNCTION_TYPE_PARAM or R_PAREN".into(),
-                                found: elem.kind(),
-                                at: elem.text_range(),
-                            });
-                        }
-                    }
-                };
-                let must_be_func_type = params.len() != 1
-                    || params
-                        .iter()
-                        .any(|item| item.0.name.is_some() || item.1.is_some());
-                if must_be_func_type {
-                    return Err(StrongAstError::missing(SyntaxKind::ARROW, it.parent));
-                }
-                let (inner, _) = params.pop().expect("one parenthesized operand");
-                Ok(UnionTypeMember::Paren(ParenType {
-                    open_paren,
-                    ty: Box::new(inner.ty),
-                    close_paren,
-                }))
+                Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "qualified type projection".into(),
+                    found: SyntaxKind::L_PAREN,
+                    at: open_paren.span(),
+                })
             }
             SyntaxKind::WORD => {
                 let first = t::Word::from_cst(first)?;
@@ -569,7 +559,8 @@ impl UnionTypeMember {
                 }
                 Ok(UnionTypeMember::Path(PathType { first, rest }))
             }
-            SyntaxKind::STRING_LITERAL
+            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE
+            | SyntaxKind::STRING_LITERAL
             | SyntaxKind::INTEGER_LITERAL
             | SyntaxKind::BIGINT_LITERAL
             | SyntaxKind::FLOAT_LITERAL => {

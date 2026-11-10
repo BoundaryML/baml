@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/cst_type_nodes.rs
+---
+UPCAST_EXPR@66..90
+  WHITESPACE@66..67 " "
+  OBJECT_LITERAL@67..71
+    WORD@67..68 "C"
+    WHITESPACE@68..69 " "
+    L_BRACE@69..70 "{"
+    R_BRACE@70..71 "}"
+  DOT@71..72 "."
+  KW_AS@72..74 "as"
+  UPCAST_TARGET@74..90
+    LESS@74..75 "<"
+    ERROR@75..89
+      TYPE_EXPR@75..76
+        WORD@75..76 "I"
+      COMMA@76..77 ","
+      TYPE_EXPR@77..89
+        WHITESPACE@77..78 " "
+        WORD@78..89 "MissingType"
+    GREATER@89..90 ">"
+
+UPCAST_EXPR@116..126
+  WHITESPACE@116..117 " "
+  OBJECT_LITERAL@117..121
+    WORD@117..118 "C"
+    WHITESPACE@118..119 " "
+    L_BRACE@119..120 "{"
+    R_BRACE@120..121 "}"
+  DOT@121..122 "."
+  KW_AS@122..124 "as"
+  UPCAST_TARGET@124..126
+    LESS@124..125 "<"
+    ERROR@125..125
+    GREATER@125..126 ">"
+
+UPCAST_EXPR@152..163
+  WHITESPACE@152..153 " "
+  OBJECT_LITERAL@153..157
+    WORD@153..154 "C"
+    WHITESPACE@154..155 " "
+    L_BRACE@155..156 "{"
+    R_BRACE@156..157 "}"
+  DOT@157..158 "."
+  KW_AS@158..160 "as"
+  UPCAST_TARGET@160..163
+    LESS@160..161 "<"
+    TYPE_EXPR@161..162
+      WORD@161..162 "I"
+    GREATER@162..163 ">"

@@ -1,0 +1,102 @@
+---
+source: crates/baml_tests/src/cst_type_nodes.rs
+---
+TYPE_ALIAS_DEF@0..26
+  KW_TYPE@0..4 "type"
+  WHITESPACE@4..5 " "
+  WORD@5..10 "Comma"
+  WHITESPACE@10..11 " "
+  EQUALS@11..12 "="
+  TYPE_EXPR@12..26
+    ERROR@12..26
+      WHITESPACE@12..13 " "
+      L_PAREN@13..14 "("
+      TYPE_EXPR@14..17
+        WORD@14..17 "int"
+      COMMA@17..18 ","
+      TYPE_EXPR@18..25
+        WHITESPACE@18..19 " "
+        WORD@19..25 "string"
+      R_PAREN@25..26 ")"
+
+TYPE_ALIAS_DEF@26..49
+  NEWLINE@26..27 "\n"
+  KW_TYPE@27..31 "type"
+  WHITESPACE@31..32 " "
+  WORD@32..40 "Trailing"
+  WHITESPACE@40..41 " "
+  EQUALS@41..42 "="
+  TYPE_EXPR@42..49
+    ERROR@42..49
+      WHITESPACE@42..43 " "
+      L_PAREN@43..44 "("
+      TYPE_EXPR@44..47
+        WORD@44..47 "int"
+      COMMA@47..48 ","
+      R_PAREN@48..49 ")"
+
+TYPE_ALIAS_DEF@49..71
+  NEWLINE@49..50 "\n"
+  KW_TYPE@50..54 "type"
+  WHITESPACE@54..55 " "
+  WORD@55..60 "Named"
+  WHITESPACE@60..61 " "
+  EQUALS@61..62 "="
+  TYPE_EXPR@62..71
+    ERROR@62..71
+      WHITESPACE@62..63 " "
+      L_PAREN@63..64 "("
+      FUNCTION_TYPE_PARAM@64..70
+        WORD@64..65 "x"
+        COLON@65..66 ":"
+        TYPE_EXPR@66..70
+          WHITESPACE@66..67 " "
+          WORD@67..70 "int"
+      R_PAREN@70..71 ")"
+
+TYPE_ALIAS_DEF@71..107
+  NEWLINE@71..72 "\n"
+  KW_TYPE@72..76 "type"
+  WHITESPACE@76..77 " "
+  WORD@77..90 "AfterGrouping"
+  WHITESPACE@90..91 " "
+  EQUALS@91..92 "="
+  TYPE_EXPR@92..107
+    PAREN_TYPE@92..107
+      WHITESPACE@92..93 " "
+      L_PAREN@93..94 "("
+      TYPE_EXPR@94..106
+        TYPE_EXPR@94..97
+          WORD@94..97 "int"
+        WHITESPACE@97..98 " "
+        PIPE@98..99 "|"
+        TYPE_EXPR@99..106
+          WHITESPACE@99..100 " "
+          WORD@100..106 "string"
+      R_PAREN@106..107 ")"
+
+TYPE_ALIAS_DEF@107..139
+  NEWLINE@107..108 "\n"
+  KW_TYPE@108..112 "type"
+  WHITESPACE@112..113 " "
+  WORD@113..118 "AtEof"
+  WHITESPACE@118..119 " "
+  EQUALS@119..120 "="
+  TYPE_EXPR@120..139
+    TYPE_EXPR@120..127
+      WHITESPACE@120..121 " "
+      WORD@121..127 "string"
+    WHITESPACE@127..128 " "
+    PIPE@128..129 "|"
+    TYPE_EXPR@129..139
+      ERROR@129..139
+        WHITESPACE@129..130 " "
+        L_PAREN@130..131 "("
+        FUNCTION_TYPE_PARAM@131..138
+          WORD@131..132 "x"
+          QUESTION@132..133 "?"
+          COLON@133..134 ":"
+          TYPE_EXPR@134..138
+            WHITESPACE@134..135 " "
+            WORD@135..138 "int"
+        R_PAREN@138..139 ")"
