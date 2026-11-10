@@ -676,7 +676,9 @@ function Side({
           {/* BAML's starts at 100% ("why would you?"), but it can sample too. */}
           <input
             aria-label={`Share of ${lit ? 'Boundary' : 'OpenTelemetry'} functions kept by sampling`}
-            className="block h-4 w-full accent-[#caaaf2]"
+            // On a touch screen the slider is 40px tall to the thumb, pulled back by its margins so
+            // the rows around it don't move.
+            className="block h-4 w-full accent-[#caaaf2] pointer-coarse:h-10 pointer-coarse:-my-3"
             max={100}
             min={1}
             onChange={(e) => setRate(Number(e.target.value) / 100)}
@@ -1364,8 +1366,13 @@ const slower = (ns: number) => {
   return times >= 10 ? Math.round(times) : Number(times.toFixed(1));
 };
 
+// Four columns from md: the name, its bar, the time, and how much slower. A phone has no room for
+// all four on one line (the name ran under the time), so there a row is two lines: the name and the
+// time, then the bar and how much slower. The time is the narrower of the two figures, so it is the
+// one that shares a line with the name, which fits down to a 320px screen. The `max-md:order-*`
+// classes below put the four in that order.
 const ROW =
-  'grid grid-cols-[minmax(0,210px)_minmax(0,1fr)_84px_130px] items-center gap-x-4 min-h-[52px]';
+  'grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,210px)_minmax(0,1fr)_84px_130px] items-center gap-x-3 md:gap-x-4 gap-y-2 py-3 md:py-0 md:min-h-[52px]';
 
 function CostRow({
   lit,
@@ -1383,10 +1390,10 @@ function CostRow({
     <div
       className={`${ROW} ${lit ? 'rounded-lg bg-clover/10 -mx-3 px-3' : ''}`}
     >
-      <div className="flex min-w-0 items-center gap-2 whitespace-nowrap text-[16px] text-white">
+      <div className="max-md:order-1 flex min-w-0 items-center gap-1.5 md:gap-2 whitespace-nowrap text-[14px] md:text-[16px] text-white">
         {name}
       </div>
-      <span className="relative block h-2.5 rounded-full bg-white/8 overflow-hidden">
+      <span className="max-md:order-3 relative block h-2.5 rounded-full bg-white/8 overflow-hidden">
         <span
           className={`block h-full rounded-full ${lit ? 'bg-clover' : 'bg-white/45'}`}
           style={{
@@ -1405,11 +1412,11 @@ function CostRow({
           ))}
       </span>
       <span
-        className={`text-right font-mono text-[15px] tabular-nums ${lit ? 'text-clover' : 'text-white/60'}`}
+        className={`max-md:order-2 text-right font-mono text-[14px] md:text-[15px] tabular-nums ${lit ? 'text-clover' : 'text-white/60'}`}
       >
         {ns.toLocaleString('en-US')} ns
       </span>
-      <span className="text-right whitespace-nowrap font-display text-[20px] font-medium leading-none tabular-nums text-head">
+      <span className="max-md:order-4 text-right whitespace-nowrap font-display text-[17px] md:text-[20px] font-medium leading-none tabular-nums text-head">
         {lit ? (
           <span className="text-[16px] font-normal text-clover">baseline</span>
         ) : (

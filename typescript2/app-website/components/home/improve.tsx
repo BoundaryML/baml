@@ -662,7 +662,9 @@ const FEATURES: {
     says: (
       <>
         Milliseconds are too slow, megabytes too big.
-        <span className="mt-2 grid grid-cols-3 gap-2">
+        {/* Below sm each column is as wide as its own text: in equal thirds "infrastructure" ran
+            out of its column and past the card's padding. */}
+        <span className="mt-2 grid grid-cols-[auto_auto_auto] justify-between gap-2 sm:grid-cols-3 sm:justify-normal">
           {SANDBOX_STATS.map(([value, label]) => (
             <span className="flex flex-col" key={label}>
               <span className="font-display text-[20px] font-medium leading-none text-clover">
@@ -844,7 +846,7 @@ function Collage() {
                     )}
                     {f.status.links?.map((l) => (
                       <a
-                        className="focus-ring rounded-md normal-case tracking-normal text-clover hover:underline"
+                        className="tap focus-ring rounded-md normal-case tracking-normal text-clover hover:underline"
                         href={l.href}
                         key={l.href}
                         rel="noopener noreferrer"
@@ -856,7 +858,8 @@ function Collage() {
                   </p>
                 )}
                 <button
-                  className="focus-ring flex cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-md text-left font-display text-[17px] font-medium text-head md:text-[18px]"
+                  // Taller on a touch screen, pulled back by its margins so the card's rhythm holds.
+                  className="focus-ring flex cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-md text-left font-display text-[17px] font-medium text-head md:text-[18px] pointer-coarse:py-2 pointer-coarse:-my-2"
                   onClick={() => pick(i)}
                   type="button"
                 >
