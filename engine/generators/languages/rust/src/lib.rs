@@ -340,4 +340,87 @@ mod tests {
                 .expect("RustLanguageFeatures name should be a valid GeneratorOutputType");
         assert_eq!(gen_type, baml_types::GeneratorOutputType::Rust);
     }
+
+    /// `Self` and `crate` cannot be raw identifiers (`r#Self` is a rustc
+    /// error), so they must be renamed and mapped back to the BAML name.
+    #[test]
+    fn test_path_keywords_are_renamed_not_raw_escaped() {
+        use std::collections::BTreeMap;
+
+        use dir_writer::LanguageFeatures;
+        use internal_baml_core::ir::repr::make_test_ir;
+
+        let ir = make_test_ir(
+            r##"
+            enum Relationship {
+                Self
+                Spouse
+            }
+            class Claim {
+                relationship Relationship
+                crate string
+                type string
+            }
+            function Extract() -> Claim {
+                client "openai/gpt-4o"
+                prompt #"{{ ctx.output_format }}"#
+            }
+            "##,
+        )
+        .expect("Valid BAML");
+
+        let args = dir_writer::GeneratorArgs {
+            output_dir_relative_to_baml_src: std::path::PathBuf::from(
+                "/tmp/test_output/baml_client",
+            ),
+            baml_src_dir: std::path::PathBuf::from("/tmp/test_output/baml_src"),
+            inlined_file_map: BTreeMap::new(),
+            version: "0.0.0-test".to_string(),
+            no_version_check: true,
+            default_client_mode: baml_types::GeneratorDefaultClientMode::Async,
+            on_generate: vec![],
+            client_type: baml_types::GeneratorOutputType::Rust,
+            client_package_name: None,
+            module_format: None,
+            is_pydantic_2: None,
+        };
+        let files = crate::RustLanguageFeatures
+            .generate_sdk_files_for_test(std::sync::Arc::new(ir), &args)
+            .expect("codegen should succeed");
+        let file = |suffix: &str| {
+            files
+                .iter()
+                .find(|(path, _)| path.to_string_lossy().ends_with(suffix))
+                .map(|(_, content)| content.as_str())
+                .unwrap_or_else(|| panic!("{suffix} should be generated"))
+        };
+
+        let enums = file("types/enums.rs");
+        assert!(enums.contains("#[baml(name = \"Self\")]"), "{enums}");
+        assert!(enums.contains("#[serde(rename = \"Self\")]"), "{enums}");
+        assert!(enums.contains("Self_,"), "{enums}");
+        assert!(
+            enums.contains("Self::Self_ => write!(f, \"Self\")"),
+            "{enums}"
+        );
+        assert!(
+            enums.contains("\"Self\" => ::std::result::Result::Ok(Self::Self_)"),
+            "{enums}"
+        );
+        assert!(enums.contains("Self::Self_\n"), "default impl: {enums}");
+        assert!(!enums.contains("r#"), "{enums}");
+
+        for path in ["types/classes.rs", "stream_types/classes.rs"] {
+            let classes = file(path);
+            assert!(classes.contains("#[baml(name = \"crate\")]"), "{classes}");
+            assert!(classes.contains("pub crate_:"), "{classes}");
+            assert!(classes.contains("pub r#type:"), "{classes}");
+            assert!(!classes.contains("r#crate"), "{classes}");
+        }
+        let classes = file("types/classes.rs");
+        assert!(
+            classes.contains("#[serde(rename = \"crate\")]"),
+            "{classes}"
+        );
+    }
 }
