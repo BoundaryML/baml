@@ -25,8 +25,8 @@ use crate::{
     HeapPtr, Object, RealizedTy, RuntimeTy, Value,
     layout::{DescriptorId, ElemKind, SlotKind},
     object_format::{
-        Access, Format, HEADER_BYTES, Header, SlotMismatch, SlotValue, read_slot, write_float_slot,
-        write_slot,
+        Access, Format, HEADER_BYTES, Header, SlotMismatch, SlotValue, TAGGED_ALIGN, read_slot,
+        write_float_slot, write_slot,
     },
     types::Class,
 };
@@ -81,6 +81,11 @@ impl InstanceLayout {
         let fields = kinds
             .iter()
             .map(|&kind| {
+                // A tagged slot sits 16-byte aligned for its single-copy
+                // atomic path; the gap before it is padding.
+                if kind == SlotKind::Tagged16 {
+                    next = next.next_multiple_of(TAGGED_ALIGN as u32);
+                }
                 let offset = next;
                 next += stride(kind);
                 FieldSlot { offset, kind }
@@ -109,6 +114,13 @@ impl InstanceLayout {
     /// Bytes of the whole object, header included.
     pub fn size(&self) -> usize {
         self.size as usize
+    }
+
+    /// Bytes of padding before 16-byte-aligned tagged fields.
+    pub fn padding(&self) -> usize {
+        let used: u32 = self.fields.iter().map(|slot| stride(slot.kind)).sum();
+        let hidden = if self.has_type_args { 2 * WORD } else { WORD };
+        (self.size - HEADER_BYTES as u32 - hidden - used) as usize
     }
 
     /// Offsets of every pointer slot, the class and type pointers included.
@@ -428,18 +440,23 @@ mod tests {
             SlotKind::Tagged16,
             SlotKind::Ptr,
         ];
+        // The tagged field is padded from 24 to 32, 16-byte aligned.
         let plain = InstanceLayout::new(DescriptorId(64), &kinds, false);
         assert_eq!(
             plain.fields().iter().map(|f| f.offset).collect::<Vec<_>>(),
-            [16, 24, 40]
+            [16, 32, 48]
         );
-        assert_eq!(plain.size(), 48);
-        assert_eq!(plain.ptr_offsets(), [8, 40]);
-        assert_eq!(plain.tagged_offsets(), [24]);
+        assert_eq!(plain.size(), 56);
+        assert_eq!(plain.padding(), 8);
+        assert_eq!(plain.ptr_offsets(), [8, 48]);
+        assert_eq!(plain.tagged_offsets(), [32]);
 
+        // With a type pointer the tagged field lands aligned without padding.
         let generic = InstanceLayout::new(DescriptorId(65), &kinds, true);
         assert_eq!(generic.fields()[0].offset, 24);
+        assert_eq!(generic.tagged_offsets(), [32]);
         assert_eq!(generic.ptr_offsets(), [8, 16, 48]);
         assert_eq!(generic.size(), 56);
+        assert_eq!(generic.padding(), 0);
     }
 }

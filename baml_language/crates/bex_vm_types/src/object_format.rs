@@ -20,14 +20,14 @@
 //! |---|---:|---|---|
 //! | raw `int`/`float`/`bool` | 8 | Relaxed load | Relaxed store |
 //! | pointer | 8 | Acquire load | Release store |
-//! | tagged ([`TaggedSlot`]) | 16 | take the tag, read, put it back | take the tag, write, publish |
+//! | tagged ([`TaggedSlot`]) | 16 | one `ldp` (LSE2) or seqlock read | one `stp` (LSE2) or seqlock write |
 //!
 //! A thread-local access (escape analysis proved no other thread can reach
 //! the object) uses Relaxed loads and stores and never takes a tag.
 
 #![allow(unsafe_code)]
 
-use std::sync::atomic::{AtomicU8, AtomicU16, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 
 use crate::{
     HeapPtr, Object, Value,
@@ -241,7 +241,7 @@ pub enum TaggedKind {
 }
 
 impl TaggedKind {
-    fn from_u8(tag: u8) -> Self {
+    fn from_word(tag: u64) -> Self {
         match tag {
             1 => TaggedKind::Ptr,
             2 => TaggedKind::Int,
@@ -255,57 +255,148 @@ impl TaggedKind {
 }
 
 /// A 16-byte slot that may hold a pointer or a scalar: `SafeValue` in the
-/// design. The tag doubles as a spinlock: an access swaps in
-/// [`TaggedKind::Locked`], reads or writes the payload, and puts a tag back.
+/// design. The tag word comes first, the payload second.
+///
+/// Readers never write. On aarch64 with LSE2 (`cfg(baml_lse2)`, set by the
+/// build script when `+lse2` is in the rustflags), a 16-byte-aligned slot is
+/// read with one `ldp` and written with one `stp`, both single-copy atomic;
+/// a Release fence precedes the store only when the payload is a pointer.
+/// Elsewhere, and for a slot that is not 16-byte aligned, it is a seqlock: a
+/// writer swaps the tag to [`TaggedKind::Locked`], writes the payload and
+/// publishes the new tag with Release; a reader loads the tag (Acquire), the
+/// payload, then the tag again, and retries while it is locked or changed.
+/// Instance fields and list and map elements are laid out 16-byte aligned so
+/// the single-copy path applies.
 #[repr(C)]
 #[derive(Debug)]
 pub struct TaggedSlot {
-    kind: AtomicU8,
-    _pad: [u8; 7],
+    tag: AtomicU64,
     payload: AtomicU64,
 }
 
 const _: () = assert!(size_of::<TaggedSlot>() == 16);
+
+/// Alignment a tagged slot needs for the single-copy-atomic path.
+pub const TAGGED_ALIGN: usize = 16;
+
+const LOCKED: u64 = TaggedKind::Locked as u64;
 
 impl TaggedSlot {
     /// The tag and payload, read by the collector while no mutator runs.
     #[inline]
     pub fn read_paused(&self) -> (TaggedKind, u64) {
         (
-            TaggedKind::from_u8(self.kind.load(Ordering::Relaxed)),
+            TaggedKind::from_word(self.tag.load(Ordering::Relaxed)),
             self.payload.load(Ordering::Relaxed),
         )
     }
 
-    /// Take the slot, returning the tag it held.
-    fn lock(&self) -> TaggedKind {
+    #[inline]
+    fn single_copy(&self) -> bool {
+        cfg!(all(target_arch = "aarch64", baml_lse2))
+            && std::ptr::from_ref(self).addr().is_multiple_of(TAGGED_ALIGN)
+    }
+
+    #[inline]
+    fn read(&self, access: Access) -> (TaggedKind, u64) {
+        match access {
+            Access::ThreadLocal => self.read_paused(),
+            Access::Shared if self.single_copy() => self.read_pair(),
+            Access::Shared => self.read_seqlock(),
+        }
+    }
+
+    /// Seqlock read: tag (Acquire), payload, tag again; retry while a writer
+    /// holds the slot or the tag changed underneath.
+    fn read_seqlock(&self) -> (TaggedKind, u64) {
         loop {
-            let tag = self.kind.swap(TaggedKind::Locked as u8, Ordering::Acquire);
-            if tag != TaggedKind::Locked as u8 {
-                return TaggedKind::from_u8(tag);
+            let before = self.tag.load(Ordering::Acquire);
+            let payload = self.payload.load(Ordering::Relaxed);
+            std::sync::atomic::fence(Ordering::Acquire);
+            if before != LOCKED && self.tag.load(Ordering::Relaxed) == before {
+                return (TaggedKind::from_word(before), payload);
             }
             std::hint::spin_loop();
         }
     }
 
-    fn read(&self, access: Access) -> (TaggedKind, u64) {
+    #[inline]
+    fn write(&self, tag: TaggedKind, payload: u64, access: Access) {
         match access {
-            Access::ThreadLocal => self.read_paused(),
-            Access::Shared => {
-                let tag = self.lock();
-                let payload = self.payload.load(Ordering::Relaxed);
-                self.kind.store(tag as u8, Ordering::Release);
-                (tag, payload)
+            Access::ThreadLocal => {
+                self.payload.store(payload, Ordering::Relaxed);
+                self.tag.store(tag as u64, Ordering::Relaxed);
             }
+            Access::Shared if self.single_copy() => self.write_pair(tag, payload),
+            Access::Shared => self.write_seqlock(tag, payload),
         }
     }
 
-    fn write(&self, tag: TaggedKind, payload: u64, access: Access) {
-        if access == Access::Shared {
-            self.lock();
+    /// Seqlock write: claim the slot by swapping in the locked tag, write the
+    /// payload, publish the new tag with Release.
+    fn write_seqlock(&self, tag: TaggedKind, payload: u64) {
+        while self.tag.swap(LOCKED, Ordering::Acquire) == LOCKED {
+            std::hint::spin_loop();
         }
+        std::sync::atomic::fence(Ordering::Release);
         self.payload.store(payload, Ordering::Relaxed);
-        self.kind.store(tag as u8, Ordering::Release);
+        self.tag.store(tag as u64, Ordering::Release);
+    }
+
+    /// One 16-byte `ldp`: tag and payload always come from the same write.
+    /// Retries only past a seqlock writer, which no aligned slot has.
+    #[cfg(all(target_arch = "aarch64", baml_lse2))]
+    #[inline]
+    fn read_pair(&self) -> (TaggedKind, u64) {
+        loop {
+            let (tag, payload): (u64, u64);
+            // SAFETY: `self` is a 16-byte-aligned slot (`single_copy`), which
+            // LSE2 reads with one single-copy-atomic `ldp`.
+            unsafe {
+                std::arch::asm!(
+                    "ldp {tag}, {payload}, [{slot}]",
+                    slot = in(reg) std::ptr::from_ref(self),
+                    tag = out(reg) tag,
+                    payload = out(reg) payload,
+                    options(nostack, preserves_flags, readonly),
+                );
+            }
+            if tag != LOCKED {
+                return (TaggedKind::from_word(tag), payload);
+            }
+            std::hint::spin_loop();
+        }
+    }
+
+    /// One 16-byte `stp`, after a Release fence only when the payload is a
+    /// pointer: a scalar publishes nothing.
+    #[cfg(all(target_arch = "aarch64", baml_lse2))]
+    #[inline]
+    fn write_pair(&self, tag: TaggedKind, payload: u64) {
+        if tag == TaggedKind::Ptr {
+            std::sync::atomic::fence(Ordering::Release);
+        }
+        // SAFETY: `self` is a 16-byte-aligned slot (`single_copy`), which
+        // LSE2 writes with one single-copy-atomic `stp`.
+        unsafe {
+            std::arch::asm!(
+                "stp {tag}, {payload}, [{slot}]",
+                slot = in(reg) std::ptr::from_ref(self),
+                tag = in(reg) tag as u64,
+                payload = in(reg) payload,
+                options(nostack, preserves_flags),
+            );
+        }
+    }
+
+    #[cfg(not(all(target_arch = "aarch64", baml_lse2)))]
+    fn read_pair(&self) -> (TaggedKind, u64) {
+        self.read_seqlock()
+    }
+
+    #[cfg(not(all(target_arch = "aarch64", baml_lse2)))]
+    fn write_pair(&self, tag: TaggedKind, payload: u64) {
+        self.write_seqlock(tag, payload);
     }
 }
 
@@ -584,6 +675,53 @@ mod tests {
             let read = unsafe { read_slot(slots.0.as_ptr(), kind, Access::Shared) };
             assert_eq!(read, SlotValue::Float(2.5));
         }
+    }
+
+    /// A reader never sees one write's tag with another's payload, and never
+    /// writes: a writer alternates `int` payloads above 1 with `bool`s, and a
+    /// `bool` tag must always come with a 0 or 1 payload.
+    #[test]
+    fn a_tagged_read_never_pairs_one_writes_tag_with_anothers_payload() {
+        let slots = Slots([0; 32]);
+        let addr = slots.0.as_ptr() as usize;
+        // SAFETY: as in `round_trip`.
+        unsafe {
+            write_slot(
+                addr as *const u8,
+                SlotKind::Tagged16,
+                Value::NULL,
+                Access::ThreadLocal,
+            )
+        }
+        .unwrap();
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                for i in 0..20_000 {
+                    let value = if i % 2 == 0 {
+                        Value::int(1_000 + i)
+                    } else {
+                        Value::bool(i % 4 == 1)
+                    };
+                    // SAFETY: the slot outlives the scope.
+                    unsafe {
+                        write_slot(addr as *const u8, SlotKind::Tagged16, value, Access::Shared)
+                    }
+                    .unwrap();
+                }
+            });
+            for _ in 0..20_000 {
+                // SAFETY: as above.
+                let read =
+                    unsafe { read_slot(addr as *const u8, SlotKind::Tagged16, Access::Shared) };
+                match read {
+                    SlotValue::Value(value) if value.as_bool().is_some() || value.is_null() => {}
+                    SlotValue::Value(value) => {
+                        assert!(value.as_int().is_some_and(|int| int >= 1_000))
+                    }
+                    SlotValue::Float(_) => panic!("no float was written"),
+                }
+            }
+        });
     }
 
     #[test]
