@@ -102,7 +102,7 @@ Enabled cloud runtime recordings automatically include the following scalar prop
 | `baml.ctx.os_version` | optional string | Best-effort OS version from `os_info`; Linux distribution version, macOS product version, or Windows version/build. Omitted when unknown. |
 | `baml.ctx.os_distro` | optional string | Recognized Linux distribution name, such as `Ubuntu` or `Debian`; omitted elsewhere and when unknown. |
 | `baml.ctx.architecture` | string | Rust build-target architecture, such as `aarch64` or `x86_64`; under emulation this describes the BAML binary. |
-| `baml.ctx.is_ci` | boolean | Whether the standard `CI` variable is exactly `true`. Unset, non-Unicode, `false`, `1`, `TRUE`, and arbitrary provider names yield `false`; raw values are never sent. |
+| `baml.ctx.is_ci` | boolean | Whether `CI` is truthy, matching wrapper telemetry: trim whitespace and ignore case; any nonempty Unicode value except `0`, `false`, `no`, or `off` yields `true`. Unset, empty, whitespace-only and non-Unicode values yield `false`; raw values are never sent. |
 | `baml.ctx.agent_harness` | optional string | Trimmed explicit `AI_AGENT` harness name; otherwise `claude`, `codex`, `pi`, `opencode`, `cursor`, `replit`, or `unknown` for the `AGENT` compatibility marker. Omitted when no agent is detected or the name fails the metadata bounds. |
 
 SDK identity/version already have native equivalents in the recording header: `baml_version` identifies the BAML engine version, and `host` identifies the launcher when known (`baml`, `pack`, `bridge`, etc.). The bridge does not currently supply the calling language or its interpreter/JVM version, so these are not guessed from executable paths, environment variables, or installed interpreters.

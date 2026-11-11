@@ -37,7 +37,7 @@ fn system() -> System {
     }
 }
 
-/// Build the fixed scalar schema from selected system fields, exact CI status
+/// Build the fixed scalar schema from selected system fields, truthy CI status
 /// and the shared detector. Optional omissions also remove caller spoofing.
 fn collect(system: &System, mut read: impl FnMut(&str) -> Option<OsString>) -> ContextPatch {
     let text = |value: &str| {
@@ -46,9 +46,16 @@ fn collect(system: &System, mut read: impl FnMut(&str) -> Option<OsString>) -> C
         (!value.trim().is_empty() && value.len() <= 128 && !value.chars().any(char::is_control))
             .then(|| ContextValue::String(value.to_owned()))
     };
-    // CI is a standard variable, not a BAML boolean: exactly CI=true, without
-    // forwarding provider names or treating arbitrary nonempty values as true.
-    let is_ci = read("CI").is_some_and(|value| value == "true");
+    // Match wrapper telemetry: trim and ignore case, treating empty and
+    // explicit false words as false. Only the boolean reaches the recording.
+    let is_ci = read("CI")
+        .and_then(|value| value.into_string().ok())
+        .is_some_and(|value| {
+            !matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "" | "0" | "false" | "no" | "off"
+            )
+        });
     // Invalid dev-only overrides must never fail SDK startup. CLI output policy
     // still surfaces the detector's strict validation error to its own caller.
     let agent = baml_env::agent::detect_with(&mut read).ok().flatten();
@@ -108,18 +115,28 @@ mod tests {
     }
 
     #[test]
-    /// Only the literal standard CI value enables the flag; other values
-    /// collapse to false instead of being transmitted as provider names.
-    fn ci_means_exactly_true_and_never_contains_the_raw_value() {
+    /// CI follows wrapper telemetry's truthy convention, including trimming
+    /// and case folding; missing or non-Unicode values remain false.
+    fn ci_uses_truthy_values_and_never_contains_the_raw_value() {
         for (value, expected) in [
             (None, false),
             (Some(""), false),
+            (Some("   "), false),
             (Some("false"), false),
+            (Some(" FALSE "), false),
             (Some("0"), false),
-            (Some("1"), false),
-            (Some("TRUE"), false),
-            (Some(" true "), false),
-            (Some("private-provider-name"), false),
+            (Some(" 0 "), false),
+            (Some("no"), false),
+            (Some(" NO "), false),
+            (Some("off"), false),
+            (Some(" Off "), false),
+            (Some("1"), true),
+            (Some("TRUE"), true),
+            (Some(" true "), true),
+            (Some("yes"), true),
+            (Some("on"), true),
+            (Some("2"), true),
+            (Some("private-provider-name"), true),
             (Some("true"), true),
         ] {
             let patch = collect(&platform(), |name| {
@@ -128,6 +145,18 @@ mod tests {
             assert_eq!(
                 patch.metadata["baml.ctx.is_ci"],
                 Some(ContextValue::Bool(expected))
+            );
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStringExt as _;
+
+            let patch = collect(&platform(), |name| {
+                (name == "CI").then(|| OsString::from_vec(vec![0xff]))
+            });
+            assert_eq!(
+                patch.metadata["baml.ctx.is_ci"],
+                Some(ContextValue::Bool(false))
             );
         }
     }

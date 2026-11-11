@@ -165,9 +165,12 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         );
         assert_eq!(
             metadata["baml.ctx.is_ci"],
-            &btel_snapshot::DecodedValue::Bool(
-                baml_env::os_var("CI").is_some_and(|value| value == "true")
-            )
+            &btel_snapshot::DecodedValue::Bool(baml_env::raw_var("CI").is_some_and(|value| {
+                !matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "" | "0" | "false" | "no" | "off"
+                )
+            }))
         );
         assert_eq!(
             metadata.get("baml.ctx.agent_harness").copied(),
