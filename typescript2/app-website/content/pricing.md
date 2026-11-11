@@ -35,7 +35,7 @@ Boundary Cloud is in early access.
 | Hosted by Boundary | Included | Included |
 | Bring your own cloud | No | Add-on |
 
-Free on both plans: unlimited spans, profiles, dashboards, members, projects and environments, and unlimited queries (SQL or `baml query`), up to 90 seconds each.
+Free on both plans: unlimited spans, profiles, dashboards, alerts, members, projects and environments, and unlimited queries (SQL or `baml query`), up to 90 seconds each.
 
 Every Boundary Cloud plan comes with a 60-day money-back guarantee. [Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
 

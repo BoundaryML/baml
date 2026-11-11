@@ -15,7 +15,7 @@ import { SoftwareApplicationStructuredData } from '@/components/structured-data'
 //
 // Every claim is one of: Boundary Cloud's code (BCS, origin/main: config/bcs.toml,
 // control-plane/README.md, control-plane/src/projector/billing.rs), or a founders' decision
-// (retention pricing, the 90-second query limit, the BYOC and audit-log add-ons, the money-back
+// (retention pricing, the 90-second query limit, the BYOC and audit-log add-ons, unlimited alerts, the money-back
 // guarantee, what's coming soon). Nothing here
 // is a feature BCS doesn't have unless it says "Coming soon".
 
@@ -39,6 +39,7 @@ const BLOCKS: {
       'Unlimited profiles',
       'Unlimited queries, up to 90 seconds each',
       'Unlimited dashboards',
+      'Unlimited alerts',
     ],
     // Named the way Better Stack names its line items: what's included, then ingestion and
     // retention past it.
