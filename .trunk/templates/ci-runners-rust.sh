@@ -21,7 +21,7 @@ echo "trunk-warm-template-v10" >/cache/trunk-template-variant
 
 # The packages with wasm_support, as the wasm32 and pre-commit jobs select them.
 metadata=$(cargo metadata --no-deps --format-version 1)
-wasm_names=$(jq -r '.packages[] | select(.source == null and (.metadata.ci.wasm_support // true)) | .name' <<<"${metadata}")
+wasm_names=$(jq -r '.packages[] | select(.source == null and .metadata.ci.wasm_support != false) | .name' <<<"${metadata}")
 wasm_packages=()
 while IFS= read -r name; do
 	wasm_packages+=(-p "${name}")
