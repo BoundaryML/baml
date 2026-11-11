@@ -558,7 +558,7 @@ pub(crate) mod tests {
             cur_pc: 0,
             heap: Arc::clone(&heap),
             early_yield: early_yield_for_test(),
-            float_boxes: std::sync::Mutex::new(Tlab::new(Arc::clone(&heap))),
+            float_boxes: std::sync::Mutex::new(Tlab::new_empty(Arc::clone(&heap))),
             tlab: Tlab::new(heap),
             globals: VmGlobals::Owned(GlobalPool::new()),
             pending_globals: None,

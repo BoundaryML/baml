@@ -282,6 +282,26 @@ impl Descriptor {
     }
 }
 
+/// The descriptors below [`FIRST_INSTANCE_DESC`], fixed by the object format:
+/// built once per process and shared by every heap.
+fn fixed_descriptors() -> &'static [Option<Descriptor>] {
+    static FIXED: std::sync::LazyLock<Vec<Option<Descriptor>>> = std::sync::LazyLock::new(|| {
+        let mut fixed = vec![None; FIRST_INSTANCE_DESC.0 as usize];
+        fixed[OBJECT_DESC.0 as usize] = Some(OBJECT_DESCRIPTOR);
+        for (slot, id) in LIST_DESCS {
+            fixed[id.0 as usize] = Some(Descriptor::list(slot));
+        }
+        for (elem, id) in BACKING_DESCS {
+            fixed[id.0 as usize] = Some(Descriptor::backing(elem));
+        }
+        for (key, value, id) in map_descriptors() {
+            fixed[id.0 as usize] = Some(Descriptor::map(key, value));
+        }
+        fixed
+    });
+    &FIXED
+}
+
 /// Every descriptor a heap knows, by [`DescriptorId`].
 ///
 /// IDs below [`FIRST_INSTANCE_DESC`] are fixed by the object format: entry
@@ -293,7 +313,7 @@ impl Descriptor {
 /// Reads take no lock: entries live in segments that never move, each set
 /// once. Additions take `interned`.
 pub struct DescriptorTable {
-    fixed: Vec<Option<Descriptor>>,
+    fixed: &'static [Option<Descriptor>],
     segments: [OnceLock<Box<[OnceLock<Descriptor>]>>; SEGMENTS],
     /// Instance layouts by their slots, and the next free dynamic index.
     interned: Mutex<(HashMap<InstanceKey, DescriptorId>, u32)>,
@@ -317,22 +337,24 @@ fn locate(index: u32) -> (usize, usize) {
 
 impl DescriptorTable {
     pub(crate) fn new() -> Self {
-        let mut fixed = vec![None; FIRST_INSTANCE_DESC.0 as usize];
-        fixed[OBJECT_DESC.0 as usize] = Some(OBJECT_DESCRIPTOR);
-        for (slot, id) in LIST_DESCS {
-            fixed[id.0 as usize] = Some(Descriptor::list(slot));
-        }
-        for (elem, id) in BACKING_DESCS {
-            fixed[id.0 as usize] = Some(Descriptor::backing(elem));
-        }
-        for (key, value, id) in map_descriptors() {
-            fixed[id.0 as usize] = Some(Descriptor::map(key, value));
-        }
-        Self {
-            fixed,
+        let table = Self {
+            fixed: fixed_descriptors(),
             segments: [const { OnceLock::new() }; SEGMENTS],
             interned: Mutex::new((HashMap::new(), 0)),
-        }
+        };
+        // Every program allocates instances, so the first segment is made
+        // with the heap rather than inside its first instance allocation.
+        table.segment(0);
+        table
+    }
+
+    /// Segment `segment`, made on first use.
+    fn segment(&self, segment: usize) -> &[OnceLock<Descriptor>] {
+        self.segments[segment].get_or_init(|| {
+            (0..(FIRST_SEGMENT << segment))
+                .map(|_| OnceLock::new())
+                .collect()
+        })
     }
 
     /// Add `descriptor` at the next dynamic ID.
@@ -366,11 +388,7 @@ impl DescriptorTable {
     fn push(&self, next: &mut u32, descriptor: Descriptor) -> DescriptorId {
         let index = *next;
         let (segment, slot) = locate(index);
-        let entries = self.segments[segment].get_or_init(|| {
-            (0..(FIRST_SEGMENT << segment))
-                .map(|_| OnceLock::new())
-                .collect()
-        });
+        let entries = self.segment(segment);
         assert!(
             entries[slot].set(descriptor).is_ok(),
             "descriptor slot set twice"
