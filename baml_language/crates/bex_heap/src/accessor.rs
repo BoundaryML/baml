@@ -743,7 +743,7 @@ fn convert_object(
                             .as_object_ptr()
                             .and_then(|ptr| unsafe { bex_vm_types::StrRef::of(ptr) })
                         {
-                            Some(key) => key.as_str().to_owned(),
+                            Some(key) => key.to_owned_string(),
                             _ => {
                                 return Err(AccessError::CannotConvertToOwned {
                                     reason: "SDK interchange requires maps with string keys"

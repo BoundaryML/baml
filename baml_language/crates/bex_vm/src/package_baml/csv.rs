@@ -306,7 +306,7 @@ fn opt_string(vm: &BexVm, v: Value) -> Result<Option<String>, VmRustFnError> {
     if v.is_null() || v.is_omitted() {
         return Ok(None);
     }
-    Ok(Some(vm.as_string(&v)?.as_str().to_string()))
+    Ok(Some(vm.as_string(&v)?.to_owned_string()))
 }
 
 fn opt_bool(v: Value) -> Option<bool> {
@@ -330,7 +330,7 @@ fn opt_string_list(vm: &BexVm, v: Value) -> Result<Option<Vec<String>>, VmRustFn
     let arr = vm.as_array(&v)?;
     let mut out = Vec::with_capacity(arr.len());
     for item in &arr {
-        out.push(vm.as_string(item)?.as_str().to_string());
+        out.push(vm.as_string(item)?.to_owned_string());
     }
     Ok(Some(out))
 }
@@ -1971,7 +1971,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
             return Err(CellTextErr::Unsupported("omitted argument".to_string()));
         }
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::Shared(SharedKind::Str) => vm.expect_str(ptr).as_str().to_string(),
+            Object::Shared(SharedKind::Str) => vm.expect_str(ptr).to_owned_string(),
             Object::Float(f) => float_cell_text(*f)?,
             Object::Bigint(b) => b.to_string(),
             Object::Variant(var) => {
@@ -2390,7 +2390,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
         }
         let mut name_texts = Vec::with_capacity(names.len());
         for v in names {
-            name_texts.push(vm.as_string(v)?.as_str().to_string());
+            name_texts.push(vm.as_string(v)?.to_owned_string());
         }
         let (mut out, bom_consumed) = begin_batch(&s);
         match encode_line(&s.opts, &name_texts) {
@@ -2427,7 +2427,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         };
 
         let (initial, eof, file) = if let Ok(s) = vm.as_string(source) {
-            (s.as_str().as_bytes().to_vec(), true, Value::NULL)
+            (s.to_owned_string().into_bytes(), true, Value::NULL)
         } else if let Ok(bytes) = vm.as_uint8array(source) {
             let initial = bytes.to_vec();
             (initial, true, Value::NULL)
@@ -2734,7 +2734,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
                 Ok(cells) => cells
                     .iter()
                     .map(|c| match vm.as_string(c) {
-                        Ok(s) => s.as_str().to_string(),
+                        Ok(s) => s.to_owned_string(),
                         Err(_) => "<unrepresentable>".to_string(),
                     })
                     .collect(),
@@ -2749,7 +2749,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             Some(hs) => hs
                 .iter()
                 .map(|h| match vm.as_string(h) {
-                    Ok(s) => s.as_str().to_string(),
+                    Ok(s) => s.to_owned_string(),
                     Err(_) => String::new(),
                 })
                 .collect(),

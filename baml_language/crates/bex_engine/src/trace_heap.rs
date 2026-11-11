@@ -359,7 +359,7 @@ impl TraceSnapshotBuilder {
             Object::Shared(bex_vm_types::types::SharedKind::Str) => {
                 // SAFETY: the marker is only shown for a string.
                 let value = unsafe { bex_vm_types::StrRef::new_unchecked(ptr) };
-                let value = Self::copy_str(value.as_str())?;
+                let value = Self::copy_str(&value.text())?;
                 self.alloc(TraceValue::String(value))
             }
             Object::String(value) => {
@@ -405,7 +405,7 @@ impl TraceSnapshotBuilder {
                     let mut entries = Self::vec_with_capacity(map.len())?;
                     for (key, value) in &map {
                         let key = string_key(key).expect("map keys validated under the same lock");
-                        let key = Self::copy_str(key.as_str())?;
+                        let key = Self::copy_str(&key.text())?;
                         let value = self.copy_slot(heap, permit, *value)?;
                         entries.push((key, value));
                     }

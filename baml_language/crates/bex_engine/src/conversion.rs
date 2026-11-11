@@ -1796,10 +1796,11 @@ fn find_matching_union_member(
                     }),
                 Object::Shared(bex_vm_types::types::SharedKind::Str) | Object::String(_) => {
                     let value = match obj {
-                        Object::String(value) => value.as_str(),
+                        Object::String(value) => std::borrow::Cow::Borrowed(value.as_str()),
                         // SAFETY: the marker is only shown for a string.
-                        _ => unsafe { bex_vm_types::StrRef::new_unchecked(ptr) }.as_str(),
+                        _ => unsafe { bex_vm_types::StrRef::new_unchecked(ptr) }.text(),
                     };
+                    let value = &*value;
                     members
                         .iter()
                         .find(|member| {

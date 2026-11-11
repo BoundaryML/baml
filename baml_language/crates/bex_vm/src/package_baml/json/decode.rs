@@ -1264,11 +1264,12 @@ impl Node {
         }
     }
 
-    /// The text of a string node.
-    fn text<'a>(&'a self, vm: &'a BexVm) -> Option<&'a str> {
+    /// The text of a string node; a rope's is copied out, the reader
+    /// having no allocator.
+    fn text<'a>(&'a self, vm: &'a BexVm) -> Option<std::borrow::Cow<'a, str>> {
         match self {
-            Node::String(value) => vm.as_string(value).ok().map(|value| value.as_str()),
-            Node::Variant(name) => Some(name),
+            Node::String(value) => vm.as_string(value).ok().map(|value| value.text()),
+            Node::Variant(name) => Some(std::borrow::Cow::Borrowed(name)),
             _ => None,
         }
     }
@@ -1278,7 +1279,7 @@ impl Node {
         match self {
             Node::Int(i) => Some(num_bigint::BigInt::from(*i)),
             Node::Bigint(b) => Some((**b).clone()),
-            Node::String(_) | Node::Variant(_) => super::parse_decimal_bigint(self.text(vm)?),
+            Node::String(_) | Node::Variant(_) => super::parse_decimal_bigint(&self.text(vm)?),
             _ => None,
         }
     }
@@ -1697,7 +1698,7 @@ impl<'p> Structural<'p> {
                 _ => Err(self.fail(vm, || "literal mismatch".into())),
             },
             baml_type::Literal::String(expected) => {
-                if node.text(vm) != Some(expected.as_str()) {
+                if node.text(vm).as_deref() != Some(expected.as_str()) {
                     return Err(self.fail(vm, || "literal mismatch".into()));
                 }
                 match node {
@@ -1748,10 +1749,10 @@ impl<'p> Structural<'p> {
         head: TypeHead,
     ) -> Result<Value, Failed> {
         let named = || baml_type::HeadDisplay::head_display_name(&head);
-        let Some(variant) = node.text(vm) else {
+        let Some(variant) = node.text(vm).map(std::borrow::Cow::into_owned) else {
             return Err(self.fail(vm, || "expected enum variant string".into()));
         };
-        match super::variant_named(vm, head, variant, self.naming()) {
+        match super::variant_named(vm, head, &variant, self.naming()) {
             Ok(Some(index)) => Ok(Value::object(vm.alloc_variant(head.ptr(), index))),
             Ok(None) => {
                 let variant = variant.to_owned();
@@ -1787,7 +1788,7 @@ impl<'p> Structural<'p> {
             _ => return Err(self.fail(vm, || format!("`{}` is not an enum", named()))),
         };
         match expected {
-            Some((true, expected)) if node.text(vm) == Some(expected.as_str()) => {
+            Some((true, expected)) if node.text(vm).as_deref() == Some(expected.as_str()) => {
                 match super::variant_named(vm, head, &expected, self.naming()) {
                     Ok(Some(index)) => Ok(Value::object(vm.alloc_variant(head.ptr(), index))),
                     _ => Err(self.fail(vm, || {
@@ -1917,7 +1918,7 @@ impl<'p> Structural<'p> {
         }
         let read = |vm: &BexVm, key: &str| {
             let value = super::object_get(vm, ptr, bex_vm_types::map_string_hash(key), key)?;
-            node_of(vm, value).text(vm).map(str::to_owned)
+            node_of(vm, value).text(vm).map(std::borrow::Cow::into_owned)
         };
         let fields = MediaFields {
             kind: read(vm, "kind"),

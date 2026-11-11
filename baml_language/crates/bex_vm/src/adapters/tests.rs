@@ -182,7 +182,7 @@ fn dump(vm: &BexVm, value: Value) -> String {
     };
     match vm.get_object(ptr) {
         Object::Float(float) => format!("{float:?}f"),
-        Object::Shared(SharedKind::Str) => format!("{:?}", vm.expect_str(ptr).as_str()),
+        Object::Shared(SharedKind::Str) => format!("{:?}", vm.expect_str(ptr)),
         Object::Shared(SharedKind::List) => {
             let array = vm.expect_list(ptr);
             format!(
@@ -854,7 +854,7 @@ fn string_keys_cache_their_map_hash_in_the_cell() {
         assert_ne!(cached, 0);
         assert_eq!(
             cached,
-            bex_vm_types::map_string_hash(string.as_str()).max(1),
+            bex_vm_types::map_string_hash(&string.text()).max(1),
             "the cached hash is the map's string hash"
         );
         assert_eq!(stored[i], cached, "the entry stores the cell's hash");

@@ -97,7 +97,7 @@ impl Scratch {
             Object::Shared(SharedKind::Str) => {
                 // SAFETY: the marker is only shown for a string.
                 let s = unsafe { bex_vm_types::StrRef::new_unchecked(ptr) };
-                leaves.string_value(&rewritten(&self.rewrites, s.as_str()))
+                leaves.string_value(&rewritten(&self.rewrites, &s.text()))
             }
             Object::Bigint(n) => leaves.bigint(n),
             Object::Type(value) => {

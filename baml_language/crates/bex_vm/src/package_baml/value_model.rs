@@ -112,6 +112,7 @@ pub(crate) fn run_compiled(
     args: &[Value],
     body: impl FnOnce(&mut ValueModel<'_>, &[Value]) -> Result<Value, GlueError>,
 ) -> Option<NativeCallResult> {
+    flatten_strings(vm, args);
     match body(&mut ValueModel::compiled(vm), args) {
         Ok(value) => Some(NativeCallResult::Done(value)),
         Err(GlueError::Vm(error)) => Some(NativeCallResult::Error(error)),
@@ -153,12 +154,21 @@ fn finish(
     fallback: Option<Yielding>,
     body: impl FnOnce(&mut ValueModel<'_>, &[Value]) -> Result<Value, GlueError>,
 ) -> NativeCallResult {
+    flatten_strings(vm, args);
     let result = body(&mut ValueModel::with(vm, locality, View::Values), args);
     match (result, fallback) {
         (Ok(value), _) => NativeCallResult::Done(value),
         (Err(GlueError::Vm(error)), _) => NativeCallResult::Error(error),
         (Err(GlueError::Defer), Some(yielding)) => yielding(vm, args, locality),
         (Err(GlueError::Defer), None) => unreachable!("a builtin that cannot yield deferred"),
+    }
+}
+
+/// Flatten every string among `args`, so a body may borrow their text
+/// (`Strings::str_text`) without the allocator.
+fn flatten_strings(vm: &mut BexVm, args: &[Value]) {
+    for arg in args {
+        vm.flatten_str(arg);
     }
 }
 
@@ -692,9 +702,17 @@ impl Strings for ValueModel<'_> {
         obj_ptr(Value::object(self.vm.alloc_string(text.to_string())))
     }
 
+    fn str_flatten(&mut self, string: ObjPtr) {
+        self.vm.tlab.flatten_string(heap_ptr(string));
+    }
+
+    fn str_to_string(&self, string: ObjPtr) -> String {
+        self.string(string).to_owned_string()
+    }
+
+    /// A view when the piece is long, else a flat copy (`Tlab::substring`).
     fn str_substring(&mut self, string: ObjPtr, bytes: Range<usize>) -> ObjPtr {
-        let sliced = self.string(string).as_str()[bytes].to_owned();
-        obj_ptr(Value::object(self.vm.alloc_string(sliced)))
+        obj_ptr(Value::object(self.vm.tlab.substring(heap_ptr(string), bytes)))
     }
 
     fn bytes_alloc(&mut self, bytes: &[u8]) -> ObjPtr {

@@ -131,7 +131,7 @@ impl HashDriver {
                             }
                             Object::Bigint(value) => framed(4, &value.to_signed_bytes_le()),
                             Object::Shared(SharedKind::Str) => {
-                                framed(5, vm.expect_str(ptr).as_bytes())
+                                framed(5, vm.expect_str(ptr).text().as_bytes())
                             }
                             Object::Uint8Array(value) => framed(6, &value.lock()),
                             Object::Shared(SharedKind::List) => {

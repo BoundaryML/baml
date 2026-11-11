@@ -337,9 +337,11 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             }
             BamlType::String => {
                 // Heap type — vm parameter needed
+                // The reader has no allocator, so a rope is copied out
+                // rather than flattened.
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v str {{"
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> std::borrow::Cow<'v, str> {{"
                 )
                 .unwrap();
                 writeln!(
@@ -350,7 +352,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    .expect(\"{class_name}.{raw_name}: expected String\").as_str()"
+                    "{inner2}    .expect(\"{class_name}.{raw_name}: expected String\").text()"
                 )
                 .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
@@ -510,9 +512,9 @@ fn view_optional_type_and_expr(
             ),
         ),
         BamlType::String => (
-            "Option<&'v str>".to_string(),
+            "Option<std::borrow::Cow<'v, str>>".to_string(),
             format!(
-                "vm.as_string(&self.instance.load({field_index}).expect_value()).expect(\"{class_name}.{field_name}: expected String\").as_str()"
+                "vm.as_string(&self.instance.load({field_index}).expect_value()).expect(\"{class_name}.{field_name}: expected String\").text()"
             ),
         ),
         _ => (
@@ -1634,6 +1636,18 @@ fn emit_arg_extractions_indented(
         .receiver
         .as_ref()
         .filter(|recv| !recv.receiver_type.is_static());
+    // Every string the glue borrows is made borrowable first (a rope is
+    // flattened), while the glue still holds `&mut vm`: the borrows below
+    // then run back to back. See `string_extraction_expr`.
+    let string_receiver = receiver
+        .filter(|recv| recv.builtin_name() == "String")
+        .map(|_| 0);
+    let string_params = b.params.iter().enumerate().filter_map(|(i, param)| {
+        has_string_text(&param.ty).then_some(i + usize::from(receiver.is_some()))
+    });
+    for idx in string_receiver.into_iter().chain(string_params) {
+        writeln!(out, "{indent}vm.flatten_str(&args[{idx}]);").unwrap();
+    }
     if let Some(recv) = receiver.filter(|recv| !recv.receiver_type.is_mut()) {
         emit_immut_receiver_extraction_indented(
             out,
@@ -1665,6 +1679,16 @@ fn emit_arg_extractions_indented(
             indent,
             matches!(b.vm_usage, VmUsage::MutRef) && b.may_yield,
         );
+    }
+}
+
+/// Whether a value of `ty` is a string whose text the glue borrows: a
+/// `string`, or an optional one.
+fn has_string_text(ty: &BamlType) -> bool {
+    match ty {
+        BamlType::String => true,
+        BamlType::Optional(inner) => has_string_text(inner),
+        _ => false,
     }
 }
 
@@ -1848,9 +1872,12 @@ fn extraction_expr(
 }
 
 /// How a `string` argument reaches a native. The text is borrowed straight
-/// from the heap cell (`StrRef::as_str`); a glue that later needs `&mut vm`
-/// (`needs_owned`) copies it out first, since the borrow would conflict.
-/// Under `//baml:str_ref` (`str_ref`) the native gets the cell handle itself.
+/// from the heap cell (`StrRef::as_str`), which the glue made borrowable
+/// first (`vm.flatten_str` in `emit_arg_extractions_indented`: a rope is
+/// flattened while the glue still holds `&mut vm`); a glue that later
+/// needs `&mut vm` (`needs_owned`) copies it out instead, since the borrow
+/// would conflict. Under `//baml:str_ref` (`str_ref`) the native gets the
+/// cell handle itself.
 fn string_extraction_expr(val: &str, needs_owned: bool, str_ref: bool) -> String {
     if str_ref {
         assert!(
@@ -1859,7 +1886,7 @@ fn string_extraction_expr(val: &str, needs_owned: bool, str_ref: bool) -> String
         );
         format!("vm.as_string({val})?")
     } else if needs_owned {
-        format!("vm.as_string({val})?.as_str().to_owned()")
+        format!("vm.as_string({val})?.to_owned_string()")
     } else {
         format!("vm.as_string({val})?.as_str()")
     }

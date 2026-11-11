@@ -216,7 +216,7 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
         synthetic = entries.remove("__baml_synthetic_role").is_some();
     }
     Some(PromptRole {
-        name: name.as_str().to_string(),
+        name: name.to_owned_string(),
         metadata,
         synthetic,
     })
@@ -240,7 +240,7 @@ impl PromptAssembly {
             if let Some(part) = self.parts.get(index)
                 && let Ok(part) = vm.as_string(part)
             {
-                content.push_text(part.as_str());
+                content.push_text(&part.text());
             }
 
             if let Some(role) = prompt_role(vm, value) {
@@ -255,7 +255,7 @@ impl PromptAssembly {
         if let Some(part) = self.parts.get(self.values.len())
             && let Ok(part) = vm.as_string(part)
         {
-            content.push_text(part.as_str());
+            content.push_text(&part.text());
         }
 
         let ast = match current_role {
@@ -333,7 +333,7 @@ impl Continuation for PromptAssembly {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
             vm.as_string(&value)
-                .map(|result| result.as_str().to_string())
+                .map(|result| result.to_owned_string())
                 .unwrap_or_default(),
         );
         self.dispatch_next(vm)

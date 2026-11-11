@@ -23,7 +23,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
         match ::toml::Table::from_str(s) {
             Ok(table) => {
                 let value = convert_toml_value(vm, ::toml::Value::Table(table))?;
-                let source = Value::object(vm.alloc_string(s.clone()));
+                let source = Value::object(vm.alloc_string(s));
                 vm.as_instance(&value)?.store(1, source);
                 Ok(value)
             }
@@ -40,7 +40,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
             DocumentMut::new()
         } else {
             vm.as_string(&source)?
-                .as_str()
+                .text()
                 .parse::<DocumentMut>()
                 .map_err(|e| invalid_argument(e.to_string()))?
         };
@@ -228,7 +228,7 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
     active.push(value);
     let ptr = value.as_object_ptr().expect("object kind has a pointer");
     let result = match vm.get_object(ptr) {
-        Object::Shared(SharedKind::Str) => Ok(Node::Scalar(vm.expect_str(ptr).as_str().into())),
+        Object::Shared(SharedKind::Str) => Ok(Node::Scalar(vm.expect_str(ptr).to_owned_string().into())),
         Object::Float(f) => Ok(Node::Scalar((*f).into())),
         Object::Shared(SharedKind::List) => {
             let values = vm.list_values(vm.expect_list(ptr), Access::Shared);

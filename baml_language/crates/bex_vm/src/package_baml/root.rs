@@ -408,7 +408,7 @@ impl Continuation for ToStringWalkContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
             vm.as_string(&value)
-                .map(|s| s.as_str().to_string())
+                .map(|s| s.to_owned_string())
                 .unwrap_or_default(),
         );
 
@@ -502,7 +502,7 @@ impl JoinContinuation {
                 self.out.push_str(&self.separator);
             }
             match element.as_object_ptr().and_then(|ptr| vm.str_at(ptr)) {
-                Some(s) => self.out.push_str(s.as_str()),
+                Some(s) => s.push_to(&mut self.out),
                 _ => {
                     let mut state = StringRenderState::with_overrides(&self.pending, &self.results);
                     let mut sink = StringRenderSink(std::mem::take(&mut self.out));
@@ -543,7 +543,7 @@ impl Continuation for JoinContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
             vm.as_string(&value)
-                .map(|s| s.as_str().to_string())
+                .map(|s| s.to_owned_string())
                 .unwrap_or_default(),
         );
         self.step(vm)
@@ -768,7 +768,7 @@ pub(super) fn render_to_sink(
     // before recursing.
     let snap = match vm.get_object(ptr) {
         Object::Shared(SharedKind::Str) => {
-            DisplaySnap::Str(vm.expect_str(ptr).as_str().to_string())
+            DisplaySnap::Str(vm.expect_str(ptr).to_owned_string())
         }
         Object::Bigint(b) => DisplaySnap::Leaf(b.to_string()),
         Object::Shared(SharedKind::List) => {
@@ -986,7 +986,7 @@ fn deep_copy_value_recursive(
             let new_ptr = match object {
                 Object::Float(f) => vm.tlab.alloc(Object::Float(f)),
                 Object::Shared(SharedKind::Str) => {
-                    let text = vm.expect_str(ptr).as_str().to_owned();
+                    let text = vm.expect_str(ptr).to_owned_string();
                     vm.alloc_string(text)
                 }
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),

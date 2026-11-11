@@ -952,7 +952,7 @@ impl BamlClassEnum for PackageReflectImpl {
             &other,
             false,
         );
-        let name = Value::object(vm.alloc_string(name.clone()));
+        let name = Value::object(vm.alloc_string(name));
         copy::r#enum::Value { name, meta }.to_value(vm)
     }
 

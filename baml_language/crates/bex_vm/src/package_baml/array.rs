@@ -1381,7 +1381,7 @@ pub(crate) mod shared {
             return Ok(text);
         }
         match value {
-            Tagged::Ptr(ptr) if rt.shape(ptr) == Shape::Str => Ok(rt.str_text(ptr).to_string()),
+            Tagged::Ptr(ptr) if rt.shape(ptr) == Shape::Str => Ok(rt.str_to_string(ptr)),
             _ => Err(Fault::NeedsVm(NeedsVm::Render)),
         }
     }
@@ -1397,7 +1397,7 @@ pub(crate) mod shared {
             Err(error) => return NativeCallResult::Error(error.into()),
         };
         let separator = match vm.as_string(&args[1]) {
-            Ok(separator) => separator.as_str().to_owned(),
+            Ok(separator) => separator.to_owned_string(),
             Err(error) => return NativeCallResult::Error(error.into()),
         };
         crate::package_baml::root::join_honoring_overrides(vm, elements, separator)

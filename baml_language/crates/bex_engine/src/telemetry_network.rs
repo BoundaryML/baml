@@ -255,7 +255,7 @@ fn reads(vm: &BexVm, operation: SysOp, receiver: Value, field: &str) -> Option<N
     NetworkTraced::of(data.as_ref())?;
     let url = instance_field(vm, receiver, "url")
         .and_then(|url| vm.as_string(&url).ok())
-        .map(|url| url.as_str().to_owned());
+        .map(|url| url.to_owned_string());
     Some(NetworkOp::Reads {
         operation,
         traced: Arc::clone(data),

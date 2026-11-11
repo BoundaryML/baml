@@ -98,6 +98,8 @@ pub(crate) fn baml_ops_equals_for_string_eq<R: bex_vm_types::layout::Strings>(
     string: bex_vm_types::layout::ObjPtr,
     other: bex_vm_types::layout::ObjPtr,
 ) -> Result<bool, bex_vm_types::layout::Fault> {
+    rt.str_flatten(string);
+    rt.str_flatten(other);
     Ok(rt.str_text(string) == rt.str_text(other))
 }
 

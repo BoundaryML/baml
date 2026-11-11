@@ -380,6 +380,7 @@ impl Encoder {
             },
             Codec::Bool => self.bool(value.as_bool().ok_or(Stop)?),
             Codec::String | Codec::Literal(_) | Codec::Literals(_) => {
+                vm.flatten_str(&value);
                 let text = vm.as_string(&value).map_err(|_| Stop)?;
                 write_escaped(&mut self.out, text.as_str());
             }
@@ -443,6 +444,7 @@ impl Encoder {
             if i > 0 {
                 self.out.push(b',');
             }
+            vm.flatten_str(&key);
             let key = vm.as_string(&key).map_err(|_| Stop)?;
             write_escaped(&mut self.out, key.as_str());
             self.out.push(b':');

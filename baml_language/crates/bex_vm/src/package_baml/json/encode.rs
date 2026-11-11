@@ -624,7 +624,7 @@ impl Walker<'_, '_> {
                 Some(Slot::Key(key)) => {
                     let key = vm
                         .as_string(key)
-                        .map(|key| key.as_str())
+                        .map(|key| key.text())
                         .unwrap_or_default();
                     write!(path, "[{key:?}]")
                 }
@@ -1013,8 +1013,8 @@ impl Walker<'_, '_> {
                 let written: Vec<_> = entries
                     .into_iter()
                     .filter(|(key, _)| {
-                        let key = vm.as_string(key).map(|key| key.as_str());
-                        key.is_ok_and(|key| !declared.contains(&key))
+                        let key = vm.as_string(key).map(|key| key.text());
+                        key.is_ok_and(|key| !declared.contains(&&*key))
                     })
                     .map(|(key, value)| (Some(Slot::Key(key)), value))
                     .collect();
@@ -1146,6 +1146,7 @@ impl Sink for TextSink<'_> {
     }
 
     fn string(&mut self, vm: &mut BexVm, value: Value) {
+        vm.flatten_str(&value);
         if let Ok(text) = vm.as_string(&value) {
             write_escaped(&mut self.out, text.as_str());
         }

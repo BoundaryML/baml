@@ -1509,7 +1509,7 @@ fn refusal(vm: &BexVm, value: Value) -> Option<String> {
     let message = vm.field(instance, 0);
     Some(
         vm.as_string(&message)
-            .map(|message| message.as_str().to_string())
+            .map(|message| message.to_owned_string())
             .unwrap_or_default(),
     )
 }

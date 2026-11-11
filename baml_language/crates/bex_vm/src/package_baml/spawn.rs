@@ -221,7 +221,7 @@ pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalEr
     }
     Ok(SpawnLaunch {
         body,
-        name: plan.name(vm).map(str::to_owned),
+        name: plan.name(vm).map(std::borrow::Cow::into_owned),
         returns: returns.clone(),
         throws: throws.clone(),
         limits,

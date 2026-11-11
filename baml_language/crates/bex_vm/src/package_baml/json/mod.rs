@@ -192,11 +192,11 @@ fn indent_text(vm: &mut BexVm, indent: Value) -> Result<String, VmRustFnError> {
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Shared(SharedKind::Str) => {
                 let text = vm.expect_str(ptr);
-                let width = text.as_str().chars().count();
+                let width = text.char_len();
                 if width > MAX_INDENT {
                     format!("indent must be at most {MAX_INDENT} characters, got {width}")
                 } else if text
-                    .as_str()
+                    .text()
                     .chars()
                     .all(|c| matches!(c, ' ' | '\t' | '\n' | '\r'))
                 {
@@ -204,7 +204,7 @@ fn indent_text(vm: &mut BexVm, indent: Value) -> Result<String, VmRustFnError> {
                 } else {
                     format!(
                         "indent must hold only spaces, tabs, and line breaks, got {:?}",
-                        text.as_str()
+                        text
                     )
                 }
             }
@@ -233,7 +233,7 @@ fn object_get(vm: &BexVm, ptr: HeapPtr, hash: u64, key: &str) -> Option<Value> {
         hash,
         |candidate| {
             vm.as_string(candidate)
-                .is_ok_and(|candidate| candidate.as_str() == key)
+                .is_ok_and(|candidate| candidate == key)
         },
     )
 }
@@ -258,12 +258,12 @@ fn rest_value(
         let Ok(string) = vm.as_string(&key) else {
             continue;
         };
-        let text = string.as_str();
+        let text = string.text();
         let claimed = rest == plan::Rest::Unclaimed
             && plan
                 .fields
                 .iter()
-                .any(|field| field.shown && field.key == text);
+                .any(|field| field.shown && field.key == text.as_ref());
         if !claimed {
             data.push((string.hash(), key, value));
         }
@@ -359,7 +359,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                 Some((Some((_, key)), _)) => {
                     let key = vm
                         .as_string(key)
-                        .map(|key| key.as_str())
+                        .map(|key| key.text())
                         .unwrap_or_default();
                     let _ = write!(path, "[{key:?}]");
                 }

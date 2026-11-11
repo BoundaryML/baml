@@ -8,6 +8,7 @@
 //! takes a new block, when the owner asks, and when the allocator is dropped.
 
 use std::{
+    ops::Range,
     ptr::NonNull,
     sync::{
         Arc,
@@ -22,8 +23,9 @@ use bex_vm_types::{
     layout::{ElemKind, SlotKind},
     object_format::{Access, SlotValue},
     types::{
-        BackingAlloc, LIST_BYTES, MAP_BYTES, MapRef, STR_DESC, StrRef, TypeValue, Variant,
-        backing_bytes, backing_descriptor, init_backing, list_descriptor, map_descriptor,
+        BackingAlloc, LIST_BYTES, MAP_BYTES, MapRef, ROPE_BYTES, ROPE_DESC, STR_DESC,
+        STR_SHARE_THRESHOLD, StrRef, TypeValue, VIEW_BYTES, VIEW_DESC, Variant, backing_bytes,
+        backing_descriptor, chars_in_bytes, init_backing, list_descriptor, map_descriptor,
         str_cell_bytes,
     },
 };
@@ -332,6 +334,94 @@ impl Tlab {
         #[cfg(feature = "gc_profiling")]
         self.heap.record_alloc();
         ptr
+    }
+
+    /// The payload of a fresh string cell of `descriptor` in `bytes`
+    /// (granule-aligned), its header written, the rest unwritten.
+    #[inline]
+    fn alloc_string_cell(&mut self, descriptor: DescriptorId, bytes: usize) -> HeapPtr {
+        let (cell, cell_bytes) = self.alloc_cell(descriptor, bytes, false);
+        self.spend(cell_bytes);
+        #[cfg(feature = "gc_profiling")]
+        self.heap.record_alloc();
+        self.payload_ptr(NonNull::new(cell as *mut u8).expect("cells are never at address zero"))
+    }
+
+    /// A flat holding a copy of `source`'s bytes, whatever its kind.
+    fn alloc_flat_copy<'a>(&mut self, source: StrRef<'a>) -> StrRef<'a> {
+        let ptr = self.alloc_string_cell(STR_DESC, str_cell_bytes(source.byte_len()));
+        // SAFETY: a fresh flat cell sized for the source.
+        unsafe { StrRef::init_flat_copy(ptr, source) }
+    }
+
+    /// The flat holding `string`'s bytes: itself, a view's base, or a
+    /// rope's flattening, made now if nobody has published one. Flattening
+    /// allocates one flat of the whole length and copies the leaves in
+    /// order (iteratively, however deep the rope), then publishes it with
+    /// a Release store; two racing flatteners both succeed and one pointer
+    /// wins, the other's flat being garbage. A borrow of the text
+    /// (`StrRef::as_str`) needs this first.
+    pub fn flatten_string(&mut self, string: HeapPtr) -> HeapPtr {
+        // SAFETY: the caller holds a live string.
+        let source = unsafe { StrRef::new_unchecked(string) };
+        if let Some((flat, _)) = source.flat() {
+            return flat.ptr();
+        }
+        let flat = self.alloc_flat_copy(source);
+        source.publish_flat(flat);
+        flat.ptr()
+    }
+
+    /// `left` then `right`: a rope when the result is
+    /// [`STR_SHARE_THRESHOLD`] bytes or more (both operands non-empty), else
+    /// a flat copy. An empty operand yields the other operand itself.
+    pub fn concat_str(&mut self, left: HeapPtr, right: HeapPtr) -> HeapPtr {
+        // SAFETY: the caller holds two live strings.
+        let (l, r) = unsafe { (StrRef::new_unchecked(left), StrRef::new_unchecked(right)) };
+        if l.is_empty() {
+            return right;
+        }
+        if r.is_empty() {
+            return left;
+        }
+        let byte_len = l.byte_len() + r.byte_len();
+        if byte_len >= STR_SHARE_THRESHOLD {
+            let ptr = self.alloc_string_cell(ROPE_DESC, granule_align(ROPE_BYTES as usize));
+            // SAFETY: a fresh rope cell; both operands are live.
+            return unsafe { StrRef::init_rope(ptr, l, r) }.ptr();
+        }
+        let ptr = self.alloc_string_cell(STR_DESC, str_cell_bytes(byte_len));
+        // SAFETY: a fresh flat cell sized for both texts.
+        unsafe { StrRef::init_concat(ptr, l, r) }.ptr()
+    }
+
+    /// The bytes `bytes` (on char boundaries) of `string`: the string
+    /// itself for its whole range, a view when the piece is
+    /// [`STR_SHARE_THRESHOLD`] bytes or more, else a flat copy. A view's base
+    /// is always a flat: a rope is flattened first, and a view of a view
+    /// points at the base with the offsets added.
+    pub fn substring(&mut self, string: HeapPtr, bytes: Range<usize>) -> HeapPtr {
+        // SAFETY: the caller holds a live string.
+        let source = unsafe { StrRef::new_unchecked(string) };
+        assert!(
+            bytes.start <= bytes.end && bytes.end <= source.byte_len(),
+            "a substring lies inside its string"
+        );
+        if bytes.start == 0 && bytes.end == source.byte_len() {
+            return string;
+        }
+        self.flatten_string(string);
+        let (base, offset) = source.flat().expect("just flattened");
+        let text = source.as_str();
+        let char_len = chars_in_bytes(text, source.char_len(), bytes.clone());
+        if bytes.len() < STR_SHARE_THRESHOLD {
+            return self.alloc_string(&text[bytes]);
+        }
+        let ptr = self.alloc_string_cell(VIEW_DESC, granule_align(VIEW_BYTES as usize));
+        let range = offset + bytes.start..offset + bytes.end;
+        // SAFETY: a fresh view cell; `base` is the live flat holding the
+        // bytes, and the range lies inside it on char boundaries.
+        unsafe { StrRef::init_view(ptr, base, range, char_len) }.ptr()
     }
 
     /// Allocate a list whose elements have static type `element_ty`.
@@ -708,6 +798,21 @@ pub trait TlabHolder {
 
     fn alloc_string(&mut self, s: impl AsRef<str>) -> HeapPtr {
         self.tlab_mut().alloc_string(s)
+    }
+
+    /// See [`Tlab::flatten_string`].
+    fn flatten_string(&mut self, string: HeapPtr) -> HeapPtr {
+        self.tlab_mut().flatten_string(string)
+    }
+
+    /// See [`Tlab::concat_str`].
+    fn concat_str(&mut self, left: HeapPtr, right: HeapPtr) -> HeapPtr {
+        self.tlab_mut().concat_str(left, right)
+    }
+
+    /// See [`Tlab::substring`].
+    fn substring(&mut self, string: HeapPtr, bytes: Range<usize>) -> HeapPtr {
+        self.tlab_mut().substring(string, bytes)
     }
 
     fn alloc_array(&mut self, element_ty: bex_vm_types::RealizedTy, values: Vec<Value>) -> HeapPtr {
@@ -1394,5 +1499,204 @@ mod tests {
                 other => panic!("cell for {key} holds {other:?}"),
             }
         }
+    }
+}
+
+/// Ropes and views: the sharing kinds `concat_str` and `substring` make,
+/// and their flattening.
+#[cfg(test)]
+mod string_kinds {
+    use bex_vm_types::types::{STR_SHARE_THRESHOLD, StrKind, StrRef};
+
+    use super::*;
+
+    fn fresh() -> Tlab {
+        Tlab::new(BexHeap::new(vec![]))
+    }
+
+    /// The string at `ptr`; nothing collects during these tests.
+    fn str_at(ptr: HeapPtr) -> StrRef<'static> {
+        // SAFETY: a string this test allocated and keeps.
+        unsafe { StrRef::of(ptr) }.expect("a string")
+    }
+
+    #[test]
+    fn concat_makes_a_rope_at_the_threshold_and_a_flat_below_it() {
+        let mut tlab = fresh();
+        let left = tlab.alloc_string("a".repeat(15));
+        let short = tlab.alloc_string("b".repeat(16));
+        let long = tlab.alloc_string("b".repeat(17));
+        let below = str_at(tlab.concat_str(left, short));
+        assert_eq!(below.byte_len(), 31);
+        assert_eq!(below.kind(), StrKind::Flat, "31 bytes: copied");
+        assert_eq!(below, format!("{}{}", "a".repeat(15), "b".repeat(16)).as_str());
+        let at = str_at(tlab.concat_str(left, long));
+        assert_eq!(at.byte_len(), STR_SHARE_THRESHOLD);
+        assert_eq!(at.kind(), StrKind::Rope, "32 bytes: shared");
+        assert!(!at.is_borrowable(), "a fresh rope is not flattened");
+        assert_eq!(at.rope_halves().map(|(l, r)| (l.ptr(), r.ptr())), Some((left, long)));
+        assert_eq!(at, format!("{}{}", "a".repeat(15), "b".repeat(17)).as_str());
+    }
+
+    #[test]
+    fn concat_with_an_empty_operand_is_the_other_operand() {
+        let mut tlab = fresh();
+        let empty = tlab.alloc_string("");
+        let long = tlab.alloc_string("x".repeat(40));
+        assert_eq!(tlab.concat_str(empty, long), long);
+        assert_eq!(tlab.concat_str(long, empty), long);
+        assert_eq!(tlab.concat_str(empty, empty), empty);
+    }
+
+    #[test]
+    fn a_rope_flattens_once_into_one_flat() {
+        let mut tlab = fresh();
+        let left = tlab.alloc_string("héllo, ".repeat(3));
+        let right = tlab.alloc_string("wörld!".repeat(3));
+        let rope = tlab.concat_str(left, right);
+        let string = str_at(rope);
+        assert_eq!(string.kind(), StrKind::Rope);
+        assert_eq!(string.byte_len(), 8 * 3 + 7 * 3);
+        assert_eq!(string.char_len(), 7 * 3 + 6 * 3, "char_len is summed, not scanned");
+        let flat = tlab.flatten_string(rope);
+        assert_ne!(flat, rope);
+        assert_eq!(str_at(flat).kind(), StrKind::Flat);
+        assert_eq!(string.rope_flat().map(StrRef::ptr), Some(flat), "published into the rope");
+        assert!(string.is_borrowable());
+        let expected = format!("{}{}", "héllo, ".repeat(3), "wörld!".repeat(3));
+        assert_eq!(string.as_str(), expected);
+        assert_eq!(str_at(flat).as_str(), expected);
+        assert_eq!(str_at(flat).char_len(), string.char_len());
+        assert_eq!(tlab.flatten_string(rope), flat, "flattened once");
+        assert_eq!(tlab.flatten_string(flat), flat, "a flat is its own flat");
+    }
+
+    #[test]
+    fn a_balanced_rope_flattens_in_order() {
+        let mut tlab = fresh();
+        let leaves: Vec<HeapPtr> = (0..64)
+            .map(|i| tlab.alloc_string(format!("<{i:02}>")))
+            .collect();
+        let mut level = leaves;
+        while level.len() > 1 {
+            level = level
+                .chunks(2)
+                .map(|pair| tlab.concat_str(pair[0], pair[1]))
+                .collect();
+        }
+        let root = level[0];
+        let expected: String = (0..64).map(|i| format!("<{i:02}>")).collect();
+        assert_eq!(str_at(root).kind(), StrKind::Rope);
+        assert_eq!(str_at(root).to_owned_string(), expected, "walked without flattening");
+        tlab.flatten_string(root);
+        assert_eq!(str_at(root).as_str(), expected);
+    }
+
+    #[test]
+    fn a_ten_thousand_deep_rope_flattens_without_recursion() {
+        let mut tlab = fresh();
+        let piece = tlab.alloc_string("0123456789abcdef");
+        let mut acc = tlab.concat_str(piece, piece);
+        for _ in 0..10_000 {
+            acc = tlab.concat_str(acc, piece);
+        }
+        let string = str_at(acc);
+        assert_eq!(string.kind(), StrKind::Rope);
+        assert_eq!(string.byte_len(), 16 * 10_002);
+        assert_eq!(string.hash(), bex_vm_types::map_string_hash(&"0123456789abcdef".repeat(10_002)).max(1), "hashed leaf by leaf");
+        let flat = tlab.flatten_string(acc);
+        assert_eq!(str_at(flat).byte_len(), 16 * 10_002);
+        assert_eq!(string.as_str(), "0123456789abcdef".repeat(10_002));
+        assert_eq!(str_at(flat).cached_hash(), string.cached_hash(), "the hash travels to the flat");
+    }
+
+    #[test]
+    fn substring_makes_a_view_at_the_threshold_and_a_flat_below_it() {
+        let mut tlab = fresh();
+        let text = "abcdefghij".repeat(10);
+        let base = tlab.alloc_string(&text);
+        let below = str_at(tlab.substring(base, 5..36));
+        assert_eq!(below.byte_len(), 31);
+        assert_eq!(below.kind(), StrKind::Flat, "31 bytes: copied");
+        assert_eq!(below.as_str(), &text[5..36]);
+        let at = str_at(tlab.substring(base, 5..37));
+        assert_eq!(at.byte_len(), STR_SHARE_THRESHOLD);
+        assert_eq!(at.kind(), StrKind::View, "32 bytes: shared");
+        assert_eq!(at.view_base().map(|(b, o)| (b.ptr(), o)), Some((base, 5)));
+        assert_eq!(at.as_str(), &text[5..37]);
+        assert_eq!(tlab.substring(base, 0..text.len()), base, "the whole string is itself");
+    }
+
+    #[test]
+    fn a_view_of_a_view_or_a_rope_points_at_a_flat() {
+        let mut tlab = fresh();
+        let text = "abcdefghij".repeat(10);
+        let base = tlab.alloc_string(&text);
+        let outer = tlab.substring(base, 10..90);
+        let inner = str_at(tlab.substring(outer, 20..60));
+        assert_eq!(inner.kind(), StrKind::View);
+        assert_eq!(inner.view_base().map(|(b, o)| (b.ptr(), o)), Some((base, 30)));
+        assert_eq!(inner.as_str(), &text[30..70]);
+
+        let left = tlab.alloc_string(&text[..50]);
+        let right = tlab.alloc_string(&text[50..]);
+        let rope = tlab.concat_str(left, right);
+        let of_rope = str_at(tlab.substring(rope, 40..80));
+        assert_eq!(of_rope.kind(), StrKind::View);
+        let flat = str_at(rope).rope_flat().expect("slicing a rope flattens it");
+        assert_eq!(of_rope.view_base().map(|(b, o)| (b.ptr(), o)), Some((flat.ptr(), 40)));
+        assert_eq!(of_rope.as_str(), &text[40..80]);
+    }
+
+    #[test]
+    fn hash_and_equality_agree_across_kinds() {
+        let mut tlab = fresh();
+        let text = "日本語テキスト, héllo wörld; ".repeat(4);
+        let flat = tlab.alloc_string(&text);
+        let (head, tail) = text.split_at(text.len() / 2 - 1);
+        let (l, r) = (tlab.alloc_string(head), tlab.alloc_string(tail));
+        let rope = tlab.concat_str(l, r);
+        let padded = tlab.alloc_string(format!("<<{text}>>"));
+        let view = tlab.substring(padded, 2..2 + text.len());
+        let (flat, rope, view) = (str_at(flat), str_at(rope), str_at(view));
+        assert_eq!(rope.kind(), StrKind::Rope);
+        assert_eq!(view.kind(), StrKind::View);
+        let expected = bex_vm_types::map_string_hash(&text).max(1);
+        assert_eq!(flat.hash(), expected);
+        assert_eq!(rope.hash(), expected, "an unflattened rope hashes its leaves");
+        assert_eq!(view.hash(), expected, "a view hashes its sub-slice");
+        assert_eq!(flat, rope);
+        assert_eq!(rope, view);
+        assert_eq!(view, flat);
+        assert_eq!(rope.cmp(&flat), std::cmp::Ordering::Equal);
+        let other = str_at(tlab.alloc_string(format!("{text}!")));
+        assert_ne!(rope, other);
+        assert!(rope < other, "a prefix orders first, leaf-wise");
+        assert!(other > view);
+        assert_eq!(rope.to_bex_str().as_str(), text);
+        assert_eq!(rope.to_string(), text);
+        assert_eq!(format!("{rope:?}"), format!("{text:?}"));
+    }
+
+    #[test]
+    fn char_len_is_right_for_non_ascii_through_every_kind() {
+        let mut tlab = fresh();
+        let l = tlab.alloc_string("日本語テキスト日本語テキスト");
+        let r = tlab.alloc_string("héllo wörld, héllo wörld");
+        let rope = str_at(tlab.concat_str(l, r));
+        assert_eq!(rope.kind(), StrKind::Rope);
+        assert_eq!(rope.byte_len(), 14 * 3 + 28);
+        assert_eq!(rope.char_len(), 14 + 24);
+        assert!(!rope.is_ascii());
+        let view = str_at(tlab.substring(rope.ptr(), 3..3 + 39 + 6));
+        assert_eq!(view.kind(), StrKind::View);
+        assert_eq!(view.as_str(), "本語テキスト日本語テキストhéllo");
+        assert_eq!(view.char_len(), 13 + 5);
+        assert_eq!(view.char_to_byte(13), 13 * 3);
+        assert_eq!(view.char_slice(13..18), "héllo");
+        let copy = str_at(tlab.substring(view.ptr(), 0..3 * 3));
+        assert_eq!(copy.kind(), StrKind::Flat);
+        assert_eq!(copy.as_str(), "本語テ");
+        assert_eq!(copy.char_len(), 3);
     }
 }

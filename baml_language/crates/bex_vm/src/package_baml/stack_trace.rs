@@ -18,13 +18,15 @@ impl BamlClassErrorsStackTrace for PackageBamlImpl {
             })
             .collect();
 
-        let out = format_traceback(frame_views.iter().map(|frame| {
-            (
-                frame.file(vm),
-                frame.line() as usize,
-                frame.function_name(vm),
-            )
-        }));
+        let frames: Vec<_> = frame_views
+            .iter()
+            .map(|frame| (frame.file(vm), frame.line() as usize, frame.function_name(vm)))
+            .collect();
+        let out = format_traceback(
+            frames
+                .iter()
+                .map(|(file, line, function)| (&**file, *line, &**function)),
+        );
 
         out.trim_end().to_string()
     }

@@ -455,6 +455,7 @@ impl BexVm {
     /// re-derived the map's shape and slot kinds from its type on every call.
     #[inline]
     pub fn map_get_known(&mut self, map: Value, descriptor: u32, key: Value) -> Option<Value> {
+        self.flatten_str(&key);
         let (map, _, pos) = self.locate_string_key(map, descriptor, key)?;
         let Some(pos) = pos else {
             return Some(Value::NULL);
@@ -476,6 +477,9 @@ impl BexVm {
         key: Value,
         value: SlotValue,
     ) -> Option<Value> {
+        // A key is flattened on entry: the map keeps it, and every later
+        // lookup borrows it.
+        self.flatten_str(&key);
         let (map, hash, pos) = self.locate_string_key(map, descriptor, key)?;
         let guard = map.lock(Access::Shared);
         let previous = match pos {

@@ -110,11 +110,19 @@ pub type EntryId = u64;
 /// Hash a native string key with the same framing as the VM's `Hash` driver.
 pub fn map_string_hash(key: &str) -> u64 {
     use std::hash::Hasher;
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    hasher.write(&[5]);
-    hasher.write(&(key.len() as u64).to_le_bytes());
+    let mut hasher = map_string_hasher(key.len());
     hasher.write(key.as_bytes());
     hasher.finish()
+}
+
+/// The hasher of [`map_string_hash`] with the framing of a `byte_len`-byte
+/// key written: feed it the bytes, in any chunking, and finish.
+pub fn map_string_hasher(byte_len: usize) -> std::collections::hash_map::DefaultHasher {
+    use std::hash::Hasher;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hasher.write(&[5]);
+    hasher.write(&(byte_len as u64).to_le_bytes());
+    hasher
 }
 
 /// An entry read out of a map, its value boxed as a local.

@@ -222,7 +222,7 @@ impl BexVm {
             None
         } else {
             let name = self.as_string(&event_name)?;
-            Some(std::sync::Arc::<str>::from(name.as_str()))
+            Some(std::sync::Arc::<str>::from(name.to_owned_string()))
         };
         let at = Self::record_frame(frame);
         self.record_log_at(at, level, name.clone(), data);

@@ -2927,7 +2927,7 @@ impl BexVm {
         let level = map
             .get("level")
             .ok_or(VmInternalError::InvalidLogEvent("missing level"))?;
-        let level = match self.as_string(level)?.as_str() {
+        let level = match self.as_string(level)?.text().as_ref() {
             "info" => LogLevel::Info,
             "debug" => LogLevel::Debug,
             "warn" => LogLevel::Warn,
@@ -2939,7 +2939,7 @@ impl BexVm {
             .filter(|value| !value.is_null() && !value.is_omitted())
             .map(|value| {
                 self.as_string(value)
-                    .map(|name| Arc::<str>::from(name.as_str()))
+                    .map(|name| Arc::<str>::from(name.text()))
             })
             .transpose()?;
         let data = *map
@@ -3983,6 +3983,17 @@ impl BexVm {
         })
     }
 
+    /// The flat holding `value`'s text, a rope flattened first (see
+    /// `Tlab::flatten_string`); `None` when `value` is not a string. A
+    /// borrow of the text (`as_string(..).as_str()`) needs this first;
+    /// copies out, hashing and comparison do not.
+    #[inline]
+    pub fn flatten_str(&mut self, value: &Value) -> Option<HeapPtr> {
+        let ptr = value.as_object_ptr()?;
+        self.str_at(ptr)?;
+        Some(self.tlab.flatten_string(ptr))
+    }
+
     /// The string at `ptr`, if it is one.
     #[inline]
     pub fn str_at(&self, ptr: HeapPtr) -> Option<StrRef<'_>> {
@@ -4281,7 +4292,7 @@ impl BexVm {
             baml_type::Literal::Int(n) => value.as_int() == Some(*n),
             baml_type::Literal::Bool(b) => value.as_bool() == Some(*b),
             baml_type::Literal::String(s) => match value.as_object_ptr() {
-                Some(ptr) => self.str_at(ptr).is_some_and(|v| v.as_str() == &**s),
+                Some(ptr) => self.str_at(ptr).is_some_and(|v| v == &**s),
                 None => false,
             },
             baml_type::Literal::Bigint(n) => match value.as_object_ptr() {
@@ -4331,7 +4342,7 @@ impl BexVm {
             match self.get_object(ptr) {
                 Object::Shared(SharedKind::Str) => {
                     return Some(literal(baml_type::Literal::String(
-                        self.expect_str(ptr).as_str().to_owned(),
+                        self.expect_str(ptr).to_owned_string(),
                     )));
                 }
                 Object::Bigint(n) => {
@@ -9720,12 +9731,10 @@ impl BexVm {
             // object/object string-concatenation case.
             self.bigint_binop(op, l, r)?
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
-            let ls = self.as_string(&left)?;
-            let rs = self.as_string(&right)?;
-            let mut result = String::with_capacity(ls.byte_len() + rs.byte_len());
-            result.push_str(ls.as_str());
-            result.push_str(rs.as_str());
-            let value = Value::object(self.alloc_string(result));
+            let ls = self.as_string(&left)?.ptr();
+            let rs = self.as_string(&right)?.ptr();
+            // A rope when the result is long, else a flat copy.
+            let value = Value::object(self.concat_str(ls, rs));
             // One instruction can build a string of any size.
             self.settle();
             value
@@ -9741,26 +9750,35 @@ impl BexVm {
         Ok(result)
     }
 
-    /// Allocate the result of a `ConcatStrings`, interpreted or compiled.
-    pub(crate) fn alloc_joined_string(&mut self, result: String) -> Value {
-        let value = Value::object(self.alloc_string(result));
+    /// The strings `parts` concatenated left to right (`ConcatStrings`:
+    /// template interpolation, interpreted or compiled). One flat when the
+    /// result is short; else each join is a `+` (a rope once the running
+    /// result is long), so interpolating onto an accumulator in a loop
+    /// stays linear.
+    pub(crate) fn concat_parts(&mut self, parts: &[Value]) -> Result<Value, VmInternalError> {
+        let mut strings: SmallVec<[HeapPtr; 16]> = SmallVec::with_capacity(parts.len());
+        let mut byte_len = 0;
+        for part in parts {
+            let string = self.as_string(part)?;
+            byte_len += string.byte_len();
+            strings.push(string.ptr());
+        }
+        let value = if byte_len < bex_vm_types::types::STR_SHARE_THRESHOLD {
+            let mut joined = String::with_capacity(byte_len);
+            for &string in &strings {
+                self.expect_str(string).push_to(&mut joined);
+            }
+            Value::object(self.alloc_string(joined))
+        } else {
+            let mut result = strings[0];
+            for &string in &strings[1..] {
+                result = self.concat_str(result, string);
+            }
+            Value::object(result)
+        };
         // One instruction can build a string of any size.
         self.settle();
-        value
-    }
-
-    /// The strings `parts` joined left to right (`ConcatStrings`).
-    pub(crate) fn join_strings(&self, parts: &[Value]) -> Result<String, VmInternalError> {
-        let mut strings: smallvec::SmallVec<[StrRef<'_>; 16]> =
-            smallvec::SmallVec::with_capacity(parts.len());
-        for part in parts {
-            strings.push(self.as_string(part)?);
-        }
-        let mut joined = String::with_capacity(strings.iter().map(|s| s.byte_len()).sum());
-        for string in &strings {
-            joined.push_str(string.as_str());
-        }
-        Ok(joined)
+        Ok(value)
     }
 
     /// Compact bytecode dispatch loop.
@@ -10306,10 +10324,11 @@ impl BexVm {
                     OpCode::ConcatStrings => {
                         let n = { read_u32_unchecked(code, pc) as usize };
                         let first = StackIndex::from_raw(self.stack.len() - n);
-                        let result = self.join_strings(&self.stack[first..])?;
+                        let parts: SmallVec<[Value; 16]> =
+                            self.stack[first..].iter().copied().collect();
+                        let value = self.concat_parts(&parts)?;
                         // SAFETY: the encoder validates the instruction's stack effect.
                         self.stack.truncate_suffix(n);
-                        let value = self.alloc_joined_string(result);
                         self.push_stack(value)?;
                     }
 

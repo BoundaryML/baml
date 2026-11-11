@@ -515,7 +515,7 @@ fn start_span_impl(
             btel_types::FunctionMetadata {
                 function_id: vm
                     .heap
-                    .named_span_function_id(name.as_str())
+                    .named_span_function_id(&name.text())
                     .map_err(|_| invalid("function identities exhausted"))?,
                 definition_key: Some(btel_types::DefinitionKey(format!("manual:{name}"))),
                 fqn: name.to_string(),

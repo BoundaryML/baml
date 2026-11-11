@@ -1,16 +1,35 @@
 use std::ops::Range;
 
+use bex_heap::TlabHolder as _;
 use bex_vm_types::{
     StrRef,
     layout::{Fault, ListOf, Lists, ObjPtr, RawWord, Strings},
     types::Value,
 };
 
-use super::{BamlClassString, PackageBamlImpl};
+use super::{BamlClassString, NativeCallResult, PackageBamlImpl};
 use crate::{
+    BexVm,
     array_index::{int_len, resolve_index, slice_bounds},
     errors::{VmBamlError, VmRustFnError},
 };
+
+/// The receiver trimmed by `trim`, sharing its storage: a view when the
+/// kept range is long, a flat copy otherwise (`Tlab::substring`). The
+/// generated glue would copy the native's `String` out every time.
+fn trimmed(vm: &mut BexVm, args: &[Value], trim: fn(&str) -> &str) -> NativeCallResult {
+    vm.flatten_str(&args[0]);
+    let (string, kept) = match vm.as_string(&args[0]) {
+        Ok(string) => {
+            let text = string.as_str();
+            let part = trim(text);
+            let start = part.as_ptr() as usize - text.as_ptr() as usize;
+            (string.ptr(), start..start + part.len())
+        }
+        Err(error) => return NativeCallResult::Error(error.into()),
+    };
+    NativeCallResult::Done(Value::object(vm.substring(string, kept)))
+}
 
 impl BamlClassString for PackageBamlImpl {
     #[expect(clippy::cast_possible_wrap)]
@@ -36,6 +55,21 @@ impl BamlClassString for PackageBamlImpl {
 
     fn trim_end(string: &str) -> String {
         string.trim_end().to_owned()
+    }
+
+    // The glue for the three is overridden to share the receiver's storage
+    // (see `trimmed`); the bodies above stay the trait's required methods.
+
+    fn __glue_trim(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        trimmed(vm, args, str::trim)
+    }
+
+    fn __glue_trim_start(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        trimmed(vm, args, str::trim_start)
+    }
+
+    fn __glue_trim_end(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        trimmed(vm, args, str::trim_end)
     }
 
     fn includes(string: &str, search: &str) -> bool {

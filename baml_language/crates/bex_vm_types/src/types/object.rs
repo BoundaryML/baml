@@ -135,7 +135,8 @@ pub enum SharedKind {
     Instance,
     List,
     Map,
-    /// A flat string cell, read through [`StrRef`](crate::types::StrRef).
+    /// A string cell of any kind (flat, rope or view), read through
+    /// [`StrRef`](crate::types::StrRef).
     Str,
 }
 
