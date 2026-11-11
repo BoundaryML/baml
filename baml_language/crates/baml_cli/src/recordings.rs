@@ -13,7 +13,7 @@ use std::{
 };
 
 use anyhow::Context as _;
-use baml_query_btel::{Budgets, Error, Index, IndexOptions, QueryRequest, Status, catalog};
+use baml_query_btel::{Budgets, Index, IndexOptions, QueryRequest, Status, catalog};
 use bcs_api::{
     credentials::{Authentication, RequestAuthorization},
     diagnostics::{Context as DiagnosticContext, CredentialSource, Operation, Outcome as Failure},
@@ -62,13 +62,9 @@ pub(crate) const QUERY_HELP: &str = "\
 BAML values navigate with brackets:
   SELECT output_value['items'][0]['name'] FROM spans WHERE input_args['customer']['age'] >= 30
 
-Exit codes:
-  0  complete
-  1  incomplete: rows returned, some evidence was unavailable
-  2  invalid SQL, or a relation you may not read
-  3  a budget (--max-rows, --max-wall) was exhausted
-  4  cancelled
-  5  any other failure
+A query that returns rows succeeds even when they are partial: some evidence
+was unavailable, or a budget (--max-rows, --max-wall) ran out. The outcome's
+`status` (`complete`, `incomplete`, `truncated`) says which.
 
 Examples:
   Local recordings:
@@ -348,20 +344,10 @@ impl Query<'_> {
             Ok(result) => result,
             Err(error) => {
                 crate::reporter::print_error(&error);
-                let status = match error {
-                    Error::Sql(_) => ExitCode::QueryInvalid,
-                    Error::Budget(_) => ExitCode::QueryBudgetExhausted,
-                    _ => ExitCode::QueryFailed,
-                };
-                return Ok(Outcome::new(QueryReport::empty(), status));
+                return Ok(Outcome::new(QueryReport::empty(), ExitCode::Failure));
             }
         };
         let outcome = &result.outcome;
-        let status = match outcome.status {
-            Status::Complete => ExitCode::Success,
-            Status::Incomplete => ExitCode::QueryIncomplete,
-            Status::Truncated => ExitCode::QueryBudgetExhausted,
-        };
         let indexed: i64 = outcome.recordings.iter().map(|r| r.indexed_sequence).sum();
         eprintln!(
             "{} row(s); {}; {} recording(s), {indexed} file(s) indexed{}",
@@ -399,7 +385,7 @@ impl Query<'_> {
             outcome: serde_json::to_value(&result.outcome)?,
             rows: result.rows,
         };
-        Ok(Outcome::new(report, status))
+        Ok(Outcome::ok(report))
     }
 
     #[allow(clippy::print_stderr, reason = "the outcome summary is status output")]
@@ -448,9 +434,14 @@ impl Query<'_> {
                 crate::reporter::print_warning(
                     "Cloud query results are incomplete because some requested data was unavailable.",
                 );
-                ExitCode::QueryIncomplete
+                ExitCode::Success
             }
-            Some("truncated") => ExitCode::QueryBudgetExhausted,
+            Some("truncated") => {
+                crate::reporter::print_warning(
+                    "Cloud query results are truncated because a budget (--max-rows, --max-wall) was exhausted.",
+                );
+                ExitCode::Success
+            }
             Some("failed") => {
                 let error = &report.outcome["error"];
                 match (error["code"].as_str(), error["message"].as_str()) {
@@ -467,9 +458,9 @@ impl Query<'_> {
                     )),
                     _ => crate::reporter::print_error(format_args!("Cloud query failed: {error}")),
                 }
-                ExitCode::QueryFailed
+                ExitCode::Failure
             }
-            Some("cancelled") => ExitCode::QueryCancelled,
+            Some("cancelled") => ExitCode::Failure,
             _ => anyhow::bail!("Boundary returned an unknown query outcome"),
         };
         Ok(Outcome::new(report, status))

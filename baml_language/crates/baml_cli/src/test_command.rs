@@ -429,7 +429,7 @@ impl TestArgs {
                 "no .baml files found in {}",
                 session.root().display()
             ));
-            return Ok(crate::ExitCode::NoTestsRun);
+            return Ok(crate::ExitCode::Failure);
         }
 
         // Warm `--list` fast path. The fully-expanded test leaf names are a pure
@@ -568,13 +568,8 @@ impl TestArgs {
                 // tests, which returns Null) is a real error — don't silently
                 // continue as if there were no testset tests.
                 crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
-                return Ok(
-                    if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error) != 0 {
-                        crate::ExitCode::TestFailure
-                    } else {
-                        crate::ExitCode::Failure
-                    },
-                );
+                finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error);
+                return Ok(crate::ExitCode::Failure);
             }
         };
 
@@ -585,22 +580,15 @@ impl TestArgs {
                     Ok(names) => names,
                     Err(e) => {
                         crate::reporter::print_error(format_args!("failed to list tests: {e}"));
-                        return Ok(
-                            if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error)
-                                != 0
-                            {
-                                crate::ExitCode::TestFailure
-                            } else {
-                                crate::ExitCode::Failure
-                            },
-                        );
+                        finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error);
+                        return Ok(crate::ExitCode::Failure);
                     }
                 },
                 None => Vec::new(),
             };
 
             if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Success) != 0 {
-                return Ok(crate::ExitCode::TestFailure);
+                return Ok(crate::ExitCode::Failure);
             }
 
             // Write-through the discovery cache (+ DEV_BAML_BUILD_CACHE_VERIFY=always oracle) so a
@@ -684,7 +672,7 @@ impl TestArgs {
 
         if total == 0 {
             reporter.finish("Finished", "no tests selected");
-            return Ok(crate::ExitCode::NoTestsRun);
+            return Ok(crate::ExitCode::Success);
         }
 
         let line = if command_failed && tolerated > 0 {
@@ -704,7 +692,7 @@ impl TestArgs {
             // `reporter.finish` styles success — print as an error so the
             // bold-red `Error:` carries the visual weight of "tests failed".
             crate::reporter::print_error(format_args!("test failures: {line}"));
-            Ok(crate::ExitCode::TestFailure)
+            Ok(crate::ExitCode::Failure)
         } else {
             reporter.finish("Finished", line);
             Ok(crate::ExitCode::Success)
@@ -888,7 +876,7 @@ impl TestArgs {
 fn list_tests(reporter: &Reporter, names: Vec<String>, report: &mut TestReport) -> ExitCode {
     if names.is_empty() {
         reporter.finish("Finished", "no tests selected");
-        return ExitCode::NoTestsRun;
+        return ExitCode::Success;
     }
     reporter.status("Selected", format!("{} test(s)", names.len()));
     report.tests = names
@@ -1322,7 +1310,7 @@ mod tests {
         // A no-match selector aggregates to a vacuous `pass` over zero tests.
         // Folding it must leave every counter at zero (so the caller's
         // `total == 0` guard fires "no tests selected") and must NOT print a
-        // green aggregate pass line contradicting the non-zero exit (B-628).
+        // green aggregate pass line when nothing ran (B-628).
         let parsed =
             parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
         assert_eq!(consume(parsed), (0, 0, 0, 0, false));

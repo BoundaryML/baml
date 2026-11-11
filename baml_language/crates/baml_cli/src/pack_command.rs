@@ -338,7 +338,7 @@ impl PackArgs {
     /// Validate flag combinations the clap-side `Args` derive can't catch.
     fn validate_flags(&self) -> Result<()> {
         if self.expression.is_some() {
-            anyhow::bail!(
+            crate::usage_bail!(
                 "expression mode (`-e` / `--expression`) is not packageable; \
                  pass a positional `<TARGET>` or `-f <NAME>` instead."
             );
@@ -349,7 +349,7 @@ impl PackArgs {
         validate_file_project_flags(self.file.as_deref(), self.project_dir.as_deref())?;
         if let Some(target) = self.target.as_deref() {
             if looks_like_path(target) {
-                anyhow::bail!(
+                crate::usage_bail!(
                     "positional `<TARGET>` is a function name, not a file path. \
                      For a single-file source, use `--file {target}` and pass the \
                      function via `-f <NAME>`. For example:\n\
@@ -357,7 +357,7 @@ impl PackArgs {
                 );
             }
             if !self.functions.is_empty() {
-                anyhow::bail!(
+                crate::usage_bail!(
                     "positional `<TARGET>` and `-f/--function` are mutually exclusive — \
                      use one or the other (positional packs a single-entry binary; \
                      `-f` produces a subcommand binary)."
@@ -365,7 +365,7 @@ impl PackArgs {
             }
         }
         if self.target.is_none() && self.functions.is_empty() {
-            anyhow::bail!(
+            crate::usage_bail!(
                 "no target specified. Pass a positional `<TARGET>` to pack one \
                  function as the binary's only entry point, or one or more \
                  `-f <NAME>` flags to pack a subcommand binary."
@@ -377,7 +377,7 @@ impl PackArgs {
             );
         }
         if self.rust && self.resolved_target_triple()? != release_host_target_triple()? {
-            anyhow::bail!("`--rust` builds for this machine only; drop `--target`");
+            crate::usage_bail!("`--rust` builds for this machine only; drop `--target`");
         }
         Ok(())
     }
@@ -418,7 +418,7 @@ impl PackArgs {
         reporter: &Reporter,
     ) -> Result<()> {
         let Some(workspace) = self.rust_workspace.as_deref() else {
-            anyhow::bail!(
+            crate::usage_bail!(
                 "`--rust` needs `--rust-workspace <DIR>`: the `baml_language` checkout \
                  whose `crates/bex_vm` the compiled bodies link against"
             );

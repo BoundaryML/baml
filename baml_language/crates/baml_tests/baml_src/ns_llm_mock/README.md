@@ -245,7 +245,7 @@ any server at all.
    aliases: `root.llm_mock.MockResponse.ok(...)`. Within `ns_llm_mock` itself the
    short names work.
 
-5. **Empty selections exit 5.** `crates/baml_cli/src/lib.rs:93-94`. If a whole
+5. **An empty selection passes without running anything.** If a whole
    group can be gated off (missing key), keep one always-registered leaf in it —
    see `preconditions` in `../ns_llm_live_smoke/live_smoke.baml`.
 

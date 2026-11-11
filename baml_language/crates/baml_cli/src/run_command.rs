@@ -376,6 +376,7 @@ impl RunArgs {
             input_source,
             input_flag,
         )
+        .map_err(|error| crate::UsageError::new(error.to_string()).into())
     }
 }
 
@@ -409,7 +410,7 @@ impl RunArgs {
             .filter_map(|(name, given)| given.then_some(*name))
             .collect();
         if used.len() > 1 {
-            anyhow::bail!(
+            crate::usage_bail!(
                 "{} are mutually exclusive dispatch modes — pick one.",
                 used.join(" and ")
             );
@@ -422,7 +423,7 @@ impl RunArgs {
 
         if self.expression.is_some() {
             if self.list {
-                anyhow::bail!(
+                crate::usage_bail!(
                     "`-e` is not compatible with `--list`. Expression mode \
                      evaluates an expression; `--list` enumerates targets — \
                      pick one."
@@ -481,7 +482,7 @@ impl RunArgs {
             // `<TARGET>` is always a function name; for a `.baml` source
             // use `--file`.
             if looks_like_path(target) {
-                anyhow::bail!(
+                crate::usage_bail!(
                     "positional `<TARGET>` is a function name, not a file path. \
                      For a single-file source, use `--file {target}` and pass the \
                      function via `-f <NAME>`. For example:\n\

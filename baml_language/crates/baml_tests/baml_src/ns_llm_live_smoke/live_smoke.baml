@@ -23,7 +23,7 @@
 // and trips rate limits.
 //
 // The always-registered `preconditions` leaf keeps a keyless `--profile live`
-// from selecting nothing, which exits 5 (crates/baml_cli/src/lib.rs:93-94).
+// from selecting nothing.
 //
 // Model ids are live-verified as of 2026-08-12; `claude-3-5-haiku-latest` and
 // `gemini-2.0-flash` both 404 now. Keep them current when this file is touched.

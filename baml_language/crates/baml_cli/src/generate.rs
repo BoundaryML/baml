@@ -204,13 +204,15 @@ impl AddGeneratorArgs {
                 generator.sdk_import_path = Some(import_path.to_string());
             }
             (OutputType::Go, Some(import_path)) => {
-                anyhow::bail!("invalid Go SDK import path `{import_path}`");
+                crate::usage_bail!("invalid Go SDK import path `{import_path}`");
             }
             (OutputType::Go, None) => {
-                anyhow::bail!("the Go generator requires `--sdk-import-path <MODULE>/baml_sdk`");
+                crate::usage_bail!(
+                    "the Go generator requires `--sdk-import-path <MODULE>/baml_sdk`"
+                );
             }
             (_, Some(_)) => {
-                anyhow::bail!("`--sdk-import-path` is only valid for the Go generator");
+                crate::usage_bail!("`--sdk-import-path` is only valid for the Go generator");
             }
             (_, None) => {}
         }

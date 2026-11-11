@@ -235,7 +235,7 @@ fn schema_invalid_sql_and_stdin() {
         &["local", "recordings", "query", "DELETE FROM spans"],
         &[],
     );
-    assert_eq!(invalid.status.code(), Some(2));
+    assert_eq!(invalid.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("read-only"));
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_baml-cli"))

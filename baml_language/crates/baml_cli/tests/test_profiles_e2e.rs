@@ -267,7 +267,8 @@ testset "integration" {
             "root.orders::unit::*",
         ],
     );
-    assert!(!contradictory.status.success());
+    assert!(contradictory.status.success());
+    assert!(!stdout(&contradictory).contains("root.orders"));
     assert!(!stdout(&contradictory).contains("failed to expand"));
 
     for exclude in ["*", "root", "root*"] {
@@ -275,7 +276,8 @@ testset "integration" {
             tmp.path(),
             &["test", "--list", "--no-profile", "-x", exclude],
         );
-        assert!(!excluded.status.success());
+        assert!(excluded.status.success());
+        assert!(!stdout(&excluded).contains("root.orders"));
         assert!(!stdout(&excluded).contains("failed to expand"));
     }
 }

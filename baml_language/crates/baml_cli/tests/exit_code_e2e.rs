@@ -183,7 +183,6 @@ fn generate_compilation_error_returns_nonzero_exit_code() {
         String::from_utf8_lossy(&output.stderr),
     );
 
-    // Verify the exit code is specifically 4 (ExitCode::Failure)
     assert_eq!(
         output.status.code(),
         Some(1),
@@ -955,9 +954,9 @@ fn test_compilation_error_returns_nonzero_exit_code() {
     );
 }
 
-/// `baml test` with no tests should return exit code 5 (`NoTestsRun`), not 0.
+/// `baml test` with no tests has nothing to fail, so it succeeds.
 #[test]
-fn test_no_tests_returns_specific_exit_code() {
+fn test_no_tests_succeeds() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
@@ -969,11 +968,10 @@ fn test_no_tests_returns_specific_exit_code() {
 
     let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
 
-    // NoTestsRun maps to exit code 5
     assert_eq!(
         output.status.code(),
-        Some(5),
-        "Expected exit code 5 for no tests found, got: {:?}\nstderr: {}",
+        Some(0),
+        "Expected exit code 0 for no tests found, got: {:?}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
     );
@@ -1125,8 +1123,8 @@ test "passes" {
 
     assert_eq!(
         output.status.code(),
-        Some(2),
-        "Expected TestFailure (2), got: {:?}\nstdout: {}\nstderr: {}",
+        Some(1),
+        "Expected exit code 1 for failing tests, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
@@ -1140,7 +1138,7 @@ test "passes" {
 
 /// A selector that matches no test must NOT print a green aggregate pass
 /// line: the aggregate of zero tests is a vacuous pass, but stdout that says
-/// PASS while the command exits 5 (`NoTestsRun`) misleads anything parsing it.
+/// PASS when nothing ran misleads anything parsing it.
 /// Regression for B-628.
 #[test]
 fn test_no_match_selector_does_not_print_pass() {
@@ -1171,11 +1169,10 @@ testset "suite" {
         ],
     );
 
-    // Exit-code semantics are preserved: no tests selected is exit 5.
     assert_eq!(
         output.status.code(),
-        Some(5),
-        "Expected NoTestsRun (5) for a no-match selector, got: {:?}\nstdout: {}\nstderr: {}",
+        Some(0),
+        "Expected exit code 0 for a no-match selector, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
@@ -1339,7 +1336,7 @@ test "fails" {
     );
     assert_eq!(
         failure.status.code(),
-        Some(2),
+        Some(1),
         "--log must preserve the test-failure exit code; stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&failure.stdout),
         String::from_utf8_lossy(&failure.stderr),
@@ -1444,7 +1441,7 @@ test "assert-equal-failure" {
     let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected test failure exit code for failing assert.equal, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
@@ -1498,7 +1495,7 @@ test "provider-failure" {
     let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected test failure exit code for thrown error, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
@@ -1647,7 +1644,7 @@ testset "hard" {
 
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected hard failing sibling testset to fail the command, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         stdout,
@@ -1680,7 +1677,7 @@ testset "suite" {
 
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected unfiltered failing testset to fail, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         stdout,
@@ -1722,7 +1719,7 @@ testset "suite" with AlwaysFail {
 
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected failing aggregate outcome to fail even with zero failed children, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
@@ -1751,7 +1748,7 @@ testset "suite" with testing.FailFast() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(output.status.code(), Some(2), "{combined}");
+    assert_eq!(output.status.code(), Some(1), "{combined}");
     assert!(
         combined.contains("FAIL root::suite::first fails"),
         "{combined}"
@@ -2680,10 +2677,10 @@ fn run_expr_takes_its_value_from_a_final_expression_or_its_returns() {
 }
 
 /// `baml test` reaches test discovery on a manifest-less `baml_src/`
-/// project — a project with no test blocks returns the `NoTestsRun` code (5),
+/// project: a project with no test blocks reports that no tests were selected,
 /// proving the loader accepted it rather than bailing on the missing manifest.
 #[test]
-fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
+fn test_without_baml_toml_using_baml_src_reaches_discovery() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
@@ -2698,9 +2695,14 @@ fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
 
     assert_eq!(
         output.status.code(),
-        Some(5),
-        "Expected NoTestsRun (5) on a manifest-less project, got: {:?}\nstderr: {}",
+        Some(0),
+        "Expected exit code 0 on a manifest-less project, got: {:?}\nstderr: {}",
         output.status.code(),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("no tests selected"),
+        "stderr: {}",
         String::from_utf8_lossy(&output.stderr),
     );
 }

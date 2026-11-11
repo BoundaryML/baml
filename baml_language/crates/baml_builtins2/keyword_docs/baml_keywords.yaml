@@ -1236,5 +1236,5 @@ query:
     RECURSIVE` walks span trees through `parent_span_id`. Discovery:
     `baml local recordings schema [TABLE]`. Output: `--output-format
     text|json|jsonl` (jsonl ends with an outcome frame). `baml cloud
-    recordings query` takes the same arguments against Boundary Cloud. Exit codes: 0 complete, 1 evidence-incomplete,
-    2 invalid SQL, 3 budget, 4 cancelled, 5 index/internal.
+    recordings query` takes the same arguments against Boundary Cloud. Exit codes: 0 rows returned (the outcome's
+    `status` says whether they are complete), 1 failure, 2 usage.

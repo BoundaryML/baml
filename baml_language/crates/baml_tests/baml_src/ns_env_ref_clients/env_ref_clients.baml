@@ -545,8 +545,7 @@ function live_env_ref_fallback_selection_answers() -> bool {
 }
 
 testset "live" with testing.Sequential() {
-    // Always registered: keeps `--profile live` from selecting nothing here,
-    // which exits 5 (crates/baml_cli/src/lib.rs:93-94).
+    // Always registered: keeps `--profile live` from selecting nothing here.
     test "env_ref_preconditions" {
         assert.is_true(true)
     }

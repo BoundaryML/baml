@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::path};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn cancelled_cloud_query_returns_the_cancellation_exit_code() {
+async fn cancelled_cloud_query_fails() {
     let server = MockServer::start().await;
     Mock::given(path("/v1/query"))
         .respond_with(|request: &Request| {
@@ -40,7 +40,7 @@ async fn cancelled_cloud_query_returns_the_cancellation_exit_code() {
         .env_remove("BOUNDARY_PROJECT")
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
     let result: Value = serde_json::from_slice(&output.stdout)
         .unwrap_or_else(|error| panic!("{error}: {output:?}"));
     assert_eq!(result["outcome"]["status"], "cancelled");

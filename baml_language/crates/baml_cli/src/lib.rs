@@ -54,53 +54,65 @@ pub(crate) mod util;
 
 use anyhow::Result;
 
-/// Process exit status. `0` success, `1` failure, `2` usage; higher codes are
-/// per command and documented in that command's help.
+/// Process exit status. Every command uses the same three; anything finer is
+/// in the command's output. `baml run` alone can also exit with the code the
+/// program chose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitCode {
     Success,
-    /// The command ran and failed: compile errors, an unformatted file, a
-    /// failing `run` target, a network error.
+    /// The command ran and failed: compile errors, failing tests, an
+    /// unformatted file, a failed query, a network error.
     Failure,
     /// The invocation was wrong: bad flags or arguments.
     Usage,
-    // `baml test`. Documented in `baml help test`.
-    /// All tests completed, but some required human evaluation.
-    HumanEvalRequired,
-    TestFailure,
-    TestCancelled,
-    NoTestsRun,
-    // `baml query`. Documented in `baml help query`; its `3` is a budget, not
-    // a cancelled test run.
-    /// The result is missing evidence: rows returned, completeness lost.
-    QueryIncomplete,
-    /// Invalid SQL, or a relation the caller is not authorized to read.
-    QueryInvalid,
-    /// A query budget (rows, wall-clock, decoded bytes) was exhausted.
-    QueryBudgetExhausted,
-    /// The query was cancelled before it completed.
-    QueryCancelled,
-    /// Any other query failure, including setup failures before execution.
-    QueryFailed,
+}
+
+impl ExitCode {
+    /// The status an error that escaped a command exits with.
+    pub fn for_error(error: &anyhow::Error) -> Self {
+        if error.is::<UsageError>() {
+            Self::Usage
+        } else {
+            Self::Failure
+        }
+    }
 }
 
 impl From<ExitCode> for u8 {
     fn from(exit_code: ExitCode) -> Self {
         match exit_code {
             ExitCode::Success => 0,
-            ExitCode::Failure | ExitCode::HumanEvalRequired => 1,
+            ExitCode::Failure => 1,
             ExitCode::Usage => 2,
-            ExitCode::TestFailure => 2,
-            ExitCode::TestCancelled => 3,
-            ExitCode::NoTestsRun => 5,
-            ExitCode::QueryIncomplete => 1,
-            ExitCode::QueryInvalid => 2,
-            ExitCode::QueryBudgetExhausted => 3,
-            ExitCode::QueryCancelled => 4,
-            ExitCode::QueryFailed => 5,
         }
     }
 }
+
+/// An invocation that is wrong in a way clap cannot express, such as flags
+/// that conflict only in combination. Exits like clap's own errors.
+#[derive(Debug)]
+pub struct UsageError(String);
+
+impl UsageError {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
+impl std::fmt::Display for UsageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for UsageError {}
+
+macro_rules! usage_bail {
+    ($($arg:tt)*) => {
+        return Err($crate::UsageError::new(format!($($arg)*)).into())
+    };
+}
+pub(crate) use usage_bail;
 
 impl From<ExitCode> for i32 {
     fn from(exit_code: ExitCode) -> Self {

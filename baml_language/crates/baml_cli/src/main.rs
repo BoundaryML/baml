@@ -38,7 +38,7 @@ fn main() {
         Ok(code) => code,
         Err(e) => {
             baml_cli::reporter::print_anyhow_error(&e);
-            baml_cli::ExitCode::Failure
+            baml_cli::ExitCode::for_error(&e)
         }
     };
     std::process::exit(exit_code.into());

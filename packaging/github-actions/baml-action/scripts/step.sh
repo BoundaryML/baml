@@ -47,7 +47,8 @@ run_test() {
   fi
   local status=0
   baml_in "$project" "${args[@]}" || status=$?
-  # 5 is `baml test`'s "no tests were found".
+  # Toolchains that predate the three-code scheme exit 5 for "no tests were
+  # found"; newer ones exit 0.
   if [[ $status -eq 5 ]]; then
     echo "::notice::baml test found no tests in $project"
     return 0

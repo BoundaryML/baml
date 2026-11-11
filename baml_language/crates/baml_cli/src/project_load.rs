@@ -23,7 +23,7 @@ pub(crate) fn validate_file_project_flags(
     project: Option<&Path>,
 ) -> Result<()> {
     if file.is_some() && project.is_some() {
-        anyhow::bail!(
+        crate::usage_bail!(
             "`--file` and `--project-dir` are mutually exclusive; `--file` already names \
              the single source to load."
         );
@@ -112,8 +112,7 @@ pub(crate) fn resolve_standalone_file(file_path: &Path) -> Result<PathBuf> {
 /// Standalone single-file callers (`baml run --file …`, `baml pack --file
 /// …`) skip this path entirely; they don't need a project at all.
 ///
-/// Callers decide how to surface an empty `files` result (e.g. `run` bails,
-/// `test` returns `NoTestsRun`, `generate` returns `Other`).
+/// Callers decide how to surface an empty `files` result.
 pub(crate) fn load_project_from(from: Option<&Path>) -> Result<LoadedProject> {
     load_project_from_inner(from, |_| {})
 }

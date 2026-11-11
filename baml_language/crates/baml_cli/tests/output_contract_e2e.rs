@@ -161,3 +161,34 @@ fn exit_codes_separate_usage_from_failure() {
     );
     assert_eq!(baml(dir.path(), &["nope"]).status.code(), Some(2));
 }
+
+/// Argument mistakes that only the command can detect exit like the ones
+/// clap rejects.
+#[test]
+fn command_level_argument_errors_are_usage_errors() {
+    let dir = project("function main() -> int {\n    1\n}\n");
+    for args in [
+        &["run", "--file", "x.baml", "--project-dir", "."][..],
+        &["run", "main", "-e", "1"],
+        &["run", "-e", "1", "--list"],
+        &["pack"],
+        &["pack", "main", "-f", "main"],
+    ] {
+        let output = baml(dir.path(), args);
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {output:?}");
+    }
+}
+
+/// Failing tests are an ordinary failure, and running none is not a failure.
+#[test]
+fn test_exit_codes_are_the_common_ones() {
+    let failing = project("test \"fails\" {\n    assert.is_true(false)\n}\n");
+    assert_eq!(baml(failing.path(), &["test"]).status.code(), Some(1));
+
+    let empty = project("function main() -> int {\n    1\n}\n");
+    assert_eq!(baml(empty.path(), &["test"]).status.code(), Some(0));
+    assert_eq!(
+        baml(empty.path(), &["test", "--list"]).status.code(),
+        Some(0)
+    );
+}
