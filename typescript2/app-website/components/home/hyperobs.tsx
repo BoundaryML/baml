@@ -261,7 +261,7 @@ function TsText({ line, tracing }: { line: string; tracing?: boolean }) {
 }
 
 /** The TypeScript listing. `level` is how much tracing has piled on, from 0 to 4; fractions ease a
- *  line in. The tracing is tinted yellow, and the logic it wraps clover. */
+ *  line in. Only the tracing is tinted, yellow; the logic it wraps is plain. */
 function TsCode({ level }: { level: number }) {
   return (
     // On a phone the longest lines are wider than the panel. The listing scrolls sideways there
@@ -274,9 +274,9 @@ function TsCode({ level }: { level: number }) {
           const indent = level > 0.5 ? l.d : (l.d0 ?? l.d);
           return (
             <div
-              // The tracing you write by hand is in yellow, and the logic it wraps keeps the BAML
-              // side's clover, so the two read as tracing versus the code that matters.
-              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'bg-clover/14 text-white' : 'bg-[#f5c451]/12 text-[#c9ab68]'}`}
+              // Only the tracing you write by hand is highlighted, in yellow; the logic it wraps, like
+              // the BAML beside it, has no background, so the yellow is the extra work.
+              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'text-white' : 'bg-[#f5c451]/12 text-[#c9ab68]'}`}
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed listing
               key={i}
               style={{
@@ -310,7 +310,7 @@ function BamlCode({ hot, onHot }: Hover) {
           const group = BAML_GROUPS[i];
           return (
             <div
-              className={`flex items-center whitespace-pre px-4 text-white transition-[background-color,opacity] duration-150 ${hot !== null && group === hot ? 'bg-clover/30' : 'bg-clover/14'}`}
+              className={`flex items-center whitespace-pre px-4 text-white transition-[background-color,opacity] duration-150 ${hot !== null && group === hot ? 'bg-clover/14' : ''}`}
               key={l}
               onMouseEnter={() => onHot(group)}
               onMouseLeave={() => onHot(null)}
