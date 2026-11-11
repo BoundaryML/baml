@@ -61,14 +61,9 @@ export default async function PodcastPage() {
           aria-labelledby="popular"
           className={`${PAGE_WRAP} pb-16 md:pb-20`}
         >
-          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-            <h2 className="v4-h3 text-head" id="popular">
-              Most watched
-            </h2>
-            <p className="text-[13px] text-muted">
-              Sorry about the thumbnails. YouTube demands it.
-            </p>
-          </div>
+          <h2 className="v4-h3 text-head" id="popular">
+            Most watched
+          </h2>
           <ul className="mt-6 grid gap-x-5 gap-y-9 md:grid-cols-3">
             {popular.map((ep) => (
               <li key={ep.id}>
