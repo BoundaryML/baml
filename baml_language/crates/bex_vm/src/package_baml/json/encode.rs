@@ -204,10 +204,13 @@ enum OverrideKey {
     String,
     Bigint,
     Uint8Array,
-    Instance(TypeHead, Box<[RealizedTy]>),
+    /// The class and the type object of its arguments, by address.
+    Instance(usize, Option<usize>),
     Variant(TypeHead),
-    List(RealizedTy),
-    Map(RealizedTy, RealizedTy),
+    /// The element type object, by address.
+    List(usize),
+    /// The map's type object, by address.
+    Map(usize),
 }
 
 impl ToJsonCache {
@@ -223,23 +226,23 @@ impl ToJsonCache {
             Object::String(_) => OverrideKey::String,
             Object::Bigint(_) => OverrideKey::Bigint,
             Object::Uint8Array(_) => OverrideKey::Uint8Array,
+            // Containers and instances are keyed by the addresses of their
+            // type objects and class: one pointer each, no type cloned or
+            // hashed. Every value met during one encode stays reachable, so
+            // an address names one type for the cache's life; equal types
+            // behind different type objects only miss.
             Object::Shared(SharedKind::List) => {
-                let array = vm.expect_list(ptr);
-                OverrideKey::List(array.element_ty().clone())
+                OverrideKey::List(address(vm.expect_list(ptr).element_type_object()))
             }
             Object::Shared(SharedKind::Map) => {
-                let map = vm.expect_map(ptr);
-                OverrideKey::Map(map.key_ty().clone(), map.value_ty().clone())
+                OverrideKey::Map(address(vm.expect_map(ptr).type_object()))
             }
             Object::Shared(SharedKind::Instance) => {
                 let instance = vm.expect_instance(ptr);
-                match vm.get_object(instance.class()) {
-                    Object::Class(class) => OverrideKey::Instance(
-                        TypeHead::new(instance.class(), class.type_tag),
-                        instance.type_args().into(),
-                    ),
-                    _ => return has_to_json_override(vm, value),
-                }
+                OverrideKey::Instance(
+                    address(instance.class()),
+                    instance.type_args_object().map(address),
+                )
             }
             Object::Variant(variant) => match vm.get_object(variant.enm) {
                 Object::Enum(enm) => OverrideKey::Variant(TypeHead::new(variant.enm, enm.type_tag)),
@@ -254,6 +257,10 @@ impl ToJsonCache {
         self.found.insert(key, found);
         Ok(found)
     }
+}
+
+fn address(ptr: HeapPtr) -> usize {
+    ptr.as_ptr() as usize
 }
 
 /// Whether `value`'s runtime type carries a `baml.ToJson` override. Shares

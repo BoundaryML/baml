@@ -216,6 +216,16 @@ impl ListRef {
         list_slot_of(id).expect("a list's descriptor is a list descriptor")
     }
 
+    /// The type object holding the declared element type: one pointer, for
+    /// a cache keyed by type without hashing the type itself.
+    pub fn element_type_object(self) -> HeapPtr {
+        let bits = self.word(LIST_ELEM_TY_OFFSET).load(Ordering::Relaxed);
+        // SAFETY: the element type slot is set at allocation.
+        unsafe { Value::from_bits(bits) }
+            .as_object_ptr()
+            .expect("a list's element type is set")
+    }
+
     /// The declared element type.
     pub fn element_ty(self) -> &'static RealizedTy {
         let bits = self.word(LIST_ELEM_TY_OFFSET).load(Ordering::Relaxed);

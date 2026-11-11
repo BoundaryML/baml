@@ -194,6 +194,16 @@ impl MapRef {
         map_slots_of(id).expect("a map's descriptor is a map descriptor")
     }
 
+    /// The type object holding the map's type (see
+    /// [`ListRef::element_type_object`](super::ListRef::element_type_object)).
+    pub fn type_object(self) -> HeapPtr {
+        let bits = self.word(MAP_TY_OFFSET).load(Ordering::Relaxed);
+        // SAFETY: the type slot is set at allocation.
+        unsafe { Value::from_bits(bits) }
+            .as_object_ptr()
+            .expect("a map's type is set")
+    }
+
     fn map_ty(self) -> (&'static RealizedTy, &'static RealizedTy) {
         let bits = self.word(MAP_TY_OFFSET).load(Ordering::Relaxed);
         // SAFETY: the type slot is set at allocation to a type object the map

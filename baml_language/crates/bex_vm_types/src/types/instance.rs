@@ -294,6 +294,15 @@ impl InstanceRef {
             .expect("a class has its layout once it has an instance")
     }
 
+    /// The type object of a generic instance's `Class<args>`, `None` for a
+    /// non-generic class: with [`Self::class`], identifies the instance's
+    /// type by two pointers.
+    pub fn type_args_object(self) -> Option<HeapPtr> {
+        self.layout()
+            .has_type_args
+            .then(|| self.hidden(TYPE_ARGS_OFFSET))
+    }
+
     /// Class type arguments, De Bruijn-ordered like the class's generic
     /// parameters. Empty for a non-generic class.
     pub fn type_args(self) -> &'static [RealizedTy] {
