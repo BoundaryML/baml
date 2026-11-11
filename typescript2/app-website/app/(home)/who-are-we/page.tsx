@@ -13,7 +13,7 @@ export const metadata = createMetadata({
   title: 'Who are we',
 });
 
-// The team page, in the homepage's BAML lane. It isn't linked from the nav or the footer.
+// The team page, in the homepage's BAML lane. The nav's Platform menu links it, as Company.
 
 type TeamMember = {
   bio: string;
