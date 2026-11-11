@@ -137,21 +137,21 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         let (identity, metadata) = trace_context::metadata(&snapshots[id.as_bytes()]);
         assert_eq!(identity, None);
         assert_eq!(
-            metadata["baml.environment.os"],
+            metadata["baml.ctx.os"],
             &btel_snapshot::DecodedValue::String(std::env::consts::OS.into())
         );
         assert_eq!(
-            metadata["baml.environment.architecture"],
+            metadata["baml.ctx.architecture"],
             &btel_snapshot::DecodedValue::String(std::env::consts::ARCH.into())
         );
         assert_eq!(
-            metadata["baml.environment.is_ci"],
+            metadata["baml.ctx.is_ci"],
             &btel_snapshot::DecodedValue::Bool(
                 baml_env::os_var("CI").is_some_and(|value| value == "true")
             )
         );
         assert_eq!(
-            metadata.get("baml.environment.agent_harness").copied(),
+            metadata.get("baml.ctx.agent_harness").copied(),
             baml_env::agent::detect()
                 .ok()
                 .flatten()
@@ -167,7 +167,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
             "agent_harness",
         ];
         assert!(metadata.keys().all(|key| {
-            key.strip_prefix("baml.environment.")
+            key.strip_prefix("baml.ctx.")
                 .is_some_and(|key| allowed.contains(&key))
         }));
     }

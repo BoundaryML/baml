@@ -62,7 +62,7 @@ fn collect(system: &System, mut read: impl FnMut(&str) -> Option<OsString>) -> C
             ("agent_harness", agent.as_deref().and_then(text)),
         ]
         .into_iter()
-        .map(|(key, value)| (format!("baml.environment.{key}"), value))
+        .map(|(key, value)| (format!("baml.ctx.{key}"), value))
         .collect(),
         distinct_id: None,
     }
@@ -100,11 +100,11 @@ mod tests {
             ("agent_harness", "codex"),
         ] {
             assert_eq!(
-                metadata[&format!("baml.environment.{key}")],
+                metadata[&format!("baml.ctx.{key}")],
                 ContextValue::String(expected.into())
             );
         }
-        assert_eq!(metadata["baml.environment.is_ci"], ContextValue::Bool(true));
+        assert_eq!(metadata["baml.ctx.is_ci"], ContextValue::Bool(true));
     }
 
     #[test]
@@ -126,7 +126,7 @@ mod tests {
                 (name == "CI").then(|| value.map(OsString::from)).flatten()
             });
             assert_eq!(
-                patch.metadata["baml.environment.is_ci"],
+                patch.metadata["baml.ctx.is_ci"],
                 Some(ContextValue::Bool(expected))
             );
         }
@@ -145,13 +145,13 @@ mod tests {
             _ => None,
         });
         for key in ["os_version", "os_distro", "agent_harness"] {
-            assert_eq!(patch.metadata[&format!("baml.environment.{key}")], None);
+            assert_eq!(patch.metadata[&format!("baml.ctx.{key}")], None);
         }
         system.version = None;
         system.distro = Some("bad\nvalue".into());
         let patch = collect(&system, |_| None);
-        assert_eq!(patch.metadata["baml.environment.os_version"], None);
-        assert_eq!(patch.metadata["baml.environment.os_distro"], None);
+        assert_eq!(patch.metadata["baml.ctx.os_version"], None);
+        assert_eq!(patch.metadata["baml.ctx.os_distro"], None);
     }
 
     #[test]
@@ -165,7 +165,7 @@ mod tests {
                 _ => None,
             });
             assert_eq!(
-                patch.metadata["baml.environment.agent_harness"],
+                patch.metadata["baml.ctx.agent_harness"],
                 expected.map(|value| ContextValue::String(value.into()))
             );
         }
@@ -179,9 +179,9 @@ mod tests {
             let patch = collect(&platform(), |name| {
                 (name == "AI_AGENT").then(|| value.clone().into())
             });
-            assert_eq!(patch.metadata["baml.environment.agent_harness"], None);
+            assert_eq!(patch.metadata["baml.ctx.agent_harness"], None);
             assert_eq!(
-                patch.metadata["baml.environment.os"],
+                patch.metadata["baml.ctx.os"],
                 Some(ContextValue::String("linux".into()))
             );
         }
@@ -198,11 +198,11 @@ mod tests {
                     Some(ContextValue::String("customer".into())),
                 ),
                 (
-                    "baml.environment.os".into(),
+                    "baml.ctx.os".into(),
                     Some(ContextValue::String("spoofed".into())),
                 ),
                 (
-                    "baml.environment.agent_harness".into(),
+                    "baml.ctx.agent_harness".into(),
                     Some(ContextValue::String("spoofed".into())),
                 ),
             ]
@@ -213,16 +213,12 @@ mod tests {
         assert_eq!(recorded.distinct_id(), launch.distinct_id());
         assert_eq!(recorded.metadata()["owner"], launch.metadata()["owner"]);
         assert_eq!(
-            recorded.metadata()["baml.environment.os"],
+            recorded.metadata()["baml.ctx.os"],
             ContextValue::String("linux".into())
         );
-        assert!(
-            !recorded
-                .metadata()
-                .contains_key("baml.environment.agent_harness")
-        );
+        assert!(!recorded.metadata().contains_key("baml.ctx.agent_harness"));
         assert_eq!(
-            launch.metadata()["baml.environment.os"],
+            launch.metadata()["baml.ctx.os"],
             ContextValue::String("spoofed".into())
         );
     }

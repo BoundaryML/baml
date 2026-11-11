@@ -94,16 +94,16 @@ The Rust wrapper sends only PostHog usage events. Release builds of the BAML-nat
 
 ## BCS environment metadata
 
-Enabled cloud runtime recordings automatically include the following scalar properties in the recorded process context's `metadata` map. The recording header's existing `initial_context_cas_id` references this context, which travels through the existing recording/CAS upload pipeline. This does not add a network request or change the recording format. The properties describe the process running BAML, including SDK calls, CLI commands and packed executables that select BCS delivery.
+Enabled cloud runtime recordings automatically include the following scalar properties under the system-populated `baml.ctx.` prefix in the recorded process context's `metadata` map. The recording header's existing `initial_context_cas_id` references this context, which travels through the existing recording/CAS upload pipeline. This does not add a network request or change the recording format. The properties describe the process running BAML, including SDK calls, CLI commands and packed executables that select BCS delivery.
 
 | Property | Type | Meaning |
 | --- | --- | --- |
-| `baml.environment.os` | string | Unmodified `std::env::consts::OS`, such as `linux`, `macos`, `windows` or `freebsd`. Presentation labels belong in read/query clients. |
-| `baml.environment.os_version` | optional string | Best-effort OS version from `os_info`; Linux distribution version, macOS product version, or Windows version/build. Omitted when unknown. |
-| `baml.environment.os_distro` | optional string | Recognized Linux distribution name, such as `Ubuntu` or `Debian`; omitted elsewhere and when unknown. |
-| `baml.environment.architecture` | string | Rust build-target architecture, such as `aarch64` or `x86_64`; under emulation this describes the BAML binary. |
-| `baml.environment.is_ci` | boolean | Whether the standard `CI` variable is exactly `true`. Unset, non-Unicode, `false`, `1`, `TRUE`, and arbitrary provider names yield `false`; raw values are never sent. |
-| `baml.environment.agent_harness` | optional string | Trimmed explicit `AI_AGENT` harness name; otherwise `claude`, `codex`, `pi`, `opencode`, `cursor`, `replit`, or `unknown` for the `AGENT` compatibility marker. Omitted when no agent is detected or the name fails the metadata bounds. |
+| `baml.ctx.os` | string | Unmodified `std::env::consts::OS`, such as `linux`, `macos`, `windows` or `freebsd`. Presentation labels belong in read/query clients. |
+| `baml.ctx.os_version` | optional string | Best-effort OS version from `os_info`; Linux distribution version, macOS product version, or Windows version/build. Omitted when unknown. |
+| `baml.ctx.os_distro` | optional string | Recognized Linux distribution name, such as `Ubuntu` or `Debian`; omitted elsewhere and when unknown. |
+| `baml.ctx.architecture` | string | Rust build-target architecture, such as `aarch64` or `x86_64`; under emulation this describes the BAML binary. |
+| `baml.ctx.is_ci` | boolean | Whether the standard `CI` variable is exactly `true`. Unset, non-Unicode, `false`, `1`, `TRUE`, and arbitrary provider names yield `false`; raw values are never sent. |
+| `baml.ctx.agent_harness` | optional string | Trimmed explicit `AI_AGENT` harness name; otherwise `claude`, `codex`, `pi`, `opencode`, `cursor`, `replit`, or `unknown` for the `AGENT` compatibility marker. Omitted when no agent is detected or the name fails the metadata bounds. |
 
 SDK identity/version already have native equivalents in the recording header: `baml_version` identifies the BAML engine version, and `host` identifies the launcher when known (`baml`, `pack`, `bridge`, etc.). The bridge does not currently supply the calling language or its interpreter/JVM version, so these are not guessed from executable paths, environment variables, or installed interpreters.
 
