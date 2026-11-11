@@ -148,17 +148,33 @@ impl<'a> Output<'a> {
 
     /// Whether the line being written has anything on it: text, or a tail
     /// that will render on it.
-    fn line_has_content(&self) -> bool {
+    /// Whether the line being written has text on it.
+    fn line_has_text(&self) -> bool {
         self.items[self.line..]
             .iter()
             .any(|item| matches!(item, Item::Text { .. }))
-            || self.has_pending_tail()
+    }
+
+    /// Whether the line being written has anything on it: text, or a tail
+    /// that will render on it.
+    fn line_has_content(&self) -> bool {
+        self.line_has_text() || self.has_pending_tail()
     }
 
     fn push_str(&mut self, text: &'a str, width: u32) {
         if !text.is_empty() {
             let end = self.column() + width;
             self.items.push(Item::Text { text, end });
+        }
+    }
+
+    /// A space between two things on the line being written: nothing at the
+    /// start of a line, where there is nothing before it to separate — a
+    /// block comment that follows a line break leaves the space before it at
+    /// the start of the next line.
+    fn push_space(&mut self) {
+        if self.line_has_text() {
+            self.push_str(" ", 1);
         }
     }
 
@@ -425,15 +441,27 @@ struct Room {
     remaining: i64,
     /// Whether a line suffix is pending, so a boundary would end the line.
     has_suffix: bool,
+    /// Whether the line has text on it yet: a space at its start prints
+    /// nothing ([`Output::push_space`]), so it measures nothing.
+    has_text: bool,
 }
 
 impl Room {
     fn consume(self, columns: u32) -> Measured {
         Self {
             remaining: self.remaining - i64::from(columns),
+            has_text: self.has_text || columns > 0,
             ..self
         }
         .check()
+    }
+
+    fn space(self) -> Measured {
+        if self.has_text {
+            self.consume(1)
+        } else {
+            Ok(self)
+        }
     }
 
     fn with_suffix(self) -> Self {
@@ -488,10 +516,10 @@ impl<'a> Printer<'a> {
             Node::Text {
                 text, forced: true, ..
             } => self.out.push_multi_line(text),
-            Node::Space => self.out.push_str(" ", 1),
+            Node::Space => self.out.push_space(),
             Node::Line(line) => match (mode, line) {
                 (Mode::Flat, LineMode::Soft) => {}
-                (Mode::Flat, LineMode::SoftOrSpace) => self.out.push_str(" ", 1),
+                (Mode::Flat, LineMode::SoftOrSpace) => self.out.push_space(),
                 (Mode::Flat | Mode::Break, LineMode::Empty) => self.out.empty_line(indent),
                 (Mode::Flat, LineMode::Hard)
                 | (Mode::Break, LineMode::Soft | LineMode::SoftOrSpace | LineMode::Hard) => {
@@ -630,6 +658,7 @@ impl<'a> Printer<'a> {
         let room = Room {
             remaining: i64::from(self.layout.line_width) - i64::from(self.out.column()),
             has_suffix: self.out.has_pending_tail(),
+            has_text: self.out.line_has_text(),
         };
         let measured = self.measure(candidate, room).and_then(|room| {
             Rest::pieces(rest).try_fold(room, |room, piece| self.measure(piece, room))
@@ -648,10 +677,10 @@ impl<'a> Printer<'a> {
                 let room = room.consume(width)?;
                 if forced { Err(Verdict::Fits) } else { Ok(room) }
             }
-            Node::Space => room.consume(1),
+            Node::Space => room.space(),
             Node::Line(line) => match (mode, line) {
                 (Mode::Flat, LineMode::Soft) => Ok(room),
-                (Mode::Flat, LineMode::SoftOrSpace) => room.consume(1),
+                (Mode::Flat, LineMode::SoftOrSpace) => room.space(),
                 (Mode::Flat, LineMode::Hard | LineMode::Empty) | (Mode::Break, _) => {
                     Err(Verdict::Fits)
                 }

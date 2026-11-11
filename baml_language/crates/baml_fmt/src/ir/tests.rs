@@ -401,6 +401,20 @@ fn a_forced_most_flat_variant_is_left_out_and_the_choice_breaks_its_parent() {
 }
 
 #[test]
+fn a_space_at_the_start_of_a_line_prints_nothing() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let root = d.concat([
+        d.text("a"),
+        Doc::HARD_LINE,
+        Doc::SPACE,
+        d.text("b"),
+        d.group(d.concat([Doc::HARD_LINE, Doc::SOFT_LINE_OR_SPACE, d.text("c")])),
+    ]);
+    assert_eq!(print(root, 80), "a\nb\nc");
+}
+
+#[test]
 fn consecutive_hard_lines_leave_no_blank_line() {
     let bump = Bump::new();
     let d = Docs::new(&bump);

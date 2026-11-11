@@ -42,7 +42,6 @@ extern crate self as baml_syntax;
 pub mod token;
 
 pub mod debug;
-pub mod docs;
 pub mod index;
 pub mod lexer;
 pub mod nodes;
