@@ -30,7 +30,7 @@ const PLANS: Plan[] = [
   },
   {
     data: ['1 GB of data a month', '$4 per GB after'],
-    features: ['14-day retention', 'Unlimited spans', 'Every Cloud feature'],
+    features: ['30-day retention', 'Unlimited spans', 'Every Cloud feature'],
     name: 'Starter',
     price: '$0',
     unit: 'per month',
@@ -39,7 +39,7 @@ const PLANS: Plan[] = [
     data: ['5 GB of data a month', '$3 per GB after'],
     // Same rows in the same order as Starter's, so the two read across; the add-on comes last.
     features: [
-      'Custom retention',
+      'Custom retention, $0.10 per GB per 30 days',
       'Unlimited spans',
       'Every Cloud feature',
       'Bring your own cloud, as an add-on',
@@ -71,6 +71,10 @@ const BILLING: [string, string][] = [
   ['What doesn’t', 'Spans, profiles, queries and seats.'],
   ['Repeats', 'A value your programs record again is billed once.'],
   ['Retries', 'An upload that’s retried is counted once.'],
+  [
+    'Retention',
+    '30 days included. Longer, on Pro, is $0.10 per GB for each extra 30 days, rounded to the nearest 30.',
+  ],
   ['Going over', 'Never blocks ingest or queries.'],
   ['Upgrading', 'Takes effect right away, prorated to your billing date.'],
   ['Canceling', 'Ends at the close of your billing month.'],

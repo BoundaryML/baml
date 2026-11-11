@@ -18,8 +18,8 @@ Boundary Cloud is in early access.
 
 | Plan | Price | Data included | Data after that | Retention |
 | --- | --- | --- | --- | --- |
-| Starter | $0 a month | 1 GB a month | $4 per GB | 14 days |
-| Pro | $250 a month | 5 GB a month | $3 per GB | Custom |
+| Starter | $0 a month | 1 GB a month | $4 per GB | 30 days |
+| Pro | $250 a month | 5 GB a month | $3 per GB | Custom, $0.10 per GB per 30 days |
 
 Pro can add bring your own cloud: Boundary Cloud runs in your cloud account and your data stays there.
 
@@ -39,6 +39,7 @@ Pro can add bring your own cloud: Boundary Cloud runs in your cloud account and 
 - What doesn't: spans, profiles, queries and seats.
 - Repeats: a value your programs record again is billed once.
 - Retries: an upload that's retried is counted once.
+- Retention: 30 days included. Longer, on Pro, is $0.10 per GB for each extra 30 days, rounded to the nearest 30.
 - Going over: never blocks ingest or queries.
 - Upgrading: takes effect right away, prorated to your billing date.
 - Canceling: ends at the close of your billing month.
