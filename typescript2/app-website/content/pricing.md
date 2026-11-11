@@ -25,15 +25,16 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | Retention past 30 days | No | $0.10 per GB per 30 days |
 | Usage caps | Coming soon | Coming soon |
 | **Team and security** | | |
-| SSO with Google | Included | Included |
+| Members | Unlimited | Unlimited |
+| SSO with Google | Coming soon | Coming soon |
 | SAML and OIDC single sign-on | No | Coming soon |
 | SCIM directory sync | No | Coming soon |
-| Audit logs | Coming soon | Coming soon |
+| Audit logs | No | Add-on, coming soon |
 | **Deployment** | | |
 | Hosted by Boundary | Included | Included |
 | Bring your own cloud | No | Add-on |
 
-Free on both plans: unlimited spans, profiles, dashboards, members, projects and environments, and SQL queries with `baml query`.
+Free on both plans: unlimited spans, profiles, dashboards, members, projects and environments, and unlimited queries (SQL or `baml query`), up to 90 seconds each.
 
 Every Boundary Cloud plan comes with a 60-day money-back guarantee. [Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
 

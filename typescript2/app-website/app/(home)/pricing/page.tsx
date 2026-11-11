@@ -15,7 +15,8 @@ import { SoftwareApplicationStructuredData } from '@/components/structured-data'
 //
 // Every claim is one of: Boundary Cloud's code (BCS, origin/main: config/bcs.toml,
 // control-plane/README.md, control-plane/src/projector/billing.rs), or a founders' decision
-// (retention pricing, the BYOC add-on, the money-back guarantee, what's coming soon). Nothing here
+// (retention pricing, the 90-second query limit, the BYOC and audit-log add-ons, the money-back
+// guarantee, what's coming soon). Nothing here
 // is a feature BCS doesn't have unless it says "Coming soon".
 
 /** A cell: an amount and, for a price, its unit under it. */
@@ -37,7 +38,7 @@ const BLOCKS: {
     free: [
       'Unlimited spans',
       'Unlimited profiles',
-      'SQL queries and baml query',
+      'Unlimited queries, up to 90 seconds each',
       'Unlimited dashboards',
     ],
     note: 'What your programs record: every function’s inputs, outputs, logs and network calls.',
@@ -73,10 +74,15 @@ const BLOCKS: {
     title: 'Data',
   },
   {
-    free: ['Unlimited members', 'Unlimited projects and environments'],
-    note: 'SSO with Google today; SSO with your own identity provider is coming.',
+    free: ['Unlimited projects and environments'],
+    note: 'Single sign-on and audit logs are on the way.',
     rows: [
-      { cells: SAME(['Included']), label: 'SSO with Google' },
+      { cells: SAME(['Unlimited']), label: 'Members' },
+      {
+        cells: SAME(['Coming soon']),
+        extra: true,
+        label: 'SSO with Google',
+      },
       {
         cells: [['—'], ['Coming soon']],
         extra: true,
@@ -88,7 +94,7 @@ const BLOCKS: {
         label: 'SCIM directory sync',
       },
       {
-        cells: SAME(['Coming soon']),
+        cells: [['—'], ['Add-on', 'coming soon']],
         extra: true,
         label: 'Audit logs',
       },
