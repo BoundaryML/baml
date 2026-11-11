@@ -10,6 +10,7 @@ export const LINKS = {
   explore: '/#features-title',
   github: 'https://github.com/boundaryml/baml',
   quickstart: '/quickstart',
+  youtube: 'https://www.youtube.com/@boundaryml',
 } as const;
 
 // Grid: 1440 max, two lanes of 528px + 96px gap + the rest. The side padding is the page frame:

@@ -4,7 +4,7 @@ import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button, LINKS } from '@/components/home/ui';
 import { SoftwareApplicationStructuredData } from '@/components/structured-data';
 
-// The pricing page, in the homepage's BAML lane. It isn't linked from the nav or the footer.
+// The pricing page, in the homepage's BAML lane. The nav links it.
 
 /** The pricing page: BAML is free and open source, with cloud tools to come. */
 export default function PricingPage() {
