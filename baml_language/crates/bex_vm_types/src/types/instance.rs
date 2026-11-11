@@ -269,8 +269,18 @@ impl InstanceRef {
 
     #[inline]
     pub fn class_def(self) -> &'static Class {
-        // SAFETY: the instance keeps its class alive.
-        match unsafe { self.class().get() } {
+        // A class is always an `Object` enum cell, so the pointer is read
+        // as one directly, without `HeapPtr::get`'s format check: every
+        // field access goes through here.
+        // SAFETY: the instance keeps its class alive, and the class slot
+        // holds an `Object::Class` cell's payload pointer.
+        let object = unsafe { &*self.class().as_ptr() };
+        debug_assert_eq!(
+            // SAFETY: as above.
+            unsafe { self.class().format() },
+            crate::object_format::Format::Object
+        );
+        match object {
             Object::Class(class) => class,
             other => unreachable!("an instance's class slot holds {other}"),
         }

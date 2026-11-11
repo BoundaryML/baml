@@ -7957,6 +7957,7 @@ impl BexVm {
     }
 
     /// The instance an instance operand points to.
+    #[inline]
     fn instance_operand(&self, value: Value) -> Result<InstanceRef, VmError> {
         let ptr = self.as_object_ptr(value, ObjectType::Instance)?;
         self.instance_at(ptr).ok_or_else(|| {
