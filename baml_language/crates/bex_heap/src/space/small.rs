@@ -14,6 +14,10 @@
 //!   serves every class, and lists the others with room as partial blocks
 //!   of their class.
 //! - Each mutator caches one current block per class ([`SmallAllocator`]).
+//! - The collector copies survivors into *to-space* blocks it takes from the
+//!   pool ([`SmallSpace::take_to_space`]): bump-allocated, cells of mixed
+//!   sizes, in no class and on no partial list, so no mutator allocates into
+//!   one. Empty, such a block returns to the pool like any other.
 //!
 //! Fragmentation is bounded by construction: a freed slot is reused by the
 //! next cell of its class before any new block is taken for that class, and
@@ -32,7 +36,7 @@
 //!   mutator's blocks back.
 //! - [`SmallSpace`], behind the heap's mutex: the collector's hooks
 //!   [`begin_collection`](SmallSpace::begin_collection),
-//!   [`cell_marked`](SmallSpace::cell_marked) and
+//!   [`take_to_space`](SmallSpace::take_to_space) and
 //!   [`end_sweep`](SmallSpace::end_sweep), and [`stats`](SmallSpace::stats)
 //!   and [`occupancy`](SmallSpace::occupancy).
 //! - [`BlockMeta`]: the policy's part of each block header.
@@ -148,6 +152,14 @@ const FIRST_SLOT_WORD: usize = FIRST_GRANULE / 64;
 pub(crate) struct BlockMeta {
     /// A mutator allocates here; a sweep leaves the block off every list.
     owned: AtomicBool,
+    /// To-space: the collector bump-allocated copies of mixed sizes here.
+    /// In no class, on no partial list, with no free list; cleared when the
+    /// block is taken for a class again.
+    bump: AtomicBool,
+    /// Held a cell when the current collection began, so its unpinned live
+    /// cells are copied out. Set by [`SmallSpace::begin_collection`], cleared
+    /// by [`SmallSpace::end_sweep`].
+    from_space: AtomicBool,
     /// Index into [`SIZE_CLASSES`]; meaningless while the block is empty
     /// and unowned.
     class: AtomicU8,
@@ -165,11 +177,30 @@ impl BlockMeta {
 
     /// Start the block over as an empty block of `class`.
     fn reset(&self, header: &BlockHeader, class: usize) {
+        self.bump.store(false, Ordering::Relaxed);
         self.class.store(
             u8::try_from(class).expect("fewer than 256 classes"),
             Ordering::Relaxed,
         );
         self.rewind(header);
+    }
+
+    /// Whether a mutator currently allocates into the block.
+    #[inline]
+    pub(crate) fn is_owned(&self) -> bool {
+        self.owned.load(Ordering::Relaxed)
+    }
+
+    /// Whether the block is to-space: bump-filled by the collector.
+    #[inline]
+    pub(crate) fn is_bump(&self) -> bool {
+        self.bump.load(Ordering::Relaxed)
+    }
+
+    /// Whether the block held a cell when the current collection began.
+    #[inline]
+    pub(crate) fn is_from_space(&self) -> bool {
+        self.from_space.load(Ordering::Relaxed)
     }
 
     /// Point the cursor at the block's first free slot. Called whenever the
@@ -306,6 +337,20 @@ impl SmallSpace {
         self.free.pop().expect("a new slab adds blocks")
     }
 
+    /// An empty block for the collector to copy survivors into, flagged
+    /// bump-only so no mutator allocates into it and no sweep lists it.
+    ///
+    /// # Safety
+    /// Every mutator is parked.
+    pub(crate) unsafe fn take_to_space(&mut self) -> usize {
+        let base = self.take_free();
+        // SAFETY: pool blocks are initialized.
+        let header = unsafe { BlockHeader::at(base) };
+        debug_assert!(header.starts.is_empty(), "a pooled block is empty");
+        header.policy.bump.store(true, Ordering::Relaxed);
+        base
+    }
+
     /// A mutator gives up `base`; it is listed by the room it has.
     fn release(&mut self, base: usize) {
         // SAFETY: handed out by `take`, so initialized.
@@ -316,20 +361,26 @@ impl SmallSpace {
 
     fn list(&mut self, header: &BlockHeader, base: usize) {
         if header.starts.is_empty() {
+            header.policy.bump.store(false, Ordering::Relaxed);
             self.free.push(base);
-        } else if header.policy.room(header) > 0 {
+        } else if !header.policy.is_bump() && header.policy.room(header) > 0 {
             self.partial[header.policy.class()].push(base);
         }
     }
 
-    /// Collector hook, before marking. Size classes keep nothing per
-    /// collection.
-    pub(crate) fn begin_collection(&self) {}
-
-    /// Collector hook, as marking finds a live cell. Size classes need no
-    /// per-cell bookkeeping: the mark bit is enough.
-    #[inline]
-    pub(crate) fn cell_marked(_header: &BlockHeader, _offset: usize, _bytes: usize) {}
+    /// Collector hook, before marking: flag every block holding a cell as
+    /// from-space, so a to-space block taken during the collection is told
+    /// from one whose survivors are to be copied out.
+    pub(crate) fn begin_collection(&self) {
+        for &base in self.pool.blocks() {
+            // SAFETY: pool blocks are initialized.
+            let header = unsafe { BlockHeader::at(base) };
+            header
+                .policy
+                .from_space
+                .store(!header.starts.is_empty(), Ordering::Relaxed);
+        }
+    }
 
     /// Collector hook, after every dead cell is dropped and its start bit
     /// cleared: rewind every block's cursor and relist every block no
@@ -344,8 +395,9 @@ impl SmallSpace {
             let base = self.pool.blocks()[index];
             // SAFETY: pool blocks are initialized.
             let header = unsafe { BlockHeader::at(base) };
+            header.policy.from_space.store(false, Ordering::Relaxed);
             header.policy.rewind(header);
-            if !header.policy.owned.load(Ordering::Relaxed) {
+            if !header.policy.is_owned() {
                 self.list(header, base);
             }
         }
@@ -376,8 +428,8 @@ impl SmallSpace {
         for &base in self.pool.blocks() {
             // SAFETY: pool blocks are initialized.
             let header = unsafe { BlockHeader::at(base) };
-            let in_pool = self.free.contains(&base);
-            if in_pool {
+            // A pooled block is in no class; neither is a to-space block.
+            if self.free.contains(&base) || header.policy.is_bump() {
                 continue;
             }
             let class = &mut classes[header.policy.class()];

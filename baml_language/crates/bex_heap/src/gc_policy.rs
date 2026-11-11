@@ -220,8 +220,8 @@ mod tests {
         assert_eq!(heap.gc_budget().bytes_since_full_gc, 11 * CELL);
     }
 
-    /// A collection does not move objects, so the allocator keeps its block;
-    /// the sweep puts the block's dead cells on its free list for reuse.
+    /// A collection retains the allocator's block; its survivors are copied
+    /// out and the block's slots go on its free list for reuse.
     #[test]
     fn a_collection_keeps_the_block_and_frees_its_dead_cells() {
         let heap = BexHeap::new(vec![]);

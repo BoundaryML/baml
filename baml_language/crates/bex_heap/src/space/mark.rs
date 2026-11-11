@@ -1,17 +1,38 @@
-//! Marking: from roots, set the side-table mark bit of every reachable cell.
+//! Marking and copying: from roots, reach every live cell. An unpinned
+//! small cell of a from-space block is copied into to-space and every
+//! pointer to it is repointed as it is visited; a pinned cell, a to-space
+//! copy and a large cell are marked and traced in place.
+//!
+//! The forwarding address of a moved cell is its new payload address,
+//! written over the old cell's header (the copy carries the real header).
+//! A moved cell is told from a pinned one by the pin bit, and from a
+//! to-space copy by its block's from-space flag, so the old header is read
+//! only where a forwarding address was written.
 
 use crate::descriptor::CellHeader as _;
-use std::ops::Range;
+use std::{collections::HashMap, ops::Range};
 
 use bex_vm_types::HeapPtr;
 
 use super::{
-    RegionKind, block::BlockHeader, cell_bytes, cell_of, large::LargeSpace, pin_cell,
-    pool::BlockPool, region_base, region_kind, small::SmallSpace,
+    BLOCK_BYTES, RegionKind,
+    block::{BlockHeader, FIRST_CELL_OFFSET},
+    cell_bytes, cell_of,
+    large::LargeSpace,
+    pin_cell,
+    pool::BlockPool,
+    region_base, region_kind,
+    small::SmallSpace,
 };
-use crate::descriptor::{DescriptorTable, Header, RUST_PAYLOAD_OFFSET, Trace, trace_slots};
+use crate::{
+    descriptor::{
+        DescriptorTable, HEADER_BYTES, Header, RUST_PAYLOAD_OFFSET, Trace, forward_slots,
+    },
+    object_trace::heap_ptr_at,
+};
 
-/// What a mark found live: cells and the bytes they occupy.
+/// What a mark found live: cells and the bytes they occupy, copies, pinned
+/// and large cells alike.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Live {
     pub(crate) cells: usize,
@@ -35,33 +56,47 @@ impl Resolved {
     }
 }
 
+/// The to-space block being filled: a bump cursor and the block's end.
+struct ToSpace {
+    cursor: usize,
+    end: usize,
+}
+
 pub(crate) struct Marker<'a> {
-    pool: &'a BlockPool,
+    small: &'a mut SmallSpace,
     large: &'a LargeSpace,
     descriptors: &'a DescriptorTable,
     /// Addresses of the compile-time objects: never collected, never traced.
     compile_time: Range<usize>,
-    stack: Vec<HeapPtr>,
+    /// Cells reached and not yet traced: a pinned cell, a large cell or the
+    /// to-space copy of a moved one. Never a moved cell's old copy.
+    stack: Vec<usize>,
+    to_space: Option<ToSpace>,
     live: Live,
-    /// Every distinct pointer the mark reached, for re-stamping epochs.
+    /// Every moved pointer, old to new: how holders outside the heap follow
+    /// their objects.
+    moved: HashMap<HeapPtr, HeapPtr>,
+    /// Every distinct pointer reached in place, for re-stamping epochs.
     #[cfg(feature = "heap_debug")]
     reached: Vec<HeapPtr>,
 }
 
 impl<'a> Marker<'a> {
     pub(crate) fn new(
-        pool: &'a BlockPool,
+        small: &'a mut SmallSpace,
         large: &'a LargeSpace,
         descriptors: &'a DescriptorTable,
         compile_time: Range<usize>,
     ) -> Self {
         Self {
-            pool,
+            small,
             large,
             descriptors,
             compile_time,
             stack: Vec::new(),
+            to_space: None,
             live: Live::default(),
+            moved: HashMap::new(),
             #[cfg(feature = "heap_debug")]
             reached: Vec::new(),
         }
@@ -71,10 +106,12 @@ impl<'a> Marker<'a> {
         self.live
     }
 
-    /// Queue a precise root or an edge.
-    #[inline]
-    pub(crate) fn push(&mut self, ptr: HeapPtr) {
-        self.stack.push(ptr);
+    pub(crate) fn pool(&self) -> &BlockPool {
+        self.small.pool()
+    }
+
+    pub(crate) fn large(&self) -> &LargeSpace {
+        self.large
     }
 
     fn is_compile_time(&self, ptr: HeapPtr) -> bool {
@@ -85,7 +122,7 @@ impl<'a> Marker<'a> {
     /// contain it, and the one ending exactly at it (a one-past-the-end
     /// pointer, as an iterator or slice end holds). Both are kept.
     pub(crate) fn resolve_conservative(&self, word: usize) -> Resolved {
-        let Some(base) = self.pool.block_containing(word) else {
+        let Some(base) = self.pool().block_containing(word) else {
             return Resolved {
                 containing: self.large.cell_containing(word),
                 ending: self.large.cell_ending_at(word),
@@ -102,11 +139,13 @@ impl<'a> Marker<'a> {
         }
     }
 
-    /// Queue, and pin, every cell a word of `range` points into or just
-    /// past.
+    /// Pin, mark in place and queue every cell a word of `range` points
+    /// into or just past. Every range must be scanned before any precise
+    /// root is forwarded: a copy decision reads the pin bits.
     ///
     /// # Safety
-    /// `range` is word-aligned and readable, and nothing writes it meanwhile.
+    /// `range` is word-aligned and readable, nothing writes it meanwhile, and
+    /// nothing has been copied yet this collection.
     pub(crate) unsafe fn scan_range(&mut self, range: Range<*const usize>) {
         let mut word = range.start;
         while word < range.end {
@@ -115,35 +154,197 @@ impl<'a> Marker<'a> {
             for cell in self.resolve_conservative(value).cells() {
                 // SAFETY: resolved from a set start bit, so allocated.
                 unsafe { pin_cell(cell) };
-                self.push(crate::object_trace::heap_ptr_at(cell));
+                let ptr = heap_ptr_at(cell);
+                // SAFETY: an allocated cell, and the caller parks mutators.
+                let kept = unsafe { self.forward(ptr) };
+                debug_assert_eq!(kept, ptr, "a pinned cell forwards to itself");
             }
             // SAFETY: stays within, or one past, the range.
             word = unsafe { word.add(1) };
         }
     }
 
-    /// Mark everything reachable from the queue.
+    /// Where the object `ptr` names lives after this collection, reaching it
+    /// if it was not yet reached: a compile-time object, a large cell, a
+    /// pinned cell and a to-space copy stay; an unpinned small cell of a
+    /// from-space block is copied the first time and found through its
+    /// forwarding address after. Null stays null.
     ///
     /// # Safety
-    /// No mutator runs, and every queued pointer names a compile-time object
-    /// or the first granule of an allocated cell.
+    /// No mutator runs, and `ptr` is null or names a compile-time object or
+    /// an allocated cell.
+    pub(crate) unsafe fn forward(&mut self, ptr: HeapPtr) -> HeapPtr {
+        if ptr.is_null() {
+            return ptr;
+        }
+        if self.is_compile_time(ptr) {
+            self.reached_compile_time(ptr);
+            return ptr;
+        }
+        let address = ptr.as_ptr() as usize;
+        let cell = cell_of(address);
+        let base = region_base(cell);
+        // SAFETY: an allocated cell lies in a live region.
+        match unsafe { region_kind(base) } {
+            RegionKind::Large => {
+                // SAFETY: as above.
+                if unsafe { LargeSpace::mark(cell) } {
+                    // SAFETY: as above.
+                    self.reached_in_place(ptr, cell, unsafe { LargeSpace::cell_bytes(cell) });
+                }
+                ptr
+            }
+            // SAFETY: as above.
+            RegionKind::Block => unsafe { self.forward_small(ptr, address, cell, base) },
+        }
+    }
+
+    /// [`Self::forward`] for a small cell.
+    ///
+    /// # Safety
+    /// `cell` is an allocated cell of the block at `base`, and `address` is
+    /// in its first granule.
+    unsafe fn forward_small(
+        &mut self,
+        ptr: HeapPtr,
+        address: usize,
+        cell: usize,
+        base: usize,
+    ) -> HeapPtr {
+        // SAFETY: forwarded to the caller.
+        let header = unsafe { BlockHeader::at(base) };
+        let granule = BlockHeader::granule(base, cell);
+        debug_assert!(
+            header.starts.get(granule),
+            "forwarding {cell:#x}, which is not an allocated cell: a pointer to a reclaimed object"
+        );
+        let pinned = header.pins.get(granule);
+        if header.marks.get(granule) {
+            if pinned || !header.policy.is_from_space() {
+                return ptr;
+            }
+            // SAFETY: a marked, unpinned from-space cell was copied.
+            return unsafe { Self::copy_of(cell, address) };
+        }
+        header.marks.set(granule);
+        // SAFETY: allocated and unmarked, so its header is intact.
+        let bytes = unsafe { Header::at(cell) }.cell_bytes();
+        if pinned {
+            self.reached_in_place(ptr, cell, bytes);
+            return ptr;
+        }
+        debug_assert!(
+            header.policy.is_from_space(),
+            "an unmarked cell in a to-space block: the copy did not mark it"
+        );
+        let new_cell = self.alloc_to_space(bytes);
+        // SAFETY: `new_cell` is `bytes` of a block no one else writes, and
+        // the old cell's bytes are intact; the regions cannot overlap.
+        unsafe {
+            std::ptr::copy_nonoverlapping(cell as *const u8, new_cell as *mut u8, bytes);
+            (cell as *mut usize).write(new_cell + HEADER_BYTES);
+        }
+        let new_base = region_base(new_cell);
+        // SAFETY: a to-space block, initialized by the pool.
+        let new_header = unsafe { BlockHeader::at(new_base) };
+        let new_granule = BlockHeader::granule(new_base, new_cell);
+        new_header.starts.set(new_granule);
+        new_header.marks.set(new_granule);
+        if header.hooked.get(granule) {
+            new_header.hooked.set(new_granule);
+        }
+        self.live.cells += 1;
+        self.live.bytes += bytes;
+        self.stack.push(new_cell);
+        let moved = heap_ptr_at(new_cell + (address - cell));
+        self.moved.insert(ptr, moved);
+        moved
+    }
+
+    /// The pointer into the copy of the moved cell `cell` that corresponds
+    /// to `address`, a byte of its first granule.
+    ///
+    /// # Safety
+    /// `cell` was copied this collection: its header word holds the copy's
+    /// payload address.
+    unsafe fn copy_of(cell: usize, address: usize) -> HeapPtr {
+        // SAFETY: forwarded to the caller.
+        let new_payload = unsafe { (cell as *const usize).read() };
+        heap_ptr_at(new_payload - HEADER_BYTES + (address - cell))
+    }
+
+    /// Where the intact bytes of the object `ptr` names are now, without
+    /// reaching it: its copy if it moved this collection, else itself. For
+    /// reading through a dead object's pointer before the keep-alive passes
+    /// decide its fate.
+    ///
+    /// # Safety
+    /// `ptr` is null or names a compile-time object or an allocated cell.
+    pub(crate) unsafe fn current_copy(&self, ptr: HeapPtr) -> HeapPtr {
+        if ptr.is_null() || self.is_compile_time(ptr) {
+            return ptr;
+        }
+        let address = ptr.as_ptr() as usize;
+        let cell = cell_of(address);
+        let base = region_base(cell);
+        // SAFETY: an allocated cell lies in a live region.
+        if unsafe { region_kind(base) } == RegionKind::Large {
+            return ptr;
+        }
+        // SAFETY: as above.
+        let header = unsafe { BlockHeader::at(base) };
+        let granule = BlockHeader::granule(base, cell);
+        let moved = header.marks.get(granule)
+            && !header.pins.get(granule)
+            && header.policy.is_from_space();
+        if moved {
+            // SAFETY: marked, unpinned and in from-space: copied.
+            unsafe { Self::copy_of(cell, address) }
+        } else {
+            ptr
+        }
+    }
+
+    /// A cell was marked where it is: count it and queue it for tracing.
+    fn reached_in_place(&mut self, ptr: HeapPtr, cell: usize, bytes: usize) {
+        self.live.cells += 1;
+        self.live.bytes += bytes;
+        self.stack.push(cell);
+        #[cfg(feature = "heap_debug")]
+        self.reached.push(ptr);
+        #[cfg(not(feature = "heap_debug"))]
+        let _ = ptr;
+    }
+
+    /// `bytes` of to-space: the current block's bump cursor, or a fresh
+    /// block from the pool.
+    fn alloc_to_space(&mut self, bytes: usize) -> usize {
+        if let Some(space) = &mut self.to_space
+            && space.cursor + bytes <= space.end
+        {
+            let cell = space.cursor;
+            space.cursor += bytes;
+            return cell;
+        }
+        // SAFETY: the marker runs only while every mutator is parked.
+        let base = unsafe { self.small.take_to_space() };
+        let cell = base + FIRST_CELL_OFFSET;
+        self.to_space = Some(ToSpace {
+            cursor: cell + bytes,
+            end: base + BLOCK_BYTES,
+        });
+        cell
+    }
+
+    /// Trace everything queued, forwarding each pointer slot as it is
+    /// visited, until nothing is left.
+    ///
+    /// # Safety
+    /// No mutator runs.
     pub(crate) unsafe fn drain(&mut self) {
-        while let Some(ptr) = self.stack.pop() {
-            if ptr.is_null() {
-                continue;
-            }
-            if self.is_compile_time(ptr) {
-                self.reached_compile_time(ptr);
-                continue;
-            }
-            let cell = cell_of(ptr.as_ptr() as usize);
-            // SAFETY: the caller guarantees `cell` is allocated.
-            if unsafe { self.mark(cell) } {
-                #[cfg(feature = "heap_debug")]
-                self.reached.push(ptr);
-                // SAFETY: just marked, so allocated; mutators are parked.
-                unsafe { self.trace(cell) };
-            }
+        while let Some(cell) = self.stack.pop() {
+            // SAFETY: queued cells are allocated, marked, and intact.
+            unsafe { self.trace(cell) };
         }
     }
 
@@ -170,74 +371,31 @@ impl<'a> Marker<'a> {
         let _ = ptr;
     }
 
-    /// Set `cell`'s mark; whether it was unmarked.
+    /// Repoint every pointer `cell` holds to where its object lives now,
+    /// reaching each.
     ///
     /// # Safety
-    /// `cell` is allocated.
-    unsafe fn mark(&mut self, cell: usize) -> bool {
-        let base = region_base(cell);
-        // SAFETY: an allocated cell lies in a live region.
-        let bytes = match unsafe { region_kind(base) } {
-            // SAFETY: as above.
-            RegionKind::Block => match unsafe { Self::mark_small(base, cell) } {
-                Some(bytes) => bytes,
-                None => return false,
-            },
-            // SAFETY: as above.
-            RegionKind::Large if unsafe { LargeSpace::mark(cell) } => unsafe {
-                LargeSpace::cell_bytes(cell)
-            },
-            RegionKind::Large => return false,
-        };
-        self.live.cells += 1;
-        self.live.bytes += bytes;
-        true
-    }
-
-    /// Mark a small cell, telling the policy. Returns its size, or
-    /// `None` if it was already marked.
-    ///
-    /// # Safety
-    /// `cell` is an allocated cell of the block at `base`.
-    unsafe fn mark_small(base: usize, cell: usize) -> Option<usize> {
-        // SAFETY: forwarded to the caller.
-        let header = unsafe { BlockHeader::at(base) };
-        let granule = BlockHeader::granule(base, cell);
-        debug_assert!(
-            header.starts.get(granule),
-            "marking {cell:#x}, which is not an allocated cell: a pointer to a reclaimed object"
-        );
-        if header.marks.get(granule) {
-            return None;
-        }
-        header.marks.set(granule);
-        // SAFETY: allocated, so its header is written.
-        let bytes = unsafe { Header::at(cell) }.cell_bytes();
-        SmallSpace::cell_marked(header, cell - base, bytes);
-        Some(bytes)
-    }
-
-    /// Queue every pointer `cell` holds.
-    ///
-    /// # Safety
-    /// `cell` is allocated and no mutator runs.
+    /// `cell` is an allocated, intact cell and no mutator runs.
     unsafe fn trace(&mut self, cell: usize) {
-        // SAFETY: allocated, so its header is written.
-        let descriptor = self.descriptors.get(unsafe { Header::at(cell) }.descriptor);
+        let descriptors: &'a DescriptorTable = self.descriptors;
+        // SAFETY: intact, so its header is written.
+        let descriptor = descriptors.get(unsafe { Header::at(cell) }.descriptor);
         match descriptor.trace {
             // SAFETY: a Rust value sits right after the header.
             Trace::Rust(hooks) => unsafe {
-                (hooks.trace)((cell + RUST_PAYLOAD_OFFSET) as *const u8, &mut self.stack);
+                (hooks.forward)((cell + RUST_PAYLOAD_OFFSET) as *mut u8, &mut |ptr| {
+                    self.forward(ptr)
+                });
             },
             // SAFETY: laid out by `descriptor`.
             Trace::Slots => unsafe {
-                trace_slots(descriptor, cell, cell_bytes(cell), &mut self.stack)
+                forward_slots(descriptor, cell, cell_bytes(cell), &mut |ptr| self.forward(ptr));
             },
         }
     }
 
     /// Whether `ptr` names an object this mark found live. Only between
-    /// marking and sweeping: afterwards a dead cell's memory may be gone.
+    /// marking and reclaiming: afterwards a dead cell's memory may be gone.
     ///
     /// # Safety
     /// `ptr` names a compile-time object or an allocated cell.
@@ -249,7 +407,25 @@ impl<'a> Marker<'a> {
         unsafe { is_cell_marked(cell_of(ptr.as_ptr() as usize)) }
     }
 
-    /// Every distinct pointer reached, compile-time ones included.
+    /// Where the object `ptr` names lives now, if the mark found it live:
+    /// for a weak entry, which keeps nothing alive.
+    ///
+    /// # Safety
+    /// As for [`Self::is_marked`].
+    pub(crate) unsafe fn forwarded(&mut self, ptr: HeapPtr) -> Option<HeapPtr> {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.is_marked(ptr) }.then(|| {
+            // SAFETY: marked, so forwarding reaches nothing new.
+            unsafe { self.forward(ptr) }
+        })
+    }
+
+    /// Every moved pointer, old to new.
+    pub(crate) fn take_moved(&mut self) -> HashMap<HeapPtr, HeapPtr> {
+        std::mem::take(&mut self.moved)
+    }
+
+    /// Every distinct pointer reached in place, compile-time ones included.
     #[cfg(feature = "heap_debug")]
     pub(crate) fn take_reached(&mut self) -> Vec<HeapPtr> {
         std::mem::take(&mut self.reached)

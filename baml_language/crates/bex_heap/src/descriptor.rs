@@ -449,12 +449,12 @@ const OBJECT_DESCRIPTOR: Descriptor = Descriptor::rust::<Object>(&OBJECT_HOOKS, 
 /// Null slots, and tagged slots holding a scalar, are passed over either way.
 enum SlotWalk<'a> {
     /// Push the pointer.
+    #[cfg_attr(
+        not(any(test, feature = "heap_debug")),
+        allow(dead_code, reason = "the heap debugger's read-only walk")
+    )]
     Trace(&'a mut Vec<HeapPtr>),
     /// Replace the pointer by what the closure returns for it.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the copying collector's rewrite")
-    )]
     Forward(&'a mut dyn FnMut(HeapPtr) -> HeapPtr),
 }
 
@@ -517,9 +517,14 @@ unsafe fn for_each_pointer_slot(
 }
 
 /// Push every pointer of the slot-described cell at `cell`, `cell_bytes` long.
+/// The heap debugger's read-only walk; the collector forwards instead.
 ///
 /// # Safety
 /// `cell` is an allocated cell laid out by `descriptor`.
+#[cfg_attr(
+    not(any(test, feature = "heap_debug")),
+    allow(dead_code, reason = "the heap debugger's read-only walk")
+)]
 pub(crate) unsafe fn trace_slots(
     descriptor: &Descriptor,
     cell: usize,
@@ -537,10 +542,6 @@ pub(crate) unsafe fn trace_slots(
 ///
 /// # Safety
 /// `cell` is an allocated cell laid out by `descriptor`, and no mutator runs.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the copying collector's rewrite")
-)]
 pub(crate) unsafe fn forward_slots(
     descriptor: &Descriptor,
     cell: usize,

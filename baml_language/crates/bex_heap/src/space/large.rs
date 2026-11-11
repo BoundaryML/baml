@@ -136,7 +136,7 @@ impl LargeSpace {
 
     /// # Safety
     /// `cell` is a live large cell.
-    #[cfg_attr(not(test), allow(dead_code, reason = "read once the collector moves cells"))]
+    #[cfg_attr(not(test), allow(dead_code, reason = "a large cell never moves; tests read it"))]
     pub(crate) unsafe fn is_pinned(cell: usize) -> bool {
         // SAFETY: forwarded to the caller.
         unsafe { prefix(cell) }.pinned.load(Ordering::Relaxed)

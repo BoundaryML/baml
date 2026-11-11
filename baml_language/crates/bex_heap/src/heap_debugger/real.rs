@@ -276,9 +276,10 @@ impl BexHeap {
         // No epoch equality is asserted. Epochs still stamp every pointer the
         // heap mints, and each collection re-stamps the roots and handles it
         // saw (its `Restamp` map), so a pointer's epoch says which collection
-        // last vouched for it. But objects never move, so a pointer stored in
-        // an object is never rewritten and legitimately outlives its epoch:
-        // liveness is checked above, against the space, instead.
+        // last vouched for it. But a pointer stored in an object is rewritten
+        // by the collector with a zero epoch, and one to a pinned object is
+        // never rewritten at all, so stored pointers legitimately outlive
+        // their epoch: liveness is checked above, against the space, instead.
     }
 
     /// Whether `ptr` names a compile-time object or an allocated cell. Reads

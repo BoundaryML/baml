@@ -57,14 +57,21 @@ impl<const WORDS: usize> Bitmap<WORDS> {
             .sum()
     }
 
+    /// How many bits are set both here and in `other`.
+    pub(crate) fn count_ones_in(&self, other: &Self) -> usize {
+        (0..WORDS)
+            .map(|word| (self.word(word) & other.word(word)).count_ones() as usize)
+            .sum()
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         (0..WORDS).all(|word| self.word(word) == 0)
     }
 
-    /// Keep only the bits also set in `other`.
-    pub(crate) fn retain(&self, other: &Self) {
+    /// Keep only the bits also set in both `a` and `b`.
+    pub(crate) fn retain_in_both(&self, a: &Self, b: &Self) {
         for word in 0..WORDS {
-            self.store(word, self.word(word) & other.word(word));
+            self.store(word, self.word(word) & a.word(word) & b.word(word));
         }
     }
 
@@ -78,9 +85,13 @@ impl<const WORDS: usize> Bitmap<WORDS> {
         set_bits::<WORDS>(move |word| self.word(word) & !other.word(word))
     }
 
-    /// Indices set both here and in `other`, ascending.
-    pub(crate) fn ones_in<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = usize> + 'a {
-        set_bits::<WORDS>(move |word| self.word(word) & other.word(word))
+    /// Indices set here, in `a` and in `b`, ascending.
+    pub(crate) fn ones_in_both<'a>(
+        &'a self,
+        a: &'a Self,
+        b: &'a Self,
+    ) -> impl Iterator<Item = usize> + 'a {
+        set_bits::<WORDS>(move |word| self.word(word) & a.word(word) & b.word(word))
     }
 
     /// The highest set bit at or below `bit` and at or above `floor`.
@@ -145,9 +156,13 @@ mod tests {
             vec![0, 63, 127]
         );
         assert_eq!(bits.count_ones_not_in(&keep), 3);
-        assert_eq!(bits.ones_in(&keep).collect::<Vec<_>>(), vec![5, 64]);
-        bits.retain(&keep);
-        assert_eq!(bits.ones().collect::<Vec<_>>(), vec![5, 64]);
+        assert_eq!(bits.count_ones_in(&keep), 2);
+        let also = Bitmap::<2>::default();
+        also.set(64);
+        also.set(127);
+        assert_eq!(bits.ones_in_both(&keep, &also).collect::<Vec<_>>(), vec![64]);
+        bits.retain_in_both(&keep, &also);
+        assert_eq!(bits.ones().collect::<Vec<_>>(), vec![64]);
         bits.clear_all();
         assert!(bits.is_empty());
     }

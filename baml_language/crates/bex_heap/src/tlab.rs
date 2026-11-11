@@ -52,8 +52,8 @@ pub const SETTLE_QUANTUM: isize = 64 * 1024;
 /// Small cells come from the current block of their size class (see
 /// [`crate::space::small`]); large cells are allocated individually.
 ///
-/// Objects never move, so a collection leaves the buffer valid: the owned
-/// blocks stay owned, their free lists rebuilt by the sweep.
+/// A collection leaves the buffer valid: a block this allocator owns is
+/// retained, its survivors copied out and its free list rebuilt.
 pub struct Tlab {
     small: SmallAllocator,
 
@@ -574,8 +574,9 @@ impl Tlab {
         &self.heap
     }
 
-    /// A collection ran. Objects do not move, so the owned blocks stay
-    /// valid; only the balance can be stale.
+    /// A collection ran. A block this allocator owns is retained by the
+    /// collection (its survivors were copied out, its slots freed), so the
+    /// owned blocks stay valid; only the balance can be stale.
     pub fn invalidate(&mut self) {
         // A full collection counted everything this balance covers.
         let full_collections = self.heap.gc_budget().full_collections;
@@ -1060,8 +1061,9 @@ mod tests {
     // - Concurrent TLAB allocation patterns
     // ========================================================================
 
-    /// A collection leaves the allocator's blocks valid: objects do not
-    /// move, so allocation continues where it was.
+    /// A collection leaves the allocator its block: the survivors are
+    /// copied out of it, so their slots come back, and allocation continues
+    /// in it.
     #[test]
     fn test_miri_tlab_survives_collection() {
         let heap = BexHeap::new(vec![]);
@@ -1071,16 +1073,17 @@ mod tests {
         let obj2 = tlab.alloc_string("before_gc_2".to_string());
         let remaining = tlab.remaining();
 
-        let (stats, _, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
+        let (stats, roots, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
         assert_eq!(stats.live_count, 2);
 
         // What bex_engine does after GC.
         tlab.invalidate();
         assert!(tlab.is_valid());
-        assert_eq!(tlab.remaining(), remaining);
+        assert_eq!(tlab.remaining(), remaining + 2 * OBJECT_CELL_BYTES);
 
         let obj3 = tlab.alloc_string("after_gc_1".to_string());
-        assert!(matches!(unsafe { obj1.get() }, Object::String(s) if s == "before_gc_1"));
+        assert_ne!(roots[0], obj1, "the survivor moved out of the block");
+        assert!(matches!(unsafe { roots[0].get() }, Object::String(s) if s == "before_gc_1"));
         assert!(matches!(unsafe { obj3.get() }, Object::String(s) if s == "after_gc_1"));
     }
 

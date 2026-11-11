@@ -268,23 +268,20 @@ fn a_body_paused_at_a_yield_survives_a_collection() {
         let mut live = vm.string_value("still live");
         let mut cached = vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown());
         for _ in 0..3 {
-            let before = live;
-            let before_cached = cached;
             // Spilled, as generated code spills what it holds across a
             // suspension: the cache holds its type weakly, so the slot is
-            // what keeps it alive.
+            // what keeps it alive, and the slot is repointed when the
+            // collection moves it.
             vm.set_slot(fr, 0, live);
             vm.set_slot(fr, 1, cached);
             vm.suspend(Step::Yield)?;
             live = vm.slot(fr, 0);
             cached = vm.slot(fr, 1);
-            assert_eq!(cached, before_cached, "the collection never moves the type");
             assert_eq!(
                 vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown()),
                 cached,
                 "the compiled cache keeps its live type"
             );
-            assert_eq!(live, before, "the collection never moves the value");
             assert_eq!(vm.as_string(&live).unwrap().as_str(), "still live");
         }
         Ok(live)
@@ -1234,9 +1231,9 @@ fn compiled_delivery_survives_collection_before_resume() {
     assert!(roots.contains(&thrown_ptr));
     assert!(roots.contains(&context_ptr));
 
-    collect(&mut vm);
-    let moved_value = thrown_ptr;
-    let moved_context = context_ptr;
+    let forwarding = collect(&mut vm);
+    let moved_value = *forwarding.get(&thrown_ptr).unwrap_or(&thrown_ptr);
+    let moved_context = *forwarding.get(&context_ptr).unwrap_or(&context_ptr);
     assert!(bex_vm_types::Survival::survived(&*vm.heap, moved_value));
     assert!(bex_vm_types::Survival::survived(&*vm.heap, moved_context));
     let Some(VmError::Thrown(thrown)) = vm.compiled.delivery.as_deref() else {
@@ -1589,12 +1586,12 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             "a native call's realized argument must root its runtime declaration",
         );
 
-        collect(&mut vm);
+        let forwarding = collect(&mut vm);
+        let moved = *forwarding.get(&class_ptr).unwrap_or(&class_ptr);
         assert!(
-            bex_vm_types::Survival::survived(&*vm.heap, class_ptr),
+            bex_vm_types::Survival::survived(&*vm.heap, moved),
             "the pending native type argument must survive collection"
         );
-        let moved = class_ptr;
 
         let ty = match lane {
             0 => &vm.pending_call_type_args[0],

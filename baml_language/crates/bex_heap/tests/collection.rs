@@ -1,6 +1,6 @@
 //! Tests the collector's tracing of every object kind, its stats, and
-//! multi-cycle behavior. Objects never move, so a survivor keeps its address
-//! and every edge to it stays valid.
+//! multi-cycle behavior. An unpinned survivor moves at every collection; its
+//! new address is in the forwarding map, and every edge to it is repointed.
 //!
 //! These tests drive `collect_garbage` directly and are placed in the `tests/`
 //! directory so they can exercise cross-module public APIs.
@@ -101,7 +101,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
 
     let rooted_heap = BexHeap::new(vec![]);
     let (mut rooted_tlab, package_ptr, function_ptr) = alloc_cycle(&rooted_heap);
-    let (stats, roots, _) = unsafe { rooted_heap.collect_garbage(&[function_ptr]) };
+    let (stats, roots, forwarding) = unsafe { rooted_heap.collect_garbage(&[function_ptr]) };
     rooted_tlab.invalidate();
     assert_eq!(stats.live_count, 4);
     let moved_function = roots[0];
@@ -129,7 +129,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
         panic!("package class ceased to be a class")
     };
     assert_eq!(class.owner.package(), Some(moved_package));
-    assert_eq!(package_ptr, moved_package, "objects never move");
+    assert_eq!(forwarding[&package_ptr], moved_package, "the package moved");
 
     let dropped_heap = BexHeap::new(vec![]);
     let (mut dropped_tlab, dropped_package, _) = alloc_cycle(&dropped_heap);
@@ -271,7 +271,7 @@ fn survivor_edge_to_a_fresh_object_is_traced_and_repointed() {
         .expect("an unknown list holds anything");
 
     // Only the container is a root: `fresh` is reachable through it alone.
-    let (_, roots, _) = unsafe { heap.collect_garbage(&[survivor]) };
+    let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[survivor]) };
     tlab.invalidate();
     let Some(array) = (unsafe { bex_vm_types::ListRef::of(roots[0]) }) else {
         panic!("expected the container array")
@@ -280,7 +280,7 @@ fn survivor_edge_to_a_fresh_object_is_traced_and_repointed() {
         .get(0)
         .and_then(|value| value.as_object_ptr())
         .expect("slot 0 holds an object");
-    assert_eq!(edge, fresh);
+    assert_eq!(edge, forwarding[&fresh]);
     let Object::String(text) = (unsafe { edge.get() }) else {
         panic!("expected the fresh string")
     };
@@ -311,7 +311,7 @@ fn survivor_edge_to_a_fresh_chain_is_traced_and_repointed() {
         )
         .expect("an unknown list holds anything");
 
-    let (_, roots, _) = unsafe { heap.collect_garbage(&[survivor]) };
+    let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[survivor]) };
     tlab.invalidate();
     let link = |ptr: bex_vm_types::HeapPtr| {
         let Some(array) = (unsafe { bex_vm_types::ListRef::of(ptr) }) else {
@@ -323,9 +323,9 @@ fn survivor_edge_to_a_fresh_chain_is_traced_and_repointed() {
             .expect("slot 0 holds an object")
     };
     let middle_after = link(roots[0]);
-    assert_eq!(middle_after, middle);
+    assert_eq!(middle_after, forwarding[&middle]);
     let leaf_after = link(middle_after);
-    assert_eq!(leaf_after, leaf);
+    assert_eq!(leaf_after, forwarding[&leaf]);
     let Object::String(text) = (unsafe { leaf_after.get() }) else {
         panic!("expected the leaf string")
     };
@@ -348,11 +348,12 @@ fn weak_verdicts_follow_the_collection() {
     let mut forward = ForwardRoots::new(&forwarding, &*heap);
     let mut live_ref = Weak::new(live);
     assert!(live_ref.visit(&mut forward));
-    assert_eq!(live_ref.ptr(), live);
+    assert_eq!(live_ref.ptr(), forwarding[&live], "repointed to the copy");
     assert!(
         live_ref.visit(&mut forward),
         "a second visit in the same pass agrees with the first"
     );
+    assert_eq!(live_ref.ptr(), forwarding[&live]);
     assert!(!Weak::new(dead).visit(&mut forward));
     let mut builtin_ref = Weak::new(builtin);
     assert!(builtin_ref.visit(&mut forward));
@@ -408,15 +409,15 @@ fn empty_package() -> Package {
 fn collect_three_times<const N: usize>(
     heap: &BexHeap,
     root: HeapPtr,
-    tracked: [HeapPtr; N],
+    mut tracked: [HeapPtr; N],
 ) -> (GcStats, HeapPtr, [HeapPtr; N]) {
-    let collect = |root: HeapPtr| {
+    let mut collect = |root: HeapPtr| {
         // SAFETY: single-threaded test; no VM is executing.
         let (stats, roots, forwarding) = unsafe { heap.collect_garbage(&[root]) };
-        for ptr in &tracked {
+        for ptr in &mut tracked {
+            *ptr = forwarding[ptr];
             assert!(bex_vm_types::Survival::survived(heap, *ptr), "{ptr:?} died");
         }
-        assert!(forwarding.is_empty() || cfg!(feature = "heap_debug"));
         (stats, roots[0])
     };
     let (_, root) = collect(root);
@@ -703,7 +704,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     // Root only the rule. Movement is checked through the forwarding map: a
     // later allocation may reuse a freed address, so inequality with the old
     // pointer is not a valid movement assertion.
-    let (stats, roots, _) = unsafe { heap.collect_garbage(&[rule_ptr]) };
+    let (stats, roots, forwarding) = unsafe { heap.collect_garbage(&[rule_ptr]) };
 
     assert_eq!(
         stats.live_count, 3,
@@ -713,7 +714,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
         panic!("root was not the impl rule")
     };
     assert_eq!(
-        rule.interface_head, iface_ptr,
+        rule.interface_head, forwarding[&iface_ptr],
         "interface moved; head must be repointed"
     );
     let Object::Interface(iface) = (unsafe { rule.interface_head.get() }) else {
@@ -721,7 +722,10 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     };
     assert_eq!(iface.path, iface_name);
     let fqn = rule.methods["run"].fqn;
-    assert_eq!(fqn, method_ptr, "method body moved; fqn must be repointed");
+    assert_eq!(
+        fqn, forwarding[&method_ptr],
+        "method body moved; fqn must be repointed"
+    );
     assert!(matches!(unsafe { fqn.get() }, Object::String(_)));
 }
 
@@ -759,16 +763,19 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
         owner: package_ptr,
     })));
 
-    // Objects never move: every edge still names the original object.
+    // Everything moves at every collection; every edge follows.
     let mut roots = vec![iface_ptr];
-    let expected_body = body_ptr;
-    let expected_structural = structural_ptr;
-    let expected_owner = package_ptr;
+    let mut expected_body = body_ptr;
+    let mut expected_structural = structural_ptr;
+    let mut expected_owner = package_ptr;
     for _ in 0..3 {
-        let (stats, next_roots, _) = unsafe { heap.collect_garbage(&roots) };
+        let (stats, next_roots, forwarding) = unsafe { heap.collect_garbage(&roots) };
         assert_eq!(stats.live_count, 4);
-        assert_eq!(next_roots, roots);
+        assert_ne!(next_roots, roots);
         roots = next_roots;
+        expected_body = forwarding[&expected_body];
+        expected_structural = forwarding[&expected_structural];
+        expected_owner = forwarding[&expected_owner];
     }
     let Object::Interface(iface) = (unsafe { roots[0].get() }) else {
         panic!("root was not the interface")
@@ -828,13 +835,15 @@ fn class_method_bodies_are_traced_and_forwarded() {
     })));
 
     let mut roots = vec![class_ptr];
-    let expected_body = body_ptr;
-    let expected_owner = package_ptr;
+    let mut expected_body = body_ptr;
+    let mut expected_owner = package_ptr;
     for _ in 0..3 {
-        let (stats, next_roots, _) = unsafe { heap.collect_garbage(&roots) };
+        let (stats, next_roots, forwarding) = unsafe { heap.collect_garbage(&roots) };
         assert_eq!(stats.live_count, 3);
-        assert_eq!(next_roots, roots);
+        assert_ne!(next_roots, roots);
         roots = next_roots;
+        expected_body = forwarding[&expected_body];
+        expected_owner = forwarding[&expected_owner];
     }
     let Object::Class(class) = (unsafe { roots[0].get() }) else {
         panic!("root was not the class")
@@ -925,7 +934,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
 
     // Root ONLY the future: the class must survive through the output-type
     // head alone.
-    let (stats, roots, _forwarding) = unsafe { heap.collect_garbage(&[future_ptr]) };
+    let (stats, roots, forwarding) = unsafe { heap.collect_garbage(&[future_ptr]) };
     tlab.invalidate();
     assert_eq!(stats.live_count, 2, "the class is live through the head");
 
@@ -937,7 +946,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         panic!("future returns ceased to be a class")
     };
     assert!(head.is_resolved());
-    assert_eq!(head.ptr(), class_ptr, "objects never move");
+    assert_eq!(head.ptr(), forwarding[&class_ptr], "the head followed the class");
     let Object::Class(class) = (unsafe { head.ptr().get() }) else {
         panic!("forwarded head does not point at the class")
     };
@@ -945,12 +954,13 @@ fn future_output_type_heads_are_traced_and_forwarded() {
 }
 
 // ============================================================================
-// Survivors Stay Put
+// Survivors Move, Their Storage Follows
 // ============================================================================
 
-/// The addresses and capacities of everything `roots` owns outside its slots,
-/// for an array, a byte array and a map, in that order.
-fn backing_storage(roots: &[bex_vm_types::HeapPtr]) -> [(usize, usize); 3] {
+/// What `roots` own outside their slots, for an array, a byte array and a
+/// map, in that order: the array's backing capacity, the byte array's Rust
+/// buffer (address and capacity), the map's length.
+fn backing_storage(roots: &[bex_vm_types::HeapPtr]) -> (usize, (usize, usize), usize) {
     // SAFETY: single-threaded tests; the roots are live and nothing mutates them.
     unsafe {
         let array = bex_vm_types::ListRef::of(roots[0]).expect("roots[0] is a list");
@@ -958,22 +968,22 @@ fn backing_storage(roots: &[bex_vm_types::HeapPtr]) -> [(usize, usize); 3] {
             panic!("roots[1] is not a byte array")
         };
         let map = bex_vm_types::MapRef::of(roots[2]).expect("roots[2] is a map");
-        let (array, array_cap) = array.backing_object().expect("a non-empty list");
+        let (_, array_cap) = array.backing_object().expect("a non-empty list");
         let bytes = bytes.data_unchecked();
-        let [map_keys, ..] = map.backing_objects().expect("a non-empty map");
-        [
-            (array.as_ptr().addr(), array_cap),
+        (
+            array_cap,
             (bytes.as_ptr().addr(), bytes.capacity()),
-            (map_keys.as_ptr().addr(), map.len()),
-        ]
+            map.len(),
+        )
     }
 }
 
-/// A collection leaves a survivor where it is: the object and whatever it
-/// owns outside its cell are the same allocations, with the same spare
-/// capacity, however many collections it passes through.
+/// A collection moves a survivor but not what it owns outside the heap: a
+/// Rust buffer is the same allocation with the same spare capacity, and a
+/// heap backing is copied whole, capacity included, however many collections
+/// it passes through.
 #[test]
-fn test_survivor_and_backing_storage_stay_in_place() {
+fn test_survivor_moves_and_its_storage_follows() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
@@ -997,12 +1007,14 @@ fn test_survivor_and_backing_storage_stay_in_place() {
 
     let mut roots = vec![array, bytes, map];
     let before = backing_storage(&roots);
-    assert_eq!(before[0].1, 100, "the array starts with spare capacity");
+    assert_eq!(before.0, 100, "the array starts with spare capacity");
 
     for _ in 0..3 {
-        let (_, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
+        let (_, new_roots, forwarding) = unsafe { heap.collect_garbage(&roots) };
         tlab.invalidate();
-        assert_eq!(new_roots, roots, "a collection never moves an object");
+        for (old, new) in roots.iter().zip(&new_roots) {
+            assert_eq!(forwarding[old], *new, "every survivor moved");
+        }
         roots = new_roots;
         assert_eq!(
             backing_storage(&roots),
@@ -1089,7 +1101,7 @@ fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
 }
 
 /// A dead instance of a runtime class is queued for `cleanup` with the
-/// class's own `cleanup` body, both still where they were allocated.
+/// class's own `cleanup` body, both at their new addresses.
 #[test]
 fn test_finalizer_is_queued_for_an_instance_of_a_runtime_class() {
     {
@@ -1114,9 +1126,9 @@ fn test_finalizer_is_queued_for_an_instance_of_a_runtime_class() {
 
         // Root the class and its method body: both are marked before the
         // scan that discovers the unreachable instance.
-        let (_, roots, _) = unsafe { heap.collect_garbage(&[class, cleanup]) };
+        let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[class, cleanup]) };
         tlab.invalidate();
-        assert_eq!(roots[0], class, "a collection never moves the class");
+        assert_eq!(roots[0], forwarding[&class], "the class moved");
 
         let pending = heap.take_pending_finalizers();
         assert_eq!(
@@ -1125,7 +1137,7 @@ fn test_finalizer_is_queued_for_an_instance_of_a_runtime_class() {
             "a collection must queue the dead instance"
         );
         let (kept_alive, queued_cleanup) = &pending[0];
-        assert_eq!(*kept_alive, dead_instance);
+        assert_eq!(*kept_alive, forwarding[&dead_instance], "kept alive by copy");
         assert_eq!(
             *queued_cleanup, roots[1],
             "the queued finalizer is the class's `cleanup` body"

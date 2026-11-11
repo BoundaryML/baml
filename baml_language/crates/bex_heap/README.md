@@ -1,8 +1,8 @@
 # BEX Heap
 
-Shared memory management for the BEX runtime: a non-moving mark-sweep
-collector with size-class allocation, behind the engine's heap handles,
-permits and root registry.
+Shared memory management for the BEX runtime: a copying collector with
+pinning over 32 KiB blocks, size-class allocation for the mutator, behind
+the engine's heap handles, permits and root registry.
 
 ## Layout
 
@@ -65,10 +65,10 @@ ratio; `BexHeap::class_occupancy` breaks blocks and cells down by class.
 ## Handles
 
 External code holds opaque handles; the handle table is always a root, and
-since objects never move a handle's pointer never changes. Under
-`heap_debug`, each collection re-stamps surviving pointers with a new epoch
-(the `Restamp` map), so a pointer the collection never saw still fails the
-epoch check.
+a collection repoints each handle whose object moved (the `Restamp` map,
+which names every moved pointer). Under `heap_debug` the map also re-stamps
+every pointer reached in place with the new epoch, so a pointer the
+collection never saw still fails the epoch check.
 
 ## Concurrency
 

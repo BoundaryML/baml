@@ -2415,14 +2415,15 @@ class Fresh {}
         let heap = Arc::clone(&vm.heap);
         let mut index = crate::package_load::DynDispatchRoot::new(Arc::clone(&vm.dynamic_dispatch));
         let (_, _, forwarding) = unsafe { heap.collect_garbage(&[class.ptr()]) };
+        let follow = |ptr: bex_vm_types::HeapPtr| *forwarding.get(&ptr).unwrap_or(&ptr);
         assert!(
-            bex_vm_types::Survival::survived(&*heap, rule),
+            bex_vm_types::Survival::survived(&*heap, follow(rule)),
             "the class owns its rule"
         );
         vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(index.tables.rule_count(), 1);
-        let moved = TypeHead::new(class.ptr(), class.tag());
+        let moved = TypeHead::new(follow(class.ptr()), class.tag());
         assert!(
             crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
                 &class_ty(moved),

@@ -1562,8 +1562,8 @@ mod tests {
         // pointer the root set misses.
         #[allow(unsafe_code, reason = "a test drives the collector directly")]
         let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
-        // Objects never move: the live witness keeps its address.
-        let moved_rule = live_rule;
+        // The live witness moved; the cache must follow it.
+        let moved_rule = *forwarding.get(&live_rule).unwrap_or(&live_rule);
         let heap = std::sync::Arc::clone(&vm.heap);
         vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         crate::package_load::DynDispatchRoot::new(std::sync::Arc::clone(&vm.dynamic_dispatch))
@@ -1576,8 +1576,9 @@ mod tests {
             vm.impl_cache.borrow().cached_rules().collect::<Vec<_>>(),
             [moved_rule]
         );
-        let live_head = TypeHead::new(live_head.ptr(), live_head.tag());
-        let dead_head = TypeHead::new(dead_head.ptr(), dead_head.tag());
+        let follow = |ptr: HeapPtr| *forwarding.get(&ptr).unwrap_or(&ptr);
+        let live_head = TypeHead::new(follow(live_head.ptr()), live_head.tag());
+        let dead_head = TypeHead::new(follow(dead_head.ptr()), dead_head.tag());
         let resolver = ImplResolver::new(&vm);
         let Some(ResolvedInterfaceImpl::Explicit { rule, .. }) =
             resolver.resolve_implementation(&int, live_head, &[])
@@ -1625,15 +1626,18 @@ mod tests {
         // pointer the root set misses.
         #[allow(unsafe_code, reason = "a test drives the collector directly")]
         let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
-        // Objects never move: the live root keeps its address.
-        let moved_root = live_root;
+        // The live root moved; the answer is rekeyed under its new address.
+        let moved_root = *forwarding.get(&live_root).unwrap_or(&live_root);
         let heap = std::sync::Arc::clone(&vm.heap);
         vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         // The answer under the freed root is gone; the other one now lives
         // under the moved root, so asking there is a hit that stores nothing.
         assert_eq!(vm.impl_cache.borrow().len(), 1);
-        let head = TypeHead::new(head.ptr(), head.tag());
+        let head = TypeHead::new(
+            *forwarding.get(&head.ptr()).unwrap_or(&head.ptr()),
+            head.tag(),
+        );
         assert!(is_structural(
             ImplResolver::for_package(&vm, moved_root)
                 .resolve_implementation(&int, head, &[])

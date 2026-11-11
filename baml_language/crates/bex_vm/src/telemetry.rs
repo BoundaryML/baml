@@ -2174,9 +2174,10 @@ mod tests {
             &*vm.heap,
         ));
         assert_eq!(definitions(&state), before);
+        let follow = |ptr: HeapPtr| *forwarding.get(&ptr).unwrap_or(&ptr);
         let moved = CallPathKey {
-            visible_caller: Some(caller),
-            callee,
+            visible_caller: Some(follow(caller)),
+            callee: follow(callee),
             ..key
         };
         assert_eq!(

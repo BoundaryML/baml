@@ -1,9 +1,9 @@
 //! Unified heap for BEX virtual machine.
 //!
 //! Compile-time objects (functions, classes, enums, literals) live in a
-//! permanent `Vec<Object>`. Runtime objects live in cells of a non-moving
-//! mark-region space ([`crate::space`]), allocated by per-mutator
-//! [`Tlab`](crate::Tlab)s and reclaimed by [`BexHeap::collect`].
+//! permanent `Vec<Object>`. Runtime objects live in cells of a block space
+//! ([`crate::space`]), allocated by per-mutator [`Tlab`](crate::Tlab)s and
+//! copied or reclaimed by [`BexHeap::collect`].
 //!
 //! # Thread Safety
 //!
@@ -34,7 +34,8 @@ use crate::{
     },
 };
 
-/// Where an object lives. Objects never move, so this never changes.
+/// Where an object lives. A collection moves an object within the runtime
+/// space, never between spaces, so this never changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Generation {
     /// Permanent compile-time objects (never collected).
@@ -228,7 +229,7 @@ pub struct BexHeap {
     /// Each entry pairs the instance's `HeapPtr` with its class's
     /// `cleanup` function, read off the class by the GC while it has the
     /// class in hand — so the engine drain needs no heap read to dispatch.
-    pending_finalizers: Mutex<Vec<(HeapPtr, HeapPtr)>>,
+    pub(crate) pending_finalizers: Mutex<Vec<(HeapPtr, HeapPtr)>>,
 
     /// Unobserved errors discovered while collecting unreachable futures.
     /// Entries are drained before execution
@@ -272,11 +273,14 @@ pub struct BexHeap {
 unsafe impl Send for BexHeap {}
 unsafe impl Sync for BexHeap {}
 
-/// After a collection, an object survived iff it is compile-time (never
-/// collected) or the collection marked it. A dead object's cell was swept:
-/// its start bit is gone (a small cell) or its allocation freed (a large
-/// one), so the verdict is read from the block tables and large-object set,
-/// never from the dead object's memory.
+/// After a collection, a pointer absent from its [`Restamp`] names a live
+/// object iff it is compile-time (never collected), or its cell is marked
+/// and still allocated: a pinned or large cell marked in place, or a
+/// to-space copy. A dead cell, and a moved cell's old copy, lost its start
+/// bit (a small cell) or its allocation (a large one), so the verdict is
+/// read from the block tables and large-object set, never from the memory.
+///
+/// [`Restamp`]: crate::gc::Restamp
 impl bex_vm_types::Survival for BexHeap {
     fn survived(&self, ptr: HeapPtr) -> bool {
         if self.is_compile_time_ptr(ptr) {
@@ -800,19 +804,26 @@ impl BexHeap {
         &self.debug_state
     }
 
-    /// Re-stamp handle pointers after a collection (see
+    /// Repoint handles after a collection (see
     /// [`Restamp`](crate::gc::Restamp)). Handles are roots, so every handle
-    /// target survived; nothing moved, so the reverse index is untouched.
+    /// target survived, and each that moved is in the map; the reverse
+    /// index is rebuilt under the new addresses.
     pub(crate) fn update_handles(&self, restamp: &HashMap<HeapPtr, HeapPtr>) {
         if restamp.is_empty() {
             return;
         }
+        // LOCK ORDER: `handles` before `handles_by_ptr`.
         let mut handles = self.handles.write().expect("handles lock poisoned");
+        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         for ptr in handles.values_mut() {
-            if let Some(&stamped) = restamp.get(ptr) {
-                *ptr = stamped;
+            if let Some(&moved) = restamp.get(ptr) {
+                *ptr = moved;
             }
         }
+        let old = std::mem::take(&mut *by_ptr);
+        by_ptr.extend(old.into_iter().map(|(ptr, entry)| {
+            (restamp.get(&ptr).copied().unwrap_or(ptr), entry)
+        }));
     }
 
     /// BEP-042: a class with a `cleanup` finalizer now lives on this heap — a

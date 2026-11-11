@@ -1,11 +1,15 @@
-//! The non-moving mark-sweep space.
+//! The space: mark-region blocks the collector copies out of.
 //!
 //! Small objects live in 32 KiB [blocks](block), at 16-byte granules. Each
-//! block starts with a header holding three side tables, an object-start
-//! bitmap, a mark bitmap and a pin bitmap (one bit per granule), and the state of the
-//! small-object policy ([`small`]: size classes, one class per block, a free
-//! list per block). Cells above [`LARGE_OBJECT_THRESHOLD`] get an allocation
-//! of their own ([`large`]). Nothing ever moves.
+//! block starts with a header holding four side tables, an object-start
+//! bitmap, a mark bitmap, a pin bitmap and a hooked bitmap (one bit per
+//! granule), and the state of the small-object policy ([`small`]: size
+//! classes, one class per block, a free list per block, and the collector's
+//! bump-filled to-space blocks). Cells above [`LARGE_OBJECT_THRESHOLD`] get
+//! an allocation of their own ([`large`]) and never move. A collection
+//! ([`mark`]) copies every unpinned live small cell into to-space and
+//! repoints every pointer to it; a cell a conservative root names is pinned
+//! and stays, and so does its block ([`sweep`]).
 //!
 //! Every allocation, small or large, is a *cell*: a
 //! [`Header`](crate::Header) followed by the object's bytes. A pointer to an
@@ -92,7 +96,7 @@ pub(crate) unsafe fn pin_cell(cell: usize) {
 ///
 /// # Safety
 /// `cell` is an allocated cell.
-#[cfg_attr(not(test), allow(dead_code, reason = "read once the collector moves cells"))]
+#[cfg_attr(not(test), allow(dead_code, reason = "the collector reads the bitmaps directly"))]
 pub(crate) unsafe fn is_cell_pinned(cell: usize) -> bool {
     let base = region_base(cell);
     // SAFETY: forwarded to the caller.
@@ -103,6 +107,25 @@ pub(crate) unsafe fn is_cell_pinned(cell: usize) -> bool {
         RegionKind::Large => unsafe { large::LargeSpace::is_pinned(cell) },
     }
 }
+
+/// Whether a collection fills every reclaimed from-space cell with
+/// [`sweep::POISON_BYTE`], so a use-after-move reads garbage rather than a
+/// stale copy: always under `heap_debug`, else under `BAML_GC_STRESS=1`.
+pub(crate) fn gc_poison() -> bool {
+    use std::sync::OnceLock;
+    static STRESS: OnceLock<bool> = OnceLock::new();
+    #[cfg(test)]
+    if POISON_FOR_TESTS.load(std::sync::atomic::Ordering::Relaxed) {
+        return true;
+    }
+    cfg!(feature = "heap_debug")
+        || *STRESS.get_or_init(|| baml_env::os_var("BAML_GC_STRESS").is_some_and(|v| v == "1"))
+}
+
+/// Turn poisoning on for every later collection in this test process.
+#[cfg(test)]
+pub(crate) static POISON_FOR_TESTS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// Forget every pin of the previous collection, in every block and large
 /// cell.

@@ -542,8 +542,12 @@ pub(crate) mod tests {
         }
 
         // SAFETY: single-threaded test; no VM is executing.
-        let _ = unsafe { vm.heap.collect_garbage(&[]) };
-        assert_eq!(vm.heap.take_pending_finalizers(), vec![(older, finalizer)]);
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
+        let follow = |ptr: HeapPtr| *forwarding.get(&ptr).unwrap_or(&ptr);
+        assert_eq!(
+            vm.heap.take_pending_finalizers(),
+            vec![(follow(older), follow(finalizer))]
+        );
     }
 
     fn test_vm_on(
@@ -1215,7 +1219,10 @@ pub(crate) mod tests {
 
         assert_eq!(stats.live_count, 1);
         assert!(
-            ::bex_vm_types::Survival::survived(&*vm.heap, trampoline),
+            ::bex_vm_types::Survival::survived(
+                &*vm.heap,
+                *forwarding.get(&trampoline).unwrap_or(&trampoline)
+            ),
             "active trampoline function must survive GC"
         );
 
@@ -1314,11 +1321,11 @@ pub(crate) mod tests {
         );
 
         let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        let moved = *forwarding.get(&class_ptr).unwrap_or(&class_ptr);
         assert!(
-            ::bex_vm_types::Survival::survived(&*vm.heap, class_ptr),
+            ::bex_vm_types::Survival::survived(&*vm.heap, moved),
             "the frame type argument's declaration must survive collection"
         );
-        let moved = class_ptr;
         let heap = Arc::clone(&vm.heap);
         vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
@@ -1371,11 +1378,11 @@ pub(crate) mod tests {
         );
 
         let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        let moved = *forwarding.get(&class_ptr).unwrap_or(&class_ptr);
         assert!(
-            ::bex_vm_types::Survival::survived(&*vm.heap, class_ptr),
+            ::bex_vm_types::Survival::survived(&*vm.heap, moved),
             "the pending native type argument must survive collection"
         );
-        let moved = class_ptr;
         let heap = Arc::clone(&vm.heap);
         vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 

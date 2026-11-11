@@ -942,8 +942,8 @@ mod tests {
             64,
             "dead owners must sweep their rules"
         );
-        // Objects never move: the live owner is where it was.
-        let live_owner = owners[0];
+        // The live owner moved; the index follows it.
+        let live_owner = *forwarding.get(&owners[0]).unwrap_or(&owners[0]);
         assert!(
             !tables.rules_for_class(live_owner).is_empty(),
             "a live owner keeps its rules"

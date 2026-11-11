@@ -22,7 +22,8 @@ pub(crate) struct BlockHeader {
     /// One bit per granule: the cell starting here was marked live.
     pub(crate) marks: Bitmap<GRANULE_WORDS>,
     /// One bit per granule: a conservative root named the cell starting
-    /// here during the latest collection, so it must not move.
+    /// here during the latest collection, so it was marked in place rather
+    /// than copied, and its block was retained.
     pub(crate) pins: Bitmap<GRANULE_WORDS>,
     /// One bit per granule: the cell starting here is a Rust value
     /// ([`Trace::Rust`](crate::Trace::Rust)) with a destructor and outside
@@ -95,7 +96,7 @@ impl BlockHeader {
         self.pins.set(Self::granule(base, cell));
     }
 
-    #[cfg_attr(not(test), allow(dead_code, reason = "read once the collector moves cells"))]
+    #[cfg_attr(not(test), allow(dead_code, reason = "the collector reads the bitmap directly"))]
     #[inline]
     pub(crate) fn is_pinned(&self, base: usize, cell: usize) -> bool {
         self.pins.get(Self::granule(base, cell))

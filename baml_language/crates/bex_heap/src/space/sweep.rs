@@ -1,17 +1,27 @@
-//! Sweeping: clear every unmarked cell's start bit, drop and measure only the
-//! Rust-valued cells (the block's `hooked` bitmap), then let the size-class
-//! policy rewind its cursors. A dead instance, list or map is never read: its
-//! header and descriptor are not looked up, and nothing is written into it.
+//! Reclaiming after the mark: a from-space block with neither a pin nor an
+//! owner goes back to the pool empty; one with a pin, or one a mutator still
+//! allocates into, is swept in place: dead cells and moved cells' old copies
+//! lose their start bits, pinned survivors keep theirs, and the size-class
+//! policy rewinds its cursor. To-space blocks hold only copies and keep
+//! their bits. Only the Rust-valued cells (the block's `hooked` bitmap) are
+//! dropped and measured; a dead instance, list or map is never read.
+//!
+//! A moved cell's old copy is marked and never dropped: its bytes went with
+//! the copy, and the copy's destructor runs when that dies.
 
 use crate::descriptor::CellHeader as _;
 use bex_vm_types::Meter;
 
 use super::{
-    GRANULE_BYTES, block::BlockHeader, large::LargeSpace, mark::is_cell_marked, small::SmallSpace,
+    BLOCK_BYTES, GRANULE_BYTES,
+    block::{BlockHeader, FIRST_CELL_OFFSET},
+    large::LargeSpace,
+    mark::is_cell_marked,
+    small::SmallSpace,
 };
 use crate::descriptor::{DescriptorTable, Header, OBJECT_DESC, RUST_PAYLOAD_OFFSET, Trace};
 
-/// What a sweep kept and reclaimed.
+/// What a reclaim kept and reclaimed.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Swept {
     pub(crate) live_cells: usize,
@@ -21,23 +31,29 @@ pub(crate) struct Swept {
     pub(crate) live_payload_bytes: usize,
 }
 
-/// Sweep every block and large object.
+/// The byte every reclaimed from-space cell is filled with under
+/// [`poison`](super::gc_poison): a read through a stale pointer finds this,
+/// not the object's last state.
+pub(crate) const POISON_BYTE: u8 = 0xD5;
+
+/// Reclaim every block and large object.
 ///
 /// # Safety
 /// No mutator runs, and the marks are those of a complete mark.
-pub(crate) unsafe fn sweep(
+pub(crate) unsafe fn reclaim(
     small: &mut SmallSpace,
     large: &mut LargeSpace,
     descriptors: &DescriptorTable,
+    poison: bool,
 ) -> Swept {
     let mut census = Meter::census();
     let mut swept = Swept::default();
     for &base in small.pool().blocks() {
         // SAFETY: forwarded to the caller.
-        unsafe { sweep_block(base, descriptors, &mut census, &mut swept) };
+        unsafe { reclaim_block(base, descriptors, poison, &mut census, &mut swept) };
     }
     // SAFETY: each dead large cell is dropped exactly once, before freeing.
-    swept.dead_cells += large.sweep(|cell| unsafe { drop_cell(descriptors, cell) });
+    swept.dead_cells += large.sweep(|cell| unsafe { drop_cell(descriptors, cell, poison) });
     for cell in large.cells() {
         swept.live_cells += 1;
         // SAFETY: a marked, live cell.
@@ -50,10 +66,11 @@ pub(crate) unsafe fn sweep(
 }
 
 /// # Safety
-/// As for [`sweep`]; `base` is a block of the space.
-unsafe fn sweep_block(
+/// As for [`reclaim`]; `base` is a block of the space.
+unsafe fn reclaim_block(
     base: usize,
     descriptors: &DescriptorTable,
+    poison: bool,
     census: &mut Meter,
     swept: &mut Swept,
 ) {
@@ -62,25 +79,72 @@ unsafe fn sweep_block(
     if header.starts.is_empty() {
         return;
     }
+    if !header.policy.is_from_space() {
+        // To-space of this collection: every cell is a live copy.
+        swept.live_cells += header.starts.count_ones();
+        for granule in header.hooked.ones() {
+            // SAFETY: a copy of a marked Rust-valued cell.
+            unsafe { measure_cell(descriptors, base + granule * GRANULE_BYTES, census) };
+        }
+        return;
+    }
     swept.dead_cells += header.starts.count_ones_not_in(&header.marks);
-    swept.live_cells += header.marks.count_ones();
     for granule in header.hooked.ones_not_in(&header.marks) {
         // SAFETY: an allocated Rust-valued cell the mark did not reach.
-        unsafe { drop_cell(descriptors, base + granule * GRANULE_BYTES) };
+        unsafe { drop_cell(descriptors, base + granule * GRANULE_BYTES, poison) };
     }
-    for granule in header.hooked.ones_in(&header.marks) {
-        // SAFETY: a marked Rust-valued cell.
+    let retained = !header.pins.is_empty() || header.policy.is_owned();
+    if !retained {
+        // Every cell is dead or moved: the block goes back to the pool.
+        if poison {
+            // SAFETY: the block's cell area, which nothing live occupies.
+            unsafe { poison_bytes(base + FIRST_CELL_OFFSET, base + BLOCK_BYTES) };
+        }
+        header.starts.clear_all();
+        header.hooked.clear_all();
+        header.marks.clear_all();
+        return;
+    }
+    // A pinned survivor is marked in place; a marked, unpinned cell is a
+    // moved cell's old copy, whose slot is free.
+    swept.live_cells += header.marks.count_ones_in(&header.pins);
+    for granule in header.hooked.ones_in_both(&header.marks, &header.pins) {
+        // SAFETY: a marked Rust-valued cell, in place.
         unsafe { measure_cell(descriptors, base + granule * GRANULE_BYTES, census) };
     }
-    header.starts.retain(&header.marks);
-    header.hooked.retain(&header.marks);
+    if poison {
+        // A moved cell's old header is its forwarding address, not its size:
+        // each reclaimed cell extends to the next start, or the block's end.
+        let starts: Vec<usize> = header.starts.ones().collect();
+        for (index, &granule) in starts.iter().enumerate() {
+            if header.marks.get(granule) && header.pins.get(granule) {
+                continue;
+            }
+            let end = starts
+                .get(index + 1)
+                .map_or(base + BLOCK_BYTES, |&next| base + next * GRANULE_BYTES);
+            // SAFETY: a dead or moved cell and the free slots after it.
+            unsafe { poison_bytes(base + granule * GRANULE_BYTES, end) };
+        }
+    }
+    header.starts.retain_in_both(&header.marks, &header.pins);
+    header.hooked.retain_in_both(&header.marks, &header.pins);
+}
+
+/// Fill `start..end` with [`POISON_BYTE`].
+///
+/// # Safety
+/// `start..end` is writable and holds nothing live.
+unsafe fn poison_bytes(start: usize, end: usize) {
+    // SAFETY: forwarded to the caller.
+    unsafe { (start as *mut u8).write_bytes(POISON_BYTE, end - start) };
 }
 
 /// Run a dead cell's destructor.
 ///
 /// # Safety
 /// `cell` is allocated, unmarked, and never read again.
-unsafe fn drop_cell(descriptors: &DescriptorTable, cell: usize) {
+unsafe fn drop_cell(descriptors: &DescriptorTable, cell: usize, poison: bool) {
     // SAFETY: allocated, so its header is written.
     let id = unsafe { Header::at(cell) }.descriptor;
     debug_assert!(!unsafe { is_cell_marked(cell) });
@@ -90,8 +154,9 @@ unsafe fn drop_cell(descriptors: &DescriptorTable, cell: usize) {
     let payload = (cell + RUST_PAYLOAD_OFFSET) as *mut u8;
     // SAFETY: forwarded to the caller.
     unsafe { (hooks.drop)(payload) };
-    if cfg!(feature = "heap_debug") && id == OBJECT_DESC {
+    if cfg!(feature = "heap_debug") && !poison && id == OBJECT_DESC {
         // A read through a stale pointer finds a tombstone, not freed state.
+        // Under poisoning the cell's bytes are filled over instead.
         // SAFETY: the dropped value's storage is still the cell's.
         unsafe {
             payload
@@ -104,7 +169,7 @@ unsafe fn drop_cell(descriptors: &DescriptorTable, cell: usize) {
 /// Add what a live cell keeps alive outside itself to `census`.
 ///
 /// # Safety
-/// `cell` is allocated and no mutator runs.
+/// `cell` is allocated, intact, and no mutator runs.
 unsafe fn measure_cell(descriptors: &DescriptorTable, cell: usize, census: &mut Meter) {
     // SAFETY: allocated, so its header is written.
     let Trace::Rust(hooks) = descriptors

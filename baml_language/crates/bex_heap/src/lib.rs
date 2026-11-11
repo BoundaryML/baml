@@ -2,11 +2,13 @@
 //!
 //! The unified heap for the BEX virtual machine:
 //!
-//! - **Non-moving mark-sweep space**: 32 KiB blocks of 16-byte granules
-//!   with an object-start bitmap and side-table mark bits per block, small
-//!   cells segregated by size class (one class per block, a free list per
-//!   block), and separately allocated large objects ([`space`]). Objects
-//!   never move.
+//! - **Block space with a copying collector**: 32 KiB blocks of 16-byte
+//!   granules with object-start, mark, pin and hooked bitmaps per block,
+//!   small cells segregated by size class for the mutator (one class per
+//!   block, a free list per block), and separately allocated large objects
+//!   ([`space`]). A collection copies every unpinned live small cell into
+//!   bump-filled to-space blocks; a cell a conservative root names is
+//!   pinned and stays.
 //! - **Per-mutator allocation**: each VM owns one block per size class and
 //!   takes cells from it without locking ([`Tlab`]).
 //! - **Descriptors**: every cell starts with a [`Header`] naming the
