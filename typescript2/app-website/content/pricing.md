@@ -20,10 +20,9 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | --- | --- | --- |
 | Price | $0 a month | $250 a month |
 | **Data** | | |
-| Data included | 1 GB a month | 5 GB a month |
-| Data after that | $4 per GB | $3 per GB |
-| Retention included | 30 days | 30 days |
-| Longer retention | No | $0.10 per GB per 30 days |
+| Included | 1 GB a month, kept 30 days | 5 GB a month, kept 30 days |
+| Ingestion past that | $4 per GB | $3 per GB |
+| Retention past 30 days | No | $0.10 per GB per 30 days |
 | **Team and security** | | |
 | Sign in with Google | Included | Included |
 | SAML and OIDC single sign-on | No | Coming soon |

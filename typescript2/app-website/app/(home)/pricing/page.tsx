@@ -35,13 +35,15 @@ const BLOCKS: { free: string[]; note: string; rows: Row[]; title: string }[] = [
       'Unlimited dashboards',
     ],
     note: 'What your programs record: every function’s inputs, outputs, logs and network calls.',
+    // Named the way Better Stack names its line items: what's included, then ingestion and
+    // retention past it.
     rows: [
       {
         cells: [
-          ['1 GB', 'per month'],
-          ['5 GB', 'per month'],
+          ['1 GB', 'a month, kept 30 days'],
+          ['5 GB', 'a month, kept 30 days'],
         ],
-        label: 'Data included',
+        label: 'Included',
       },
       {
         cells: [
@@ -49,13 +51,12 @@ const BLOCKS: { free: string[]; note: string; rows: Row[]; title: string }[] = [
           ['$3', 'per GB'],
         ],
         extra: true,
-        label: 'Data after that',
+        label: 'Ingestion',
       },
-      { cells: SAME(['30 days']), label: 'Retention included' },
       {
         cells: [['—'], ['$0.10', 'per GB per 30 days']],
         extra: true,
-        label: 'Longer retention',
+        label: 'Retention',
       },
     ],
     title: 'Data',
@@ -110,7 +111,7 @@ const PLANS = [
 
 // Label, Starter, Pro.
 const COLUMNS =
-  'grid grid-cols-[minmax(0,1fr)_6rem_8rem] items-center gap-3 px-4 sm:grid-cols-[minmax(0,1fr)_8rem_10rem]';
+  'grid grid-cols-[minmax(0,1fr)_6rem_8rem] items-center gap-3 px-4 sm:grid-cols-[minmax(0,1fr)_10rem_10rem]';
 
 function Tick({ children }: { children: ReactNode }) {
   return (
