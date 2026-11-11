@@ -2106,8 +2106,8 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           >
             agents can understand and use the toolchain well
           </a>
-          . Seriously, ask Claude to download BAML and try it, then ask it
-          anything about BAML.
+          . Seriously, ask Claude to download BAML and ask it to be ambitious
+          with it.
         </p>
         <p className="mt-4 max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
           We’re building something no one has built before: a language, its
