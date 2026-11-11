@@ -129,11 +129,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
         }
     }
 
-    fn _path(
-        vm: &mut BexVm,
-        j: &Value,
-        selector: &str,
-    ) -> Result<Value, VmRustFnError> {
+    fn _path(vm: &mut BexVm, j: &Value, selector: &str) -> Result<Value, VmRustFnError> {
         path::select(vm, *j, selector)
     }
 
@@ -259,16 +255,17 @@ fn rest_value(
         .map_snapshot(map, bex_vm_types::object_format::Access::Shared)
         .snapshot_entries()
     {
-        let Ok(text) = vm.as_string(&key).map(|key| key.as_str()) else {
+        let Ok(string) = vm.as_string(&key) else {
             continue;
         };
+        let text = string.as_str();
         let claimed = rest == plan::Rest::Unclaimed
             && plan
                 .fields
                 .iter()
                 .any(|field| field.shown && field.key == text);
         if !claimed {
-            data.push((bex_vm_types::map_string_hash(text), key, value));
+            data.push((string.hash(), key, value));
         }
     }
     let json_ty = json_alias_ty(vm);
@@ -405,9 +402,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                                     .snapshot_entries()
                                     .into_iter()
                                     .map(|(key, v)| {
-                                        let hash = vm.as_string(&key).map_or(0, |key| {
-                                            bex_vm_types::map_string_hash(key.as_str())
-                                        });
+                                        let hash = vm.as_string(&key).map_or(0, |key| key.hash());
                                         (Some((hash, key)), v)
                                     })
                                     .collect(),

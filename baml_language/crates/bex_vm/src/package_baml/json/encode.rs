@@ -1329,7 +1329,7 @@ impl Sink for ValueSink {
             Key::Value(value) => {
                 let hash = vm
                     .as_string(&value)
-                    .map(|key| bex_vm_types::map_string_hash(key.as_str()))
+                    .map(|key| key.hash())
                     .unwrap_or_default();
                 (hash, value)
             }
@@ -1338,12 +1338,22 @@ impl Sink for ValueSink {
                     .field_keys
                     .entry((class, index))
                     .or_insert_with(|| Value::object(vm.alloc_string(text)));
-                (bex_vm_types::map_string_hash(text), value)
+                // The cell is reused for every instance of the class, so its
+                // hash is computed once.
+                let hash = vm
+                    .as_string(&value)
+                    .map(|key| key.hash())
+                    .unwrap_or_default();
+                (hash, value)
             }
-            Key::Text(text) => (
-                bex_vm_types::map_string_hash(text),
-                Value::object(vm.alloc_string(text)),
-            ),
+            Key::Text(text) => {
+                let value = Value::object(vm.alloc_string(text));
+                let hash = vm
+                    .as_string(&value)
+                    .map(|key| key.hash())
+                    .unwrap_or_default();
+                (hash, value)
+            }
         };
         if let Some(Building::Object(_, next)) = self.building.last_mut() {
             *next = Some((hash, key));

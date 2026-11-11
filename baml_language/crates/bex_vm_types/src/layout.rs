@@ -485,6 +485,12 @@ pub trait Maps<V: Elem>: Descriptors {
 pub trait Strings: Descriptors {
     fn str_text(&self, string: ObjPtr) -> &str;
 
+    /// The string's map hash ([`crate::map_string_hash`] of its text). A
+    /// model whose cells cache it computes it once per cell.
+    fn str_hash(&self, string: ObjPtr) -> u64 {
+        crate::map_string_hash(self.str_text(string))
+    }
+
     /// Length in Unicode scalar values.
     fn str_char_len(&self, string: ObjPtr) -> usize;
 

@@ -351,8 +351,11 @@ impl Tlab {
         let entries: Vec<(u64, Value, Value)> = values
             .into_iter()
             .map(|(key, value)| {
-                let hash = bex_vm_types::map_string_hash(&key);
-                (hash, Value::object(self.alloc_string(key)), value)
+                let key = self.alloc_string(key);
+                // SAFETY: just allocated; the hash lands in the cell, so the
+                // first lookup of the key reads it.
+                let hash = unsafe { StrRef::new_unchecked(key) }.hash();
+                (hash, Value::object(key), value)
             })
             .collect();
         self.alloc_map_hashed(key_ty, value_ty, entries).ptr()

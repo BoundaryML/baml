@@ -802,6 +802,84 @@ fn specialized_map_adapters_take_the_slot_representation() {
     assert_eq!(adapters::baml_map_length_tagged16(&mut m, optionals), Ok(2));
 }
 
+/// A string key's hash is computed on its first map use and read from the
+/// cell after: ten thousand distinct keys, each set once and looked up
+/// twice, and every cell holds its map hash after the first use.
+#[test]
+fn string_keys_cache_their_map_hash_in_the_cell() {
+    const KEYS: usize = 10_000;
+    let mut vm = test_vm(Vec::new());
+    let map = ptr(Value::object(vm.alloc_map(
+        RealizedTy::string(),
+        RealizedTy::int(),
+        IndexMap::new(),
+    )));
+    let keys: Vec<ObjPtr> = (0..KEYS)
+        .map(|i| ptr(Value::object(vm.alloc_string(format!("key-{i}-ключ")))))
+        .collect();
+    fn cell(vm: &BexVm, key: ObjPtr) -> bex_vm_types::StrRef<'_> {
+        vm.expect_str(ptr_value(key).as_object_ptr().unwrap())
+    }
+    for &key in &keys {
+        assert_eq!(
+            cell(&vm, key).cached_hash(),
+            None,
+            "a fresh cell holds no hash"
+        );
+    }
+
+    let mut m = ValueModel::compiled(&mut vm);
+    for (i, &key) in keys.iter().enumerate() {
+        let value = bex_vm_types::layout::RawWord::from_int(i as i64);
+        assert_eq!(
+            adapters::baml_map_set_raw8(&mut m, map, key, value),
+            Ok(None)
+        );
+    }
+    assert_eq!(adapters::baml_map_length_raw8(&mut m, map), Ok(KEYS as i64));
+    drop(m);
+
+    let stored: Vec<u64> = vm
+        .map_snapshot(
+            vm.map_at(ptr_value(map).as_object_ptr().unwrap()).unwrap(),
+            bex_vm_types::object_format::Access::Shared,
+        )
+        .hashes()
+        .collect();
+    for (i, &key) in keys.iter().enumerate() {
+        let string = cell(&vm, key);
+        let cached = string
+            .cached_hash()
+            .expect("the first use left the hash in the cell");
+        assert_ne!(cached, 0);
+        assert_eq!(
+            cached,
+            bex_vm_types::map_string_hash(string.as_str()).max(1),
+            "the cached hash is the map's string hash"
+        );
+        assert_eq!(stored[i], cached, "the entry stores the cell's hash");
+    }
+
+    let mut m = ValueModel::compiled(&mut vm);
+    for (i, &key) in keys.iter().enumerate() {
+        let expected = Ok(Some(bex_vm_types::layout::RawWord::from_int(i as i64)));
+        assert_eq!(adapters::baml_map_get_raw8(&mut m, map, key), expected);
+        assert_eq!(adapters::baml_map_get_raw8(&mut m, map, key), expected);
+        assert_eq!(adapters::baml_map_has_raw8(&mut m, map, key), Ok(true));
+    }
+    // A different cell with the same text finds the entry too.
+    let twin = m.str_alloc("key-4321-ключ");
+    assert_eq!(
+        adapters::baml_map_get_raw8(&mut m, map, twin),
+        Ok(Some(bex_vm_types::layout::RawWord::from_int(4321)))
+    );
+    let missing = m.str_alloc("key-4321-ключ!");
+    assert_eq!(adapters::baml_map_get_raw8(&mut m, map, missing), Ok(None));
+    drop(m);
+    assert!(cell(&vm, twin).cached_hash().is_some());
+    assert!(cell(&vm, missing).cached_hash().is_some());
+}
+
 #[test]
 fn specialized_string_adapters_take_pointers() {
     let mut vm = test_vm(Vec::new());

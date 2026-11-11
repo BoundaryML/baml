@@ -416,12 +416,15 @@ impl<'vm> ValueModel<'vm> {
     }
 
     fn is_key(&self, candidate: Value, key: StrKey) -> bool {
+        if candidate == ptr_value(key.ptr) {
+            return true;
+        }
         let Some(ptr) = candidate.as_object_ptr() else {
             return false;
         };
         match self.vm.get_object(ptr) {
             Object::Shared(SharedKind::Str) => {
-                self.vm.expect_str(ptr).as_str() == self.str_text(key.ptr)
+                self.vm.expect_str(ptr).text_eq(self.string(key.ptr))
             }
             _ => false,
         }
@@ -671,6 +674,10 @@ impl<V: ValueElem> Maps<V> for ValueModel<'_> {
 impl Strings for ValueModel<'_> {
     fn str_text(&self, string: ObjPtr) -> &str {
         self.string(string).as_str()
+    }
+
+    fn str_hash(&self, string: ObjPtr) -> u64 {
+        self.string(string).hash()
     }
 
     fn str_char_len(&self, string: ObjPtr) -> usize {

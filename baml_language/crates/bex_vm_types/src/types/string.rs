@@ -190,14 +190,22 @@ impl<'a> StrRef<'a> {
         unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
     }
 
+    #[inline]
+    fn hash_word(self) -> &'a AtomicU64 {
+        // SAFETY: the hash word is inside the live cell.
+        unsafe { &*(self.cell().byte_add(STR_HASH_OFFSET as usize) as *const AtomicU64) }
+    }
+
     /// The string's hash, computed on first use and kept in the cell. Never
     /// zero: zero means "not computed", so a hash of zero reads as one.
     /// Two racing first uses compute the same value.
+    ///
+    /// The value is [`map_string_hash`](crate::types::map_string_hash) of the
+    /// text: a string key's map hash, so every map operation keyed by a
+    /// string cell hashes its bytes at most once.
     #[inline]
     pub fn hash(self) -> u64 {
-        // SAFETY: the hash word is inside the live cell.
-        let word =
-            unsafe { &*(self.cell().byte_add(STR_HASH_OFFSET as usize) as *const AtomicU64) };
+        let word = self.hash_word();
         let cached = word.load(Ordering::Relaxed);
         if cached != 0 {
             return cached;
@@ -205,6 +213,35 @@ impl<'a> StrRef<'a> {
         let hash = crate::types::map_string_hash(self.as_str()).max(1);
         word.store(hash, Ordering::Relaxed);
         hash
+    }
+
+    /// The hash if a use already computed it: what [`Self::hash`] would
+    /// return, without computing it.
+    #[inline]
+    pub fn cached_hash(self) -> Option<u64> {
+        match self.hash_word().load(Ordering::Relaxed) {
+            0 => None,
+            hash => Some(hash),
+        }
+    }
+
+    /// Whether `other` holds the same text, settled as cheaply as the cells
+    /// allow: the same cell, else unequal lengths, else (when both are
+    /// cached) unequal hashes, else the bytes.
+    #[inline]
+    pub fn text_eq(self, other: Self) -> bool {
+        if self.ptr == other.ptr {
+            return true;
+        }
+        if self.byte_len() != other.byte_len() {
+            return false;
+        }
+        if let (Some(mine), Some(theirs)) = (self.cached_hash(), other.cached_hash())
+            && mine != theirs
+        {
+            return false;
+        }
+        self.as_bytes() == other.as_bytes()
     }
 
     /// The string copied out as a `BexStr`, for the compiler and host
@@ -364,7 +401,7 @@ impl fmt::Display for StrRef<'_> {
 
 impl PartialEq for StrRef<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.ptr == other.ptr || self.as_str() == other.as_str()
+        self.text_eq(*other)
     }
 }
 
@@ -433,7 +470,11 @@ mod tests {
                     .nth(i)
                     .map_or(text.len(), |(byte, _)| byte);
                 assert_eq!(char_to_byte_in(text, n, i), expected, "{text:?}[{i}]");
-                assert_eq!(byte_to_char_in(text, n, expected), i.min(n), "{text:?}[{i}]");
+                assert_eq!(
+                    byte_to_char_in(text, n, expected),
+                    i.min(n),
+                    "{text:?}[{i}]"
+                );
             }
             assert_eq!(char_to_byte_in(text, n, usize::MAX), text.len());
             assert_eq!(byte_to_char_in(text, n, usize::MAX), n);
@@ -448,14 +489,112 @@ mod tests {
             for start in 0..=n + 1 {
                 for end in 0..=n + 1 {
                     let range = char_bytes_in(text, n, start..end);
-                    let expected: String = chars[start.min(n)..end.max(start).min(n)]
-                        .iter()
-                        .collect();
+                    let expected: String =
+                        chars[start.min(n)..end.max(start).min(n)].iter().collect();
                     assert_eq!(&text[range], expected, "{text:?}[{start}..{end}]");
                 }
             }
-            assert_eq!(char_bytes_in(text, n, usize::MAX - 1..usize::MAX), text.len()..text.len());
+            assert_eq!(
+                char_bytes_in(text, n, usize::MAX - 1..usize::MAX),
+                text.len()..text.len()
+            );
         }
+    }
+
+    /// A string cell in a buffer, for tests that need no heap.
+    #[cfg(not(feature = "heap_debug"))]
+    #[repr(C, align(16))]
+    struct Cell([u8; 256]);
+
+    #[cfg(not(feature = "heap_debug"))]
+    impl Cell {
+        fn holding(text: &str) -> Self {
+            assert!(str_cell_bytes(text.len()) <= 256);
+            let mut cell = Self([0; 256]);
+            let granules = (str_cell_bytes(text.len()) / STR_GRANULE_BYTES) as u16;
+            let header = crate::object_format::Header::new(STR_DESC, granules);
+            // SAFETY: the buffer is 16-aligned and sized for the header and
+            // the cell; nothing reads it before `init`.
+            unsafe {
+                cell.0
+                    .as_mut_ptr()
+                    .cast::<crate::object_format::Header>()
+                    .write(header);
+                StrRef::init(cell.payload(), text);
+            }
+            cell
+        }
+
+        fn payload(&self) -> HeapPtr {
+            let ptr = self.0.as_ptr().wrapping_add(HEADER_BYTES).cast_mut();
+            // SAFETY: a `StrRef` reads only through header-relative offsets
+            // inside the buffer, and the buffer outlives every view.
+            unsafe { HeapPtr::from_ptr(ptr.cast()) }
+        }
+
+        fn view(&self) -> StrRef<'_> {
+            // SAFETY: `holding` wrote a string cell.
+            unsafe { StrRef::new_unchecked(self.payload()) }
+        }
+    }
+
+    #[cfg(not(feature = "heap_debug"))]
+    #[test]
+    fn the_cached_hash_is_the_map_string_hash() {
+        for text in [
+            "",
+            "a",
+            "key",
+            "héllo wörld",
+            "日本語テキスト",
+            "a日b本c",
+            "x".repeat(200).as_str(),
+        ] {
+            let cell = Cell::holding(text);
+            let string = cell.view();
+            assert_eq!(
+                string.cached_hash(),
+                None,
+                "{text:?}: fresh cells hold no hash"
+            );
+            let expected = crate::types::map_string_hash(text).max(1);
+            assert_eq!(string.hash(), expected, "{text:?}");
+            assert_eq!(
+                string.cached_hash(),
+                Some(expected),
+                "{text:?}: cached after one use"
+            );
+            assert_eq!(
+                string.hash(),
+                expected,
+                "{text:?}: read back, not recomputed"
+            );
+        }
+    }
+
+    #[cfg(not(feature = "heap_debug"))]
+    #[test]
+    fn text_eq_settles_by_length_hash_then_bytes() {
+        let a = Cell::holding("héllo");
+        let b = Cell::holding("héllo");
+        let c = Cell::holding("hello!");
+        let d = Cell::holding("hållo!");
+        assert!(a.view().text_eq(a.view()), "the same cell");
+        assert!(a.view().text_eq(b.view()), "equal bytes, nothing cached");
+        assert!(!a.view().text_eq(c.view()), "lengths differ");
+        assert_eq!(c.view().byte_len(), 6);
+        assert_eq!(d.view().byte_len(), 7);
+        assert!(!c.view().text_eq(d.view()), "lengths differ");
+        let e = Cell::holding("hellp!");
+        assert!(!c.view().text_eq(e.view()), "same length, bytes differ");
+        c.view().hash();
+        e.view().hash();
+        assert!(!c.view().text_eq(e.view()), "same length, hashes differ");
+        a.view().hash();
+        b.view().hash();
+        assert!(a.view().text_eq(b.view()), "equal with both hashes cached");
+        assert_eq!(a.view(), b.view());
+        assert_ne!(a.view(), c.view());
     }
 
     #[test]

@@ -213,7 +213,7 @@ pub(crate) mod shared {
     fn str_key<R: Strings + ?Sized>(rt: &R, key: ObjPtr) -> StrKey {
         StrKey {
             ptr: key,
-            hash: bex_vm_types::map_string_hash(rt.str_text(key)),
+            hash: rt.str_hash(key),
         }
     }
 

@@ -510,14 +510,14 @@ impl BexVm {
             return None;
         }
         let map = self.map_at(ptr)?;
-        let text = self.as_string(&key).ok()?.as_str();
-        let hash = bex_vm_types::map_string_hash(text);
+        let string = self.as_string(&key).ok()?;
+        let hash = string.hash();
         let pos = map.lock(Access::Shared).find(hash, |candidate| {
             let candidate = candidate.expect_value();
             candidate == key
                 || candidate
                     .as_object_ptr()
-                    .is_some_and(|ptr| self.str_at(ptr).is_some_and(|other| other.as_str() == text))
+                    .is_some_and(|ptr| self.str_at(ptr).is_some_and(|other| other.text_eq(string)))
         });
         Some((map, hash, pos))
     }
