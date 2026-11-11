@@ -103,6 +103,9 @@ pub enum Format {
     /// A list's backing object, holding elements of this kind. No value
     /// points at one.
     Backing(ElemKind),
+    /// A map ([`MapRef`](crate::types::MapRef)) with these key and value
+    /// slots.
+    Map(SlotKind, SlotKind),
 }
 
 impl Format {
@@ -116,6 +119,9 @@ impl Format {
         }
         if let Some(slot) = crate::types::list_slot_of(descriptor) {
             return Format::List(slot);
+        }
+        if let Some((key, value)) = crate::types::map_slots_of(descriptor) {
+            return Format::Map(key, value);
         }
         match crate::types::backing_elem_of(descriptor) {
             Some(elem) => Format::Backing(elem),
@@ -229,6 +235,9 @@ pub enum TaggedKind {
     Float = 3,
     Bool = 4,
     Null = 5,
+    /// The interpreter's omitted-argument sentinel, which a variadic
+    /// builtin's argument map can hold. Not a BAML value.
+    Omitted = 6,
 }
 
 impl TaggedKind {
@@ -239,6 +248,7 @@ impl TaggedKind {
             3 => TaggedKind::Float,
             4 => TaggedKind::Bool,
             5 => TaggedKind::Null,
+            6 => TaggedKind::Omitted,
             _ => TaggedKind::Locked,
         }
     }
@@ -350,6 +360,9 @@ fn tagged_parts(value: Value) -> Option<(TaggedKind, u64)> {
     if value.is_null() {
         return Some((TaggedKind::Null, 0));
     }
+    if value.is_omitted() {
+        return Some((TaggedKind::Omitted, 0));
+    }
     if let Some(int) = value.as_int() {
         #[expect(clippy::cast_sign_loss, reason = "the payload stores the i64's bits")]
         return Some((TaggedKind::Int, int as u64));
@@ -374,6 +387,7 @@ fn tagged_value(tag: TaggedKind, payload: u64) -> SlotValue {
         TaggedKind::Float => SlotValue::Float(f64::from_bits(payload)),
         TaggedKind::Bool => SlotValue::Value(Value::bool(payload != 0)),
         TaggedKind::Null => SlotValue::Value(Value::NULL),
+        TaggedKind::Omitted => SlotValue::Value(Value::OMITTED_ARG),
         TaggedKind::Locked => unreachable!("a tagged slot read returned its lock"),
     }
 }
@@ -540,6 +554,7 @@ mod tests {
             (SlotKind::Tagged16, Value::int(7)),
             (SlotKind::Tagged16, Value::FALSE),
             (SlotKind::Tagged16, Value::NULL),
+            (SlotKind::Tagged16, Value::OMITTED_ARG),
             (SlotKind::Ptr, Value::NULL),
         ];
         for (kind, value) in cases {

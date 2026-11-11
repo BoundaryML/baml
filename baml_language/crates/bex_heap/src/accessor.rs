@@ -710,14 +710,16 @@ fn convert_object(
                     .collect::<Result<_, _>>()?,
             })
         }
-        Object::Map(map) => {
-            if !baml_type::normalize::is_string_key(map.key_ty.as_ty(), &MapKeyFacts) {
+        Object::Shared(bex_vm_types::types::SharedKind::Map) => {
+            // SAFETY: the marker is only shown for a map.
+            let map = unsafe { bex_vm_types::MapRef::new_unchecked(heap_ptr) };
+            if !baml_type::normalize::is_string_key(map.key_ty().as_ty(), &MapKeyFacts) {
                 return Err(AccessError::CannotConvertToOwned {
                     reason: "SDK interchange requires maps with string keys".to_owned(),
                 });
             }
             let key_type = map
-                .key_ty
+                .key_ty()
                 .try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)
                 .map_err(|_| AccessError::CannotConvertToOwned {
                     reason: "cannot name map key type for SDK interchange".to_owned(),
@@ -726,7 +728,8 @@ fn convert_object(
                 key_type,
                 value_type: bex_external_types::WireTy::Unknown,
                 entries: map
-                    .snapshot_entries()
+                    .lock(bex_vm_types::object_format::Access::Shared)
+                    .entries()
                     .into_iter()
                     .map(|(k, v)| {
                         let key = match k.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
@@ -738,7 +741,7 @@ fn convert_object(
                                 });
                             }
                         };
-                        Ok((key, owned_inner(BexValue::OwnedValue(v), heap, lossy)?))
+                        Ok((key, owned_inner(v.into(), heap, lossy)?))
                     })
                     .collect::<Result<_, _>>()?,
             })
@@ -843,10 +846,7 @@ mod tests {
 
     #[tokio::test]
     async fn sdk_maps_reject_non_string_keys_even_when_empty_or_lossy() {
-        use bex_vm_types::{
-            MapData, RealizedTy,
-            types::{Map, Object, Value},
-        };
+        use bex_vm_types::{RealizedTy, types::Value};
 
         let heap = BexHeap::new(Vec::new());
         let manager = HeapPermitManager::new();
@@ -857,18 +857,15 @@ mod tests {
             .await
             .acquire()
             .await;
-        for (key_ty, data) in [
-            (RealizedTy::Int, MapData::new()),
-            (
-                RealizedTy::String,
-                MapData::from_hashed_entries([(0, Value::int(1), Value::NULL)]),
-            ),
+        for (key_ty, entries) in [
+            (RealizedTy::Int, vec![]),
+            (RealizedTy::Unknown, vec![(0, Value::int(1), Value::NULL)]),
         ] {
-            let ptr = permit.holder_mut().tlab.alloc(Object::Map(Map::new(
-                key_ty,
-                RealizedTy::Null,
-                data,
-            )));
+            let ptr = permit
+                .holder_mut()
+                .tlab
+                .alloc_map_hashed(key_ty, RealizedTy::Null, entries)
+                .ptr();
             for lossy in [false, true] {
                 let error = super::convert_object(ptr, &heap, lossy).unwrap_err();
                 assert!(error.to_string().contains("string keys"), "{error}");

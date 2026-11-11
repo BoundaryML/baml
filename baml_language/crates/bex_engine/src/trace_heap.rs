@@ -19,7 +19,7 @@ use bex_vm_types::object_format::Access;
 use bex_vm_types::object_format::SlotValue;
 use bex_vm_types::types::SharedKind;
 use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
-use bex_vm_types::{InstanceRef, ListRef};
+use bex_vm_types::{InstanceRef, ListRef, MapRef};
 
 /// A structured-log snapshot could not allocate its owned value graph.
 #[derive(Debug)]
@@ -346,7 +346,7 @@ impl TraceSnapshotBuilder {
         ptr: HeapPtr,
     ) -> Result<TraceValueRef, CopyError> {
         let object = unsafe { ptr.get() };
-        let tracks_recursion = matches!(object, Object::Map(_) | Object::Shared(_));
+        let tracks_recursion = matches!(object, Object::Shared(_));
         if tracks_recursion && self.in_progress.contains(&ptr) {
             return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
         }
@@ -380,26 +380,29 @@ impl TraceSnapshotBuilder {
                 }
                 self.alloc(TraceValue::Array(items))
             }
-            Object::Map(map) => {
-                let map = map.data.lock();
-                let string_key = |key: &Value| {
+            Object::Shared(SharedKind::Map) => {
+                // SAFETY: the marker is only shown for a map.
+                let map = unsafe { MapRef::new_unchecked(ptr) }
+                    .lock(Access::Shared)
+                    .entries();
+                let string_key = |key: &SlotValue| {
                     // SAFETY: the copy holds a heap permit for the entire traversal.
                     match key.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
                         Some(Object::String(key)) => Some(key),
                         _ => None,
                     }
                 };
-                if map.keys().any(|key| string_key(key).is_none()) {
+                if map.iter().any(|(key, _)| string_key(key).is_none()) {
                     self.omitted(
                         TraceOmissionReason::UnsupportedValue,
                         "map with non-string keys",
                     )
                 } else {
                     let mut entries = Self::vec_with_capacity(map.len())?;
-                    for (key, value) in map.iter() {
+                    for (key, value) in &map {
                         let key = string_key(key).expect("map keys validated under the same lock");
                         let key = Self::copy_str(key.as_str())?;
-                        let value = self.copy_value(heap, permit, *value)?;
+                        let value = self.copy_slot(heap, permit, *value)?;
                         entries.push((key, value));
                     }
                     self.alloc(TraceValue::Map(entries))
@@ -585,7 +588,6 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::String(_)
         | Object::Bigint(_)
         | Object::Uint8Array(_)
-        | Object::Map(_)
         | Object::Shared(_)
         | Object::Variant(_)
         | Object::Float(_) => "unsupported value",
@@ -635,7 +637,7 @@ mod tests {
         let discarded = permit.tlab_mut().alloc_string("must not survive omission");
         let unsupported = permit
             .tlab_mut()
-            .alloc(Object::Map(bex_vm_types::types::Map::new(
+            .alloc_map_hashed(
                 bex_vm_types::RealizedTy::Union(
                     vec![
                         bex_vm_types::RealizedTy::string(),
@@ -644,15 +646,16 @@ mod tests {
                     .into(),
                 ),
                 bex_vm_types::RealizedTy::unknown(),
-                bex_vm_types::MapData::from_hashed_entries([
+                vec![
                     (
                         bex_vm_types::map_string_hash("first"),
                         Value::object(first_key),
                         Value::object(discarded),
                     ),
                     (0, Value::int(1), Value::int(2)),
-                ]),
-            )));
+                ],
+            )
+            .ptr();
         let outer = permit.tlab_mut().alloc_map(
             bex_vm_types::RealizedTy::string(),
             bex_vm_types::RealizedTy::unknown(),

@@ -5,7 +5,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use crate::{
     BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Uint8ArrayContainer, Variant,
     types::{
-        Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package, RuntimeImplRule,
+        Cell, Closure, FunctionType, FutureType, InterfaceDef, Package, RuntimeImplRule,
         TypeAliasDef,
     },
 };
@@ -98,11 +98,6 @@ pub enum Object {
     /// racing mutation under `spawn`.
     Uint8Array(Uint8ArrayContainer),
 
-    /// Map of values. Wrapped in [`crate::MapContainer`] so the underlying
-    /// [`crate::MapData`] is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
-    /// mutation under `spawn`.
-    Map(Map),
-
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
     /// for full-precision f64. Allocation rate is low in practice —
@@ -139,6 +134,7 @@ pub enum Object {
 pub enum SharedKind {
     Instance,
     List,
+    Map,
 }
 
 impl SharedKind {
@@ -147,9 +143,11 @@ impl SharedKind {
     pub(crate) fn marker(self) -> &'static Object {
         static INSTANCE: Object = Object::Shared(SharedKind::Instance);
         static LIST: Object = Object::Shared(SharedKind::List);
+        static MAP: Object = Object::Shared(SharedKind::Map);
         match self {
             SharedKind::Instance => &INSTANCE,
             SharedKind::List => &LIST,
+            SharedKind::Map => &MAP,
         }
     }
 }
@@ -177,7 +175,6 @@ impl Object {
             | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
             | Object::Type(_) => true,
@@ -242,7 +239,6 @@ impl Object {
             | Object::BoundMethod(_)
             | Object::HostClosure(_)
             | Object::Cell(_)
-            | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
             | Object::RustData(_)
@@ -274,7 +270,6 @@ impl Object {
             | Object::BoundMethod(_)
             | Object::HostClosure(_)
             | Object::Cell(_)
-            | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
             | Object::RustData(_)
@@ -371,6 +366,12 @@ impl BorshSerialize for Object {
             }
             Self::ImplRule(v) => ObjectWire::ImplRule(v.clone()),
             Self::Class(v) => ObjectWire::Class(v.clone()),
+            Self::Shared(SharedKind::Map) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "runtime maps cannot be serialized; hash indexes require the VM",
+                ));
+            }
             Self::Shared(kind) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -387,12 +388,6 @@ impl BorshSerialize for Object {
             Self::String(v) => ObjectWire::String(v.to_string()),
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
-            Self::Map(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "runtime maps cannot be serialized; hash indexes require the VM",
-                ));
-            }
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
@@ -489,13 +484,7 @@ impl std::fmt::Display for Object {
             Object::Bigint(bi) => write!(f, "{bi}"),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
             Object::Shared(SharedKind::List) => write!(f, "<array>"),
-            Object::Map(map) => write!(
-                f,
-                "<map[{}: {}] len={}>",
-                map.key_ty,
-                map.value_ty,
-                map.data.lock().len()
-            ),
+            Object::Shared(SharedKind::Map) => write!(f, "<map>"),
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
@@ -559,7 +548,7 @@ impl ObjectType {
             Object::Bigint(_) => Self::Bigint,
             Object::Uint8Array(_) => Self::Uint8Array,
             Object::Shared(SharedKind::List) => Self::Array,
-            Object::Map(_) => Self::Map,
+            Object::Shared(SharedKind::Map) => Self::Map,
             Object::RustData(_) => Self::RustData,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
@@ -618,28 +607,7 @@ mod wire_tests {
     use borsh::BorshDeserialize;
 
     use super::*;
-    use crate::{Value, types::TypeValue};
-
-    #[test]
-    fn runtime_maps_do_not_persist_cached_hashes() {
-        for data in [
-            crate::MapData::new(),
-            crate::MapData::from_hashed_entries([(123, Value::int(1), Value::int(2))]),
-        ] {
-            let object = Object::Map(Map::new(
-                crate::RealizedTy::int(),
-                crate::RealizedTy::int(),
-                data,
-            ));
-            let error = borsh::to_vec(&object).expect_err("runtime map has no artifact wire form");
-            assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-            assert!(
-                error
-                    .to_string()
-                    .contains("runtime maps cannot be serialized")
-            );
-        }
-    }
+    use crate::types::TypeValue;
 
     #[test]
     fn reserved_map_wire_tag_is_rejected_without_changing_later_tags() {

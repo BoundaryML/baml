@@ -6,7 +6,7 @@ use std::{
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, ObjectType, RootHaver, RootVisitor, ValueKind,
-    types::{Map, Object, Value},
+    types::{Object, Value},
 };
 
 use super::{
@@ -294,7 +294,11 @@ pub(super) fn collect_to_string_overrides(
             let values = vm.expect_list(ptr);
             vm.list_values(values, bex_vm_types::object_format::Access::Shared)
         }
-        Object::Map(map) => map
+        Object::Shared(SharedKind::Map) => vm
+            .map_snapshot(
+                vm.expect_map(ptr),
+                bex_vm_types::object_format::Access::Shared,
+            )
             .snapshot_entries()
             .into_iter()
             .flat_map(|(key, value)| [key, value])
@@ -790,8 +794,9 @@ pub(super) fn render_to_sink(
             }
             DisplaySnap::Leaf(format!("[{rendered}]"))
         }
-        Object::Map(map) => {
-            let map = map.lock();
+        Object::Shared(SharedKind::Map) => {
+            let map = vm.expect_map(ptr);
+            let map = vm.map_snapshot(map, bex_vm_types::object_format::Access::Shared);
             let limit = state.snapshot_child_limit(map.len());
             DisplaySnap::Entries(
                 map.iter().take(limit).map(|(k, v)| (*k, *v)).collect(),
@@ -1004,32 +1009,28 @@ fn deep_copy_value_recursive(
                     placeholder_ptr
                 }
 
-                Object::Map(map) => {
+                Object::Shared(SharedKind::Map) => {
+                    let map = vm.expect_map(ptr);
                     // A deep copy preserves the source map's key/value types.
-                    let key_ty = map.key_ty.as_ref().clone();
-                    let value_ty = map.value_ty.as_ref().clone();
-                    let placeholder_ptr = vm.tlab.alloc(Object::Map(Map::new(
-                        key_ty,
-                        value_ty,
-                        bex_vm_types::MapData::new(),
-                    )));
-                    copied_objects.insert(ptr, placeholder_ptr);
+                    let key_ty = map.key_ty().clone();
+                    let value_ty = map.value_ty().clone();
+                    let placeholder = vm.tlab.alloc_empty_map(key_ty, value_ty);
+                    copied_objects.insert(ptr, placeholder.ptr());
 
-                    let snapshot: Vec<_> = map.lock().entries().map(|(_, entry)| *entry).collect();
-                    let mut new_map = bex_vm_types::MapData::new();
-                    for entry in snapshot {
-                        let new_key = deep_copy_value_recursive(vm, entry.key, copied_objects)?;
-                        let new_value = deep_copy_value_recursive(vm, entry.value, copied_objects)?;
-                        new_map.insert_hashed(entry.hash, new_key, new_value);
+                    // Snapshot under the source's lock; the recursive call
+                    // re-enters the VM and may take other container locks.
+                    let snapshot = vm.map_snapshot(map, Access::Shared);
+                    let mut copied = Vec::with_capacity(snapshot.len());
+                    for (hash, (key, value)) in snapshot.hashes().zip(snapshot.snapshot_entries()) {
+                        let new_key = deep_copy_value_recursive(vm, key, copied_objects)?;
+                        let new_value = deep_copy_value_recursive(vm, value, copied_objects)?;
+                        copied.push((hash, new_key, new_value));
                     }
-
-                    let Object::Map(map) = vm.get_object(placeholder_ptr) else {
-                        unreachable!("the placeholder was allocated as a map")
-                    };
-                    let mut entries = map.lock_mut(vm.tlab.alloc_debt());
-                    **entries = new_map;
-                    drop(entries);
-                    placeholder_ptr
+                    let mut edit = crate::MapEdit::new(vm, placeholder, Access::Shared);
+                    for (hash, key, value) in copied {
+                        edit.insert_hashed(hash, key, value);
+                    }
+                    placeholder.ptr()
                 }
 
                 Object::Shared(SharedKind::Instance) => {

@@ -5,7 +5,7 @@
 //! a message points at the same character a BAML `slice` would.
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{Object, Value};
+use bex_vm_types::Value;
 
 use crate::{BexVm, errors::VmRustFnError};
 
@@ -114,9 +114,10 @@ fn field(
     key: &str,
     selector: &str,
 ) -> Result<Value, VmRustFnError> {
-    let object = current.as_object_ptr().filter(
-        |&ptr| matches!(vm.get_object(ptr), Object::Map(map) if super::string_keyed(vm, map)),
-    );
+    let object = current.as_object_ptr().filter(|&ptr| {
+        vm.map_at(ptr)
+            .is_some_and(|map| super::string_keyed(vm, map))
+    });
     let Some(ptr) = object else {
         return Err(refuse(
             vm,

@@ -132,6 +132,7 @@ impl BexHeap {
                 Self::for_each_runtime_object(small.pool(), &large, |object| objects.push(object));
             }
         }
+        self.verify_slot_cells();
         for object in objects {
             // SAFETY: allocated, and every mutator is parked.
             unsafe {
@@ -150,40 +151,48 @@ impl BexHeap {
         }
     }
 
+    /// Every pointer a shared-format cell (instance, list, backing, map)
+    /// holds names an allocated cell or a compile-time object.
+    fn verify_slot_cells(&self) {
+        let mut cells = Vec::new();
+        {
+            let small = self.small.lock();
+            let large = self.large.lock();
+            // SAFETY: verification runs with every mutator parked.
+            unsafe {
+                Self::for_each_runtime_cell(small.pool(), &large, |cell| cells.push(cell));
+            }
+        }
+        let mut edges = Vec::new();
+        for cell in cells {
+            // SAFETY: an allocated cell with a written header.
+            let id =
+                unsafe { <crate::Header as crate::descriptor::CellHeader>::at(cell) }.descriptor;
+            let descriptor = self.descriptors().get(id);
+            if matches!(descriptor.trace, crate::Trace::Rust(_)) {
+                continue;
+            }
+            // SAFETY: allocated and laid out by its descriptor; mutators are
+            // parked.
+            unsafe {
+                crate::descriptor::trace_slots(
+                    descriptor,
+                    cell,
+                    crate::space::cell_bytes(cell),
+                    &mut edges,
+                );
+            }
+            for edge in edges.drain(..) {
+                self.debug_assert_valid_index(edge);
+            }
+        }
+    }
+
     fn verify_object_invariants(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) {
         match obj {
-            // SAFETY: heap-debugger verification runs under STW (it's
-            // called from the GC verifier path); no mutator is concurrently
-            // active.
-            Object::Array(values) => {
-                let data = unsafe { values.data_unchecked() };
-                for value in data.iter() {
-                    self.debug_assert_valid_value(value);
-                }
-            }
-            Object::Map(values) => {
-                let data = unsafe { values.data_unchecked() };
-                for value in data.keys().chain(data.values()) {
-                    self.debug_assert_valid_value(value);
-                }
-            }
-            Object::Instance(instance) => {
-                let class_idx = instance.class;
-                self.debug_assert_valid_index(class_idx);
-                let class_obj = unsafe { self.get_object(class_idx) };
-                let Object::Class(class) = class_obj else {
-                    panic!("instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}");
-                };
-                assert!(
-                    instance.fields.len() == class.fields.len(),
-                    "instance field count mismatch: obj_idx={idx:?} fields_len={} class_fields_len={}",
-                    instance.fields.len(),
-                    class.fields.len()
-                );
-                for slot in &instance.fields {
-                    self.debug_assert_valid_value(&slot.load());
-                }
-            }
+            // Shared-format objects are not enum cells; `verify_slot_cells`
+            // checks their pointer slots.
+            Object::Shared(_) => {}
             Object::Variant(variant) => {
                 let enm_idx = variant.enm;
                 self.debug_assert_valid_index(enm_idx);

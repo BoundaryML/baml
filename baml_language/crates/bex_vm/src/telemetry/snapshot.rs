@@ -3,8 +3,8 @@
 use std::borrow::Cow;
 
 use bex_vm_types::{
-    HeapPtr, InstanceRef, ListRef, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind,
-    object_format::SlotValue, types::SharedKind,
+    HeapPtr, InstanceRef, ListRef, MapRef, MediaContent, MediaValue, Object, TypeHead, Value,
+    ValueKind, object_format::SlotValue, types::SharedKind,
 };
 use btel_snapshot::{
     Builder, Carried, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType,
@@ -191,14 +191,16 @@ impl Scratch {
                         self.add_slot(leaves, *value, depth + 1)
                     })
                 }
-                Object::Map(data) => {
-                    let key_type = described(&mut b.leaves(), &mut self.carried, &data.key_ty);
-                    let value_type = described(&mut b.leaves(), &mut self.carried, &data.value_ty);
-                    let data = data.lock();
+                Object::Shared(SharedKind::Map) => {
+                    // SAFETY: the marker is only shown for a map.
+                    let map = unsafe { MapRef::new_unchecked(ptr) };
+                    let key_type = described(&mut b.leaves(), &mut self.carried, map.key_ty());
+                    let value_type = described(&mut b.leaves(), &mut self.carried, map.value_ty());
+                    let data = map.lock(Access::Shared).entries();
                     b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
                         (
-                            self.add(leaves, *key, depth + 1),
-                            self.add(leaves, *value, depth + 1),
+                            self.add_slot(leaves, *key, depth + 1),
+                            self.add_slot(leaves, *value, depth + 1),
                         )
                     })
                 }
@@ -980,10 +982,7 @@ mod tests {
         let snapshot = capture(&[Value::object(map)]);
         unsafe {
             InstanceRef::new_unchecked(instance).store(0, Value::int(99));
-            let Object::Map(map) = map.get() else {
-                unreachable!()
-            };
-            map.lock_mut(&bex_vm_types::AllocDebt::new()).clear();
+            MapRef::of(map).expect("a map").lock(Access::Shared).clear();
             vm.heap.collect_garbage(&[]);
         }
         drop(vm);

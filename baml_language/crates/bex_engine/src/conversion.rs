@@ -468,7 +468,8 @@ impl BexEngine {
                 })
             }
 
-            Object::Map(map) => {
+            Object::Shared(bex_vm_types::types::SharedKind::Map) => {
+                let map = vm.expect_map(ptr);
                 // The key and value types are the declared ones where the
                 // declared type is a map; where it is not, the map's own,
                 // which the value carries.
@@ -478,13 +479,13 @@ impl BexEngine {
                         (key.as_ref(), value.as_ref())
                     }
                     _ => {
-                        own_types = (map.key_ty.as_ref().clone(), map.value_ty.as_ref().clone());
+                        own_types = (map.key_ty().clone(), map.value_ty().clone());
                         (&own_types.0, &own_types.1)
                     }
                 };
 
                 if !baml_type::normalize::is_string_key(key_type.as_ty(), vm)
-                    || !baml_type::normalize::is_string_key(map.key_ty.as_ty(), vm)
+                    || !baml_type::normalize::is_string_key(map.key_ty().as_ty(), vm)
                 {
                     return Err(EngineError::CannotConvert {
                         type_name:
@@ -492,7 +493,9 @@ impl BexEngine {
                                 .to_owned(),
                     });
                 }
-                let snapshot = map.snapshot_entries();
+                let snapshot = vm
+                    .map_snapshot(map, bex_vm_types::object_format::Access::Shared)
+                    .snapshot_entries();
                 let entries: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
                     snapshot
                         .iter()
@@ -836,12 +839,13 @@ impl BexEngine {
             malformed("host-call optional arguments are not a heap object".to_string())
         })?;
         // SAFETY: covered by the active heap permit above.
-        let Object::Map(optional_map) = (unsafe { optional_ptr.get() }) else {
+        let Some(optional_map) = vm.map_at(optional_ptr) else {
             return Err(malformed(
                 "host-call optional arguments are not a map".to_string(),
             ));
         };
-        let optional_values = optional_map
+        let optional_values = vm
+            .map_snapshot(optional_map, bex_vm_types::object_format::Access::Shared)
             .snapshot_entries()
             .into_iter()
             .map(
@@ -1856,9 +1860,11 @@ fn find_matching_union_member(
                             if runtime_ty_structurally_equal(actual_element, expected))
                     })
                 }
-                Object::Map(map) => {
-                    let actual_key = map.key_ty.as_ref();
-                    let actual_value = map.value_ty.as_ref();
+                Object::Shared(bex_vm_types::types::SharedKind::Map) => {
+                    // SAFETY: the marker is only shown for a map.
+                    let map = unsafe { bex_vm_types::MapRef::new_unchecked(ptr) };
+                    let actual_key = map.key_ty();
+                    let actual_value = map.value_ty();
                     members.iter().find(|member| {
                         matches!(member, bex_vm_types::RealizedTy::Map { key, value, .. }
                             if runtime_ty_structurally_equal(actual_key, key)

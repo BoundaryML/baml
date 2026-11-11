@@ -216,8 +216,10 @@ impl Drop for ListEdit<'_> {
 }
 
 pub(crate) mod frame_stack;
+mod map_access;
 use frame_stack::ThreadStackBudget;
 pub use frame_stack::{FrameStack, THREAD_STACK_BUDGET_BYTES};
+pub use map_access::{MapEdit, MapSnapshot};
 
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
@@ -2305,7 +2307,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Uint8Array(_) => type_tags::UINT8ARRAY,
                 Object::Variant(_) => type_tags::ENUM,
                 Object::Shared(SharedKind::List) => type_tags::LIST,
-                Object::Map(_) => type_tags::MAP,
+                Object::Shared(SharedKind::Map) => type_tags::MAP,
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
                 Object::BoundMethod(_) => type_tags::FUNCTION,
@@ -3393,7 +3395,10 @@ impl BexVm {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
-                Object::Map(map) => Some((*map.key_ty).clone()),
+                Object::Shared(SharedKind::Map) => {
+                    let map = self.expect_map(ptr);
+                    Some(map.key_ty().clone())
+                }
                 _ => None,
             })
             .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
@@ -3406,7 +3411,10 @@ impl BexVm {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
-                Object::Map(map) => Some((*map.value_ty).clone()),
+                Object::Shared(SharedKind::Map) => {
+                    let map = self.expect_map(ptr);
+                    Some(map.value_ty().clone())
+                }
                 _ => None,
             })
             .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
@@ -4015,7 +4023,10 @@ impl BexVm {
                     let arr = self.expect_list(ptr);
                     !arr.is_empty()
                 }
-                Object::Map(map) => !map.is_empty(),
+                Object::Shared(SharedKind::Map) => {
+                    let map = self.expect_map(ptr);
+                    !map.is_empty()
+                }
                 Object::Uint8Array(bytes) => !bytes.is_empty(),
                 Object::Float(f) => *f != 0.0,
                 Object::Bigint(n) => n.sign() != num_bigint::Sign::NoSign,
@@ -4508,10 +4519,13 @@ impl BexVm {
                 let arr = self.expect_list(ptr);
                 ConcreteRealizedTy::List(Box::new(arr.element_ty().clone()))
             }
-            Object::Map(map) => ConcreteRealizedTy::Map {
-                key: Box::new((*map.key_ty).clone()),
-                value: Box::new((*map.value_ty).clone()),
-            },
+            Object::Shared(SharedKind::Map) => {
+                let map = self.expect_map(ptr);
+                ConcreteRealizedTy::Map {
+                    key: Box::new(map.key_ty().clone()),
+                    value: Box::new(map.value_ty().clone()),
+                }
+            }
             // A cell is a transparent capture/mutable-binding slot, not a value
             // of its own: its concrete type is that of the value it holds.
             Object::Cell(cell) => return self.value_concrete_ty(cell.load()),
@@ -4845,12 +4859,6 @@ impl BexVm {
             .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"))
     }
 
-    /// Get map from a Value. Acquires the container's mutex.
-    pub fn as_map(&self, value: &Value) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
-        // SAFETY: the locked specialization needs no locality proof.
-        unsafe { self.as_map_in::<false>(*value) }
-    }
-
     /// Snapshot a string-keyed map for native string-only boundaries.
     pub fn as_string_map(
         &self,
@@ -4860,85 +4868,6 @@ impl BexVm {
             .iter()
             .map(|(key, value)| Ok((self.as_string(key)?.clone(), *value)))
             .collect()
-    }
-
-    /// Get mutable map from a Value. Acquires the container's mutex.
-    pub fn as_map_mut(
-        &mut self,
-        value: &Value,
-    ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
-        // SAFETY: the locked specialization needs no locality proof.
-        unsafe { self.as_map_mut_in::<false>(*value) }
-    }
-
-    /// [`Self::as_map`] for a map only this thread can reach, without its
-    /// lock.
-    ///
-    /// # Safety
-    ///
-    /// As for [`Self::as_array_local`].
-    pub unsafe fn as_map_local(
-        &self,
-        value: &Value,
-    ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
-        // SAFETY: forwarded locality contract.
-        unsafe { self.as_map_in::<true>(*value) }
-    }
-
-    /// [`Self::as_map_mut`] for a map only this thread can reach, without
-    /// its lock.
-    ///
-    /// # Safety
-    ///
-    /// As for [`Self::as_array_local`].
-    pub unsafe fn as_map_mut_local(
-        &mut self,
-        value: &Value,
-    ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
-        // SAFETY: forwarded locality contract.
-        unsafe { self.as_map_mut_in::<true>(*value) }
-    }
-
-    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
-    #[inline]
-    unsafe fn as_map_in<const THREAD_LOCAL: bool>(
-        &self,
-        value: Value,
-    ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::Map)?;
-        match self.get_object(ptr) {
-            Object::Map(container) => Ok(if THREAD_LOCAL {
-                // SAFETY: forwarded locality contract.
-                unsafe { container.lock_thread_local() }
-            } else {
-                container.lock()
-            }),
-            obj => Err(VmInternalError::TypeError {
-                expected: ObjectType::Map.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
-    }
-
-    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
-    #[inline]
-    unsafe fn as_map_mut_in<const THREAD_LOCAL: bool>(
-        &mut self,
-        value: Value,
-    ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::Map)?;
-        match self.get_object(ptr) {
-            Object::Map(container) => Ok(if THREAD_LOCAL {
-                // SAFETY: forwarded locality contract.
-                unsafe { container.lock_mut_thread_local(self.tlab.alloc_debt()) }
-            } else {
-                container.lock_mut(self.tlab.alloc_debt())
-            }),
-            obj => Err(VmInternalError::TypeError {
-                expected: ObjectType::Map.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
     }
 
     /// Get Value reference (for generic types).
@@ -11550,12 +11479,9 @@ impl BexVm {
                             Object::Uint8Array(bytes) if thread_local => {
                                 bytes.lock_thread_local().len() as i64
                             }
-                            Object::Map(map) if thread_local => {
-                                map.lock_thread_local().len() as i64
-                            }
                             Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
-                            Object::Map(map) => map.len() as i64,
+                            Object::Shared(SharedKind::Map) => self.expect_map(ptr).len() as i64,
                             Object::String(s) => s.byte_len() as i64,
                             other => {
                                 return Err(VmInternalError::TypeError {

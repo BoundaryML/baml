@@ -501,19 +501,21 @@ impl EqualsDriver {
             }
             (Object::Shared(SharedKind::List), _) => Cmp::NotEqual,
 
-            (Object::Map(x), Object::Map(y)) => {
-                let (xs, ys) = lock_pair_ordered(pa, &x.data, pb, &y.data);
+            (Object::Shared(SharedKind::Map), Object::Shared(SharedKind::Map)) => {
+                // Each map is read under its own lock, never both at once.
+                let xs = vm.map_snapshot(vm.expect_map(pa), Access::Shared);
+                let ys = vm.map_snapshot(vm.expect_map(pb), Access::Shared);
                 if xs.len() != ys.len() {
                     return Cmp::NotEqual;
                 }
                 let mut buckets: HashMap<u64, Vec<(Value, Value)>> = HashMap::new();
-                for (_, entry) in ys.entries() {
+                for entry in ys.entries() {
                     buckets
                         .entry(entry.hash)
                         .or_default()
                         .push((entry.key, entry.value));
                 }
-                for (_, entry) in xs.entries() {
+                for entry in xs.entries() {
                     let Some(candidates) = buckets.get(&entry.hash) else {
                         return Cmp::NotEqual;
                     };
@@ -525,7 +527,7 @@ impl EqualsDriver {
                 }
                 Cmp::Continue
             }
-            (Object::Map(_), _) => Cmp::NotEqual,
+            (Object::Shared(SharedKind::Map), _) => Cmp::NotEqual,
 
             (Object::Variant(x), Object::Variant(y)) => {
                 // Different enum types ⇒ never equal (`eq` needs the same `Self`).

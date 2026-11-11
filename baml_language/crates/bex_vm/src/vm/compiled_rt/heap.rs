@@ -44,10 +44,9 @@ impl BexVm {
             Object::Uint8Array(bytes) if THREAD_LOCAL => {
                 unsafe { bytes.lock_thread_local() }.len() as i64
             }
-            Object::Map(map) if THREAD_LOCAL => unsafe { map.lock_thread_local() }.len() as i64,
             Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
-            Object::Map(map) => map.len() as i64,
+            Object::Shared(SharedKind::Map) => self.expect_map(ptr).len() as i64,
             Object::String(s) => s.byte_len() as i64,
             other => return Err(object_type_error(ObjectType::Array, other)),
         };
@@ -451,11 +450,11 @@ mod tests {
         let mut vm = test_vm(Vec::new());
         let map = vm.new_map(RealizedTy::String, RealizedTy::Int);
         assert_eq!(vm.container_len(map).unwrap(), Value::int(0));
-        let Object::Map(object) = vm.get_object(map.as_object_ptr().unwrap()) else {
+        let Some(object) = vm.map_at(map.as_object_ptr().unwrap()) else {
             panic!("a map object");
         };
-        assert_eq!(*object.key_ty, RealizedTy::String);
-        assert_eq!(*object.value_ty, RealizedTy::Int);
+        assert_eq!(*object.key_ty(), RealizedTy::String);
+        assert_eq!(*object.value_ty(), RealizedTy::Int);
     }
 
     #[test]

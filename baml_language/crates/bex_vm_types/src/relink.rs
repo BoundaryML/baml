@@ -305,7 +305,6 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         | Object::BoundMethod(..)
         | Object::HostClosure(..)
         | Object::Cell(..)
-        | Object::Map(..)
         | Object::Float(..)
         | Object::Future(..)
         | Object::RustData(..)

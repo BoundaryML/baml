@@ -157,10 +157,6 @@ impl Object {
         match self {
             Object::String(string) => meter.string(string),
             Object::Uint8Array(bytes) => meter.bytes(bytes.get_mut().footprint()),
-            Object::Map(map) => {
-                meter.bytes(2 * size_of::<RealizedTy>());
-                meter.bytes(map.data.get_mut().footprint());
-            }
             Object::Closure(closure) => {
                 meter.bytes(size_of_val(&*closure.captures));
                 meter.bytes(size_of_val(&*closure.captured_type_args));
@@ -248,7 +244,6 @@ mod tests {
     use bex_str::BexStr;
 
     use super::*;
-    use crate::{MapData, Value, types::Map};
 
     fn charged(mut object: Object) -> usize {
         let mut meter = Meter::charge();
@@ -276,27 +271,6 @@ mod tests {
         let mut bytes = Vec::with_capacity(4_096);
         bytes.push(7u8);
         assert_eq!(charged(Object::Uint8Array(bytes.into())), 4_096);
-    }
-
-    #[test]
-    fn a_map_grows_with_its_entries() {
-        let empty = charged(Object::Map(Map::new(
-            RealizedTy::string(),
-            RealizedTy::int(),
-            MapData::new(),
-        )));
-        let entries = 1_000;
-        let full = charged(Object::Map(Map::new(
-            RealizedTy::string(),
-            RealizedTy::int(),
-            MapData::from_hashed_entries((0..entries).map(|i| (i, Value::int(1), Value::int(2)))),
-        )));
-        // Each entry stores at least an id, a key, a value and a hash.
-        let per_entry = usize::try_from(entries).unwrap() * 4 * size_of::<u64>();
-        assert!(
-            full >= empty + per_entry,
-            "{full} bytes for {entries} entries, {empty} when empty"
-        );
     }
 
     #[test]

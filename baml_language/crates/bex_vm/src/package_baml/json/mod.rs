@@ -26,10 +26,7 @@ use baml_type::MediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::object_format::Access;
 use bex_vm_types::types::SharedKind;
-use bex_vm_types::{
-    BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind,
-    types::{Map, Object},
-};
+use bex_vm_types::{BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind, types::Object};
 use decode::{Decoder, Root};
 use encode::{Finish, WriteOptions};
 pub(super) use serde_bridge::{json_value_to_serde, serde_to_value};
@@ -148,7 +145,8 @@ impl BamlNamespaceJson for PackageBamlImpl {
             return Value::NULL;
         };
         match vm.get_object(ptr) {
-            Object::Map(map) => {
+            Object::Shared(SharedKind::Map) => {
+                let map = vm.expect_map(ptr);
                 assert!(
                     string_keyed(vm, map),
                     "baml.json.field received invalid json: {STRING_MAP_REQUIRED}"
@@ -225,21 +223,26 @@ fn indent_text(vm: &mut BexVm, indent: Value) -> Result<String, VmRustFnError> {
 // ─── JSON objects ────────────────────────────────────────────────────────────
 
 /// Whether `map` has string keys, the only keys a JSON object has.
-fn string_keyed(vm: &BexVm, map: &Map) -> bool {
-    matches!(*map.key_ty, RealizedTy::String)
-        || baml_type::normalize::is_string_key(map.key_ty.as_ty(), vm)
+fn string_keyed(vm: &BexVm, map: bex_vm_types::MapRef) -> bool {
+    matches!(map.key_ty(), RealizedTy::String)
+        || baml_type::normalize::is_string_key(map.key_ty().as_ty(), vm)
 }
 
 /// The value under `key` (whose map hash is `hash`) in the string-keyed map
 /// at `ptr`.
 fn object_get(vm: &BexVm, ptr: HeapPtr, hash: u64, key: &str) -> Option<Value> {
-    let Object::Map(map) = vm.get_object(ptr) else {
+    let Some(map) = vm.map_at(ptr) else {
         return None;
     };
-    map.lock().get_hashed(hash, |candidate| {
-        vm.as_string(candidate)
-            .is_ok_and(|candidate| candidate.as_str() == key)
-    })
+    vm.map_get_hashed(
+        map,
+        bex_vm_types::object_format::Access::Shared,
+        hash,
+        |candidate| {
+            vm.as_string(candidate)
+                .is_ok_and(|candidate| candidate.as_str() == key)
+        },
+    )
 }
 
 /// The `map<string, json>` a [`plan::Rest`] field of `plan` holds, read from
@@ -251,11 +254,14 @@ fn rest_value(
     plan: &plan::ClassPlan,
     rest: plan::Rest,
 ) -> Result<Value, (&'static str, String)> {
-    let Object::Map(map) = vm.get_object(ptr) else {
+    let Some(map) = vm.map_at(ptr) else {
         unreachable!("a class decodes from a JSON object")
     };
-    let mut data = bex_vm_types::MapData::new();
-    for (key, value) in map.snapshot_entries() {
+    let mut data = Vec::new();
+    for (key, value) in vm
+        .map_snapshot(map, bex_vm_types::object_format::Access::Shared)
+        .snapshot_entries()
+    {
         let Ok(text) = vm.as_string(&key).map(BexStr::as_str) else {
             continue;
         };
@@ -265,11 +271,11 @@ fn rest_value(
                 .iter()
                 .any(|field| field.shown && field.key == text);
         if !claimed {
-            data.insert_hashed(bex_vm_types::map_string_hash(text), key, value);
+            data.push((bex_vm_types::map_string_hash(text), key, value));
         }
     }
     let json_ty = json_alias_ty(vm);
-    let kept = Value::object(vm.alloc(Object::Map(Map::new(RealizedTy::String, json_ty, data))));
+    let kept = Value::object(vm.alloc_map_hashed(RealizedTy::String, json_ty, data));
     copy_json(vm, kept)
 }
 
@@ -313,10 +319,11 @@ fn fallback_tag_error(
 
 /// The entries of the string-keyed map at `ptr`, in order.
 fn string_entries(vm: &BexVm, ptr: HeapPtr) -> Vec<(BexStr, Value)> {
-    let Object::Map(map) = vm.get_object(ptr) else {
+    let Some(map) = vm.map_at(ptr) else {
         return Vec::new();
     };
-    map.snapshot_entries()
+    vm.map_snapshot(map, bex_vm_types::object_format::Access::Shared)
+        .snapshot_entries()
         .into_iter()
         .filter_map(|(key, value)| Some((vm.as_string(&key).ok()?.clone(), value)))
         .collect()
@@ -388,7 +395,8 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                                 .collect::<Vec<_>>(),
                             false,
                         )),
-                        Object::Map(map) => {
+                        Object::Shared(SharedKind::Map) => {
+                            let map = vm.expect_map(ptr);
                             if inside.contains(ptr) {
                                 return Err((CYCLIC_JSON, path(&open, vm)));
                             }
@@ -396,7 +404,8 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                                 return Err((STRING_MAP_REQUIRED, path(&open, vm)));
                             }
                             Some((
-                                map.snapshot_entries()
+                                vm.map_snapshot(map, bex_vm_types::object_format::Access::Shared)
+                                    .snapshot_entries()
                                     .into_iter()
                                     .map(|(key, v)| {
                                         let hash = vm.as_string(&key).map_or(0, |key| {
@@ -447,16 +456,16 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
             .unwrap_or_else(|| unreachable!("the container was just read"));
         inside.remove(copying.ptr);
         let copied = if copying.is_map {
-            let mut data = bex_vm_types::MapData::new();
-            for ((key, _), value) in copying.children.into_iter().zip(copying.copied) {
-                let (hash, key) = key.unwrap_or_else(|| unreachable!("map children have keys"));
-                data.insert_hashed(hash, key, value);
-            }
-            vm.alloc(Object::Map(Map::new(
-                RealizedTy::String,
-                json_ty.clone(),
-                data,
-            )))
+            let data = copying
+                .children
+                .into_iter()
+                .zip(copying.copied)
+                .map(|((key, _), value)| {
+                    let (hash, key) = key.unwrap_or_else(|| unreachable!("map children have keys"));
+                    (hash, key, value)
+                })
+                .collect();
+            vm.alloc_map_hashed(RealizedTy::String, json_ty.clone(), data)
         } else {
             vm.alloc_array(json_ty.clone(), copying.copied)
         };

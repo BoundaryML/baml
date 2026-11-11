@@ -132,6 +132,7 @@ impl HeapPtr {
             crate::object_format::Format::Object => unsafe { &*self.ptr },
             crate::object_format::Format::Instance => crate::types::SharedKind::Instance.marker(),
             crate::object_format::Format::List(_) => crate::types::SharedKind::List.marker(),
+            crate::object_format::Format::Map(..) => crate::types::SharedKind::Map.marker(),
             crate::object_format::Format::Backing(_) => {
                 unreachable!("a list's backing is reached only through its list")
             }

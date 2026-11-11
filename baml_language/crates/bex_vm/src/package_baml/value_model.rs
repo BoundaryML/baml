@@ -16,14 +16,14 @@ use std::{num::NonZeroU64, ops::Range};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    EntryId, HeapPtr, ListRef, MapReadGuard, MapWriteGuard, Object, RealizedTy, Value, ValueKind,
+    HeapPtr, ListRef, MapRef, Object, RealizedTy, Value, ValueKind,
     errors::{VmBamlError, VmInternalError, VmPanic, VmRustFnError},
     layout::{
         Descriptors, Elem, Fault, Kind, ListOf, Lists, Maps, ObjPtr, RawWord, Shape, SlotKind,
         Slots, StrKey, Strings, Tagged,
     },
-    object_format::Access,
-    types::{Map, ObjectType, SharedKind, Type},
+    object_format::{Access, SlotValue},
+    types::{MapGuard, ObjectType, SharedKind, Type},
 };
 
 use super::NativeCallResult;
@@ -312,11 +312,10 @@ impl<'vm> ValueModel<'vm> {
         }
     }
 
-    fn map(&self, map: ObjPtr) -> &Map {
-        match self.object(map) {
-            Object::Map(map) => map,
-            other => panic!("map ABI call on {}", ObjectType::of(other)),
-        }
+    fn map(&self, map: ObjPtr) -> MapRef {
+        self.vm
+            .map_at(heap_ptr(map))
+            .unwrap_or_else(|| panic!("map ABI call on {}", ObjectType::of(self.object(map))))
     }
 
     /// The list's elements, under its lock, as values.
@@ -324,25 +323,9 @@ impl<'vm> ValueModel<'vm> {
         self.vm.list_values(self.array(list), self.access())
     }
 
-    #[allow(unsafe_code)]
-    fn entries(&self, map: ObjPtr) -> MapReadGuard<'_> {
-        let map = self.map(map);
-        match self.locality {
-            Locality::Shared => map.lock(),
-            // SAFETY: as for `read`.
-            Locality::ThreadLocal => unsafe { map.lock_thread_local() },
-        }
-    }
-
-    #[allow(unsafe_code)]
-    fn entries_mut(&self, map: ObjPtr) -> MapWriteGuard<'_> {
-        let map = self.map(map);
-        let debt = self.vm.tlab.alloc_debt();
-        match self.locality {
-            Locality::Shared => map.lock_mut(debt),
-            // SAFETY: as for `read`.
-            Locality::ThreadLocal => unsafe { map.lock_mut_thread_local(debt) },
-        }
+    /// The map, held under its lock as the locality allows.
+    fn entries(&self, map: ObjPtr) -> MapGuard {
+        self.map(map).lock(self.access())
     }
 
     /// The slot a container whose elements have type `ty` reports to
@@ -366,7 +349,7 @@ impl<'vm> ValueModel<'vm> {
     }
 
     fn map_value_slot(&self, map: ObjPtr) -> SlotKind {
-        SlotKind::of_type(&self.map(map).value_ty)
+        SlotKind::of_type(self.map(map).value_ty())
     }
 
     /// The element type of a list allocated as `of`. The interpreter tags a
@@ -388,7 +371,7 @@ impl<'vm> ValueModel<'vm> {
             #[cfg(test)]
             (ListOf::SameAs(list), View::Typed) => self.array(list).element_ty().clone(),
             #[cfg(test)]
-            (ListOf::ValuesOf(map), View::Typed) => (*self.map(map).value_ty).clone(),
+            (ListOf::ValuesOf(map), View::Typed) => self.map(map).value_ty().clone(),
         }
     }
 
@@ -405,7 +388,7 @@ impl<'vm> ValueModel<'vm> {
                 .cloned()
                 .unwrap_or_else(RealizedTy::unknown),
             #[cfg(test)]
-            View::Typed => (*self.map(map).key_ty).clone(),
+            View::Typed => self.map(map).key_ty().clone(),
         }
     }
 
@@ -419,14 +402,11 @@ impl<'vm> ValueModel<'vm> {
         }
     }
 
-    /// The map's epoch and the entry whose key equals `key`.
-    fn find_entry(&self, map: ObjPtr, key: StrKey) -> (u64, Option<EntryId>) {
-        let (epoch, bucket) = self.entries(map).snapshot_bucket(key.hash);
-        let found = bucket
-            .into_iter()
-            .find(|(_, entry)| self.is_key(entry.key, key))
-            .map(|(id, _)| id);
-        (epoch, found)
+    /// The position of the entry whose key equals `key`.
+    fn find_entry(&self, guard: &MapGuard, key: StrKey) -> Option<usize> {
+        guard.find(key.hash, |candidate| {
+            self.is_key(candidate.expect_value(), key)
+        })
     }
 }
 
@@ -502,10 +482,13 @@ impl Descriptors for ValueModel<'_> {
             Object::Shared(SharedKind::List) => Shape::List {
                 elem: self.slot_of(self.array(obj).element_ty()),
             },
-            Object::Map(map) => Shape::Map {
-                key: self.slot_of(&map.key_ty),
-                value: self.slot_of(&map.value_ty),
-            },
+            Object::Shared(SharedKind::Map) => {
+                let map = self.map(obj);
+                Shape::Map {
+                    key: self.slot_of(map.key_ty()),
+                    value: self.slot_of(map.value_ty()),
+                }
+            }
             Object::String(_) => Shape::Str,
             Object::Shared(SharedKind::Instance) => Shape::Other(Kind::Instance),
             Object::Closure(_) => Shape::Other(Kind::Closure),
@@ -567,49 +550,74 @@ impl<E: ValueElem> Lists<E> for ValueModel<'_> {
 
 impl<V: ValueElem> Maps<V> for ValueModel<'_> {
     fn map_len(&self, map: ObjPtr) -> usize {
-        self.entries(map).len()
+        self.map(map).len()
     }
 
     fn map_get(&self, map: ObjPtr, key: StrKey) -> Option<V> {
-        let value = self
-            .entries(map)
-            .get_hashed(key.hash, |candidate| self.is_key(*candidate, key))?;
+        let guard = self.entries(map);
+        let pos = self.find_entry(&guard, key)?;
+        let value = self.vm.box_slot(guard.value(pos));
         Some(self.elem(value, self.map_value_slot(map)))
     }
 
     fn map_set(&mut self, map: ObjPtr, key: StrKey, value: V) -> Option<V> {
         let slot = self.map_value_slot(map);
-        let value = value.into_value(self, slot);
-        let (epoch, found) = self.find_entry(map, key);
-        let previous = self
-            .entries_mut(map)
-            .set_if_epoch(epoch, found, key.hash, ptr_value(key.ptr), value)
-            .expect("no writer runs between the lookup and the store");
-        previous.map(|previous| self.elem(previous, slot))
+        let value = SlotValue::Value(value.into_value(self, slot));
+        let guard = self.entries(map);
+        let previous = match self.find_entry(&guard, key) {
+            Some(pos) => {
+                let previous = guard.value(pos);
+                guard
+                    .set_value(pos, value)
+                    .expect("a map value fits its slot");
+                Some(previous)
+            }
+            None => {
+                let key_value = SlotValue::Value(ptr_value(key.ptr));
+                guard
+                    .insert(&mut self.vm.tlab, key.hash, key_value, value)
+                    .expect("a map entry fits its slots");
+                None
+            }
+        };
+        drop(guard);
+        previous.map(|previous| {
+            let previous = self.vm.slot_value(previous);
+            self.elem(previous, slot)
+        })
     }
 
     fn map_remove(&mut self, map: ObjPtr, key: StrKey) -> Option<V> {
         let slot = self.map_value_slot(map);
-        let (epoch, found) = self.find_entry(map, key);
-        let removed = self
-            .entries_mut(map)
-            .remove_if_epoch(epoch, found)
-            .expect("no writer runs between the lookup and the removal");
-        removed.map(|removed| self.elem(removed, slot))
+        let guard = self.entries(map);
+        let removed = guard.remove(self.find_entry(&guard, key)?);
+        drop(guard);
+        let removed = self.vm.slot_value(removed);
+        Some(self.elem(removed, slot))
     }
 
     fn map_clear(&mut self, map: ObjPtr) {
-        self.entries_mut(map).clear();
+        self.entries(map).clear();
     }
 
     fn map_key_list(&mut self, map: ObjPtr) -> ObjPtr {
-        let keys: Vec<Value> = self.entries(map).keys().copied().collect();
+        let keys: Vec<Value> = self
+            .entries(map)
+            .entries()
+            .into_iter()
+            .map(|(key, _)| self.vm.box_slot(key))
+            .collect();
         let element_ty = self.key_list_ty(map);
         obj_ptr(Value::object(self.vm.alloc_array(element_ty, keys)))
     }
 
     fn map_values(&self, map: ObjPtr) -> Vec<V> {
-        let values: Vec<Value> = self.entries(map).values().copied().collect();
+        let values: Vec<Value> = self
+            .entries(map)
+            .entries()
+            .into_iter()
+            .map(|(_, value)| self.vm.box_slot(value))
+            .collect();
         self.elems(values, self.map_value_slot(map))
     }
 }

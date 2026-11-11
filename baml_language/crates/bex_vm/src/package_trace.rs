@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    MapReadGuard,
     trace::{ReservedSpanData, SpanId, TraceOptionsData},
     types::{Object, Type, Value},
 };

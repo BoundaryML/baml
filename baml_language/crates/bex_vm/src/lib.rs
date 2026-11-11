@@ -51,8 +51,8 @@ pub use type_match::{Primitive, value_is_member, value_primitive};
 #[doc(hidden)]
 pub use vm::compiled_rt;
 pub use vm::{
-    BexVm, BoundCheck, BoundParts, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation,
-    VmExecState,
+    BexVm, BoundCheck, BoundParts, BytecodeFrame, BytecodeProgram, Frame, MapEdit, MapSnapshot,
+    VmEventSourceLocation, VmExecState,
     compiled_rt::{CompiledBodies, CompiledBodyTable},
     convert_program, prepare_compact_code,
 };

@@ -957,16 +957,14 @@ fn backing_storage(roots: &[bex_vm_types::HeapPtr]) -> [(usize, usize); 3] {
         let Object::Uint8Array(bytes) = roots[1].get() else {
             panic!("roots[1] is not a byte array")
         };
-        let Object::Map(map) = roots[2].get() else {
-            panic!("roots[2] is not a map")
-        };
+        let map = bex_vm_types::MapRef::of(roots[2]).expect("roots[2] is a map");
         let (array, array_cap) = array.backing_object().expect("a non-empty list");
         let bytes = bytes.data_unchecked();
-        let map = map.data_unchecked();
+        let [map_keys, ..] = map.backing_objects().expect("a non-empty map");
         [
             (array.as_ptr().addr(), array_cap),
             (bytes.as_ptr().addr(), bytes.capacity()),
-            (std::ptr::from_ref(map).addr(), map.len()),
+            (map_keys.as_ptr().addr(), map.len()),
         ]
     }
 }

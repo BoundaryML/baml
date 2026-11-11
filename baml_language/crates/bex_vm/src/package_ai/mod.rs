@@ -3,7 +3,7 @@
 //! values and split rendered fragments on typed role markers.
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{MapReadGuard, types::Value};
+use bex_vm_types::types::Value;
 
 use crate::{
     BexVm,

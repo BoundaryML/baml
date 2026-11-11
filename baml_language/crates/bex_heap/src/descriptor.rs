@@ -23,7 +23,8 @@ use bex_vm_types::{
     object_format::FIRST_INSTANCE_DESC,
     types::{
         BACKING_DESCS, BACKING_ELEMS_OFFSET, LIST_BACKING_OFFSET, LIST_BYTES, LIST_DESCS,
-        LIST_ELEM_TY_OFFSET, backing_descriptor, list_descriptor,
+        LIST_ELEM_TY_OFFSET, MAP_BYTES, MAP_INDEX_OFFSET, MAP_KEYS_OFFSET, MAP_TY_OFFSET,
+        MAP_VALUES_OFFSET, backing_descriptor, list_descriptor, map_descriptor, map_descriptors,
     },
 };
 use parking_lot::Mutex;
@@ -200,6 +201,27 @@ impl Descriptor {
         }
     }
 
+    /// The descriptor of maps with `key` and `value` slots: the three
+    /// backing pointers and the type pointer.
+    fn map(key: SlotKind, value: SlotKind) -> Self {
+        Self {
+            kind: Kind::Map,
+            trace: Trace::Slots,
+            size: MAP_BYTES,
+            elems: None,
+            ptr_slots: Cow::Owned(vec![
+                MAP_KEYS_OFFSET,
+                MAP_VALUES_OFFSET,
+                MAP_INDEX_OFFSET,
+                MAP_TY_OFFSET,
+            ]),
+            tagged_slots: Cow::Borrowed(&[]),
+            slot_kinds: Cow::Owned(vec![key, value]),
+            type_id: map_descriptor(key, value).0,
+            finalizer: None,
+        }
+    }
+
     /// The descriptor of list backings holding `elem` elements.
     fn backing(elem: ElemKind) -> Self {
         Self {
@@ -302,6 +324,9 @@ impl DescriptorTable {
         }
         for (elem, id) in BACKING_DESCS {
             fixed[id.0 as usize] = Some(Descriptor::backing(elem));
+        }
+        for (key, value, id) in map_descriptors() {
+            fixed[id.0 as usize] = Some(Descriptor::map(key, value));
         }
         Self {
             fixed,
@@ -483,7 +508,7 @@ mod tests {
             Err(DescriptorError::BadSlot(24)),
             "overruns the object"
         );
-        assert_eq!(table.len(), 1 + 5 + 3 + 1);
+        assert_eq!(table.len(), 1 + 5 + 3 + 25 + 1);
     }
 
     /// Fields are laid out after the header in declaration order, each in

@@ -3,7 +3,7 @@
 
 use bex_heap::TlabHolder;
 use bex_str::BexStr;
-use bex_vm_types::{MapReadGuard, types::Value};
+use bex_vm_types::types::Value;
 
 use crate::{
     BexVm,

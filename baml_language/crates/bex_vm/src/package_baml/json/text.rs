@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{MapData, Object, RealizedTy, Value, types::Map};
+use bex_vm_types::{Object, RealizedTy, Value};
 use rustc_hash::FxHashMap;
 
 use crate::{BexVm, errors::VmRustFnError};
@@ -576,12 +576,12 @@ impl Entries {
 
     /// The map of these entries, typed `map<key, value>`.
     pub(super) fn alloc(self, vm: &mut BexVm, key: RealizedTy, value: RealizedTy) -> Value {
-        let mut data = MapData::new();
-        for (hash, key, value) in self.entries {
-            let key = Value::object(vm.alloc_string(key));
-            data.insert_hashed(hash, key, value);
-        }
-        Value::object(vm.alloc(Object::Map(Map::new(key, value, data))))
+        let data = self
+            .entries
+            .into_iter()
+            .map(|(hash, key, value)| (hash, Value::object(vm.alloc_string(key)), value))
+            .collect();
+        Value::object(vm.alloc_map_hashed(key, value, data))
     }
 }
 

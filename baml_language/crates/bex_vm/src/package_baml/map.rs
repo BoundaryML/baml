@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use bex_vm_types::{
-    EntryId, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value,
+    EntryId, MapRef, RootHaver, RootVisitor, Value,
     layout::{Elem, Fault, ListOf, Lists, Maps, ObjPtr, StrKey, Strings},
+    object_format::Access,
 };
 
 use super::{BamlClassMap, Continuation, NativeCallResult, PackageBamlImpl, value_model::Locality};
@@ -67,44 +68,35 @@ impl MapDriver {
         super::chain(vm, result, Box::new(driver))
     }
 
-    /// The map's backing store, read without its lock when it is thread-local.
-    #[allow(unsafe_code)]
-    fn entries<'vm>(&self, vm: &'vm BexVm) -> MapReadGuard<'vm> {
-        let Object::Map(map) = vm.get_object(self.map.as_object_ptr().unwrap()) else {
-            unreachable!("map receiver was validated")
-        };
+    /// The map's access: without its lock when it is thread-local, which
+    /// only the `$local` twins set, for a receiver escape analysis proved
+    /// thread-local.
+    fn access(&self) -> Access {
         if self.thread_local {
-            // SAFETY: only the `$local` twins set `thread_local`, and the
-            // native backend selects those only for a receiver escape
-            // analysis proved thread-local.
-            unsafe { map.lock_thread_local() }
+            Access::ThreadLocal
         } else {
-            map.lock()
+            Access::Shared
         }
     }
 
-    /// [`Self::entries`] for writing.
-    #[allow(unsafe_code)]
-    fn entries_mut<'vm>(&self, vm: &'vm BexVm) -> MapWriteGuard<'vm> {
-        let Object::Map(map) = vm.get_object(self.map.as_object_ptr().unwrap()) else {
-            unreachable!("map receiver was validated")
-        };
-        let debt = vm.tlab.alloc_debt();
-        if self.thread_local {
-            // SAFETY: as for `entries`.
-            unsafe { map.lock_mut_thread_local(debt) }
-        } else {
-            map.lock_mut(debt)
-        }
+    fn map(&self, vm: &BexVm) -> MapRef {
+        vm.expect_map(
+            self.map
+                .as_object_ptr()
+                .expect("map receiver was validated"),
+        )
+    }
+
+    /// The map held for reading and writing.
+    fn entries<'vm>(&self, vm: &'vm mut BexVm) -> crate::MapEdit<'vm> {
+        let map = self.map(vm);
+        crate::MapEdit::new(vm, map, self.access())
     }
 
     fn snapshot(&mut self, vm: &BexVm) {
-        let (epoch, entries) = self.entries(vm).snapshot_bucket(self.hash);
+        let (epoch, candidates) = vm.map_bucket(self.map(vm), self.access(), self.hash);
         self.epoch = epoch;
-        self.candidates = entries
-            .into_iter()
-            .map(|(id, entry)| (id, entry.key))
-            .collect();
+        self.candidates = candidates;
         self.cursor = 0;
     }
 
@@ -131,13 +123,13 @@ impl MapDriver {
             }
             let result = match self.operation {
                 Operation::Set => self
-                    .entries_mut(vm)
+                    .entries(vm)
                     .set_if_epoch(self.epoch, matched, self.hash, self.key, self.value),
                 Operation::GetOrInsert if matched.is_none() => self
-                    .entries_mut(vm)
+                    .entries(vm)
                     .set_if_epoch(self.epoch, None, self.hash, self.key, self.value)
                     .map(|_| Some(self.value)),
-                Operation::Delete => self.entries_mut(vm).remove_if_epoch(self.epoch, matched),
+                Operation::Delete => self.entries(vm).remove_if_epoch(self.epoch, matched),
                 _ => self.entries(vm).get_if_epoch(self.epoch, matched),
             };
             let Ok(previous) = result else {

@@ -600,69 +600,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "heap_debug")]
-    #[test]
-    fn test_full_verify_panics_on_instance_field_mismatch() {
-        use std::panic::{AssertUnwindSafe, catch_unwind};
-
-        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
-
-        let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
-            declared_crossing: baml_type::ClassCrossing::Fields,
-            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("C")),
-            fields: vec![bex_vm_types::ClassField {
-                name: "x".to_string(),
-                field_type: baml_type::RuntimeTy::Int,
-                field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
-                description: None,
-                alias: None,
-                docstring: None,
-                other: Default::default(),
-                skip: false,
-                stream_done: false,
-                must_exist: false,
-                runtime_type: None,
-                json_rename: None,
-                json_flatten: false,
-                json_fallback: false,
-                json_omit_null: false,
-                redact: false,
-            }],
-            description: None,
-            alias: None,
-            docstring: None,
-            other: Default::default(),
-            stream_done: false,
-            type_tag: baml_type::typetag::TypeTag::from_i64(100),
-            cleanup: None,
-            methods: indexmap::IndexMap::new(),
-            generic_param_count: 0,
-            owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
-            redact: false,
-        }))];
-        let debug = HeapDebuggerConfig {
-            enabled: true,
-            verify: HeapVerifyMode::Full,
-        };
-        let heap = BexHeap::with_debug(compile_time, debug);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        let class_ptr = heap.compile_time_ptr(0);
-        // Instance has 3 fields but class expects 1 — should panic on verify
-        let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance::new(
-            class_ptr,
-            Box::new([]),
-            vec![Value::int(1), Value::int(2), Value::int(3)],
-        )));
-
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            heap.verify_quick();
-        }));
-        assert!(result.is_err());
-    }
-
     #[test]
     fn test_gc_preserves_rooted_objects() {
         let heap = BexHeap::new(vec![]);
@@ -822,20 +759,26 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let leaf = tlab.alloc_string("key leaf");
         let key = tlab.alloc_array(baml_type::RealizedTy::string(), vec![Value::object(leaf)]);
-        let map = tlab.alloc(Object::Map(bex_vm_types::types::Map::new(
-            baml_type::RealizedTy::unknown(),
-            baml_type::RealizedTy::int(),
-            bex_vm_types::MapData::from_hashed_entries([(17, Value::object(key), Value::int(42))]),
-        )));
+        let map = tlab
+            .alloc_map_hashed(
+                bex_vm_types::RealizedTy::unknown(),
+                bex_vm_types::RealizedTy::int(),
+                vec![(17, Value::object(key), Value::int(42))],
+            )
+            .ptr();
         let (stats, roots, _) = unsafe { heap.collect_garbage(&[map]) };
-        assert_eq!(stats.live_count, 5); // a non-empty list is a list and a backing cell, plus its element type
-        let Object::Map(map) = (unsafe { roots[0].get() }) else {
+        assert_eq!(stats.live_count, 9); // a non-empty map is a map and three backing cells, plus its type
+        let Some(map) = (unsafe { bex_vm_types::MapRef::of(roots[0]) }) else {
             panic!("expected map");
         };
-        let (_, entries) = map.snapshot_bucket(17);
-        assert_eq!(entries[0].1.value, Value::int(42));
+        let guard = map.lock(bex_vm_types::object_format::Access::Shared);
+        let pos = guard.candidates(17)[0];
+        assert_eq!(
+            guard.value(pos),
+            bex_vm_types::object_format::SlotValue::Value(Value::int(42))
+        );
         let Some(key) =
-            (unsafe { bex_vm_types::ListRef::of(entries[0].1.key.as_object_ptr().unwrap()) })
+            (unsafe { bex_vm_types::ListRef::of(guard.key(pos).as_object_ptr().unwrap()) })
         else {
             panic!("expected array key");
         };
@@ -870,13 +813,12 @@ mod tests {
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[map_obj]) };
 
         // The map, key, and value should survive.
-        assert_eq!(stats.live_count, 3);
+        assert_eq!(stats.live_count, 7); // a non-empty map is a map and three backing cells, plus its type
         assert_eq!(remapped.len(), 1);
 
         // Verify the map's reference was updated correctly
         let new_map_ptr = remapped[0];
-        let map_result = unsafe { new_map_ptr.get() };
-        if let Object::Map(m) = map_result {
+        if let Some(m) = unsafe { bex_vm_types::MapRef::of(new_map_ptr) } {
             let entries = m.snapshot_entries();
             assert!(
                 matches!(unsafe { entries[0].0.as_object_ptr().unwrap().get() }, Object::String(key) if key == "key")
@@ -1012,7 +954,7 @@ mod tests {
         let (stats, remapped, _forwarding) = unsafe { heap.collect_garbage(&[outer_array]) };
 
         // The four chain objects and the map key should survive.
-        assert_eq!(stats.live_count, 8); // a non-empty list is a list and a backing cell, plus its element type
+        assert_eq!(stats.live_count, 12); // a non-empty map is a map and three backing cells, plus its type
         assert!(stats.collected_count >= 2);
 
         // Verify the chain is intact after forwarding
@@ -1020,8 +962,7 @@ mod tests {
         if let Some(arr) = unsafe { bex_vm_types::ListRef::of(new_outer) }
             && let Some(map_ptr) = arr.get(0).and_then(|v| v.as_object_ptr())
         {
-            let map_obj = unsafe { map_ptr.get() };
-            if let Object::Map(m) = map_obj
+            if let Some(m) = unsafe { bex_vm_types::MapRef::of(map_ptr) }
                 && let Some(inner_arr_ptr) = m.snapshot_entries()[0].1.as_object_ptr()
             {
                 if let Some(inner_arr) = unsafe { bex_vm_types::ListRef::of(inner_arr_ptr) }
@@ -1709,12 +1650,12 @@ mod tests {
         );
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[arr, map]) };
-        assert_eq!(stats.live_count, 3); // a non-empty list is a list and a backing cell, plus its element type
+        assert_eq!(stats.live_count, 4); // a non-empty map is a map and three backing cells, plus its type
         let Some(a) = (unsafe { bex_vm_types::ListRef::of(new_roots[0]) }) else {
             panic!("not array")
         };
         assert!(a.is_empty());
-        let Object::Map(m) = (unsafe { new_roots[1].get() }) else {
+        let Some(m) = (unsafe { bex_vm_types::MapRef::of(new_roots[1]) }) else {
             panic!("not map")
         };
         assert!(m.is_empty());
@@ -2116,7 +2057,7 @@ mod tests {
         assert_eq!(s, "in_array");
 
         // Map: key "k" should resolve to the (forwarded) leaf string.
-        let Object::Map(m) = (unsafe { new_roots[1].get() }) else {
+        let Some(m) = (unsafe { bex_vm_types::MapRef::of(new_roots[1]) }) else {
             panic!("new_roots[1] not Map")
         };
         let Some(map_leaf) = m.snapshot_entries()[0].1.as_object_ptr() else {
@@ -2408,6 +2349,60 @@ mod tests {
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
         assert_eq!(stats.live_count, 6, "a popped element is not kept");
         let _ = unsafe { ListRef::of(roots[0]) }.expect("still a list");
+    }
+
+    /// A map keeps insertion order across collisions, growth and removal,
+    /// finds entries by hash and key, and bumps its epoch on every
+    /// membership change but not on a value update.
+    #[test]
+    fn map_entries_keep_order_through_collisions_growth_and_removal() {
+        use bex_vm_types::object_format::{Access, SlotValue};
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let map = tlab.alloc_empty_map(
+            bex_vm_types::RealizedTy::Int,
+            bex_vm_types::RealizedTy::Float,
+        );
+        let guard = map.lock(Access::Shared);
+        let key = |i: i64| SlotValue::Value(Value::int(i));
+        // Every key hashes to one of two buckets: collisions everywhere.
+        for i in 0..20 {
+            let hash = u64::try_from(i % 2).unwrap();
+            guard
+                .insert(
+                    &mut tlab,
+                    hash,
+                    key(i),
+                    SlotValue::Float(f64::from(i as i32)),
+                )
+                .unwrap();
+        }
+        assert_eq!(guard.len(), 20);
+        assert_eq!(guard.candidates(1).len(), 10);
+        let found = guard.find(1, |candidate| candidate == key(7)).unwrap();
+        assert_eq!(guard.value(found), SlotValue::Float(7.0));
+
+        let epoch = guard.epoch();
+        guard.set_value(found, SlotValue::Float(70.0)).unwrap();
+        assert_eq!(
+            guard.epoch(),
+            epoch,
+            "a value update is not a membership change"
+        );
+        assert_eq!(guard.remove(found), SlotValue::Float(70.0));
+        assert_ne!(guard.epoch(), epoch);
+        assert_eq!(guard.find(1, |candidate| candidate == key(7)), None);
+        let keys: Vec<SlotValue> = guard.entries().into_iter().map(|(k, _)| k).collect();
+        let expected: Vec<SlotValue> = (0..20).filter(|&i| i != 7).map(key).collect();
+        assert_eq!(keys, expected, "removal keeps insertion order");
+        drop(guard);
+
+        let (stats, _, _) = unsafe { heap.collect_garbage(&[map.ptr()]) };
+        // The map, its three backings and its type object.
+        assert_eq!(stats.live_count, 5);
+        map.lock(Access::Shared).clear();
+        assert!(map.is_empty());
     }
 
     /// A generic instance keeps its type arguments in a type object its

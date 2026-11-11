@@ -153,10 +153,6 @@ macro_rules! walk_object_heads {
                     }
                 }
                 Object::Future(fut) => fut.$visit(f),
-                Object::Map(map) => {
-                    map.key_ty.$visit(f);
-                    map.value_ty.$visit(f);
-                }
                 // Carry no head. `Package` and `Enum` reference declarations by
                 // pointer, and the rest are plain values.
                 Object::Package(_)

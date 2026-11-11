@@ -377,7 +377,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             BamlType::Map(_, _) => {
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> MapReadGuard<'v> {{"
+                    "{inner}pub fn {field_name}(&self, vm: &BexVm) -> crate::MapSnapshot {{"
                 )
                 .unwrap();
                 writeln!(

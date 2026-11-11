@@ -31,6 +31,7 @@ use super::{
     plan::{ClassPlan, Plans},
 };
 use crate::BexVm;
+use bex_vm_types::types::SharedKind;
 
 /// What JSON value a union is decoding: what members are prefiltered by.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -79,7 +80,10 @@ impl Keys<'_> {
     fn len(&self, vm: &BexVm) -> usize {
         match self {
             Keys::Map(ptr) => match vm.get_object(*ptr) {
-                Object::Map(map) => map.len(),
+                Object::Shared(SharedKind::Map) => {
+                    let map = vm.expect_map(*ptr);
+                    map.len()
+                }
                 _ => 0,
             },
             Keys::Text(keys) => keys.len(),
@@ -267,7 +271,7 @@ pub(super) fn tagged_member(
     ptr: HeapPtr,
     plans: &mut Plans,
 ) -> Option<Result<RealizedTy, Refused>> {
-    if !matches!(vm.get_object(ptr), Object::Map(_)) {
+    if vm.map_at(ptr).is_none() {
         return None;
     }
     let tags = union_tags(vm, members, plans)?;

@@ -191,8 +191,12 @@ fn dump(vm: &BexVm, value: Value) -> String {
             )
         }
         Object::Uint8Array(bytes) => format!("bytes{:?}", bytes.to_vec()),
-        Object::Map(map) => {
-            let entries: Vec<String> = map
+        Object::Shared(SharedKind::Map) => {
+            let entries: Vec<String> = vm
+                .map_snapshot(
+                    vm.expect_map(ptr),
+                    bex_vm_types::object_format::Access::Shared,
+                )
                 .snapshot_entries()
                 .into_iter()
                 .map(|(key, value)| format!("{}: {}", dump(vm, key), dump(vm, value)))

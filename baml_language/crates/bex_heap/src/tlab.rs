@@ -16,8 +16,8 @@ use bex_vm_types::{
     layout::{ElemKind, SlotKind},
     object_format::{Access, SlotValue},
     types::{
-        BackingAlloc, LIST_BYTES, Map, TypeValue, Variant, backing_bytes, backing_descriptor,
-        init_backing, list_descriptor,
+        BackingAlloc, LIST_BYTES, MAP_BYTES, MapRef, TypeValue, Variant, backing_bytes,
+        backing_descriptor, init_backing, list_descriptor, map_descriptor,
     },
 };
 use indexmap::IndexMap;
@@ -282,20 +282,53 @@ impl Tlab {
         self.alloc_list_of(element_ty, &values).ptr()
     }
 
-    /// Allocate a map object whose keys/values have static types `key_ty`/`value_ty`.
-    #[inline]
+    /// Allocate a string-keyed map whose keys/values have static types
+    /// `key_ty`/`value_ty`.
     pub fn alloc_map(
         &mut self,
-        key_ty: bex_vm_types::RealizedTy,
-        value_ty: bex_vm_types::RealizedTy,
+        key_ty: RealizedTy,
+        value_ty: RealizedTy,
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
-        let values =
-            bex_vm_types::MapData::from_hashed_entries(values.into_iter().map(|(key, value)| {
+        let entries: Vec<(u64, Value, Value)> = values
+            .into_iter()
+            .map(|(key, value)| {
                 let hash = bex_vm_types::map_string_hash(&key);
                 (hash, Value::object(self.alloc_string(key)), value)
-            }));
-        self.alloc(Object::Map(Map::new(key_ty, value_ty, values)))
+            })
+            .collect();
+        self.alloc_map_hashed(key_ty, value_ty, entries).ptr()
+    }
+
+    /// Allocate an empty map of `key_ty` to `value_ty`.
+    pub fn alloc_empty_map(&mut self, key_ty: RealizedTy, value_ty: RealizedTy) -> MapRef {
+        let (key, value) = (SlotKind::of_type(&key_ty), SlotKind::of_type(&value_ty));
+        let ty = self.type_object(RealizedTy::Map {
+            key: Box::new(key_ty),
+            value: Box::new(value_ty),
+        });
+        let cell = self.alloc_zeroed(map_descriptor(key, value), MAP_BYTES as usize);
+        // SAFETY: the payload of a fresh map cell; the type object was just
+        // made.
+        unsafe { MapRef::init(self.payload_ptr(cell), ty) }
+    }
+
+    /// Allocate a map holding `entries`: distinct keys, each with the hash
+    /// the interpreter's hashing gives it.
+    pub fn alloc_map_hashed(
+        &mut self,
+        key_ty: RealizedTy,
+        value_ty: RealizedTy,
+        entries: Vec<(u64, Value, Value)>,
+    ) -> MapRef {
+        let map = self.alloc_empty_map(key_ty, value_ty);
+        let guard = map.lock(Access::ThreadLocal);
+        for (hash, key, value) in entries {
+            guard
+                .insert(self, hash, SlotValue::Value(key), SlotValue::Value(value))
+                .unwrap_or_else(|error| panic!("a map entry does not fit its slots: {error}"));
+        }
+        map
     }
 
     /// Allocate a non-generic instance object (empty class type args).
@@ -617,6 +650,18 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_variant(enm, index)
     }
 
+    /// Allocate a map holding `entries` (see [`Tlab::alloc_map_hashed`]).
+    fn alloc_map_hashed(
+        &mut self,
+        key_ty: RealizedTy,
+        value_ty: RealizedTy,
+        entries: Vec<(u64, Value, Value)>,
+    ) -> HeapPtr {
+        self.tlab_mut()
+            .alloc_map_hashed(key_ty, value_ty, entries)
+            .ptr()
+    }
+
     fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
         self.tlab_mut().alloc_uint8array(data)
     }
@@ -779,17 +824,13 @@ mod tests {
         );
 
         unsafe {
-            match ptr.get() {
-                Object::Map(m) => {
-                    let entries = m.snapshot_entries();
-                    assert_eq!(entries.len(), 1);
-                    assert_eq!(entries[0].1, Value::int(42));
-                    assert!(
-                        matches!(entries[0].0.as_object_ptr().unwrap().get(), Object::String(key) if key == "key")
-                    );
-                }
-                _ => panic!("Expected Map"),
-            }
+            let m = MapRef::of(ptr).expect("a map");
+            let entries = m.snapshot_entries();
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].1, SlotValue::Value(Value::int(42)));
+            assert!(
+                matches!(entries[0].0.as_object_ptr().unwrap().get(), Object::String(key) if key == "key")
+            );
         }
     }
 

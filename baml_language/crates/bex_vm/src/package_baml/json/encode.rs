@@ -31,8 +31,7 @@
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, MapData, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
-    types::Map,
+    HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
 };
 use rustc_hash::FxHashMap;
 use sys_types::JsonNaming;
@@ -228,7 +227,10 @@ impl ToJsonCache {
                 let array = vm.expect_list(ptr);
                 OverrideKey::List(array.element_ty().clone())
             }
-            Object::Map(map) => OverrideKey::Map((*map.key_ty).clone(), (*map.value_ty).clone()),
+            Object::Shared(SharedKind::Map) => {
+                let map = vm.expect_map(ptr);
+                OverrideKey::Map(map.key_ty().clone(), map.value_ty().clone())
+            }
             Object::Shared(SharedKind::Instance) => {
                 let instance = vm.expect_instance(ptr);
                 match vm.get_object(instance.class()) {
@@ -320,7 +322,11 @@ fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
             let values = vm.expect_list(ptr);
             vm.list_values(values, bex_vm_types::object_format::Access::Shared)
         }
-        Object::Map(map) => map
+        Object::Shared(SharedKind::Map) => vm
+            .map_snapshot(
+                vm.expect_map(ptr),
+                bex_vm_types::object_format::Access::Shared,
+            )
             .snapshot_entries()
             .into_iter()
             .map(|(_, value)| value)
@@ -685,7 +691,7 @@ impl Walker<'_, '_> {
                 let values = vm.expect_list(ptr);
                 Shape::Array(vm.list_values(values, bex_vm_types::object_format::Access::Shared))
             }
-            Object::Map(_) => Shape::Map,
+            Object::Shared(SharedKind::Map) => Shape::Map,
             Object::Shared(SharedKind::Instance) => {
                 let instance = vm.expect_instance(ptr);
                 Shape::Instance(instance.class())
@@ -799,7 +805,7 @@ impl Walker<'_, '_> {
                     vm.list_values(values, bex_vm_types::object_format::Access::Shared),
                 )
             }
-            Object::Map(_) => JsonShape::Map,
+            Object::Shared(SharedKind::Map) => JsonShape::Map,
             Object::Variant(variant) => JsonShape::Variant(match vm.get_object(variant.enm) {
                 Object::Enum(e) => e.variants.get(variant.index).map(|v| v.name.clone()),
                 _ => None,
@@ -864,13 +870,14 @@ impl Walker<'_, '_> {
         spliced: bool,
         sink: &mut impl Sink,
     ) -> Result<(), Stopped> {
-        let Object::Map(map) = vm.get_object(ptr) else {
+        let Some(map) = vm.map_at(ptr) else {
             unreachable!("the value was just read as a map")
         };
         if !super::string_keyed(vm, map) {
             return Err(self.refuse(vm, STRING_MAP_REQUIRED, "map_key"));
         }
-        let children = map
+        let children = vm
+            .map_snapshot(map, bex_vm_types::object_format::Access::Shared)
             .snapshot_entries()
             .into_iter()
             .map(|(key, value)| (Some(Slot::Key(key)), value))
@@ -983,8 +990,10 @@ impl Walker<'_, '_> {
                 .position(|(slot, _)| matches!(slot, Some(Slot::Field(_, i)) if *i == flattened));
             if let Some(at) = at {
                 let (_, map) = children.remove(at);
-                let entries = match map.as_object_ptr().map(|map| vm.get_object(map)) {
-                    Some(Object::Map(map)) => map.snapshot_entries(),
+                let entries = match map.as_object_ptr().and_then(|map| vm.map_at(map)) {
+                    Some(map) => vm
+                        .map_snapshot(map, bex_vm_types::object_format::Access::Shared)
+                        .snapshot_entries(),
                     _ => Vec::new(),
                 };
                 let declared: Vec<&str> = children
@@ -1222,7 +1231,7 @@ struct ValueSink {
 enum Building {
     Array(Vec<Value>),
     /// The entries so far, and the key of the next one.
-    Object(MapData, Option<(u64, Value)>),
+    Object(Vec<(u64, Value, Value)>, Option<(u64, Value)>),
 }
 
 impl ValueSink {
@@ -1245,7 +1254,7 @@ impl ValueSink {
                     .take()
                     .unwrap_or_else(|| unreachable!("an object value follows its key"));
                 // The walk writes each key once.
-                data.insert_hashed(hash, key, value);
+                data.push((hash, key, value));
             }
         }
     }
@@ -1305,7 +1314,7 @@ impl Sink for ValueSink {
     }
 
     fn begin_object(&mut self, _: &mut BexVm) {
-        self.building.push(Building::Object(MapData::new(), None));
+        self.building.push(Building::Object(Vec::new(), None));
     }
 
     fn key(&mut self, vm: &mut BexVm, _: bool, key: Key<'_>) {
@@ -1338,11 +1347,7 @@ impl Sink for ValueSink {
         let Some(Building::Object(data, _)) = self.building.pop() else {
             unreachable!("an object ends what it began")
         };
-        let map = vm.alloc(Object::Map(Map::new(
-            RealizedTy::String,
-            self.json.clone(),
-            data,
-        )));
+        let map = vm.alloc_map_hashed(RealizedTy::String, self.json.clone(), data);
         self.emit(Value::object(map));
     }
 }

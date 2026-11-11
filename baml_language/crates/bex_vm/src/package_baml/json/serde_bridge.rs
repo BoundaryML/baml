@@ -28,12 +28,13 @@ where
 
 fn string_map_entries(
     vm: &BexVm,
-    map: &bex_vm_types::types::Map,
+    map: bex_vm_types::MapRef,
 ) -> Result<Vec<(bex_vm_types::BexStr, Value)>, &'static str> {
     if !super::string_keyed(vm, map) {
         return Err(STRING_MAP_REQUIRED);
     }
-    map.snapshot_entries()
+    vm.map_snapshot(map, bex_vm_types::object_format::Access::Shared)
+        .snapshot_entries()
         .into_iter()
         .map(
             |(key, value)| match key.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
@@ -137,7 +138,7 @@ fn value_to_serde_at(
         ValueKind::Object(ptr) => {
             let is_container = matches!(
                 vm.get_object(ptr),
-                Object::Shared(SharedKind::List) | Object::Map(_)
+                Object::Shared(SharedKind::List) | Object::Shared(_)
             );
             if is_container {
                 if active.contains(&ptr) {
@@ -180,7 +181,8 @@ fn object_to_serde_at(
             }
             serde_json::Value::Array(out)
         }
-        Object::Map(map) => {
+        Object::Shared(SharedKind::Map) => {
+            let map = vm.expect_map(ptr);
             let map = string_map_entries(vm, map).map_err(|message| ValueToSerdeError {
                 message,
                 path: path.clone(),

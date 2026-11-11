@@ -143,8 +143,11 @@ impl HashDriver {
                                 );
                                 bytes
                             }
-                            Object::Map(map) => {
-                                let entries = map.snapshot_entries();
+                            Object::Shared(SharedKind::Map) => {
+                                let map = vm.expect_map(ptr);
+                                let entries = vm
+                                    .map_snapshot(map, bex_vm_types::object_format::Access::Shared)
+                                    .snapshot_entries();
                                 self.map_hashes.push(Vec::with_capacity(entries.len()));
                                 self.pending.push(Work::FinishMap);
                                 for (key, value) in entries.into_iter().rev() {

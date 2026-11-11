@@ -853,8 +853,8 @@ fn json_object(
     expected: impl FnOnce() -> String,
     path: &dyn Fn() -> String,
 ) -> Result<HeapPtr, VmRustFnError> {
-    let refused = match json.as_object_ptr().map(|ptr| (ptr, vm.get_object(ptr))) {
-        Some((ptr, Object::Map(map))) => {
+    let refused = match json.as_object_ptr().map(|ptr| (ptr, vm.map_at(ptr))) {
+        Some((ptr, Some(map))) => {
             if super::string_keyed(vm, map) {
                 return Ok(ptr);
             }
@@ -1087,7 +1087,7 @@ fn first_invalid(vm: &BexVm, json: Value) -> Option<(&'static str, String)> {
         value.as_object_ptr().filter(|&ptr| {
             matches!(
                 vm.get_object(ptr),
-                Object::Shared(SharedKind::List) | Object::Map(_)
+                Object::Shared(SharedKind::List) | Object::Shared(_)
             )
         })
     };
@@ -1108,7 +1108,8 @@ fn first_invalid(vm: &BexVm, json: Value) -> Option<(&'static str, String)> {
                     .enumerate()
                     .map(|(i, value)| (Segment::Index(i), value))
                     .collect(),
-                Object::Map(map) => {
+                Object::Shared(SharedKind::Map) => {
+                    let map = vm.expect_map(ptr);
                     if !super::string_keyed(vm, map) {
                         return Some((STRING_MAP_REQUIRED, render_segments(&open)));
                     }
@@ -1220,7 +1221,7 @@ fn node_of(vm: &BexVm, json: Value) -> Node {
             Object::String(_) => Node::String(json),
             Object::Bigint(b) => Node::Bigint(Arc::clone(b)),
             Object::Shared(SharedKind::List) => Node::Array(ptr),
-            Object::Map(_) => Node::Object(ptr),
+            Object::Shared(SharedKind::Map) => Node::Object(ptr),
             Object::Variant(variant) => match vm.get_object(variant.enm) {
                 Object::Enum(enm) => enm
                     .variants
@@ -1946,7 +1947,10 @@ impl<'p> Structural<'p> {
 /// Whether the map at `ptr` has string keys.
 fn object_string_keyed(vm: &BexVm, ptr: HeapPtr) -> bool {
     match vm.get_object(ptr) {
-        Object::Map(map) => super::string_keyed(vm, map),
+        Object::Shared(SharedKind::Map) => {
+            let map = vm.expect_map(ptr);
+            super::string_keyed(vm, map)
+        }
         _ => false,
     }
 }
