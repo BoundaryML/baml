@@ -15,6 +15,8 @@ pub use frame::{CompiledBodies, CompiledBodyTable};
 pub(crate) use state::CompiledState;
 mod heap;
 pub mod json;
+mod timing;
+pub use timing::Timed;
 pub use heap::{FieldBase, InstanceShape, ListBase, class_word, debug_class, instance_class_word};
 mod program;
 mod record;

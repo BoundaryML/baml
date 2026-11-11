@@ -71,7 +71,7 @@ impl<P> Processing<P> {
     ) where
         P: Publisher<I, V>,
     {
-        let delta = AggregateDelta {
+        self.observe::<I, V>(AggregateDelta {
             node: CallPathNodeId::new(path, reentry),
             count: 1,
             total_duration: entered.elapsed_until(exited),
@@ -79,7 +79,13 @@ impl<P> Processing<P> {
             errored: u64::from(outcome.is_error()),
             cancelled: u64::from(outcome == InvocationOutcome::Cancelled),
             panicked: u64::from(outcome == InvocationOutcome::Panicked),
-        };
+        });
+    }
+
+    fn observe<I, V>(&mut self, delta: AggregateDelta)
+    where
+        P: Publisher<I, V>,
+    {
         self.cache.observe(delta, |delta| {
             publisher::publish_aggregate(&mut self.publisher, delta);
         });
@@ -108,6 +114,23 @@ impl<P> Processing<P> {
                     self.sample::<I, V>(
                         call_path, entered_at, exited_at, await_time, reentry, outcome,
                     );
+                }
+                TimingRecord::FunctionTimingAggregate {
+                    call_path,
+                    total_duration,
+                    count,
+                    reentry,
+                } => {
+                    assert!(thread.is_some(), "timing aggregate without thread selector");
+                    self.observe::<I, V>(AggregateDelta {
+                        node: CallPathNodeId::new(call_path, reentry),
+                        count: u64::from(count),
+                        total_duration,
+                        total_self_await: btel_types::AwaitDuration::ZERO,
+                        errored: 0,
+                        cancelled: 0,
+                        panicked: 0,
+                    });
                 }
                 TimingRecord::SysOpTime { call_path, elapsed } => {
                     assert!(thread.is_some(), "sysop time without thread selector");

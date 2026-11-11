@@ -326,6 +326,7 @@ fn admission_fixpoint(
         let mut done = Vec::new();
         let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
         let json = std::cell::RefCell::new(crate::json_codec::JsonCodecs::default());
+        let timed_sites = std::cell::Cell::new(0);
         let mut failed = Vec::new();
         for (&object, unit) in units.iter() {
             let program = ProgramContext {
@@ -338,6 +339,7 @@ fn admission_fixpoint(
                 recursive: &recursive,
                 masks: &masks,
                 json: &json,
+                timed_sites: &timed_sites,
             };
             match generate(&program, &mut builtins, object, unit) {
                 Ok(generated) => done.push((object, generated)),
@@ -553,6 +555,8 @@ struct Generated {
     code: String,
     function: CompiledFunction,
     plain: bool,
+    /// Plain, and no call it makes takes a boxed or generic record path.
+    timeable: bool,
 }
 
 fn generate(
@@ -584,6 +588,7 @@ fn generate(
         code,
         function,
         plain,
+        timeable: plain && !generator.untimed,
     })
 }
 
@@ -598,15 +603,22 @@ fn assemble(
     let mut functions = Vec::with_capacity(done.len());
     // Bodies that keep no state in their record, before their callees'.
     let mut plain = BTreeSet::new();
+    let mut timed = BTreeSet::new();
     for (object, generated) in done {
         if generated.plain {
             plain.insert(object);
+        }
+        if generated.timeable {
+            timed.insert(object);
         }
         bodies.push_str(&generated.code);
         functions.push(generated.function);
     }
     close_plain(units, &mut plain);
-    bodies.push_str(&plain_consts(symbols, &plain));
+    timed.retain(|object| plain.contains(object));
+    close_plain(units, &mut timed);
+    bodies.push_str(&flag_consts(symbols, &plain, crate::codegen::plain_const));
+    bodies.push_str(&flag_consts(symbols, &timed, crate::codegen::timed_const));
     (bodies, functions)
 }
 
@@ -621,12 +633,17 @@ fn locally_plain(unit: &Unit<'_>, generator: &Generator<'_, '_>, code: &str) -> 
         && !crate::codegen::keeps_record_state(code)
 }
 
-/// Per compiled body, the constant that says whether calls may run it plain.
-fn plain_consts(symbols: &HashMap<usize, String>, plain: &BTreeSet<usize>) -> String {
+/// Per compiled body, the constant `name` says whether calls may run it
+/// plain (`set` = the plain bodies) or timed (the timed ones).
+fn flag_consts(
+    symbols: &HashMap<usize, String>,
+    set: &BTreeSet<usize>,
+    name: fn(&str) -> String,
+) -> String {
     let mut out = String::new();
     for (object, symbol) in symbols {
-        let flag = crate::codegen::plain_const(symbol);
-        let value = plain.contains(object);
+        let flag = name(symbol);
+        let value = set.contains(object);
         out.push_str(&format!(
             "#[allow(non_upper_case_globals, dead_code)]\nconst {flag}: bool = {value};\n"
         ));

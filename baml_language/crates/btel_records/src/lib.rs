@@ -77,6 +77,16 @@ pub enum TimingRecord {
         outcome: InvocationOutcome,
         reentry: bool,
     },
+    /// `count` successful completions of `call_path`, none of which awaited,
+    /// counted in place by compiled code and written once at a task
+    /// boundary: what as many `FunctionTimingCompletion`s with an `Ok`
+    /// outcome and no await time add to the path's aggregate.
+    FunctionTimingAggregate {
+        call_path: CallPathId,
+        total_duration: ClockDuration,
+        count: u32,
+        reentry: bool,
+    },
     /// Time one sysop took, charged to the innermost observed call path:
     /// the whole call for a synchronous sysop, the wait for an async one.
     SysOpTime {

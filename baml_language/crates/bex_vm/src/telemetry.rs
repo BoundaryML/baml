@@ -163,6 +163,7 @@ mod definitions;
 mod host;
 pub(crate) mod manual;
 mod snapshot;
+pub(crate) mod timed;
 type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
 const _: () = assert!(size_of::<TimingRecord>() <= btel_settings::layout::TIMING_RECORD_MAX_BYTES);
 const _: () = assert!(size_of::<VmSpanRecord>() <= btel_settings::layout::SPAN_RECORD_MAX_BYTES);
@@ -207,6 +208,8 @@ pub struct TelemetryState {
     /// Model usage charged to open spans (or the thread), one entry per model,
     /// written just before the node completes. Empty without model calls.
     usage: Vec<(TelemetryId, Vec<btel_records::ModelUsage>)>,
+    /// Compiled code's in-place timing aggregates ([`timed`]).
+    timed: timed::TimedCounts,
     #[cfg(test)]
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
@@ -376,6 +379,7 @@ impl TelemetryState {
             runtime,
             errors: None,
             usage: Vec::new(),
+            timed: timed::TimedCounts::default(),
             #[cfg(test)]
             timing_records: Vec::new(),
             #[cfg(test)]
@@ -1627,6 +1631,8 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
                 runtime: _,
             errors: _,
             usage: _,
+            // Call-path ids only.
+            timed: _,
             #[cfg(test)]
                 timing_records: _,
             #[cfg(test)]
@@ -3172,7 +3178,9 @@ mod tests {
                     reentry,
                     ..
                 } => Some((await_time.get().get(), *reentry)),
-                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+                TimingRecord::ThreadSelected { .. }
+                | TimingRecord::SysOpTime { .. }
+                | TimingRecord::FunctionTimingAggregate { .. } => None,
             })
             .collect();
         // Completion must carry each invocation's own wait, without rolling

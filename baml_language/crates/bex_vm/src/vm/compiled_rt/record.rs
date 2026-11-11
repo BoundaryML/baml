@@ -345,14 +345,15 @@ impl BexVm {
     }
 
     /// Whether a compiled call to a plain body (one that keeps no state in
-    /// its record) may run it without a record: nothing observes calls, and
-    /// direct calls are on. Its record is made only if an error leaves it
+    /// its record) may run it without a record: nothing observes calls
+    /// (telemetry is off, or low with no policy published anywhere, where the
+    /// interpreter records nothing either), and direct calls are on. Its record is made only if an error leaves it
     /// ([`Self::plain_unwound`]).
     #[allow(clippy::inline_always, reason = "checked at every plain call site")]
     #[inline(always)]
     #[must_use]
     pub fn plain_calls(&self) -> bool {
-        self.telemetry.is_none() && self.direct_calls()
+        self.compiled.call_mode == super::state::CallMode::Plain && self.direct_calls()
     }
 
     /// `error` left `callee`, which a plain call ran under `caller`, the
@@ -371,6 +372,23 @@ impl BexVm {
         callee: HeapPtr,
         error: Box<VmError>,
     ) -> Box<VmError> {
+        self.unwound_with(caller, callee, error, None)
+    }
+
+    /// [`Self::plain_unwound`] for a call that holds `receipt`: the zombie
+    /// carries it, so the unwinder completes the call as it completes a
+    /// recorded one.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "levels and stack offsets are bounded by the fiber stack, so they fit u32"
+    )]
+    pub(super) fn unwound_with(
+        &mut self,
+        caller: &FrameRecord,
+        callee: HeapPtr,
+        error: Box<VmError>,
+        receipt: Option<FrameTelemetry>,
+    ) -> Box<VmError> {
         let zombie = FrameRecord {
             prev: Cell::new(ptr::null()),
             function: Cell::new(callee),
@@ -381,7 +399,7 @@ impl BexVm {
             level: Cell::new(0),
             entry: false,
             scoped: Cell::new(false),
-            receipt: Cell::new(None),
+            receipt: Cell::new(receipt),
             type_args: UnsafeCell::new(Box::default()),
         };
         self.compiled.records.pending().push(Box::new(zombie));

@@ -576,14 +576,21 @@ fn timing_records(vm: &BexVm, paths: &NamedPaths) -> TimingRecords {
     telemetry
         .timing_records()
         .iter()
-        .filter_map(|event| match event {
+        .flat_map(|event| match event {
             TimingRecord::FunctionTimingCompletion {
                 call_path,
                 outcome,
                 reentry,
                 ..
-            } => Some((paths[call_path].clone(), *outcome, *reentry)),
-            TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+            } => vec![(paths[call_path].clone(), *outcome, *reentry)],
+            // Successful completions counted in place: as many completions.
+            TimingRecord::FunctionTimingAggregate {
+                call_path,
+                count,
+                reentry,
+                ..
+            } => vec![(paths[call_path].clone(), InvocationOutcome::Ok, *reentry); *count as usize],
+            TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => Vec::new(),
         })
         .collect()
 }

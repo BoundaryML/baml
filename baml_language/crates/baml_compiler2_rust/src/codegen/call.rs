@@ -339,6 +339,7 @@ impl<'db> Generator<'_, 'db> {
         let values = format!("&[{}]", values.join(", "));
         let framed =
             format!("vm.call_compiled(fr, {callee}, {symbol}, {type_args}, {values}, {pc})");
+        self.untimed = true;
         let call = if self.framed.contains(object) {
             framed
         } else if !generic {
@@ -384,6 +385,7 @@ impl<'db> Generator<'_, 'db> {
         });
         let direct = format!("{}_d(vm, fr{passed}, {mask})", site.symbol);
         let call = if site.generic {
+            self.untimed = true;
             format!(
                 "(if {} {{ {} }} else {})",
                 site.allowed(),
@@ -395,12 +397,31 @@ impl<'db> Generator<'_, 'db> {
             let plain = self.plain_call(site, &direct);
             let flag = super::plain_const(&site.symbol);
             let CallSite { symbol, pc, .. } = site;
-            format!(
-                "(if {flag} && vm.plain_calls() {{ {plain} }} else {{ {symbol}_r(vm, fr, {pc}{passed}, {mask}) }})"
-            )
+            let record = format!("{symbol}_r(vm, fr, {pc}{passed}, {mask})");
+            let timed = self.timed_call(site, &passed, &mask);
+            format!("(if {flag} && vm.plain_calls() {{ {plain} }}{timed} else {{ {record} }})")
         };
         let code = self.call_code(block, &call)?;
         Ok(Expr::new(code, signature.ret))
+    }
+
+    /// The branch that runs a plain callee timed, through its out-of-line
+    /// timed entry `{symbol}_t`, when the level only times calls
+    /// (`BexVm::timing_calls`); nothing when this body may not name itself
+    /// the visible caller (a passthrough or model body).
+    fn timed_call(&mut self, site: &CallSite, passed: &str, mask: &str) -> String {
+        let info = self.index.info(self.object);
+        if info.trace_passthrough || info.body_meta.is_some() {
+            return String::new();
+        }
+        let number = self.timed_sites.get();
+        self.timed_sites.set(number + 1);
+        let flag = super::timed_const(&site.symbol);
+        let CallSite { symbol, pc, .. } = site;
+        let caller = self.object;
+        format!(
+            " else if {flag} && vm.timing_calls() {{ {symbol}_t(vm, fr, {number}, {caller}, {pc}{passed}, {mask}) }}"
+        )
     }
 
     /// A plain body runs without a record when nothing observes calls; one

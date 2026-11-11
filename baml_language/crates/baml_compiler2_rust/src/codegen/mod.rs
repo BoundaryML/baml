@@ -75,6 +75,9 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) masks: &'a HashMap<usize, u64>,
     /// The module's JSON schemas, shared by every body's decode sites.
     pub(crate) json: &'a std::cell::RefCell<crate::json_codec::JsonCodecs>,
+    /// The next timed call site's number: a site's index into the VM's
+    /// site cache (`BexVm::timed_enter`).
+    pub(crate) timed_sites: &'a std::cell::Cell<usize>,
 }
 
 pub(crate) struct Generator<'a, 'db> {
@@ -95,6 +98,11 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) recursive: bool,
     pub(crate) builtins: &'a mut BTreeMap<String, usize>,
     pub(crate) json: &'a std::cell::RefCell<crate::json_codec::JsonCodecs>,
+    pub(crate) timed_sites: &'a std::cell::Cell<usize>,
+    /// Whether this body calls a compiled body through its boxed or generic
+    /// record path, whose caller facts would name an ancestor's record: it
+    /// then never runs timed ([`timed_const`]).
+    pub(crate) untimed: bool,
     pub(crate) body: &'a MirFunctionBody<'db>,
     pub(crate) lambdas: &'a [MirFunction<'db>],
     pub(crate) analysis: &'a Analysis,
@@ -151,6 +159,8 @@ impl<'a, 'db> Generator<'a, 'db> {
             recursive: unit.recursive,
             builtins,
             json: program.json,
+            timed_sites: program.timed_sites,
+            untimed: false,
             body: &unit.body,
             lambdas: &unit.lambdas,
             analysis: &unit.analysis,
@@ -190,8 +200,10 @@ fn pc_arg(pc: Option<usize>) -> String {
 pub(crate) fn keeps_record_state(code: &str) -> bool {
     // `call_inline` is a devirtualized site's path for a receiver whose class
     // was made at run time; see `dispatch`.
-    const BEFORE: [&str; 9] = [
+    const BEFORE: [&str; 11] = [
         "vm.record_object(",
+        "vm.timed_enter(",
+        "vm.timed_unwound(",
         "vm.call_record(",
         "vm.call_record_typed(",
         "vm.call_compiled(",
@@ -246,6 +258,14 @@ fn record_entry(symbol: &str, object: usize, signature: &Signature, typed: &str)
          let values: [Value; {count}] = [{boxed}];\n\
          match vm.call_compiled(fr, callee, {symbol}, &[], &values, site) {{ Ok(v) => {unbox}, Err(e) => Err(e) }}\n\
          }}\n\
+         }}\n\
+         #[inline(never)]\npub fn {symbol}_t(vm: &mut BexVm, fr: &FrameRecord, timed: usize, caller: usize, site: u32{typed}, mask: u64) -> R<{ret}> {{\n\
+         let Some(t) = vm.timed_enter(fr, timed, caller, site, {object}) else {{ return {symbol}_r(vm, fr, site{passed}, mask); }};\n\
+         vm.stack_room()?;\n\
+         match {symbol}_d(vm, fr{passed}, mask) {{\n\
+         Ok(v) => {{ vm.timed_exit(t); Ok(v) }}\n\
+         Err(e) => Err(vm.timed_unwound(fr, vm.record_object(fr, ObjectIndex::from_raw({object})), t, e)),\n\
+         }}\n\
          }}\n"
     )
 }
@@ -254,6 +274,13 @@ fn record_entry(symbol: &str, object: usize, signature: &Signature, typed: &str)
 /// without a frame record; see [`keeps_record_state`].
 pub(crate) fn plain_const(symbol: &str) -> String {
     format!("PLAIN_{symbol}")
+}
+
+/// The constant that says whether a call may run `symbol`'s body timed
+/// (`BexVm::timing_calls`): it is plain and every call it makes is plain or
+/// timed itself.
+pub(crate) fn timed_const(symbol: &str) -> String {
+    format!("TIMED_{symbol}")
 }
 
 fn unsupported<T>(what: impl Into<String>) -> Gen<T> {

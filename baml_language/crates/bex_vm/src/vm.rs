@@ -892,7 +892,9 @@ pub(crate) mod tests {
                 TimingRecord::FunctionTimingCompletion {
                     call_path, reentry, ..
                 } => Some((*call_path, *reentry)),
-                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+                TimingRecord::ThreadSelected { .. }
+                | TimingRecord::SysOpTime { .. }
+                | TimingRecord::FunctionTimingAggregate { .. } => None,
             })
             .collect();
         assert_eq!(
@@ -9335,6 +9337,7 @@ impl BexVm {
         #[cfg(not(target_arch = "wasm32"))]
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         self.finish_pending_telemetry_wait();
+        self.settle_call_mode();
         // Keep GC polling progress across engine handoffs. Returning from
         // exec (for example, to spawn a child) does not necessarily release
         // the heap permit. The checker resets its own counter when it polls.
@@ -9351,7 +9354,13 @@ impl BexVm {
         // running (converting arguments or a sys-op result).
         self.settle();
 
-        let result = match self.exec_inner() {
+        let inner = self.exec_inner();
+        // Compiled code's timing aggregates reach the recorder whenever
+        // control returns to the engine: a task boundary.
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            telemetry.flush_timed();
+        }
+        let result = match inner {
             Err(VmError::InternalError(err)) => {
                 let trace = self.capture_stack_trace();
                 Err(VmError::TracedInternalError { source: err, trace })

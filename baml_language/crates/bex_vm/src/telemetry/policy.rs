@@ -34,6 +34,9 @@ pub struct TelemetryPolicies {
     interned: Mutex<FxHashMap<TelemetryPolicy, u16>>,
     // Only owned spans subscribe. Ordinary calls keep their existing atomic read.
     owned_watchers: Mutex<FxHashMap<btel_types::FunctionId, Weak<TelemetryPolicyId>>>,
+    /// Some function was ever given a policy: until then, which calls an
+    /// automatic level observes follows from the level alone.
+    published: std::sync::atomic::AtomicBool,
 }
 
 impl Default for TelemetryPolicies {
@@ -54,6 +57,7 @@ impl TelemetryPolicies {
             pages: [const { OnceLock::new() }; PAGE_COUNT],
             interned: Mutex::new(FxHashMap::default()),
             owned_watchers: Mutex::new(FxHashMap::default()),
+            published: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -157,8 +161,16 @@ impl TelemetryPolicies {
             interned.insert(policy, id);
             id
         };
+        self.published
+            .store(true, std::sync::atomic::Ordering::Release);
         target.store(id);
         Ok(())
+    }
+
+    /// Whether any function was ever given a policy.
+    #[inline]
+    pub(crate) fn any_published(&self) -> bool {
+        self.published.load(std::sync::atomic::Ordering::Acquire)
     }
 }
 

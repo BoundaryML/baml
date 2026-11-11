@@ -1,7 +1,10 @@
-//! `baml.json.decode<T>` sites read through the module's schema for `T`, and
+//! When nothing observes calls (`vm.plain_calls()`: telemetry off, or low
+//! with no policy), `baml.json.decode<T>` sites read through the module's
+//! schema for `T`, and
 //! `baml.json.stringify(value)` sites write through the schema of the
 //! value's static type ([`crate::json_codec`]); a miss runs the call the
-//! site always made.
+//! site always made. A level that observes calls sees `decode` and
+//! `stringify` called as the interpreter calls them.
 //!
 //! Replaces, for a type with a schema, the VM's `_decode` and `_stringify`
 //! on the success path: per-call plans, type substitution, boxed instance
@@ -165,7 +168,7 @@ impl<'a, 'db> Generator<'a, 'db> {
         let ty = self.type_operand("call", site.ty)?;
         let store = self.store(block, destination, &Expr::atom("decoded", Repr::Value))?;
         self.emit_statement(&format!(
-            "if let Some(decoded) = bex_vm::compiled_rt::json::decode_json(vm, {text}, &{ty}, &{}) {{ {store} }} else {{",
+            "if let Some(decoded) = (if vm.plain_calls() {{ bex_vm::compiled_rt::json::decode_json(vm, {text}, &{ty}, &{}) }} else {{ None }}) {{ {store} }} else {{",
             site.schema
         ));
         fallback(self)?;
@@ -195,7 +198,7 @@ impl<'a, 'db> Generator<'a, 'db> {
         };
         let store = self.store(block, destination, &Expr::atom("encoded", Repr::Value))?;
         self.emit_statement(&format!(
-            "if let Some(encoded) = bex_vm::compiled_rt::json::encode_json(vm, {value}, &{}, {omit_nulls}) {{ {store} }} else {{",
+            "if let Some(encoded) = (if vm.plain_calls() {{ bex_vm::compiled_rt::json::encode_json(vm, {value}, &{}, {omit_nulls}) }} else {{ None }}) {{ {store} }} else {{",
             site.schema
         ));
         fallback(self)?;

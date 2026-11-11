@@ -41,6 +41,16 @@ pub(crate) struct CompiledState {
     /// Per class object index, how compiled code allocates its instances,
     /// once looked up; see [`crate::BexVm::instance_shape_at`].
     pub(crate) shapes: Vec<Option<Option<super::InstanceShape>>>,
+    /// How compiled calls run this slice; see `BexVm::settle_call_mode`.
+    pub(crate) call_mode: CallMode,
+}
+
+/// How a compiled call to a plain body runs.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum CallMode {
+    Plain,
+    Timed,
+    Recorded,
 }
 
 impl Default for CompiledState {
@@ -61,6 +71,7 @@ impl Default for CompiledState {
             static_type_cache: FxHashMap::default(),
             direct_calls: !super::frames_forced(),
             shapes: Vec::new(),
+            call_mode: CallMode::Plain,
         }
     }
 }
@@ -90,6 +101,7 @@ impl RootHaver for CompiledState {
             direct_calls: _,
             // Shapes name compile-time classes, which never move or die.
             shapes: _,
+            call_mode: _,
         } = self;
         // Parked bodies keep their values in Rust locals and registers, all
         // on the fiber's stack while it is parked.
