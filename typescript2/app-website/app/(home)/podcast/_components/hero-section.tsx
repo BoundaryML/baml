@@ -61,11 +61,22 @@ export function HeroSection({
         ai that <span className="text-clover">works</span>.
       </h1>
       <p className="mt-6 md:mt-8 max-w-[38rem] v4-body text-ink-2">
-        A weekly conversation about getting more out of today&apos;s models with{' '}
-        <Host {...HOSTS[0]} /> and <Host {...HOSTS[1]} />. Live code, Q&amp;A,
-        and production AI patterns.
+        Two engineers, live every week, building AI that actually works.
       </p>
-      <p className="mt-6 text-[15px] text-body">
+      <p className="mt-4 text-[15px] text-body">
+        With <Host {...HOSTS[0]} /> and <Host {...HOSTS[1]} />.
+      </p>
+      <dl className="mt-8 flex max-w-[44rem] flex-wrap gap-x-12 gap-y-6 border-y border-rule py-6">
+        {stats.map(([value, label]) => (
+          <div className="flex flex-col-reverse justify-end gap-1" key={label}>
+            <dt className="text-[13px] text-muted">{label}</dt>
+            <dd className="font-display text-[28px] font-medium leading-none tracking-[-0.02em] text-head tabular-nums md:text-[34px]">
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-8 text-[15px] text-body">
         <NextLive />, live on{' '}
         <a
           className="text-head underline decoration-accent decoration-1 underline-offset-[3px] transition-colors hover:text-clover"
@@ -86,16 +97,6 @@ export function HeroSection({
           Add to your calendar
         </Button>
       </div>
-      <dl className="mt-12 flex max-w-[44rem] flex-wrap gap-x-12 gap-y-6 border-t border-rule pt-6">
-        {stats.map(([value, label]) => (
-          <div className="flex flex-col-reverse justify-end gap-1" key={label}>
-            <dt className="text-[13px] text-muted">{label}</dt>
-            <dd className="font-display text-[28px] font-medium leading-none tracking-[-0.02em] text-head tabular-nums md:text-[34px]">
-              {value}
-            </dd>
-          </div>
-        ))}
-      </dl>
     </section>
   );
 }

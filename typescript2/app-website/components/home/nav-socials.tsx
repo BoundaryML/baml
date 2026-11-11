@@ -54,7 +54,6 @@ const MARKS: {
 export function Socials({ counts }: { counts: Record<Key, string> }) {
   const [hot, setHot] = useState<Key>('github');
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: resets the shown count when the pointer leaves the group
     <div
       className="flex items-center gap-3 sm:gap-4"
       onPointerLeave={() => setHot('github')}
