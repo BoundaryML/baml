@@ -513,6 +513,91 @@ impl<'db> Generator<'_, 'db> {
         self.attach_trace(&out)
     }
 
+    /// The request for a call terminator: a direct callee by its object, an
+    /// indirect one through the value (in place when it is a compiled
+    /// closure), with the arguments laid out as the site recorded.
+    fn call_request(
+        &mut self,
+        block: BlockId,
+        callee: &Operand<'db>,
+        args: &[Operand<'db>],
+        ntypeargs: usize,
+        argument_layout: Option<&baml_type::CallLayout>,
+        has_trace: bool,
+    ) -> Gen<String> {
+        let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
+        let types = self.type_operands("call", type_args)?;
+        let plain = types.is_empty() && !has_trace;
+        self.call_types = types;
+        let named = argument_layout
+            .as_ref()
+            .is_some_and(|layout| layout.0.iter().any(Option::is_some));
+        if let Operand::Constant(Constant::Function(func)) = callee {
+            let args = self.trace_attachment(block, args, has_trace)?;
+            self.callee_ptr(block, callee, None)?;
+            let name = function_display_name(self.db, *func);
+            let Some((_, info)) = self.index.function(self.db, *func) else {
+                return unsupported(format!("callee `{name}` not found in the program"));
+            };
+            let values = self.laid_out_args(block, &name, info, argument_layout, args)?;
+            let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
+            return Ok(self.suspend_expr(block, &step, &values));
+        }
+        let (args, trace) = if has_trace {
+            let Some((trace, args)) = args.split_last() else {
+                return Err(Rejection::Invalid(
+                    "a traced call without its attachment".into(),
+                ));
+            };
+            (args, Some(trace))
+        } else {
+            (args, None)
+        };
+        // Bytecode pushes the arguments before loading an indirect callee.
+        let values = self.arg_values(block, args)?;
+        self.callee_ptr(block, callee, trace)?;
+        // Function values need their named arguments mapped at runtime.
+        if named {
+            let layout = argument_layout.expect("checked");
+            let slots = call::named_arg_slots(layout);
+            self.emit_statement(&format!(
+                "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
+                slots,
+                values.join(", ")
+            ));
+            return Ok(self.suspend_expr(block, "Step::Call { callee, argc }", &[]));
+        }
+        // The VM lays the pushed arguments over the callee's slots, as
+        // the interpreter's `CallIndirect` does with its recorded
+        // layout: a callee with trailing optionals the site omits.
+        let suspend = match argument_layout {
+            Some(layout) => {
+                let slots = call::named_arg_slots(layout);
+                let inner = self.suspend_expr(block, "Step::Call { callee, argc }", &[]);
+                format!(
+                    "{{ let argc = vm.push_indirect_args(callee, &[{slots}], &[{}])?; {inner} }}",
+                    values.join(", ")
+                )
+            }
+            None => {
+                let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
+                self.suspend_expr(block, &step, &values)
+            }
+        };
+        if !plain {
+            return Ok(suspend);
+        }
+        // A compiled closure runs in place.
+        let site = self.site_pc(block);
+        let values = values.join(", ");
+        Ok(format!(
+            "match vm.closure_compiled_body(callee, {}) {{ \
+        Some(body) => vm.call_closure_compiled(fr, callee, body, &[{values}], {site}), \
+        None => {suspend} }}",
+            args.len()
+        ))
+    }
+
     fn request(&mut self, block: BlockId, terminator: &Terminator<'db>) -> Gen<String> {
         Ok(match terminator {
             Terminator::Call {
@@ -522,65 +607,14 @@ impl<'db> Generator<'_, 'db> {
                 argument_layout,
                 has_trace,
                 ..
-            } => {
-                let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
-                let types = self.type_operands("call", type_args)?;
-                let plain = types.is_empty() && !*has_trace;
-                self.call_types = types;
-                let named = argument_layout
-                    .as_ref()
-                    .is_some_and(|layout| layout.0.iter().any(Option::is_some));
-                if let Operand::Constant(Constant::Function(func)) = callee {
-                    let args = self.trace_attachment(block, args, *has_trace)?;
-                    self.callee_ptr(block, callee, None)?;
-                    let name = function_display_name(self.db, *func);
-                    let Some((_, info)) = self.index.function(self.db, *func) else {
-                        return unsupported(format!("callee `{name}` not found in the program"));
-                    };
-                    let values =
-                        self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?;
-                    let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
-                    return Ok(self.suspend_expr(block, &step, &values));
-                }
-                let (args, trace) = if *has_trace {
-                    let Some((trace, args)) = args.split_last() else {
-                        return Err(Rejection::Invalid(
-                            "a traced call without its attachment".into(),
-                        ));
-                    };
-                    (args, Some(trace))
-                } else {
-                    (args, None)
-                };
-                // Bytecode pushes the arguments before loading an indirect callee.
-                let values = self.arg_values(block, args)?;
-                self.callee_ptr(block, callee, trace)?;
-                // Function values need their named arguments mapped at runtime.
-                if named {
-                    let layout = argument_layout.as_ref().expect("checked");
-                    let slots = call::named_arg_slots(layout);
-                    self.emit_statement(&format!(
-                        "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
-                        slots,
-                        values.join(", ")
-                    ));
-                    return Ok(self.suspend_expr(block, "Step::Call { callee, argc }", &[]));
-                }
-                let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
-                let suspend = self.suspend_expr(block, &step, &values);
-                if !plain {
-                    return Ok(suspend);
-                }
-                // A compiled closure runs in place.
-                let site = self.site_pc(block);
-                let values = values.join(", ");
-                format!(
-                    "match vm.closure_compiled_body(callee, {}) {{ \
-             Some(body) => vm.call_closure_compiled(fr, callee, body, &[{values}], {site}), \
-             None => {suspend} }}",
-                    args.len()
-                )
-            }
+            } => self.call_request(
+                block,
+                callee,
+                args,
+                *ntypeargs,
+                argument_layout.as_ref(),
+                *has_trace,
+            )?,
             Terminator::SysOp { callee, args, .. } => {
                 self.callee_ptr(block, callee, None)?;
                 let args = self.arg_values(block, args)?;
