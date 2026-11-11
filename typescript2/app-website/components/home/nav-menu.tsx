@@ -17,6 +17,7 @@ const COLUMNS: {
     links: [
       ['Overview', '/'],
       ['Adopt', '/adopt'],
+      ['How BAML works', '/how-baml-works'],
       ['Pricing', '/pricing', true],
     ],
     title: 'Platform',

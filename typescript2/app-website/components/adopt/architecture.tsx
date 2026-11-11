@@ -9,7 +9,7 @@ import {
 } from '@/components/home/lang-pick';
 import { useReducedMotion } from '@/components/home/pinned';
 
-// How BAML runs, for the /adopt page's last section and anyone who wants the detail: what
+// How BAML works, the /how-baml-works page, for anyone who wants the detail: what
 // `baml generate` makes, where the runtime lives in each target and language, and what happens at
 // startup, when BAML throws, and at shutdown. Facts come from the SDK generators (sdks/*/sdkgen_*),
 // the bridges (crates/bridge_cffi, sdks/*), sys_native and sys_wasm, and baml.panics.
@@ -1784,9 +1784,9 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
     <>
       <header className="pb-10">
         {embedded ? (
-          <h2 className="v4-h2 text-head">How BAML runs</h2>
+          <h2 className="v4-h2 text-head">How BAML works</h2>
         ) : (
-          <h1 className="v4-h2 text-head">How BAML runs</h1>
+          <h1 className="v4-h2 text-head">How BAML works</h1>
         )}
         <p className="mt-4 max-w-[42rem] text-[17px] leading-relaxed text-ink-2">
           {embedded

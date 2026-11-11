@@ -10,6 +10,7 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
     links: [
       ['Overview', '/'],
       ['Adopt', '/adopt'],
+      ['How BAML works', '/how-baml-works'],
       ['Pricing', '/pricing'],
       ['Get early access', BOOK],
     ],

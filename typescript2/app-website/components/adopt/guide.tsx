@@ -8,11 +8,11 @@ import {
   usePinnedLang,
 } from '@/components/home/lang-pick';
 import { BOOK } from '@/components/home/links';
-import { ArchitecturePage } from './architecture';
 import { LANGS, SAMPLES } from './code';
 import { Start } from './start';
 
-// The /adopt page: the homepage's three ways in, small, then each one in full, then how BAML runs.
+// The /adopt page: the homepage's three ways in, small, then each one in full. How BAML works is
+// its own page, /how-baml-works, linked from the contents.
 // The language picked anywhere on the page is the language everywhere on it.
 
 // ---------- one BAML function, called from every language ----------
@@ -308,8 +308,7 @@ function Route({ r }: { r: (typeof ROUTES)[number] }) {
   );
 }
 
-/** The /adopt page: the three ways in, each in full, then how BAML runs for anyone who wants
- *  the detail. `html` is every code sample, highlighted on the server (./highlight.ts). */
+/** The /adopt page: the three ways in, each in full. `html` is every code sample, highlighted on the server (./highlight.ts). */
 export function AdoptGuide({ html }: { html: Record<string, string> }) {
   const [at, setAt] = usePinnedLang();
   const [sample, setSample] = useState(0);
@@ -330,8 +329,8 @@ export function AdoptGuide({ html }: { html: Record<string, string> }) {
                     label: r.title,
                   })),
                   {
-                    href: '#how-baml-runs',
-                    label: 'How BAML runs',
+                    href: '/how-baml-works',
+                    label: 'How BAML works',
                   },
                 ].map((item, i) => (
                   <li className="bg-ground" key={item.href}>
@@ -343,11 +342,12 @@ export function AdoptGuide({ html }: { html: Record<string, string> }) {
                         {String(i + 1).padStart(2, '0')}
                       </span>
                       <span className="flex-1">{item.label}</span>
+                      {/* A section below gets ↓; the separate How BAML works page gets →. */}
                       <span
                         aria-hidden
-                        className="text-muted transition-[translate] group-hover:translate-y-0.5"
+                        className={`text-muted transition-[translate] ${item.href.startsWith('/') ? 'group-hover:translate-x-0.5' : 'group-hover:translate-y-0.5'}`}
                       >
-                        ↓
+                        {item.href.startsWith('/') ? '→' : '↓'}
                       </span>
                     </a>
                   </li>
@@ -359,12 +359,6 @@ export function AdoptGuide({ html }: { html: Record<string, string> }) {
                 <Route key={r.id} r={r} />
               ))}
             </div>
-          </section>
-          <section
-            className="v3-wrap mx-auto scroll-mt-24 border-t border-rule px-(--frame-pad) py-20 md:py-28"
-            id="how-baml-runs"
-          >
-            <ArchitecturePage embedded />
           </section>
         </Sample.Provider>
       </Lang.Provider>
