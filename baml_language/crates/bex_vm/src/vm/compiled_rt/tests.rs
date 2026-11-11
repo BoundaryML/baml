@@ -1771,6 +1771,6 @@ fn call_safepoints_keep_yielding_under_gc_stress() {
     let mut vm = vm_with_main(main, 0, false);
     vm.early_yield =
         bex_vm_types::EarlyYieldCheck::with_interval(Arc::new(AtomicBool::new(false)), 3);
-    let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(true)).collect();
+    let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(|| true)).collect();
     assert_eq!(yields, [3, 6, 9]);
 }

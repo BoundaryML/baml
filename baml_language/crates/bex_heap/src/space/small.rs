@@ -86,10 +86,23 @@ pub(crate) fn cell_size(bytes: usize) -> usize {
     SIZE_CLASSES[class_of(bytes)]
 }
 
+/// The bytes the slots of a block of each class span: a table, so a bump
+/// allocation does not divide.
+const SLOTS_SPAN: [usize; SIZE_CLASSES.len()] = {
+    let mut spans = [0; SIZE_CLASSES.len()];
+    let mut class = 0;
+    while class < spans.len() {
+        let size = SIZE_CLASSES[class];
+        spans[class] = (BLOCK_BYTES - FIRST_CELL_OFFSET) / size * size;
+        class += 1;
+    }
+    spans
+};
+
 /// The end of the slots of a block of class `class` at `base`.
+#[inline]
 const fn slots_end(base: usize, class: usize) -> usize {
-    let size = SIZE_CLASSES[class];
-    base + FIRST_CELL_OFFSET + (BLOCK_BYTES - FIRST_CELL_OFFSET) / size * size
+    base + FIRST_CELL_OFFSET + SLOTS_SPAN[class]
 }
 
 /// The policy's part of a block header. Written by the mutator that owns the
@@ -108,6 +121,7 @@ pub(crate) struct BlockMeta {
 }
 
 impl BlockMeta {
+    #[inline]
     fn class(&self) -> usize {
         usize::from(self.class.load(Ordering::Relaxed))
     }

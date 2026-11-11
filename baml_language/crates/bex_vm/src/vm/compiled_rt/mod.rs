@@ -31,8 +31,20 @@ pub(crate) mod tests;
 #[inline]
 #[must_use]
 pub fn gc_stress() -> bool {
-    static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *STRESS.get_or_init(|| baml_env::os_var("BAML_GC_STRESS").is_some_and(|value| value == "1"))
+    // A Relaxed load of a plain static, not a `OnceLock`'s Acquire load:
+    // compiled loops and recursive calls poll this. Reading the environment
+    // is idempotent, so racing first calls agree.
+    use std::sync::atomic::{AtomicU8, Ordering};
+    static STRESS: AtomicU8 = AtomicU8::new(0);
+    match STRESS.load(Ordering::Relaxed) {
+        1 => false,
+        2 => true,
+        _ => {
+            let on = baml_env::os_var("BAML_GC_STRESS").is_some_and(|value| value == "1");
+            STRESS.store(if on { 2 } else { 1 }, Ordering::Relaxed);
+            on
+        }
+    }
 }
 
 /// Whether to collect at this safepoint: the heap's own heuristic, or every

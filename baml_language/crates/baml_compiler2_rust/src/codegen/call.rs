@@ -299,26 +299,26 @@ impl<'db> Generator<'_, 'db> {
             args.push((temp, *repr));
         }
         let mask = self.callee_mask(block);
-        let direct = format!(
-            "{}_d(vm, fr{}, {mask})",
-            site.symbol,
-            args.iter().fold(String::new(), |mut out, (arg, _)| {
-                let _ = write!(out, ", {arg}");
-                out
-            })
-        );
-        let call = format!(
-            "(if {} {{ {} }} else {})",
-            site.allowed(),
-            site.recorded(&direct, &args),
-            site.boxed(&args, signature.ret)
-        );
+        let passed = args.iter().fold(String::new(), |mut out, (arg, _)| {
+            let _ = write!(out, ", {arg}");
+            out
+        });
+        let direct = format!("{}_d(vm, fr{passed}, {mask})", site.symbol);
         let call = if site.generic {
-            call
+            format!(
+                "(if {} {{ {} }} else {})",
+                site.allowed(),
+                site.recorded(&direct, &args),
+                site.boxed(&args, signature.ret)
+            )
         } else {
+            // The record and boxed calls are the callee's cold entry.
             let plain = self.plain_call(site, &direct);
             let flag = super::plain_const(&site.symbol);
-            format!("(if {flag} && vm.plain_calls() {{ {plain} }} else {{ {call} }})")
+            let CallSite { symbol, pc, .. } = site;
+            format!(
+                "(if {flag} && vm.plain_calls() {{ {plain} }} else {{ {symbol}_r(vm, fr, {pc}{passed}, {mask}) }})"
+            )
         };
         let code = self.call_code(block, &call)?;
         Ok(Expr::new(code, signature.ret))

@@ -203,6 +203,44 @@ pub(crate) fn keeps_record_state(code: &str) -> bool {
     })
 }
 
+/// The entry a compiled caller takes when it cannot call `symbol`'s body
+/// plain: with a frame record, or through the boxed entry with a VM frame
+/// when the VM wants frames. Out of line and cold, so a call site carries
+/// only its plain call; `site` is the caller's call-site position.
+fn record_entry(symbol: &str, object: usize, signature: &Signature, typed: &str) -> String {
+    let args: Vec<String> = (0..signature.params.len())
+        .map(|i| format!("arg{i}"))
+        .collect();
+    let boxed: Vec<String> = args
+        .iter()
+        .zip(&signature.params)
+        .map(|(arg, repr)| coerce(arg, *repr, Repr::Value))
+        .collect();
+    let passed = args.iter().fold(String::new(), |mut out, arg| {
+        let _ = write!(out, ", {arg}");
+        out
+    });
+    let unbox = match signature.ret {
+        Repr::Int => "bex_vm::compiled_rt::expect_int(v)",
+        Repr::Bool => "bex_vm::compiled_rt::expect_bool(v)",
+        Repr::Float => "bex_vm::compiled_rt::expect_f64(v)",
+        Repr::Value => "Ok(v)",
+    };
+    let (count, boxed) = (boxed.len(), boxed.join(", "));
+    let ret = signature.ret.rust_type();
+    format!(
+        "#[cold]\n#[inline(never)]\npub fn {symbol}_r(vm: &mut BexVm, fr: &FrameRecord, site: u32{typed}, mask: u64) -> R<{ret}> {{\n\
+         let callee = vm.record_object(fr, ObjectIndex::from_raw({object}));\n\
+         if vm.direct_calls() {{\n\
+         vm.call_record(fr, callee, site, |vm: &mut BexVm| -> [Value; {count}] {{ [{boxed}] }}, |vm, fr| {symbol}_d(vm, fr{passed}, mask))\n\
+         }} else {{\n\
+         let values: [Value; {count}] = [{boxed}];\n\
+         match vm.call_compiled(fr, callee, {symbol}, &[], &values, site) {{ Ok(v) => {unbox}, Err(e) => Err(e) }}\n\
+         }}\n\
+         }}\n"
+    )
+}
+
 /// The name of the constant that says whether `symbol`'s body may run
 /// without a frame record; see [`keeps_record_state`].
 pub(crate) fn plain_const(symbol: &str) -> String {
@@ -323,6 +361,8 @@ impl<'db> Generator<'_, 'db> {
                     let _ = write!(out, ", arg{i}: {}", repr.rust_type());
                     out
                 });
+        self.out
+            .push_str(&record_entry(symbol, self.object, &signature, &typed));
         // The body reports its position through `pc`, which the direct entry
         // records when an error leaves; it is always inlined into that entry,
         // where `pc` is a local. `mask` has bit `i` set when the caller
