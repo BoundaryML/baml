@@ -653,6 +653,13 @@ impl Strings for ValueModel<'_> {
         }
     }
 
+    fn str_char_bytes(&self, string: ObjPtr, chars: Range<usize>) -> Range<usize> {
+        match self.object(string) {
+            Object::String(text) => text.char_to_byte(chars.start)..text.char_to_byte(chars.end),
+            other => panic!("string ABI call on {}", ObjectType::of(other)),
+        }
+    }
+
     fn str_alloc(&mut self, text: &str) -> ObjPtr {
         obj_ptr(Value::object(self.vm.alloc_string(text.to_string())))
     }

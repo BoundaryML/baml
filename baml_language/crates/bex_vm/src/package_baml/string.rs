@@ -325,13 +325,7 @@ pub(crate) mod shared {
         end: i64,
     ) -> Result<ObjPtr, Fault> {
         let chars = slice_bounds(start, end, rt.str_char_len(string));
-        let text = rt.str_text(string);
-        let byte_at = |char_index: usize| {
-            text.char_indices()
-                .nth(char_index)
-                .map_or(text.len(), |(byte, _)| byte)
-        };
-        let bytes = byte_at(chars.start)..byte_at(chars.end);
+        let bytes = rt.str_char_bytes(string, chars);
         Ok(rt.str_substring(string, bytes))
     }
 

@@ -463,6 +463,19 @@ pub trait Strings: Descriptors {
     /// Length in Unicode scalar values.
     fn str_char_len(&self, string: ObjPtr) -> usize;
 
+    /// The byte range of the chars `chars`; an index past the end maps to
+    /// the byte length. The default scans the text; a model that knows
+    /// where its ASCII prefix ends answers in O(1) inside it.
+    fn str_char_bytes(&self, string: ObjPtr, chars: Range<usize>) -> Range<usize> {
+        let text = self.str_text(string);
+        let byte_at = |char_index: usize| {
+            text.char_indices()
+                .nth(char_index)
+                .map_or(text.len(), |(byte, _)| byte)
+        };
+        byte_at(chars.start)..byte_at(chars.end)
+    }
+
     fn str_alloc(&mut self, text: &str) -> ObjPtr;
 
     /// The substring at `bytes` (char boundaries), sharing storage where the
