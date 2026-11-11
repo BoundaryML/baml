@@ -15,7 +15,10 @@ use std::sync::{
 
 use crate::BexHeap;
 
-pub(crate) const MIN_FULL_BUDGET: usize = 32 * 1024 * 1024;
+/// The budget floor: Go's default heap floor. Small programs collect their
+/// garbage (outgrown backings included) about as often as the enum VM freed
+/// it, rather than accumulating up to a large fixed floor.
+pub(crate) const MIN_FULL_BUDGET: usize = 4 * 1024 * 1024;
 const LIVE_HEADROOM: usize = 4;
 /// Number of existing VM control-flow checks between pressure/park polls.
 pub const POLL_INTERVAL: u64 = 4096;
@@ -254,7 +257,8 @@ mod tests {
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
-        let text = bex_str::BexStr::from("x".repeat(1 << 20));
+        // 8 copies stay under the 4 MiB floor.
+        let text = bex_str::BexStr::from("x".repeat(1 << 18));
         let whole = text.unshared_heap_bytes() as isize;
         for _ in 0..8 {
             tlab.alloc_string(text.clone());
