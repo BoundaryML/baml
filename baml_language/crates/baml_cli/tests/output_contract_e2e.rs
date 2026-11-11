@@ -199,7 +199,6 @@ fn command_level_argument_errors_are_usage_errors() {
         &["run", "--file", "x.baml", "--project-dir", "."][..],
         &["run", "main", "-e", "1"],
         &["run", "-e", "1", "--list"],
-        &["pack"],
         &["pack", "main", "-f", "main"],
     ] {
         let output = baml(dir.path(), args);

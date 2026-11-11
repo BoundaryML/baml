@@ -73,7 +73,8 @@ pub struct PackArgs {
 
     /// Function to package as the executable's only entry point.
     ///
-    /// Mutually exclusive with `--function`.
+    /// Defaults to `main` when the project or file has one. Mutually exclusive
+    /// with `--function`.
     #[arg(value_name = "FUNCTION")]
     pub target: Option<String>,
 
@@ -342,13 +343,6 @@ impl PackArgs {
                      `-f` produces a subcommand binary)."
                 );
             }
-        }
-        if self.target.is_none() && self.functions.is_empty() {
-            crate::usage_bail!(
-                "no target specified. Pass a positional `<TARGET>` to pack one \
-                 function as the binary's only entry point, or one or more \
-                 `-f <NAME>` flags to pack a subcommand binary."
-            );
         }
         if self.rust && !bex_engine::STACKFUL_FIBERS_SUPPORTED {
             anyhow::bail!(
@@ -633,8 +627,8 @@ impl PackArgs {
         Ok((db, workspace, needs_format_hint))
     }
 
-    /// Resolve into `(mode, targets)`. Positional `<TARGET>` →
-    /// [`PackMode::Single`] with one entry; one-or-more `-f` →
+    /// Resolve into `(mode, targets)`. Positional `<TARGET>`, or `main` when
+    /// nothing is named → [`PackMode::Single`] with one entry; one-or-more `-f` →
     /// [`PackMode::Subcommand`] (a single `-f` still gets the subcommand
     /// layer per the spec).
     fn resolve_targets(
@@ -643,6 +637,18 @@ impl PackArgs {
     ) -> Result<(baml_exec::PackMode, Vec<ResolvedPackTarget>)> {
         if let Some(target) = self.target.as_deref() {
             let resolved = resolve_one(engine, target)?;
+            return Ok((baml_exec::PackMode::Single, vec![resolved]));
+        }
+        if self.functions.is_empty() {
+            use crate::run_command::ENTRY_POINT;
+            if !engine.function_exists(ENTRY_POINT) {
+                crate::usage_bail!(
+                    "no target specified and there is no `{ENTRY_POINT}` to default to. Pass a \
+                     positional `<TARGET>` to pack one function as the binary's only entry \
+                     point, or one or more `-f <NAME>` flags to pack a subcommand binary."
+                );
+            }
+            let resolved = resolve_one(engine, ENTRY_POINT)?;
             return Ok((baml_exec::PackMode::Single, vec![resolved]));
         }
 
@@ -1050,11 +1056,24 @@ mod tests {
         );
     }
 
-    /// No positional and no `-f` → user gets a clean "no target" error.
+    /// No positional and no `-f` packs `main` as the only entry point.
     #[test]
-    fn test_pack_no_target_errors() {
+    fn test_pack_no_target_defaults_to_main() {
+        let engine = engine_from_source("function main() -> int { 42 }");
         let args = pack_args();
-        let err = args.validate_flags().unwrap_err();
+        args.validate_flags().unwrap();
+        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        assert!(matches!(mode, baml_exec::PackMode::Single));
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].display_name, "main");
+    }
+
+    /// With no `main` to default to, the user gets a clean "no target" error.
+    #[test]
+    fn test_pack_no_target_without_main_errors() {
+        let engine = engine_from_source("function other() -> int { 42 }");
+        let err = pack_args().resolve_targets(&engine).unwrap_err();
+        assert!(err.is::<crate::UsageError>(), "{err}");
         let msg = format!("{err}");
         assert!(msg.contains("no target"), "got: {msg}");
         assert!(msg.contains("-f"), "got: {msg}");

@@ -150,6 +150,9 @@ fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
 // CLI Args
 // ============================================================================
 
+/// The function `run` and `pack` use when no target is named.
+pub(crate) const ENTRY_POINT: &str = "main";
+
 /// Run a BAML function, script, or expression.
 ///
 /// Choose one execution mode: a positional function or script, one or more
@@ -499,7 +502,6 @@ impl RunArgs {
     /// With no target, `main` is the entry point. A project that has no
     /// `main`, or a directory that is not a project, gets the help instead.
     fn run_default_target(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
-        const ENTRY_POINT: &str = "main";
         let print_help = || {
             Self::print_run_help();
             Ok(crate::ExitCode::Failure)
@@ -1621,7 +1623,7 @@ impl RunArgs {
     /// The JSON shape of `--list`, split out so the
     /// JSON shape (including the empty-targets case, per BEP-027 §`--list`)
     /// can be unit-tested without capturing stdout. Always returns the
-    /// same three keys (`scripts`, `namespace_mains`, `functions`); when
+    /// same three keys (`scripts`, `namespaces`, `functions`); when
     /// every input is empty the arrays are empty — scripted callers must
     /// still get a parseable document, never the human-readable "No
     /// runnable targets found." text.
@@ -1697,7 +1699,7 @@ impl RunArgs {
 
         serde_json::json!({
             "scripts": script_items,
-            "namespace_mains": namespace_mains_items,
+            "namespaces": namespace_mains_items,
             "functions": function_items,
         })
     }
@@ -2427,7 +2429,7 @@ mod tests {
     /// `println!("No runnable targets found.")` in the empty case
     /// regardless of `--output-format`, breaking JSON readers. The
     /// empty-targets path now still builds a JSON value with empty
-    /// arrays for `scripts`, `namespace_mains`, and `functions`.
+    /// arrays for `scripts`, `namespaces`, and `functions`.
     #[test]
     fn list_empty_json_shape_has_all_keys_with_empty_arrays() {
         let scripts: HashMap<String, Vec<String>> = HashMap::new();
@@ -2439,12 +2441,12 @@ mod tests {
         let obj = value.as_object().expect("top-level must be an object");
         assert!(
             obj.contains_key("scripts")
-                && obj.contains_key("namespace_mains")
+                && obj.contains_key("namespaces")
                 && obj.contains_key("functions"),
             "missing keys; got: {value}"
         );
         assert!(obj["scripts"].as_array().unwrap().is_empty());
-        assert!(obj["namespace_mains"].as_array().unwrap().is_empty());
+        assert!(obj["namespaces"].as_array().unwrap().is_empty());
         assert!(obj["functions"].as_array().unwrap().is_empty());
 
         // Round-trips through serde_json — the same property scripted
