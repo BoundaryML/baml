@@ -15,10 +15,12 @@ use std::sync::{
 
 use crate::BexHeap;
 
-/// The budget floor: Go's default heap floor. Small programs collect their
-/// garbage (outgrown backings included) about as often as the enum VM freed
-/// it, rather than accumulating up to a large fixed floor.
-pub(crate) const MIN_FULL_BUDGET: usize = 4 * 1024 * 1024;
+/// The budget floor. Small programs collect their garbage (outgrown backings
+/// included) about as often as the enum VM freed it, rather than
+/// accumulating up to a large fixed floor. 8 MiB rather than Go's 4 MiB: at
+/// 4 MiB allocation-high-retention ran 3.4% slower than at 32 MiB, at 8 MiB
+/// no row did, and peak RSS stays at or below the enum VM's either way.
+pub(crate) const MIN_FULL_BUDGET: usize = 8 * 1024 * 1024;
 const LIVE_HEADROOM: usize = 4;
 /// Number of existing VM control-flow checks between pressure/park polls.
 pub const POLL_INTERVAL: u64 = 4096;
@@ -257,7 +259,7 @@ mod tests {
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
-        // 8 copies stay under the 4 MiB floor.
+        // 8 copies stay under the floor.
         let text = bex_str::BexStr::from("x".repeat(1 << 18));
         let whole = text.unshared_heap_bytes() as isize;
         for _ in 0..8 {
