@@ -246,15 +246,42 @@ pub fn compare_modes(
         let (Some(expected), Some(actual)) = (&outputs[reference], actual) else {
             continue;
         };
-        if expected.status != actual.status
-            || expected.stdout != actual.stdout
-            || expected.stderr != actual.stderr
-        {
+        let stressed = modes
+            .iter()
+            .any(|(name, _, stress, ..)| name == mode && *stress == "1");
+        if !same_output(probe, stressed, expected, actual) {
             let diff = diff(probe, mode, expected, actual);
             eprintln!("{diff}");
             failures.push(diff);
         }
     }
+}
+
+/// Probes whose stderr reports tasks in the order they settle, which forced
+/// collections change: the interpreter and compiled code yield at different
+/// points, so each reorders differently under GC stress (bytecode under
+/// stress reorders too). Their stressed runs compare stderr as a set of
+/// lines; every other mode compares it exactly.
+const SCHEDULE_DEPENDENT: &[&str] = &["task_edges::RtUnhandledOrder"];
+
+/// Whether `actual` matches bytecode's `expected`, stderr as a set of
+/// lines for a schedule-dependent probe under stress.
+fn same_output(probe: &str, stressed: bool, expected: &Output, actual: &Output) -> bool {
+    let same_stderr = if stressed && SCHEDULE_DEPENDENT.contains(&probe) {
+        sorted_lines(&expected.stderr) == sorted_lines(&actual.stderr)
+    } else {
+        expected.stderr == actual.stderr
+    };
+    expected.status == actual.status && expected.stdout == actual.stdout && same_stderr
+}
+
+fn sorted_lines(bytes: &[u8]) -> Vec<String> {
+    let mut lines: Vec<String> = String::from_utf8_lossy(bytes)
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    lines.sort();
+    lines
 }
 
 fn diff(probe: &str, mode: &str, expected: &Output, actual: &Output) -> String {
