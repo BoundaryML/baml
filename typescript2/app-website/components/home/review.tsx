@@ -1028,7 +1028,7 @@ const STAGES: {
   },
   {
     at: 1,
-    label: 'Simpler code is merged',
+    label: 'Good code is merged',
     ms: 4500,
     says: (
       <span className="text-clover">The code is now simpler than main.</span>
