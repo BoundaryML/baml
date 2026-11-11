@@ -46,7 +46,7 @@ pub use meter::{AllocDebt, Meter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{
     CollectRoots, CollectRootsAndRanges, ForwardRoots, NothingCollected, PermitProof, RootHaver,
-    RootHaverExt, RootVisitor, Survival, Weak,
+    RootHaverExt, RootVisitor, Survival, Weak, WeakRefs,
 };
 pub use runtime_compile::{
     MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,

@@ -35,12 +35,13 @@
 //!    because the manager's holders mutex is held by the GC.
 //! 3. **Collect**: `BexHeap::collect_paused` takes the [`HeapGuard`], walks
 //!    each live permit holder's `RootHaver::visit_roots` with a recording
-//!    visitor, unions that with the handle table, then marks and sweeps.
-//!    Objects never move.
-//! 4. **Fixup**: `HeapGuard` walks each parked holder's `visit_roots` again,
-//!    dropping weak references to dead objects, then calls its
-//!    `RootHaver::relocated`; the `BexVm` impl tells its TLAB a collection
-//!    ran, which discards its stale payload balance.
+//!    visitor, unions that with the handle table, then marks and copies.
+//! 4. **Fixup**, still in the pause: the heap walks each parked holder's
+//!    `visit_roots` again with a forwarding visitor, repointing strong roots
+//!    to the copies and dropping weak references to dead objects, reclaims,
+//!    then calls each holder's `RootHaver::relocated`; the `BexVm` impl
+//!    tells its TLAB a collection ran, which discards its stale payload
+//!    balance.
 //! 5. **Resume**: dropping the `HeapGuard` releases the semaphore; parked
 //!    VMs re-acquire and continue.
 //!
@@ -1139,8 +1140,8 @@ pub struct BexEngine {
     globals: SharedGlobals,
     /// Permit holder that keeps `globals` registered with the
     /// `HeapPermitManager`. The engine never `acquire()`s this — it exists
-    /// purely so the GC's `collect_roots`/`forward_roots` walks reach the
-    /// frozen globals pool.
+    /// purely so the GC's root and forwarding walks reach the frozen
+    /// globals pool.
     _globals_permit: bex_heap::InactiveHeapPermit<SharedGlobals>,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
@@ -2288,7 +2289,7 @@ impl BexEngine {
         // GC traces and forwards `Value::object(HeapPtr)` entries (e.g.
         // top-level `let g = [1, 2, 3]` populated during `$init`). The
         // permit is never `acquire()`d — its sole job is to participate in
-        // `HeapGuard::collect_roots` / `forward_roots` walks. The
+        // the collector's root and forwarding walks over the `HeapGuard`. The
         // `SharedGlobals` is `Clone` (Arc bump), so the holder and the
         // engine's own field point at the same `UnsafeCell<Box<[Value]>>`.
         let globals_permit = permit_before_any_collector(&heap_permit_manager, globals.clone());
@@ -3220,35 +3221,14 @@ impl BexEngine {
         let abort_on_unwind = AbortOnCollectionUnwind;
 
         // Roots come from the handle table and every parked holder in the
-        // registry. Nothing moves; `restamp` is empty unless `heap_debug`.
-        let (mut stats, restamp) = self
+        // registry; every holder is repointed in the pause, and its weak
+        // references to the dead dropped, before the collection returns.
+        let mut stats = self
             .heap
             .collect_paused(&mut heap_guard, &mut bex_heap::NoRoots);
 
         cycle.roots_scanned();
         cycle.heap_done();
-
-        // Drop weak references to the dead from every parked holder (and
-        // re-stamp strong ones under `heap_debug`). Every holder is still
-        // parked: the `HeapGuard` holds every permit and the holders mutex
-        // until it is dropped below.
-        heap_guard.forward_roots(&mut bex_vm_types::ForwardRoots::new(&restamp, &*self.heap));
-
-        // Bug H, check 3 (heap_debug only): after `forward_roots`, no holder
-        // root may name a reclaimed object. If one does, the root scan missed
-        // it and the pointer now names freed or reused memory.
-        #[cfg(feature = "heap_debug")]
-        {
-            let mut roots_after = self.heap.collect_handle_roots();
-            heap_guard.collect_roots(&mut roots_after);
-            for &ptr in &roots_after {
-                assert!(
-                    !self.heap.debug_ptr_is_reclaimed(ptr),
-                    "heap_debug: post-forward_roots — root {ptr:?} names a reclaimed \
-                     object (the root scan missed it)"
-                );
-            }
-        }
 
         self.heap.verify_quick();
 
@@ -6005,8 +5985,8 @@ impl BexEngine {
     /// (cancel token, optional name, optional `settles_future`) that
     /// distinguishes a root call from a spawned child. The permit is
     /// released at async safepoints (via `gc_safepoint`) and re-acquired
-    /// after any concurrent GC finishes. Each re-acquisition invalidates
-    /// the VM's TLAB through the post-GC `forward_roots` hook.
+    /// after any concurrent GC finishes. The collection invalidates the
+    /// VM's TLAB through its `RootHaver::relocated` hook.
     ///
     /// Returns a [`ThreadOutcome`] describing how the thread terminated:
     /// either a host-visible root value, a root that has already written

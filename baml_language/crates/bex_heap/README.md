@@ -62,8 +62,12 @@ Stop-the-world under the `HeapGuard` pause, copying:
    it is visited; a pinned, large or to-space cell is marked in place.
 3. Keep alive: unobserved spawn errors and dead finalizable instances, with
    everything they reach.
-4. Weak entries (function lookup, finalizable list) of dead objects are
-   dropped or forwarded; the engine then forwards the registry.
+4. Forward the outside, while the old cells still carry their forwarding
+   words: the heap's weak entries (function lookup, finalizable list) are
+   dropped or repointed, so are the handles, and every holder in the root
+   registry is walked through its `RootVisitor` (strong roots repointed,
+   weak references repointed or reported dead). Nothing is left for the
+   engine to repoint after the collection.
 5. Reclaim: drop every dead cell; free dead large objects; a from-space
    block with no pin goes back to the pool empty, whole. One with a pin is
    *retained*: its dead and moved cells lose their start bits, its pinned
@@ -80,10 +84,10 @@ ratio; `BexHeap::block_occupancy` counts blocks, retained blocks and cells.
 ## Handles
 
 External code holds opaque handles; the handle table is always a root, and
-a collection repoints each handle whose object moved (the `Restamp` map,
-which names every moved pointer). Under `heap_debug` the map also re-stamps
-every pointer reached in place with the new epoch, so a pointer the
-collection never saw still fails the epoch check.
+a collection repoints each handle whose object moved, in the pause. The
+`Restamp` map the explicit-root entry points (`collect_garbage`,
+`collect_with_holder`, `collect`) return names only the precise roots that
+moved; a cell reached through a root is repointed where it is stored.
 
 ## Concurrency
 

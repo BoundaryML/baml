@@ -10,7 +10,7 @@
 //! only where a forwarding address was written.
 
 use crate::descriptor::CellHeader as _;
-use std::{collections::HashMap, ops::Range};
+use std::ops::Range;
 
 use bex_vm_types::HeapPtr;
 
@@ -69,12 +69,6 @@ pub(crate) struct Marker<'a> {
     /// The block copies are bumped into, until it is full.
     to_space: Bump,
     live: Live,
-    /// Every moved pointer, old to new: how holders outside the heap follow
-    /// their objects.
-    moved: HashMap<HeapPtr, HeapPtr>,
-    /// Every distinct pointer reached in place, for re-stamping epochs.
-    #[cfg(feature = "heap_debug")]
-    reached: Vec<HeapPtr>,
 }
 
 impl<'a> Marker<'a> {
@@ -92,9 +86,6 @@ impl<'a> Marker<'a> {
             stack: Vec::new(),
             to_space: Bump::default(),
             live: Live::default(),
-            moved: HashMap::new(),
-            #[cfg(feature = "heap_debug")]
-            reached: Vec::new(),
         }
     }
 
@@ -186,7 +177,7 @@ impl<'a> Marker<'a> {
                 // SAFETY: as above.
                 if unsafe { LargeSpace::mark(cell) } {
                     // SAFETY: as above.
-                    self.reached_in_place(ptr, cell, unsafe { LargeSpace::cell_bytes(cell) });
+                    self.reached_in_place(cell, unsafe { LargeSpace::cell_bytes(cell) });
                 }
                 ptr
             }
@@ -226,7 +217,7 @@ impl<'a> Marker<'a> {
         // SAFETY: allocated and unmarked, so its header is intact.
         let bytes = unsafe { Header::at(cell) }.cell_bytes();
         if pinned {
-            self.reached_in_place(ptr, cell, bytes);
+            self.reached_in_place(cell, bytes);
             return ptr;
         }
         debug_assert!(
@@ -252,9 +243,7 @@ impl<'a> Marker<'a> {
         self.live.cells += 1;
         self.live.bytes += bytes;
         self.stack.push(new_cell);
-        let moved = heap_ptr_at(new_cell + (address - cell));
-        self.moved.insert(ptr, moved);
-        moved
+        heap_ptr_at(new_cell + (address - cell))
     }
 
     /// The pointer into the copy of the moved cell `cell` that corresponds
@@ -301,14 +290,10 @@ impl<'a> Marker<'a> {
     }
 
     /// A cell was marked where it is: count it and queue it for tracing.
-    fn reached_in_place(&mut self, ptr: HeapPtr, cell: usize, bytes: usize) {
+    fn reached_in_place(&mut self, cell: usize, bytes: usize) {
         self.live.cells += 1;
         self.live.bytes += bytes;
         self.stack.push(cell);
-        #[cfg(feature = "heap_debug")]
-        self.reached.push(ptr);
-        #[cfg(not(feature = "heap_debug"))]
-        let _ = ptr;
     }
 
     /// `bytes` of to-space: the current block's bump cursor, or a fresh
@@ -338,8 +323,6 @@ impl<'a> Marker<'a> {
     /// A compile-time object is permanent and must not lead anywhere else:
     /// marking does not trace it.
     fn reached_compile_time(&mut self, ptr: HeapPtr) {
-        #[cfg(feature = "heap_debug")]
-        self.reached.push(ptr);
         #[cfg(debug_assertions)]
         {
             // SAFETY: compile-time objects live for the heap's lifetime.
@@ -354,7 +337,7 @@ impl<'a> Marker<'a> {
                  trace compile-time objects and would miss it"
             );
         }
-        #[cfg(not(any(debug_assertions, feature = "heap_debug")))]
+        #[cfg(not(debug_assertions))]
         let _ = ptr;
     }
 
@@ -409,16 +392,6 @@ impl<'a> Marker<'a> {
         })
     }
 
-    /// Every moved pointer, old to new.
-    pub(crate) fn take_moved(&mut self) -> HashMap<HeapPtr, HeapPtr> {
-        std::mem::take(&mut self.moved)
-    }
-
-    /// Every distinct pointer reached in place, compile-time ones included.
-    #[cfg(feature = "heap_debug")]
-    pub(crate) fn take_reached(&mut self) -> Vec<HeapPtr> {
-        std::mem::take(&mut self.reached)
-    }
 }
 
 /// Whether the allocated cell `cell` carries a mark.

@@ -12,14 +12,17 @@
 //!   pinned and large cells are marked where they are.
 //! - **Keep alive**: unobserved spawn errors and dead finalizable instances
 //!   are kept alive too, with everything they reach, through the same copy.
-//! - **Reclaim**: a from-space block with no pin and no owner returns to the
-//!   pool empty; one with a pin, or one a mutator still allocates into, is
-//!   swept in place; large dead cells are freed.
+//! - **Forward the outside**: while the old cells still carry their
+//!   forwarding words, every holder of heap pointers outside the heap is
+//!   repointed in the pause: the handle table, the heap's own weak entries,
+//!   and (under [`BexHeap::collect_paused`]) every holder in the root
+//!   registry, through its [`RootVisitor`] walk.
+//! - **Reclaim**: a from-space block with no pin returns to the pool empty;
+//!   one with a pin is swept in place; large dead cells are freed.
 //!
-//! The [`Restamp`] the collection entry points return maps every moved
-//! pointer to its new address, so holders outside the heap (VM frames,
-//! handles, weak entries) can follow their objects; under `heap_debug` it
-//! also maps each pointer reached in place to itself under the new epoch.
+//! The [`Restamp`] the explicit-root entry points return maps each precise
+//! root that moved to its new address, and nothing else: a holder the
+//! collection walked needs no map.
 //!
 //! # Invariant: compile-time objects do not contain runtime `HeapPtr`s
 //!
@@ -30,7 +33,7 @@
 use crate::descriptor::CellHeader as _;
 use std::collections::HashMap;
 
-use bex_vm_types::{FutureRead, HeapPtr, Object, RootHaverExt, Value};
+use bex_vm_types::{FutureRead, HeapPtr, Object, RootHaver, RootHaverExt, RootVisitor, Value};
 
 use crate::{
     BexHeap, HeapGuard,
@@ -56,9 +59,50 @@ pub struct GcStats {
     pub profile: crate::GcProfile,
 }
 
-/// Every pointer a collection moved, old to new. Under `heap_debug` every
-/// pointer reached in place also maps to itself under the new epoch.
+/// Every precise root a collection moved, old to new. Only the roots: a
+/// pointer reached through them is repointed where it is stored.
 pub type Restamp = HashMap<HeapPtr, HeapPtr>;
+
+/// The holder walk of a collection, in the pause: a strong root is
+/// repointed to where the collection put its object; a weak reference is
+/// repointed if its object survived and reported dead otherwise.
+struct ForwardInPause<'h, 'm, 'a> {
+    heap: &'h BexHeap,
+    marker: &'m mut Marker<'a>,
+}
+
+impl RootVisitor for ForwardInPause<'_, '_, '_> {
+    fn visit(&mut self, root: &mut HeapPtr) {
+        if root.is_null() {
+            return;
+        }
+        // SAFETY: a root names a live object, so the walk reaches nothing
+        // new (checked below); an unreached root is one the root scan
+        // missed, and is reached late and drained after the walk.
+        debug_assert!(
+            unsafe { self.marker.is_marked(*root) },
+            "a strong root {root:?} the collection did not reach"
+        );
+        // SAFETY: as above.
+        let moved = unsafe { self.marker.forward(*root) };
+        // SAFETY: stamping an address the collection just vouched for.
+        *root = unsafe { self.heap.make_heap_ptr(moved.as_ptr()) };
+    }
+
+    fn visit_weak(&mut self, root: &mut HeapPtr) -> bool {
+        if root.is_null() {
+            return false;
+        }
+        // SAFETY: a weak entry names an allocated cell or a compile-time
+        // object until its holder is told otherwise, which is now.
+        let Some(moved) = (unsafe { self.marker.forwarded(*root) }) else {
+            return false;
+        };
+        // SAFETY: as in `visit`.
+        *root = unsafe { self.heap.make_heap_ptr(moved.as_ptr()) };
+        true
+    }
+}
 
 impl BexHeap {
     /// Run a full collection with `roots` as its only precise roots.
@@ -71,31 +115,48 @@ impl BexHeap {
     /// # Returns
     ///
     /// `(stats, roots, restamp)`: the roots, repointed where their objects
-    /// moved, and the [`Restamp`] map.
+    /// moved, and the [`Restamp`] map of the roots and handles that moved.
     pub unsafe fn collect_garbage(&self, roots: &[HeapPtr]) -> (GcStats, Vec<HeapPtr>, Restamp) {
-        let mut handles = self.collect_handle_roots();
-        handles.extend_from_slice(roots);
         // SAFETY: forwarded to the caller.
-        let (stats, restamp) = unsafe { self.collect(&mut PreciseRoots(&handles)) };
+        unsafe { self.collect_with_holder(&mut (), roots) }
+    }
+
+    /// [`Self::collect_garbage`] with a holder: `holder`'s roots and
+    /// conservative ranges are roots too, and it is forwarded in the pause
+    /// (every weak reference it holds learns its verdict). For a test that
+    /// drives the collector over a VM directly.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::collect_garbage`], with `holder` among the holders.
+    pub unsafe fn collect_with_holder(
+        &self,
+        holder: &mut dyn RootHaver,
+        roots: &[HeapPtr],
+    ) -> (GcStats, Vec<HeapPtr>, Restamp) {
+        let mut precise = self.collect_handle_roots();
+        precise.extend_from_slice(roots);
+        let mut ranges = Vec::new();
+        holder.collect_roots_and_ranges(&mut precise, &mut ranges);
+        let mut held = BothRoots(PreciseRoots(&precise), ConservativeRanges(&ranges));
+        // SAFETY: forwarded to the caller.
+        let (stats, restamp) = unsafe { self.collect_inner(&mut held, Some(holder), true) };
         let roots = roots
             .iter()
-            .map(|root| restamp.get(root).copied().unwrap_or(*root))
+            // SAFETY: stamping an address the collection just vouched for.
+            .map(|root| unsafe {
+                self.make_heap_ptr(restamp.get(root).copied().unwrap_or(*root).as_ptr())
+            })
             .collect();
         (stats, roots, restamp)
     }
 
     /// Run a full collection under `guard`'s pause: the roots are the handle
     /// table, every holder in the root registry, and `extra` (for instance
-    /// the conservative stacks of parked fibers).
-    ///
-    /// The caller still forwards the registry with the returned [`Restamp`]
-    /// (`HeapGuard::forward_roots`), which repoints every root that moved
-    /// and drops weak references to the dead.
-    pub fn collect_paused(
-        &self,
-        guard: &mut HeapGuard<'_>,
-        extra: &mut dyn RootSource,
-    ) -> (GcStats, Restamp) {
+    /// the conservative stacks of parked fibers). Every holder in the
+    /// registry is forwarded in the pause, so nothing is left for the
+    /// caller to repoint.
+    pub fn collect_paused(&self, guard: &mut HeapGuard<'_>, extra: &mut dyn RootSource) -> GcStats {
         let mut roots = self.collect_handle_roots();
         // Parked fibers report their stacks as conservative ranges.
         let mut ranges = Vec::new();
@@ -105,16 +166,40 @@ impl BexHeap {
         // holder of heap pointers outside the heap is in its registry or the
         // handle table, or reported by `extra`. Each range is a parked
         // fiber's stack, unwritten until its VM resumes.
-        unsafe { self.collect(&mut BothRoots(&mut held, extra)) }
+        unsafe {
+            self.collect_inner(&mut BothRoots(&mut held, extra), Some(guard), false)
+                .0
+        }
     }
 
-    /// The collector.
+    /// The collector over an explicit [`RootSource`], with no holder to
+    /// forward: the [`Restamp`] maps each precise root that moved.
     ///
     /// # Safety
     ///
     /// No mutator runs, and `roots` reports every pointer to the heap held
     /// outside it, handles included.
     pub unsafe fn collect(&self, roots: &mut dyn RootSource) -> (GcStats, Restamp) {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.collect_inner(roots, None, true) }
+    }
+
+    /// The collector.
+    ///
+    /// `holder` is walked in the pause, after the mark and before the
+    /// reclaim; `record` says whether each precise root that moved goes in
+    /// the returned [`Restamp`] (a holder walked in the pause needs none).
+    ///
+    /// # Safety
+    ///
+    /// No mutator runs, and `roots` reports every pointer to the heap held
+    /// outside it, handles and `holder`'s roots included.
+    unsafe fn collect_inner(
+        &self,
+        roots: &mut dyn RootSource,
+        holder: Option<&mut dyn RootHaver>,
+        record: bool,
+    ) -> (GcStats, Restamp) {
         // SAFETY: the caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self) };
         self.bump_epoch();
@@ -137,10 +222,15 @@ impl BexHeap {
         // SAFETY: mutators are parked and the ranges are readable.
         roots.conservative_ranges(&mut |range| unsafe { marker.scan_range(range) });
         let mut precise = 0;
+        let mut restamp = Restamp::new();
         roots.precise_roots(&mut |ptr| {
             precise += 1;
             // SAFETY: the roots name live objects.
-            unsafe { marker.forward(ptr) };
+            let moved = unsafe { marker.forward(ptr) };
+            if record && moved != ptr {
+                // SAFETY: stamping an address the collection just vouched for.
+                restamp.insert(ptr, unsafe { self.make_heap_ptr(moved.as_ptr()) });
+            }
         });
         // SAFETY: entries not yet taken by the engine name live objects.
         unsafe { self.forward_pending_finalizers(&mut marker) };
@@ -156,9 +246,22 @@ impl BexHeap {
         }
         profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
 
-        // SAFETY: the mark is final; nothing is reclaimed yet.
-        unsafe { self.forward_weak_entries(&mut marker) };
-        let restamp = self.restamp(&mut marker);
+        // SAFETY: the mark is final; nothing is reclaimed yet, so every old
+        // cell still carries its forwarding word.
+        unsafe {
+            self.forward_weak_entries(&mut marker);
+            self.forward_handles(&mut marker);
+        }
+        let mut holder = holder;
+        if let Some(holder) = holder.as_deref_mut() {
+            holder.visit_roots(&mut ForwardInPause {
+                heap: self,
+                marker: &mut marker,
+            });
+            // SAFETY: a root the scan missed was reached by the walk (and
+            // reported in debug builds); its children are reached here.
+            unsafe { marker.drain() };
+        }
         let live = marker.live();
         drop(marker);
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
@@ -169,13 +272,16 @@ impl BexHeap {
         drop(blocks);
         profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
 
-        self.update_handles(&restamp);
         self.live_bytes
             .store(live.bytes, std::sync::atomic::Ordering::Relaxed);
         self.gc_policy
             .after_full(live.bytes.saturating_add(swept.live_payload_bytes));
         #[cfg(feature = "gc_profiling")]
         self.reset_gc_counter();
+        // After the epoch moved: a holder's layout caches are keyed by it.
+        if let Some(holder) = holder {
+            holder.relocated();
+        }
         profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
 
         // SAFETY: exclusive heap access is still held.
@@ -459,21 +565,6 @@ impl BexHeap {
                 true
             });
     }
-
-    /// The [`Restamp`] map for this collection: every moved pointer, and
-    /// under `heap_debug` every pointer reached in place, re-stamped.
-    fn restamp(&self, marker: &mut Marker<'_>) -> Restamp {
-        let moved = marker.take_moved().into_iter();
-        #[cfg(feature = "heap_debug")]
-        let reached = marker.take_reached().into_iter().map(|ptr| (ptr, ptr));
-        #[cfg(not(feature = "heap_debug"))]
-        let reached = std::iter::empty();
-        moved
-            .chain(reached)
-            // SAFETY: stamping an address the collection just vouched for.
-            .map(|(old, new)| (old, unsafe { self.make_heap_ptr(new.as_ptr()) }))
-            .collect()
-    }
 }
 
 /// Forget the previous collection's marks.
@@ -491,7 +582,7 @@ mod tests {
 
     use baml_type::RealizedTy;
     use bex_external_types::WeakHeapRef;
-    use bex_vm_types::{Meter, Object, Value, types::Future};
+    use bex_vm_types::{Meter, Object, Value, WeakRefs, types::Future};
 
     use super::*;
     use crate::Tlab;
@@ -772,6 +863,45 @@ mod tests {
         assert!(matches!(unsafe { inner.get() }, Object::String(s) if s == "inner"));
     }
 
+    /// The restamp names the roots that moved and nothing else: a cell
+    /// reached through a root is repointed where it is stored.
+    #[test]
+    fn test_gc_restamp_holds_only_the_roots() {
+        use bex_vm_types::types::Cell;
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let mut roots = Vec::new();
+        for _ in 0..3 {
+            let mut head = tlab.alloc_string("leaf".to_string());
+            for _ in 0..3_333 {
+                head = tlab.alloc(Object::Cell(Cell::new(Value::object(head))));
+            }
+            roots.push(head);
+        }
+        let (stats, moved, restamp) = unsafe { heap.collect_garbage(&roots) };
+        assert_eq!(stats.live_count, 3 * 3_334, "every cell survives, copied");
+        for (root, moved) in roots.iter().zip(&moved) {
+            assert_ne!(root, moved, "out of the mutator's block");
+        }
+        assert!(
+            restamp.len() <= roots.len() + heap.stats().active_handles,
+            "the restamp holds {} entries for {} roots",
+            restamp.len(),
+            roots.len()
+        );
+        // The chains read whole through their new roots.
+        for mut cell in moved {
+            for _ in 0..3_333 {
+                let Object::Cell(link) = (unsafe { cell.get() }) else {
+                    panic!("not a cell")
+                };
+                cell = link.load().as_object_ptr().unwrap();
+            }
+            assert!(matches!(unsafe { cell.get() }, Object::String(s) if s == "leaf"));
+        }
+    }
+
     /// A chain A -> B -> C with only A rooted: all three move and the chain
     /// reads correctly afterwards.
     #[test]
@@ -784,21 +914,23 @@ mod tests {
         let b = tlab.alloc(Object::Cell(Cell::new(Value::object(c))));
         let a = tlab.alloc(Object::Cell(Cell::new(Value::object(b))));
 
-        let (stats, roots, restamp) = unsafe { heap.collect_garbage(&[a]) };
+        let mut followed = WeakRefs(vec![a, b, c]);
+        let (stats, roots, restamp) = unsafe { heap.collect_with_holder(&mut followed, &[a]) };
         assert_eq!(stats.live_count, 3);
-        for old in [a, b, c] {
-            assert_ne!(restamp[&old], old, "{old:?} moved");
+        for (old, new) in [a, b, c].into_iter().zip(&followed.0) {
+            assert_ne!(*new, old, "{old:?} moved");
         }
+        assert_eq!(restamp.len(), 1, "only the root is restamped");
         let Object::Cell(a_cell) = (unsafe { roots[0].get() }) else {
             panic!("not a cell")
         };
         let b_now = a_cell.load().as_object_ptr().unwrap();
-        assert_eq!(b_now, restamp[&b]);
+        assert_eq!(b_now, followed.0[1]);
         let Object::Cell(b_cell) = (unsafe { b_now.get() }) else {
             panic!("not a cell")
         };
         let c_now = b_cell.load().as_object_ptr().unwrap();
-        assert_eq!(c_now, restamp[&c]);
+        assert_eq!(c_now, followed.0[2]);
         assert!(matches!(unsafe { c_now.get() }, Object::String(s) if s == "c"));
     }
 
@@ -2457,14 +2589,15 @@ mod tests {
         assert_eq!(instance.load(1), SlotValue::Float(2.5));
         assert_eq!(instance.layout().size(), 8 + 8 + 8 + 8 + 16 + 8);
 
-        let (stats, roots, restamp) = unsafe { heap.collect_garbage(&[ptr]) };
+        let mut followed = WeakRefs(vec![by_tag, by_ptr]);
+        let (stats, roots, _) = unsafe { heap.collect_with_holder(&mut followed, &[ptr]) };
         // The instance, its class and the two strings; the float box was
         // only an argument, unboxed into the raw slot.
         assert_eq!(stats.live_count, 4);
         let instance = unsafe { InstanceRef::of(roots[0]) }.expect("still an instance");
         assert_eq!(instance.load(0), SlotValue::Value(Value::int(7)));
         assert_eq!(instance.load(1), SlotValue::Float(2.5));
-        let (by_tag, by_ptr) = (follow(&restamp, by_tag), follow(&restamp, by_ptr));
+        let (by_tag, by_ptr) = (followed.0[0], followed.0[1]);
         assert_eq!(instance.load(2), SlotValue::Value(Value::object(by_tag)));
         assert_eq!(instance.load(3), SlotValue::Value(Value::object(by_ptr)));
 
@@ -2507,12 +2640,13 @@ mod tests {
         assert_eq!(floats.get(9), Some(SlotValue::Float(9.5)));
 
         let roots = [floats.ptr(), mixed.ptr()];
-        let (stats, roots, restamp) = unsafe { heap.collect_garbage(&roots) };
+        let mut followed = WeakRefs(vec![text]);
+        let (stats, roots, _) = unsafe { heap.collect_with_holder(&mut followed, &roots) };
         // Two lists, two backings, two element type objects and the string.
         assert_eq!(stats.live_count, 7);
         let floats = unsafe { ListRef::of(roots[0]) }.expect("still a list");
         let mixed = unsafe { ListRef::of(roots[1]) }.expect("still a list");
-        let text = follow(&restamp, text);
+        let text = followed.0[0];
         let mixed_values = [
             SlotValue::Value(Value::int(1)),
             SlotValue::Float(2.5),
@@ -2730,15 +2864,12 @@ mod tests {
         });
 
         FINALIZER_SCAN_VISITS.with(|visits| visits.set(0));
-        let (_, _, restamp) = unsafe { heap.collect_garbage(&[live]) };
+        let mut followed = WeakRefs(vec![live, dead, finalizer]);
+        unsafe { heap.collect_with_holder(&mut followed, &[live]) };
 
         assert_eq!(FINALIZER_SCAN_VISITS.with(std::cell::Cell::get), 2);
         // Everything moved; the queue and the list name the copies.
-        let (live, dead, finalizer) = (
-            follow(&restamp, live),
-            follow(&restamp, dead),
-            follow(&restamp, finalizer),
-        );
+        let (live, dead, finalizer) = (followed.0[0], followed.0[1], followed.0[2]);
         assert_eq!(heap.take_pending_finalizers(), vec![(dead, finalizer)]);
         // The live instance and the resurrected dead one stay on the list.
         let mut expected = vec![live, dead];
@@ -2759,19 +2890,18 @@ mod tests {
         let mut finalizer = finalizer;
 
         for _ in 0..2 {
-            let (_, roots, restamp) = unsafe { heap.collect_garbage(&[instance]) };
+            let mut followed = WeakRefs(vec![finalizer]);
+            let (_, roots, _) = unsafe { heap.collect_with_holder(&mut followed, &[instance]) };
             instance = roots[0];
-            finalizer = follow(&restamp, finalizer);
+            finalizer = followed.0[0];
             assert!(heap.take_pending_finalizers().is_empty());
             assert_eq!(finalizable_entries(&heap), vec![instance]);
         }
 
-        let (_, _, restamp) = unsafe { heap.collect_garbage(&[]) };
+        let mut followed = WeakRefs(vec![instance, finalizer]);
+        unsafe { heap.collect_with_holder(&mut followed, &[]) };
         let pending = heap.take_pending_finalizers();
-        assert_eq!(
-            pending,
-            vec![(follow(&restamp, instance), follow(&restamp, finalizer))]
-        );
+        assert_eq!(pending, vec![(followed.0[0], followed.0[1])]);
         // The engine runs `cleanup`, which latches the instance.
         let finalized = unsafe { bex_vm_types::InstanceRef::of(pending[0].0) }
             .expect("a finalizer seed is an instance");
@@ -2802,10 +2932,11 @@ mod tests {
         }
         heap.invalidate_finalizable_instances();
 
-        let (_, _, restamp) = unsafe { heap.collect_garbage(&[]) };
+        let mut followed = WeakRefs(vec![older, finalizer]);
+        unsafe { heap.collect_with_holder(&mut followed, &[]) };
         assert_eq!(
             heap.take_pending_finalizers(),
-            vec![(follow(&restamp, older), follow(&restamp, finalizer))]
+            vec![(followed.0[0], followed.0[1])]
         );
     }
 
@@ -2828,13 +2959,14 @@ mod tests {
         let early = low.alloc_instance(class, vec![]);
         assert!(early.as_ptr() < late.as_ptr());
 
-        let (_, _, restamp) = unsafe { heap.collect_garbage(&[]) };
+        let mut followed = WeakRefs(vec![early, late]);
+        unsafe { heap.collect_with_holder(&mut followed, &[]) };
         let order: Vec<HeapPtr> = heap
             .take_pending_finalizers()
             .into_iter()
             .map(|(instance, _)| instance)
             .collect();
-        assert_eq!(order, vec![follow(&restamp, early), follow(&restamp, late)]);
+        assert_eq!(order, followed.0);
         assert!(order[0] < order[1], "copied in seed order");
     }
 }

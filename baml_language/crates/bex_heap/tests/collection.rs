@@ -1,6 +1,8 @@
 //! Tests the collector's tracing of every object kind, its stats, and
-//! multi-cycle behavior. An unpinned survivor moves at every collection; its
-//! new address is in the forwarding map, and every edge to it is repointed.
+//! multi-cycle behavior. An unpinned survivor moves at every collection; a
+//! root's new address is in the forwarding map, every edge to a survivor is
+//! repointed, and a cell a test does not root is followed weakly
+//! ([`collect_following`]).
 //!
 //! These tests drive `collect_garbage` directly and are placed in the `tests/`
 //! directory so they can exercise cross-module public APIs.
@@ -11,7 +13,7 @@ use baml_type::Name;
 use bex_heap::{BexHeap, GcStats, Generation, Tlab};
 use bex_vm_types::{
     Class, ClassField, ForwardRoots, GenericFunction, GlobalIndex, HeapPtr, Object, RealizedTy,
-    RootVisitor, Value, Weak,
+    RootVisitor, Value, Weak, WeakRefs,
     types::{
         Edge, EdgeKind, ExportSurface, InterfaceDef, LocalName, MethodImpl, Objects, Package,
         PackageKind, RuntimeImplRule, Slots, TypeAliasDef, TypeValue,
@@ -22,6 +24,21 @@ use indexmap::IndexMap;
 // ============================================================================
 // Survival and Reclamation Tests
 // ============================================================================
+
+/// Collect with `roots` as the precise roots, following `tracked` weakly:
+/// where each tracked cell went (null if it died), beside the stats and
+/// the repointed roots.
+fn collect_following<const N: usize>(
+    heap: &BexHeap,
+    roots: &[HeapPtr],
+    tracked: [HeapPtr; N],
+) -> (GcStats, Vec<HeapPtr>, [HeapPtr; N]) {
+    let mut followed = WeakRefs(tracked.to_vec());
+    // SAFETY: single-threaded test; no VM is executing.
+    let (stats, roots, _) = unsafe { heap.collect_with_holder(&mut followed, roots) };
+    let tracked = followed.0.try_into().expect("one verdict per tracked cell");
+    (stats, roots, tracked)
+}
 
 /// A runtime package owns its objects — here a type value naming its class,
 /// a generic value, and the class, which carries a back-edge to the package.
@@ -101,7 +118,8 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
 
     let rooted_heap = BexHeap::new(vec![]);
     let (mut rooted_tlab, package_ptr, function_ptr) = alloc_cycle(&rooted_heap);
-    let (stats, roots, forwarding) = unsafe { rooted_heap.collect_garbage(&[function_ptr]) };
+    let (stats, roots, [package_now]) =
+        collect_following(&rooted_heap, &[function_ptr], [package_ptr]);
     rooted_tlab.invalidate();
     assert_eq!(stats.live_count, 4);
     let moved_function = roots[0];
@@ -129,7 +147,8 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
         panic!("package class ceased to be a class")
     };
     assert_eq!(class.owner.package(), Some(moved_package));
-    assert_eq!(forwarding[&package_ptr], moved_package, "the package moved");
+    assert_eq!(package_now, moved_package, "the package moved");
+    assert_ne!(package_now, package_ptr, "the package moved");
 
     let dropped_heap = BexHeap::new(vec![]);
     let (mut dropped_tlab, dropped_package, _) = alloc_cycle(&dropped_heap);
@@ -271,7 +290,7 @@ fn survivor_edge_to_a_fresh_object_is_traced_and_repointed() {
         .expect("an unknown list holds anything");
 
     // Only the container is a root: `fresh` is reachable through it alone.
-    let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[survivor]) };
+    let (_, roots, [fresh_now]) = collect_following(&heap, &[survivor], [fresh]);
     tlab.invalidate();
     let Some(array) = (unsafe { bex_vm_types::ListRef::of(roots[0]) }) else {
         panic!("expected the container array")
@@ -280,7 +299,7 @@ fn survivor_edge_to_a_fresh_object_is_traced_and_repointed() {
         .get(0)
         .and_then(|value| value.as_object_ptr())
         .expect("slot 0 holds an object");
-    assert_eq!(edge, forwarding[&fresh]);
+    assert_eq!(edge, fresh_now);
     let Object::String(text) = (unsafe { edge.get() }) else {
         panic!("expected the fresh string")
     };
@@ -311,7 +330,8 @@ fn survivor_edge_to_a_fresh_chain_is_traced_and_repointed() {
         )
         .expect("an unknown list holds anything");
 
-    let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[survivor]) };
+    let (_, roots, [middle_now, leaf_now]) =
+        collect_following(&heap, &[survivor], [middle, leaf]);
     tlab.invalidate();
     let link = |ptr: bex_vm_types::HeapPtr| {
         let Some(array) = (unsafe { bex_vm_types::ListRef::of(ptr) }) else {
@@ -323,9 +343,9 @@ fn survivor_edge_to_a_fresh_chain_is_traced_and_repointed() {
             .expect("slot 0 holds an object")
     };
     let middle_after = link(roots[0]);
-    assert_eq!(middle_after, forwarding[&middle]);
+    assert_eq!(middle_after, middle_now);
     let leaf_after = link(middle_after);
-    assert_eq!(leaf_after, forwarding[&leaf]);
+    assert_eq!(leaf_after, leaf_now);
     let Object::String(text) = (unsafe { leaf_after.get() }) else {
         panic!("expected the leaf string")
     };
@@ -412,10 +432,10 @@ fn collect_three_times<const N: usize>(
     mut tracked: [HeapPtr; N],
 ) -> (GcStats, HeapPtr, [HeapPtr; N]) {
     let mut collect = |root: HeapPtr| {
-        // SAFETY: single-threaded test; no VM is executing.
-        let (stats, roots, forwarding) = unsafe { heap.collect_garbage(&[root]) };
-        for ptr in &mut tracked {
-            *ptr = forwarding[ptr];
+        let (stats, roots, now) = collect_following(heap, &[root], tracked);
+        tracked = now;
+        for ptr in &tracked {
+            assert!(!ptr.is_null(), "a tracked cell died");
             assert!(bex_vm_types::Survival::survived(heap, *ptr), "{ptr:?} died");
         }
         (stats, roots[0])
@@ -701,10 +721,10 @@ fn impl_rule_edges_are_traced_and_forwarded() {
         field_links: Box::default(),
     })));
 
-    // Root only the rule. Movement is checked through the forwarding map: a
-    // later allocation may reuse a freed address, so inequality with the old
-    // pointer is not a valid movement assertion.
-    let (stats, roots, forwarding) = unsafe { heap.collect_garbage(&[rule_ptr]) };
+    // Root only the rule; the interface and the method body are followed
+    // weakly to where the collection put them.
+    let (stats, roots, [iface_now, method_now]) =
+        collect_following(&heap, &[rule_ptr], [iface_ptr, method_ptr]);
 
     assert_eq!(
         stats.live_count, 3,
@@ -714,7 +734,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
         panic!("root was not the impl rule")
     };
     assert_eq!(
-        rule.interface_head, forwarding[&iface_ptr],
+        rule.interface_head, iface_now,
         "interface moved; head must be repointed"
     );
     let Object::Interface(iface) = (unsafe { rule.interface_head.get() }) else {
@@ -723,7 +743,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     assert_eq!(iface.path, iface_name);
     let fqn = rule.methods["run"].fqn;
     assert_eq!(
-        fqn, forwarding[&method_ptr],
+        fqn, method_now,
         "method body moved; fqn must be repointed"
     );
     assert!(matches!(unsafe { fqn.get() }, Object::String(_)));
@@ -769,13 +789,17 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     let mut expected_structural = structural_ptr;
     let mut expected_owner = package_ptr;
     for _ in 0..3 {
-        let (stats, next_roots, forwarding) = unsafe { heap.collect_garbage(&roots) };
+        let (stats, next_roots, [body_now, structural_now, owner_now]) = collect_following(
+            &heap,
+            &roots,
+            [expected_body, expected_structural, expected_owner],
+        );
         assert_eq!(stats.live_count, 4);
         assert_ne!(next_roots, roots);
         roots = next_roots;
-        expected_body = forwarding[&expected_body];
-        expected_structural = forwarding[&expected_structural];
-        expected_owner = forwarding[&expected_owner];
+        expected_body = body_now;
+        expected_structural = structural_now;
+        expected_owner = owner_now;
     }
     let Object::Interface(iface) = (unsafe { roots[0].get() }) else {
         panic!("root was not the interface")
@@ -838,12 +862,13 @@ fn class_method_bodies_are_traced_and_forwarded() {
     let mut expected_body = body_ptr;
     let mut expected_owner = package_ptr;
     for _ in 0..3 {
-        let (stats, next_roots, forwarding) = unsafe { heap.collect_garbage(&roots) };
+        let (stats, next_roots, [body_now, owner_now]) =
+            collect_following(&heap, &roots, [expected_body, expected_owner]);
         assert_eq!(stats.live_count, 3);
         assert_ne!(next_roots, roots);
         roots = next_roots;
-        expected_body = forwarding[&expected_body];
-        expected_owner = forwarding[&expected_owner];
+        expected_body = body_now;
+        expected_owner = owner_now;
     }
     let Object::Class(class) = (unsafe { roots[0].get() }) else {
         panic!("root was not the class")
@@ -934,7 +959,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
 
     // Root ONLY the future: the class must survive through the output-type
     // head alone.
-    let (stats, roots, forwarding) = unsafe { heap.collect_garbage(&[future_ptr]) };
+    let (stats, roots, [class_now]) = collect_following(&heap, &[future_ptr], [class_ptr]);
     tlab.invalidate();
     assert_eq!(stats.live_count, 2, "the class is live through the head");
 
@@ -946,7 +971,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         panic!("future returns ceased to be a class")
     };
     assert!(head.is_resolved());
-    assert_eq!(head.ptr(), forwarding[&class_ptr], "the head followed the class");
+    assert_eq!(head.ptr(), class_now, "the head followed the class");
     let Object::Class(class) = (unsafe { head.ptr().get() }) else {
         panic!("forwarded head does not point at the class")
     };
@@ -1126,9 +1151,10 @@ fn test_finalizer_is_queued_for_an_instance_of_a_runtime_class() {
 
         // Root the class and its method body: both are marked before the
         // scan that discovers the unreachable instance.
-        let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[class, cleanup]) };
+        let (_, roots, [instance_now]) =
+            collect_following(&heap, &[class, cleanup], [dead_instance]);
         tlab.invalidate();
-        assert_eq!(roots[0], forwarding[&class], "the class moved");
+        assert_ne!(roots[0], class, "the class moved");
 
         let pending = heap.take_pending_finalizers();
         assert_eq!(
@@ -1137,7 +1163,7 @@ fn test_finalizer_is_queued_for_an_instance_of_a_runtime_class() {
             "a collection must queue the dead instance"
         );
         let (kept_alive, queued_cleanup) = &pending[0];
-        assert_eq!(*kept_alive, forwarding[&dead_instance], "kept alive by copy");
+        assert_eq!(*kept_alive, instance_now, "kept alive by copy");
         assert_eq!(
             *queued_cleanup, roots[1],
             "the queued finalizer is the class's `cleanup` body"

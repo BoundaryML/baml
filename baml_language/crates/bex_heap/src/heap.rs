@@ -273,12 +273,14 @@ pub struct BexHeap {
 unsafe impl Send for BexHeap {}
 unsafe impl Sync for BexHeap {}
 
-/// After a collection, a pointer absent from its [`Restamp`] names a live
-/// object iff it is compile-time (never collected), or its cell is marked
-/// and still allocated: a pinned or large cell marked in place, or a
-/// to-space copy. A dead cell, and a moved cell's old copy, lost its start
-/// bit (a small cell) or its allocation (a large one), so the verdict is
-/// read from the block tables and large-object set, never from the memory.
+/// After a collection, a pointer names a live object iff it is compile-time
+/// (never collected), or its cell is marked and still allocated: a pinned or
+/// large cell marked in place, or a to-space copy. A dead cell, and a moved
+/// cell's old copy, lost its start bit (a small cell) or its allocation (a
+/// large one), so the verdict is read from the block tables and large-object
+/// set, never from the memory. For a holder forwarded from a [`Restamp`]
+/// after the pause; a holder walked in the pause gets its verdicts from the
+/// marker.
 ///
 /// [`Restamp`]: crate::gc::Restamp
 impl bex_vm_types::Survival for BexHeap {
@@ -803,27 +805,34 @@ impl BexHeap {
         &self.debug_state
     }
 
-    /// Repoint handles after a collection (see
-    /// [`Restamp`](crate::gc::Restamp)). Handles are roots, so every handle
-    /// target survived, and each that moved is in the map; the reverse
-    /// index is rebuilt under the new addresses.
-    pub(crate) fn update_handles(&self, restamp: &HashMap<HeapPtr, HeapPtr>) {
-        if restamp.is_empty() {
-            return;
-        }
+    /// Repoint every handle in the pause of a collection. Handles are
+    /// roots, so every handle target survived; the reverse index is rebuilt
+    /// under the new addresses when any moved.
+    ///
+    /// # Safety
+    /// Between a complete mark and the reclaim.
+    pub(crate) unsafe fn forward_handles(&self, marker: &mut crate::space::mark::Marker<'_>) {
         // LOCK ORDER: `handles` before `handles_by_ptr`.
         let mut handles = self.handles.write().expect("handles lock poisoned");
-        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
+        let mut moved_any = false;
         for ptr in handles.values_mut() {
-            if let Some(&moved) = restamp.get(ptr) {
-                *ptr = moved;
-            }
+            // SAFETY: a handle's object is a root, so it was reached.
+            let moved = unsafe { marker.forward(*ptr) };
+            moved_any |= moved != *ptr;
+            // SAFETY: stamping an address the collection just vouched for.
+            *ptr = unsafe { self.make_heap_ptr(moved.as_ptr()) };
         }
+        if !moved_any {
+            return;
+        }
+        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         let old = std::mem::take(&mut *by_ptr);
-        by_ptr.extend(
-            old.into_iter()
-                .map(|(ptr, entry)| (restamp.get(&ptr).copied().unwrap_or(ptr), entry)),
-        );
+        by_ptr.extend(old.into_iter().map(|(ptr, entry)| {
+            // SAFETY: as above.
+            let moved = unsafe { marker.forward(ptr) };
+            // SAFETY: as above.
+            (unsafe { self.make_heap_ptr(moved.as_ptr()) }, entry)
+        }));
     }
 
     /// BEP-042: a class with a `cleanup` finalizer now lives on this heap — a
@@ -940,7 +949,7 @@ impl BexHeap {
         // retire the entry in between and leave two keys for one object.
         //
         // LOCK ORDER: `handles` before `handles_by_ptr` — the order every
-        // other two-lock path takes (`release_handle`, `update_handles`).
+        // other two-lock path takes (`release_handle`, `forward_handles`).
         // Taking `handles_by_ptr` first here deadlocked against a concurrent
         // `Handle` drop (AB-BA), which the future-cleanup stress test caught.
         let mut handles = self.handles.write().expect("handles lock poisoned");

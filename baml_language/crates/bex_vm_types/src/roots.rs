@@ -147,6 +147,21 @@ impl Weak {
     }
 }
 
+/// Pointers followed weakly through a collection: each is repointed to
+/// where its object went, or nulled if the object died. For a test that
+/// wants to know where a cell it does not root ended up.
+pub struct WeakRefs(pub Vec<HeapPtr>);
+
+impl RootHaver for WeakRefs {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        for ptr in &mut self.0 {
+            if !ptr.is_null() && !visitor.visit_weak(ptr) {
+                *ptr = HeapPtr::null();
+            }
+        }
+    }
+}
+
 /// A holder of heap roots: anything that keeps heap pointers outside the heap
 /// itself and must therefore be scanned and repointed by the collector.
 ///
@@ -240,6 +255,16 @@ impl RootHaver for crate::RealizedTy {
 impl RootHaver for crate::types::TypeValue {
     fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
         self.ty.visit_roots(visitor);
+    }
+}
+
+impl<T: ?Sized + RootHaver> RootHaver for &mut T {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        (**self).visit_roots(visitor);
+    }
+
+    fn relocated(&mut self) {
+        (**self).relocated();
     }
 }
 

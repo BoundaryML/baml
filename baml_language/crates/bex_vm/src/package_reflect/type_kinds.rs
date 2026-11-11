@@ -2414,16 +2414,16 @@ class Fresh {}
         // the class kept it alive.
         let heap = Arc::clone(&vm.heap);
         let mut index = crate::package_load::DynDispatchRoot::new(Arc::clone(&vm.dynamic_dispatch));
-        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[class.ptr()]) };
-        let follow = |ptr: bex_vm_types::HeapPtr| *forwarding.get(&ptr).unwrap_or(&ptr);
+        let mut followed = bex_vm_types::WeakRefs(vec![rule]);
+        let (_, roots, _) = unsafe {
+            heap.collect_with_holder(&mut (&mut vm, (&mut index, &mut followed)), &[class.ptr()])
+        };
         assert!(
-            bex_vm_types::Survival::survived(&*heap, follow(rule)),
+            !followed.0[0].is_null() && bex_vm_types::Survival::survived(&*heap, followed.0[0]),
             "the class owns its rule"
         );
-        vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
-        index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(index.tables.rule_count(), 1);
-        let moved = TypeHead::new(follow(class.ptr()), class.tag());
+        let moved = TypeHead::new(roots[0], class.tag());
         assert!(
             crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
                 &class_ty(moved),
@@ -2435,8 +2435,7 @@ class Fresh {}
 
         // Nothing reaches the class any more: the rule goes with it.
         drop(vm);
-        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
-        index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
+        unsafe { heap.collect_with_holder(&mut index, &[]) };
         assert_eq!(index.tables.rule_count(), 0);
     }
 }

@@ -542,11 +542,11 @@ pub(crate) mod tests {
         }
 
         // SAFETY: single-threaded test; no VM is executing.
-        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
-        let follow = |ptr: HeapPtr| *forwarding.get(&ptr).unwrap_or(&ptr);
+        let mut followed = bex_vm_types::WeakRefs(vec![older, finalizer]);
+        unsafe { vm.heap.collect_with_holder(&mut followed, &[]) };
         assert_eq!(
             vm.heap.take_pending_finalizers(),
-            vec![(follow(older), follow(finalizer))]
+            vec![(followed.0[0], followed.0[1])]
         );
     }
 
