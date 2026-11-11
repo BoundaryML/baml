@@ -32,7 +32,12 @@ const size = (bytes: number) =>
       ? `${(bytes / 1000).toFixed(1)} KB`
       : `${bytes} B`;
 
-/** A value as the program sent it: purple when it's billed, struck through when it's free. */
+// Billed is purple, free is green, both bright: what you don't pay for should be as easy to see as
+// what you do.
+const FREE = '#4ade80';
+const FREE_BG = 'rgba(74,222,128,0.14)';
+
+/** A recorded value: purple when it's billed, green when it's free. */
 function Chip({
   billed,
   children,
@@ -44,17 +49,40 @@ function Chip({
 }) {
   return (
     <span
-      className={`rounded px-1 transition-[background-color,color] duration-500 ${on && !billed ? 'line-through decoration-white/30' : ''}`}
+      className="rounded px-1 transition-[background-color,color] duration-500"
       style={{
-        background: on && billed ? 'rgba(202,170,242,0.18)' : 'transparent',
-        color: !on
-          ? 'var(--color-ink)'
+        background: !on
+          ? 'transparent'
           : billed
-            ? 'var(--color-clover)'
-            : 'var(--muted)',
+            ? 'rgba(202,170,242,0.18)'
+            : FREE_BG,
+        color: !on ? 'var(--color-ink)' : billed ? 'var(--color-clover)' : FREE,
       }}
     >
       {children}
+    </span>
+  );
+}
+
+/** The tag at the end of a line: the price, or "free" in green. */
+function Tag({
+  bytes,
+  on,
+  text,
+}: {
+  bytes?: number;
+  on: boolean;
+  text?: string;
+}) {
+  return (
+    <span
+      className="shrink-0 font-sans text-[12px] transition-opacity duration-300"
+      style={{
+        color: bytes ? 'var(--color-clover)' : FREE,
+        opacity: on ? 1 : 0,
+      }}
+    >
+      {bytes ? `+${size(bytes)}` : (text ?? 'free')}
     </span>
   );
 }
@@ -113,6 +141,7 @@ function Repeated({ step }: { step: number }) {
   return (
     <Scene
       billed={billed}
+      free={sent - billed}
       left={
         <Pane title="What your program sends">
           {SENT.map((s, i) => {
@@ -132,12 +161,11 @@ function Repeated({ step }: { step: number }) {
                     {s.value}
                   </Chip>
                 </span>
-                <span
-                  className={`shrink-0 font-sans text-[12px] transition-opacity duration-300 ${isNew(i) ? 'text-clover' : 'text-muted'}`}
-                  style={{ opacity: on ? 1 : 0 }}
-                >
-                  {isNew(i) ? `+${size(s.bytes)}` : 'already stored'}
-                </span>
+                <Tag
+                  bytes={isNew(i) ? s.bytes : undefined}
+                  on={on}
+                  text="free, already stored"
+                />
               </div>
             );
           })}
@@ -156,14 +184,13 @@ function Repeated({ step }: { step: number }) {
                 <span className="text-ink">{s.value}</span>
               </span>
               <span className="shrink-0 font-sans text-[12px] text-muted">
-                {hit === s.hash ? 'match' : size(s.bytes)}
+                {hit === s.hash ? 'match, free' : size(s.bytes)}
               </span>
             </div>
           ))}
         </Pane>
       }
       say="We fingerprint every value by its content. Send the same prompt again and the fingerprint matches what’s stored, so it isn’t billed again."
-      sent={sent}
     />
   );
 }
@@ -350,6 +377,7 @@ function Images({ step }: { step: number }) {
       )}
       <Scene
         billed={billed}
+        free={sent - billed}
         left={
           <Pane title="What your program sends">
             {CALLS.map((images, call) => (
@@ -379,14 +407,17 @@ function Images({ step }: { step: number }) {
                         ring={on && !fresh && hit === pic}
                       />
                       <span
-                        className={`absolute top-full left-1/2 mt-1 -translate-x-1/2 text-center font-sans text-[10px] leading-tight transition-opacity ${fresh ? 'text-clover' : 'text-muted'}`}
-                        style={{ opacity: on ? 1 : 0 }}
+                        className="absolute top-full left-1/2 mt-1 -translate-x-1/2 text-center font-sans text-[10px] leading-tight transition-opacity"
+                        style={{
+                          color: fresh ? 'var(--color-clover)' : FREE,
+                          opacity: on ? 1 : 0,
+                        }}
                       >
                         <span className="block font-mono text-ink-2">
                           #{PICS[pic].hash}
                         </span>
                         <span className="block whitespace-nowrap">
-                          {fresh ? `+${size(PICS[pic].bytes)}` : 'stored'}
+                          {fresh ? `+${size(PICS[pic].bytes)}` : 'free'}
                         </span>
                       </span>
                     </span>
@@ -415,139 +446,159 @@ function Images({ step }: { step: number }) {
                   </span>
                 </span>
                 <span className="shrink-0 font-sans text-[12px] text-muted">
-                  {hit === pic ? 'match' : size(PICS[pic].bytes)}
+                  {hit === pic ? 'match, free' : size(PICS[pic].bytes)}
                 </span>
               </div>
             ))}
           </Pane>
         }
         say="We fingerprint every image by its content. The same logo on every call has the same fingerprint, so it’s stored once and billed once."
-        sent={sent}
       />
     </div>
   );
 }
 
-// ---------- what counts ----------
+// ---------- what you pay for ----------
 
-// The call around the value: its timing and identity, recorded and stored, never billed.
-const CALL = [
-  { label: 'function', value: 'draft_reply(ticket)' },
-  { label: 'started', value: '10:42:07.118' },
-  { label: 'took', value: '1.84s' },
-];
+// Everything one call records, in the order it lands. Free lines are the call's identity and timing
+// and the type it uses; billed lines are a field's value, and that field's name rides along free.
+// The free sizes are rough: enough to show how much comes along at no charge.
+type Rec =
+  | { bytes: number; key: string; kind: 'call' }
+  | {
+      bytes: number;
+      kind: 'field';
+      name: string;
+      nameBytes: number;
+      value: string;
+    };
 
-const FIELDS = [
-  { bytes: 4, name: 'ticket_id', value: '4812' },
-  { bytes: 11, name: 'customer_email', value: '"sam@acme.co"' },
-  { bytes: 4, name: 'priority', value: 'High' },
-  { bytes: 21, name: 'body', value: '"My refund came twice."' },
+const RECORD: Rec[] = [
+  { bytes: 19, key: 'function  draft_reply(ticket)', kind: 'call' },
+  { bytes: 16, key: 'started   10:42:07.118', kind: 'call' },
+  { bytes: 8, key: 'took      1.84s', kind: 'call' },
+  { bytes: 64, key: 'type      class Ticket { … }', kind: 'call' },
+  { bytes: 4, kind: 'field', name: 'ticket_id', nameBytes: 9, value: '4812' },
+  {
+    bytes: 11,
+    kind: 'field',
+    name: 'customer_email',
+    nameBytes: 14,
+    value: '"sam@acme.co"',
+  },
+  { bytes: 4, kind: 'field', name: 'priority', nameBytes: 8, value: 'High' },
+  {
+    bytes: 21,
+    kind: 'field',
+    name: 'body',
+    nameBytes: 4,
+    value: '"My refund came twice."',
+  },
 ];
 const LONG = 'customer_email_address_on_file';
-// The call info, one step per field, then the rename.
-const COUNT_STEPS = FIELDS.length + 2;
+// One step per record, then the rename.
+const COUNT_STEPS = RECORD.length + 1;
 
 function Counts({ step }: { step: number }) {
-  const callOn = step >= 1;
-  const fieldsOn = Math.max(0, step - 1);
-  const renamed = step > FIELDS.length + 1;
-  const name = (i: number) =>
-    renamed && i === 1 ? LONG : (FIELDS[i]?.name ?? '');
-  const billed = FIELDS.slice(0, fieldsOn).reduce((sum, f) => sum + f.bytes, 0);
-  const label = (text: string) => (
-    <p className="font-sans text-[11px] text-muted uppercase tracking-[0.08em]">
-      {text}
-    </p>
+  const renamed = step > RECORD.length;
+  const seen = RECORD.slice(0, step);
+  const billed = seen.reduce(
+    (sum, r) => sum + (r.kind === 'field' ? r.bytes : 0),
+    0,
   );
+  const free = seen.reduce(
+    (sum, r) =>
+      sum +
+      (r.kind === 'call'
+        ? r.bytes
+        : renamed && r.name === 'customer_email'
+          ? LONG.length
+          : r.nameBytes),
+    0,
+  );
+  const fieldsSeen = seen.filter((r) => r.kind === 'field');
   return (
     <Scene
       billed={billed}
+      free={free}
       left={
-        <Pane title="What your program records">
-          <div
-            className="flex items-center justify-between gap-3 transition-opacity duration-500"
-            style={{ opacity: callOn ? 1 : 0.25 }}
-          >
-            <span className="min-w-0 truncate text-muted">
-              draft_reply(ticket) · 1.84s
-            </span>
-            <span
-              className="shrink-0 font-sans text-[12px] text-muted transition-opacity duration-300"
-              style={{ opacity: callOn ? 1 : 0 }}
-            >
-              free
-            </span>
-          </div>
-          <div className="text-muted">ticket = Ticket {'{'}</div>
-          {FIELDS.map((f, i) => {
-            const on = i < fieldsOn;
+        <Pane title="What one call records">
+          {RECORD.map((r, i) => {
+            const on = i < step;
+            if (r.kind === 'call')
+              return (
+                <div
+                  className="flex items-center justify-between gap-3 transition-opacity duration-500"
+                  key={r.key}
+                  style={{ opacity: on ? 1 : 0.25 }}
+                >
+                  <span className="min-w-0 truncate whitespace-pre">
+                    <Chip billed={false} on={on}>
+                      {r.key}
+                    </Chip>
+                  </span>
+                  <Tag on={on} />
+                </div>
+              );
+            const name = renamed && r.name === 'customer_email' ? LONG : r.name;
             return (
               <div
                 className="flex items-center justify-between gap-3 transition-opacity duration-500"
-                key={f.name}
+                key={r.name}
                 style={{ opacity: on ? 1 : 0.25 }}
               >
                 <span className="min-w-0 truncate whitespace-pre">
-                  <span
-                    className={renamed && i === 1 ? 'text-ink-2' : 'text-muted'}
-                  >
-                    {'  '}
-                    {name(i)}:{' '}
-                  </span>
+                  <Chip billed={false} on={on}>
+                    {`${name}:`}
+                  </Chip>{' '}
                   <Chip billed on={on}>
-                    {f.value}
+                    {r.value}
                   </Chip>
                 </span>
-                <span
-                  className="shrink-0 font-sans text-[12px] text-clover transition-opacity duration-300"
-                  style={{ opacity: on ? 1 : 0 }}
-                >
-                  +{f.bytes} B
-                </span>
+                <Tag bytes={r.bytes} on={on} />
               </div>
             );
           })}
-          <div className="text-muted">{'}'}</div>
         </Pane>
       }
       right={
         <Pane title="What we store">
-          {label('The call, free')}
-          <div
-            className="transition-opacity duration-500"
-            style={{ opacity: callOn ? 1 : 0.25 }}
+          <p
+            className="font-sans text-[11px] uppercase tracking-[0.08em]"
+            style={{ color: FREE }}
           >
-            {CALL.map((c) => (
-              <div className="truncate whitespace-pre text-muted" key={c.label}>
-                {c.label.padEnd(9)}
-                <span className="text-ink-2">{c.value}</span>
-              </div>
+            Free
+          </p>
+          <ul className="font-sans text-[13px] leading-relaxed text-ink-2">
+            {[
+              ['The call: name, start, duration', step >= 3],
+              ['The type, stored once for every call', step >= 4],
+              ['Field names, as short IDs', fieldsSeen.length > 0],
+            ].map(([text, on]) => (
+              <li
+                className="flex items-center gap-2 transition-opacity duration-500"
+                key={String(text)}
+                style={{ opacity: on ? 1 : 0.25 }}
+              >
+                <span style={{ color: FREE }}>✓</span>
+                {text}
+              </li>
             ))}
-          </div>
-          <div className="mt-2">{label('The schema, once, free')}</div>
-          <div className="break-words text-muted">
-            class Ticket {'{ '}
-            {FIELDS.map((f, i) => (
-              <span key={f.name}>
-                <span className="text-ink-2">{i + 1}</span>{' '}
-                <span
-                  className={`transition-colors duration-500 ${renamed && i === 1 ? 'text-clover' : ''}`}
-                >
-                  {name(i)}
-                </span>
-                {i < FIELDS.length - 1 ? ', ' : ''}
-              </span>
-            ))}
-            {' }'}
-          </div>
-          <div className="mt-2">{label('The values, billed')}</div>
+          </ul>
+          <p className="mt-4 font-sans text-[11px] uppercase tracking-[0.08em] text-clover">
+            Billed
+          </p>
           <div className="break-words">
             <span className="text-muted">{'{ '}</span>
-            {FIELDS.slice(0, fieldsOn).map((f, i) => (
-              <span key={f.name}>
+            {fieldsSeen.map((r, i) => (
+              <span key={r.kind === 'field' ? r.name : i}>
                 <span className="text-ink-2">{i + 1}:</span>
-                <span className="text-clover">{f.value}</span>
-                {i < fieldsOn - 1 && <span className="text-muted">, </span>}
+                <span className="text-clover">
+                  {r.kind === 'field' ? r.value : ''}
+                </span>
+                {i < fieldsSeen.length - 1 && (
+                  <span className="text-muted">, </span>
+                )}
               </span>
             ))}
             <span className="text-muted">{' }'}</span>
@@ -556,10 +607,10 @@ function Counts({ step }: { step: number }) {
       }
       say={
         renamed
-          ? 'Renamed to customer_email_address_on_file: the schema changes once, the values don’t, and neither does the bill.'
-          : step <= 1
-            ? 'Every call’s timing and identity are recorded and stored for free.'
-            : 'You pay for the content: 4812, not ticket_id. The schema is stored once, and each value points at it with a short ID.'
+          ? 'Renamed to customer_email_address_on_file. More free, same bill.'
+          : step <= 4
+            ? 'The call’s name, timing and types come along free.'
+            : 'You pay for the values. Their field names come along free.'
       }
     />
   );
@@ -569,16 +620,16 @@ function Counts({ step }: { step: number }) {
 
 function Scene({
   billed,
+  free,
   left,
   right,
   say,
-  sent,
 }: {
   billed: number;
+  free: number;
   left: ReactNode;
   right: ReactNode;
   say: string;
-  sent?: number;
 }) {
   return (
     <>
@@ -586,17 +637,21 @@ function Scene({
         {left}
         {right}
       </div>
-      <div className="grid gap-4 border-t border-rule bg-white/[0.02] px-5 py-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-8">
+      <div className="grid gap-4 border-t border-rule bg-white/[0.02] px-5 py-4 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:items-center sm:gap-8">
         <div>
           <p className="text-[12px] text-muted">Billed</p>
           <p className="mt-0.5 font-display text-[32px] leading-none font-medium text-clover tabular-nums">
             {size(billed)}
           </p>
-          {sent !== undefined && (
-            <p className="mt-1 text-[12px] text-muted tabular-nums">
-              of {size(sent)} sent
-            </p>
-          )}
+        </div>
+        <div>
+          <p className="text-[12px] text-muted">Free</p>
+          <p
+            className="mt-0.5 font-display text-[32px] leading-none font-medium tabular-nums"
+            style={{ color: FREE }}
+          >
+            {size(free)}
+          </p>
         </div>
         <p className="text-[14px] text-head">{say}</p>
       </div>
