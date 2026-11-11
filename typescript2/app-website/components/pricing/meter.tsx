@@ -24,7 +24,8 @@ import { useReducedMotion, useVisible } from '@/components/home/pinned';
 // Sizes are kept round enough to follow; the hashes are made up.
 
 const STEP_MS = 1300;
-const HOLD_MS = 5000;
+// The pause before the next scene: one more bar, at half the steps' pace.
+const HOLD_MS = STEP_MS * 2;
 
 const size = (bytes: number) =>
   bytes >= 1_000_000
@@ -697,7 +698,9 @@ export function Meter() {
     setStep(reduce ? SCENES[i].steps : 0);
     setPlaying(true);
   };
-  const next = SCENES[scene + 1];
+  // After the last scene, next is the first.
+  const nextIndex = (scene + 1) % SCENES.length;
+  const next = SCENES[nextIndex];
 
   const View = current.View;
   return (
@@ -772,24 +775,31 @@ export function Meter() {
               type="button"
             />
           ))}
+          {/* One more bar, twice a step's length, that fills on the way to the next scene. */}
+          {auto && (
+            <span className="relative h-1.5 flex-[2] overflow-hidden rounded-full bg-white/10">
+              {done && playing && visible && (
+                <span
+                  className="meter-next absolute inset-y-0 left-0 rounded-full bg-white/40"
+                  key={scene}
+                  style={{ animationDuration: `${HOLD_MS}ms` }}
+                />
+              )}
+              <style>
+                {
+                  '.meter-next{width:0;animation-name:meter-next;animation-timing-function:linear;animation-fill-mode:forwards}@keyframes meter-next{to{width:100%}}'
+                }
+              </style>
+            </span>
+          )}
         </div>
-        {next ? (
-          <button
-            className="cursor-pointer whitespace-nowrap text-ink-2 transition-colors hover:text-head"
-            onClick={() => go(scene + 1)}
-            type="button"
-          >
-            Next: {next.title} →
-          </button>
-        ) : (
-          <button
-            className="cursor-pointer whitespace-nowrap text-ink-2 transition-colors hover:text-head"
-            onClick={() => go(0)}
-            type="button"
-          >
-            Start over
-          </button>
-        )}
+        <button
+          className="cursor-pointer whitespace-nowrap text-ink-2 transition-colors hover:text-head"
+          onClick={() => go(nextIndex)}
+          type="button"
+        >
+          Next: {next.title} →
+        </button>
       </div>
     </div>
   );
