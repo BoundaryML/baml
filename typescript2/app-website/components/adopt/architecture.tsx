@@ -2109,11 +2109,6 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           . Seriously, ask Claude to download BAML and ask it to be ambitious
           with it.
         </p>
-        <p className="mt-4 max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
-          We’re building something no one has built before: a language, its
-          runtime, and the whole toolchain around them. So our time goes to the
-          teams already shipping on it, and to engineering.
-        </p>
         <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
           {/* biome-ignore lint/performance/noImgElement: a small static photo */}
           <img
