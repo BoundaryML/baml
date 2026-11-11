@@ -1,4 +1,4 @@
 version: 1
 previews:
-  refs: ["*/*-template-*"]
+  refs: ["*/trunk-template-*"]
   ttl_days: 7
