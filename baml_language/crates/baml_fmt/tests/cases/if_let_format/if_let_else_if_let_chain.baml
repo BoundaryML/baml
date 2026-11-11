@@ -1,0 +1,9 @@
+function f(r: int | string | bool) -> string {
+    if let v: int = r {
+        "int"
+    } else if let v: string = r {
+        v
+    } else {
+        "bool"
+    }
+}

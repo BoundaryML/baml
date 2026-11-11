@@ -1,0 +1,19 @@
+/// Documents `Int`.
+///
+/// Across a paragraph.
+
+class Int {
+    /// A field.
+
+    value: int,
+
+    /// A method, no blank line.
+    function get(self) -> int {
+        self.value
+    }
+}
+
+/// No blank line here.
+function f() -> int {
+    1
+}

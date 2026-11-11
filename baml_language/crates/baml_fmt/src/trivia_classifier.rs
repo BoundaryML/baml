@@ -1,14 +1,28 @@
 use std::collections::HashMap;
 
-use baml_db::baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+use baml_syntax::{
+    nodes::FileTree,
+    token::{TokenKind, Tokens},
+};
 use ouroboros::self_referencing;
-use rowan::{TextRange, TextSize};
+use text_size::{TextRange, TextSize};
 
-use crate::printer::Printable;
+use crate::printer::Spanned;
 
 /// Represents all the trivia attached to tokens or EOF.
 pub struct TriviaInfo {
     inner: TriviaInfoInner,
+}
+
+/// One token as the classification sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scanned {
+    Newline,
+    Whitespace,
+    LineComment(TextRange),
+    BlockComment(TextRange),
+    /// A token a node owns; trivia attaches to it.
+    Significant(TextRange),
 }
 
 #[self_referencing]
@@ -27,26 +41,54 @@ impl TriviaInfo {
     /// The output will always be sorted with regard to the range they are attached to (with EOF being later than everything else),
     /// then ordered by the location of the order the trivia should be emitted (based on the order in the input).
     #[must_use]
-    pub fn classify_trivia(root: &SyntaxNode) -> Self {
+    pub fn classify(tokens: &Tokens) -> Self {
+        Self::from_scan(tokens.iter().map(|idx| {
+            let range = tokens.range(idx);
+            match tokens.kind(idx) {
+                TokenKind::Newline => Scanned::Newline,
+                TokenKind::Whitespace => Scanned::Whitespace,
+                TokenKind::LineComment => Scanned::LineComment(range),
+                // The formatter refuses a parse with errors, and an unclosed
+                // `/*` is one, so the unclosed kind is read like a closed one.
+                TokenKind::BlockComment | TokenKind::UnclosedBlockComment => {
+                    Scanned::BlockComment(range)
+                }
+                // Everything else is owned by a node and printed by it: `///`
+                // docs and `//baml:` directives by the declaration they
+                // precede, a `//#` header as the statement it is (trivia to
+                // the parser's cursor, a node in the tree).
+                kind => {
+                    debug_assert!(
+                        !kind.is_trivia() || kind == TokenKind::HeaderComment,
+                        "Unexpected trivia token kind {kind:?} in the catch-all non-trivia branch. This means a new trivia token kind was added without updating this match statement."
+                    );
+                    Scanned::Significant(range)
+                }
+            }
+        }))
+    }
+
+    /// Attaches every comment and blank line to the significant token it
+    /// precedes (leading) or follows on its line (trailing).
+    fn from_scan(scan: impl Iterator<Item = Scanned>) -> Self {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         enum AttachTriviaToNext {
             LineComment(TextRange),
             BlockComment(TextRange),
             Newline,
         }
-        let mut found_trivia = Vec::new();
 
+        let mut found_trivia = Vec::new();
         let mut prev_non_trivia_on_line: Option<TextRange> = None;
         let mut has_comment_on_line = false;
         let mut trivia_to_attach_next = Vec::new();
 
-        let mut next = root.first_token();
-        while let Some(token) = next {
-            next = token.next_token();
-            match token.kind() {
-                SyntaxKind::NEWLINE => {
+        let mut scan = scan.peekable();
+        while let Some(scanned) = scan.next() {
+            let next = scan.peek().copied();
+            match scanned {
+                Scanned::Newline => {
                     if !has_comment_on_line && prev_non_trivia_on_line.is_none() {
-                        // terminated line is empty except for maybe whitespace
                         if !trivia_to_attach_next.ends_with(&[AttachTriviaToNext::Newline]) {
                             trivia_to_attach_next.push(AttachTriviaToNext::Newline);
                         }
@@ -54,62 +96,51 @@ impl TriviaInfo {
                     has_comment_on_line = false;
                     prev_non_trivia_on_line = None;
                 }
-                SyntaxKind::LINE_COMMENT => {
+                Scanned::LineComment(range) => {
                     if let Some(prev) = prev_non_trivia_on_line {
                         debug_assert!(
-                            next.is_none()
-                                || next
-                                    .as_ref()
-                                    .is_some_and(|next| next.kind() == SyntaxKind::NEWLINE),
+                            next.is_none_or(|next| next == Scanned::Newline),
                             "We expect a newline after a line comment",
                         );
                         found_trivia.push(EmittableTrivia::TrailingLineComment {
-                            comment: token.text_range(),
+                            comment: range,
                             after: prev,
                         });
                     } else {
-                        trivia_to_attach_next
-                            .push(AttachTriviaToNext::LineComment(token.text_range()));
+                        trivia_to_attach_next.push(AttachTriviaToNext::LineComment(range));
                     }
                     has_comment_on_line = true;
                 }
-                SyntaxKind::BLOCK_COMMENT => {
+                Scanned::BlockComment(range) => {
                     if let Some(prev) = prev_non_trivia_on_line {
                         found_trivia.push(EmittableTrivia::TrailingBlockComment {
-                            comment: token.text_range(),
+                            comment: range,
                             after: prev,
                         });
                     } else {
-                        trivia_to_attach_next
-                            .push(AttachTriviaToNext::BlockComment(token.text_range()));
+                        trivia_to_attach_next.push(AttachTriviaToNext::BlockComment(range));
                     }
                     has_comment_on_line = true;
                 }
-                SyntaxKind::WHITESPACE => {}
-                kind => {
-                    debug_assert!(
-                        !kind.is_trivia(),
-                        "Unexpected trivia token kind {kind:?} in the catch-all non-trivia branch. This means a new trivia token kind was added without updating this match statement."
-                    );
-                    prev_non_trivia_on_line = Some(token.text_range());
+                Scanned::Whitespace => {}
+                Scanned::Significant(range) => {
+                    prev_non_trivia_on_line = Some(range);
                     for trivia in trivia_to_attach_next.drain(..) {
                         match trivia {
                             AttachTriviaToNext::LineComment(comment) => {
                                 found_trivia.push(EmittableTrivia::LeadingLineComment {
                                     comment,
-                                    before: token.text_range(),
+                                    before: range,
                                 });
                             }
                             AttachTriviaToNext::BlockComment(comment) => {
                                 found_trivia.push(EmittableTrivia::LeadingBlockComment {
                                     comment,
-                                    before: token.text_range(),
+                                    before: range,
                                 });
                             }
                             AttachTriviaToNext::Newline => {
-                                found_trivia.push(EmittableTrivia::EmptyLine {
-                                    before: token.text_range(),
-                                });
+                                found_trivia.push(EmittableTrivia::EmptyLine { before: range });
                             }
                         }
                     }
@@ -117,7 +148,6 @@ impl TriviaInfo {
             }
         }
 
-        // trivia at end:
         for trivia in trivia_to_attach_next {
             match trivia {
                 AttachTriviaToNext::LineComment(comment)
@@ -217,7 +247,7 @@ impl TriviaInfo {
         (leading, trailing)
     }
 
-    /// Returns the leading trivia for [`Printable::leftmost_token`] and the trailing trivia for [`Printable::rightmost_token`].
+    /// Returns the leading trivia for [`Spanned::leftmost_token`] and the trailing trivia for [`Spanned::rightmost_token`].
     ///
     /// This can be more efficient than calling [`Self::get_for_range_split`] on each separately,
     /// since it will only split the trivia for the element once if has only one token (leftmost == rightmost).
@@ -225,10 +255,11 @@ impl TriviaInfo {
     #[must_use]
     pub fn get_for_element(
         &self,
-        printable: &impl Printable,
+        tree: &FileTree,
+        printable: impl Spanned,
     ) -> (&[EmittableTrivia], &[EmittableTrivia]) {
-        let leftmost = printable.leftmost_token();
-        let rightmost = printable.rightmost_token();
+        let leftmost = printable.leftmost_token(tree);
+        let rightmost = printable.rightmost_token(tree);
         if leftmost == rightmost {
             self.get_for_range_split(leftmost)
         } else {
@@ -238,21 +269,29 @@ impl TriviaInfo {
         }
     }
 
-    /// Returns the leading trivia for [`Printable::leftmost_token`]
+    /// Returns the leading trivia for [`Spanned::leftmost_token`]
     ///
     /// Similar to [`Self::get_for_element`], but only returns the leading trivia.
     #[must_use]
-    pub fn get_leading_for_element(&self, printable: &impl Printable) -> &[EmittableTrivia] {
-        let leftmost = printable.leftmost_token();
+    pub fn get_leading_for_element(
+        &self,
+        tree: &FileTree,
+        printable: impl Spanned,
+    ) -> &[EmittableTrivia] {
+        let leftmost = printable.leftmost_token(tree);
         self.get_for_range_split(leftmost).0
     }
 
-    /// Returns the trailing trivia for [`Printable::rightmost_token`]
+    /// Returns the trailing trivia for [`Spanned::rightmost_token`]
     ///
     /// Similar to [`Self::get_for_element`], but only returns the trailing trivia.
     #[must_use]
-    pub fn get_trailing_for_element(&self, printable: &impl Printable) -> &[EmittableTrivia] {
-        let rightmost = printable.rightmost_token();
+    pub fn get_trailing_for_element(
+        &self,
+        tree: &FileTree,
+        printable: impl Spanned,
+    ) -> &[EmittableTrivia] {
+        let rightmost = printable.rightmost_token(tree);
         self.get_for_range_split(rightmost).1
     }
 
@@ -474,8 +513,6 @@ impl TriviaSliceExt for [EmittableTrivia] {
 
 #[cfg(test)]
 mod tests {
-    use baml_db::{baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax::SyntaxNode};
-
     use super::*;
 
     #[test]
@@ -496,12 +533,9 @@ function MyFunction() -> int {
 // comment before eof
 
 ";
-        let (db, source_file) = crate::single_file_db("file.baml", source);
-        let tokens = baml_compiler_lexer::lex_file(&db, source_file);
-        let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
-        assert!(errors.is_empty());
-        let ast = SyntaxNode::new_root(parsed);
-        let trivia = TriviaInfo::classify_trivia(&ast);
+        let parsed = baml_parser::parse(source);
+        assert!(parsed.errors.is_empty());
+        let trivia = TriviaInfo::classify(parsed.tree.tokens());
         let trivia = trivia.all_trivia();
 
         assert_eq!(

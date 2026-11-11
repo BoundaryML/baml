@@ -1,431 +1,22 @@
-//! Pure structural CST → AST lowering.
-//!
-//! One function per item kind. Type expressions are fully lowered to recursive
-//! `TypeExpr`. Expression bodies are fully lowered to `ExprBody` arenas with a
-//! parallel `AstSourceMap`. Missing names skip the item (`return None`), missing
-//! types produce `TypeExprKind::Missing`.
-//!
-//! No LLM function expansion, no attribute validation, no duplicate detection —
-//! all of that moves downstream.
+//! Item-level desugarings shared by every reader: the `$init_test` registrar
+//! synthesis, the LLM client and prompt rules, the injected `@spec` parameters.
+//! The tree readers live in `lower_tree`.
 
 use baml_base::{Name, Path, compiler_path};
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
-use rowan::ast::AstNode;
+use text_size::TextRange;
 
 use crate::{
-    DeclarativeMeta, LoweringDiagnostic,
+    LoweringDiagnostic,
     ast::{
-        AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
-        FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
-        ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
-        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TypeAliasDef, TypeExpr,
-        TypeExprKind, VariantDef,
+        CallArg, Expr, ExprId, FunctionBodyDef, FunctionDef, FunctionDefaults, LambdaDef,
+        LambdaKind, Param, TypeExprKind,
     },
-    companions::expand_companions,
-    lower_expr_body, lower_type_expr,
+    lower_expr_body,
 };
-
-// ── Test/Testset desugaring intermediate types ───────────────────
-
-/// Intermediate representation of a test/testset block before synthesis.
-///
-/// Collected during file lowering, then passed to `synthesize_init_test_function`
-/// which emits a per-file `$init_test_<path>` function registering each with
-/// the collector it is handed (`register_test` / `register_test_set`).
-enum TestRegistrationItem {
-    Test {
-        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
-        name_element: baml_compiler_syntax::SyntaxElement,
-        /// The `BLOCK_EXPR` CST node for the test body — lowered lazily into a lambda.
-        body_node: SyntaxNode,
-        /// Optional runner expression element from `with <expr>`.
-        /// May be a node (e.g. `CALL_EXPR`) or a token (e.g. `INTEGER_LITERAL`).
-        runner_element: Option<baml_compiler_syntax::SyntaxElement>,
-    },
-    TestSet {
-        /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
-        name_element: baml_compiler_syntax::SyntaxElement,
-        /// The `BLOCK_EXPR` body node of the testset — lowered as a collector lambda body.
-        /// May contain setup statements (let bindings), for/if blocks, and nested test/testset.
-        body_node: SyntaxNode,
-        /// Optional runner expression element from `with <expr>`.
-        runner_element: Option<baml_compiler_syntax::SyntaxElement>,
-    },
-}
-
-// ── File-level lowering ─────────────────────────────────────────
-
-/// Lower a CST root node to a list of `Item`s.
-///
-/// After this returns, the CST is no longer needed — all structural content
-/// is owned by the returned `Item`s.
-///
-/// All diagnostics (structural lowering issues, client validation) are
-/// returned as `LoweringDiagnostic` variants.
-pub fn lower_file(
-    root: &SyntaxNode,
-) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    lower_file_with_path(root, None)
-}
-
-pub fn lower_file_with_path(
-    root: &SyntaxNode,
-    file_path: Option<&std::path::Path>,
-) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    lower_file_with_path_and_test_owner(root, file_path, None)
-}
-
-/// Variant used by project-aware lowering, where the HIR layer already knows
-/// the exact BAML namespace derived from the project root. Keeping the owner an
-/// input avoids accidentally treating an absolute ancestor named `ns_*` as a
-/// user namespace.
-pub fn lower_file_with_path_and_test_owner(
-    root: &SyntaxNode,
-    file_path: Option<&std::path::Path>,
-    test_owner: Option<&str>,
-) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, false)
-}
-
-/// Lower compiler-generated source for a `Session.eval` submission.
-///
-/// Session lowering rewrites persistent bindings into root lets before the
-/// transient source reaches HIR. This entry point is intentionally separate
-/// from ordinary file lowering so user-authored file-scope lets stay rejected.
-pub fn lower_session_file_with_path_and_test_owner(
-    root: &SyntaxNode,
-    file_path: Option<&std::path::Path>,
-    test_owner: Option<&str>,
-) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, true)
-}
-
-fn lower_file_with_path_and_test_owner_impl(
-    root: &SyntaxNode,
-    file_path: Option<&std::path::Path>,
-    test_owner: Option<&str>,
-    is_session_submission: bool,
-) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    let mut diags = Vec::new();
-    crate::docstring::reject_unsupported_trace_hooks(root, &mut diags);
-    let mut env_var_refs = Vec::new();
-    let mut items = Vec::new();
-    let mut test_registrations: Vec<TestRegistrationItem> = Vec::new();
-
-    for child in root.children() {
-        match child.kind() {
-            baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
-                if let Some(func) = lower_function(&child, &mut diags, &mut env_var_refs, None) {
-                    let companions = expand_companions(&func, None, &[]);
-                    items.push(Item::Function(func));
-                    items.extend(companions.into_iter().map(Item::Function));
-                }
-            }
-            baml_compiler_syntax::SyntaxKind::CLASS_DEF => {
-                if let Some(class) = lower_class(&child, &mut diags, &mut env_var_refs) {
-                    items.push(Item::Class(class));
-                }
-            }
-            baml_compiler_syntax::SyntaxKind::ENUM_DEF => {
-                if let Some(e) = lower_enum(&child, &mut diags) {
-                    items.push(Item::Enum(e));
-                }
-            }
-            baml_compiler_syntax::SyntaxKind::INTERFACE_DEF => {
-                if let Some(i) = lower_interface(&child, &mut diags, &mut env_var_refs) {
-                    items.push(Item::Interface(i));
-                }
-            }
-            baml_compiler_syntax::SyntaxKind::TYPE_ALIAS_DEF => {
-                if let Some(ta) = lower_type_alias(&child, &mut diags) {
-                    items.push(Item::TypeAlias(ta));
-                }
-            }
-            baml_compiler_syntax::SyntaxKind::CLIENT_VALUE_DEF => {
-                if let Some(let_item) =
-                    lower_client_value_def(&child, &mut diags, &mut env_var_refs)
-                {
-                    items.push(let_item);
-                }
-            }
-            baml_compiler_syntax::SyntaxKind::CLIENT_DEF => {
-                // Legacy `client<llm> Name { ... }` config block: removed in
-                // the single-path world. Parse succeeded so the error is one
-                // targeted diagnostic, not a cascade.
-                let def = ast::ClientDef::cast(child.clone());
-                let name = def
-                    .as_ref()
-                    .and_then(ast::ClientDef::name)
-                    .map_or_else(|| "MyClient".to_string(), |t| t.text().to_string());
-                // The block's own `provider`, so the suggested replacement
-                // names the client class that speaks to it rather than
-                // defaulting every migration to OpenAI.
-                let provider = def.as_ref().and_then(|c| {
-                    c.config_block()?
-                        .items()
-                        .find(|item| item.key().is_some_and(|key| key.text() == "provider"))?
-                        .value_str()
-                });
-                diags.push(LoweringDiagnostic::ClientBlockRemoved {
-                    name,
-                    provider,
-                    span: child.span_range(),
-                });
-            }
-            baml_compiler_syntax::SyntaxKind::TEST_EXPR_DEF => {
-                if let Some(reg) = lower_test_expr(&child) {
-                    test_registrations.push(reg);
-                }
-            }
-            baml_compiler_syntax::SyntaxKind::TESTSET_DEF => {
-                if let Some(reg) = lower_testset(&child) {
-                    test_registrations.push(reg);
-                }
-            }
-            baml_compiler_syntax::SyntaxKind::GENERATOR_DEF => {
-                diags.push(lower_generator_deprecation(&child));
-            }
-            baml_compiler_syntax::SyntaxKind::TEMPLATE_STRING_DEF => {
-                diags.push(LoweringDiagnostic::TemplateStringRemoved {
-                    span: child.span_range(),
-                });
-            }
-            baml_compiler_syntax::SyntaxKind::RETRY_POLICY_DEF => {
-                // Legacy `retry_policy` block: retry composes at the client
-                // boundary now (ai.Retry).
-                let name = ast::RetryPolicyDef::cast(child.clone())
-                    .and_then(|r| r.name())
-                    .map_or_else(|| "policy".to_string(), |t| t.text().to_string());
-                diags.push(LoweringDiagnostic::RetryPolicyRemoved {
-                    name,
-                    span: child.span_range(),
-                });
-            }
-            baml_compiler_syntax::SyntaxKind::LET_STMT => {
-                let surface = if is_session_submission {
-                    lower_expr_body::TopLevelLetSurface::Session
-                } else {
-                    lower_expr_body::TopLevelLetSurface::Source
-                };
-                if let Some(let_item) = lower_expr_body::lower_top_level_let(
-                    &child,
-                    surface,
-                    &mut diags,
-                    &mut env_var_refs,
-                ) {
-                    items.push(Item::Let(let_item));
-                }
-            }
-            // `let type` binds a runtime type for the rest of a block, and a
-            // file has no block for it to bind in.
-            baml_compiler_syntax::SyntaxKind::TYPE_BINDING_STMT => {
-                diags.push(LoweringDiagnostic::TopLevelLetType {
-                    span: child.span_range(),
-                });
-            }
-            baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
-                if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
-                    items.push(Item::ImplementsFor(imp));
-                }
-            }
-            _ => {} // skip comments, whitespace, errors
-        }
-    }
-
-    // BEP-044: merge top-level `implements I for T` items into the target
-    // class when `T` names a local class. Targets declared in another file,
-    // primitives, and fixed-shape types must remain as first-class
-    // implementation records for later package-level resolution.
-    let impl_fors: Vec<ImplementsForDef> = items
-        .iter()
-        .filter_map(|item| match item {
-            Item::ImplementsFor(imp) => Some(imp.clone()),
-            _ => None,
-        })
-        .collect();
-    items.retain(|item| !matches!(item, Item::ImplementsFor(_)));
-    for imp in impl_fors {
-        if !imp.generic_params.is_empty() {
-            items.push(Item::ImplementsFor(imp));
-            continue;
-        }
-        let target_name = match &imp.for_target.kind {
-            crate::ast::TypeExprKind::Path {
-                path, generic_args, ..
-            } if path.len() == 1 && generic_args.is_empty() => path.first().cloned(),
-            _ => None,
-        };
-        if let Some(target_name) = target_name {
-            let target_class = items.iter_mut().find_map(|item| {
-                if let Item::Class(class) = item
-                    && class.name == target_name
-                {
-                    Some(class)
-                } else {
-                    None
-                }
-            });
-            if let Some(class) = target_class {
-                class.implements.push(ImplementsBlockDef {
-                    target: imp.interface_target,
-                    field_links: imp.field_links,
-                    associated_type_bindings: imp.associated_type_bindings,
-                    methods: imp.methods,
-                    is_out_of_body: true,
-                    span: imp.span,
-                });
-            } else {
-                items.push(Item::ImplementsFor(imp));
-            }
-        } else {
-            items.push(Item::ImplementsFor(imp));
-        }
-    }
-
-    // Synthesize a per-file $init_test function for all collected test/testset registrations.
-    // The path-derived suffix keeps the name unique across files while staying
-    // stable across compilations (unlike a load-order file id).
-    if !test_registrations.is_empty() {
-        let init_fn = synthesize_init_test_function(
-            &test_registrations,
-            file_path,
-            test_owner,
-            &mut diags,
-            &mut env_var_refs,
-        );
-        items.push(Item::Function(init_fn));
-    }
-
-    check_string_escapes(root, &mut diags);
-
-    (items, diags, env_var_refs)
-}
-
-/// Report invalid escape sequences in every `"..."`, `b"..."`, and backtick
-/// string literal in the file, plus non-ASCII characters in byte strings.
-/// Decoding happens wherever a literal is lowered and keeps such sequences
-/// verbatim; this pass is the one place that diagnoses them, so each literal
-/// is reported exactly once no matter how many call sites decode it.
-fn check_string_escapes(root: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) {
-    use baml_base::escape::{
-        EscapeIssue, backtick_string_literal_escape_issues, byte_string_literal_escape_issues,
-        string_literal_escape_issues,
-    };
-
-    let offset =
-        |n: usize| text_size::TextSize::from(u32::try_from(n).expect("literal exceeds u32 length"));
-    let mut report = |body_start: text_size::TextSize, issues: Vec<EscapeIssue>| {
-        for issue in issues {
-            let start = body_start + offset(issue.start);
-            let span = text_size::TextRange::new(start, start + offset(issue.len));
-            diags.push(LoweringDiagnostic::InvalidStringEscape { issue, span });
-        }
-    };
-
-    for node in root.descendants() {
-        let check: fn(&str) -> Vec<EscapeIssue> = match node.kind() {
-            SyntaxKind::STRING_LITERAL => string_literal_escape_issues,
-            SyntaxKind::BYTE_STRING_LITERAL => byte_string_literal_escape_issues,
-            SyntaxKind::BACKTICK_STRING_LITERAL => {
-                for (run_start, run) in backtick_text_runs(&node) {
-                    report(run_start, backtick_string_literal_escape_issues(&run));
-                }
-                continue;
-            }
-            _ => continue,
-        };
-        let text = node.text().to_string();
-        let Some(open) = text.find('"') else { continue };
-        // Unclosed literals already have a parse error.
-        let Some(body) = text[open + 1..].strip_suffix('"') else {
-            continue;
-        };
-        let body_start = node.text_range().start() + offset(open + 1);
-        let mut issues = check(body);
-        if !accepts_raw_string(&node) {
-            for issue in &mut issues {
-                issue.suggest_raw_string = false;
-            }
-        }
-        report(body_start, issues);
-    }
-}
-
-/// Whether an `r"..."` literal would parse where `node` is. Raw strings are
-/// expressions only, so suggesting one in a type, pattern, attribute, or
-/// config value would lead to a parse error.
-fn accepts_raw_string(node: &SyntaxNode) -> bool {
-    !node.ancestors().any(|ancestor| {
-        matches!(
-            ancestor.kind(),
-            SyntaxKind::TYPE_EXPR
-                | SyntaxKind::STRING_LITERAL_TYPE
-                | SyntaxKind::ATTRIBUTE
-                | SyntaxKind::BLOCK_ATTRIBUTE
-                | SyntaxKind::ATTRIBUTE_ARGS
-                | SyntaxKind::CONFIG_BLOCK
-                | SyntaxKind::CONFIG_ITEM
-                | SyntaxKind::CONFIG_VALUE
-                | SyntaxKind::MATCH_PATTERN
-                | SyntaxKind::CATCH_PATTERN
-                | SyntaxKind::PATTERN
-        )
-    })
-}
-
-/// The contiguous runs of literal text in a backtick string literal, between
-/// its delimiters and any `${...}` parts, as (source start, raw text) pairs.
-fn backtick_text_runs(node: &SyntaxNode) -> Vec<(text_size::TextSize, String)> {
-    let Some(lit) = ast::BacktickStringLiteral::cast(node.clone()) else {
-        return Vec::new();
-    };
-    let n = lit.delimiter_count();
-    let elements: Vec<_> = node.children_with_tokens().collect();
-    let total_backticks = elements
-        .iter()
-        .filter(|el| el.kind() == SyntaxKind::BACKTICK)
-        .count();
-    if n == 0 || total_backticks < 2 * n {
-        return Vec::new();
-    }
-    let closing_start = total_backticks - n;
-    let mut runs: Vec<text_size::TextRange> = Vec::new();
-    let mut current: Option<text_size::TextRange> = None;
-    let mut bt_seen = 0usize;
-    for el in &elements {
-        let is_text = match el.kind() {
-            SyntaxKind::BACKTICK => {
-                let inside = bt_seen >= n && bt_seen < closing_start;
-                bt_seen += 1;
-                inside
-            }
-            SyntaxKind::BACKTICK_INTERPOLATION
-            | SyntaxKind::BACKTICK_FOR_OPEN
-            | SyntaxKind::BACKTICK_ENDFOR
-            | SyntaxKind::BACKTICK_IF_OPEN
-            | SyntaxKind::BACKTICK_ELSE_IF
-            | SyntaxKind::BACKTICK_ELSE
-            | SyntaxKind::BACKTICK_ENDIF => false,
-            _ => bt_seen >= n && bt_seen <= closing_start,
-        };
-        if is_text {
-            let range = el.text_range();
-            current = Some(current.map_or(range, |c| c.cover(range)));
-        } else if let Some(run) = current.take() {
-            runs.push(run);
-        }
-    }
-    runs.extend(current);
-    let text = node.text().to_string();
-    let node_start = node.text_range().start();
-    runs.into_iter()
-        .map(|run| (run.start(), text[run - node_start].to_string()))
-        .collect()
-}
 
 /// Check if a just-lowered type expression contains `TypeExprKind::Missing` at the root.
 /// If so, emit an `UnparseableType` diagnostic.
-fn check_missing_type(
+pub(crate) fn check_missing_type(
     type_expr: &crate::ast::TypeExpr,
     context: String,
     span: text_size::TextRange,
@@ -436,412 +27,11 @@ fn check_missing_type(
     }
 }
 
-// ── Per-item lowering ───────────────────────────────────────────
-
+/// The class a method is declared in, for the companion bodies it needs.
 #[derive(Clone, Copy)]
-struct ClassMethodContext<'a> {
-    name: &'a Name,
-    generic_params: &'a [crate::ast::GenericParam],
-}
-
-fn lower_function(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-    class_method: Option<ClassMethodContext<'_>>,
-) -> Option<FunctionDef> {
-    let func = ast::FunctionDef::cast(node.clone())?;
-    let Some(name_token) = func.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "function",
-            span: node.span_range(),
-        });
-        return None;
-    };
-    let name = Name::new(name_token.text());
-    let name_span = name_token.text_range();
-
-    let generic_params = extract_generic_params_with_bounds(node, diags);
-    let parameter_context = format!("function `{}`", name.as_str());
-
-    let (mut params, mut defaults) = func
-        .param_list()
-        .map(|pl| {
-            lower_params_with_defaults(
-                &pl,
-                name.as_str(),
-                &parameter_context,
-                diags,
-                true,
-                env_var_refs,
-            )
-        })
-        .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
-
-    let return_type = func.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let te_span = te.syntax().span_range();
-        check_missing_type(&expr, format!("return type of `{name}`"), te_span, diags);
-        lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
-        expr.with_span(te_span)
-    });
-
-    let throws = func
-        .throws_clause()
-        .and_then(|tc| tc.type_expr())
-        .map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-            let te_span = te.syntax().span_range();
-            lower_type_expr::check_throws_wildcard(&mut expr, te_span, diags);
-            expr.with_span(te_span)
-        });
-
-    let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
-        let mut llm_body_def = lower_llm_body(&llm);
-        reject_reserved_llm_params(&mut params, name.as_str(), diags);
-        // A prompt is a string literal: backtick (interpolating) or quoted
-        // (inert). Both become the same tagged template below; the parser
-        // rejects every other value shape.
-        let prompt_literal = llm.prompt_field().and_then(|pf| {
-            pf.backtick_string()
-                .map(LlmPromptLiteral::Backtick)
-                .or_else(|| pf.string().map(LlmPromptLiteral::Quoted))
-        });
-
-        // Jinja prompts are removed: the single-path world renders prompts as
-        // plain backtick templates through the spec.
-        if let Some(raw_prompt) = llm.prompt_field().and_then(|pf| pf.hash_string()) {
-            diags.push(LoweringDiagnostic::LlmJinjaPromptRemoved {
-                span: raw_prompt.syntax().span_range(),
-            });
-        }
-
-        if let Some(LlmPromptLiteral::Quoted(quoted)) = &prompt_literal {
-            warn_quoted_prompt_interpolation(quoted, diags);
-        }
-
-        llm_body_def.prompt_spans = prompt_literal.as_ref().map(|literal| match literal {
-            LlmPromptLiteral::Backtick(lit) => crate::ast::LlmPromptSpans {
-                literal: lit.syntax().span_range(),
-                code: lit
-                    .syntax()
-                    .descendants()
-                    .filter(|node| {
-                        node.kind() == baml_compiler_syntax::SyntaxKind::BACKTICK_INTERPOLATION
-                    })
-                    .map(|node| node.span_range())
-                    .collect(),
-            },
-            // A quoted prompt is inert: the whole literal is prose.
-            LlmPromptLiteral::Quoted(lit) => crate::ast::LlmPromptSpans {
-                literal: lit.syntax().span_range(),
-                code: Vec::new(),
-            },
-        });
-
-        // Resolve the client: a quoted "provider/model" string maps at
-        // compile time to a provider constructor; anything else is an
-        // expression evaluating to ai.Client.
-        let client_value = llm.client_field().and_then(|cf| cf.value_element());
-        let client_spec = resolve_llm_client(name.as_str(), client_value, llm_body_def.span, diags);
-
-        // The function's real parameters — the injected `client` and
-        // `on_event` overrides are added below and are never part of the
-        // spec's bound arguments.
-        let user_params: Vec<Param> = params
-            .iter()
-            .filter(|p| !crate::companions::is_injected_llm_param(&p.name))
-            .cloned()
-            .collect();
-        let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
-
-        // Build and stash the `@spec` companion body while the CST prompt
-        // literal is in hand (read back by `companions::llm_spec`). Skipped
-        // when the prompt or client is unusable — the migration diagnostics
-        // above are the authoritative errors then.
-        if let (Some(prompt), Some(client_spec)) = (&prompt_literal, client_spec) {
-            let tools_value = tools_value_element(&llm);
-            let (spec_body, spec_sm, prompt_segments, mut spec_diags, mut spec_env_refs) =
-                lower_expr_body::synthesize_llm_spec_body(
-                    name.as_str(),
-                    &param_names,
-                    &generic_params
-                        .iter()
-                        .map(|param| param.name.clone())
-                        .collect::<Vec<_>>(),
-                    class_method.map(|owner| owner.name),
-                    &class_method
-                        .map(|owner| {
-                            owner
-                                .generic_params
-                                .iter()
-                                .map(|param| param.name.clone())
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default(),
-                    &client_spec,
-                    return_type.clone(),
-                    tools_value.as_ref(),
-                    prompt,
-                    llm_body_def.span,
-                );
-            diags.append(&mut spec_diags);
-            env_var_refs.append(&mut spec_env_refs);
-            llm_body_def
-                .companion_bodies
-                .push(("spec".to_string(), (spec_body, spec_sm)));
-            llm_body_def.prompt_segments = prompt_segments;
-        }
-
-        // Every LLM function runs the ai Agent loop; `client: ai.Client? =
-        // null` is the compiler-injected per-call override. When the spec
-        // could not be synthesized (migration diagnostics fired), the body is
-        // omitted so the missing `<Fn>@spec` reference never cascades.
-        append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
-        append_spec_on_event_param(&mut params, &mut defaults, llm_body_def.span);
-        let body = if llm_body_def
-            .companion_bodies
-            .iter()
-            .any(|(t, _)| t == "spec")
-        {
-            let owner_generic_param_names = class_method
-                .map(|owner| {
-                    owner
-                        .generic_params
-                        .iter()
-                        .map(|param| param.name.clone())
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
-                name.as_str(),
-                &user_params,
-                &generic_params
-                    .iter()
-                    .map(|param| param.name.clone())
-                    .collect::<Vec<_>>(),
-                class_method.map(|owner| owner.name),
-                &owner_generic_param_names,
-                llm_body_def.span,
-            );
-            Some(FunctionBodyDef::Expr(expr_body, source_map))
-        } else {
-            None
-        };
-        (body, Some(DeclarativeMeta::Llm(llm_body_def)))
-    } else if let Some(expr) = func.expr_body() {
-        // Check if the body is `$rust_function` or `$rust_io_function` before lowering
-        if let Some(builtin_kind) = check_builtin_body(expr.syntax()) {
-            (Some(FunctionBodyDef::Builtin(builtin_kind)), None)
-        } else {
-            let (expr_body, source_map) = lower_expr_body::lower(&expr, diags, env_var_refs);
-            (Some(FunctionBodyDef::Expr(expr_body, source_map)), None)
-        }
-    } else {
-        (None, None)
-    };
-
-    let attributes = lower_attributes_from_node(node);
-    let docstring = crate::docstring::extract_docstring(node);
-    let is_tagged_template_tag = crate::docstring::has_baml_marker(node, "tagged_string");
-    let trace_hook = crate::docstring::trace_hook(node, name.as_str(), diags);
-
-    Some(FunctionDef {
-        name,
-        generic_params,
-        params,
-        defaults,
-        return_type,
-        throws,
-        body,
-        declarative_meta: declarative_meta.clone(),
-        metadata: crate::ast::FunctionMetadata {
-            trace_passthrough: declarative_meta.is_some()
-                || crate::docstring::has_baml_marker(node, "trace_passthrough"),
-            explicit_trace_passthrough: crate::docstring::has_baml_marker(
-                node,
-                "trace_passthrough",
-            ),
-            ..crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::UserDefined)
-        },
-        attributes,
-        docstring,
-        is_tagged_template_tag,
-        trace_hook,
-        span: node.span_range(),
-        name_span,
-    })
-}
-
-/// Check if an `EXPR_FUNCTION_BODY` node's content is a single `$rust_function`
-/// or `$rust_io_function` word. Returns the `BuiltinKind` if so.
-///
-/// The expected CST structure is:
-/// `EXPR_FUNCTION_BODY { BLOCK_EXPR { L_BRACE PATH_EXPR { WORD("$rust_function") } R_BRACE } }`
-fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
-    use baml_compiler_syntax::SyntaxKind;
-
-    // Collect all non-trivia tokens from the body
-    let meaningful_tokens: Vec<_> = expr_body_node
-        .descendants_with_tokens()
-        .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
-        .filter(|t| {
-            let kind: SyntaxKind = t.kind();
-            !kind.is_trivia() && kind != SyntaxKind::L_BRACE && kind != SyntaxKind::R_BRACE
-        })
-        .collect();
-
-    if meaningful_tokens.len() == 1 {
-        let text = meaningful_tokens[0].text();
-        match text {
-            "$rust_function" => return Some(BuiltinKind::Vm),
-            "$rust_io_function" => return Some(BuiltinKind::Io),
-            "$compiler_intrinsic" => return Some(BuiltinKind::Intrinsic),
-            "$await_any" => return Some(BuiltinKind::AwaitAny),
-            "$spawn" => return Some(BuiltinKind::Spawn),
-            _ => {}
-        }
-    }
-    None
-}
-
-pub(crate) fn lower_params(
-    pl: &ast::ParameterList,
-    owner_name: &str,
-    unsupported_default_context: &str,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Vec<Param> {
-    let mut env_var_refs = Vec::new();
-    lower_params_with_defaults(
-        pl,
-        owner_name,
-        unsupported_default_context,
-        diags,
-        false,
-        &mut env_var_refs,
-    )
-    .0
-}
-
-pub(crate) fn lower_params_with_defaults(
-    pl: &ast::ParameterList,
-    owner_name: &str,
-    unsupported_default_context: &str,
-    diags: &mut Vec<LoweringDiagnostic>,
-    defaults_allowed: bool,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> (Vec<Param>, FunctionDefaults) {
-    let mut default_nodes = Vec::new();
-    let mut params = Vec::new();
-    for p in pl.params() {
-        let default_expr = p.default_expr_syntax();
-        let lowered_param_idx = params.len();
-
-        match lower_param(&p, owner_name, diags) {
-            Some(param) => {
-                if let Some(default_expr) = default_expr.clone() {
-                    if !defaults_allowed {
-                        diags.push(LoweringDiagnostic::UnsupportedParameterDefault {
-                            context: unsupported_default_context.to_string(),
-                            span: default_expr.text_range(),
-                        });
-                    }
-                    default_nodes.push((lowered_param_idx, default_expr));
-                }
-                params.push(param);
-            }
-            None => {
-                let Some(default_expr) = default_expr else {
-                    continue;
-                };
-                if !defaults_allowed {
-                    diags.push(LoweringDiagnostic::UnsupportedParameterDefault {
-                        context: unsupported_default_context.to_string(),
-                        span: default_expr.text_range(),
-                    });
-                }
-                default_nodes.push((usize::MAX, default_expr));
-            }
-        }
-    }
-
-    let (defaults, default_ids) =
-        lower_expr_body::lower_default_expr_nodes(&default_nodes, diags, env_var_refs);
-    for (idx, default_id) in default_ids {
-        if let Some(param) = params.get_mut(idx) {
-            param.default = Some(default_id);
-        }
-    }
-
-    (params, defaults)
-}
-
-pub(crate) fn lower_param(
-    param: &ast::Parameter,
-    function_name: &str,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<Param> {
-    let Some(name_token) = param.name() else {
-        diags.push(LoweringDiagnostic::MissingParamName {
-            function_name: function_name.to_string(),
-            span: param.syntax().span_range(),
-        });
-        return None;
-    };
-    let param_name_str = name_token.text().to_string();
-
-    Some(Param {
-        name: Name::new(&param_name_str),
-        type_expr: param.ty().map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-            let te_span = te.syntax().span_range();
-            check_missing_type(
-                &expr,
-                format!("parameter `{param_name_str}` in `{function_name}`"),
-                te_span,
-                diags,
-            );
-            lower_type_expr::check_wildcard_type(&mut expr, "a parameter type", te_span, diags);
-            expr.with_span(te_span)
-        }),
-        default: None,
-        span: param.syntax().span_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
-/// Lower `client Name = <expr>;` to a top-level client let binding — the
-/// same [`LetOrigin::Client`] item the legacy config blocks produced, so the
-/// name resolves from every function body, but the initializer is the user's
-/// own expression (evaluated once at `$init`; client construction is pure).
-fn lower_client_value_def(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<Item> {
-    let def = ast::ClientValueDef::cast(node.clone())?;
-    let Some(name_token) = def.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "client",
-            span: node.span_range(),
-        });
-        return None;
-    };
-    let (body, source_map) = lower_expr_body::lower_client_initializer(
-        def.value_element().as_ref(),
-        node.span_range(),
-        diags,
-        env_var_refs,
-    );
-    Some(Item::Let(crate::ast::LetDef {
-        name: Name::new(name_token.text()),
-        type_annotation: None,
-        initializer: Some((body, source_map)),
-        origin: crate::ast::LetOrigin::Client,
-        docstring: crate::docstring::extract_docstring(node),
-        span: node.span_range(),
-        name_span: name_token.text_range(),
-    }))
+pub(crate) struct ClassMethodContext<'a> {
+    pub(crate) name: &'a Name,
+    pub(crate) generic_params: &'a [crate::ast::GenericParam],
 }
 
 /// Append the spec-mode client override parameter: `client: ai.Client? = null`.
@@ -925,7 +115,7 @@ pub(crate) fn append_spec_on_event_param(
     });
 }
 
-fn reject_reserved_llm_params(
+pub(crate) fn reject_reserved_llm_params(
     params: &mut Vec<Param>,
     function_name: &str,
     diags: &mut Vec<LoweringDiagnostic>,
@@ -954,46 +144,6 @@ fn reject_reserved_llm_params(
         });
         false
     });
-}
-
-fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
-    let span = llm_body.syntax().span_range();
-
-    let client = llm_body
-        .client_field()
-        .and_then(|cf| cf.value())
-        .map(|name| Name::new(&name));
-
-    LlmBodyDef {
-        client,
-        // Filled in by the LLM-function branch once param names are known.
-        companion_bodies: Vec::new(),
-        // Filled in by the LLM-function branch from the prompt literal.
-        prompt_spans: None,
-        // Filled in alongside the `@spec` companion body.
-        prompt_segments: Vec::new(),
-        has_tools: llm_tools_present(llm_body),
-        span,
-    }
-}
-
-/// Whether the `tools` field can hold tools at runtime. An absent field and
-/// the literal empty list (`tools: []`) are tool-less; a non-empty literal or
-/// any other expression is conservatively tools-bearing (an arbitrary
-/// expression may evaluate empty, but that is only known at runtime).
-fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
-    match tools_value_element(llm_body) {
-        None => false,
-        Some(rowan::NodeOrToken::Node(node)) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
-            // Elements are expression nodes or bare-identifier tokens.
-            node.children().next().is_some()
-                || node
-                    .children_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .any(|t| lower_expr_body::is_ident_token(t.kind()))
-        }
-        Some(_) => true,
-    }
 }
 
 /// The provider package + client class the `@spec` desugar constructs for a
@@ -1063,29 +213,6 @@ pub(crate) fn spec_client_provider(client: &str) -> Option<&'static Path> {
         .map(|(_, constructor)| constructor)
 }
 
-/// The prompt literal shapes an LLM function accepts.
-///
-/// Both lower through the same `` prompt`...` `` tagged template into a
-/// `PromptAst`; they differ only in how the segment list is built. A quoted
-/// prompt has no `${...}` interpolation (regular strings are inert), so it is
-/// exactly a one-text-segment template.
-pub(crate) enum LlmPromptLiteral {
-    Backtick(baml_compiler_syntax::BacktickStringLiteral),
-    Quoted(ast::StringLiteral),
-}
-
-impl LlmPromptLiteral {
-    /// The literal's source range. Doubles as the synthesized prompt lambda's
-    /// span, which must be distinct from every other lambda synthesized into
-    /// the same body (lambda scopes are located by exact span).
-    pub(crate) fn span_range(&self) -> text_size::TextRange {
-        match self {
-            Self::Backtick(lit) => lit.syntax().span_range(),
-            Self::Quoted(lit) => lit.syntax().span_range(),
-        }
-    }
-}
-
 /// Warn on each `${` in a quoted prompt.
 ///
 /// A quoted prompt is inert, so a `${...}` the author meant as an
@@ -1094,12 +221,11 @@ impl LlmPromptLiteral {
 /// searched in the *raw* token text so the span lands on the source
 /// characters; a quoted string's escapes never introduce or remove a `${`
 /// (`\$` is not an escape in this flavor, so it decodes to `\$`).
-fn warn_quoted_prompt_interpolation(
-    quoted: &ast::StringLiteral,
+pub(crate) fn warn_quoted_prompt_interpolation(
+    text: &str,
+    range: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    let range = quoted.syntax().span_range();
-    let text = quoted.syntax().text().to_string();
     for (offset, _) in text.match_indices("${") {
         let offset = u32::try_from(offset).expect("prompt literal exceeds u32 length");
         let start = range.start() + text_size::TextSize::from(offset);
@@ -1109,887 +235,66 @@ fn warn_quoted_prompt_interpolation(
     }
 }
 
-/// How an LLM function's `client:` value lowers into the spec's
-/// `default_client`.
-pub(crate) enum LlmClientSpec {
-    /// A `"provider/model"` string, mapped at compile time to a builtin
-    /// provider constructor.
-    Provider {
-        /// The client constructor, `<package>.<Client>.new`, from
-        /// [`SHORTHAND_PROVIDERS`].
-        constructor: &'static Path,
-        model: String,
-    },
-    /// An arbitrary expression evaluating to `ai.Selector` (a declared
-    /// client name, a constructor call, a wrapper, a runtime
-    /// `"provider/model"` string, an `env.X` reference, ...). Wrapped in
-    /// `ai.clients.resolve(...)` by `synthesize_llm_spec_body` and resolved
-    /// when the function is called.
-    Expr(rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>),
-}
-
-/// Classify the client field's value element, emitting migration diagnostics
-/// for the unusable shapes. `None` means an authoritative error was emitted
-/// (or the parser already reported a missing value).
-fn resolve_llm_client(
+/// Classify a quoted `client "provider/model"` string: the builtin provider
+/// constructor it names, or `None` after reporting why it names none.
+pub(crate) fn classify_client_string(
     function_name: &str,
-    value: Option<rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
+    text: &str,
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<LlmClientSpec> {
-    use baml_compiler_syntax::SyntaxKind;
-    let value = value?;
-    if let rowan::NodeOrToken::Node(node) = &value {
-        if node.kind() == SyntaxKind::STRING_LITERAL {
-            let text = ast::StringLiteral::cast(node.clone())
-                .map(|s| s.value())
-                .unwrap_or_default();
-            let Some((prefix, model)) = text.split_once('/') else {
-                diags.push(LoweringDiagnostic::InvalidLlmClient {
-                    function_name: function_name.to_string(),
-                    reason: format!("\"{text}\" is not a \"provider/model\" string (no `/`)"),
-                    span,
-                });
-                return None;
-            };
-            let Some(constructor) = spec_client_provider(&text) else {
-                if prefix == "azure" {
-                    diags.push(LoweringDiagnostic::InvalidLlmClient {
-                        function_name: function_name.to_string(),
-                        reason: AZURE_SHORTHAND_REMOVED.to_string(),
-                        span,
-                    });
-                    return None;
-                }
-                diags.push(LoweringDiagnostic::InvalidLlmClient {
-                    function_name: function_name.to_string(),
-                    reason: format!(
-                        "no builtin provider for prefix \"{prefix}\"; construct a client \
-                         value instead (OpenAI-compatible endpoints: \
-                         openai.GenericClient.new(base_url = ..., model = \"{model}\"))"
-                    ),
-                    span,
-                });
-                return None;
-            };
-            return Some(LlmClientSpec::Provider {
-                constructor,
-                model: model.to_string(),
+) -> Option<lower_expr_body::LlmClient> {
+    let Some((prefix, model)) = text.split_once('/') else {
+        diags.push(LoweringDiagnostic::InvalidLlmClient {
+            function_name: function_name.to_string(),
+            reason: format!("\"{text}\" is not a \"provider/model\" string (no `/`)"),
+            span,
+        });
+        return None;
+    };
+    let Some(constructor) = spec_client_provider(text) else {
+        if prefix == "azure" {
+            diags.push(LoweringDiagnostic::InvalidLlmClient {
+                function_name: function_name.to_string(),
+                reason: AZURE_SHORTHAND_REMOVED.to_string(),
+                span,
             });
+            return None;
         }
-        // The removed unquoted shorthand (`client: openai/gpt-4o-mini`) parses
-        // as a whitespace-free division chain; catch it before it cascades
-        // into unresolved-name errors.
-        if node.kind() == SyntaxKind::BINARY_EXPR {
-            let text = node.text().to_string();
-            if text.contains('/') && !text.contains(char::is_whitespace) {
-                diags.push(LoweringDiagnostic::InvalidLlmClient {
-                    function_name: function_name.to_string(),
-                    reason: format!("quote the model string: client: \"{text}\""),
-                    span,
-                });
-                return None;
-            }
-        }
-    }
-    Some(LlmClientSpec::Expr(value))
-}
-
-/// The `tools` field's value element, if the function declares one.
-fn tools_value_element(
-    llm: &ast::LlmFunctionBody,
-) -> Option<rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>> {
-    llm.tools_field()
-        .as_ref()
-        .and_then(ast::ToolsField::value_element)
-}
-
-fn lower_class(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<crate::ast::ClassDef> {
-    let class = ast::ClassDef::cast(node.clone())?;
-    let Some(name_token) = class.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "class",
-            span: node.span_range(),
-        });
-        return None;
-    };
-
-    let generic_params = extract_generic_params_with_bounds(node, diags);
-    let class_name = name_token.text().to_string();
-    let class_name_ident = Name::new(name_token.text());
-
-    let fields = class
-        .fields()
-        .filter_map(|f| {
-            let Some(fname) = f.name() else {
-                diags.push(LoweringDiagnostic::MissingFieldName {
-                    class_name: class_name.clone(),
-                    span: f.syntax().span_range(),
-                });
-                return None;
-            };
-            let field_name_str = fname.text().to_string();
-            // A field with no type is already reported by the parser ("field '<name>'
-            // is missing a type annotation"), so recover with the error sentinel rather
-            // than making the type optional: an absent type is not a kind of type, and
-            // leaving it representable downstream forces every consumer to invent its
-            // own stand-in. `Error` suppresses follow-on diagnostics while the rest of
-            // the declaration still type-checks.
-            let type_expr = f.ty().map_or_else(
-                || TypeExprKind::Error.at(f.syntax().span_range()),
-                |te| {
-                    let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-                    let te_span = te.syntax().span_range();
-                    check_missing_type(
-                        &expr,
-                        format!("field `{class_name}.{field_name_str}`"),
-                        te_span,
-                        diags,
-                    );
-                    lower_type_expr::check_wildcard_type(
-                        &mut expr,
-                        "a class field type",
-                        te_span,
-                        diags,
-                    );
-                    expr.with_span(te_span)
-                },
-            );
-            let field_docstring = crate::docstring::extract_docstring(f.syntax());
-            Some(FieldDef {
-                name: Name::new(&field_name_str),
-                type_expr,
-                attributes: lower_member_attributes(f.attributes()),
-                docstring: field_docstring,
-                span: f.syntax().span_range(),
-                name_span: fname.text_range(),
-            })
-        })
-        .collect();
-
-    let methods = class
-        .methods()
-        .filter_map(|f| {
-            lower_function(
-                f.syntax(),
-                diags,
-                env_var_refs,
-                Some(ClassMethodContext {
-                    name: &class_name_ident,
-                    generic_params: &generic_params,
-                }),
-            )
-        })
-        .flat_map(|func| {
-            let owner_generic_param_names = generic_params
-                .iter()
-                .map(|param| param.name.clone())
-                .collect::<Vec<_>>();
-            let companions =
-                expand_companions(&func, Some(&class_name_ident), &owner_generic_param_names);
-            std::iter::once(func).chain(companions)
-        })
-        .collect();
-
-    let implements = class
-        .implements_blocks()
-        .filter_map(|block| lower_implements_block(&block, diags, env_var_refs))
-        .collect();
-
-    let mut class_def = crate::ast::ClassDef {
-        name: class_name_ident,
-        generic_params,
-        fields,
-        methods,
-        implements,
-        attributes: lower_attributes_from_node(node),
-        docstring: crate::docstring::extract_docstring(node),
-        span: node.span_range(),
-        name_span: name_token.text_range(),
-    };
-
-    // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
-    crate::cleanup_guard::maybe_inject_cleanup_guard(&mut class_def);
-
-    Some(class_def)
-}
-
-/// BEP-044 generic bounds: walk `GENERIC_PARAM_LIST` and return each
-/// parameter's `Name` paired with **every** `&`-separated bound it declares
-/// (`<T>` → `(T, [])`; `<T extends A & B>` → `(T, [A, B])`). The bound list is
-/// a conjunction: an argument for `T` must satisfy all of them.
-///
-/// Bounds are captured as `TypeExpr`s so generic parents like `Container<int>`
-/// round-trip; that they must denote *interfaces* (never interface-existential
-/// types) is enforced when they are lowered to constraints in TIR.
-pub(crate) fn extract_generic_params_with_bounds(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Vec<crate::ast::GenericParam> {
-    use baml_compiler_syntax::SyntaxKind;
-
-    let mut out: Vec<crate::ast::GenericParam> = Vec::new();
-    for child in node.children() {
-        if child.kind() != SyntaxKind::GENERIC_PARAM_LIST {
-            continue;
-        }
-        for param_node in child.children() {
-            if param_node.kind() != SyntaxKind::GENERIC_PARAM {
-                continue;
-            }
-            let mut name: Option<(Name, text_size::TextRange)> = None;
-            for elem in param_node.children_with_tokens() {
-                if let Some(token) = elem.as_token()
-                    && token.kind() == SyntaxKind::WORD
-                    && name.is_none()
-                {
-                    name = Some((Name::new(token.text()), token.text_range()));
-                }
-            }
-            let bounds: Vec<crate::ast::TypeExpr> = param_node
-                .children()
-                .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
-                .map(|bounds_node| {
-                    bounds_node
-                        .children()
-                        .filter_map(|n| {
-                            let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                            let mut bound = lower_type_expr::lower_type_expr_node(&te, diags);
-                            let span = bound.span;
-                            lower_type_expr::check_wildcard_type(
-                                &mut bound,
-                                "a generic type bound",
-                                span,
-                                diags,
-                            );
-                            Some(bound)
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            if let Some((name, name_span)) = name {
-                out.push(crate::ast::GenericParam {
-                    name,
-                    bounds,
-                    name_span,
-                });
-            }
-        }
-    }
-    out
-}
-
-fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<EnumDef> {
-    let enum_def = ast::EnumDef::cast(node.clone())?;
-    let Some(name_token) = enum_def.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "enum",
-            span: node.span_range(),
-        });
-        return None;
-    };
-    let enum_name = name_token.text().to_string();
-
-    let variants = enum_def
-        .variants()
-        .filter_map(|v| {
-            let Some(vname) = v.name() else {
-                diags.push(LoweringDiagnostic::MissingVariantName {
-                    enum_name: enum_name.clone(),
-                    span: v.syntax().span_range(),
-                });
-                return None;
-            };
-            let variant_docstring = crate::docstring::extract_docstring(v.syntax());
-            Some(VariantDef {
-                name: Name::new(vname.text()),
-                attributes: lower_member_attributes(v.attributes()),
-                docstring: variant_docstring,
-                span: v.syntax().span_range(),
-                name_span: vname.text_range(),
-            })
-        })
-        .collect();
-
-    Some(EnumDef {
-        name: Name::new(name_token.text()),
-        variants,
-        attributes: lower_attributes_from_node(node),
-        docstring: crate::docstring::extract_docstring(node),
-        span: node.span_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
-fn lower_interface(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<InterfaceDef> {
-    let iface = ast::InterfaceDef::cast(node.clone())?;
-    let Some(name_token) = iface.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "interface",
-            span: node.span_range(),
-        });
-        return None;
-    };
-    let iface_name = name_token.text().to_string();
-    let generic_params = extract_generic_params_with_bounds(node, diags);
-
-    let parent_type_nodes: Vec<baml_compiler_syntax::ast::TypeExpr> =
-        if let Some(c) = iface.requires_clause() {
-            c.parents().collect()
-        } else {
-            Vec::new()
-        };
-    let requires: Vec<TypeExpr> = parent_type_nodes
-        .into_iter()
-        .map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-            let te_span = te.syntax().span_range();
-            check_missing_type(
-                &expr,
-                format!("requires clause of interface `{iface_name}`"),
-                te_span,
-                diags,
-            );
-            lower_type_expr::check_wildcard_type(
-                &mut expr,
-                "an interface `requires` clause",
-                te_span,
-                diags,
-            );
-            expr.with_span(te_span)
-        })
-        .collect();
-
-    let fields = iface
-        .fields()
-        .filter_map(|f| {
-            let Some(fname) = f.name() else {
-                diags.push(LoweringDiagnostic::MissingFieldName {
-                    class_name: iface_name.clone(),
-                    span: f.syntax().span_range(),
-                });
-                return None;
-            };
-            let field_name_str = fname.text().to_string();
-            // See the class-field site: the parser already reports a missing type, so
-            // recover with the error sentinel instead of an optional type.
-            let type_expr = f.ty().map_or_else(
-                || TypeExprKind::Error.at(f.syntax().span_range()),
-                |te| {
-                    let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-                    let te_span = te.syntax().span_range();
-                    check_missing_type(
-                        &expr,
-                        format!("interface field `{iface_name}.{field_name_str}`"),
-                        te_span,
-                        diags,
-                    );
-                    lower_type_expr::check_wildcard_type(
-                        &mut expr,
-                        "an interface field type",
-                        te_span,
-                        diags,
-                    );
-                    expr.with_span(te_span)
-                },
-            );
-            Some(FieldDef {
-                name: Name::new(&field_name_str),
-                type_expr,
-                attributes: lower_member_attributes(f.attributes()),
-                docstring: crate::docstring::extract_docstring(f.syntax()),
-                span: f.syntax().span_range(),
-                name_span: fname.text_range(),
-            })
-        })
-        .collect();
-
-    let required_methods = iface
-        .required_methods()
-        .filter_map(|sig| lower_method_sig(&sig, diags))
-        .collect();
-
-    let associated_types = iface
-        .associated_types()
-        .filter_map(|decl| lower_associated_type_def(&decl, diags))
-        .collect();
-
-    let default_methods = iface
-        .default_methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
-        .collect();
-
-    Some(InterfaceDef {
-        name: Name::new(&iface_name),
-        generic_params,
-        requires,
-        fields,
-        associated_types,
-        required_methods,
-        default_methods,
-        attributes: lower_attributes_from_node(node),
-        docstring: crate::docstring::extract_docstring(node),
-        span: node.span_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
-fn lower_associated_type_def(
-    decl: &ast::AssociatedTypeDecl,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<AssociatedTypeDef> {
-    let Some(name_token) = decl.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "associated type",
-            span: decl.syntax().span_range(),
-        });
-        return None;
-    };
-    let name = Name::new(name_token.text());
-    let bound = decl.bound().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let span = te.syntax().span_range();
-        check_missing_type(
-            &expr,
-            format!("bound of associated type `{name}`"),
+        diags.push(LoweringDiagnostic::InvalidLlmClient {
+            function_name: function_name.to_string(),
+            reason: format!(
+                "no builtin provider for prefix \"{prefix}\"; construct a client \
+                 value instead (OpenAI-compatible endpoints: \
+                 openai.GenericClient.new(base_url = ..., model = \"{model}\"))"
+            ),
             span,
-            diags,
-        );
-        expr.with_span(span)
-    });
-    let default = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let span = te.syntax().span_range();
-        check_missing_type(
-            &expr,
-            format!("default of associated type `{name}`"),
+        });
+        return None;
+    };
+    Some(lower_expr_body::LlmClient::Provider {
+        constructor,
+        model: model.to_string(),
+    })
+}
+
+/// The removed unquoted shorthand (`client: openai/gpt-4o-mini`) parses as a
+/// whitespace-free division chain; report it before it cascades into
+/// unresolved-name errors. `text` is the binary expression's source.
+pub(crate) fn reject_unquoted_client_shorthand(
+    function_name: &str,
+    text: &str,
+    span: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> bool {
+    if text.contains('/') && !text.contains(char::is_whitespace) {
+        diags.push(LoweringDiagnostic::InvalidLlmClient {
+            function_name: function_name.to_string(),
+            reason: format!("quote the model string: client: \"{text}\""),
             span,
-            diags,
-        );
-        expr.with_span(span)
-    });
-    Some(AssociatedTypeDef {
-        name,
-        bound,
-        default,
-        span: decl.syntax().span_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
-fn lower_associated_type_binding_def(
-    decl: &ast::AssociatedTypeDecl,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<AssociatedTypeBindingDef> {
-    let Some(name_token) = decl.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "associated type binding",
-            span: decl.syntax().span_range(),
         });
-        return None;
-    };
-    let name = Name::new(name_token.text());
-    let type_expr = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let span = te.syntax().span_range();
-        check_missing_type(
-            &expr,
-            format!("binding of associated type `{name}`"),
-            span,
-            diags,
-        );
-        expr.with_span(span)
-    });
-    Some(AssociatedTypeBindingDef {
-        name,
-        type_expr,
-        span: decl.syntax().span_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
-fn lower_method_sig(
-    sig: &ast::MethodSig,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<MethodSigDef> {
-    let Some(name_token) = sig.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "method signature",
-            span: sig.syntax().span_range(),
-        });
-        return None;
-    };
-    let name = Name::new(name_token.text());
-    let name_span = name_token.text_range();
-    let generic_params = extract_generic_params_with_bounds(sig.syntax(), diags);
-    let parameter_context = format!("method signature `{}`", name.as_str());
-
-    let (params, defaults) = sig
-        .param_list()
-        .map(|pl| lower_params(&pl, name.as_str(), &parameter_context, diags))
-        .map(|params| (params, FunctionDefaults::empty()))
-        .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
-
-    let return_type = sig.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let te_span = te.syntax().span_range();
-        check_missing_type(&expr, format!("return type of `{name}`"), te_span, diags);
-        lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
-        expr.with_span(te_span)
-    });
-
-    let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let te_span = te.syntax().span_range();
-        // A bodyless method signature (interface required method) has nothing to
-        // infer an open `throws … | _` from, and its declared throws is compared
-        // structurally during conformance checking — so reject ANY `_` here
-        // (unlike a function with a body, where a top-level `_` is the open slot).
-        lower_type_expr::check_wildcard_type(
-            &mut expr,
-            "a method signature `throws` clause",
-            te_span,
-            diags,
-        );
-        expr.with_span(te_span)
-    });
-
-    Some(MethodSigDef {
-        name,
-        generic_params,
-        params,
-        defaults,
-        return_type,
-        throws,
-        attributes: lower_attributes_from_node(sig.syntax()),
-        docstring: crate::docstring::extract_docstring(sig.syntax()),
-        span: sig.syntax().span_range(),
-        name_span,
-    })
-}
-
-fn lower_implements_block(
-    block: &ast::ImplementsBlock,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<ImplementsBlockDef> {
-    let target_node = block.target()?;
-    let target_te = target_node.type_expr()?;
-    let target_span = target_te.syntax().span_range();
-    let target = lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
-    check_missing_type(
-        &target,
-        "interface name in `implements`".to_string(),
-        target_span,
-        diags,
-    );
-
-    let target_label = match &target.kind {
-        crate::ast::TypeExprKind::Path { path, .. } => path
-            .last()
-            .map(|n: &Name| n.to_string())
-            .unwrap_or_else(|| "?".to_string()),
-        _ => "?".to_string(),
-    };
-
-    for f in block.fields() {
-        let field_name = f
-            .name()
-            .map(|name| name.text().to_string())
-            .unwrap_or_else(|| "?".to_string());
-        diags.push(
-            LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
-                interface_name: target_label.clone(),
-                field_name,
-                span: f.syntax().span_range(),
-            },
-        );
+        return true;
     }
-
-    let field_links = block
-        .field_links()
-        .filter_map(|link| lower_interface_field_link(&link, diags))
-        .collect();
-
-    let associated_type_bindings = block
-        .associated_type_bindings()
-        .filter_map(|decl| lower_associated_type_binding_def(&decl, diags))
-        .collect();
-
-    let methods = block
-        .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
-        .collect();
-
-    Some(ImplementsBlockDef {
-        target,
-        field_links,
-        associated_type_bindings,
-        methods,
-        is_out_of_body: false,
-        span: block.syntax().span_range(),
-    })
-}
-
-fn lower_implements_for(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
-) -> Option<ImplementsForDef> {
-    let imp = ast::ImplementsFor::cast(node.clone())?;
-
-    let generic_params = extract_generic_params_with_bounds(node, diags);
-
-    // Interface target (the `I` in `implements I for T`)
-    let target_node = imp.target()?;
-    let target_te = target_node.type_expr()?;
-    let target_span = target_te.syntax().span_range();
-    let interface_target =
-        lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
-    check_missing_type(
-        &interface_target,
-        "interface name in `implements ... for`".to_string(),
-        target_span,
-        diags,
-    );
-
-    // For target (the `T` in `implements I for T`)
-    let for_node = imp.for_target()?;
-    let for_te = for_node.type_expr()?;
-    let for_span = for_te.syntax().span_range();
-    let for_target = lower_type_expr::lower_type_expr_node(&for_te, diags).with_span(for_span);
-    check_missing_type(
-        &for_target,
-        "target type in `implements ... for`".to_string(),
-        for_span,
-        diags,
-    );
-
-    let iface_label = match &interface_target.kind {
-        crate::ast::TypeExprKind::Path { path, .. } => path
-            .last()
-            .map(|n: &Name| n.to_string())
-            .unwrap_or_else(|| "?".to_string()),
-        _ => "?".to_string(),
-    };
-
-    for f in imp.fields() {
-        let field_name = f
-            .name()
-            .map(|name| name.text().to_string())
-            .unwrap_or_else(|| "?".to_string());
-        diags.push(
-            LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
-                interface_name: iface_label.clone(),
-                field_name,
-                span: f.syntax().span_range(),
-            },
-        );
-    }
-
-    let field_links = imp
-        .field_links()
-        .filter_map(|link| lower_interface_field_link(&link, diags))
-        .collect();
-
-    let associated_type_bindings = imp
-        .associated_type_bindings()
-        .filter_map(|decl| lower_associated_type_binding_def(&decl, diags))
-        .collect();
-
-    let methods = imp
-        .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
-        .collect();
-
-    Some(ImplementsForDef {
-        generic_params,
-        interface_target,
-        for_target,
-        field_links,
-        associated_type_bindings,
-        methods,
-        span: node.span_range(),
-        docstring: crate::docstring::extract_docstring(node),
-    })
-}
-
-fn lower_interface_field_link(
-    link: &ast::InterfaceFieldLink,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<InterfaceFieldLinkDef> {
-    let Some(interface_field) = link.interface_field() else {
-        diags.push(LoweringDiagnostic::MissingFieldName {
-            class_name: "interface field link".to_string(),
-            span: link.syntax().span_range(),
-        });
-        return None;
-    };
-    let Some(class_field) = link.class_field() else {
-        diags.push(LoweringDiagnostic::MissingFieldName {
-            class_name: "interface field link".to_string(),
-            span: link.syntax().span_range(),
-        });
-        return None;
-    };
-    Some(InterfaceFieldLinkDef {
-        interface_field: Name::new(interface_field.text()),
-        class_field: Name::new(class_field.text()),
-        span: link.syntax().span_range(),
-        interface_field_span: interface_field.text_range(),
-        class_field_span: class_field.text_range(),
-    })
-}
-
-fn lower_type_alias(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<TypeAliasDef> {
-    let alias = ast::TypeAliasDef::cast(node.clone())?;
-    let Some(name_token) = alias.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "type alias",
-            span: node.span_range(),
-        });
-        return None;
-    };
-
-    let alias_name = name_token.text().to_string();
-    Some(TypeAliasDef {
-        name: Name::new(&alias_name),
-        type_expr: alias.ty().map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-            let te_span = te.syntax().span_range();
-            check_missing_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
-            lower_type_expr::check_wildcard_type(&mut expr, "a type alias", te_span, diags);
-            expr.with_span(te_span)
-        }),
-        span: node.span_range(),
-        name_span: name_token.text_range(),
-        docstring: crate::docstring::extract_docstring(node),
-    })
-}
-
-/// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
-///
-/// Returns the first non-trivial child (node or token) after the keyword
-/// (`KW_TEST` or `KW_TESTSET`) and before `KW_WITH` or `BLOCK_EXPR`.
-fn extract_name_element(
-    node: &SyntaxNode,
-    keyword_kind: SyntaxKind,
-) -> Option<baml_compiler_syntax::SyntaxElement> {
-    let mut past_keyword = false;
-    for child in node.children_with_tokens() {
-        let kind = child.kind();
-        // Skip whitespace/newline trivia
-        if matches!(
-            kind,
-            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
-        ) {
-            continue;
-        }
-        if kind == keyword_kind {
-            past_keyword = true;
-            continue;
-        }
-        if past_keyword && kind != SyntaxKind::KW_WITH && kind != SyntaxKind::BLOCK_EXPR {
-            return Some(child);
-        }
-        if kind == SyntaxKind::KW_WITH || kind == SyntaxKind::BLOCK_EXPR {
-            break;
-        }
-    }
-    None
-}
-
-/// Extract the runner expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
-///
-/// Returns the first non-trivial child (node or token) that appears after `KW_WITH` and
-/// before `BLOCK_EXPR`. This uses `children_with_tokens()` because the runner expression
-/// may be a bare token (e.g. `INTEGER_LITERAL "42"`) rather than a wrapped node.
-pub(crate) fn extract_runner_element(
-    node: &SyntaxNode,
-) -> Option<baml_compiler_syntax::SyntaxElement> {
-    let mut found_with = false;
-    for child in node.children_with_tokens() {
-        let kind = child.kind();
-        // Skip whitespace/newline trivia
-        if matches!(
-            kind,
-            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT
-        ) {
-            continue;
-        }
-        if kind == SyntaxKind::KW_WITH {
-            found_with = true;
-            continue;
-        }
-        if found_with && kind != SyntaxKind::BLOCK_EXPR {
-            return Some(child);
-        }
-        if kind == SyntaxKind::BLOCK_EXPR {
-            break;
-        }
-    }
-    None
-}
-
-/// Lower a `TEST_EXPR_DEF` CST node into a `TestRegistrationItem::Test`.
-///
-/// The CST structure is:
-/// `TEST_EXPR_DEF [ KW_TEST STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
-fn lower_test_expr(node: &SyntaxNode) -> Option<TestRegistrationItem> {
-    // Find the name expression — first child element after KW_TEST, before KW_WITH/BLOCK_EXPR.
-    let name_element = extract_name_element(node, SyntaxKind::KW_TEST)?;
-
-    // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
-    let runner_element = extract_runner_element(node);
-
-    // Find the BLOCK_EXPR child (the test body)
-    let body_node = node
-        .children()
-        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
-
-    Some(TestRegistrationItem::Test {
-        name_element,
-        body_node,
-        runner_element,
-    })
-}
-
-/// Lower a `TESTSET_DEF` CST node into a `TestRegistrationItem::TestSet`.
-///
-/// The CST structure is:
-/// `TESTSET_DEF [ KW_TESTSET STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
-///
-/// The `BLOCK_EXPR` body may contain setup statements (let bindings), for/if control
-/// flow, and nested `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The entire body is stored
-/// and lowered lazily into a collector lambda body.
-fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
-    // Find the name expression — first child element after KW_TESTSET, before KW_WITH/BLOCK_EXPR.
-    let name_element = extract_name_element(node, SyntaxKind::KW_TESTSET)?;
-
-    // Find the optional runner expression (first child after KW_WITH, before BLOCK_EXPR)
-    let runner_element = extract_runner_element(node);
-
-    // Find the BLOCK_EXPR child (the full testset body)
-    let body_node = node
-        .children()
-        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
-
-    Some(TestRegistrationItem::TestSet {
-        name_element,
-        body_node,
-        runner_element,
-    })
+    false
 }
 
 /// Synthesize a `$init_test` function that registers tests and testsets
@@ -2008,7 +313,7 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 /// break the `.`-delimited namespace routing of function names). The result is
 /// stable across compilations, unique per file within its package, and free of
 /// the checkout's location, e.g. `ns_arrays/arrays.baml` -> `ns_arrays_arrays`.
-fn init_test_key_from_path(path: &std::path::Path) -> String {
+pub(crate) fn init_test_key_from_path(path: &std::path::Path) -> String {
     path.with_extension("")
         .to_string_lossy()
         .chars()
@@ -2025,7 +330,7 @@ fn init_test_key_from_path(path: &std::path::Path) -> String {
 /// Public owner of tests declared in `path`. User package names are deliberately
 /// not embedded in test ids: `root` is stable across package renames, while
 /// `ns_<name>` directories retain BAML's dotted namespace qualification.
-fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
+pub(crate) fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
     let mut namespaces = Vec::new();
     if let Some(path) = path {
         for component in path
@@ -2072,8 +377,8 @@ pub fn is_init_test_function(name: &str) -> bool {
 /// whenever an earlier file is added (e.g. a new stdlib file), which would
 /// churn every snapshot referencing the name. The path is stable across
 /// compilations. When no path is available, uses plain `"$init_test"`.
-fn synthesize_init_test_function(
-    registrations: &[TestRegistrationItem],
+pub(crate) fn synthesize_init_test_function<R: TestRegistration>(
+    registrations: &[R],
     file_path: Option<&std::path::Path>,
     explicit_test_owner: Option<&str>,
     diags: &mut Vec<LoweringDiagnostic>,
@@ -2144,199 +449,109 @@ fn synthesize_init_test_function(
         ),
         attributes: vec![],
         docstring: None,
+        header_title: None,
         is_tagged_template_tag: false,
+        directives: crate::ast::NativeDirectives::default(),
         trace_hook: None,
         span,
         name_span: span,
     }
 }
 
+/// A top-level `test` or `testset` as the registrar synthesis reads it,
+/// whichever tree it came from: the pieces lower into the registrar's arena
+/// at the point the call needs them, so the arenas fill in one order.
+pub(crate) trait TestRegistration {
+    /// A `testset` (registers a collector lambda) rather than a `test`.
+    fn is_set(&self) -> bool;
+    /// The body's source range: the registered lambda's span, so HIR scope
+    /// lookup by offset finds the lambda the body's statements belong to.
+    fn body_span(&self) -> TextRange;
+    fn lower_name(&self, ctx: &mut lower_expr_body::InitTestContext) -> ExprId;
+    /// The body: a test's as a plain lambda body (no collector in scope), a
+    /// testset's as the collector lambda's body (`testset` bound).
+    fn lower_body(&self, ctx: &mut lower_expr_body::InitTestContext, span: TextRange) -> ExprId;
+    /// The `with` runner, or `null` when there is none.
+    fn lower_runner(&self, ctx: &mut lower_expr_body::InitTestContext, span: TextRange) -> ExprId;
+}
+
 /// Synthesize a single `register_test(name, lambda, runner)` or
 /// `register_test_set(name, collector_lambda, runner)` call on the collector.
-fn synthesize_register_call(
-    reg: &TestRegistrationItem,
+fn synthesize_register_call<R: TestRegistration>(
+    reg: &R,
     test_owner: &str,
     ctx: &mut lower_expr_body::InitTestContext,
 ) -> ExprId {
     let span = text_size::TextRange::default();
-    match reg {
-        TestRegistrationItem::Test {
-            name_element,
-            body_node,
-            runner_element,
-        } => {
-            // The body lowers into `$init_test`'s own arena.
-            let lambda_body = ctx.lower_test_body(body_node, span);
-
-            let lambda_def = LambdaDef {
-                kind: LambdaKind::Anonymous,
-                params: vec![],
-                defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
-                throws: None,
-                body: Some(lambda_body),
-                span,
-            };
-
-            // registry.register_test_at(owner, ...)
-            let method_call_target = ctx.alloc_expr(
-                Expr::Path(baml_base::Path::new(vec![
-                    Name::new(" __registry"),
-                    Name::new("register_test_at"),
-                ])),
-                span,
-            );
-
-            // Args: (name_expr, lambda, runner_or_null)
-            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
-            let owner_arg = ctx.alloc_expr(
-                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
-                span,
-            );
-            // Use the test body's real CST range as the lambda's span so HIR
-            // scope lookup resolves names inside the body correctly. The body's
-            // statements carry real source offsets, so a synthetic span (disjoint
-            // from those offsets) would make `scope_at_offset` miss the lambda
-            // scope, and every `let`-bound local would fail to resolve (reading
-            // the local would fall back to a null placeholder). The range is
-            // unique per test block, so distinct lambda scopes stay
-            // distinguishable. Mirrors the testset collector lambda below.
-            let lambda_span = body_node.span_range();
-            let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), lambda_span);
-            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
-
-            ctx.alloc_expr(
-                Expr::Call {
-                    callee: method_call_target,
-                    type_args: vec![],
-                    args: vec![
-                        CallArg::positional(owner_arg),
-                        CallArg::positional(name_arg),
-                        CallArg::positional(lambda_arg),
-                        CallArg::positional(runner_arg),
-                    ],
-                },
-                span,
-            )
-        }
-        TestRegistrationItem::TestSet {
-            name_element,
-            body_node,
-            runner_element,
-        } => {
-            let collector_exprs = ctx.lower_testset_body(body_node, Name::new("testset"), span);
-
-            // Collector lambda parameter: `testset`
-            let testset_param = Param {
-                name: Name::new("testset"),
-                type_expr: Some(
-                    crate::ast::TypeExprKind::Path {
-                        path: baml_base::compiler_path!(testing.TestCollector),
-                        generic_args: vec![],
-                        associated_type_bindings: vec![],
-                    }
-                    .at(span),
-                ),
-                default: None,
-                span,
-                name_span: span,
-            };
-
-            let collector_def = LambdaDef {
-                kind: LambdaKind::Anonymous,
-                params: vec![testset_param],
-                defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
-                throws: None,
-                body: Some(collector_exprs),
-                span,
-            };
-
-            // registry.register_test_set_at(owner, ...)
-            let method_call_target = ctx.alloc_expr(
-                Expr::Path(baml_base::Path::new(vec![
-                    Name::new(" __registry"),
-                    Name::new("register_test_set_at"),
-                ])),
-                span,
-            );
-
-            // Args: (name_expr, collector_lambda, runner_or_null)
-            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
-            let owner_arg = ctx.alloc_expr(
-                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
-                span,
-            );
-            // Use the testset body's real CST range so HIR scope lookup works
-            // correctly for name resolution inside the collector lambda body.
-            let collector_lambda_span = body_node.span_range();
-            let collector_arg =
-                ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
-            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
-
-            ctx.alloc_expr(
-                Expr::Call {
-                    callee: method_call_target,
-                    type_args: vec![],
-                    args: vec![
-                        CallArg::positional(owner_arg),
-                        CallArg::positional(name_arg),
-                        CallArg::positional(collector_arg),
-                        CallArg::positional(runner_arg),
-                    ],
-                },
-                span,
-            )
-        }
-    }
-}
-
-/// Lower an optional runner CST element directly into the parent arena.
-///
-/// If present, the runner expression is lowered into the same `InitTestContext` arena
-/// (no IIFE wrapping needed). If absent, returns `Expr::Null`.
-fn lower_runner_element(
-    runner_element: Option<&baml_compiler_syntax::SyntaxElement>,
-    ctx: &mut lower_expr_body::InitTestContext,
-    span: text_size::TextRange,
-) -> ExprId {
-    match runner_element {
-        Some(element) => lower_expr_body::lower_runner_element(ctx, element),
-        None => ctx.alloc_expr(Expr::Null, span),
-    }
-}
-
-/// Build the migration warning for a deprecated top-level `generator { … }`
-/// block. The block is otherwise ignored — generators are configured in
-/// `baml.toml` now (see `baml_cli`'s `discover_generators`).
-fn lower_generator_deprecation(node: &SyntaxNode) -> LoweringDiagnostic {
-    // Point the diagnostic at the `generator <name>` header, not the whole
-    // node — the node's `text_range()` would swallow leading trivia and the
-    // entire opaque body, producing an ugly multi-line caret.
-    let mut kw_range = None;
-    let mut name = None;
-    let mut name_range = None;
-    for token in node
-        .children_with_tokens()
-        .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
-    {
-        match token.kind() {
-            SyntaxKind::KW_GENERATOR => kw_range = Some(token.text_range()),
-            SyntaxKind::WORD if name.is_none() => {
-                name = Some(token.text().to_string());
-                name_range = Some(token.text_range());
+    let collector_param = || Param {
+        name: Name::new("testset"),
+        type_expr: Some(
+            crate::ast::TypeExprKind::Path {
+                path: baml_base::compiler_path!(testing.TestCollector),
+                generic_args: vec![],
+                associated_type_bindings: vec![],
             }
-            // Stop before the opaque `{ … }` body.
-            SyntaxKind::L_BRACE => break,
-            _ => {}
-        }
-    }
-    let span = match (kw_range, name_range) {
-        (Some(kw), Some(nm)) => text_size::TextRange::new(kw.start(), nm.end()),
-        (Some(kw), None) => kw,
-        _ => node.span_range(),
+            .at(span),
+        ),
+        default: None,
+        span,
+        name_span: span,
     };
-    LoweringDiagnostic::GeneratorBlockInBaml { name, span }
+    // The body lowers into `$init_test`'s own arena.
+    let lambda_body = reg.lower_body(ctx, span);
+    let (params, register) = if reg.is_set() {
+        (vec![collector_param()], "register_test_set_at")
+    } else {
+        (vec![], "register_test_at")
+    };
+    let lambda_def = LambdaDef {
+        kind: LambdaKind::Anonymous,
+        params,
+        defaults: FunctionDefaults::empty(),
+        return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
+        throws: None,
+        body: Some(lambda_body),
+        span,
+    };
+
+    // registry.register_test_at(owner, ...) / register_test_set_at(owner, ...)
+    let method_call_target = ctx.alloc_expr(
+        Expr::Path(baml_base::Path::new(vec![
+            Name::new(" __registry"),
+            Name::new(register),
+        ])),
+        span,
+    );
+
+    // Args: (owner, name_expr, lambda, runner_or_null)
+    let name_arg = reg.lower_name(ctx);
+    let owner_arg = ctx.alloc_expr(
+        Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
+        span,
+    );
+    // The lambda carries the body's real source range so HIR scope lookup
+    // resolves names inside the body correctly. The body's statements carry
+    // real source offsets, so a synthetic span (disjoint from those offsets)
+    // would make `scope_at_offset` miss the lambda scope, and every
+    // `let`-bound local would fail to resolve (reading the local would fall
+    // back to a null placeholder). The range is unique per test block, so
+    // distinct lambda scopes stay distinguishable.
+    let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), reg.body_span());
+    let runner_arg = reg.lower_runner(ctx, span);
+
+    ctx.alloc_expr(
+        Expr::Call {
+            callee: method_call_target,
+            type_args: vec![],
+            args: vec![
+                CallArg::positional(owner_arg),
+                CallArg::positional(name_arg),
+                CallArg::positional(lambda_arg),
+                CallArg::positional(runner_arg),
+            ],
+        },
+        span,
+    )
 }
 
 // NOTE: the legacy `client<llm>` / `retry_policy` config-block synthesis
@@ -2345,74 +560,6 @@ fn lower_generator_deprecation(node: &SyntaxNode) -> LoweringDiagnostic {
 // clients are plain values (`client Name = <expr>;`) and retry composes at
 // the client boundary via `ai.Retry`. Their CST nodes now lower to a single
 // migration diagnostic each, as does `template_string`.
-
-/// Lower the `@` attributes trailing a field or enum variant.
-fn lower_member_attributes(attributes: impl Iterator<Item = ast::Attribute>) -> Vec<RawAttribute> {
-    attributes
-        .filter_map(|attr| lower_attribute(&attr))
-        .collect()
-}
-
-/// Lower block-level attributes (@@) from any item node.
-fn lower_attributes_from_node(node: &SyntaxNode) -> Vec<RawAttribute> {
-    node.children()
-        .filter_map(ast::BlockAttribute::cast)
-        .filter_map(|attr| lower_block_attribute(&attr))
-        .collect()
-}
-
-/// Lower a single field or variant attribute (single @).
-fn lower_attribute(attr: &ast::Attribute) -> Option<RawAttribute> {
-    let name_token = attr.name()?;
-    let attr_name = attr
-        .full_name()
-        .unwrap_or_else(|| name_token.text().to_string());
-    let span = attr.syntax().span_range();
-
-    let args = lower_attribute_args_from_node(attr.syntax());
-
-    Some(RawAttribute {
-        name: Name::new(&attr_name),
-        args,
-        span,
-    })
-}
-
-/// Lower a single block attribute (@@).
-fn lower_block_attribute(attr: &ast::BlockAttribute) -> Option<RawAttribute> {
-    let name_token = attr.name()?;
-    let attr_name = attr
-        .full_name()
-        .unwrap_or_else(|| name_token.text().to_string());
-    let span = attr.syntax().span_range();
-
-    let args = lower_attribute_args_from_node(attr.syntax());
-
-    Some(RawAttribute {
-        name: Name::new(&attr_name),
-        args,
-        span,
-    })
-}
-
-/// Extract raw attribute arguments as strings from an attribute node.
-fn lower_attribute_args_from_node(node: &SyntaxNode) -> Vec<RawAttributeArg> {
-    // Arguments are inside ATTRIBUTE_ARGS nodes
-    node.children()
-        .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::ATTRIBUTE_ARGS)
-        .flat_map(|args_node| {
-            args_node.children().map(|arg_node| {
-                let text = arg_node.text().to_string();
-                let span = arg_node.span_range();
-                RawAttributeArg {
-                    key: None,
-                    value: text.trim().to_string(),
-                    span,
-                }
-            })
-        })
-        .collect()
-}
 
 #[cfg(test)]
 mod test_owner_tests {

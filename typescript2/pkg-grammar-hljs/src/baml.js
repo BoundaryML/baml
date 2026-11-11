@@ -11,7 +11,7 @@ highlight.js third-party language definition for BAML.
 Single source of truth: typescript2/pkg-grammar-hljs/src/baml.js in the BAML
 monorepo (https://github.com/BoundaryML/baml). The keyword lists and literal
 forms below are derived from the real lexer
-(baml_language/crates/baml_compiler_lexer/src/tokens.rs) and the TextMate
+(baml_language/crates/baml_syntax/src/token.rs) and the TextMate
 grammar (typescript2/pkg-grammar/src/baml.ts).
 
 Notable BAML shapes this definition covers:
@@ -34,7 +34,7 @@ false for this language.
 /** @type {import('highlight.js').LanguageFn} */
 export default function baml(hljs) {
   // Identifier as the BAML lexer defines its `Word` token
-  // (baml_compiler_lexer/src/tokens.rs): first char is a letter or underscore,
+  // (baml_syntax/src/token.rs): first char is a letter or underscore,
   // continuation chars add digits and hyphens (`gpt-4o` is one identifier).
   // Names may be joined by `$` into segments (`ExtractResume$render_prompt`),
   // and a leading `$` marks the special $-prefixed form (`$stream`).

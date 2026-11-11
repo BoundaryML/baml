@@ -1,0 +1,203 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== extra_greater.baml ===
+SourceFile@203..959
+  items: ClassDef@203..509
+    kw: Class "class" @203..208
+    name: Name@209..223
+      token: Word "MalformedClass" @209..223
+    l: LBrace "{" @224..225
+    members: Field@303..330
+      name: Name@303..312
+        token: Word "bad_field" @303..312
+      ty: PathType@313..329
+        head: Name@313..316
+          token: Map "map" @313..316
+        args: TypeArgs@316..329
+          l: Less "<" @316..317
+          args: PathType@317..323
+            head: Name@317..323
+              token: Word "string" @317..323
+          args: Comma "," @323..324
+          args: PathType@325..328
+            head: Name@325..328
+              token: Word "int" @325..328
+          r: Greater ">" @328..329
+    members: Field@400..427
+      name: Name@400..410
+        token: Word "good_field" @400..410
+      ty: PathType@411..427
+        head: Name@411..414
+          token: Map "map" @411..414
+        args: TypeArgs@414..427
+          l: Less "<" @414..415
+          args: PathType@415..421
+            head: Name@415..421
+              token: Word "string" @415..421
+          args: Comma "," @421..422
+          args: PathType@423..426
+            head: Name@423..426
+              token: Word "int" @423..426
+          r: Greater ">" @426..427
+    members: Field@487..507
+      name: Name@487..500
+        token: Word "another_field" @487..500
+      ty: PathType@501..507
+        head: Name@501..507
+          token: Word "string" @501..507
+    r: RBrace "}" @508..509
+  items: ClassDef@566..655
+    kw: Class "class" @566..571
+    name: Name@572..586
+      token: Word "NestedGenerics" @572..586
+    l: LBrace "{" @587..588
+    members: Field@591..627
+      name: Name@591..597
+        token: Word "nested" @591..597
+      ty: PathType@598..627
+        head: Name@598..601
+          token: Map "map" @598..601
+        args: TypeArgs@601..627
+          l: Less "<" @601..602
+          args: PathType@602..608
+            head: Name@602..608
+              token: Word "string" @602..608
+          args: Comma "," @608..609
+          args: PathType@610..626
+            head: Name@610..613
+              token: Map "map" @610..613
+            args: TypeArgs@613..626
+              l: Less "<" @613..614
+              args: PathType@614..620
+                head: Name@614..620
+                  token: Word "string" @614..620
+              args: Comma "," @620..621
+              args: PathType@622..625
+                head: Name@622..625
+                  token: Word "int" @622..625
+              r: Greater ">" @625..626
+          r: Greater ">" @626..627
+    members: Field@630..653
+      name: Name@630..636
+        token: Word "simple" @630..636
+      ty: PathType@637..653
+        head: Name@637..640
+          token: Map "map" @637..640
+        args: TypeArgs@640..653
+          l: Less "<" @640..641
+          args: PathType@641..647
+            head: Name@641..647
+              token: Word "string" @641..647
+          args: Comma "," @647..648
+          args: PathType@649..652
+            head: Name@649..652
+              token: Word "int" @649..652
+          r: Greater ">" @652..653
+    r: RBrace "}" @654..655
+  items: FunctionDef@692..777
+    kw: Function "function" @692..700
+    name: Name@701..709
+      token: Word "BadParam" @701..709
+    params: ParamList@709..731
+      l: LParen "(" @709..710
+      params: Param@710..730
+        name: Name@710..711
+          token: Word "x" @710..711
+        ascription: TypeAscription@711..730
+          colon: Colon ":" @711..712
+          ty: PathType@713..729
+            head: Name@713..716
+              token: Map "map" @713..716
+            args: TypeArgs@716..729
+              l: Less "<" @716..717
+              args: PathType@717..723
+                head: Name@717..723
+                  token: Word "string" @717..723
+              args: Comma "," @723..724
+              args: PathType@725..728
+                head: Name@725..728
+                  token: Word "int" @725..728
+              r: Greater ">" @728..729
+      r: RParen ")" @730..731
+    ret: ReturnType@732..741
+      arrow: Arrow "->" @732..734
+      ty: PathType@735..741
+        head: Name@735..741
+          token: Word "string" @735..741
+    body: LlmBody@742..777
+      l: LBrace "{" @742..743
+      fields: ClientField@746..758
+        kw: Client "client" @746..752
+        colon: Colon ":" @752..753
+        value: PathExpr@754..758
+          head: Name@754..758
+            token: Word "GPT4" @754..758
+      fields: PromptField@761..775
+        kw: Prompt "prompt" @761..767
+        colon: Colon ":" @767..768
+        value: BacktickString@769..775
+          open: BacktickStart "`" @769..770
+          parts: TemplateChunk "test" @770..774
+          close: BacktickEnd "`" @774..775
+      r: RBrace "}" @776..777
+  items: FunctionDef@816..897
+    kw: Function "function" @816..824
+    name: Name@825..838
+      token: Word "BadReturnType" @825..838
+    params: ParamList@838..840
+      l: LParen "(" @838..839
+      r: RParen ")" @839..840
+    ret: ReturnType@841..861
+      arrow: Arrow "->" @841..843
+      ty: PathType@844..860
+        head: Name@844..847
+          token: Map "map" @844..847
+        args: TypeArgs@847..860
+          l: Less "<" @847..848
+          args: PathType@848..854
+            head: Name@848..854
+              token: Word "string" @848..854
+          args: Comma "," @854..855
+          args: PathType@856..859
+            head: Name@856..859
+              token: Word "int" @856..859
+          r: Greater ">" @859..860
+    body: LlmBody@862..897
+      l: LBrace "{" @862..863
+      fields: ClientField@866..878
+        kw: Client "client" @866..872
+        colon: Colon ":" @872..873
+        value: PathExpr@874..878
+          head: Name@874..878
+            token: Word "GPT4" @874..878
+      fields: PromptField@881..895
+        kw: Prompt "prompt" @881..887
+        colon: Colon ":" @887..888
+        value: BacktickString@889..895
+          open: BacktickStart "`" @889..890
+          parts: TemplateChunk "test" @890..894
+          close: BacktickEnd "`" @894..895
+      r: RBrace "}" @896..897
+  items: TypeAliasDef@926..959
+    kw: Type "type" @926..930
+    name: Name@931..939
+      token: Word "BadAlias" @931..939
+    eq: Equals "=" @940..941
+    ty: PathType@942..958
+      head: Name@942..945
+        token: Map "map" @942..945
+      args: TypeArgs@945..958
+        l: Less "<" @945..946
+        args: PathType@946..952
+          head: Name@946..952
+            token: Word "string" @946..952
+        args: Comma "," @952..953
+        args: PathType@954..957
+          head: Name@954..957
+            token: Word "int" @954..957
+        r: Greater ">" @957..958
+error @329..330: unmatched `>` in type expression (found 1 extra)
+error @729..730: unmatched `>` in type expression (found 1 extra)
+error @860..861: unmatched `>` in type expression (found 1 extra)
+error @958..959: unmatched `>` in type expression (found 1 extra)

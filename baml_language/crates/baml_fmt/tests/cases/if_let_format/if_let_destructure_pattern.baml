@@ -1,0 +1,12 @@
+class User {
+    name: string,
+    age: int,
+}
+
+function f(u: User) -> string {
+    if let User { name, age } = u {
+        name
+    } else {
+        "none"
+    }
+}

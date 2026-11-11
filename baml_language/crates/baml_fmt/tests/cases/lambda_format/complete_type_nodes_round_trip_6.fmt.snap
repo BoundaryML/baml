@@ -1,0 +1,4 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+type Values = map<string, int | (value?: int) -> string[]? throws string | int>;

@@ -1,0 +1,128 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f(x: \\\"a\\\\d\\\") -> int {\\n  let s = \\\"\\\\d\\\";\\n  let b = b\\\"\\\\u{41}\\u{e9}\\\";\\n  let t = `a\\\\q${x}b\\\\z`;\\n  let r = r\\\"\\\\d\\\";\\n  match (x) { \\\"\\\\d\\\" => 1, _ => 2 }\\n}\\nclass C { x: string @alias(\\\"\\\\d\\\") }\\n\")"
+---
+SourceFile@0..180
+  items: FunctionDef@0..145
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..20
+      l: LParen "(" @10..11
+      params: Param@11..19
+        name: Name@11..12
+          token: Word "x" @11..12
+        ascription: TypeAscription@12..19
+          colon: Colon ":" @12..13
+          ty: LiteralType@14..19
+            value: String "\"a\\d\"" @14..19
+      r: RParen ")" @19..20
+    ret: ReturnType@21..27
+      arrow: Arrow "->" @21..23
+      ty: PathType@24..27
+        head: Name@24..27
+          token: Word "int" @24..27
+    body: Block@28..145
+      l: LBrace "{" @28..29
+      stmts: LetStmt@32..45
+        introducer: Let "let" @32..35
+        pattern: BindingPattern@36..37
+          name: Name@36..37
+            token: Word "s" @36..37
+        eq: Equals "=" @38..39
+        init: StringLit@40..44
+          token: String "\"\\d\"" @40..44
+        semi: Semicolon ";" @44..45
+      stmts: LetStmt@48..68
+        introducer: Let "let" @48..51
+        pattern: BindingPattern@52..53
+          name: Name@52..53
+            token: Word "b" @52..53
+        eq: Equals "=" @54..55
+        init: StringLit@56..67
+          token: ByteString "b\"\\u{41}é\"" @56..67
+        semi: Semicolon ";" @67..68
+      stmts: LetStmt@71..92
+        introducer: Let "let" @71..74
+        pattern: BindingPattern@75..76
+          name: Name@75..76
+            token: Word "t" @75..76
+        eq: Equals "=" @77..78
+        init: BacktickString@79..91
+          open: BacktickStart "`" @79..80
+          parts: TemplateChunk "a\\q" @80..83
+          parts: TemplateInterp@83..87
+            open: DollarLBrace "${" @83..85
+            tail: PathExpr@85..86
+              head: Name@85..86
+                token: Word "x" @85..86
+            close: RBrace "}" @86..87
+          parts: TemplateChunk "b\\z" @87..90
+          close: BacktickEnd "`" @90..91
+        semi: Semicolon ";" @91..92
+      stmts: LetStmt@95..109
+        introducer: Let "let" @95..98
+        pattern: BindingPattern@99..100
+          name: Name@99..100
+            token: Word "r" @99..100
+        eq: Equals "=" @101..102
+        init: StringLit@103..108
+          token: RawString "r\"\\d\"" @103..108
+        semi: Semicolon ";" @108..109
+      tail: MatchExpr@112..143
+        kw: Match "match" @112..117
+        scrutinee: MatchParen@118..121
+          l: LParen "(" @118..119
+          expr: PathExpr@119..120
+            head: Name@119..120
+              token: Word "x" @119..120
+          r: RParen ")" @120..121
+        l: LBrace "{" @122..123
+        arms: MatchArm@124..134
+          pattern: TypePattern@124..128
+            ty: LiteralType@124..128
+              value: String "\"\\d\"" @124..128
+          arrow: FatArrow "=>" @129..131
+          body: LiteralExpr@132..133
+            token: Integer "1" @132..133
+          comma: Comma "," @133..134
+        arms: MatchArm@135..141
+          pattern: WildcardPattern@135..136
+            underscore: Underscore "_" @135..136
+          arrow: FatArrow "=>" @137..139
+          body: LiteralExpr@140..141
+            token: Integer "2" @140..141
+        r: RBrace "}" @142..143
+      r: RBrace "}" @144..145
+  items: ClassDef@146..180
+    kw: Class "class" @146..151
+    name: Name@152..153
+      token: Word "C" @152..153
+    l: LBrace "{" @154..155
+    members: Field@156..178
+      name: Name@156..157
+        token: Word "x" @156..157
+      colon: Colon ":" @157..158
+      ty: PathType@159..165
+        head: Name@159..165
+          token: Word "string" @159..165
+      attrs: Attribute@166..178
+        at: At "@" @166..167
+        path: DottedName@167..172
+          head: Name@167..172
+            token: Word "alias" @167..172
+        args: AttrArgs@172..178
+          l: LParen "(" @172..173
+          args: StringLit@173..177
+            token: String "\"\\d\"" @173..177
+          r: RParen ")" @177..178
+    r: RBrace "}" @179..180
+---
+InvalidStringEscape { issue: EscapeIssue { start: 1, len: 2, text: "\\d", kind: Unknown('d'), literal: Quoted, suggest_raw_string: false }, range: 16..18 }
+InvalidStringEscape { issue: EscapeIssue { start: 0, len: 2, text: "\\d", kind: Unknown('d'), literal: Quoted, suggest_raw_string: true }, range: 41..43 }
+InvalidStringEscape { issue: EscapeIssue { start: 0, len: 6, text: "\\u{41}", kind: UnicodeInByteString { utf8: Some([65]) }, literal: Bytes, suggest_raw_string: false }, range: 58..64 }
+InvalidStringEscape { issue: EscapeIssue { start: 6, len: 2, text: "é", kind: NonAsciiInByteString('é'), literal: Bytes, suggest_raw_string: false }, range: 64..66 }
+InvalidStringEscape { issue: EscapeIssue { start: 1, len: 2, text: "\\q", kind: Unknown('q'), literal: Backtick, suggest_raw_string: false }, range: 81..83 }
+InvalidStringEscape { issue: EscapeIssue { start: 1, len: 2, text: "\\z", kind: Unknown('z'), literal: Backtick, suggest_raw_string: false }, range: 88..90 }
+InvalidStringEscape { issue: EscapeIssue { start: 0, len: 2, text: "\\d", kind: Unknown('d'), literal: Quoted, suggest_raw_string: false }, range: 125..127 }
+InvalidStringEscape { issue: EscapeIssue { start: 0, len: 2, text: "\\d", kind: Unknown('d'), literal: Quoted, suggest_raw_string: false }, range: 174..176 }

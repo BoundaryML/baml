@@ -1,0 +1,3 @@
+function f() -> bool {
+    !((true))
+}

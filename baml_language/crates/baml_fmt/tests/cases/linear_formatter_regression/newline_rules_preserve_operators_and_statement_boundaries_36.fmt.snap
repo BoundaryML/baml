@@ -1,0 +1,12 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function example() -> int {
+    consume(() -> int {
+        if (true) {
+            return 3;
+        }
+        -1
+    });
+    -3
+}

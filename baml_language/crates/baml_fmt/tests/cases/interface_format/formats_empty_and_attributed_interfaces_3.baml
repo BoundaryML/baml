@@ -1,0 +1,1 @@
+interface Marker<T> requires Base {}

@@ -384,12 +384,6 @@ pub(super) fn formatting(
     let formatted = match baml_fmt::format_salsa(db, file, baml_fmt::FormatOptions::default()) {
         Ok(formatted) => formatted.apply_to(buffer),
         Err(baml_fmt::FormatterError::ParseErrors(_)) => return Ok(None),
-        Err(baml_fmt::FormatterError::StrongAstError(error)) => {
-            return Err(LspError::RequestFailed(format!(
-                "cannot format: {}",
-                error.print_with_file_context(&path, text)
-            )));
-        }
     };
     if formatted == buffer {
         return Ok(None);

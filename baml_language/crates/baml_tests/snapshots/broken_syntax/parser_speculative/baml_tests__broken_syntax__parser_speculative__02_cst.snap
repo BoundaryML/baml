@@ -1,0 +1,509 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== ambiguous_function.baml ===
+SourceFile@51..295
+  items: FunctionDef@51..140
+    kw: Function "function" @51..59
+    name: Name@60..69
+      token: Word "Ambiguous" @60..69
+    params: ParamList@69..84
+      l: LParen "(" @69..70
+      params: Param@70..83
+        name: Name@70..75
+          token: Word "input" @70..75
+        ascription: TypeAscription@75..83
+          colon: Colon ":" @75..76
+          ty: PathType@77..83
+            head: Name@77..83
+              token: Word "string" @77..83
+      r: RParen ")" @83..84
+    ret: ReturnType@85..94
+      arrow: Arrow "->" @85..87
+      ty: PathType@88..94
+        head: Name@88..94
+          token: Word "string" @88..94
+    body: LlmBody@95..140
+      l: LBrace "{" @95..96
+      fields: ClientField@99..111
+        kw: Client "client" @99..105
+        colon: Colon ":" @105..106
+        value: PathExpr@107..111
+          head: Name@107..111
+            token: Word "GPT4" @107..111
+      r: RBrace "}" @139..140
+  items: FunctionDef@203..295
+    kw: Function "function" @203..211
+    name: Name@212..222
+      token: Word "AnotherLLM" @212..222
+    params: ParamList@222..237
+      l: LParen "(" @222..223
+      params: Param@223..236
+        name: Name@223..228
+          token: Word "input" @223..228
+        ascription: TypeAscription@228..236
+          colon: Colon ":" @228..229
+          ty: PathType@230..236
+            head: Name@230..236
+              token: Word "string" @230..236
+      r: RParen ")" @236..237
+    ret: ReturnType@238..247
+      arrow: Arrow "->" @238..240
+      ty: PathType@241..247
+        head: Name@241..247
+          token: Word "string" @241..247
+    body: Block@248..295
+      l: LBrace "{" @248..249
+      stmts: ExprStmt@252..257
+        expr: PathExpr@252..257
+          head: Name@252..257
+            token: Word "clent" @252..257
+      stmts: Bogus@257..258
+        tokens: Colon ":" @257..258
+      stmts: ExprStmt@259..263
+        expr: PathExpr@259..263
+          head: Name@259..263
+            token: Word "GPT4" @259..263
+      stmts: ExprStmt@266..272
+        expr: PathExpr@266..272
+          head: Name@266..272
+            token: Prompt "prompt" @266..272
+      stmts: Bogus@272..273
+        tokens: Colon ":" @272..273
+      tail: BacktickString@274..293
+        open: BacktickStart "`" @274..275
+        parts: TemplateChunk "Process: " @275..284
+        parts: TemplateInterp@284..292
+          open: DollarLBrace "${" @284..286
+          tail: PathExpr@286..291
+            head: Name@286..291
+              token: Word "input" @286..291
+          close: RBrace "}" @291..292
+        close: BacktickEnd "`" @292..293
+      r: RBrace "}" @294..295
+error @139..140: expected LLM function missing 'prompt' field, found '}'
+error @257..258: expected expression, found ':'
+error @272..273: expected expression, found ':'
+=== expr_function.baml ===
+SourceFile@0..199
+  items: ClassDef@0..44
+    kw: Class "class" @0..5
+    name: Name@6..14
+      token: Word "JsonData" @6..14
+    l: LBrace "{" @15..16
+    members: Field@19..29
+      name: Name@19..25
+        token: Word "field1" @19..25
+      ty: PathType@26..29
+        head: Name@26..29
+          token: Word "int" @26..29
+    members: Field@32..42
+      name: Name@32..38
+        token: Word "field2" @32..38
+      ty: PathType@39..42
+        head: Name@39..42
+          token: Word "int" @39..42
+    r: RBrace "}" @43..44
+  items: FunctionDef@46..199
+    kw: Function "function" @46..54
+    name: Name@55..66
+      token: Word "ProcessData" @55..66
+    params: ParamList@66..82
+      l: LParen "(" @66..67
+      params: Param@67..81
+        name: Name@67..71
+          token: Word "data" @67..71
+        ascription: TypeAscription@71..81
+          colon: Colon ":" @71..72
+          ty: PathType@73..81
+            head: Name@73..81
+              token: Word "JsonData" @73..81
+      r: RParen ")" @81..82
+    ret: ReturnType@83..92
+      arrow: Arrow "->" @83..85
+      ty: PathType@86..92
+        head: Name@86..92
+          token: Word "string" @86..92
+    body: Block@93..199
+      l: LBrace "{" @93..94
+      stmts: LetStmt@97..136
+        introducer: Let "let" @97..100
+        pattern: BindingPattern@101..107
+          name: Name@101..107
+            token: Word "result" @101..107
+        eq: Equals "=" @108..109
+        init: BinaryExpr@110..135
+          lhs: PathExpr@110..121
+            head: Name@110..114
+              token: Word "data" @110..114
+            dot: Dot "." @114..115
+            name: Name@115..121
+              token: Word "field1" @115..121
+          op: Plus "+" @122..123
+          rhs: PathExpr@124..135
+            head: Name@124..128
+              token: Word "data" @124..128
+            dot: Dot "." @128..129
+            name: Name@129..135
+              token: Word "field2" @129..135
+        semi: Semicolon ";" @135..136
+      stmts: ExprStmt@139..181
+        expr: IfExpr@139..181
+          kw: If "if" @139..141
+          cond: ParenExpr@142..156
+            l: LParen "(" @142..143
+            inner: BinaryExpr@143..155
+              lhs: PathExpr@143..149
+                head: Name@143..149
+                  token: Word "result" @143..149
+              op: Greater ">" @150..151
+              rhs: LiteralExpr@152..155
+                token: Integer "100" @152..155
+            r: RParen ")" @155..156
+          then_branch: Block@157..181
+            l: LBrace "{" @157..158
+            stmts: ExprStmt@163..177
+              expr: ReturnExpr@163..176
+                kw: Return "return" @163..169
+                value: StringLit@170..176
+                  token: String "\"high\"" @170..176
+              semi: Semicolon ";" @176..177
+            r: RBrace "}" @180..181
+      stmts: ExprStmt@184..197
+        expr: ReturnExpr@184..196
+          kw: Return "return" @184..190
+          value: StringLit@191..196
+            token: String "\"low\"" @191..196
+        semi: Semicolon ";" @196..197
+      r: RBrace "}" @198..199
+=== llm_function.baml ===
+SourceFile@0..143
+  items: FunctionDef@0..143
+    kw: Function "function" @0..8
+    name: Name@9..20
+      token: Word "ExtractData" @9..20
+    params: ParamList@20..34
+      l: LParen "(" @20..21
+      params: Param@21..33
+        name: Name@21..25
+          token: Word "text" @21..25
+        ascription: TypeAscription@25..33
+          colon: Colon ":" @25..26
+          ty: PathType@27..33
+            head: Name@27..33
+              token: Word "string" @27..33
+      r: RParen ")" @33..34
+    ret: ReturnType@35..46
+      arrow: Arrow "->" @35..37
+      ty: PathType@38..46
+        head: Name@38..46
+          token: Word "JsonData" @38..46
+    body: LlmBody@47..143
+      l: LBrace "{" @47..48
+      fields: ClientField@51..63
+        kw: Client "client" @51..57
+        colon: Colon ":" @57..58
+        value: PathExpr@59..63
+          head: Name@59..63
+            token: Word "GPT4" @59..63
+      fields: PromptField@66..141
+        kw: Prompt "prompt" @66..72
+        colon: Colon ":" @72..73
+        value: BacktickString@74..141
+          open: BacktickStart "`" @74..75
+          parts: TemplateChunk "\n    Extract structured data from: " @75..110
+          parts: TemplateInterp@110..117
+            open: DollarLBrace "${" @110..112
+            tail: PathExpr@112..116
+              head: Name@112..116
+                token: Word "text" @112..116
+            close: RBrace "}" @116..117
+          parts: TemplateChunk "\n    Return as JSON.\n  " @117..140
+          close: BacktickEnd "`" @140..141
+      r: RBrace "}" @142..143
+=== mixed_functions.baml ===
+SourceFile@51..921
+  items: FunctionDef@51..239
+    kw: Function "function" @51..59
+    name: Name@60..70
+      token: Word "LLMAnalyze" @60..70
+    params: ParamList@70..84
+      l: LParen "(" @70..71
+      params: Param@71..83
+        name: Name@71..75
+          token: Word "text" @71..75
+        ascription: TypeAscription@75..83
+          colon: Colon ":" @75..76
+          ty: PathType@77..83
+            head: Name@77..83
+              token: Word "string" @77..83
+      r: RParen ")" @83..84
+    ret: ReturnType@85..96
+      arrow: Arrow "->" @85..87
+      ty: PathType@88..96
+        head: Name@88..96
+          token: Word "Analysis" @88..96
+    body: LlmBody@97..239
+      l: LBrace "{" @97..98
+      fields: ClientField@101..113
+        kw: Client "client" @101..107
+        colon: Colon ":" @107..108
+        value: PathExpr@109..113
+          head: Name@109..113
+            token: Word "GPT4" @109..113
+      fields: PromptField@116..237
+        kw: Prompt "prompt" @116..122
+        colon: Colon ":" @122..123
+        value: BacktickString@124..237
+          open: BacktickStart "`" @124..125
+          parts: TemplateChunk "\n    Analyze the following text:\n    " @125..162
+          parts: TemplateInterp@162..169
+            open: DollarLBrace "${" @162..164
+            tail: PathExpr@164..168
+              head: Name@164..168
+                token: Word "text" @164..168
+            close: RBrace "}" @168..169
+          parts: TemplateChunk "\n    \n    Return an Analysis object with sentiment and keywords.\n  " @169..236
+          close: BacktickEnd "`" @236..237
+      r: RBrace "}" @238..239
+  items: ClassDef@241..312
+    kw: Class "class" @241..246
+    name: Name@247..255
+      token: Word "Analysis" @247..255
+    l: LBrace "{" @256..257
+    members: Field@260..276
+      name: Name@260..269
+        token: Word "sentiment" @260..269
+      ty: PathType@270..276
+        head: Name@270..276
+          token: Word "string" @270..276
+    members: Field@279..296
+      name: Name@279..287
+        token: Word "keywords" @279..287
+      ty: ArrayType@288..296
+        inner: PathType@288..294
+          head: Name@288..294
+            token: Word "string" @288..294
+        l: LBracket "[" @294..295
+        r: RBracket "]" @295..296
+    members: Field@299..310
+      name: Name@299..304
+        token: Word "score" @299..304
+      ty: PathType@305..310
+        head: Name@305..310
+          token: Word "float" @305..310
+    r: RBrace "}" @311..312
+  items: FunctionDef@314..671
+    kw: Function "function" @314..322
+    name: Name@323..338
+      token: Word "ProcessAnalysis" @323..338
+    params: ParamList@338..358
+      l: LParen "(" @338..339
+      params: Param@339..357
+        name: Name@339..347
+          token: Word "analysis" @339..347
+        ascription: TypeAscription@347..357
+          colon: Colon ":" @347..348
+          ty: PathType@349..357
+            head: Name@349..357
+              token: Word "Analysis" @349..357
+      r: RParen ")" @357..358
+    ret: ReturnType@359..368
+      arrow: Arrow "->" @359..361
+      ty: PathType@362..368
+        head: Name@362..368
+          token: Word "string" @362..368
+    body: Block@369..671
+      l: LBrace "{" @369..370
+      stmts: LetStmt@373..399
+        introducer: Let "let" @373..376
+        pattern: BindingPattern@377..382
+          name: Name@377..382
+            token: Word "score" @377..382
+        eq: Equals "=" @383..384
+        init: PathExpr@385..399
+          head: Name@385..393
+            token: Word "analysis" @385..393
+          dot: Dot "." @393..394
+          name: Name@394..399
+            token: Word "score" @394..399
+      tail: IfExpr@402..669
+        kw: If "if" @402..404
+        cond: BinaryExpr@405..416
+          lhs: PathExpr@405..410
+            head: Name@405..410
+              token: Word "score" @405..410
+          op: Greater ">" @411..412
+          rhs: LiteralExpr@413..416
+            token: Float "0.8" @413..416
+        then_branch: Block@417..472
+          l: LBrace "{" @417..418
+          tail: ReturnExpr@423..468
+            kw: Return "return" @423..429
+            value: BinaryExpr@430..468
+              lhs: StringLit@430..447
+                token: String "\"Very positive: \"" @430..447
+              op: Plus "+" @448..449
+              rhs: PathExpr@450..468
+                head: Name@450..458
+                  token: Word "analysis" @450..458
+                dot: Dot "." @458..459
+                name: Name@459..468
+                  token: Word "sentiment" @459..468
+          r: RBrace "}" @471..472
+        kw: Else "else" @473..477
+        body: IfExpr@478..669
+          kw: If "if" @478..480
+          cond: BinaryExpr@481..492
+            lhs: PathExpr@481..486
+              head: Name@481..486
+                token: Word "score" @481..486
+            op: Greater ">" @487..488
+            rhs: LiteralExpr@489..492
+              token: Float "0.5" @489..492
+          then_branch: Block@493..543
+            l: LBrace "{" @493..494
+            tail: ReturnExpr@499..539
+              kw: Return "return" @499..505
+              value: BinaryExpr@506..539
+                lhs: StringLit@506..518
+                  token: String "\"Positive: \"" @506..518
+                op: Plus "+" @519..520
+                rhs: PathExpr@521..539
+                  head: Name@521..529
+                    token: Word "analysis" @521..529
+                  dot: Dot "." @529..530
+                  name: Name@530..539
+                    token: Word "sentiment" @530..539
+            r: RBrace "}" @542..543
+          kw: Else "else" @544..548
+          body: IfExpr@549..669
+            kw: If "if" @549..551
+            cond: BinaryExpr@552..563
+              lhs: PathExpr@552..557
+                head: Name@552..557
+                  token: Word "score" @552..557
+              op: Greater ">" @558..559
+              rhs: LiteralExpr@560..563
+                token: Float "0.2" @560..563
+            then_branch: Block@564..613
+              l: LBrace "{" @564..565
+              tail: ReturnExpr@570..609
+                kw: Return "return" @570..576
+                value: BinaryExpr@577..609
+                  lhs: StringLit@577..588
+                    token: String "\"Neutral: \"" @577..588
+                  op: Plus "+" @589..590
+                  rhs: PathExpr@591..609
+                    head: Name@591..599
+                      token: Word "analysis" @591..599
+                    dot: Dot "." @599..600
+                    name: Name@600..609
+                      token: Word "sentiment" @600..609
+              r: RBrace "}" @612..613
+            kw: Else "else" @614..618
+            body: Block@619..669
+              l: LBrace "{" @619..620
+              tail: ReturnExpr@625..665
+                kw: Return "return" @625..631
+                value: BinaryExpr@632..665
+                  lhs: StringLit@632..644
+                    token: String "\"Negative: \"" @632..644
+                  op: Plus "+" @645..646
+                  rhs: PathExpr@647..665
+                    head: Name@647..655
+                      token: Word "analysis" @647..655
+                    dot: Dot "." @655..656
+                    name: Name@656..665
+                      token: Word "sentiment" @656..665
+              r: RBrace "}" @668..669
+      r: RBrace "}" @670..671
+  items: FunctionDef@673..854
+    kw: Function "function" @673..681
+    name: Name@682..696
+      token: Word "ChainedProcess" @682..696
+    params: ParamList@696..711
+      l: LParen "(" @696..697
+      params: Param@697..710
+        name: Name@697..702
+          token: Word "input" @697..702
+        ascription: TypeAscription@702..710
+          colon: Colon ":" @702..703
+          ty: PathType@704..710
+            head: Name@704..710
+              token: Word "string" @704..710
+      r: RParen ")" @710..711
+    ret: ReturnType@712..721
+      arrow: Arrow "->" @712..714
+      ty: PathType@715..721
+        head: Name@715..721
+          token: Word "string" @715..721
+    body: LlmBody@722..854
+      l: LBrace "{" @722..723
+      fields: ClientField@726..738
+        kw: Client "client" @726..732
+        colon: Colon ":" @732..733
+        value: PathExpr@734..738
+          head: Name@734..738
+            token: Word "GPT4" @734..738
+      fields: PromptField@741..852
+        kw: Prompt "prompt" @741..747
+        colon: Colon ":" @747..748
+        value: BacktickString@749..852
+          open: BacktickStart "`" @749..750
+          parts: TemplateChunk "\n    Process this through multiple steps:\n    1. " @750..799
+          parts: TemplateInterp@799..807
+            open: DollarLBrace "${" @799..801
+            tail: PathExpr@801..806
+              head: Name@801..806
+                token: Word "input" @801..806
+            close: RBrace "}" @806..807
+          parts: TemplateChunk "\n    2. Transform it\n    3. Return result\n  " @807..851
+          close: BacktickEnd "`" @851..852
+      r: RBrace "}" @853..854
+  items: FunctionDef@856..921
+    kw: Function "function" @856..864
+    name: Name@865..875
+      token: Word "SimpleCalc" @865..875
+    params: ParamList@875..891
+      l: LParen "(" @875..876
+      params: Param@876..882
+        name: Name@876..877
+          token: Word "a" @876..877
+        ascription: TypeAscription@877..882
+          colon: Colon ":" @877..878
+          ty: PathType@879..882
+            head: Name@879..882
+              token: Word "int" @879..882
+      params: Comma "," @882..883
+      params: Param@884..890
+        name: Name@884..885
+          token: Word "b" @884..885
+        ascription: TypeAscription@885..890
+          colon: Colon ":" @885..886
+          ty: PathType@887..890
+            head: Name@887..890
+              token: Word "int" @887..890
+      r: RParen ")" @890..891
+    ret: ReturnType@892..898
+      arrow: Arrow "->" @892..894
+      ty: PathType@895..898
+        head: Name@895..898
+          token: Word "int" @895..898
+    body: Block@899..921
+      l: LBrace "{" @899..900
+      tail: ReturnExpr@903..919
+        kw: Return "return" @903..909
+        value: BinaryExpr@910..919
+          lhs: PathExpr@910..911
+            head: Name@910..911
+              token: Word "a" @910..911
+          op: Plus "+" @912..913
+          rhs: BinaryExpr@914..919
+            lhs: PathExpr@914..915
+              head: Name@914..915
+                token: Word "b" @914..915
+            op: Star "*" @916..917
+            rhs: LiteralExpr@918..919
+              token: Integer "2" @918..919
+      r: RBrace "}" @920..921

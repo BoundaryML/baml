@@ -12,7 +12,7 @@ type IncludeRule = tm.IncludeRule<BamlScope>;
 // replaces the reference with `{ include: "#<key>" }`.
 
 // An identifier as the BAML lexer defines its `Word` token
-// (baml_compiler_lexer/src/tokens.rs):
+// (baml_syntax/src/token.rs):
 //
 //   $-prefixed: \$[a-zA-Z_][a-zA-Z0-9_]*
 //   normal:     [a-zA-Z_][a-zA-Z0-9_-]*(\$[a-zA-Z_][a-zA-Z0-9_-]*)*
@@ -189,7 +189,7 @@ const ITEM_END_TAIL = String.raw`\s*\}|\s+${IDENT}\b|\r?\n\s*(?:${IDENT}\b|@@|\}
 
 // --- Literals --------------------------------------------------------------
 //
-// Derived from the BAML lexer (baml_compiler_lexer/src/tokens.rs). Every literal
+// Derived from the BAML lexer (baml_syntax/src/token.rs). Every literal
 // is also a valid type expression in BAML (literal types: `1 | 2`, `"a" | "b"`,
 // `true`), so the `literal` group below is wired into `typeExpression` as well.
 

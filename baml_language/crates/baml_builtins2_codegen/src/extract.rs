@@ -3,15 +3,14 @@
 //! Iterates `baml_builtins2::ALL`, parses each file through the compiler2
 //! front-end (lex → parse → lower), and collects every function whose body is
 //! `FunctionBodyDef::Builtin(BuiltinKind::Vm)` or `BuiltinKind::Io` into a
-//! `NativeBuiltin` record. The CST is also retained per file for
-//! `//baml:mut_self`, `//baml:vm`, and `//baml:mut_vm` directive scanning.
+//! `NativeBuiltin` record. The `//baml:` directives a native declares travel
+//! on the lowered function as [`baml_compiler2_ast::ast::NativeDirectives`].
 
 use baml_base::{FileId, native_key_spelling};
-use baml_compiler_diagnostics::ToDiagnostic;
-use baml_compiler_syntax::{NodeOrToken, SyntaxKind, SyntaxNode};
+use baml_compiler_diagnostics::typed_parse_error_diagnostic;
 use baml_compiler2_ast::ast::{
-    BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, ImplementsForDef, Item, TypeExpr,
-    TypeExprKind,
+    BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, ImplementsForDef, Item, NativeDirective,
+    TypeExpr, TypeExprKind,
 };
 
 use crate::types::{
@@ -133,11 +132,9 @@ fn extract_scoped(
             builtin_file.package,
             builtin_file.relative_path
         );
-        // Lex and parse into a lossless CST.
-        let tokens = baml_compiler_lexer::lex_lossless(builtin_file.contents, FileId::new(0));
-        let (green, errors) = baml_compiler_parser::parse_file(&tokens);
-        for e in &errors {
-            let d = e.to_diagnostic();
+        let parsed = baml_parser::parse(builtin_file.contents);
+        for e in &parsed.errors {
+            let d = typed_parse_error_diagnostic(e, FileId::new(0));
             let location = d
                 .primary_span()
                 .map(|span| {
@@ -148,13 +145,13 @@ fn extract_scoped(
                 .unwrap_or_else(|| diag_path.clone());
             diagnostic_lines.push(format!("  {location}: [{}] {}", d.id.code(), d.message));
         }
-        if !errors.is_empty() {
+        if !parsed.errors.is_empty() {
             continue;
         }
-        let cst_root = SyntaxNode::new_root(green);
 
-        // Lower CST → AST items.
-        let (items, diags, _) = baml_compiler2_ast::lower_file(&cst_root);
+        // Lower the tree to AST items.
+        let (items, diags, _) =
+            baml_compiler2_ast::lower_tree::lower_file(&parsed.tree, None, None);
         for ld in &diags {
             let d = ld.to_diagnostic(FileId::new(0));
             let location = d
@@ -186,8 +183,8 @@ fn extract_scoped(
                 Item::Class(class_def) => {
                     extract_from_class(
                         class_def,
+                        &items,
                         &namespace_prefix,
-                        &cst_root,
                         &path,
                         &mut vm_builtins,
                         &mut io_builtins,
@@ -202,23 +199,28 @@ fn extract_scoped(
                     extract_from_free_function(
                         func_def,
                         &namespace_prefix,
-                        &cst_root,
                         &path,
                         &mut vm_builtins,
                         &mut io_builtins,
                     );
                 }
-                Item::ImplementsFor(impl_def) => {
+                // A block for a class of this file is extracted with the class
+                // (its natives are the class's, receiver and all).
+                Item::ImplementsFor(impl_def)
+                    if !items.iter().any(
+                        |item| matches!(item, Item::Class(class) if impl_def.is_for_class(class)),
+                    ) =>
+                {
                     extract_from_implements_for(
                         impl_def,
                         &items,
                         &namespace_prefix,
-                        &cst_root,
                         &path,
                         &mut vm_builtins,
                         &mut io_builtins,
                     );
                 }
+                Item::ImplementsFor(_) => {}
                 _ => {}
             }
         }
@@ -252,8 +254,8 @@ fn extract_scoped(
 /// Extract `$rust_function` and `$rust_io_function` methods from a class definition.
 fn extract_from_class(
     class_def: &ClassDef,
+    items: &[Item],
     namespace_prefix: &str,
-    cst_root: &SyntaxNode,
     source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
@@ -274,13 +276,22 @@ fn extract_from_class(
     // renders the separate `<(target as iface)>` DISPLAY spelling); a direct
     // method is just `{ns}.{Class}.{method}`.
     let direct = class_def.methods.iter().map(|m| (m, None));
-    let in_impl = class_def.implements.iter().flat_map(|b| {
-        // The interface `TypeExpr`'s `Display` is the exact form MIR keys
-        // on, with a written `root.` spelled as the package — through the
-        // same function MIR uses, so the two cannot drift.
-        let iface = native_key_spelling(package_of(namespace_prefix), &b.target.to_string());
-        b.methods.iter().map(move |m| (m, Some(iface.clone())))
-    });
+    let in_impl = items
+        .iter()
+        .filter_map(|item| match item {
+            Item::ImplementsFor(b) if b.is_for_class(class_def) => Some(b),
+            _ => None,
+        })
+        .flat_map(|b| {
+            // The interface `TypeExpr`'s `Display` is the exact form MIR keys
+            // on, with a written `root.` spelled as the package — through the
+            // same function MIR uses, so the two cannot drift.
+            let iface = native_key_spelling(
+                package_of(namespace_prefix),
+                &b.interface_target.to_string(),
+            );
+            b.methods.iter().map(move |m| (m, Some(iface.clone())))
+        });
     for (method, iface_qualifier) in direct.chain(in_impl) {
         let Some(pipeline) = extract_builtin_pipeline(method) else {
             continue;
@@ -317,13 +328,11 @@ fn extract_from_class(
             .map(|p| p.name.as_str() == "self")
             .unwrap_or(false);
 
-        let method_name = method.name.as_str();
-        let is_mut =
-            has_self && has_method_directive(cst_root, class_name, method_name, "//baml:mut_self");
-        let has_vm = has_method_directive(cst_root, class_name, method_name, "//baml:vm");
-        let has_mut_vm = has_method_directive(cst_root, class_name, method_name, "//baml:mut_vm");
-        let may_yield = has_method_directive(cst_root, class_name, method_name, "//baml:may_yield");
-        let fallible = has_method_directive(cst_root, class_name, method_name, "//baml:fallible");
+        let is_mut = has_self && method.directives.has(NativeDirective::MutSelf);
+        let has_vm = method.directives.has(NativeDirective::Vm);
+        let has_mut_vm = method.directives.has(NativeDirective::MutVm);
+        let may_yield = method.directives.has(NativeDirective::MayYield);
+        let fallible = method.directives.has(NativeDirective::Fallible);
 
         assert!(
             !(has_vm && has_mut_vm),
@@ -410,12 +419,7 @@ fn extract_from_class(
             vm_usage,
             may_yield,
             fallible,
-            local_twin: has_method_directive(
-                cst_root,
-                class_name,
-                method_name,
-                "//baml:local_twin",
-            ),
+            local_twin: method.directives.has(NativeDirective::LocalTwin),
             pipeline,
             throws,
             source_file: source_file.to_string(),
@@ -491,7 +495,6 @@ fn extract_class_fields(
 fn extract_from_free_function(
     func_def: &FunctionDef,
     namespace_prefix: &str,
-    cst_root: &SyntaxNode,
     source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
@@ -508,10 +511,10 @@ fn extract_from_free_function(
 
     let path = format!("{namespace_prefix}.{}", func_def.name.as_str());
     let fn_name = path_to_fn_name(&path);
-    let has_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:vm");
-    let has_mut_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:mut_vm");
-    let may_yield = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:may_yield");
-    let fallible = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:fallible");
+    let has_vm = func_def.directives.has(NativeDirective::Vm);
+    let has_mut_vm = func_def.directives.has(NativeDirective::MutVm);
+    let may_yield = func_def.directives.has(NativeDirective::MayYield);
+    let fallible = func_def.directives.has(NativeDirective::Fallible);
 
     assert!(
         !(has_vm && has_mut_vm),
@@ -598,7 +601,6 @@ fn extract_from_implements_for(
     impl_def: &ImplementsForDef,
     items: &[Item],
     namespace_prefix: &str,
-    cst_root: &SyntaxNode,
     source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
@@ -675,15 +677,12 @@ fn extract_from_implements_for(
         );
         let fn_name = path_to_fn_name(&path);
 
-        // Scan the method's `//baml:` directives, scoped to this exact method by
-        // its `name_span` (the method names `add` / `div` / … collide across
-        // `implement` blocks, so a name-keyed lookup would be ambiguous). The
-        // `implement` blocks have no `//baml:mut_self` (the receiver is always
-        // `&self`), so only VM-access, yielding, and fallibility are scanned.
-        let has_vm = impl_method_has_directive(cst_root, method, "//baml:vm");
-        let has_mut_vm = impl_method_has_directive(cst_root, method, "//baml:mut_vm");
-        let may_yield = impl_method_has_directive(cst_root, method, "//baml:may_yield");
-        let fallible = impl_method_has_directive(cst_root, method, "//baml:fallible");
+        // The `implement` blocks have no `//baml:mut_self` (the receiver is
+        // always `&self`), so only VM access, yielding and fallibility count.
+        let has_vm = method.directives.has(NativeDirective::Vm);
+        let has_mut_vm = method.directives.has(NativeDirective::MutVm);
+        let may_yield = method.directives.has(NativeDirective::MayYield);
+        let fallible = method.directives.has(NativeDirective::Fallible);
 
         assert!(
             !(has_vm && has_mut_vm),
@@ -1065,164 +1064,6 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     }
 }
 
-/// Check if a method inside a class has the given `directive` comment (e.g. `"//baml:mut_self"`)
-/// before its `function` keyword in the CST.
-///
-/// In the Rowan CST, the parser's `bump()` emits leading trivia tokens (whitespace,
-/// comments) immediately before the `function` keyword inside the `FUNCTION_DEF` node
-/// itself. So the directive appears as a `LINE_COMMENT` token child of the
-/// `FUNCTION_DEF` node, before the `KW_FUNCTION` token.
-fn has_method_directive(
-    cst_root: &SyntaxNode,
-    class_name: &str,
-    method_name: &str,
-    directive: &str,
-) -> bool {
-    for class_node in cst_root.descendants() {
-        if class_node.kind() != SyntaxKind::CLASS_DEF {
-            continue;
-        }
-        if !class_node_has_name(&class_node, class_name) {
-            continue;
-        }
-        for func_node in class_node.descendants() {
-            if func_node.kind() != SyntaxKind::FUNCTION_DEF {
-                continue;
-            }
-            if !func_node_has_name(&func_node, method_name) {
-                continue;
-            }
-            if function_node_has_leading_directive(&func_node, directive) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Check if an `implement`-block method has the given `directive` comment before
-/// its `function` keyword in the CST.
-///
-/// Unlike [`has_method_directive`], the lookup is scoped to a single method by
-/// its `name_span` rather than by `(class_name, method_name)`: the method names
-/// in `implement` blocks (`add`, `div`, `eq`, …) repeat across every block, so a
-/// name-keyed search would match the wrong block. Exactly one `FUNCTION_DEF`
-/// node contains the method's name token, so containment uniquely identifies it.
-/// Offsets are compared as raw `u32`s so the match does not depend on the
-/// `text_size` version the AST and CST crates each resolve.
-fn impl_method_has_directive(cst_root: &SyntaxNode, method: &FunctionDef, directive: &str) -> bool {
-    let name_start = u32::from(method.name_span.start());
-    for node in cst_root.descendants() {
-        if node.kind() != SyntaxKind::FUNCTION_DEF {
-            continue;
-        }
-        let range = node.text_range();
-        if u32::from(range.start()) <= name_start && name_start < u32::from(range.end()) {
-            return function_node_has_leading_directive(&node, directive);
-        }
-    }
-    false
-}
-
-/// Check if a top-level (non-class) function has the given `directive` comment
-/// before its `function` keyword in the CST.
-fn has_free_fn_directive(cst_root: &SyntaxNode, fn_name: &str, directive: &str) -> bool {
-    for node in cst_root.children() {
-        if node.kind() != SyntaxKind::FUNCTION_DEF {
-            continue;
-        }
-        if !func_node_has_name(&node, fn_name) {
-            continue;
-        }
-        if function_node_has_leading_directive(&node, directive) {
-            return true;
-        }
-    }
-    false
-}
-
-/// Returns true if the `CLASS_DEF` node has a name token matching `class_name`.
-fn class_node_has_name(class_node: &SyntaxNode, class_name: &str) -> bool {
-    // The class name is the first WORD token that is a direct meaningful child.
-    // In the CST: `class WORD<...> { ... }`
-    // Scan children_with_tokens: skip the `class` keyword and trivia,
-    // then the next WORD should be the class name.
-    for element in class_node.children_with_tokens() {
-        if let NodeOrToken::Token(tok) = element {
-            if tok.kind().is_trivia() || tok.kind() == SyntaxKind::KW_CLASS {
-                continue;
-            }
-            // First non-trivia, non-keyword token should be the class name.
-            return tok.kind() == SyntaxKind::WORD && tok.text() == class_name;
-        }
-        // Encountered a child node before finding the name token — not a match.
-        // (Shouldn't happen for CLASS_DEF in practice.)
-    }
-    false
-}
-
-/// Returns true if the `FUNCTION_DEF` node has a name matching `method_name`.
-fn func_node_has_name(func_node: &SyntaxNode, method_name: &str) -> bool {
-    for element in func_node.children_with_tokens() {
-        if let NodeOrToken::Token(tok) = element {
-            if tok.kind().is_trivia() || tok.kind() == SyntaxKind::KW_FUNCTION {
-                continue;
-            }
-            // First non-trivia, non-`function` token is the function name.
-            // BEP-044 introduced `implements`, `extends`, and `interface` as
-            // top-level keywords; the parser still accepts them as method
-            // names so reflection methods like `TypeValue.implements(...)`
-            // can keep their natural spelling.
-            let kind = tok.kind();
-            let is_name_token = matches!(
-                kind,
-                SyntaxKind::WORD
-                    | SyntaxKind::KW_IMPLEMENTS
-                    | SyntaxKind::KW_IMPLEMENT
-                    | SyntaxKind::KW_EXTENDS
-                    | SyntaxKind::KW_REQUIRES
-                    | SyntaxKind::KW_INTERFACE
-            );
-            return is_name_token && tok.text() == method_name;
-        }
-        // Encountered a child node — past the name.
-        break;
-    }
-    false
-}
-
-/// Check whether a `FUNCTION_DEF` node contains a specific directive `LINE_COMMENT`
-/// (e.g. `"//baml:mut_self"` or `"//baml:mut_vm"`) before its `KW_FUNCTION` token.
-///
-/// The parser emits trivia (whitespace, comments) as tokens within the containing
-/// syntactic node before the first real token. So any directive comment that
-/// appears immediately before `function foo(...)` in source is stored as a
-/// `LINE_COMMENT` child of that `FUNCTION_DEF` node.
-fn function_node_has_leading_directive(func_node: &SyntaxNode, directive: &str) -> bool {
-    for element in func_node.children_with_tokens() {
-        match element {
-            NodeOrToken::Token(tok) => match tok.kind() {
-                SyntaxKind::LINE_COMMENT => {
-                    let text = tok.text().trim();
-                    if text == directive {
-                        return true;
-                    }
-                }
-                k if k.is_whitespace() => {}
-                SyntaxKind::KW_FUNCTION => {
-                    return false;
-                }
-                SyntaxKind::AT_AT | SyntaxKind::BLOCK_COMMENT => {}
-                _ => {
-                    return false;
-                }
-            },
-            NodeOrToken::Node(_) => {}
-        }
-    }
-    false
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1535,11 +1376,10 @@ implements<T, E> Modifier<T, E> for Root {
     }
 }
 "#;
-        let tokens = baml_compiler_lexer::lex_lossless(source, FileId::new(0));
-        let (green, errors) = baml_compiler_parser::parse_file(&tokens);
-        assert!(errors.is_empty(), "the source parses");
-        let cst_root = SyntaxNode::new_root(green);
-        let (items, diags, _) = baml_compiler2_ast::lower_file(&cst_root);
+        let parsed = baml_parser::parse(source);
+        assert!(parsed.errors.is_empty(), "the source parses");
+        let (items, diags, _) =
+            baml_compiler2_ast::lower_tree::lower_file(&parsed.tree, None, None);
         assert!(diags.is_empty(), "the source lowers");
 
         let mut vm_builtins = Vec::new();
@@ -1550,7 +1390,6 @@ implements<T, E> Modifier<T, E> for Root {
                     impl_def,
                     &items,
                     "test",
-                    &cst_root,
                     "test.baml",
                     &mut vm_builtins,
                     &mut io_builtins,

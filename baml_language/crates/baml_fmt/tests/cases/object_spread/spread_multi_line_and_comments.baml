@@ -1,0 +1,14 @@
+class Config {
+    alpha: string,
+    beta: string,
+    gamma: string,
+}
+
+function f(base: Config) -> Config {
+    Config {
+        // inherit everything from the base configuration first
+        ...base,
+        alpha: "a much longer override value to force the multi-line path",
+        beta: "another fairly long override value so this cannot fit",
+    }
+}

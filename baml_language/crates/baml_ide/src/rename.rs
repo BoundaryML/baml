@@ -31,7 +31,6 @@
 //! span count nobody can read.
 
 use baml_base::{Name, SourceFile};
-use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_hir::{
     item_data::{self, MethodOwner},
     loc::{ClassLoc, DeclRef, ImplLoc, InterfaceLoc},
@@ -137,7 +136,7 @@ pub fn rename(
     new_name: &str,
 ) -> Result<Vec<Location>, RenameError> {
     let target = renameable(db, file, offset)?;
-    if !baml_compiler_lexer::is_baml_identifier(new_name) {
+    if !baml_compiler_diagnostics::runtime_type::is_baml_identifier(new_name) {
         return Err(RenameError::InvalidName {
             name: new_name.to_string(),
         });
@@ -193,12 +192,12 @@ fn renameable(
     // The cursor must sit on the name itself — a rename replaces an
     // identifier, and nothing else is one.
     let token = find_token_at_offset(db, file, offset).ok_or(RenameError::NotASymbol)?;
-    if token.kind() != SyntaxKind::WORD {
+    if !token.is_ident() {
         return Err(RenameError::NotASymbol);
     }
     let cursor = Location {
         file,
-        range: token.text_range(),
+        range: token.range(),
     };
     let name = token.text().to_string();
 
@@ -1094,7 +1093,8 @@ function read(p: P, n: Named, s: Shows) -> string throws never {
     #[test]
     fn the_replacement_must_be_one_identifier() {
         let test = at("enum Status", "Status");
-        for bad in ["", "2legit", "has space", "with.dot", "class", "type"] {
+        // `type` is a contextual keyword, a name a declaration may have.
+        for bad in ["", "2legit", "has space", "with.dot", "class"] {
             let error = rename(&test.db, test.cursor.file, test.cursor.offset, bad)
                 .expect_err("`{bad}` is not an identifier");
             assert_eq!(

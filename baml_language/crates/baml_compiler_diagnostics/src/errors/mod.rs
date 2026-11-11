@@ -5,14 +5,11 @@
 //!
 //! ## Error Types
 //!
-//! - [`ParseError`] - Syntax errors from the parser
 //! - [`TypeError`] - Type checking and type-level validation errors (generic over the type representation)
 //! - [`NameError`] - Name resolution errors (duplicates across files)
 
 mod name_error;
-mod parse_error;
 mod type_error;
 
 pub use name_error::NameError;
-pub use parse_error::ParseError;
 pub use type_error::{ErrorContext, SpanContext, TypeError};

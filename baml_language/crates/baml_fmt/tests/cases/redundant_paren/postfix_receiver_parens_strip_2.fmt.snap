@@ -1,0 +1,6 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(xs: string[]) -> string {
+    xs.at(0).to_string()
+}

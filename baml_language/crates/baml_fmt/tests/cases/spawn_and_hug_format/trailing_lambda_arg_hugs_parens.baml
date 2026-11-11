@@ -1,0 +1,5 @@
+function f(rows: int[]) -> int {
+    rows.reduce(0, (acc: int, x: int) -> {
+        acc + x + 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000
+    })
+}

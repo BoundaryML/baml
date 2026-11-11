@@ -18,47 +18,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [parse] E0010
 
-  × unexpected token
-   ╭─[test.baml:8:23]
- 8 │         model gemini-2.0-flash
-   ·                       ┬
-   ·                       ╰── expected `config key`, found `'.'`
-   ╰────
-
-  [parse] E0010
-
-  × unexpected token
-   ╭─[test.baml:8:24]
- 8 │         model gemini-2.0-flash
-   ·                        ┬
-   ·                        ╰── expected `config key`, found `integer`
-   ╰────
-
-  [parse] E0010
-
-  × unexpected token
-   ╭─[test.baml:8:25]
- 8 │         model gemini-2.0-flash
-   ·                         ┬
-   ·                         ╰── expected `config key`, found `'-'`
-   ╰────
-
-  [parse] E0010
-
-  × unexpected token
-   ╭─[test.baml:9:5]
- 9 │     }
-   ·     ┬
-   ·     ╰── expected `identifier`, found `'}'`
-   ╰────
-
-  [parse] E0010
-
   × invalid syntax
     ╭─[test.baml:13:5]
  13 │     //# collect source material
     ·     ─────────────┬─────────────
-    ·                  ╰── header comments (`//#`) are only allowed in expression functions
+    ·                  ╰── a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here
     ╰────
 
   [type] E0003

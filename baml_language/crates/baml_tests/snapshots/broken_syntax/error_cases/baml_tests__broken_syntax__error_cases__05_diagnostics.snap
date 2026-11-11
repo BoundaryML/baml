@@ -20,11 +20,11 @@ source: crates/baml_tests/src/generated_tests.rs
    ·                       ╰── expected `return type (->)`, found `'{'`
    ╰────
 
-  [parse] E0010
+  [parse] E0009
 
-  × unexpected token
+  × unexpected end of file
    ╭─[syntax_errors.baml:6:25]
  6 │ function 123Invalid() {}
    ·                         ▲
-   ·                         ╰── expected `'}'`, found `EOF`
+   ·                         ╰── expected `'}'`, found end of file
    ╰────

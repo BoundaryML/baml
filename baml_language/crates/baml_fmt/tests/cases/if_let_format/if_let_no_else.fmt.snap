@@ -1,0 +1,8 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(r: int | string) -> void {
+    if let v: int = r {
+        let _ = v;
+    }
+}

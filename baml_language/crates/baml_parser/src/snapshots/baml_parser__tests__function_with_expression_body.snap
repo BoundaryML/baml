@@ -1,0 +1,37 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f<T>(x: T) -> T { x }\")"
+---
+SourceFile@0..30
+  items: FunctionDef@0..30
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    generics: GenericParamList@10..13
+      l: Less "<" @10..11
+      params: GenericParam@11..12
+        name: Name@11..12
+          token: Word "T" @11..12
+      r: Greater ">" @12..13
+    params: ParamList@13..19
+      l: LParen "(" @13..14
+      params: Param@14..18
+        name: Name@14..15
+          token: Word "x" @14..15
+        ascription: TypeAscription@15..18
+          colon: Colon ":" @15..16
+          ty: PathType@17..18
+            head: Name@17..18
+              token: Word "T" @17..18
+      r: RParen ")" @18..19
+    ret: ReturnType@20..24
+      arrow: Arrow "->" @20..22
+      ty: PathType@23..24
+        head: Name@23..24
+          token: Word "T" @23..24
+    body: Block@25..30
+      l: LBrace "{" @25..26
+      tail: PathExpr@27..28
+        head: Name@27..28
+          token: Word "x" @27..28
+      r: RBrace "}" @29..30

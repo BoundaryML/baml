@@ -1,0 +1,5 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+interface Empty { /* kept */
+}

@@ -1,0 +1,6 @@
+interface  Named < T > requires  Display , Identity {
+ type Key extends string = string;
+ name  :string;
+ function label( self ,value:T )->string throws never
+ function fallback(self)->string throws never{return self.name}
+}
