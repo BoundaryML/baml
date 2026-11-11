@@ -2072,17 +2072,14 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
       {/* The question readers ask after a page like this one, answered plainly, and by the founder. */}
       <Section id="docs" title="Why don’t you have docs?">
         <p className="max-w-[40rem] text-[16px] leading-relaxed text-ink-2">
-          Boundary is still in early access, and right now nearly all of our
-          effort goes into engineering and working directly with our
-          early-access customers. We work hard to make sure AI agents can
-          already use the toolchain well, with{' '}
+          Agents can already use the toolchain well, with{' '}
           <a
             className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
             href="/#review"
           >
             backpressure built in
           </a>
-          . Docs for humans will catch up.
+          . Docs for humans are next.
         </p>
         <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
           {/* biome-ignore lint/performance/noImgElement: a small static photo */}
