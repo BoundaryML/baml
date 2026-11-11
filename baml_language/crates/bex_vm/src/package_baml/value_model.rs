@@ -318,11 +318,6 @@ impl<'vm> ValueModel<'vm> {
             .unwrap_or_else(|| panic!("map ABI call on {}", ObjectType::of(self.object(map))))
     }
 
-    /// The list's elements, under its lock, as values.
-    fn read(&self, list: ObjPtr) -> Vec<Value> {
-        self.vm.list_values(self.array(list), self.access())
-    }
-
     /// The map, held under its lock as the locality allows.
     fn entries(&self, map: ObjPtr) -> MapGuard {
         self.map(map).lock(self.access())
@@ -410,19 +405,40 @@ impl<'vm> ValueModel<'vm> {
     }
 }
 
-/// How each slot representation moves in and out of a `Value` container.
+/// How each slot representation moves in and out of a slot. A pure
+/// representation converts through its universal form, a float staying
+/// unboxed; the interpreter's `Value` boxes a float it reads.
 trait ValueElem: Elem {
-    fn from_value(model: &ValueModel<'_>, value: Value, slot: SlotKind) -> Self;
-    fn into_value(self, model: &mut ValueModel<'_>, slot: SlotKind) -> Value;
+    fn from_slot(model: &ValueModel<'_>, value: SlotValue, slot: SlotKind) -> Self;
+    fn into_slot(self, model: &ValueModel<'_>, slot: SlotKind) -> SlotValue;
 }
 
 impl ValueElem for Value {
-    fn from_value(_model: &ValueModel<'_>, value: Value, _slot: SlotKind) -> Self {
-        value
+    fn from_slot(model: &ValueModel<'_>, value: SlotValue, _slot: SlotKind) -> Self {
+        model.vm.box_slot(value)
     }
 
-    fn into_value(self, _model: &mut ValueModel<'_>, _slot: SlotKind) -> Value {
-        self
+    fn into_slot(self, _model: &ValueModel<'_>, _slot: SlotKind) -> SlotValue {
+        SlotValue::Value(self)
+    }
+}
+
+/// The universal form of a slot's contents.
+fn slot_tagged(model: &ValueModel<'_>, value: SlotValue) -> Tagged {
+    match value {
+        SlotValue::Value(value) => model.tagged(value),
+        SlotValue::Float(float) => Tagged::Float(float),
+    }
+}
+
+/// A slot's contents for a universal value; a float stays unboxed.
+fn tagged_slot(value: Tagged) -> SlotValue {
+    match value {
+        Tagged::Null => SlotValue::Value(Value::NULL),
+        Tagged::Bool(boolean) => SlotValue::Value(Value::bool(boolean)),
+        Tagged::Int(int) => SlotValue::Value(Value::int(int)),
+        Tagged::Float(float) => SlotValue::Float(float),
+        Tagged::Ptr(ptr) => SlotValue::Value(ptr_value(ptr)),
     }
 }
 
@@ -430,15 +446,14 @@ impl ValueElem for Value {
 macro_rules! value_elem_via_tagged {
     ($($elem:ty),*) => {$(
         impl ValueElem for $elem {
-            fn from_value(model: &ValueModel<'_>, value: Value, slot: SlotKind) -> Self {
+            fn from_slot(model: &ValueModel<'_>, value: SlotValue, slot: SlotKind) -> Self {
                 let mut unit = ();
-                Slots::<$elem>::untag(&mut unit, model.tagged(value), slot)
+                Slots::<$elem>::untag(&mut unit, slot_tagged(model, value), slot)
                     .unwrap_or_else(|fault| panic!("stored element does not fit its slot: {fault:?}"))
             }
 
-            fn into_value(self, model: &mut ValueModel<'_>, slot: SlotKind) -> Value {
-                let tagged = Slots::<$elem>::to_tagged(&(), self, slot);
-                model.value(tagged)
+            fn into_slot(self, _model: &ValueModel<'_>, slot: SlotKind) -> SlotValue {
+                tagged_slot(Slots::<$elem>::to_tagged(&(), self, slot))
             }
         }
     )*};
@@ -447,18 +462,18 @@ macro_rules! value_elem_via_tagged {
 value_elem_via_tagged!(RawWord, ObjPtr, Tagged);
 
 impl ValueModel<'_> {
-    fn elem<E: ValueElem>(&self, value: Value, slot: SlotKind) -> E {
-        E::from_value(self, value, slot)
+    fn elem<E: ValueElem>(&self, value: SlotValue, slot: SlotKind) -> E {
+        E::from_slot(self, value, slot)
     }
 
-    fn values<E: ValueElem>(&mut self, elems: &[E], slot: SlotKind) -> Vec<Value> {
+    fn slots<E: ValueElem>(&self, elems: &[E], slot: SlotKind) -> Vec<SlotValue> {
         elems
             .iter()
-            .map(|elem| elem.into_value(self, slot))
+            .map(|elem| elem.into_slot(self, slot))
             .collect()
     }
 
-    fn elems<E: ValueElem>(&self, values: Vec<Value>, slot: SlotKind) -> Vec<E> {
+    fn elems<E: ValueElem>(&self, values: Vec<SlotValue>, slot: SlotKind) -> Vec<E> {
         values
             .into_iter()
             .map(|value| self.elem(value, slot))
@@ -510,41 +525,47 @@ impl<E: ValueElem> Lists<E> for ValueModel<'_> {
 
     fn list_get(&self, list: ObjPtr, index: usize) -> Option<E> {
         let value = self.array(list).get_with(index, self.access())?;
-        Some(self.elem(self.vm.box_slot(value), self.list_slot(list)))
+        Some(self.elem(value, self.list_slot(list)))
     }
 
     fn list_to_vec(&self, list: ObjPtr) -> Vec<E> {
-        let values = self.read(list);
+        let values = self.array(list).snapshot(self.access());
         self.elems(values, self.list_slot(list))
     }
 
     fn list_splice(&mut self, list: ObjPtr, range: Range<usize>, with: &[E]) -> Vec<E> {
         let slot = self.list_slot(list);
-        let inserted = self.values(with, slot);
-        let (array, access) = (self.array(list), self.access());
-        let removed: Vec<Value> = self.vm.edit_list(array, access, |values| {
-            let range = clamp(range, values.len());
-            values.splice(range, inserted).collect()
-        });
+        let inserted = self.slots(with, slot);
+        let guard = self.array(list).lock(self.access());
+        let mut values = guard.to_vec();
+        let range = clamp(range, values.len());
+        let removed: Vec<SlotValue> = values.splice(range, inserted).collect();
+        guard
+            .replace_all(&mut self.vm.tlab, &values)
+            .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"));
+        drop(guard);
         self.elems(removed, slot)
     }
 
     fn list_push(&mut self, list: ObjPtr, elem: E) -> usize {
-        let value = elem.into_value(self, self.list_slot(list));
-        let (array, access) = (self.array(list), self.access());
-        self.vm.list_push(array, access, value)
+        let value = elem.into_slot(self, self.list_slot(list));
+        self.array(list)
+            .lock(self.access())
+            .push(&mut self.vm.tlab, value)
+            .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"))
     }
 
     fn list_pop(&mut self, list: ObjPtr) -> Option<E> {
         let popped = self.array(list).lock(self.access()).pop()?;
-        let popped = self.vm.slot_value(popped);
         Some(self.elem(popped, self.list_slot(list)))
     }
 
     fn list_alloc(&mut self, of: ListOf, elems: &[E]) -> ObjPtr {
         let element_ty = self.element_ty(of);
-        let values = self.values(elems, SlotKind::of_type(&element_ty));
-        obj_ptr(Value::object(self.vm.alloc_array(element_ty, values)))
+        let values = self.slots(elems, SlotKind::of_type(&element_ty));
+        obj_ptr(Value::object(
+            self.vm.tlab.alloc_list_of(element_ty, &values).ptr(),
+        ))
     }
 }
 
@@ -556,13 +577,12 @@ impl<V: ValueElem> Maps<V> for ValueModel<'_> {
     fn map_get(&self, map: ObjPtr, key: StrKey) -> Option<V> {
         let guard = self.entries(map);
         let pos = self.find_entry(&guard, key)?;
-        let value = self.vm.box_slot(guard.value(pos));
-        Some(self.elem(value, self.map_value_slot(map)))
+        Some(self.elem(guard.value(pos), self.map_value_slot(map)))
     }
 
     fn map_set(&mut self, map: ObjPtr, key: StrKey, value: V) -> Option<V> {
         let slot = self.map_value_slot(map);
-        let value = SlotValue::Value(value.into_value(self, slot));
+        let value = value.into_slot(self, slot);
         let guard = self.entries(map);
         let previous = match self.find_entry(&guard, key) {
             Some(pos) => {
@@ -581,10 +601,7 @@ impl<V: ValueElem> Maps<V> for ValueModel<'_> {
             }
         };
         drop(guard);
-        previous.map(|previous| {
-            let previous = self.vm.slot_value(previous);
-            self.elem(previous, slot)
-        })
+        previous.map(|previous| self.elem(previous, slot))
     }
 
     fn map_remove(&mut self, map: ObjPtr, key: StrKey) -> Option<V> {
@@ -592,7 +609,6 @@ impl<V: ValueElem> Maps<V> for ValueModel<'_> {
         let guard = self.entries(map);
         let removed = guard.remove(self.find_entry(&guard, key)?);
         drop(guard);
-        let removed = self.vm.slot_value(removed);
         Some(self.elem(removed, slot))
     }
 
@@ -612,11 +628,11 @@ impl<V: ValueElem> Maps<V> for ValueModel<'_> {
     }
 
     fn map_values(&self, map: ObjPtr) -> Vec<V> {
-        let values: Vec<Value> = self
+        let values = self
             .entries(map)
             .entries()
             .into_iter()
-            .map(|(_, value)| self.vm.box_slot(value))
+            .map(|(_, value)| value)
             .collect();
         self.elems(values, self.map_value_slot(map))
     }

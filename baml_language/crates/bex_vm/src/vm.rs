@@ -4820,17 +4820,6 @@ impl BexVm {
             .collect()
     }
 
-    /// Edit the elements of `list` as a `Vec` under its lock (see
-    /// [`ListEdit`]).
-    pub fn edit_list<R>(
-        &mut self,
-        list: ListRef,
-        access: Access,
-        edit: impl FnOnce(&mut Vec<Value>) -> R,
-    ) -> R {
-        edit(&mut ListEdit::new(self, list, access))
-    }
-
     /// The list `value` points to, as an editable `Vec` held under its lock
     /// (see [`ListEdit`]).
     pub fn as_array_mut(&mut self, value: &Value) -> Result<ListEdit<'_>, VmInternalError> {
