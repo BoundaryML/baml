@@ -516,12 +516,8 @@ fn tagged_value(tag: TaggedKind, payload: u64) -> SlotValue {
 #[inline]
 pub unsafe fn read_slot(addr: *const u8, kind: SlotKind, access: Access) -> SlotValue {
     match kind {
-        SlotKind::Tagged16 => {
-            // SAFETY: forwarded to the caller.
-            let slot = unsafe { &*addr.cast::<TaggedSlot>() };
-            let (tag, payload) = slot.read(access);
-            tagged_value(tag, payload)
-        }
+        // SAFETY: forwarded to the caller.
+        SlotKind::Tagged16 => unsafe { read_tagged(addr, access) },
         SlotKind::Raw(raw) => {
             // SAFETY: forwarded to the caller.
             let word = unsafe { &*addr.cast::<AtomicU64>() };
@@ -539,6 +535,35 @@ pub unsafe fn read_slot(addr: *const u8, kind: SlotKind, access: Access) -> Slot
     }
 }
 
+/// The tagged slot at `addr`, out of line so the raw and pointer reads
+/// inline at every slot access.
+///
+/// # Safety
+/// `addr` addresses a tagged slot inside a live object.
+#[inline(never)]
+unsafe fn read_tagged(addr: *const u8, access: Access) -> SlotValue {
+    // SAFETY: forwarded to the caller.
+    let slot = unsafe { &*addr.cast::<TaggedSlot>() };
+    let (tag, payload) = slot.read(access);
+    tagged_value(tag, payload)
+}
+
+/// Write `value` to the tagged slot at `addr`, out of line (see
+/// [`read_tagged`]).
+///
+/// # Safety
+/// `addr` addresses a tagged slot inside a live object.
+#[inline(never)]
+unsafe fn write_tagged(addr: *const u8, value: Value, access: Access) -> Result<(), SlotMismatch> {
+    let (tag, payload) = tagged_parts(value).ok_or(SlotMismatch {
+        slot: SlotKind::Tagged16,
+        value,
+    })?;
+    // SAFETY: forwarded to the caller.
+    unsafe { &*addr.cast::<TaggedSlot>() }.write(tag, payload, access);
+    Ok(())
+}
+
 /// Write `value` to the slot of kind `kind` at `addr`.
 ///
 /// # Safety
@@ -552,11 +577,8 @@ pub unsafe fn write_slot(
 ) -> Result<(), SlotMismatch> {
     let mismatch = SlotMismatch { slot: kind, value };
     match kind {
-        SlotKind::Tagged16 => {
-            let (tag, payload) = tagged_parts(value).ok_or(mismatch)?;
-            // SAFETY: forwarded to the caller.
-            unsafe { &*addr.cast::<TaggedSlot>() }.write(tag, payload, access);
-        }
+        // SAFETY: forwarded to the caller.
+        SlotKind::Tagged16 => unsafe { write_tagged(addr, value, access) }?,
         SlotKind::Raw(raw) => {
             let bits = raw_bits(raw, value).ok_or(mismatch)?;
             // SAFETY: forwarded to the caller.

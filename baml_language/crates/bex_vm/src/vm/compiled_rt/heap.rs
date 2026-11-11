@@ -88,9 +88,11 @@ impl BexVm {
         // Hold the lock across bounds checking and loading to prevent races with growth.
         let load_result: Result<SlotValue, (i64, usize)> = {
             match self.get_object(array_ptr) {
-                Object::Shared(SharedKind::List) => {
-                    self.load_list_element(array_ptr, i, access::<THREAD_LOCAL>())
-                }
+                Object::Shared(SharedKind::List) => Self::load_list_element(
+                    self.expect_list(array_ptr),
+                    i,
+                    access::<THREAD_LOCAL>(),
+                ),
                 Object::Uint8Array(bytes) => {
                     // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
                     #[allow(unsafe_code)]
@@ -149,9 +151,12 @@ impl BexVm {
         let new_value_u8: Option<u8> = new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
         let store_result: Result<(), (i64, usize)> = {
             match self.get_object(array_ptr) {
-                Object::Shared(SharedKind::List) => {
-                    self.store_list_element(array_ptr, i, new_value, access::<THREAD_LOCAL>())
-                }
+                Object::Shared(SharedKind::List) => Self::store_list_element(
+                    self.expect_list(array_ptr),
+                    i,
+                    new_value,
+                    access::<THREAD_LOCAL>(),
+                ),
                 Object::Uint8Array(bytes) => {
                     let Some(byte_v) = new_value_u8 else {
                         return Err(self.type_error(Type::Int, new_value));

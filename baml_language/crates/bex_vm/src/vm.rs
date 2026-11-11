@@ -7923,15 +7923,14 @@ impl BexVm {
     /// `LoadArrayElement` on a list: element `index` (negative counts from
     /// the end), or the index and length to report.
     #[inline]
-    #[expect(clippy::unused_self, reason = "an element op of this VM's heap, called as one")]
+    /// Element `index` of `list` (a negative index counts from the end), or
+    /// the index and length to report.
     pub(crate) fn load_list_element(
-        &self,
-        ptr: HeapPtr,
+        list: ListRef,
         index: i64,
         access: Access,
     ) -> Result<SlotValue, (i64, usize)> {
-        // SAFETY: the caller matched the object as a list.
-        let view = unsafe { ListRef::new_unchecked(ptr) }.view();
+        let view = list.view();
         crate::array_index::resolve_index(index, view.len())
             .and_then(|idx| view.get(idx, access))
             .ok_or((index, view.len()))
@@ -7939,21 +7938,19 @@ impl BexVm {
 
     /// `StoreArrayElement` on a list, under its lock.
     #[inline]
-    #[expect(clippy::unused_self, reason = "an element op of this VM's heap, called as one")]
+    /// Store `value` to element `index` of `list`, or the index and length
+    /// to report.
     pub(crate) fn store_list_element(
-        &self,
-        ptr: HeapPtr,
+        list: ListRef,
         index: i64,
         value: Value,
         access: Access,
     ) -> Result<(), (i64, usize)> {
-        // SAFETY: the caller matched the object as a list.
-        let list = unsafe { ListRef::new_unchecked(ptr) };
         // Holds the lock only under `locked-containers`.
         let _guard = list.lock(access);
         let view = list.view();
-        let idx = crate::array_index::resolve_index(index, view.len())
-            .ok_or((index, view.len()))?;
+        let idx =
+            crate::array_index::resolve_index(index, view.len()).ok_or((index, view.len()))?;
         view.set(idx, SlotValue::Value(value), access)
             .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"));
         Ok(())
@@ -8006,7 +8003,6 @@ impl BexVm {
     /// `LoadField`/`LoadFieldLocal`, out of line to keep the dispatch loop small.
     #[inline(never)]
     fn op_load_field(&mut self, idx: usize, local: bool) -> Result<(), VmError> {
-        
         let top = self.stack.ensure_pop();
         let access = if local {
             Access::ThreadLocal
@@ -8021,7 +8017,6 @@ impl BexVm {
     /// `StoreField`/`StoreFieldLocal`, out of line.
     #[inline(never)]
     fn op_store_field(&mut self, idx: usize, local: bool) -> Result<(), VmError> {
-        
         let new_value = self.stack.ensure_pop();
         let instance_value = self.stack.ensure_pop();
         let access = if local {
@@ -8036,7 +8031,6 @@ impl BexVm {
     /// `InitField`, out of line.
     #[inline(never)]
     fn op_init_field(&mut self, idx: usize) -> Result<(), VmError> {
-        
         let new_value = self.stack.ensure_pop();
         let instance_value = self.stack.ensure_pop();
         self.store_field_op(instance_value, idx, new_value, Access::Shared)?;
@@ -8048,11 +8042,10 @@ impl BexVm {
     /// `InitSpread`, out of line.
     #[inline(never)]
     fn op_init_spread(&mut self, copies: &bytecode::FieldCopySet) -> Result<(), VmError> {
-        
         let source_value = self.stack.ensure_pop();
         let dest_slot = self.stack.ensure_slot_from_top(0);
         let dest_value = self.stack[dest_slot];
-                                self.init_spread(dest_value, source_value, copies)?;
+        self.init_spread(dest_value, source_value, copies)?;
         if let Some(last) = copies.fields.iter().map(|copy| copy.dest).max() {
             self.seal_if_constructed(dest_value, last)?;
         }
@@ -8062,7 +8055,6 @@ impl BexVm {
     /// `AllocArray`, out of line.
     #[inline(never)]
     fn op_alloc_array(&mut self, size: usize) -> Result<(), VmError> {
-        
         // The declared element type rides on top of the `size`
         // elements: a preceding `LoadType` pushed it, already resolved
         // against the frame's type args. Pop it before the values.
@@ -8077,7 +8069,6 @@ impl BexVm {
     /// `AllocMap`, out of line.
     #[inline(never)]
     fn op_alloc_map(&mut self, n: usize) -> Result<(), VmError> {
-        
         // The declared value type rides on top, the key type just
         // below it (two `LoadType`s after the entries, already
         // resolved against the frame's type args). Pop both before
@@ -8112,8 +8103,6 @@ impl BexVm {
     /// `AllocInstance`, out of line.
     #[inline(never)]
     fn op_alloc_instance(&mut self, raw: u32, ntypeargs: usize) -> Result<(), VmError> {
-        
-        
         let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
 
         let class_type_args: Box<[bex_vm_types::RealizedTy]> = if ntypeargs == 0 {
@@ -8152,7 +8141,7 @@ impl BexVm {
         // SAFETY (`thread_local`): the emitter selects the
         // `_LOCAL` opcodes only where escape analysis proved
         // no other thread can reach the container.
-                                let container = self.stack.ensure_pop();
+        let container = self.stack.ensure_pop();
         let Some(ptr) = container.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
                 expected: ObjectType::Array.into(),
@@ -8190,68 +8179,22 @@ impl BexVm {
     /// it.
     #[inline(never)]
     unsafe fn op_load_array_element(&mut self, thread_local: bool) -> Result<(), VmError> {
-        // SAFETY (`thread_local`): see `ContainerLenLocal`.
-                                let index_value = self.stack.ensure_pop();
+        let index_value = self.stack.ensure_pop();
         let array_value = self.stack.ensure_pop();
-        let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-        let Some(i) = index_value.as_int() else {
-            return Err(VmInternalError::TypeError {
-                expected: bex_vm_types::types::Type::Int,
-                got: self.type_of(&index_value),
-            }
-            .into());
+        let ptr = self.as_object_ptr(array_value, ObjectType::Array)?;
+        let i = self.index_operand(index_value)?;
+        let access = if thread_local {
+            Access::ThreadLocal
+        } else {
+            Access::Shared
         };
-        // Acquire the array's read lock for the duration of the
-        // bounds-check + element load so it stays atomic against
-        // a racing `push`/grow. Guard drops at the end of the
-        // inner scope before any `&mut self` call. A negative index
-        // counts from the end; one that still lands outside the
-        // array reports the original index in the panic.
-        let load_result: Result<SlotValue, (i64, usize)> = {
-            match self.get_object(array_obj_index) {
-                Object::Shared(SharedKind::List) => {
-                    let access = if thread_local {
-                        Access::ThreadLocal
-                    } else {
-                        Access::Shared
-                    };
-                    self.load_list_element(array_obj_index, i, access)
-                }
-                Object::Uint8Array(bytes) => {
-                    let guard = if thread_local {
-                        // SAFETY: see the function's safety section.
-                        unsafe { bytes.lock_thread_local() }
-                    } else {
-                        bytes.lock()
-                    };
-                    let len = guard.len();
-                    match crate::array_index::resolve_index(i, len) {
-                        Some(idx) => {
-                            Ok(SlotValue::Value(Value::int(i64::from(guard[idx]))))
-                        }
-                        None => Err((i, len)),
-                    }
-                }
-                other => {
-                    return Err(VmInternalError::TypeError {
-                        expected: ObjectType::Array.into(),
-                        got: ObjectType::of(other).into(),
-                    }
-                    .into());
-                }
-            }
+        // A list is recognized from its header, without the `Object` view.
+        let loaded = match self.list_at(ptr) {
+            Some(list) => Self::load_list_element(list, i, access),
+            // SAFETY: forwarded to the caller.
+            None => unsafe { self.load_byte_element(ptr, i, thread_local) }?,
         };
-        let element = match load_result {
-            Ok(v) => v,
-            Err((idx, len)) => {
-                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                    VmPanic::IndexOutOfBounds {
-                        index: idx,
-                        length: len,
-                    },
-                )));
-            }
-        };
+        let element = loaded.map_err(|(index, length)| self.index_panic(index, length))?;
         let element = self.slot_value(element);
         self.push_stack(element)?;
         Ok(())
@@ -8265,92 +8208,127 @@ impl BexVm {
     /// it.
     #[inline(never)]
     unsafe fn op_store_array_element(&mut self, thread_local: bool) -> Result<(), VmError> {
-        // SAFETY (`thread_local`): see `ContainerLenLocal`.
-                                let new_value = self.stack.ensure_pop();
+        let new_value = self.stack.ensure_pop();
         let index_value = self.stack.ensure_pop();
         let array_value = self.stack.ensure_pop();
-        let array_object_index =
-            self.as_object_ptr(array_value, ObjectType::Array)?;
-        let Some(i) = index_value.as_int() else {
+        let ptr = self.as_object_ptr(array_value, ObjectType::Array)?;
+        let i = self.index_operand(index_value)?;
+        let access = if thread_local {
+            Access::ThreadLocal
+        } else {
+            Access::Shared
+        };
+        let stored = match self.list_at(ptr) {
+            Some(list) => Self::store_list_element(list, i, new_value, access),
+            // SAFETY: forwarded to the caller.
+            None => unsafe { self.store_byte_element(ptr, i, new_value, thread_local) }?,
+        };
+        stored.map_err(|(index, length)| self.index_panic(index, length))
+    }
+
+    /// An index operand, which must be an int.
+    fn index_operand(&self, index: Value) -> Result<i64, VmError> {
+        index.as_int().ok_or_else(|| {
+            VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Int,
+                got: self.type_of(&index),
+            }
+            .into()
+        })
+    }
+
+    /// The `IndexOutOfBounds` panic for `index` into `length` elements.
+    #[cold]
+    fn index_panic(&mut self, index: i64, length: usize) -> VmError {
+        VmError::thrown_fresh(
+            self.panic_to_exception_value(VmPanic::IndexOutOfBounds { index, length }),
+        )
+    }
+
+    /// The type error for an element op on something that is no array.
+    #[cold]
+    fn not_an_array(&self, ptr: HeapPtr) -> VmError {
+        VmInternalError::TypeError {
+            expected: ObjectType::Array.into(),
+            got: ObjectType::of(self.get_object(ptr)).into(),
+        }
+        .into()
+    }
+
+    /// Element `index` of the byte array at `ptr` (a negative index counts
+    /// from the end), as an int.
+    ///
+    /// # Safety
+    /// As for [`Self::op_load_array_element`].
+    unsafe fn load_byte_element(
+        &self,
+        ptr: HeapPtr,
+        index: i64,
+        thread_local: bool,
+    ) -> Result<Result<SlotValue, (i64, usize)>, VmError> {
+        let Object::Uint8Array(bytes) = self.get_object(ptr) else {
+            return Err(self.not_an_array(ptr));
+        };
+        let guard = if thread_local {
+            // SAFETY: forwarded to the caller.
+            unsafe { bytes.lock_thread_local() }
+        } else {
+            bytes.lock()
+        };
+        let len = guard.len();
+        Ok(crate::array_index::resolve_index(index, len)
+            .map(|idx| SlotValue::Value(Value::int(i64::from(guard[idx]))))
+            .ok_or((index, len)))
+    }
+
+    /// Store the int `value`'s low byte to element `index` of the byte array
+    /// at `ptr`.
+    ///
+    /// # Safety
+    /// As for [`Self::op_store_array_element`].
+    unsafe fn store_byte_element(
+        &self,
+        ptr: HeapPtr,
+        index: i64,
+        value: Value,
+        thread_local: bool,
+    ) -> Result<Result<(), (i64, usize)>, VmError> {
+        let Object::Uint8Array(bytes) = self.get_object(ptr) else {
+            return Err(self.not_an_array(ptr));
+        };
+        let Some(byte) = value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8) else {
             return Err(VmInternalError::TypeError {
                 expected: bex_vm_types::types::Type::Int,
-                got: self.type_of(&index_value),
+                got: self.type_of(&value),
             }
             .into());
         };
-        let new_value_u8: Option<u8> =
-            new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
-        let store_result: Result<(), (i64, usize)> = {
-            match self.get_object(array_object_index) {
-                Object::Shared(SharedKind::List) => {
-                    let access = if thread_local {
-                        Access::ThreadLocal
-                    } else {
-                        Access::Shared
-                    };
-                    self.store_list_element(
-                        array_object_index,
-                        i,
-                        new_value,
-                        access,
-                    )
-                }
-                Object::Uint8Array(bytes) => {
-                    let Some(byte_v) = new_value_u8 else {
-                        return Err(VmInternalError::TypeError {
-                            expected: bex_vm_types::types::Type::Int,
-                            got: self.type_of(&new_value),
-                        }
-                        .into());
-                    };
-                    let debt = self.tlab.alloc_debt();
-                    let mut guard = if thread_local {
-                        // SAFETY: see the function's safety section.
-                        unsafe { bytes.lock_mut_thread_local(debt) }
-                    } else {
-                        bytes.lock_mut(debt)
-                    };
-                    let len = guard.len();
-                    match crate::array_index::resolve_index(i, len) {
-                        Some(idx) => {
-                            guard[idx] = byte_v;
-                            Ok(())
-                        }
-                        None => Err((i, len)),
-                    }
-                }
-                other => {
-                    return Err(VmInternalError::TypeError {
-                        expected: ObjectType::Array.into(),
-                        got: ObjectType::of(other).into(),
-                    }
-                    .into());
-                }
-            }
+        let debt = self.tlab.alloc_debt();
+        let mut guard = if thread_local {
+            // SAFETY: forwarded to the caller.
+            unsafe { bytes.lock_mut_thread_local(debt) }
+        } else {
+            bytes.lock_mut(debt)
         };
-        match store_result {
-            Ok(()) => {}
-            Err((idx, len)) => {
-                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                    VmPanic::IndexOutOfBounds {
-                        index: idx,
-                        length: len,
-                    },
-                )));
-            }
-        }
-        Ok(())
+        let len = guard.len();
+        let Some(idx) = crate::array_index::resolve_index(index, len) else {
+            return Ok(Err((index, len)));
+        };
+        guard[idx] = byte;
+        Ok(Ok(()))
     }
 
     /// `ArrayIterNext`/`ArrayIterNextLocal`, out of line.
     #[inline(never)]
-    fn op_array_iter_next(&mut self, frame_idx: usize, iterator: usize, index: usize, local: bool) -> Result<(), VmError> {
-        
-        
+    fn op_array_iter_next(
+        &mut self,
+        frame_idx: usize,
+        iterator: usize,
+        index: usize,
+        local: bool,
+    ) -> Result<(), VmError> {
         #[allow(unsafe_code)]
-        let Frame::Bytecode(bf) =
-            (unsafe { self.frames.get_unchecked(frame_idx) })
-        else {
+        let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(frame_idx) }) else {
             unreachable!()
         };
         let iterator = Self::local_slot_stack_index(bf.locals_offset, iterator);
@@ -10015,7 +9993,12 @@ impl BexVm {
                     OpCode::ArrayIterNext | OpCode::ArrayIterNextLocal => {
                         let iterator = { read_u32_unchecked(code, pc) as usize };
                         let index = { read_u32_unchecked(code, pc) as usize };
-                        self.op_array_iter_next(*frame_idx, iterator, index, op == OpCode::ArrayIterNextLocal)?;
+                        self.op_array_iter_next(
+                            *frame_idx,
+                            iterator,
+                            index,
+                            op == OpCode::ArrayIterNextLocal,
+                        )?;
                     }
 
                     // ── Operand-movement superinstructions (CPython-style) ────────
