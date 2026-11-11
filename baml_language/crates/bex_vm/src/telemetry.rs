@@ -29,6 +29,7 @@ use btel_types::{FunctionId, allocate_telemetry_id};
 use rustc_hash::FxHashMap;
 
 mod errors;
+pub mod frozen;
 pub(crate) use errors::{ErrorBook, LandingMatch};
 mod network;
 mod policy;
@@ -3172,7 +3173,9 @@ mod tests {
                     reentry,
                     ..
                 } => Some((await_time.get().get(), *reentry)),
-                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+                TimingRecord::ThreadSelected { .. }
+                | TimingRecord::SysOpTime { .. }
+                | TimingRecord::AggregateDeltas(_) => None,
             })
             .collect();
         // Completion must carry each invocation's own wait, without rolling

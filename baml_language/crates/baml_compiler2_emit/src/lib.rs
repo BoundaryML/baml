@@ -36,7 +36,7 @@ use bex_vm_types::{
     Bytecode, Function, FunctionKind, FunctionMeta, FunctionOrigin, Object, ObjectPool,
 };
 pub(crate) use emit::compile_mir_function;
-pub use items::owns_no_slot;
+pub use items::{impl_runtime_pattern, owns_no_slot};
 pub use package::{emit_package, emit_session_submission};
 pub use refs::{function_identity, function_path};
 

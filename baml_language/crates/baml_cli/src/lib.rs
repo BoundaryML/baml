@@ -39,6 +39,7 @@ pub(crate) mod lsp;
 pub(crate) mod optional_duration;
 pub(crate) mod output;
 pub(crate) mod pack_command;
+mod pack_rt_tests;
 pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;

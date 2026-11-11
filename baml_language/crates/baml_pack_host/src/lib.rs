@@ -11,10 +11,12 @@ use baml_exec::{
     CONTEXT_ENV, DispatchResult, Interrupts, PACK_SECTION_NAME, PackEnvelope, PackMode,
     clamp_exit_code, context_source_from_env, dispatch_target_with_context,
     ensure_single_stdin_consumer, load_json_source, load_launch_context, parse_multi_target_argv,
-    parse_target_argv, print_error,
+    parse_target_argv, parse_test_argv, print_error,
+    test_report::{self, FlatReport, TestSelection},
 };
 use bex_engine::{
-    BexEngine, CallId, FunctionCallContextBuilder, UserFunctionCatalog, UserFunctionInfo,
+    BexEngine, BexExternalValue, CallId, CancellationToken, FunctionCallContextBuilder,
+    UserFunctionCatalog, UserFunctionInfo,
 };
 use sys_native::SysOpsExt;
 
@@ -54,9 +56,21 @@ pub fn run_embedded(
                     table,
                     artifact_fingerprint,
                 });
-            match envelope.mode {
+            match envelope.mode.clone() {
                 PackMode::Single => run_single(envelope, compiled_bodies),
                 PackMode::Subcommand => run_subcommand(envelope, compiled_bodies),
+                PackMode::Tests {
+                    profile_include,
+                    profile_exclude,
+                } => run_tests(
+                    envelope,
+                    TestSelection {
+                        profile_include,
+                        profile_exclude,
+                        ..Default::default()
+                    },
+                    compiled_bodies,
+                ),
             }
         }
         Err(e) => {
@@ -305,6 +319,194 @@ fn launch(
     )
 }
 
+/// `baml test`'s exit code for a run with a failed test.
+const TEST_FAILURE: u8 = 2;
+/// `baml test`'s exit code for a run that selected no test.
+const NO_TESTS_RUN: u8 = 5;
+
+/// Test dispatch: the binary runs the packed test registry under the
+/// pack-time profile selectors, narrowed by its own, and prints the report
+/// of [`FlatReport::stable_text`] to stdout. Exits 0 when every selected
+/// test passed, with `baml test`'s codes otherwise.
+///
+/// What `baml test` prints and this does not: per-leaf durations, `log.*`
+/// events from test bodies, and the progress lines — none of it is stable
+/// across two runs, and comparing runs is what this binary is for.
+fn run_tests(
+    envelope: PackEnvelope,
+    profile: TestSelection,
+    compiled_bodies: Option<bex_engine::CompiledBodies>,
+) -> ExitCode {
+    let mut os_args = std::env::args();
+    let exe = os_args
+        .next()
+        .unwrap_or_else(|| "baml-pack-host".to_string());
+    let trailing: Vec<String> = os_args.collect();
+    let parsed = match parse_test_argv(&exe, &trailing) {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            use baml_exec::clap_reexport::ErrorKind;
+            let kind = err.kind();
+            let _ = err.print();
+            return match kind {
+                ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => ExitCode::SUCCESS,
+                _ => ExitCode::FAILURE,
+            };
+        }
+    };
+    let selection = TestSelection {
+        cli_include: parsed.include,
+        cli_exclude: parsed.exclude,
+        ..profile
+    };
+
+    let engine = match new_engine(
+        envelope.program,
+        build_argv(&exe, "test", &trailing),
+        envelope.telemetry,
+        Default::default(),
+        compiled_bodies,
+    ) {
+        Ok(e) => Arc::new(e),
+        Err(e) => {
+            print_error(format_args!("failed to initialize engine: {e}"));
+            return ExitCode::FAILURE;
+        }
+    };
+    let rt = match runtime() {
+        Ok(rt) => rt,
+        Err(code) => return code,
+    };
+    let cancel = CancellationToken::new();
+
+    // `collect_tests` runs `$init_test` and returns the live registry, or
+    // `Null` for a program without test blocks.
+    let registry = match rt.block_on(engine.collect_tests(CallId::next(), cancel.clone())) {
+        Ok(BexExternalValue::Null) => None,
+        Ok(handle @ BexExternalValue::Handle(_)) => Some(handle),
+        Ok(other) => {
+            print_error(format_args!(
+                "unexpected collect_tests result: {}",
+                other.type_name()
+            ));
+            let _ = shutdown_engine(&engine, &rt, bex_engine::ProcessStatus::Error);
+            return ExitCode::FAILURE;
+        }
+        Err(e) => {
+            print_error(format_args!("testset discovery failed: {e}"));
+            let _ = shutdown_engine(&engine, &rt, bex_engine::ProcessStatus::Error);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut flat = None;
+    if let Some(registry) = &registry {
+        let max_concurrency = parsed
+            .max_concurrency
+            .map_or_else(test_report::default_max_concurrency, i64::from);
+        let call_context = FunctionCallContextBuilder::new(CallId::next())
+            .with_cancel_token(cancel)
+            .build();
+        let report = rt.block_on(test_report::run_filtered(
+            &engine,
+            registry,
+            &selection,
+            max_concurrency,
+            test_report::test_timeout_ms(Some(test_report::DEFAULT_TEST_TIMEOUT)),
+            call_context,
+        ));
+        flat = match report.as_ref().map(test_report::parse_flat_report) {
+            Ok(Some(flat)) => Some(flat),
+            Ok(None) => {
+                print_error("could not read test report");
+                let _ = shutdown_engine(&engine, &rt, bex_engine::ProcessStatus::Error);
+                return ExitCode::FAILURE;
+            }
+            Err(e) => {
+                print_error(format_args!("{e}"));
+                let _ = shutdown_engine(&engine, &rt, bex_engine::ProcessStatus::Error);
+                return ExitCode::FAILURE;
+            }
+        };
+    }
+
+    let status = match &flat {
+        Some(flat) if !flat.passed() => bex_engine::ProcessStatus::Error,
+        _ => bex_engine::ProcessStatus::Success,
+    };
+    // Shut down before printing: the shutdown joins the spawned tasks, and a
+    // task that failed unhandled is one more failed leaf of the report.
+    let spawn_errors = match shutdown_engine(&engine, &rt, status) {
+        Ok(errors) => errors,
+        Err(code) => return code,
+    };
+    let mut extra_failures = Vec::new();
+    for report in spawn_errors {
+        if report.cancelled {
+            let error = report.into_engine_error();
+            eprintln!("Warning: cancelled spawned task failed: {error}");
+        } else {
+            let error = report.into_engine_error();
+            extra_failures.push((
+                "testing::unhandled_spawn_error".to_string(),
+                error.to_string(),
+            ));
+        }
+    }
+
+    let flat = flat.unwrap_or_else(|| FlatReport {
+        outcome: "pass".to_string(),
+        ..FlatReport::default()
+    });
+    if flat.is_vacuous_pass() && extra_failures.is_empty() {
+        eprintln!("no tests selected");
+        return ExitCode::from(NO_TESTS_RUN);
+    }
+    print!("{}", flat.stable_text(&extra_failures));
+    if flat.passed() && extra_failures.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(TEST_FAILURE)
+    }
+}
+
+/// The runtime a packed program runs on. Spawned tasks run on the workers.
+/// Give them the main thread's stack, so a task's compiled code recurses as
+/// deep as the root call's before it raises `StackOverflow`; only touched
+/// pages cost memory.
+fn runtime() -> Result<tokio::runtime::Runtime, ExitCode> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(WORKER_STACK)
+        .build()
+        .map_err(|e| {
+            print_error(format_args!("failed to create runtime: {e}"));
+            ExitCode::FAILURE
+        })
+}
+
+/// Record `status`, shut the engine down, and hand back the unhandled
+/// spawned-task failures the shutdown surfaced — or the exit code of a cloud
+/// authorization refusal, which ends the run by itself.
+fn shutdown_engine(
+    engine: &Arc<BexEngine>,
+    rt: &tokio::runtime::Runtime,
+    status: bex_engine::ProcessStatus,
+) -> Result<Vec<bex_engine::UnhandledSpawnError>, ExitCode> {
+    engine.record_process_exit(status);
+    rt.block_on(engine.shutdown());
+    if let Some(error) = engine.initial_cloud_authorization_error() {
+        print_error(format_args!("{error}"));
+        return Err(ExitCode::FAILURE);
+    }
+    if !engine.initial_telemetry_failure_handled()
+        && let Some(Err(error)) = engine.telemetry_result()
+    {
+        eprintln!("Warning: telemetry recording failed: {error}");
+    }
+    Ok(engine.take_unhandled_spawn_errors())
+}
+
 fn finalize_dispatch(
     engine: &Arc<BexEngine>,
     target_name: &str,
@@ -320,8 +522,8 @@ fn finalize_dispatch(
     }
     let rt = match builder.build() {
         Ok(rt) => rt,
-        Err(e) => {
-            print_error(format_args!("failed to create runtime: {e}"));
+        Err(error) => {
+            print_error(error);
             return ExitCode::FAILURE;
         }
     };
@@ -345,23 +547,17 @@ fn finalize_dispatch(
         || {},
     ));
     interrupts.root_finished();
-    engine.record_process_exit(match &result {
+    let status = match &result {
         Ok(DispatchResult::Ok | DispatchResult::Exit(0)) => bex_engine::ProcessStatus::Success,
         _ if engine.root_panicked() => bex_engine::ProcessStatus::Panicked,
         _ => bex_engine::ProcessStatus::Error,
-    });
-    rt.block_on(engine.shutdown());
-    if let Some(error) = engine.initial_cloud_authorization_error() {
-        print_error(format_args!("{error}"));
-        return ExitCode::FAILURE;
-    }
-    if !engine.initial_telemetry_failure_handled()
-        && let Some(Err(error)) = engine.telemetry_result()
-    {
-        eprintln!("Warning: telemetry recording failed: {error}");
-    }
+    };
+    let spawn_errors = match shutdown_engine(engine, &rt, status) {
+        Ok(errors) => errors,
+        Err(code) => return code,
+    };
     let mut unhandled_spawn_failed = false;
-    for report in engine.take_unhandled_spawn_errors() {
+    for report in spawn_errors {
         if report.cancelled {
             let error = report.into_engine_error();
             eprintln!("Warning: cancelled spawned task failed: {error}");

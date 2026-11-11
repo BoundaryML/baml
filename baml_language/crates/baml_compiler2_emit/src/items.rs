@@ -541,6 +541,28 @@ pub(crate) struct ImplRuleTarget<'db> {
     generic_param_bounds: Vec<Vec<TargetBound>>,
 }
 
+/// The exact symbolic key and frame used when baking a linked implementation.
+/// Native dispatch uses this rather than reconstructing the checker's pattern,
+/// which can retain different alias spelling and owner parameter identities.
+#[salsa::tracked]
+pub fn impl_runtime_pattern<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    implementation: ImplLoc<'db>,
+    root: SourceRoot,
+) -> Option<(
+    Vec<ParamTy>,
+    baml_compiler2_mir::TyTemplate,
+    Vec<baml_compiler2_mir::TyTemplate>,
+)> {
+    let lowering = RuntimeLowering::of(db, root);
+    let target = impl_rule_target(db, implementation, &lowering)?;
+    Some((
+        target.impl_params,
+        target.for_ty_pattern,
+        target.interface_args,
+    ))
+}
+
 /// One interface bound of an impl's declared parameter, at the compiler's
 /// head.
 #[derive(Clone)]

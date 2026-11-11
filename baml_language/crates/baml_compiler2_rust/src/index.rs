@@ -1,6 +1,7 @@
 //! Linked program metadata for Rust emission.
 
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
+use std::rc::Rc;
 
 use baml_base::SourceRoot;
 use baml_compiler2_emit::function_identity;
@@ -22,21 +23,23 @@ use crate::coords::{
     enum_head_coords, function_coords, interface_head_coords, item_path, let_coords,
 };
 
+#[derive(Clone)]
 pub(crate) struct ProgramIndex<'p> {
     program: &'p Program,
-    names: Vec<(String, String)>,
+    rt_origins: HashMap<usize, usize>,
+    names: Rc<Vec<(String, String)>>,
     /// Package ordinals derived from the linked dependency edges.
     packages: HashMap<SourceRoot, u32>,
     let_helpers: HashMap<(u32, DeclPath), usize>,
     /// Lambda (closure body) object by identity; `None` for an identity
     /// more than one object claims, which then stays bytecode.
-    lambdas: HashMap<(u32, FunctionIdentity), Option<usize>>,
+    lambdas: Rc<HashMap<(u32, FunctionIdentity), Option<usize>>>,
     /// Method names conservatively resolve all possible dispatch targets.
     methods: HashMap<String, Vec<usize>>,
     /// The methods and interface bodies of every non-stdlib package.
     pub(crate) user_methods: Vec<usize>,
     /// String literal → the compile-time string object bytecode loads it from.
-    pub(crate) strings: HashMap<String, usize>,
+    pub(crate) strings: Rc<HashMap<String, usize>>,
     /// Global slot used by pooled generic function values.
     pub(crate) globals: HashMap<usize, usize>,
     /// Find a pooled generic function with the program's anchored type arguments.
@@ -55,13 +58,14 @@ impl<'p> ProgramIndex<'p> {
     ) -> Self {
         let mut index = Self {
             program,
-            names: vec![(String::new(), String::new()); program.objects.len()],
+            rt_origins: HashMap::new(),
+            names: Rc::new(vec![(String::new(), String::new()); program.objects.len()]),
             packages: package_ordinals(db, root, program),
             let_helpers: HashMap::new(),
-            lambdas: HashMap::new(),
+            lambdas: Rc::new(HashMap::new()),
             methods: HashMap::new(),
             user_methods: Vec::new(),
-            strings: HashMap::new(),
+            strings: Rc::new(HashMap::new()),
             globals: HashMap::new(),
             generic_functions: Vec::new(),
             bigints: HashMap::new(),
@@ -95,7 +99,7 @@ impl<'p> ProgramIndex<'p> {
                         (&function.identity, &placing)
                     {
                         let key = (*package, function.identity.clone());
-                        match self.lambdas.entry(key) {
+                        match Rc::make_mut(&mut self.lambdas).entry(key) {
                             Entry::Vacant(vacant) => {
                                 vacant.insert(Some(object));
                             }
@@ -126,10 +130,12 @@ impl<'p> ProgramIndex<'p> {
                             self.user_methods.push(object);
                         }
                     }
-                    self.names[object] = (name, display);
+                    Rc::make_mut(&mut self.names)[object] = (name, display);
                 }
                 Object::String(text) => {
-                    self.strings.entry(text.to_string()).or_insert(object);
+                    Rc::make_mut(&mut self.strings)
+                        .entry(text.to_string())
+                        .or_insert(object);
                 }
                 Object::GenericFunction(generic) => {
                     self.generic_functions.push((
@@ -331,6 +337,30 @@ impl<'p> ProgramIndex<'p> {
         .find_map(|path| self.lookup((head.root(), path(item_path(head)))))
     }
 
+    /// Recover a declaration that occurs only in a linked implementation frame.
+    /// Such a head need not appear in the caller's local types or constructors.
+    pub(crate) fn declaration(&self, tag: TypeTag) -> Option<DeclName> {
+        for (&root, &ordinal) in &self.packages {
+            let package = &self.program.packages[ordinal as usize];
+            for (path, object) in package
+                .classes
+                .iter()
+                .chain(package.enums.iter())
+                .chain(package.interfaces.iter())
+                .chain(package.type_aliases.iter())
+            {
+                if TypeTag::of_static_index(object.raw()) == tag {
+                    return Some(DeclName::qualified(
+                        root,
+                        path.namespace.clone(),
+                        path.name.clone(),
+                    ));
+                }
+            }
+        }
+        None
+    }
+
     pub(crate) fn pooled_constant(&self, function: usize, wanted: &ConstValue) -> Option<usize> {
         self.info(function)
             .bytecode
@@ -339,11 +369,20 @@ impl<'p> ProgramIndex<'p> {
             .position(|constant| constant == wanted)
     }
 
+    pub(crate) fn rt_origin(&self, object: usize) -> usize {
+        self.rt_origins.get(&object).copied().unwrap_or(object)
+    }
+
+    pub(crate) fn rt_alias(&mut self, object: usize, origin: usize) {
+        self.rt_origins.insert(object, origin);
+    }
+
     pub(crate) fn positions(&self, object: usize) -> &Bytecode {
         &self.info(object).bytecode
     }
 
     pub(crate) fn info(&self, object: usize) -> &bex_vm_types::types::Function {
+        let object = self.rt_origins.get(&object).copied().unwrap_or(object);
         let Object::Function(function) = &self.program.objects[ObjectIndex::from_raw(object)]
         else {
             unreachable!("function metadata")
@@ -352,7 +391,7 @@ impl<'p> ProgramIndex<'p> {
     }
 
     pub(crate) fn name(&self, object: usize) -> &str {
-        &self.names[object].0
+        &self.names[self.rt_origin(object)].0
     }
 
     /// Every method and interface body named `method`, whichever class or
@@ -364,7 +403,20 @@ impl<'p> ProgramIndex<'p> {
     /// [`Self::name`] under its package's label; see
     /// [`crate::CompiledFunction::display`].
     pub(crate) fn display(&self, object: usize) -> &str {
-        &self.names[object].1
+        &self.names[self.rt_origins.get(&object).copied().unwrap_or(object)].1
+    }
+
+    /// Dispatch keys are declaration identities, independent of rendered
+    /// interface-body names such as `<(C as I)>.method`.
+    pub(crate) fn builtin_path(&self, object: usize) -> &str {
+        let function = self.info(object);
+        if let Some(key) = function.native_key.as_deref() {
+            return key;
+        }
+        if let bex_vm_types::types::FunctionKind::SysOp(op) = function.kind {
+            return op.path();
+        }
+        self.display(object)
     }
 
     fn key(&self, (root, path): DeclCoords) -> Option<(u32, DeclPath)> {

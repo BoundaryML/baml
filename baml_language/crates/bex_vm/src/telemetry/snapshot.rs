@@ -1511,3 +1511,7 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "snapshot_rt_tests.rs"]
+mod rt_tests;

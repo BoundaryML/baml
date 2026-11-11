@@ -1,0 +1,261 @@
+BAML runtime coverage (normal AND GC stress): 59 pass, 117 unsupported, 0 fail
+Telemetry off: required
+String probes: off/low/medium/high/default required
+Standalone JSON and closure/task telemetry checked; not enabled generally
+Exception probe: off/low/medium/high/default required
+Packed testing probe: off/low/medium/high/default process/report parity required
+
+First unsupported constructs (fixtures blocked):
+18	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+9	list element
+5	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+5	typed builtin exception class
+4	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+3	list field element
+3	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(11), unwind: None })
+2	baml.errors.Context._to_string_impl
+2	field type Type (layout Class, object 14, types [Type])
+2	growing list builtin receiver
+2	specialization frame arity
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(10)))], destination: Local(Local(9)), target: BlockId(6), unwind: None })
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(16), unwind: None })
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(9), unwind: None })
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(9), unwind: None })
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(18)))], destination: Local(Local(17)), target: BlockId(10), unwind: None })
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(5), unwind: None })
+2	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(7)))], destination: Local(Local(6)), target: BlockId(5), unwind: None })
+1	field type Media(Image) (layout content.Media, object 1663, types [Union([Media(Image), Media(Audio), Media(Video), Media(Pdf)]), Union([String, Null]), Union([String, Null])])
+1	field type Never (layout future.AllFailed, object 4861, types [List(Never)])
+1	field type Type (layout ModelTurnInput, object 1689, types [Function { params: [RuntimeFunctionParamTy { name: None, ty: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1779) }, []), mode: Required }], ret: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1785) }, []), throws: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1819) }, []) }, Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1778) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1788) }, []), Type])
+1	interface without a reachable concrete receiver (reaching user.Iterators block 7)
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("logged"))], destination: Local(Local(1)), target: BlockId(3), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("parent-done"))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("unreachable: global callback was not initialized"))], destination: Local(Local(1)), target: BlockId(1), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(10)))], destination: Local(Local(9)), target: BlockId(11), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(11)))], destination: Local(Local(10)), target: BlockId(9), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(10), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(4), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(6), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(8), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(10), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(8), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(15)))], destination: Local(Local(14)), target: BlockId(11), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(15)))], destination: Local(Local(14)), target: BlockId(13), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(16)))], destination: Local(Local(15)), target: BlockId(11), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(16)))], destination: Local(Local(15)), target: BlockId(15), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(17)))], destination: Local(Local(16)), target: BlockId(15), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(18)))], destination: Local(Local(17)), target: BlockId(14), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(12), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(13), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(14), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(3), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(7), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(20)))], destination: Local(Local(19)), target: BlockId(10), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(20)))], destination: Local(Local(19)), target: BlockId(22), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(20)))], destination: Local(Local(19)), target: BlockId(9), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(21)))], destination: Local(Local(20)), target: BlockId(15), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(22)))], destination: Local(Local(21)), target: BlockId(19), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(23)))], destination: Local(Local(22)), target: BlockId(5), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(25)))], destination: Local(Local(24)), target: BlockId(14), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(25)))], destination: Local(Local(24)), target: BlockId(15), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(26)))], destination: Local(Local(25)), target: BlockId(4), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(27)))], destination: Local(Local(26)), target: BlockId(10), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(27)))], destination: Local(Local(26)), target: BlockId(16), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(3)))], destination: Local(Local(2)), target: BlockId(7), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(30)))], destination: Local(Local(29)), target: BlockId(16), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(41)))], destination: Local(Local(40)), target: BlockId(25), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(5), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(7), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(8)))], destination: Local(Local(7)), target: BlockId(8), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(10), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(6), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(7), unwind: None })
+1	terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(8), unwind: None })
+1	unmapped implementation frame head
+
+Per probe / KPI workload:
+Allocation	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(23)))], destination: Local(Local(22)), target: BlockId(5), unwind: None })
+AnyWithFailure	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(20)))], destination: Local(Local(19)), target: BlockId(10), unwind: None })
+ArrayWalk	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+Async	unsupported: field type Never (layout future.AllFailed, object 4861, types [List(Never)])
+AwaitChain	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(9), unwind: None })
+AwaitErrors	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(41)))], destination: Local(Local(40)), target: BlockId(25), unwind: None })
+BoundTypes	unsupported: unmapped implementation frame head
+CallbackDepth	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(18)))], destination: Local(Local(17)), target: BlockId(14), unwind: None })
+CancelDeep	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(11), unwind: None })
+CancelDuringUnwind	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(11), unwind: None })
+Cancellation	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(14), unwind: None })
+CatchAllThrownPanic	unsupported: typed builtin exception class
+CatchAllocation	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(10), unwind: None })
+CatchBindChain	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(16), unwind: None })
+CatchBindJumpTable	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(16), unwind: None })
+CatchMixedUnion	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(20)))], destination: Local(Local(19)), target: BlockId(22), unwind: None })
+CatchNonstreamCancellation	unsupported: field type Type (layout ModelTurnInput, object 1689, types [Function { params: [RuntimeFunctionParamTy { name: None, ty: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1779) }, []), mode: Required }], ret: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1785) }, []), throws: Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1819) }, []) }, Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1778) }, []), Class(TypeHead { ptr: HeapPtr(0x0), tag: TypeTag(1788) }, []), Type])
+CatchOrPanics	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(9), unwind: None })
+CatchStreamingCancellation	unsupported: field type Media(Image) (layout content.Media, object 1663, types [Union([Media(Image), Media(Audio), Media(Video), Media(Pdf)]), Union([String, Null]), Union([String, Null])])
+CatchUnmatchedChain	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(15)))], destination: Local(Local(14)), target: BlockId(13), unwind: None })
+CatchWildcardDivision	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(16)))], destination: Local(Local(15)), target: BlockId(15), unwind: None })
+CatchWildcardIndex	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(10), unwind: None })
+CatchWildcardReassigned	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(13)))], destination: Local(Local(12)), target: BlockId(9), unwind: None })
+CatchWildcardThenBoundary	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(11)))], destination: Local(Local(10)), target: BlockId(9), unwind: None })
+CatchWildcardThrownPanic	unsupported: typed builtin exception class
+CauseChains	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(21)))], destination: Local(Local(20)), target: BlockId(15), unwind: None })
+Closures	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(10)))], destination: Local(Local(9)), target: BlockId(6), unwind: None })
+Containers	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(12), unwind: None })
+Contexts	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(15)))], destination: Local(Local(14)), target: BlockId(11), unwind: None })
+DeepErrors	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(8), unwind: None })
+DeepUncaught	unsupported: baml.errors.Context._to_string_impl
+DeferUnwind	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(9), unwind: None })
+DeferUnwindUncaught	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(7)))], destination: Local(Local(6)), target: BlockId(5), unwind: None })
+Depth	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(7), unwind: None })
+Equality	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(10)))], destination: Local(Local(9)), target: BlockId(11), unwind: None })
+EscapeAwaitResult	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+EscapeAwaitShared	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeCaptureAlias	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeClosure	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeField	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeFinalizer	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(14)))], destination: Local(Local(13)), target: BlockId(8), unwind: None })
+EscapeGlobal	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(6), unwind: None })
+EscapeInsert	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeInsertContents	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeIterator	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(27)))], destination: Local(Local(26)), target: BlockId(10), unwind: None })
+EscapeMap	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(25)))], destination: Local(Local(24)), target: BlockId(14), unwind: None })
+EscapeMapSetContents	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeMapValue	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeMaskClosure	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeMaskMixed	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeOrderedReturn	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(6), unwind: None })
+EscapeOrderedSpawn	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(7), unwind: None })
+EscapePublishedField	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(10)))], destination: Local(Local(9)), target: BlockId(6), unwind: None })
+EscapePushContents	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeRecursive	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeReturnedAlias	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeSessionHandoff	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(7)))], destination: Local(Local(6)), target: BlockId(5), unwind: None })
+EscapeSpawn	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeSpawnInCallee	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeStoredDeep	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeThrowCaught	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+EscapeUnshiftContents	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(4)))], destination: Local(Local(3)), target: BlockId(6), unwind: None })
+FrameLimit	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(13), unwind: None })
+GenericChains	unsupported: field type Type (layout Class, object 14, types [Type])
+GenericClosures	unsupported: specialization frame arity
+GlobalCallPending	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("unreachable: global callback was not initialized"))], destination: Local(Local(1)), target: BlockId(1), unwind: None })
+GlobalCalls	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(5), unwind: None })
+Hidden	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(30)))], destination: Local(Local(29)), target: BlockId(16), unwind: None })
+Hooked	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(8), unwind: None })
+HookedDeep	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(16)))], destination: Local(Local(15)), target: BlockId(11), unwind: None })
+InitializerClosures	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(6)))], destination: Local(Local(5)), target: BlockId(5), unwind: None })
+InitializerErrors	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+InitializerPanic	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+InitializerPending	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+InitializerTestErrors	unsupported: typed builtin exception class
+InitializerTests	unsupported: typed builtin exception class
+InitializerUncaught	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+Initializers	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(5), unwind: None })
+InterfaceErrors	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(20)))], destination: Local(Local(19)), target: BlockId(9), unwind: None })
+Interfaces	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(3), unwind: None })
+IteratorInterfaceIdentity	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(8)))], destination: Local(Local(7)), target: BlockId(8), unwind: None })
+Iterators	unsupported: interface without a reachable concrete receiver (reaching user.Iterators block 7)
+JsonRuntime	pass
+Logs	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("logged"))], destination: Local(Local(1)), target: BlockId(3), unwind: None })
+LogsDeep	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(10), unwind: None })
+ManualSpan	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(17)))], destination: Local(Local(16)), target: BlockId(15), unwind: None })
+NoLeaks	unsupported: specialization frame arity
+Overflow	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(2), unwind: None })
+RecursiveCancellation	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(22)))], destination: Local(Local(21)), target: BlockId(19), unwind: None })
+RtAutomaticCleanup	pass
+RtBackgroundError	pass
+RtBackgroundTask	pass
+RtBoundGenericClosures	pass
+RtBuiltinCallbacks	pass
+RtCancelledFailure	pass
+RtClosures	pass
+RtDefaultCallbacks	pass
+RtEmptyClosures	pass
+RtGenericClosures	pass
+RtGenericMethods	pass
+RtLinkedCancelledFailure	pass
+RtNativeBytes	pass
+RtNativeCalendar	pass
+RtNativeCallback	pass
+RtNativeClock	pass
+RtNativeFiles	pass
+RtNativeHigherOrderValue	pass
+RtNativeIoValues	pass
+RtNativeMath	pass
+RtNativeProcess	pass
+RtNativeRandom	pass
+RtScalarTaskOrder	pass
+RtSpawnAwait	pass
+RtTaskControls	pass
+RtTaskErrors	pass
+RtTaskLimits	pass
+RtTaskModifiers	pass
+RtTaskSleep	pass
+RtTaskTimeout	pass
+RtTokenComposition	pass
+RtUnhandledOrder	pass
+RtVirtualGenericClosures	pass
+RtVirtualOwnGenericClosure	pass
+RuntimeClass	unsupported: field type Type (layout Class, object 14, types [Type])
+RuntimeListMaps	pass
+Scalars	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(12)))], destination: Local(Local(11)), target: BlockId(4), unwind: None })
+Shapes	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(3)))], destination: Local(Local(2)), target: BlockId(7), unwind: None })
+Shielded	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(19)))], destination: Local(Local(18)), target: BlockId(11), unwind: None })
+SpawnChains	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(2)))], destination: Local(Local(1)), target: BlockId(7), unwind: None })
+SpawnPanicCaught	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(27)))], destination: Local(Local(26)), target: BlockId(16), unwind: None })
+SpawnPanicDetached	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Constant(String("parent-done"))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+SpawnPanicUncaught	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+SpawnThrowUncaught	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(9)))], destination: Local(Local(8)), target: BlockId(5), unwind: None })
+SpawnedClosures	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(18)))], destination: Local(Local(17)), target: BlockId(10), unwind: None })
+Spawns	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(26)))], destination: Local(Local(25)), target: BlockId(4), unwind: None })
+StackAllocation	pass
+TaskOverflow	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(25)))], destination: Local(Local(24)), target: BlockId(15), unwind: None })
+ThreadLocalParallel	unsupported: terminator Some(SysOp { callee: Constant(Function(Source(FunctionLoc(..)))), args: [Copy(Local(Local(18)))], destination: Local(Local(17)), target: BlockId(10), unwind: None })
+TimeoutCancellation	unsupported: typed builtin exception class
+Uncaught	unsupported: baml.errors.Context._to_string_impl
+classes::method call 100k	pass
+compute::array build sum 100k	unsupported: growing list builtin receiver
+compute::array traversal 8k	unsupported: growing list builtin receiver
+compute::fib32 recursive	pass
+compute::generate sort 8k	pass
+compute::json aggregate 2k	pass
+compute::json hello	pass
+compute::json ndjson events	pass
+compute::json request body	pass
+compute::json tree path	pass
+compute::k-nucleotide 25k	pass
+compute::merge sort 20k	unsupported: list element
+compute::nbody 20k	unsupported: list element
+compute::nested loops 500x500	pass
+compute::pure call 1m	pass
+compute::quick sort 3-way 1k	unsupported: list element
+concurrency::spawn await x10k	pass
+interfaces::polymorphic dispatch 100k	pass
+memory::binary trees 14	pass
+memory::cycles into live	unsupported: list element
+memory::cyclic churn	unsupported: list field element
+memory::heap calls	pass
+memory::live heap	unsupported: list element
+memory::live walk	unsupported: list field element
+memory::splay 2k	unsupported: list element
+process::startup	pass
+programs::agent loop 300	pass
+programs::json parser 15	unsupported: list field element
+programs::richards 50	pass
+rt_exception_semantics_at_every_telemetry_level	pass
+rt_setup_state_benchmark	pass
+rt_testing_stdlib_and_test_host	pass
+rt_type_dispatch_semantics	pass
+string::concat loop 10k	pass
+string::split medium literal 10k	pass
+strings::codepoint error	pass
+strings::float	pass
+strings::float error	pass
+strings::formatting	pass
+strings::parse error	pass
+strings::regex	pass
+strings::regex error	pass
+strings::semantics	pass
+strings::utf8	pass
+strings::utf8 error	pass

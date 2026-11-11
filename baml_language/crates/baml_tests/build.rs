@@ -23,6 +23,19 @@ fn make_include_str(path: &str) -> TokenStream {
 }
 
 fn main() {
+    // Test-only JSON view of the authoritative wire schema. New fields remain
+    // visible to the differential comparator without changing production types.
+    println!("cargo:rerun-if-changed=../btel_recorder/proto/recording.proto");
+    let mut config = prost_build::Config::new();
+    config.protoc_executable(protoc_bin_vendored::protoc_bin_path().unwrap());
+    config.type_attribute(".", "#[derive(serde::Serialize)]");
+    config
+        .compile_protos(
+            &["../btel_recorder/proto/recording.proto"],
+            &["../btel_recorder/proto"],
+        )
+        .unwrap();
+
     // Watch the projects directory for changes
     println!("cargo:rerun-if-changed=projects");
 

@@ -6309,7 +6309,7 @@ impl<'db> LoweringContext<'db> {
 
     /// Lower `await expr` into a `Terminator::Await` whose destination is
     /// the awaited value.
-    fn lower_await(&mut self, _expr_id: AstExprId, future: AstExprId, dest: Place) -> Lowered<()> {
+    fn lower_await(&mut self, expr_id: AstExprId, future: AstExprId, dest: Place) -> Lowered<()> {
         let future_local = self.builder.temp(RuntimeTy::Null);
         let future_place = Place::Local(future_local);
         self.lower_expr(future, future_place.clone())?;
@@ -6321,7 +6321,9 @@ impl<'db> LoweringContext<'db> {
         let (await_dest, projection_dest) = match dest {
             Place::Local(_) => (dest, None),
             projection => {
-                let tmp = self.builder.temp(RuntimeTy::Null);
+                // Typed like the awaited value: native backends store it by
+                // representation (e.g. into a captured cell).
+                let tmp = self.builder.temp(self.expr_ty(expr_id)?);
                 (Place::Local(tmp), Some(projection))
             }
         };

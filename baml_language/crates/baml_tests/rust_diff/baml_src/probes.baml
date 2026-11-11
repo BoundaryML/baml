@@ -116,12 +116,12 @@ function Contexts() -> void {
 function Uncaught() -> void {
     let _ = Rethrow();
 }
-
+// Settle both inputs before any so loser cancellation cannot race completion.
 function Async() -> void {
-    let a = spawn { 20 };
-    let b = spawn { 22 };
+    let a = spawn { 21 };
+    let b = spawn { 21 };
     let sum = await a + await b;
-    let winner = await baml.future.any([spawn { 21 }, spawn { 21 }]);
+    let winner = await baml.future.any([a, b]);
     baml.io.println(`${winner}:${sum}`);
 }
 

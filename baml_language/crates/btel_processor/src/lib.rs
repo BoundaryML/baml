@@ -29,8 +29,8 @@ mod capture;
 pub use capture::CaptureProcessor;
 mod aggregate;
 mod publisher;
-pub use aggregate::AggregateDelta;
 use aggregate::CombiningCache;
+pub use btel_records::AggregateDelta;
 use btel_settings::processor::CACHE_FLUSH_INTERVAL_DURATION;
 pub use publisher::{NoSinkPublisher, Publisher, PublisherStats};
 
@@ -92,6 +92,14 @@ impl<P> Processing<P> {
         let mut thread = self.context(producer).timing;
         for record in records.as_slice() {
             match *record {
+                TimingRecord::AggregateDeltas(ref deltas) => {
+                    assert!(thread.is_some(), "aggregate delta without thread selector");
+                    for delta in deltas.iter().copied() {
+                        self.cache.observe(delta, |delta| {
+                            publisher::publish_aggregate(&mut self.publisher, delta);
+                        });
+                    }
+                }
                 TimingRecord::ThreadSelected { thread_id } => thread = Some(thread_id),
                 TimingRecord::FunctionTimingCompletion {
                     call_path,

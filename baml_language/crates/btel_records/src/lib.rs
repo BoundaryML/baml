@@ -10,6 +10,9 @@
 
 use std::sync::Arc;
 
+mod aggregate;
+pub use aggregate::AggregateDelta;
+
 use btel_clock::ClockEpoch;
 use btel_types::{
     AwaitDuration, CallPathEdge, CallPathId, ClockDuration, ClockInstant, FunctionId,
@@ -66,6 +69,9 @@ impl<I, V> SpanRecord<I, V> {
 /// ```
 #[derive(Debug)]
 pub enum TimingRecord {
+    /// Pre-combined loop-local samples, transferred at a yield or task end.
+    /// Boxing the batch preserves the per-invocation timing slot budget.
+    AggregateDeltas(Box<[AggregateDelta]>),
     /// Ring-local thread context without adding an ID to every timing slot.
     ThreadSelected { thread_id: TelemetryId },
     /// Common anonymous completion; its layout determines the hot slot size.

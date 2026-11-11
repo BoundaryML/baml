@@ -40,16 +40,18 @@ def _scaled(stats, f):
 
 def _value(metric, cell, build, row):
     """One bar: a measured value, a note saying why there is none, or None (row-level reason)."""
+    if cell["status"] == "unsupported":
+        return {"note": cell.get("reason") or "unsupported by baml_rt"}
     if metric == "binary_kib":
         if not row.is_baml:
             return NO_BINARY
-        if row.key != PRIMARY:
+        if row.telemetry != "off":
             return SAME_AS_OFF
         return {"median": build["bytes"] / 1024} if build.get("status") == "ok" else {"note": "pack failed"}
     if metric == "build_s":
         if not row.is_baml:
             return NO_BUILD
-        if row.key != PRIMARY:
+        if row.telemetry != "off":
             return SAME_AS_OFF
         return {"median": build["seconds"]} if build.get("status") == "ok" else {"note": "pack failed"}
     if cell["status"] == "failed":
@@ -66,6 +68,14 @@ def _value(metric, cell, build, row):
     return _scaled(cell["peak_rss_bytes"], 1 / 2**20)
 
 
+def rt_speedups(cells):
+    def value(key):
+        cell = cells.get(key, {})
+        return (cell.get("per_job_ns") or {}).get("median") if cell.get("status") == "ok" else None
+    rt = value("rt-off")
+    return {key: value(key) / rt if rt and value(key) else None for key in ("vm-off", "node")}
+
+
 def build(data, workloads, row_list):
     by_name = {w["name"]: w for w in workloads}
     summary, builds = data["summary"], data["builds"]
@@ -80,7 +90,7 @@ def build(data, workloads, row_list):
             if not w:
                 continue
             cells, b = summary[w["id"]], builds.get(w["id"], {})
-            values = {r.key: _value(k["metric"], cells[r.key], b, r) for r in present}
+            values = {r.key: _value(k["metric"], cells[r.key], b.get(r.backend, b if r.backend == "vm" else {}), r) for r in present}
             p = values.get(PRIMARY) or {}
             headline = {}
             for ref in refs:
@@ -95,23 +105,26 @@ def build(data, workloads, row_list):
     rows = []
     for r in present:
         statuses = {summary[w["id"]][r.key]["status"] for w in workloads}
-        status = "measured" if "ok" in statuses else "unavailable" if statuses == {"unavailable"} else "failed"
+        status = "measured" if "ok" in statuses else "unavailable" if statuses == {"unavailable"} else "unsupported" if statuses == {"unsupported"} else "failed"
         rows.append({"key": r.key, "label": r.label, "family": r.family, "status": status})
 
     all_rows = []
     for w in workloads:
         cells = summary[w["id"]]
         all_rows.append({"name": w["name"], "description": w["description"], "origin": w.get("origin"),
-                         "values": {r.key: (cells[r.key]["per_job_ns"]["median"] if cells[r.key].get("per_job_ns") else None)
+                         "values": {r.key: (cells[r.key]["per_job_ns"]["median"] if cells[r.key]["status"] == "ok" and cells[r.key].get("per_job_ns") else None)
                                     for r in present},
-                         "status": {r.key: cells[r.key]["status"] for r in present}})
+                         "status": {r.key: cells[r.key]["status"] for r in present},
+                         "reasons": {r.key: cells[r.key].get("reason") for r in present},
+                         "rt_speedup": rt_speedups(cells)})
 
     vcs = (data.get("cli") or {}).get("vcs") or {}
     trials_total = sum(s["trials"] for ws in summary.values() for s in ws.values())
     trials_failed = sum(s["failed_trials"] for ws in summary.values() for s in ws.values())
     verify_failures = sum(1 for ws in summary.values() for s in ws.values() if s["status"] == "failed")
     return {
-        "schema": 3,
+        "schema": 4,
+        "builds": builds,
         "primary": PRIMARY,
         "compare": [r for r in ("node", "python", "bun") if r in refs][:2],
         "candidate": {"sha": vcs.get("commit"), "branch": vcs.get("branch") or vcs.get("bookmark"),
@@ -120,10 +133,12 @@ def build(data, workloads, row_list):
         "protocol": {"name": data.get("protocol"), "trials": data.get("trials"), "seed": data.get("seed"), "cpu": data.get("cpu")},
         "run": {"id": data.get("id"), "started": data.get("started"), "finished": data.get("finished"),
                 "trials_total": trials_total, "trials_failed": trials_failed, "verify_failures": verify_failures,
+                "loadavg_1m_range": data.get("loadavg_1m_range"),
                 "loadavg_start": data.get("loadavg_start"), "loadavg_end": data.get("loadavg_end")},
         "rows": rows,
         "reasons": {"unavailable": "the toolchain is not installed on this machine",
-                    "failed": "failed verification or every trial on this workload"},
+                    "failed": "failed verification or trials on this workload",
+                    "unsupported": "unsupported by baml_rt"},
         "kpis": out_kpis,
         "workloads": all_rows,
     }

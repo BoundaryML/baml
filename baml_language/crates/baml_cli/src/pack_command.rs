@@ -62,7 +62,10 @@ Examples:
     baml pack --function Extract --function Classify --output ./baml-tools
 
   Package a function from a standalone file:
-    baml pack --file script.baml main")]
+    baml pack --file script.baml main
+
+  Package the project's tests:
+    baml pack --tests --output ./tests")]
 pub struct PackArgs {
     #[command(flatten)]
     pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
@@ -87,6 +90,17 @@ pub struct PackArgs {
     )]
     pub functions: Vec<String>,
 
+    /// Package the project's tests instead of a function.
+    ///
+    /// The executable runs the test registry the way `baml test` does, under
+    /// the project's default test profile, narrowed by its own `-i`/`-x`
+    /// selectors, and prints a byte-stable report: one `PASS`/`FAIL` line per
+    /// test in name order, then the failure messages, then an `AGGREGATE`
+    /// line with the counts; no timings. Mutually exclusive with `<TARGET>`
+    /// and `--function`.
+    #[arg(long, help_heading = "Target options")]
+    pub tests: bool,
+
     /// Load one standalone source file instead of discovering a project.
     ///
     /// Mutually exclusive with `--project`.
@@ -104,6 +118,14 @@ pub struct PackArgs {
     /// Builds a host with cargo from `--rust-workspace`.
     #[arg(long, help_heading = "Build options")]
     pub rust: bool,
+
+    /// Run compiled Rust with baml_rt instead of the VM.
+    #[arg(long, requires = "rust", help_heading = "Build options")]
+    pub rt: bool,
+
+    /// Native speedtest setup()/run(state) protocol, retaining state on one fiber.
+    #[arg(long, hide = true, requires = "rt")]
+    pub rt_benchmark: bool,
 
     /// The `baml_language` workspace checkout the generated host is built from.
     #[arg(
@@ -200,6 +222,9 @@ impl PackArgs {
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         self.validate_flags()?;
         let manifest = self.artifact_manifest()?;
+        if self.rt && self.telemetry.embed_telemetry {
+            anyhow::bail!("unsupported in baml_rt: embedded telemetry");
+        }
         let mut telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
             &manifest,
             btel_settings::artifact::ArtifactKind::Pack,
@@ -228,7 +253,18 @@ impl PackArgs {
         )
         .map_err(|e| anyhow!("failed to initialize engine for resolution: {e:?}"))?;
 
-        let (mode, targets) = self.resolve_targets(&engine)?;
+        let (mode, targets) = if self.tests {
+            let (profile_include, profile_exclude) = self.test_profile_selectors()?;
+            (
+                baml_exec::PackMode::Tests {
+                    profile_include,
+                    profile_exclude,
+                },
+                Vec::new(),
+            )
+        } else {
+            self.resolve_targets(&engine)?
+        };
         for t in &targets {
             validate_help_param(&engine, &t.qualified_name)?;
         }
@@ -257,30 +293,101 @@ impl PackArgs {
         let compiled = if self.rust {
             reporter.spin("Compiling", "BAML to Rust");
             let callables = envelope.program.rendered_callables();
-            let entries: Option<Vec<usize>> = targets
-                .iter()
-                .map(|target| {
-                    callables
-                        .get(&target.qualified_name)
-                        .map(|callable| callable.object.raw())
+            let entries: Option<Vec<usize>> = if self.tests {
+                None
+            } else {
+                targets
+                    .iter()
+                    .map(|target| {
+                        callables
+                            .get(&target.qualified_name)
+                            .map(|callable| callable.object.raw())
+                    })
+                    .collect()
+            };
+            if self.rt && self.tests {
+                let (profile_include, profile_exclude) = self.test_profile_selectors()?;
+                let source = crate::pack_rt_tests::compile(
+                    &db,
+                    root,
+                    &envelope.program,
+                    Arc::new(engine),
+                    baml_exec::test_report::TestSelection {
+                        profile_include,
+                        profile_exclude,
+                        ..Default::default()
+                    },
+                )?;
+                Some(baml_db::rust_backend::RustModule {
+                    source,
+                    functions: Vec::new(),
+                    rejected: Vec::new(),
                 })
-                .collect();
-            let module = baml_db::rust_backend::compile_program(
-                &db,
-                root,
-                &envelope.program,
-                crate::bytecode_cache::CLI_OPT_LEVEL,
-                "program.bexa",
-                fingerprint,
-                entries.as_deref(),
-            )
-            .map_err(|error| anyhow!(error))?;
-            Some(module)
+            } else if self.rt {
+                if self.target.is_none() || targets.len() != 1 {
+                    anyhow::bail!("unsupported in baml_rt: subcommand packs");
+                }
+                let entry = entries
+                    .as_ref()
+                    .and_then(|e| e.first())
+                    .ok_or_else(|| anyhow!("rt entry not linked"))?;
+                let source = if self.rt_benchmark {
+                    let namespace = targets[0]
+                        .qualified_name
+                        .rsplit_once('.')
+                        .map(|(prefix, _)| prefix)
+                        .ok_or_else(|| anyhow!("rt benchmark namespace missing"))?;
+                    let linked = |name: &str| {
+                        callables
+                            .get(&format!("{namespace}.{name}"))
+                            .map(|callable| callable.object.raw())
+                            .ok_or_else(|| anyhow!("rt benchmark needs {name}()"))
+                    };
+                    baml_db::rust_backend::compile_rt_benchmark(
+                        &db,
+                        root,
+                        &envelope.program,
+                        crate::bytecode_cache::CLI_OPT_LEVEL,
+                        *entry,
+                        (linked("setup")?, linked("run")?),
+                    )
+                } else {
+                    baml_db::rust_backend::compile_rt(
+                        &db,
+                        root,
+                        &envelope.program,
+                        crate::bytecode_cache::CLI_OPT_LEVEL,
+                        *entry,
+                    )
+                }
+                .map_err(|e| anyhow!(e))?;
+                Some(baml_db::rust_backend::RustModule {
+                    source,
+                    functions: Vec::new(),
+                    rejected: Vec::new(),
+                })
+            } else {
+                let module = baml_db::rust_backend::compile_program(
+                    &db,
+                    root,
+                    &envelope.program,
+                    crate::bytecode_cache::CLI_OPT_LEVEL,
+                    "program.bexa",
+                    fingerprint,
+                    entries.as_deref(),
+                )
+                .map_err(|error| anyhow!(error))?;
+                Some(module)
+            }
         } else {
             None
         };
         drop(db);
-        let label = label_for(&targets);
+        let label = if self.tests {
+            "tests".into()
+        } else {
+            label_for(&targets)
+        };
         reporter.spin("Packaging", &label);
         let target_triple = self.resolved_target_triple()?;
         let basename = self.resolve_output_basename()?;
@@ -349,11 +456,18 @@ impl PackArgs {
                 );
             }
         }
-        if self.target.is_none() && self.functions.is_empty() {
+        if self.tests && (self.target.is_some() || !self.functions.is_empty()) {
+            anyhow::bail!(
+                "`--tests` packs the project's tests, not a function — drop the \
+                 positional `<TARGET>` / `-f <NAME>`, or drop `--tests`."
+            );
+        }
+        if self.target.is_none() && self.functions.is_empty() && !self.tests {
             anyhow::bail!(
                 "no target specified. Pass a positional `<TARGET>` to pack one \
-                 function as the binary's only entry point, or one or more \
-                 `-f <NAME>` flags to pack a subcommand binary."
+                 function as the binary's only entry point, one or more \
+                 `-f <NAME>` flags to pack a subcommand binary, or `--tests` \
+                 to pack the project's tests."
             );
         }
         if self.rust && !bex_engine::STACKFUL_FIBERS_SUPPORTED {
@@ -435,7 +549,35 @@ impl PackArgs {
         let src_dir = build_dir.join("src");
         std::fs::create_dir_all(&src_dir)
             .with_context(|| format!("failed to create {}", src_dir.display()))?;
-        let manifest = rust_manifest(&workspace, self.rust_profile);
+        let manifest = if self.rt {
+            let mut manifest =
+                rust_manifest(&workspace, self.rust_profile).parse::<toml::Value>()?;
+            let dependencies = manifest["dependencies"].as_table_mut().unwrap();
+            dependencies.clear();
+            for name in ["baml_rt", "baml_rt_gc"] {
+                dependencies.insert(
+                    name.into(),
+                    toml::Value::Table(toml::map::Map::from_iter([(
+                        "path".into(),
+                        toml::Value::String(
+                            workspace.join("crates").join(name).display().to_string(),
+                        ),
+                    )])),
+                );
+            }
+            // Retain source symbols for the required gap profile.
+            manifest["profile"]["release"]["strip"] = toml::Value::Boolean(false);
+            manifest["profile"]["release"]
+                .as_table_mut()
+                .unwrap()
+                .insert(
+                    "debug".into(),
+                    toml::Value::Integer(if self.tests { 0 } else { 1 }),
+                );
+            toml::to_string(&manifest)?
+        } else {
+            rust_manifest(&workspace, self.rust_profile)
+        };
         let main = b"fn main() -> std::process::ExitCode {
     baml_pack_host::run_embedded(
         baml_rust_program::PROGRAM_ARTIFACT,
@@ -445,8 +587,22 @@ impl PackArgs {
 ";
         for (name, contents) in [
             ("src/program.bexa", serialized),
-            ("src/lib.rs", module.source.as_bytes()),
-            ("src/main.rs", main.as_slice()),
+            (
+                "src/lib.rs",
+                if self.rt {
+                    b""
+                } else {
+                    module.source.as_bytes()
+                },
+            ),
+            (
+                "src/main.rs",
+                if self.rt {
+                    module.source.as_bytes()
+                } else {
+                    main.as_slice()
+                },
+            ),
             ("Cargo.toml", manifest.as_bytes()),
         ] {
             std::fs::write(build_dir.join(name), contents)
@@ -529,22 +685,42 @@ impl PackArgs {
     }
 
     fn artifact_manifest(&self) -> Result<toml::Value> {
-        if self.file.is_some() {
-            return Ok(toml::Value::Table(toml::Table::new()));
-        }
-        let Some(root) = crate::project_load::find_project_root_from(self.from.as_deref())? else {
-            return Ok(toml::Value::Table(toml::Table::new()));
-        };
-        let path = root.join("baml.toml");
-        match std::fs::read_to_string(&path) {
-            Ok(content) => {
+        match self.manifest_text()? {
+            Some((root, content)) => {
+                let path = root.join("baml.toml");
                 Ok(toml::from_str(&content)
                     .with_context(|| format!("Invalid {}", path.display()))?)
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                Ok(toml::Value::Table(toml::Table::new()))
-            }
+            None => Ok(toml::Value::Table(toml::Table::new())),
+        }
+    }
+
+    /// The project root and its `baml.toml` text; `None` for a `--file`
+    /// source (hermetic, no project) or a manifest-less project.
+    fn manifest_text(&self) -> Result<Option<(PathBuf, String)>> {
+        if self.file.is_some() {
+            return Ok(None);
+        }
+        let Some(root) = crate::project_load::find_project_root_from(self.from.as_deref())? else {
+            return Ok(None);
+        };
+        let path = root.join("baml.toml");
+        match std::fs::read_to_string(&path) {
+            Ok(content) => Ok(Some((root, content))),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error).with_context(|| format!("failed to read {}", path.display())),
+        }
+    }
+
+    /// The selectors a `--tests` binary bakes in: those of the project's
+    /// default test profile, as a bare `baml test` applies them. A source
+    /// without a manifest has no profile.
+    fn test_profile_selectors(&self) -> Result<(Vec<String>, Vec<String>)> {
+        match self.manifest_text()? {
+            Some((root, content)) => {
+                crate::test_command::default_profile_selectors(Some(&content), &root)
+            }
+            None => Ok(Default::default()),
         }
     }
 
@@ -999,9 +1175,12 @@ mod tests {
             compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),
+            tests: false,
             file: None,
             output: None,
             rust: false,
+            rt: false,
+            rt_benchmark: false,
             rust_workspace: None,
             rust_build_dir: None,
             rust_profile: RustProfile::Release,
@@ -1068,6 +1247,44 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("no target"), "got: {msg}");
         assert!(msg.contains("-f"), "got: {msg}");
+    }
+
+    /// `--tests` alone is a complete target; with a positional or `-f` it
+    /// is rejected.
+    #[test]
+    fn test_pack_tests_flag_is_exclusive_with_targets() {
+        let mut args = pack_args();
+        args.tests = true;
+        args.validate_flags().unwrap();
+        args.target = Some("main".to_string());
+        let msg = format!("{}", args.validate_flags().unwrap_err());
+        assert!(msg.contains("--tests"), "got: {msg}");
+        args.target = None;
+        args.functions = vec!["main".to_string()];
+        let msg = format!("{}", args.validate_flags().unwrap_err());
+        assert!(msg.contains("--tests"), "got: {msg}");
+    }
+
+    /// The baked-in selectors come from the manifest's default profile;
+    /// a `--file` source has none.
+    #[test]
+    fn test_pack_tests_profile_selectors_follow_default_profile() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"t\"\n\n[test]\ndefault = \"offline\"\n\n\
+             [test.profiles.offline]\nargs = [\"-x\", \"::live::\", \"-i\", \"root::\"]\n",
+        )
+        .unwrap();
+        let mut args = pack_args();
+        args.tests = true;
+        args.from = Some(tmp.path().to_path_buf());
+        assert_eq!(
+            args.test_profile_selectors().unwrap(),
+            (vec!["root::".to_string()], vec!["::live::".to_string()])
+        );
+        args.file = Some(tmp.path().join("x.baml"));
+        assert_eq!(args.test_profile_selectors().unwrap(), (vec![], vec![]));
     }
 
     /// Positional + `-f` is rejected.
