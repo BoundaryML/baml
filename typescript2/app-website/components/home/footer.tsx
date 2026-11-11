@@ -3,22 +3,34 @@ import { BoundaryLogo } from './boundary-logo';
 import { BOOK } from './links';
 import { LANES, LEFT, LINKS, WRAP } from './ui';
 
-// The footer on the homepage and the blog. Its links are full paths, so they work from either page.
+// The footer on every page. Its columns follow the nav's Platform menu, plus the community links.
+// Its links are full paths, so they work from any page.
 const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
-    links: [['Get early access', BOOK]],
-    title: 'BAML',
+    links: [
+      ['Overview', '/'],
+      ['Adopt', '/adopt'],
+      ['How BAML works', '/how-baml-works'],
+      ['Pricing', '/pricing'],
+      ['Get early access', BOOK],
+    ],
+    title: 'Platform',
   },
   {
     links: [
-      ['Source code', LINKS.github],
-      ['Discord', LINKS.discord],
+      ['Engineering blog', '/blog'],
+      ['Podcast: ai that works', '/podcast'],
+      ['Company', '/who-are-we'],
     ],
-    title: 'Open source',
+    title: 'Resources',
   },
   {
-    links: [['Blog', '/blog']],
-    title: 'Boundary',
+    links: [
+      ['GitHub', LINKS.github],
+      ['Discord', LINKS.discord],
+      ['YouTube', LINKS.youtube],
+    ],
+    title: 'Community',
   },
 ];
 
@@ -50,6 +62,10 @@ export default function Footer() {
                     className="tap-row hover:text-footer-accent transition-colors"
                     href={href}
                     key={label}
+                    // External links open in a new tab, so the reader keeps the site.
+                    {...(href.startsWith('http')
+                      ? { rel: 'noopener', target: '_blank' }
+                      : {})}
                   >
                     {label}
                   </a>
@@ -59,7 +75,7 @@ export default function Footer() {
           </nav>
         </div>
         <div className="flex flex-col sm:flex-row justify-between gap-3 pt-[22px] border-t border-footer-rule text-[13px] text-footer-muted">
-          <span>© 2026 Boundary ML</span>
+          <span>© 2026 Boundary</span>
           <span className="text-[15px] font-medium leading-[18px] tracking-[-0.01em] text-footer-accent">
             The unified software stack for agents.
           </span>

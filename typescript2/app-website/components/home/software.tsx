@@ -92,7 +92,7 @@ const FILES: {
     baml: true,
     name: 'extract.baml',
     team: 'ops',
-    to: ['s3', 'nowhere'],
+    to: ['datadog', 'sentry'],
   },
   {
     at: 0.56,
@@ -113,7 +113,7 @@ const FILES: {
     fn: 'Dedupe()',
     name: 'etl.py',
     team: 'data',
-    to: ['datadog', 'nowhere'],
+    to: ['s3', 'nowhere'],
   },
   {
     at: 0.64,
@@ -589,7 +589,7 @@ export default function Software() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2 text-head max-w-[22em]" id="software">
-          Every team is an engineering team now.
+          Everyone writes code now.
           <br />
           Boundary gives them great defaults.
         </h2>

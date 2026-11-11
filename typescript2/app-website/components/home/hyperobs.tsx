@@ -231,20 +231,25 @@ const ROW = 'var(--r)';
 
 const TS_TOKENS =
   /("[^"]*"|\b(?:const|async|function|return|await|try|catch|finally|throw|if)\b|\b\w+(?=\())/;
+const TS_KEYWORD =
+  /^(const|async|function|return|await|try|catch|finally|throw|if)$/;
 
-function TsText({ line }: { line: string }) {
+/** A line of TypeScript, highlighted: strings, keywords and calls each get a color. The tracing lines
+ *  use a yellow set of the same three, so they stay yellow while still reading as code. */
+function TsText({ line, tracing }: { line: string; tracing?: boolean }) {
+  const [string, keyword, call] = tracing
+    ? ['text-[#efd9a4]', 'text-[#f7c548]', 'text-[#fff3d1]']
+    : ['text-(--color-pasture-200)', 'text-clover', 'text-white'];
   return (
     <>
       {line.split(TS_TOKENS).map((part, i) => {
         const key = `${i}-${part}`;
         if (i % 2 === 0) return <span key={key}>{part}</span>;
         const tone = part.startsWith('"')
-          ? 'text-(--color-pasture-200)'
-          : /^(const|async|function|return|await|try|catch|finally|throw|if)$/.test(
-                part,
-              )
-            ? 'text-clover'
-            : 'text-white';
+          ? string
+          : TS_KEYWORD.test(part)
+            ? keyword
+            : call;
         return (
           <span className={tone} key={key}>
             {part}
@@ -256,7 +261,7 @@ function TsText({ line }: { line: string }) {
 }
 
 /** The TypeScript listing. `level` is how much tracing has piled on, from 0 to 4; fractions ease a
- *  line in. The original lines keep a clover tint, so they stay findable, and the tracing is muted. */
+ *  line in. Only the tracing is tinted, yellow; the logic it wraps is plain. */
 function TsCode({ level }: { level: number }) {
   return (
     // On a phone the longest lines are wider than the panel. The listing scrolls sideways there
@@ -269,7 +274,9 @@ function TsCode({ level }: { level: number }) {
           const indent = level > 0.5 ? l.d : (l.d0 ?? l.d);
           return (
             <div
-              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'bg-clover/14 text-white' : 'text-white/35'}`}
+              // Only the tracing you write by hand is highlighted, in yellow; the logic it wraps, like
+              // the BAML beside it, has no background, so the yellow is the extra work.
+              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'text-white' : 'bg-[#f5c451]/12 text-[#c9ab68]'}`}
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed listing
               key={i}
               style={{
@@ -278,7 +285,7 @@ function TsCode({ level }: { level: number }) {
                 paddingLeft: `calc(1rem + ${indent * 2}ch)`,
               }}
             >
-              {l.k === 'logic' ? <TsText line={l.s} /> : l.s}
+              <TsText line={l.s} tracing={l.k !== 'logic'} />
             </div>
           );
         })}
@@ -303,7 +310,7 @@ function BamlCode({ hot, onHot }: Hover) {
           const group = BAML_GROUPS[i];
           return (
             <div
-              className={`flex items-center whitespace-pre px-4 text-white transition-[background-color,opacity] duration-150 ${hot !== null && group === hot ? 'bg-clover/30' : 'bg-clover/14'}`}
+              className={`flex items-center whitespace-pre px-4 text-white transition-[background-color,opacity] duration-150 ${hot !== null && group === hot ? 'bg-clover/14' : ''}`}
               key={l}
               onMouseEnter={() => onHot(group)}
               onMouseLeave={() => onHot(null)}

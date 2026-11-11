@@ -556,14 +556,22 @@ export function checkArt(posts: Post[]) {
   }
 }
 
-/** A post's drawing inside its own body. */
-export function PostDrawing({ alt, slug }: { alt: string; slug: string }) {
+/** A post's drawing inside its own body, or wherever else the post is featured. */
+export function PostDrawing({
+  alt,
+  className = 'my-8',
+  slug,
+}: {
+  alt: string;
+  className?: string;
+  slug: string;
+}) {
   const Art = ART[slug];
   if (!Art) return null;
   return (
     <svg
       aria-label={alt}
-      className="not-prose my-8 aspect-[1200/630] w-full overflow-hidden rounded-xl bg-raised"
+      className={`not-prose aspect-[1200/630] w-full overflow-hidden rounded-xl bg-raised ${className}`}
       role="img"
       // Post bodies redefine --muted as a dark background color.
       style={{ '--muted': '#828280' } as CSSProperties}

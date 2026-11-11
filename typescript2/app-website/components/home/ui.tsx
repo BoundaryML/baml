@@ -10,6 +10,7 @@ export const LINKS = {
   explore: '/#features-title',
   github: 'https://github.com/boundaryml/baml',
   quickstart: '/quickstart',
+  youtube: 'https://www.youtube.com/@boundaryml',
 } as const;
 
 // Grid: 1440 max, two lanes of 528px + 96px gap + the rest. The side padding is the page frame:
@@ -57,6 +58,10 @@ export function Button({
     <a
       className={`inline-flex items-center px-5 h-[46px] rounded-lg text-[15px] font-medium active:translate-y-px transition ${VARIANTS[variant]}`}
       href={href}
+      // A link off the site opens in a new tab, so the reader keeps their place here.
+      {...(href.startsWith('http')
+        ? { rel: 'noopener', target: '_blank' }
+        : {})}
     >
       {children}
     </a>

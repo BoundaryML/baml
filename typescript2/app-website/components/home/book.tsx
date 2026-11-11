@@ -27,11 +27,10 @@ export default function Book() {
             When humans wrote code, it was okay to move in days or weeks.
           </h2>
           <p className="mt-6 v4-body text-ink">
-            Now AI writes it.{' '}
+            Now AI writes code.{' '}
             <span className="text-clover">Hyperobservability</span> gets you the
-            speed. Incredible products are still your job.
+            data and the speed. Making great decisions is still your job.
           </p>
-          <p className="mt-4 v4-body text-ink">The stack is in private beta.</p>
           <div className="mt-8">
             <Button href={BOOK}>Get early access</Button>
           </div>
