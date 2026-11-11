@@ -180,14 +180,16 @@ impl BexHeap {
         large: &LargeSpace,
         mut visit: impl FnMut(*mut Object),
     ) {
-        // SAFETY: forwarded to the caller.
-        unsafe {
-            Self::for_each_runtime_cell(pool, large, |cell| {
-                // SAFETY: every listed cell is allocated with a written header.
-                if crate::Header::at(cell).descriptor == OBJECT_DESC {
-                    visit((cell + RUST_PAYLOAD_OFFSET) as *mut Object);
-                }
-            });
+        // Only Rust-valued cells can be objects; the rest are never read.
+        let small = pool.blocks().iter().flat_map(|&base| {
+            // SAFETY: the pool's blocks are initialized.
+            unsafe { BlockHeader::at(base) }.hooked_cells(base)
+        });
+        for cell in small.chain(large.cells()) {
+            // SAFETY: every listed cell is allocated with a written header.
+            if unsafe { crate::Header::at(cell) }.descriptor == OBJECT_DESC {
+                visit((cell + RUST_PAYLOAD_OFFSET) as *mut Object);
+            }
         }
     }
 

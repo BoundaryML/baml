@@ -129,7 +129,7 @@ impl Tlab {
     pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
         self.charge(&mut obj);
 
-        let (cell, _) = self.alloc_cell(OBJECT_DESC, OBJECT_CELL_BYTES);
+        let (cell, _) = self.alloc_cell(OBJECT_DESC, OBJECT_CELL_BYTES, true);
         let payload = (cell + RUST_PAYLOAD_OFFSET) as *mut Object;
         // SAFETY: a fresh cell of this allocator's, sized and aligned for an
         // `Object` after its header.
@@ -149,12 +149,14 @@ impl Tlab {
     /// # Panics
     /// If `bytes` is smaller than the descriptor's size.
     pub fn alloc_zeroed(&mut self, descriptor: DescriptorId, bytes: usize) -> NonNull<u8> {
-        let size = self.heap.descriptors().get(descriptor).size as usize;
+        let entry = self.heap.descriptors().get(descriptor);
+        let size = entry.size as usize;
         assert!(
             bytes >= size,
             "a cell of {bytes} bytes for a {size}-byte descriptor"
         );
-        let (cell, cell_bytes) = self.alloc_cell(descriptor, granule_align(bytes));
+        let hooked = matches!(entry.trace, crate::Trace::Rust(_));
+        let (cell, cell_bytes) = self.alloc_cell(descriptor, granule_align(bytes), hooked);
         self.spend(cell_bytes);
         // SAFETY: a fresh cell of `cell_bytes`; the header stays intact.
         unsafe { ((cell + HEADER_BYTES) as *mut u8).write_bytes(0, cell_bytes - HEADER_BYTES) };
@@ -178,7 +180,7 @@ impl Tlab {
             bytes,
             "an instance cell is its layout's size"
         );
-        let (cell, cell_bytes) = self.alloc_cell(descriptor, granule_align(bytes));
+        let (cell, cell_bytes) = self.alloc_cell(descriptor, granule_align(bytes), false);
         self.spend(cell_bytes);
         // SAFETY: a fresh cell of `cell_bytes`; the header stays intact, and
         // the class slot lies inside the instance.
@@ -191,9 +193,16 @@ impl Tlab {
     }
 
     /// Place a cell for `bytes` (granule-aligned) and write its header.
-    /// Returns the cell and its size, `bytes` rounded to its size class.
+    /// `hooked`: the descriptor traces a Rust value, which the sweep must
+    /// drop and measure. Returns the cell and its size, `bytes` rounded to
+    /// its size class.
     #[inline]
-    fn alloc_cell(&mut self, descriptor: DescriptorId, bytes: usize) -> (usize, usize) {
+    fn alloc_cell(
+        &mut self,
+        descriptor: DescriptorId,
+        bytes: usize,
+        hooked: bool,
+    ) -> (usize, usize) {
         debug_assert!(bytes.is_multiple_of(GRANULE_BYTES));
         if bytes > LARGE_OBJECT_THRESHOLD {
             return (self.alloc_large(descriptor, bytes), bytes);
@@ -206,9 +215,12 @@ impl Tlab {
         let block = region_base(cell);
         // SAFETY: a cell this allocator just took from a block it owns.
         unsafe {
-            BlockHeader::at(block)
-                .starts
-                .set(BlockHeader::granule(block, cell));
+            let header = BlockHeader::at(block);
+            let granule = BlockHeader::granule(block, cell);
+            header.starts.set(granule);
+            if hooked {
+                header.hooked.set(granule);
+            }
             (cell as *mut Header).write(Header::for_cell(descriptor, cell_bytes, false));
         }
         (cell, cell_bytes)

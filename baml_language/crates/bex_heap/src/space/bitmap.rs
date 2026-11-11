@@ -16,8 +16,9 @@ pub(crate) struct Bitmap<const WORDS: usize> {
 }
 
 impl<const WORDS: usize> Bitmap<WORDS> {
+    /// Word `word` of the bitmap: bits `64 * word ..`.
     #[inline]
-    fn word(&self, word: usize) -> u64 {
+    pub(crate) fn word(&self, word: usize) -> u64 {
         self.words[word].load(Ordering::Relaxed)
     }
 
@@ -49,6 +50,13 @@ impl<const WORDS: usize> Bitmap<WORDS> {
             .sum()
     }
 
+    /// How many bits are set here but clear in `other`.
+    pub(crate) fn count_ones_not_in(&self, other: &Self) -> usize {
+        (0..WORDS)
+            .map(|word| (self.word(word) & !other.word(word)).count_ones() as usize)
+            .sum()
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         (0..WORDS).all(|word| self.word(word) == 0)
     }
@@ -68,6 +76,11 @@ impl<const WORDS: usize> Bitmap<WORDS> {
     /// Indices set here but clear in `other`, ascending.
     pub(crate) fn ones_not_in<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = usize> + 'a {
         set_bits::<WORDS>(move |word| self.word(word) & !other.word(word))
+    }
+
+    /// Indices set both here and in `other`, ascending.
+    pub(crate) fn ones_in<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = usize> + 'a {
+        set_bits::<WORDS>(move |word| self.word(word) & other.word(word))
     }
 
     /// The highest set bit at or below `bit` and at or above `floor`.
@@ -131,6 +144,8 @@ mod tests {
             bits.ones_not_in(&keep).collect::<Vec<_>>(),
             vec![0, 63, 127]
         );
+        assert_eq!(bits.count_ones_not_in(&keep), 3);
+        assert_eq!(bits.ones_in(&keep).collect::<Vec<_>>(), vec![5, 64]);
         bits.retain(&keep);
         assert_eq!(bits.ones().collect::<Vec<_>>(), vec![5, 64]);
         bits.clear_all();

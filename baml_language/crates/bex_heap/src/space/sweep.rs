@@ -1,5 +1,7 @@
-//! Sweeping: drop every unmarked cell and clear its start bit, measure the
-//! marked, then let the size-class policy rebuild free lists.
+//! Sweeping: clear every unmarked cell's start bit, drop and measure only the
+//! Rust-valued cells (the block's `hooked` bitmap), then let the size-class
+//! policy rewind its cursors. A dead instance, list or map is never read: its
+//! header and descriptor are not looked up, and nothing is written into it.
 
 use crate::descriptor::CellHeader as _;
 use bex_vm_types::Meter;
@@ -60,17 +62,18 @@ unsafe fn sweep_block(
     if header.starts.is_empty() {
         return;
     }
-    for granule in header.starts.ones_not_in(&header.marks) {
-        swept.dead_cells += 1;
-        // SAFETY: an allocated cell the mark did not reach.
+    swept.dead_cells += header.starts.count_ones_not_in(&header.marks);
+    swept.live_cells += header.marks.count_ones();
+    for granule in header.hooked.ones_not_in(&header.marks) {
+        // SAFETY: an allocated Rust-valued cell the mark did not reach.
         unsafe { drop_cell(descriptors, base + granule * GRANULE_BYTES) };
     }
-    for granule in header.marks.ones() {
-        swept.live_cells += 1;
-        // SAFETY: a marked cell.
+    for granule in header.hooked.ones_in(&header.marks) {
+        // SAFETY: a marked Rust-valued cell.
         unsafe { measure_cell(descriptors, base + granule * GRANULE_BYTES, census) };
     }
     header.starts.retain(&header.marks);
+    header.hooked.retain(&header.marks);
 }
 
 /// Run a dead cell's destructor.

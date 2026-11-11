@@ -217,7 +217,7 @@ fn requests_round_up_to_the_smallest_class_that_fits() {
 }
 
 #[test]
-fn a_sweep_rebuilds_the_free_list_from_the_mark_bits() {
+fn a_sweep_frees_slots_from_the_mark_bits() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let cells: Vec<HeapPtr> = (0..10)
@@ -245,6 +245,35 @@ fn a_sweep_rebuilds_the_free_list_from_the_mark_bits() {
     for (i, &ptr) in kept.iter().enumerate() {
         assert_eq!(string_at(ptr), format!("cell {}", 2 * i));
     }
+}
+
+#[test]
+fn a_sweep_never_reads_a_dead_slot_cell() {
+    let f = fixture();
+    let mut tlab = Tlab::new(Arc::clone(&f.heap));
+    let mut node = || {
+        let cell = tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr();
+        // SAFETY: a fresh cell of this heap; its payload follows the header.
+        unsafe { f.heap.make_heap_ptr(cell.add(HEADER_BYTES).cast::<Object>()) }
+    };
+    let nodes: Vec<HeapPtr> = (0..6).map(|_| node()).collect();
+    let kept = [nodes[0], nodes[3]];
+    let dead: Vec<usize> = [1, 2, 4, 5].map(|i| cell_of_ptr(nodes[i])).to_vec();
+    for &cell in &dead {
+        // A descriptor no table has: reading it would panic. The sweep frees
+        // a dead instance from the bitmaps alone, and the allocator does not
+        // read a free slot either.
+        // SAFETY: an allocated cell's header word.
+        unsafe { (cell as *mut Header).write(Header::for_cell(DescriptorId(u32::MAX), 48, false)) };
+    }
+
+    // SAFETY: no mutator runs.
+    let (stats, _, _) = unsafe { f.heap.collect_garbage(&kept) };
+    assert_eq!((stats.live_count, stats.collected_count), (2, 4));
+    let reused: Vec<usize> = (0..4)
+        .map(|_| tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr() as usize)
+        .collect();
+    assert_eq!(reused, dead, "freed slots come back lowest address first");
 }
 
 #[test]

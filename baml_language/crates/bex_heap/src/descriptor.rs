@@ -59,6 +59,7 @@ impl CellHeader for Header {
         unsafe { &*(cell as *const Header) }
     }
 
+    #[inline]
     fn for_cell(descriptor: DescriptorId, cell_bytes: usize, large: bool) -> Header {
         let granules = if large {
             0

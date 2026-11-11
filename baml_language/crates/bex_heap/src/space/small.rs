@@ -6,12 +6,13 @@
 //!
 //! - Every small cell size is rounded up to one of [`SIZE_CLASSES`].
 //! - A block holds cells of one class only, in fixed slots after its header.
-//! - Each block keeps a free list of its empty slots, threaded through them,
-//!   plus a never-used tail it hands out in order.
-//! - A sweep rebuilds each block's free list from the start bits it left
-//!   (a dead cell's start bit is gone), returns blocks with no cells to a
-//!   shared pool that serves every class, and lists the others with room as
-//!   partial blocks of their class.
+//! - A slot is free when its start bit is clear. Each block hands its free
+//!   slots out lowest address first, through a cursor over its start
+//!   bitmap; nothing is written into a free slot.
+//! - A sweep frees a dead cell by clearing its start bit, rewinds each
+//!   block's cursor, returns blocks with no cells to a shared pool that
+//!   serves every class, and lists the others with room as partial blocks
+//!   of their class.
 //! - Each mutator caches one current block per class ([`SmallAllocator`]).
 //!
 //! Fragmentation is bounded by construction: a freed slot is reused by the
@@ -36,13 +37,13 @@
 //!   and [`occupancy`](SmallSpace::occupancy).
 //! - [`BlockMeta`]: the policy's part of each block header.
 
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 
 use parking_lot::Mutex;
 
 use super::{
     BLOCK_BYTES, GRANULE_BYTES, LARGE_OBJECT_THRESHOLD,
-    block::{BlockHeader, FIRST_CELL_OFFSET},
+    block::{BlockHeader, FIRST_CELL_OFFSET, FIRST_GRANULE, GRANULE_WORDS},
     pool::BlockPool,
 };
 
@@ -86,27 +87,63 @@ pub(crate) fn cell_size(bytes: usize) -> usize {
     SIZE_CLASSES[class_of(bytes)]
 }
 
-/// The bytes the slots of a block of each class span: a table, so a bump
-/// allocation does not divide.
-const SLOTS_SPAN: [usize; SIZE_CLASSES.len()] = {
-    let mut spans = [0; SIZE_CLASSES.len()];
+/// Hint that `address` will be written soon.
+#[inline(always)]
+#[allow(clippy::inline_always, unsafe_code)]
+fn prefetch_write(address: usize) {
+    #[cfg(target_arch = "aarch64")]
+    // SAFETY: a prefetch is a hint; it never faults or changes memory.
+    unsafe {
+        std::arch::asm!("prfm pstl1keep, [{0}]", in(reg) address, options(nostack, preserves_flags, readonly));
+    }
+    #[cfg(target_arch = "x86_64")]
+    // SAFETY: as above.
+    unsafe {
+        std::arch::x86_64::_mm_prefetch::<{ std::arch::x86_64::_MM_HINT_T0 }>(address as *const i8);
+    }
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    let _ = address;
+}
+
+/// How many slots a block of each class has.
+const SLOTS: [usize; CLASSES] = {
+    let mut slots = [0; CLASSES];
     let mut class = 0;
-    while class < spans.len() {
-        let size = SIZE_CLASSES[class];
-        spans[class] = (BLOCK_BYTES - FIRST_CELL_OFFSET) / size * size;
+    while class < CLASSES {
+        slots[class] = (BLOCK_BYTES - FIRST_CELL_OFFSET) / SIZE_CLASSES[class];
         class += 1;
     }
-    spans
+    slots
 };
 
-/// The end of the slots of a block of class `class` at `base`.
-#[inline]
-const fn slots_end(base: usize, class: usize) -> usize {
-    base + FIRST_CELL_OFFSET + SLOTS_SPAN[class]
-}
+/// Per class, the start granules of its slots as a block bitmap: a slot is
+/// free exactly when its bit here is set and its start bit is clear.
+static SLOT_MASKS: [[u64; GRANULE_WORDS]; CLASSES] = {
+    let mut masks = [[0; GRANULE_WORDS]; CLASSES];
+    let mut class = 0;
+    while class < CLASSES {
+        let stride = SIZE_CLASSES[class] / GRANULE_BYTES;
+        let mut slot = 0;
+        while slot < SLOTS[class] {
+            let granule = FIRST_GRANULE + slot * stride;
+            masks[class][granule / 64] |= 1 << (granule % 64);
+            slot += 1;
+        }
+        class += 1;
+    }
+    masks
+};
+
+/// The first bitmap word that can hold a slot.
+const FIRST_SLOT_WORD: usize = FIRST_GRANULE / 64;
 
 /// The policy's part of a block header. Written by the mutator that owns the
 /// block, or by the collector while every mutator is parked.
+///
+/// Free slots are not threaded through the block: a slot is free when its
+/// start bit is clear, so a sweep that clears dead cells' start bits has
+/// freed them without writing to them. Allocation walks the start bitmap
+/// with a cursor, one word at a time, lowest address first.
 #[derive(Default)]
 pub(crate) struct BlockMeta {
     /// A mutator allocates here; a sweep leaves the block off every list.
@@ -114,10 +151,10 @@ pub(crate) struct BlockMeta {
     /// Index into [`SIZE_CLASSES`]; meaningless while the block is empty
     /// and unowned.
     class: AtomicU8,
-    /// First free slot, each holding the address of the next; zero ends it.
-    free: AtomicUsize,
-    /// First slot never handed out; slots from here on are free too.
-    tail: AtomicUsize,
+    /// The start-bitmap word the cursor is in.
+    word: AtomicUsize,
+    /// The free slots of that word not yet handed out, as granule bits.
+    free: AtomicU64,
 }
 
 impl BlockMeta {
@@ -126,63 +163,72 @@ impl BlockMeta {
         usize::from(self.class.load(Ordering::Relaxed))
     }
 
-    /// Start the block over as an empty block of `class` at `base`.
-    fn reset(&self, base: usize, class: usize) {
+    /// Start the block over as an empty block of `class`.
+    fn reset(&self, header: &BlockHeader, class: usize) {
         self.class.store(
             u8::try_from(class).expect("fewer than 256 classes"),
             Ordering::Relaxed,
         );
-        self.free.store(0, Ordering::Relaxed);
-        self.tail.store(base + FIRST_CELL_OFFSET, Ordering::Relaxed);
+        self.rewind(header);
     }
 
-    /// Take a free slot of the block at `base`.
+    /// Point the cursor at the block's first free slot. Called whenever the
+    /// start bitmap lost bits: on reset and after a sweep.
+    fn rewind(&self, header: &BlockHeader) {
+        self.word.store(FIRST_SLOT_WORD, Ordering::Relaxed);
+        self.free
+            .store(self.free_bits(header, FIRST_SLOT_WORD), Ordering::Relaxed);
+    }
+
+    /// The free slots of word `word` of `header`'s start bitmap.
+    #[inline]
+    fn free_bits(&self, header: &BlockHeader, word: usize) -> u64 {
+        SLOT_MASKS[self.class()][word] & !header.starts.word(word)
+    }
+
+    /// Take a free slot of the block at `base`, lowest address first.
     ///
     /// # Safety
     /// The caller owns the block, or every mutator is parked.
     #[inline]
     unsafe fn pop(&self, base: usize) -> Option<usize> {
-        let free = self.free.load(Ordering::Relaxed);
-        if free != 0 {
-            // SAFETY: a free slot holds the next free slot's address.
-            self.free
-                .store(unsafe { *(free as *const usize) }, Ordering::Relaxed);
-            return Some(free);
+        let mut free = self.free.load(Ordering::Relaxed);
+        if free == 0 {
+            free = self.advance(base)?;
         }
-        let tail = self.tail.load(Ordering::Relaxed);
-        let size = SIZE_CLASSES[self.class()];
-        if tail + size > slots_end(base, self.class()) {
-            return None;
+        let rest = free & (free - 1);
+        self.free.store(rest, Ordering::Relaxed);
+        let word_base = base + self.word.load(Ordering::Relaxed) * 64 * GRANULE_BYTES;
+        if rest != 0 {
+            // The next cell is written soon: a reused slot is usually out of
+            // cache, and its first stores would otherwise stall the caller.
+            prefetch_write(word_base + rest.trailing_zeros() as usize * GRANULE_BYTES);
         }
-        self.tail.store(tail + size, Ordering::Relaxed);
-        Some(tail)
+        Some(word_base + free.trailing_zeros() as usize * GRANULE_BYTES)
     }
 
-    fn has_room(&self, base: usize) -> bool {
-        self.free.load(Ordering::Relaxed) != 0
-            || self.tail.load(Ordering::Relaxed) + SIZE_CLASSES[self.class()]
-                <= slots_end(base, self.class())
-    }
-
-    /// Thread every slot below the tail whose start bit is clear onto the
-    /// free list, lowest address first.
-    ///
-    /// # Safety
-    /// Every mutator is parked, and dead cells have been dropped.
-    unsafe fn rebuild_free_list(&self, header: &BlockHeader, base: usize) {
-        let size = SIZE_CLASSES[self.class()];
-        let tail = self.tail.load(Ordering::Relaxed);
-        let mut free = 0;
-        let mut slot = tail;
-        while slot > base + FIRST_CELL_OFFSET {
-            slot -= size;
-            if !header.starts.get(BlockHeader::granule(base, slot)) {
-                // SAFETY: a free slot's memory is the policy's.
-                unsafe { (slot as *mut usize).write(free) };
-                free = slot;
+    /// Move the cursor to the next word with a free slot and return its
+    /// free bits, or `None` when the block is full.
+    #[cold]
+    fn advance(&self, base: usize) -> Option<u64> {
+        // SAFETY: the caller of `pop` owns the initialized block.
+        let header = unsafe { BlockHeader::at(base) };
+        let mut word = self.word.load(Ordering::Relaxed);
+        while word + 1 < GRANULE_WORDS {
+            word += 1;
+            let free = self.free_bits(header, word);
+            if free != 0 {
+                self.word.store(word, Ordering::Relaxed);
+                return Some(free);
             }
         }
-        self.free.store(free, Ordering::Relaxed);
+        self.word.store(GRANULE_WORDS - 1, Ordering::Relaxed);
+        None
+    }
+
+    /// Free slots left in the block.
+    fn room(&self, header: &BlockHeader) -> usize {
+        SLOTS[self.class()] - header.starts.count_ones()
     }
 }
 
@@ -239,7 +285,8 @@ impl SmallSpace {
         let base = self.partial[class].pop().unwrap_or_else(|| {
             let base = self.take_free();
             // SAFETY: pool blocks are initialized.
-            unsafe { BlockHeader::at(base) }.policy.reset(base, class);
+            let header = unsafe { BlockHeader::at(base) };
+            header.policy.reset(header, class);
             base
         });
         // SAFETY: as above.
@@ -270,7 +317,7 @@ impl SmallSpace {
     fn list(&mut self, header: &BlockHeader, base: usize) {
         if header.starts.is_empty() {
             self.free.push(base);
-        } else if header.policy.has_room(base) {
+        } else if header.policy.room(header) > 0 {
             self.partial[header.policy.class()].push(base);
         }
     }
@@ -285,7 +332,8 @@ impl SmallSpace {
     pub(crate) fn cell_marked(_header: &BlockHeader, _offset: usize, _bytes: usize) {}
 
     /// Collector hook, after every dead cell is dropped and its start bit
-    /// cleared: rebuild free lists and relist every block no mutator owns.
+    /// cleared: rewind every block's cursor and relist every block no
+    /// mutator owns.
     ///
     /// # Safety
     /// Every mutator is parked.
@@ -296,8 +344,7 @@ impl SmallSpace {
             let base = self.pool.blocks()[index];
             // SAFETY: pool blocks are initialized.
             let header = unsafe { BlockHeader::at(base) };
-            // SAFETY: forwarded to the caller.
-            unsafe { header.policy.rebuild_free_list(header, base) };
+            header.policy.rewind(header);
             if !header.policy.owned.load(Ordering::Relaxed) {
                 self.list(header, base);
             }
@@ -406,24 +453,14 @@ impl SmallAllocator {
     }
 
     /// How many more cells of `bytes` the current block of their class can
-    /// take before the allocator needs another. Walks the free list.
+    /// take before the allocator needs another.
     pub(crate) fn room_for(&self, bytes: usize) -> usize {
-        let class = class_of(bytes);
-        let block = self.current[class];
+        let block = self.current[class_of(bytes)];
         if block == 0 {
             return 0;
         }
         // SAFETY: this allocator owns the block.
-        let meta = unsafe { &BlockHeader::at(block).policy };
-        let size = SIZE_CLASSES[class];
-        let tail = (slots_end(block, class) - meta.tail.load(Ordering::Relaxed)) / size;
-        let mut listed = 0;
-        let mut free = meta.free.load(Ordering::Relaxed);
-        while free != 0 {
-            listed += 1;
-            // SAFETY: a free slot holds the next free slot's address.
-            free = unsafe { *(free as *const usize) };
-        }
-        tail + listed
+        let header = unsafe { BlockHeader::at(block) };
+        header.policy.room(header)
     }
 }

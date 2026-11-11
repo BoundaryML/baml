@@ -7,7 +7,7 @@ use super::{
 use crate::descriptor::CellHeader as _;
 use crate::descriptor::Header;
 
-const GRANULE_WORDS: usize = GRANULES_PER_BLOCK / u64::BITS as usize;
+pub(crate) const GRANULE_WORDS: usize = GRANULES_PER_BLOCK / u64::BITS as usize;
 
 /// The most granules a small cell spans. Bounds the backward search for a
 /// cell start.
@@ -21,6 +21,11 @@ pub(crate) struct BlockHeader {
     pub(crate) starts: Bitmap<GRANULE_WORDS>,
     /// One bit per granule: the cell starting here was marked live.
     pub(crate) marks: Bitmap<GRANULE_WORDS>,
+    /// One bit per granule: the cell starting here is a Rust value
+    /// ([`Trace::Rust`](crate::Trace::Rust)) with a destructor and outside
+    /// storage. Only these cells' descriptors are read by the sweep; a dead
+    /// instance, list or map is reclaimed from the bitmaps alone.
+    pub(crate) hooked: Bitmap<GRANULE_WORDS>,
     /// The small-object policy's state for this block.
     pub(crate) policy: BlockMeta,
 }
@@ -29,7 +34,7 @@ pub(crate) struct BlockHeader {
 pub(crate) const FIRST_CELL_OFFSET: usize = granule_align(size_of::<BlockHeader>());
 /// Bytes of a block cells may use.
 pub(crate) const USABLE_BLOCK_BYTES: usize = BLOCK_BYTES - FIRST_CELL_OFFSET;
-const FIRST_GRANULE: usize = FIRST_CELL_OFFSET / GRANULE_BYTES;
+pub(crate) const FIRST_GRANULE: usize = FIRST_CELL_OFFSET / GRANULE_BYTES;
 
 const _: () = assert!(FIRST_CELL_OFFSET < BLOCK_BYTES / 32);
 const _: () = assert!(LARGE_OBJECT_THRESHOLD < USABLE_BLOCK_BYTES);
@@ -45,6 +50,7 @@ impl BlockHeader {
             kind: RegionKind::Block,
             starts: Bitmap::default(),
             marks: Bitmap::default(),
+            hooked: Bitmap::default(),
             policy: BlockMeta::default(),
         };
         // SAFETY: the caller hands over the block's memory.
@@ -91,6 +97,13 @@ impl BlockHeader {
         // SAFETY: a set start bit names a cell with a written header.
         let bytes = unsafe { Header::at(cell) }.cell_bytes();
         (address < cell + bytes).then_some(cell)
+    }
+
+    /// Every Rust-valued cell in the block, ascending.
+    pub(crate) fn hooked_cells(&self, base: usize) -> impl Iterator<Item = usize> + '_ {
+        self.hooked
+            .ones()
+            .map(move |granule| base + granule * GRANULE_BYTES)
     }
 
     /// Every cell in the block, ascending.
