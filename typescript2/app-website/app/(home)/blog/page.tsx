@@ -8,6 +8,7 @@ import { getPosts, type Post } from './_lib/get-posts';
 import { BLOG_WRAP, BlogShell } from './_lib/shell';
 import {
   isOnIndex,
+  isTopic,
   LAUNCH_WEEK_PREFIX,
   TOPICS,
   type Topic,
@@ -38,11 +39,15 @@ export const metadata: Metadata = {
 // (`?tags=research`, `?tags=release`, ...) changes only that last list; the sections above it stay. `?tags=article` is the unfiltered
 // view, kept for old links; /changelog redirects to `?tags=release`. Archived posts aren't listed.
 
-type Filter = 'release' | Topic;
+type Filter = 'all' | 'release' | Topic;
 
 const FILTERS: { href: string; key: Filter; label: string }[] = [
-  // Engineering is the default view, at /blog itself.
-  ...TOPICS.map((t) => ({ href: '/blog', key: t.key, label: t.label })),
+  { href: '/blog', key: 'all', label: 'Everything' },
+  ...TOPICS.map((t) => ({
+    href: `/blog?tags=${t.key}`,
+    key: t.key,
+    label: t.label,
+  })),
   { href: '/blog?tags=release', key: 'release', label: 'Releases' },
 ];
 
@@ -53,10 +58,11 @@ const ROW_GRID =
 const ROW_TITLE =
   'max-w-[34ch] font-display font-medium text-[22px] md:text-[26px] leading-[1.2] tracking-[-0.03em] text-head transition-colors';
 
-/** The view named by `?tags=`: releases, or engineering for anything else (old topic links too). */
+/** The filter named by `?tags=`, or the unfiltered view. */
 function readFilter(tags: string | string[] | undefined): Filter {
   const key = Array.isArray(tags) ? tags[0] : tags;
-  return key === 'release' ? 'release' : 'engineering';
+  if (key === 'release') return 'release';
+  return key && isTopic(key) ? key : 'all';
 }
 
 /** One row of the list: a post, or Launch Week's posts gathered into one entry. */
@@ -295,7 +301,12 @@ export default async function BlogIndex({
   // the list below them. "All posts" means all: the lead is listed there too.
   const lead = articles.at(0);
   const featured = articles.filter((p) => p.featured && p !== lead);
-  const listed = selected === 'release' ? releases : articles;
+  const listed =
+    selected === 'all'
+      ? articles
+      : selected === 'release'
+        ? releases
+        : articles.filter((p) => topicsOf(p).includes(selected));
 
   return (
     <BlogShell>
@@ -335,7 +346,7 @@ export default async function BlogIndex({
           {FILTERS.filter(
             // A topic with nothing on the index has no tab, unless it's the one asked for.
             ({ key }) =>
-              key === 'engineering' ||
+              key === 'all' ||
               key === selected ||
               (key === 'release'
                 ? releases.length > 0
