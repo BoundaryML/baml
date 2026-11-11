@@ -984,7 +984,8 @@ fn runtime_target_dir(workspace: &Path, profile: RustProfile) -> PathBuf {
 }
 
 /// The crates a compiled pack links but runs only off its hot paths: the
-/// compiler (for runtime compilation), the network stack and the CLI parser.
+/// compiler (for runtime compilation), the network stack, the system-op
+/// layer (I/O, processes), regex parsing and the CLI parser.
 const COLD_RUNTIME_CRATES: &[&str] = &[
     "baml_compiler2_ast",
     "baml_compiler2_emit",
@@ -1007,11 +1008,14 @@ const COLD_RUNTIME_CRATES: &[&str] = &[
     "hyper-util",
     "logos",
     "prost",
+    "regex-syntax",
     "reqwest",
     "rowan",
     "rustls",
     "rustls-webpki",
     "salsa",
+    "sys_native",
+    "sys_ops",
     "toml",
     "toml_edit",
     "toml_parser",
