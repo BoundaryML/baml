@@ -1585,7 +1585,7 @@ function Threads() {
 // ---------- the heading ----------
 
 // What observability slows down. All plural, so the second sentence's "them" fits every one.
-const SLOWED = ['decisions', 'incidents', 'product calls', 'fixes'];
+const SLOWED = ['decisions', 'product calls', 'fixes'];
 const ROTATE_MS = 2600;
 
 /** "Observability makes X slow. Hyperobservability makes them fast.", with X rotating, one sentence
