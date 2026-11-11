@@ -2106,8 +2106,7 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           >
             agents can understand and use the toolchain well
           </a>
-          . Seriously, ask Claude to install BAML and ask it to be ambitious
-          with it.
+          . Seriously, ask Claude to install BAML and be ambitious with it.
         </p>
         <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
           {/* biome-ignore lint/performance/noImgElement: a small static photo */}
