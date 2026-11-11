@@ -14,7 +14,8 @@ use baml_compiler2_mir::{FunctionOwner, MirFunctionId};
 use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
     Bytecode, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
-    types::{FunctionIdentity, PackageKind},
+    layout::DescriptorId,
+    types::{FieldSlot, FunctionIdentity, InstanceLayout, PackageKind},
 };
 
 use crate::coords::{
@@ -209,6 +210,18 @@ impl<'p> ProgramIndex<'p> {
 
     pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(enum_head_coords(head))
+    }
+
+    /// The slot `field` of the class at `object` has in its instances: the
+    /// runtime's own [`InstanceLayout`] for the class, so compiled code and
+    /// the interpreter agree on every offset by construction.
+    pub(crate) fn field_slot(&self, object: usize, field: usize) -> Option<FieldSlot> {
+        let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
+            return None;
+        };
+        let (kinds, has_type_args) = InstanceLayout::plan(class);
+        let layout = InstanceLayout::new(DescriptorId(0), &kinds, has_type_args);
+        layout.fields().get(field).copied()
     }
 
     fn class_fields(&self, coords: DeclCoords) -> Option<(usize, usize)> {

@@ -112,6 +112,9 @@ pub(crate) struct Generator<'a, 'db> {
     /// Static type value sites, by their generated expression; each site is
     /// one type object, as bytecode's `LoadType` site is.
     pub(crate) static_value_sites: Vec<String>,
+    /// Classes whose class word the body binds in its prologue, for direct
+    /// field access (`place::direct_load`).
+    pub(crate) class_words: BTreeSet<usize>,
 }
 
 type Gen<T> = Result<T, Rejection>;
@@ -154,6 +157,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             call_trace: None,
             structured: None,
             static_value_sites: Vec::new(),
+            class_words: BTreeSet::new(),
         }
     }
 }
@@ -302,7 +306,16 @@ impl<'db> Generator<'_, 'db> {
         if self.recursive {
             self.recursion_check();
         }
+        let prologue = self.out.len();
         self.stmts(&stmts)?;
+        let words = self.class_words.iter().fold(String::new(), |mut out, class| {
+            let _ = writeln!(
+                out,
+                "let k{class}: u64 = bex_vm::compiled_rt::class_word(vm.record_object(fr, ObjectIndex::from_raw({class})));"
+            );
+            out
+        });
+        self.out.insert_str(prologue, &words);
         // Every path ends in an `Exit`; this keeps the closure well-typed.
         self.emit_line("#[allow(unreachable_code)]");
         self.emit_line(&format!("Ok({})", signature.ret.default_value()));

@@ -40,7 +40,7 @@ use crate::{
 /// Bytes of a raw or pointer slot.
 const WORD: u32 = 8;
 /// Offset, from the header, of the class pointer.
-const CLASS_OFFSET: u32 = HEADER_BYTES as u32;
+pub const CLASS_OFFSET: u32 = HEADER_BYTES as u32;
 /// Offset, from the header, of a generic instance's type pointer.
 const TYPE_ARGS_OFFSET: u32 = CLASS_OFFSET + WORD;
 

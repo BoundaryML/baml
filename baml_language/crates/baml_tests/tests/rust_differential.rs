@@ -1,8 +1,8 @@
 //! Packs the probe programs once with compiled bodies, then runs each as
 //! bytecode, compiled, compiled under GC stress, and compiled with a VM frame
 //! for every call (`BAML_COMPILED_FRAMES=1`, as before frame records), at the
-//! default telemetry level, with telemetry off and at `high`. Each must agree
-//! with bytecode at the same telemetry level.
+//! default telemetry level and at `off`, `low`, `medium` and `high`. Each must
+//! agree with bytecode at the same telemetry level.
 //! Run with `cargo test -p baml_tests --test rust_differential -- --ignored`;
 //! `BAML_RUST_DIFF_PROBES=A,B` selects probes and `BAML_RUST_DIFF_DUMP=1`
 //! prints every run's output.
@@ -143,6 +143,12 @@ const MODES: &[Mode] = &[
     ("compiled-telemetry-off", "1", "0", "0", Some("off")),
     ("gc-stress-telemetry-off", "1", "1", "0", Some("off")),
     ("vm-frames-telemetry-off", "1", "0", "1", Some("off")),
+    ("bytecode-telemetry-low", "0", "0", "0", Some("low")),
+    ("compiled-telemetry-low", "1", "0", "0", Some("low")),
+    ("gc-stress-telemetry-low", "1", "1", "0", Some("low")),
+    ("bytecode-telemetry-medium", "0", "0", "0", Some("medium")),
+    ("compiled-telemetry-medium", "1", "0", "0", Some("medium")),
+    ("gc-stress-telemetry-medium", "1", "1", "0", Some("medium")),
     ("bytecode-telemetry-high", "0", "0", "0", Some("high")),
     ("compiled-telemetry-high", "1", "0", "0", Some("high")),
     ("gc-stress-telemetry-high", "1", "1", "0", Some("high")),

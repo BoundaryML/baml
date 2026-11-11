@@ -21,8 +21,6 @@
 
 use std::{num::NonZeroU64, ops::Range};
 
-use crate::RealizedTy;
-
 /// What a heap object is, as its descriptor says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -94,7 +92,8 @@ impl SlotKind {
     /// Whether a union is an optional reference type (`Class?`, `string?`,
     /// `T[]?`, ...): null and exactly one other member, whose slot is a
     /// pointer. Other unions, optional scalars included, stay tagged.
-    fn is_nullable_pointer(members: &[RealizedTy]) -> bool {
+    fn is_nullable_pointer<N: Clone>(members: &[baml_type::RealizedTy<N>]) -> bool {
+        use baml_type::RealizedTy;
         let has_null = members
             .iter()
             .any(|member| matches!(member, RealizedTy::Null));
@@ -113,8 +112,14 @@ impl SlotKind {
     /// pointers; anything that may hold more than one representation is
     /// tagged. An optional reference type is a pointer slot whose null is
     /// the zero word; optional scalars and other unions are tagged.
-    pub fn of_type(ty: &RealizedTy) -> SlotKind {
+    ///
+    /// Generic over the type's head so the Rust emitter lays out the same
+    /// slots from MIR types (`baml_compiler2_rust`) as the runtime does from
+    /// its own.
+    pub fn of_type<N: Clone>(ty: &baml_type::RealizedTy<N>) -> SlotKind {
         use baml_base::Literal;
+        use baml_type::RealizedTy;
+
         match ty {
             RealizedTy::Int | RealizedTy::Literal(Literal::Int(_), ..) => {
                 SlotKind::Raw(RawKind::Int)
@@ -533,6 +538,7 @@ impl<T> ObjectModel for T where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::RealizedTy;
 
     #[test]
     fn strides_follow_the_slot_table() {

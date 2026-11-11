@@ -1,10 +1,16 @@
 //! Heap access and allocation for compiled code.
 
 use bex_heap::TlabHolder;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use bex_vm_types::{
     HeapPtr, Object, ObjectType, RealizedTy, Value,
-    object_format::Access,
-    types::{Closure, Type},
+    layout::SlotKind,
+    object_format::{Access, FIRST_INSTANCE_DESC, HEADER_BYTES, read_slot, write_slot},
+    types::{
+        BACKING_CAP_OFFSET, BACKING_ELEMS_OFFSET, CLASS_OFFSET, Closure, LIST_BACKING_OFFSET,
+        LIST_LEN_OFFSET, Type,
+    },
 };
 
 use crate::{
@@ -481,5 +487,266 @@ mod tests {
         let red = vm.new_variant(color, 0);
         assert_eq!(vm.discriminant(red).unwrap(), 0);
         assert_ne!(red, green, "each literal is a fresh object");
+    }
+}
+
+/// A class instance compiled code reads and writes at fixed offsets.
+///
+/// Replaces, for a base whose class the emitter knows, the per-access layout
+/// lookup of [`BexVm::load_field`] and [`BexVm::store_field`]: the emitter
+/// takes each field's offset and slot kind from the same
+/// [`InstanceLayout`](bex_vm_types::types::InstanceLayout) the interpreter
+/// lays instances out with, and [`FieldBase::of`] checks the value is an
+/// instance of that class before any slot is touched. Slot access follows
+/// `documents/runtime-v2-shared-design.md` section 1: raw and pointer loads
+/// are Relaxed, raw stores Relaxed, pointer stores Release. Tagged slots go
+/// through the interpreter's own [`read_slot`]/[`write_slot`], so both sides
+/// use one tagged-slot protocol.
+#[derive(Clone, Copy)]
+pub struct FieldBase(*const u8);
+
+/// The class-slot word of an instance of `class`: what [`FieldBase::of`]
+/// compares an instance's class slot with. Bound once per compiled body.
+#[inline]
+#[must_use]
+pub fn class_word(class: HeapPtr) -> u64 {
+    Value::object(class).bits()
+}
+
+impl FieldBase {
+    /// `value` as an instance of the class whose [`class_word`] is `class`,
+    /// or `None` (null, another object, another class) for the generic path.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    #[must_use]
+    pub fn of(value: Value, class: u64) -> Option<Self> {
+        let ptr = value.as_object_ptr()?;
+        // SAFETY: a `Value` names a live object, and every object has a
+        // header. An instance's class slot is a pointer slot set at
+        // allocation and never rewritten.
+        unsafe {
+            if ptr.header().descriptor.0 < FIRST_INSTANCE_DESC.0 {
+                return None;
+            }
+            let base = ptr.as_ptr().cast::<u8>().sub(HEADER_BYTES);
+            let slot = &*base.add(CLASS_OFFSET as usize).cast::<AtomicU64>();
+            (slot.load(Ordering::Relaxed) == class).then_some(Self(base))
+        }
+    }
+
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    unsafe fn word(self, offset: u32) -> &'static AtomicU64 {
+        // SAFETY: forwarded to the caller.
+        unsafe { &*self.0.add(offset as usize).cast::<AtomicU64>() }
+    }
+
+    /// The raw `int` slot at `offset`.
+    ///
+    /// # Safety
+    /// `offset` is a raw `int` slot of this instance's layout.
+    #[allow(clippy::inline_always, unsafe_code, clippy::cast_possible_wrap)]
+    #[inline(always)]
+    #[must_use]
+    pub unsafe fn int(self, offset: u32) -> i64 {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.word(offset) }.load(Ordering::Relaxed) as i64
+    }
+
+    /// The raw `float` slot at `offset`.
+    ///
+    /// # Safety
+    /// `offset` is a raw `float` slot of this instance's layout.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    #[must_use]
+    pub unsafe fn float(self, offset: u32) -> f64 {
+        // SAFETY: forwarded to the caller.
+        f64::from_bits(unsafe { self.word(offset) }.load(Ordering::Relaxed))
+    }
+
+    /// The raw `bool` slot at `offset`.
+    ///
+    /// # Safety
+    /// `offset` is a raw `bool` slot of this instance's layout.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    #[must_use]
+    pub unsafe fn bool(self, offset: u32) -> bool {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.word(offset) }.load(Ordering::Relaxed) != 0
+    }
+
+    /// The pointer slot at `offset`, null or an object. Relaxed: the pointee
+    /// is ordered by the address dependency on the writer's Release store.
+    ///
+    /// # Safety
+    /// `offset` is a pointer slot of this instance's layout.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    #[must_use]
+    pub unsafe fn ptr(self, offset: u32) -> Value {
+        // SAFETY: forwarded to the caller; a pointer slot holds zero or the
+        // bits of a live object's `Value`.
+        unsafe { Value::from_bits(self.word(offset).load(Ordering::Relaxed)) }
+    }
+
+    /// Store an `int` to the raw slot at `offset`.
+    ///
+    /// # Safety
+    /// `offset` is a raw `int` slot of this instance's layout.
+    #[allow(clippy::inline_always, unsafe_code, clippy::cast_sign_loss)]
+    #[inline(always)]
+    pub unsafe fn set_int(self, offset: u32, value: i64) {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.word(offset) }.store(value as u64, Ordering::Relaxed);
+    }
+
+    /// Store a `float` to the raw slot at `offset`.
+    ///
+    /// # Safety
+    /// `offset` is a raw `float` slot of this instance's layout.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    pub unsafe fn set_float(self, offset: u32, value: f64) {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.word(offset) }.store(value.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Store a `bool` to the raw slot at `offset`.
+    ///
+    /// # Safety
+    /// `offset` is a raw `bool` slot of this instance's layout.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    pub unsafe fn set_bool(self, offset: u32, value: bool) {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.word(offset) }.store(u64::from(value), Ordering::Relaxed);
+    }
+
+    /// Store null or an object to the pointer slot at `offset`, Release so a
+    /// reader that sees the pointer sees the object's contents.
+    ///
+    /// # Safety
+    /// `offset` is a pointer slot of this instance's layout, and `value` is
+    /// null or an object of the field's declared type.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    pub unsafe fn set_ptr(self, offset: u32, value: Value) {
+        debug_assert!(value.is_null() || value.is_object());
+        // SAFETY: forwarded to the caller.
+        unsafe { self.word(offset) }.store(value.bits(), Ordering::Release);
+    }
+}
+
+impl BexVm {
+    /// The tagged slot at `offset` of `base`, a float boxed.
+    ///
+    /// # Safety
+    /// `offset` is a tagged slot of `base`'s layout.
+    #[allow(unsafe_code)]
+    #[inline]
+    pub unsafe fn load_tagged_at(&mut self, base: FieldBase, offset: u32) -> Value {
+        // SAFETY: forwarded to the caller.
+        let value = unsafe {
+            read_slot(
+                base.0.add(offset as usize),
+                SlotKind::Tagged16,
+                Access::Shared,
+            )
+        };
+        self.slot_value(value)
+    }
+
+    /// Store `value` to the tagged slot at `offset` of `base`.
+    ///
+    /// # Safety
+    /// `offset` is a tagged slot of `base`'s layout.
+    #[allow(unsafe_code)]
+    #[inline]
+    pub unsafe fn store_tagged_at(
+        &mut self,
+        base: FieldBase,
+        offset: u32,
+        value: Value,
+    ) -> Result<(), Box<VmError>> {
+        // SAFETY: forwarded to the caller.
+        let stored = unsafe {
+            write_slot(
+                base.0.add(offset as usize),
+                SlotKind::Tagged16,
+                value,
+                Access::Shared,
+            )
+        };
+        stored.map_err(|mismatch| {
+            Box::new(VmError::from(VmInternalError::CompiledBody {
+                message: mismatch.to_string(),
+            }))
+        })
+    }
+}
+
+/// A list compiled code reads and writes elements of in place.
+///
+/// Replaces, for a list whose element slot kind the emitter knows, the
+/// object-kind dispatch of [`BexVm::load_array_element`] and
+/// [`BexVm::store_array_element`]. [`ListBase::of`] checks the list's fixed
+/// descriptor (`bex_vm_types::types::LIST_DESCS`), which fixes the element
+/// slot kind. Reads follow the design's lock-free container rule: the
+/// backing pointer and the length are Acquire loads, and the index is
+/// bounded by both the length and the loaded backing's own capacity, so a
+/// racing grow leaves a reader on valid, if stale, memory.
+#[derive(Clone, Copy)]
+pub struct ListBase(*const u8);
+
+impl ListBase {
+    /// `value` as a list with descriptor `descriptor`, or `None`.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    #[must_use]
+    pub fn of(value: Value, descriptor: u32) -> Option<Self> {
+        let ptr = value.as_object_ptr()?;
+        // SAFETY: a `Value` names a live object with a header.
+        unsafe {
+            (ptr.header().descriptor.0 == descriptor)
+                .then(|| Self(ptr.as_ptr().cast::<u8>().sub(HEADER_BYTES)))
+        }
+    }
+
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn word(base: *const u8, offset: u32) -> &'static AtomicU64 {
+        // SAFETY: callers pass a live list's or backing's header address and
+        // one of its fixed word offsets.
+        unsafe { &*base.add(offset as usize).cast::<AtomicU64>() }
+    }
+
+    /// Element `index` (`stride` bytes apart), or `None` when it is negative
+    /// or past the end; the generic path then decides.
+    #[allow(
+        clippy::inline_always,
+        unsafe_code,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
+    #[inline(always)]
+    #[must_use]
+    pub fn elem(self, index: i64, stride: u32) -> Option<FieldBase> {
+        let backing = Self::word(self.0, LIST_BACKING_OFFSET).load(Ordering::Acquire);
+        if backing == 0 || index < 0 {
+            return None;
+        }
+        let index = index as u64;
+        let len = Self::word(self.0, LIST_LEN_OFFSET).load(Ordering::Acquire);
+        // The backing slot holds a `Value`'s bits: the backing's payload.
+        let backing = (backing as usize as *const u8).wrapping_sub(HEADER_BYTES);
+        let cap = Self::word(backing, BACKING_CAP_OFFSET).load(Ordering::Relaxed);
+        if index >= len || index >= cap {
+            return None;
+        }
+        let offset = BACKING_ELEMS_OFFSET as usize + index as usize * stride as usize;
+        // SAFETY: in bounds of the loaded backing.
+        Some(FieldBase(unsafe { backing.add(offset) }))
     }
 }
