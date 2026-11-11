@@ -406,6 +406,30 @@ impl BexVm {
         })
     }
 
+    /// [`Self::instance_shape`] of the compile-time class at object index
+    /// `index`, looked up once per VM: the class's layout sits behind a
+    /// `OnceLock`, whose Acquire load waits for the Release stores of the
+    /// fields just written, on every literal.
+    #[inline]
+    pub fn instance_shape_at(&mut self, index: usize, class: HeapPtr) -> Option<InstanceShape> {
+        match self.compiled.shapes.get(index) {
+            Some(Some(shape)) => *shape,
+            _ => self.find_instance_shape(index, class),
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn find_instance_shape(&mut self, index: usize, class: HeapPtr) -> Option<InstanceShape> {
+        let shape = self.instance_shape(class);
+        let shapes = &mut self.compiled.shapes;
+        if shapes.len() <= index {
+            shapes.resize(index + 1, None);
+        }
+        shapes[index] = Some(shape);
+        shape
+    }
+
     /// A new instance of `shape`, zeroed but for its class slot. The caller
     /// stores every field through the returned base before its next
     /// safepoint: a zeroed tagged field reads as held until stored.

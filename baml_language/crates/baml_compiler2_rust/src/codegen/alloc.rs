@@ -47,7 +47,7 @@ impl<'db> Generator<'_, 'db> {
         };
         Ok(Expr::new(
             format!(
-                "(match vm.instance_shape({class}) {{ Some(s) => {{ let (v, f) = vm.alloc_shaped(s); {stores}v }} None => {generic} }})"
+                "(match vm.instance_shape_at({object}, {class}) {{ Some(s) => {{ let (v, f) = vm.alloc_shaped(s); {stores}v }} None => {generic} }})"
             ),
             Repr::Value,
         ))

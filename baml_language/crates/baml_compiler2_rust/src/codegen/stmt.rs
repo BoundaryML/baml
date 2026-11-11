@@ -407,7 +407,7 @@ impl<'db> Generator<'_, 'db> {
             // `Done` has no fields: allocated in place, as a literal is.
             let done_class = format!("vm.record_object(fr, ObjectIndex::from_raw({done}))");
             let done_value = format!(
-                "(match vm.instance_shape({done_class}) {{ Some(s) => vm.alloc_shaped(s).0, None => vm.new_instance({done_class}, Vec::new()) }})"
+                "(match vm.instance_shape_at({done}, {done_class}) {{ Some(s) => vm.alloc_shaped(s).0, None => vm.new_instance({done_class}, Vec::new()) }})"
             );
             // The walk reads the iterator's array, its contents.
             let walk = |local: &str| {

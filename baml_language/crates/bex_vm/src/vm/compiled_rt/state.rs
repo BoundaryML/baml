@@ -35,6 +35,9 @@ pub(crate) struct CompiledState {
     /// Whether compiled callees may run with frame records; see
     /// [`crate::BexVm::direct_calls`].
     pub(crate) direct_calls: bool,
+    /// Per class object index, how compiled code allocates its instances,
+    /// once looked up; see [`crate::BexVm::instance_shape_at`].
+    pub(crate) shapes: Vec<Option<Option<super::InstanceShape>>>,
 }
 
 impl Default for CompiledState {
@@ -53,6 +56,7 @@ impl Default for CompiledState {
             records: Box::default(),
             static_type_cache: FxHashMap::default(),
             direct_calls: !super::frames_forced(),
+            shapes: Vec::new(),
         }
     }
 }
@@ -78,6 +82,8 @@ impl RootHaver for CompiledState {
             error_evidence: _,
             records,
             direct_calls: _,
+            // Shapes name compile-time classes, which never move or die.
+            shapes: _,
         } = self;
         // Parked bodies keep their values in Rust locals and registers, all
         // on the fiber's stack while it is parked.
