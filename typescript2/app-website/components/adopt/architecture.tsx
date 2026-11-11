@@ -2071,16 +2071,20 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
       </Section>
       {/* The question readers ask after a page like this one, answered plainly, and by the founder. */}
       <Section id="docs" title="Why don’t you have docs?">
-        <p className="max-w-[40rem] text-[16px] leading-relaxed text-ink-2">
-          Agents can already use the toolchain well, with{' '}
-          <a
-            className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
-            href="/#review"
-          >
-            backpressure built in
-          </a>
-          . Docs for humans are next.
-        </p>
+        <ul className="max-w-[40rem] space-y-1.5 text-[16px] leading-relaxed text-ink-2">
+          <li>We build the engine first.</li>
+          <li>
+            Agents already use it well, because{' '}
+            <a
+              className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
+              href="/#review"
+            >
+              the toolchain pushes back
+            </a>{' '}
+            when they get it wrong.
+          </li>
+          <li>Docs for humans are next.</li>
+        </ul>
         <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
           {/* biome-ignore lint/performance/noImgElement: a small static photo */}
           <img
@@ -2110,6 +2114,13 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
                 Ask on Discord
               </Button>
             </div>
+            {/* Trust is the team as much as the tech: the people behind it, one click away. */}
+            <a
+              className="mt-4 inline-block text-[14px] text-ink-2 underline decoration-white/30 underline-offset-2 hover:text-head"
+              href="/who-are-we"
+            >
+              Meet the team →
+            </a>
           </div>
         </div>
       </Section>
