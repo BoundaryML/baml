@@ -2092,24 +2092,26 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
       </Section>
       {/* The question readers ask after a page like this one, answered plainly, and by the founder. */}
       <Section id="docs" title="Why don’t you have docs?">
-        <p className="max-w-[40rem] text-[17px] font-medium leading-relaxed text-head">
-          Docs for humans are coming by the end of 2026.
+        <p className="max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
+          <span className="font-medium text-head">
+            Docs for humans are coming by the end of 2026.
+          </span>{' '}
+          Until then, we’re more than happy to make time with you directly.
+        </p>
+        <p className="mt-4 max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
+          Meanwhile, we’ve worked hard to ensure{' '}
+          <a
+            className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
+            href="/#review"
+          >
+            agents can understand and use the toolchain well
+          </a>
+          .
         </p>
         <p className="mt-4 max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
           We’re building something no one has built before: a language, its
           runtime, and the whole toolchain around them. So our time goes to the
           teams already shipping on it, and to engineering.
-        </p>
-        <p className="mt-4 max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
-          We worked hard to ensure{' '}
-          <a
-            className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
-            href="/#review"
-          >
-            agents use the toolchain well
-          </a>
-          . Until they’re out, we’re more than happy to make time with you
-          directly.
         </p>
         <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
           {/* biome-ignore lint/performance/noImgElement: a small static photo */}
