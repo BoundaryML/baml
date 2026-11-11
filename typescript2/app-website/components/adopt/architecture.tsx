@@ -2101,7 +2101,7 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           teams already shipping on it, and to engineering.
         </p>
         <p className="mt-4 max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
-          We spend a lot of time ensuring{' '}
+          We worked hard to ensure{' '}
           <a
             className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
             href="/#review"
