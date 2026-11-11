@@ -1,682 +1,175 @@
 version: 1
 name: CI runners
+
+# The template env reaches the build steps AND every Kiln job (through $GITHUB_ENV).
+# Put a value here only when the jobs need it too.
 env:
-  MISE_DATA_DIR: /cache/trunk-bake-tools/mise
-steps:
-  - script:
-      on: build
-      run: |-
-        cd /
-        #!/usr/bin/env bash
-        # Warm-target creation script for BoundaryML/baml.
-        #
-        #
-        # Two paths decide whether the warm tree is used at all:
-        #   - the CI job hook binds /workspace/<name> onto <work>/<repo>/<repo>, so the clone
-        #     basename must equal the GitHub repo short name, or actions/checkout will not
-        #     adopt the pre-warmed clone.
-        #   - cargo records ABSOLUTE paths in a build script's rerun-if-changed set, so a tree
-        #     baked at a path the job does not use reports RerunIfChangedOutputPathsChanged and
-        #     rebuilds everything downstream of it.
-        #
-        # The repository is public, so the clone needs no credential. That is what makes this
-        # template usable by a hardened job: no job on a public-repo runner group is given the
-        # contents:read credential.
-        #
-        # Bakes the build trees of every Kiln-shadowed job into the template rootfs snapshot,
-        # plus the cargo registry and the in-tree package caches of the sdk legs. Runs ONCE per
-        # snapshot build (ADR-0057), in a build VM, then the VM powers off and the rootfs is
-        # snapshotted.
-        #
-        # Time limit: the template uses the default build limit of 60 minutes. The trunk2 webapp
-        # cannot change it (only a direct Sawmill `PATCH /templates/{id}` with
-        # `buildTimeoutMinutes` can). guest-bootstrap.sh does not pass the limit to this script,
-        # so BUILD_LIMIT below must equal it. A kill at the limit publishes NO snapshot. The v6
-        # bakes of 2026-11-05 reached the cleanup at about +2490 s.
-        # Bake time is cheap and CI time is not, so the bake runs the jobs' own commands in full.
-        # Needs the template at build_size=xlarge and a 600 GiB disk. The MSRV step filled a
-        # 160 GiB disk in every bake of 2026-11-03 and 2026-11-04. A full disk stops the bake even
-        # after a step fails softly: the markers at the end must still write.
-        #
-        # stdin is the script body (`bash -s <startup.sh`): any command that reads stdin eats
-        # the rest of this file and the bake ends with status 0. Give such calls </dev/null.
-        # best_effort below does that for every step it runs.
-        set -euo pipefail
+  # jdx/mise-action finds the baked mise binary and tools here.
+  MISE_DATA_DIR: /cache/mise
+  # No job checks out LFS objects, so the bake does not download them.
+  GIT_LFS_SKIP_SMUDGE: "1"
 
-        # Bump on every edit. Two jobs: it re-keys snapshot_build_hash so a variant always
-        # gets a fresh row (never revert a creation script -- the status read picks the
-        # newest row by created_at and cannot see a revert), and a job prints it to prove
-        # which snapshot it actually booted from.
-        VARIANT="trunk-warm-template-v9"
-
-        CACHE="${XDG_CACHE_HOME:-/cache}"
-
-        # Send all output to /cache/bake.log as well as stdout. The rootfs is published even
-        # when the bake stops early, so the next job can `tail` this file. A whole-pod death
-        # or an early `ready` exit ships no log tail any other way.
-        exec > >(tee -a "${CACHE}/bake.log") 2>&1
-
-        # No workflow sets `lfs: true`, so the jobs run on LFS pointers and the bake must too.
-        # actions/checkout does not smudge unless asked, but a plain `git clone` does: without
-        # this it fetches 373 MB of objects no job reads, or dies on a smudge filter error.
-        export GIT_LFS_SKIP_SMUDGE=1
-
-        # MUST match the consuming job's profile env exactly. cargo folds these into the unit
-        # fingerprint, so a tree baked at the default dev opt-level 0 is entirely rebuilt by a
-        # job that sets opt-level 1 -- the warm tree would measure as no benefit at all, for a
-        # reason that looks like the feature not working. These three are the workflow-level
-        # `env:` of the upstream cargo-tests.reusable.yaml; keep them in lockstep with it. The
-        # jobs that do not set them (pre-commit, webview, size gate, wasm-pack test) unset them
-        # in their own step below.
-        export CARGO_PROFILE_DEV_OPT_LEVEL=1
-        export CARGO_PROFILE_TEST_OPT_LEVEL=1
-        export CARGO_INCREMENTAL=0
-        # The LTO check below reads cargo's plain-text error lines.
-        export CARGO_TERM_COLOR=never
-
-        REPO_URL="https://github.com/BoundaryML/baml"
-        # Basename must equal the GitHub repo short name: the CI job hook binds
-        # /workspace/<name> onto <work>/<repo>/<repo> so actions/checkout adopts it as an
-        # incremental fetch. The hook also normalizes a `.git` origin suffix itself, but
-        # clone without it so the adopt path does not depend on that fixup.
-        PREWARM_ROOT="/workspace"
-        CLONE_DIR="${PREWARM_ROOT}/baml"
-
-        # The path the job sees, because the pre-warm bind-mounts the clone here. Build against
-        # it, not CLONE_DIR: a tree baked elsewhere reports RerunIfChangedOutputPathsChanged and
-        # rebuilds, which costs more than the whole warm tree saves.
-        RUNNER_PATH="/opt/actions-runner/_work/baml/baml"
-
-        # Tools that the bake needs: mise and the toolchains it installs, wasm-pack, and the LTO
-        # wrapper. They live on /cache (per-box, so in the snapshot) and not in /tmp, because a uv
-        # venv baked into the tree links to its python by absolute path; a python under /tmp would
-        # be deleted before poweroff and every job would rebuild the venv. Never under $HOME.
-        #
-        # Since v9 the mise data directory is also meant for the JOBS: the mise binary sits at
-        # $MISE_DATA_DIR/bin/mise, where jdx/mise-action looks before it downloads one, and every
-        # tool the Kiln shadow jobs install is baked (step "bake the mise tools of the Kiln jobs").
-        # Today's jobs do not use it: their mise-action keeps its default data dir and its cache.
-        # The template env TRUNK_MISE_DATA_DIR names this directory, and no current step reads that
-        # name. A job uses the directory only once its workflow passes TRUNK_MISE_DATA_DIR to mise
-        # as MISE_DATA_DIR together with `cache: false` (the BoundaryML setup-mise change).
-        # Setting MISE_DATA_DIR itself in the template env while `cache` is still true would change
-        # mise-action's cache path: every restore would miss, and canary runs would save this
-        # multi-GB directory.
-        TOOLS="${CACHE}/trunk-bake-tools"
-        export MISE_DATA_DIR="${TOOLS}/mise"
-        export MISE_CACHE_DIR="${TOOLS}/mise-cache"
-        export MISE_YES=1
-        export PATH="${TOOLS}/bin:${PATH}"
-
-        # Must equal the template's build time limit in seconds (60 minutes now; change both
-        # together). A best-effort step does not start after DEADLINE, so the cleanup at the end
-        # always runs inside the limit. The cleanup needs the margin: it unmounts, runs
-        # `chmod -R` and a git index refresh over a tree of several hundred GiB.
-        BUILD_LIMIT=3600
-        DEADLINE=$((BUILD_LIMIT - 900))
-
-        # Every section is timed, so the build log shows where the bake spends its time.
-        START=${SECONDS}
-        step() { printf '\n=== [+%ss] %s\n' "$((SECONDS - START))" "$1"; }
-
-        # Runs one optional population. A failure or a skip is logged and the bake goes on, so a
-        # broken population gives a smaller warm tree instead of no snapshot. cargo writes a
-        # unit's fingerprint only after the unit succeeds, so a cut build leaves a partial tree
-        # that is still correct and still warm.
-        #
-        # `set -e` has no effect in a command that is part of `||` or `if`, so the step runs
-        # with errexit on in a subshell, and the status is read after it.
-        best_effort() {
-                local name="$1"
-                shift
-                if [ "$((SECONDS - START))" -ge "${DEADLINE}" ]; then
-                        echo "SKIPPED (deadline): ${name} at +$((SECONDS - START))s" | tee -a "${CACHE}/trunk-template-skipped" || true
-                        return 0
-                fi
-                step "${name}"
-                local rc=0
-                set +e
-                (
-                        set -e
-                        "$@"
-                ) </dev/null
-                rc=$?
-                set -e
-                # On a full disk, `tee -a` fails, and under pipefail and errexit that failure stopped
-                # the whole bake (v6 build of 2026-11-03). A log write must never stop the bake.
-                if [ "${rc}" -ne 0 ]; then
-                        echo "PARTIAL (rc=${rc}): ${name} at +$((SECONDS - START))s" | tee -a "${CACHE}/trunk-template-skipped" || true
-                fi
-                df -h / | tail -1 || true
-        }
-
-        step "prepare ${PREWARM_ROOT}"
-        # NOTHING in the sandbox image creates /workspace -- the "clone into /workspace/<repo>"
-        # convention makes it the template's job. This script runs as an unprivileged user via
-        # `runuser`, so the mkdir needs sudo (the image gives the sandbox user NOPASSWD:ALL).
-        sudo mkdir -p "${PREWARM_ROOT}"
-        sudo chown "$(id -u):$(id -g)" "${PREWARM_ROOT}"
-        : >"${CACHE}/trunk-template-skipped"
-        mkdir -p "${TOOLS}/bin"
-
-        # The build VM's user comes from the sandbox row's linux_username, and a CI runner's
-        # comes from the synthetic CI owner (`runner`, per the probe's /home/runner). They are
-        # not guaranteed equal, and if they differ every git call in the pre-warmed clone dies
-        # with "detected dubious ownership". Register the path system-wide -- /etc lands in the
-        # rootfs snapshot, so this survives into every workspace cloned from it.
-        sudo git config --system --add safe.directory "${CLONE_DIR}"
-
-        step "clone ${REPO_URL}"
-        # --no-tags: no build step reads one, and it keeps the fetch small.
-        # Full history, not shallow: determine_changes runs `git merge-base HEAD origin/canary`
-        # and the basis-commit mtime diff needs to resolve an arbitrary past commit.
-        git clone --no-tags "${REPO_URL}" "${CLONE_DIR}"
-        cd "${CLONE_DIR}"
-
-        step "expose the clone at the runner path"
-        # Best effort: a failed bind still builds, it just bakes in the rebuild cascade, so say
-        # so rather than producing a slow snapshot silently. Record what already existed: a
-        # root-owned `_work` left in the snapshot fails every job at setup, which is worse.
-        RUNNER_WORK_PREEXISTED=1
-        [ -d /opt/actions-runner/_work ] || RUNNER_WORK_PREEXISTED=0
-
-        BUILD_DIR="${CLONE_DIR}"
-        if sudo mkdir -p "${RUNNER_PATH}" && sudo mount --bind "${CLONE_DIR}" "${RUNNER_PATH}"; then
-                BUILD_DIR="${RUNNER_PATH}"
-                echo "building at ${BUILD_DIR}"
-        else
-                echo "WARNING: bind mount failed; building at ${CLONE_DIR}, expect a rebuild cascade" >&2
-        fi
-        cd "${BUILD_DIR}"
-        # mise reads the repo's mise.toml for the tool versions, so it must trust it.
-        export MISE_TRUSTED_CONFIG_PATHS="${BUILD_DIR}"
-
-        step "install the pinned toolchain"
-        # rust-toolchain.toml lives in baml_language/, so rustup must resolve it from there.
-        (cd baml_language && rustup show)
-        # A job that runs cargo from the repo root gets rustup's default toolchain, not this pin, and
-        # misses every unit baked below. Make the pin the default so both resolve the same compiler.
-        (cd baml_language && rustup default "$(rustup show active-toolchain | head -n1 | cut -d' ' -f1)")
-
-        step "install the musl and wasm32 targets and the musl C toolchain"
-        # The musl job runs `rustup target add` and the setup-musl-cross action, which installs
-        # musl-tools. The job still runs both; here they only let the musl population build.
-        # apt-get reads stdin, and stdin is this script: keep the </dev/null on both calls.
-        (cd baml_language && rustup target add x86_64-unknown-linux-musl wasm32-unknown-unknown)
-        sudo DEBIAN_FRONTEND=noninteractive apt-get update </dev/null
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y musl-tools </dev/null
-
-        step "install the bake tools"
-        # mise gives the sdk legs the node, pnpm, python, uv, java, gradle, go, ruby and dotnet
-        # versions that the repo's mise.toml pins, which are the versions the jobs install. Each
-        # leg installs only what it uses. The installer reads the pipe, not this script's stdin.
-        # The binary goes to $MISE_DATA_DIR/bin/mise, the one path jdx/mise-action checks before it
-        # downloads mise (setupMise). The latest release at bake time: BoundaryML's setup-mise notes
-        # that an old mise cannot install the current Python layout, and the template rebuild keeps
-        # this one current.
-        mkdir -p "${MISE_DATA_DIR}/bin"
-        curl -fsSL https://mise.run | MISE_INSTALL_PATH="${MISE_DATA_DIR}/bin/mise" sh
-        ln -sfn "${MISE_DATA_DIR}/bin/mise" "${TOOLS}/bin/mise"
-        # The `cargo:` tools in mise.toml install from prebuilt binaries only when cargo-binstall is
-        # on PATH (`cargo_binstall = true` in its [settings]); without it mise compiles them. The
-        # jobs get it from cargo-bins/cargo-binstall@main, which downloads this same asset.
-        curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz" |
-                tar -xz -C "${TOOLS}/bin" cargo-binstall
-        # wasm-pack 0.14.0 is the version the jobs install through mise.
-        curl -sSfL "https://github.com/rustwasm/wasm-pack/releases/download/v0.14.0/wasm-pack-v0.14.0-x86_64-unknown-linux-musl.tar.gz" |
-                tar -xz -C "${TOOLS}/bin" --strip-components=1 --wildcards '*/wasm-pack'
-
-        # RUSTC_WRAPPER for the release builds. Cargo calls it as `<wrapper> <rustc> <args...>`.
-        # With `lto = "fat"`, cargo builds every dependency as bitcode and does all of the
-        # optimization in ONE rustc call per final artifact, the one that carries `-C lto=fat`.
-        # That artifact changes on every PR, so the job always redoes that call and a baked copy
-        # is thrown away. The wrapper fails exactly that call and runs every other call, so
-        # cargo writes the fingerprint of every dependency in the mode that the job uses. A plain
-        # `cargo build -p <dep>` cannot do this: it builds the dependency as a root, in another
-        # LTO mode, as a different unit.
-        cat >"${TOOLS}/bin/skip-lto-rustc" <<'EOF'
-        #!/usr/bin/env bash
-        skip=0
-        prev=""
-        name="unknown"
-        for a in "$@"; do
-                if [ "${prev}" = "-C" ]; then
-                        case "${a}" in lto | lto=fat | lto=true | lto=yes | lto=thin) skip=1 ;; esac
-                fi
-                case "${a}" in -Clto | -Clto=fat | -Clto=true | -Clto=yes | -Clto=thin) skip=1 ;; esac
-                if [ "${prev}" = "--crate-name" ]; then name="${a}"; fi
-                prev="${a}"
-        done
-        if [ "${skip}" = 1 ]; then
-                echo "trunk-bake: skipped the LTO unit ${name}" | tee -a "${TRUNK_LTO_SKIP_LOG}" >&2
-                exit 1
-        fi
-        if [ -n "${TRUNK_INNER_RUSTC_WRAPPER:-}" ]; then
-                exec "${TRUNK_INNER_RUSTC_WRAPPER}" "$@"
-        fi
-        exec "$@"
-        EOF
-        chmod +x "${TOOLS}/bin/skip-lto-rustc"
-
-        # Prints the PID of each process that holds a path under $1: its working directory, its
-        # root, an open file or a mapped file. Runs as root, because only root can read the /proc
-        # entries of every process. `fuser -m` cannot do this job: a bind mount is on the same
-        # filesystem as /, so `fuser -m` names every process on the box, this bake included.
-        cat >"${TOOLS}/bin/mount-holders" <<'EOF'
-        #!/usr/bin/env bash
-        target="$1"
-        for dir in /proc/[0-9]*; do
-                pid="${dir#/proc/}"
-                [ "${pid}" = "$$" ] && continue
-                for link in "${dir}/cwd" "${dir}/root" "${dir}"/fd/*; do
-                        case "$(readlink "${link}" 2>/dev/null)" in
-                        "${target}" | "${target}"/*)
-                                echo "${pid}"
-                                continue 2
-                                ;;
-                        esac
-                done
-                if grep -qF " ${target}/" "${dir}/maps" 2>/dev/null; then
-                        echo "${pid}"
-                fi
-        done
-        EOF
-        chmod +x "${TOOLS}/bin/mount-holders"
-
-        # cargo build under the wrapper. The build fails at the LTO units by design, so the
-        # check is that it failed ONLY there: every `could not compile` must be a skipped unit.
-        # --keep-going builds every unit that does not depend on a failed one.
-        build_without_lto() {
-                local label="$1"
-                shift
-                local log="${TOOLS}/lto-${label}.log"
-                export TRUNK_LTO_SKIP_LOG="${TOOLS}/lto-${label}.skipped"
-                : >"${TRUNK_LTO_SKIP_LOG}"
-                # The wrapper calls the bake's own RUSTC_WRAPPER (if any) for every call it runs.
-                local inner="${RUSTC_WRAPPER:-}"
-                local rc=0
-                TRUNK_INNER_RUSTC_WRAPPER="${inner}" RUSTC_WRAPPER="${TOOLS}/bin/skip-lto-rustc" \
-                        cargo build --keep-going "$@" 2>&1 | tee "${log}" || rc=$?
-                local failed skipped
-                failed="$(grep -c '^error: could not compile' "${log}" || true)"
-                skipped="$(wc -l <"${TRUNK_LTO_SKIP_LOG}")"
-                echo "${label}: rc=${rc}, ${skipped} LTO unit(s) skipped, ${failed} unit(s) failed"
-                if [ "${rc}" -ne 0 ] && [ "${failed}" -gt "${skipped}" ]; then
-                        echo "${label}: a unit other than an LTO unit failed" >&2
-                        return 1
-                fi
-        }
-
-        step "cargo fetch"
-        # CARGO_HOME is $XDG_CACHE_HOME/cargo = /cache/cargo, which is per-box on the block
-        # rootfs, so the registry and the git dependency checkouts bake into the snapshot.
-        # This is the +5.5s/job `cargo fetch` delta the measurements attribute to it.
-        (cd baml_language && cargo fetch)
-
-        step "pin the build fingerprint"
-        # baml_artifact stamps BAML_GIT_SHA into generated bytecode and into the runtime, and rejects
-        # a mismatch, so the tree and every job that consumes it must carry the SAME value. Derive it
-        # from the clone: build.rs asserts a 40- or 64-character lowercase hex commit id, so a
-        # readable sentinel fails the build. The job side reads it back from the marker below.
-        BAML_GIT_SHA="$(git -C "${CLONE_DIR}" rev-parse HEAD)"
-        export BAML_GIT_SHA
-
-        step "build the debug test binaries (cargo-test-linux)"
-        # The package set MUST equal the job's `cargo nextest run --no-run` line, exclusion for
-        # exclusion. A workspace build unifies features across every selected package, so one
-        # extra package changes the features of shared dependencies and gives them a different
-        # unit hash. v3 omitted `--exclude baml_pack_host` (upstream added it in #4988): its
-        # `ring-crypto`/`sys_native` features reached zip, flate2, hashbrown, parking_lot,
-        # salsa and ~35 more, and the job rebuilt those and everything above them (110 units).
-        #
-        # target/ stays in-tree, so any job consuming it MUST set `clean: false` on
-        # actions/checkout -- the default runs `git clean -ffdx`, whose `-x` deletes ignored
-        # paths, and target/ is ignored. The alternative is CARGO_TARGET_DIR outside the work
-        # dir, which survives a stock checkout but breaks the repo's relative `target/...` paths.
-        (
-                cd baml_language
-                cargo test --no-run --all-features --workspace \
-                        --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
-        )
-
-        step "build the compiler and snapshot test binaries (snapshot-tests)"
-        # The `Compiler and documentation tests` job builds exactly the packages the step above
-        # excludes, so none of its units were warm in v3 (174 units, 136 s). Keep the three -p
-        # flags in ONE command, as the job does: its feature set is the union of the three.
-        (
-                cd baml_language
-                cargo build --tests --bins -p baml_tests -p baml_cli -p baml_pack_host --all-features
-        )
-
-        step "build what the sdk test setup scripts compile (sdk-tests)"
-        # Each sdk_tests/crates/<sdk>/setup.sh runs these as separate cargo commands before its
-        # tests, and none of them matched a baked unit in v4: the first setup pass took 23-44 s
-        # per leg and the second 1.6-5 s. Keep ONE package per command, as the scripts do: a
-        # combined -p list unifies features into units no setup script builds. `cargo run -p`
-        # builds the same units as `cargo build -p`, without running the generator here. The sdk
-        # legs below run the full scripts too; these lines stay so that the units are warm even
-        # when a leg fails on a tool.
-        (
-                cd baml_language
-                cargo build -p sdk_test_codegen
-                cargo build -p bridge_cffi
-                cargo build -p bridge_java
-                # The cpp leg's feature set (sdk_tests/crates/cpp/setup.sh).
-                cargo build -p bridge_cffi --no-default-features --features ring-crypto,bundle-http
-        )
-
-        step "build what the pre-commit job compiles"
-        # Upstream's `Pre-commit Checks` (job `prek`) never loads .envrc, so it has no sccache on any
-        # platform and compiles three things cold every run: the baml_cli and cargo-stow debug builds
-        # behind the `baml fmt` and `cargo stow` hooks, and the two clippy passes. It also runs on the
-        # default dev profile, so drop the opt-level overrides exported above. The clippy arguments and
-        # CLIPPY_CONF_DIR are part of cargo's fingerprint: keep them identical to baml_language/mise.toml.
-        (
-                cd baml_language
-                unset CARGO_PROFILE_DEV_OPT_LEVEL CARGO_PROFILE_TEST_OPT_LEVEL
-                # One package per command, as the hooks' `cargo run -p` does: selecting both at once unifies
-                # their dependencies' features into units neither hook builds (130 missing fingerprints).
-                cargo build -p baml_cli
-                cargo build -p cargo-stow
-                cargo clippy --workspace --all-targets --all-features -- -D warnings
-                wasm_pkgs="$(cargo metadata --no-deps --format-version 1 |
-                        jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | "-p \(.name)"' |
-                        xargs)"
-                # shellcheck disable=SC2086 # one -p flag per package, as the mise task passes them
-                CLIPPY_CONF_DIR="$(pwd)/clippy-wasm" cargo clippy ${wasm_pkgs} --target wasm32-unknown-unknown \
-                        --all-features --locked -- -D warnings -W clippy::disallowed-types
-        )
-
-        step "build what the webview jobs compile"
-        # The three webview jobs run `pnpm --filter pkg-playground build:wasm`, which is this wasm-pack
-        # command (typescript2/pkg-playground/package.json; wasm-opt is off in bridge_wasm's Cargo.toml).
-        # It is a cold release build on every platform. The jobs set no opt-level overrides, so drop ours;
-        # wasm-pack 0.14.0 is the version the jobs install through mise, and its cargo flags must match.
-        (
-                unset CARGO_PROFILE_DEV_OPT_LEVEL CARGO_PROFILE_TEST_OPT_LEVEL
-                cd typescript2/pkg-playground
-                wasm-pack build ../../baml_language/crates/bridge_wasm --target web \
-                        --out-dir ../../../typescript2/pkg-playground/wasm --release
-        )
-
-        step "build the documentation (cargo-doc)"
-        # sccache does not serve rustdoc, so every `cargo doc` job documents all 37 workspace
-        # crates from nothing (242 s on Kiln). A warm tree keeps the crates a PR does not reach.
-        # RUSTDOCFLAGS is part of the fingerprint: keep it equal to the job's `env:`.
-        (
-                cd baml_language
-                RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps
-        )
-
-        # --- v6: every step below is best effort and is new in v6 unless it says otherwise. ---
-
-        # The musl test binaries (cargo-test-linux-musl). Not new: v5 ran this last, under the
-        # old 1800 s budget, and it is no longer the last step.
-        #
-        # Every value below is part of the fingerprint and MUST equal the musl job:
-        #   - CARGO_BUILD_TARGET is the job-level env.
-        #   - CC_<target> and CARGO_TARGET_<TARGET>_LINKER are what setup-musl-cross writes to
-        #     GITHUB_ENV; the cc crate reruns a build script when CC_<target> changes.
-        #   - default features, NOT --all-features: the job leaves native-tls off on musl.
-        # Two commands, as the job runs two: `cargo build --tests --bin ...` builds the binaries,
-        # and the nextest step's `cargo test --no-run` adds the examples and the rest of its test
-        # targets (5 units in run 37045955100, among them bex_engine and bridge_swift).
-        bake_musl() {
-                cd baml_language
-                export CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
-                export CC_x86_64_unknown_linux_musl=musl-gcc
-                export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc
-                cargo build --tests --bin baml-cli --bin baml-pack-host --workspace \
-                        --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
-                cargo test --no-run --workspace \
-                        --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
-        }
-        best_effort "build the musl test binaries (cargo-test-linux-musl)" bake_musl
-
-        # measure-baml-size (linux) is the slowest job of the run (12.7 min on `medium`).
-        # cargo-size-gate runs exactly these two commands (crates/tools_size_gate/src/measure.rs);
-        # they are two commands because the second one's feature set is the union of two packages.
-        # The job sets no opt-level overrides; they do not reach the release profile, but the
-        # size-gate tool itself builds on the dev profile, so drop them for this step.
-        bake_size_gate_linux() {
-                cd baml_language
-                unset CARGO_PROFILE_DEV_OPT_LEVEL CARGO_PROFILE_TEST_OPT_LEVEL
-                cargo build -p cargo-size-gate
-                build_without_lto size-gate-cli --release -p baml_cli --bin baml-cli
-                build_without_lto size-gate-pack --release -p baml_cli --bin baml-cli -p baml_pack_host --bin baml-pack-host
-        }
-        best_effort "build the size-gate release dependencies (measure-baml-size linux)" bake_size_gate_linux
-
-        # measure-baml-size (wasm): the size gate's cdylib command for bridge_wasm.
-        bake_size_gate_wasm() {
-                cd baml_language
-                unset CARGO_PROFILE_DEV_OPT_LEVEL CARGO_PROFILE_TEST_OPT_LEVEL
-                build_without_lto size-gate-wasm --release -p bridge_wasm --target wasm32-unknown-unknown --no-default-features
-        }
-        best_effort "build the size-gate wasm dependencies (measure-baml-size wasm)" bake_size_gate_wasm
-
-        # cargo test (wasm32-unknown-unknown): one command over every wasm_support package, as the
-        # job runs it. The job keeps the opt-level env, but it does not reach the release profile.
-        bake_wasm32_release() {
-                cd baml_language
-                local package_args=()
-                local package
-                while IFS= read -r package; do
-                        package_args+=(-p "${package}")
-                done < <(cargo metadata --no-deps --format-version 1 |
-                        jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | .name')
-                [ "${#package_args[@]}" -gt 0 ]
-                build_without_lto wasm32-release "${package_args[@]}" --target wasm32-unknown-unknown --no-default-features --release
-        }
-        best_effort "build the wasm32 release dependencies (cargo-test-wasm32)" bake_wasm32_release
-
-        # wasm-pack test: the job runs `cargo check` and then `wasm-pack test --node`, with no
-        # opt-level overrides and no direnv. Running the real command also caches the
-        # wasm-bindgen download in $XDG_CACHE_HOME/.wasm-pack, which the job fetches on each run.
-        bake_wasm_pack_test() {
-                cd baml_language
-                unset CARGO_PROFILE_DEV_OPT_LEVEL CARGO_PROFILE_TEST_OPT_LEVEL
-                cargo check -p bridge_wasm --target wasm32-unknown-unknown
-                mise install node
-                cd crates/bridge_wasm
-                mise exec node -- wasm-pack test --node
-        }
-        best_effort "build and run the wasm-pack tests (wasm-pack-test)" bake_wasm_pack_test
-
-        # cargo build (msrv): the job reads workspace.package.rust-version, then runs
-        # `cargo +MSRV test --no-run --all-features` on the whole workspace, with the opt-level
-        # env. It also runs `rustup default MSRV`; the bake does not, because the steps after
-        # this one need the pinned toolchain as the default. This step adds a second full debug
-        # tree (another rustc gives every unit a new hash): on the 160 GiB default disk it filled
-        # the disk in all 8 bakes of 2026-11-03 and 2026-11-04, so it needs the 400 GiB disk.
-        bake_msrv() {
-                cd baml_language
-                local msrv
-                msrv="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^rust-version *= *"\([^"]*\)".*/\1/p}' Cargo.toml | head -n1)"
-                [ -n "${msrv}" ]
-                echo "MSRV=${msrv}"
-                rustup toolchain install "${msrv}"
-                cargo "+${msrv}" test --no-run --all-features
-        }
-        best_effort "build the MSRV test binaries (cargo-build-msrv)" bake_msrv
-
-        # The sdk legs. Each job runs `cargo test --no-run -p sdk_test_<sdk> --all-features`, then
-        # runs the leg's setup.sh as a nextest setup script. The bake runs both, as they are, so the
-        # commands and the feature sets match by construction. The setup scripts keep their package
-        # caches in the tree (target/pnpm-store, target/uv-cache, target/ruby-bundle,
-        # target/gradle-home, target/sdk-rust-target), and `clean: false` keeps them for the job;
-        # the generated fixture trees are git-ignored (sdk_tests/crates/.gitignore). The mise tools
-        # of each leg are the job's `Install sdk test tools` list, less sccache, direnv and nextest.
-        # GitHub Actions sets CI=true for every step, and pnpm reads it.
-        sdk_leg() {
-                local sdk="$1"
-                shift
-                cd baml_language
-                cargo test --no-run -p "sdk_test_${sdk}" --all-features
-                export CI=true
-                if [ "$#" -gt 0 ]; then
-                        local tool
-                        for tool in "$@"; do mise install "${tool}"; done
-                        mise exec "$@" -- "./sdk_tests/crates/${sdk}/setup.sh"
-                else
-                        "./sdk_tests/crates/${sdk}/setup.sh"
-                fi
-        }
-        best_effort "sdk leg typescript" sdk_leg typescript node npm:pnpm
-        best_effort "sdk leg typescript_web" sdk_leg typescript_web node npm:pnpm
-
-        # Do NOT bake pnpm's node_modules. In the bake, pnpm links them from a store at the root
-        # of the bind mount (`.pnpm-store`), because the build user's home is on another
-        # filesystem. In the job, pnpm wants the store in the runner's home, which the snapshot
-        # does not keep, and `pnpm update --force` in each fixture then fails with
-        # ERR_PNPM_UNEXPECTED_STORE (v7, runs 42130645901 and 42131126291). The setup scripts'
-        # `npm_config_store_dir` does not move the store: pnpm 11.1.3 used neither that path in
-        # the bake nor in the job. So delete every node_modules tree the two legs made, and the
-        # store: each job then runs a cold `pnpm install`, as on v5. The Rust units of the two
-        # legs (the bridge builds) stay warm. Not best effort: a left-over tree breaks two jobs.
-        step "drop the pnpm node_modules trees (sdk legs typescript, typescript_web)"
-        find "${BUILD_DIR}" -path "${BUILD_DIR}/baml_language/target" -prune -o \
-                -type d -name node_modules -prune -print -exec rm -rf {} + | sed 's/^/removed /'
-        rm -rf "${BUILD_DIR}/.pnpm-store" "${BUILD_DIR}/baml_language/target/pnpm-store"
-        if find "${BUILD_DIR}" -path "${BUILD_DIR}/baml_language/target" -prune -o \
-                -type d \( -name node_modules -o -name .pnpm-store \) -print -quit | grep -q .; then
-                echo "ERROR: a pnpm tree is still in the clone" >&2
-                exit 1
-        fi
-        best_effort "sdk leg rust" sdk_leg rust
-        best_effort "sdk leg java" sdk_leg java java gradle
-        best_effort "sdk leg python_pydantic2" sdk_leg python_pydantic2 python uv
-        best_effort "sdk leg go" sdk_leg go go
-        best_effort "sdk leg csharp" sdk_leg csharp dotnet
-        best_effort "sdk leg cpp" sdk_leg cpp
-        best_effort "sdk leg ruby_sorbet" sdk_leg ruby_sorbet ruby
-
-        # The mise tools of the Kiln jobs: the union of every `install_args` of
-        # BoundaryML's .github/workflows/kiln-shadow.yml, the sdk matrix included (2026-11-06). The
-        # sdk legs above already installed some of them. Keep this list in step with that file: a
-        # tool it adds and this list lacks is downloaded by each job that uses it, as it is today.
-        # `mise install` runs from the repo root, as mise-action does (its working_directory default),
-        # so it resolves the same versions from the same mise.toml, `latest` included.
-        MISE_JOB_TOOLS=(
-                sccache direnv node npm:pnpm protoc protoc-gen-go python uv clang-format ast-grep
-                go java gradle github:rustwasm/wasm-pack cargo:prek cargo:cargo-insta cargo:cargo-nextest
-        )
-        bake_mise_job_tools() {
-                cd "${BUILD_DIR}"
-                # The jobs' setup-mise sets the same value for the same reason (a slow Python
-                # metadata endpoint).
-                export MISE_FETCH_REMOTE_VERSIONS_TIMEOUT=60
-                mise --version
-                mise install "${MISE_JOB_TOOLS[@]}"
-                # Proof, per tool, that the version this mise.toml resolves to is installed. A tool
-                # missing here is downloaded by each job that uses it, so name it in the log.
-                local tool missing=0
-                for tool in "${MISE_JOB_TOOLS[@]}"; do
-                        if ! mise where "${tool}" >/dev/null 2>&1; then
-                                echo "mise tool not installed: ${tool}" >&2
-                                missing=1
-                        fi
-                done
-                mise ls --current
-                [ "${missing}" = 0 ]
-        }
-        best_effort "bake the mise tools of the Kiln jobs" bake_mise_job_tools
-
-        step "unmount the runner path"
-        # The mount itself is not captured by a filesystem snapshot and the job hook needs to bind
-        # over an empty directory, so drop it. Only the paths recorded inside target/ matter, and
-        # those are already written.
-        #
-        # Every v6 bake that reached this step (2026-11-05) failed here: `umount` said "target is
-        # busy", and the old `rm -rf` then ran THROUGH the live bind mount and deleted the clone.
-        # The sdk legs leave daemons running with files open in the tree (the java leg's Gradle
-        # daemon, the csharp leg's MSBuild build server), so stop those first, then any other
-        # holder, and never delete the runner path while it is still a mount point.
-        release_runner_path() {
-                local baml="${RUNNER_PATH}/baml_language"
-                # gradle --stop finds only the daemons of its own GRADLE_USER_HOME, which the java
-                # leg sets to target/gradle-home (sdk_tests/crates/java/setup.sh).
-                (cd "${baml}" && GRADLE_USER_HOME="${baml}/target/gradle-home" \
-                        mise exec java gradle -- gradle --stop) </dev/null || true
-                (cd "${baml}" && mise exec dotnet -- dotnet build-server shutdown) </dev/null || true
-
-                local attempt holders pid
-                for attempt in 1 2 3 4; do
-                        sudo umount "${RUNNER_PATH}" && return 0
-                        holders="$(sudo "${TOOLS}/bin/mount-holders" "${RUNNER_PATH}" | sort -u | xargs)"
-                        echo "umount attempt ${attempt}: busy; holders: ${holders:-none found}"
-                        for pid in ${holders}; do
-                                ps -o pid=,user=,etime=,args= -p "${pid}" 2>/dev/null || true
-                        done
-                        if [ -n "${holders}" ]; then
-                                # SIGTERM first, then SIGKILL, so a daemon gets a chance to close cleanly.
-                                if [ "${attempt}" -le 2 ]; then
-                                        # shellcheck disable=SC2086 # one PID per word
-                                        sudo kill -TERM ${holders} 2>/dev/null || true
-                                else
-                                        # shellcheck disable=SC2086 # one PID per word
-                                        sudo kill -KILL ${holders} 2>/dev/null || true
-                                fi
-                        fi
-                        sleep 5
-                done
-                # Last resort: a lazy unmount takes the mount off the path at once, so the `rm`
-                # below cannot reach the clone, even if a holder is still alive.
-                echo "WARNING: umount still busy; lazy unmount" >&2
-                sudo umount -l "${RUNNER_PATH}"
-        }
-
-        if [ "${BUILD_DIR}" = "${RUNNER_PATH}" ]; then
-                cd "${CLONE_DIR}"
-                release_runner_path
-                if mountpoint -q "${RUNNER_PATH}"; then
-                        echo "ERROR: ${RUNNER_PATH} is still a mount point; not deleting it" >&2
-                        exit 1
-                fi
-                # Leave the rootfs exactly as it was found. Only the absolute paths recorded INSIDE
-                # target/ need to survive; the directories themselves must not, or the runner
-                # inherits a root-owned work tree it cannot write.
-                sudo rm -rf /opt/actions-runner/_work/baml
-                if [ "${RUNNER_WORK_PREEXISTED}" = "0" ]; then
-                        sudo rmdir /opt/actions-runner/_work 2>/dev/null || true
-                fi
-                echo "runner path restored (pre-existing _work: ${RUNNER_WORK_PREEXISTED})"
-                ls -ld /opt/actions-runner/_work 2>/dev/null || echo "_work absent, as before the build"
-        fi
-
-        step "hand the tree to whoever runs the job"
-        # Same user-mismatch hazard as safe.directory above: a job user that differs from this
-        # one must still be able to write target/ and fetch into .git. The job user must also run
-        # the python that the baked uv venvs link to.
-        chmod -R a+rwX "${CLONE_DIR}" 2>/dev/null || true
-        chmod -R a+rX "${TOOLS}" 2>/dev/null || true
-
-        # The chmod above moves every file's ctime, which voids git's stat cache. Without this
-        # the first `git checkout` in EVERY job re-hashes the whole tree to decide what changed
-        # -- 126 s of a 142 s checkout, measured. Pay it once here instead, into the snapshot.
-        git -C "${CLONE_DIR}" update-index --refresh >/dev/null 2>&1 || true
-
-        step "sizes"
-        # Read CARGO_HOME rather than assume it: guest-bootstrap resolves it as
-        # $XDG_CACHE_HOME/cargo, but only the variable is the contract.
-        du -sh "${CLONE_DIR}/baml_language/target" "${CLONE_DIR}/baml_language/target/x86_64-unknown-linux-musl" \
-                "${CLONE_DIR}/baml_language/target/release" "${CLONE_DIR}/baml_language/target/wasm32-unknown-unknown" \
-                "${CARGO_HOME:-${CACHE}/cargo}" "${TOOLS}" 2>/dev/null || true
-        echo "built_at=${BUILD_DIR}"
-        echo "skipped or partial populations:"
-        cat "${CACHE}/trunk-template-skipped"
-        df -h / | tail -1
-
-        step "stamp markers"
-        # Stamp LAST. A job that reads this variant knows every step above ran to the end; a
-        # bake that stopped early leaves no v6 marker, and the job fails on the mismatch.
-        # Both live in /cache, not the clone: the clone is bind-mounted onto the runner
-        # checkout dir, where `git clean -ffdx` would delete an untracked marker.
-        git -C "${CLONE_DIR}" rev-parse HEAD >"${CACHE}/trunk-template-basis-sha"
-        printf '%s\n' "${VARIANT}" >"${CACHE}/trunk-template-variant"
-        printf '\nvariant=%s basis=%s user=%s home=%s elapsed=%ss\n' \
-                "${VARIANT}" "$(cat "${CACHE}/trunk-template-basis-sha")" "$(id -un)" "${HOME}" "$((SECONDS - START))"
 build:
   size: xlarge
-  disk_gib: 600
+  disk_gib: 400
+  timeout_minutes: 120
   rebuild_nightly: true
+
+steps:
+  # Clones the synced commit with full history to /opt/actions-runner/_work/baml/baml, the
+  # path the job uses, and binds it at /workspace/baml. The bind stays in /etc/fstab.
+  - checkout: { on: build, repo: . }
+
+  # The steps below run as one bash script, so `cd` and variables carry from step to step.
+  - script:
+      name: Toolchains
+      on: build
+      run: |
+        set -euo pipefail
+        # Build at the job's path, not at /workspace/baml. Cargo keeps absolute paths in
+        # its output, so a tree built at another path is stale or wrong in the job.
+        SRC=/opt/actions-runner/_work/baml/baml
+        cd "${SRC}/baml_language"
+
+        # The toolchain that rust-toolchain.toml pins, also as the default for cargo calls
+        # from the repository root.
+        rustup show
+        rustup default "$(rustup show active-toolchain | head -n1 | cut -d' ' -f1)"
+        rustup target add x86_64-unknown-linux-musl wasm32-unknown-unknown
+        sudo DEBIAN_FRONTEND=noninteractive apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y musl-tools
+
+        # mise-action uses $MISE_DATA_DIR/bin/mise when it is there. mise installs the
+        # `cargo:` tools from binaries only when cargo-binstall is on PATH.
+        # TODO: pin the mise and cargo-binstall versions.
+        mkdir -p "${MISE_DATA_DIR}/bin"
+        curl -fsSL https://mise.run | MISE_INSTALL_PATH="${MISE_DATA_DIR}/bin/mise" sh
+        curl -fsSL https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz |
+          tar -xz -C "${MISE_DATA_DIR}/bin" cargo-binstall
+        export PATH="${MISE_DATA_DIR}/bin:${PATH}" MISE_YES=1 MISE_TRUSTED_CONFIG_PATHS="${SRC}"
+        # Every job sets CARGO_INCREMENTAL=0.
+        export CARGO_INCREMENTAL=0
+
+        # The union of the `install_args` in .github/workflows/kiln-shadow.yml. Run from the
+        # repository root, as mise-action does, so mise resolves the same versions.
+        (cd "${SRC}" && mise install \
+          sccache direnv node npm:pnpm protoc protoc-gen-go python uv clang-format ast-grep \
+          go java gradle dotnet ruby github:rustwasm/wasm-pack cargo:prek cargo:cargo-insta cargo:cargo-nextest)
+
+        cargo fetch
+
+        # build.rs puts BAML_GIT_SHA in the artifacts. Each job reads the basis marker below and
+        # sets the same value, so the baked units stay fresh.
+        BAML_GIT_SHA=$(git -C "${SRC}" rev-parse HEAD)
+        export BAML_GIT_SHA
+
+        # The packages with wasm_support, as the wasm32 and pre-commit jobs select them.
+        wasm_packages=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[]
+          | select(.source == null and (.metadata.ci.wasm_support // true)) | "-p \(.name)"' | xargs)
+
+  # Each command must equal the job's command, with the job's env. Cargo puts the profile
+  # env, the features and the package set in the fingerprint of each unit.
+  - script:
+      name: Rust builds of the cargo, doc and snapshot jobs
+      on: build
+      run: |
+        (
+          export CARGO_PROFILE_DEV_OPT_LEVEL=1 CARGO_PROFILE_TEST_OPT_LEVEL=1
+
+          # cargo test (x86_64-unknown-linux-gnu)
+          cargo test --no-run --all-features --workspace \
+            --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
+          # Compiler and documentation tests
+          cargo build --tests --bins -p baml_tests -p baml_cli -p baml_pack_host --all-features
+          # cargo doc
+          RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps
+          # The cargo commands of the sdk setup scripts, one package for each command.
+          cargo build -p sdk_test_codegen
+          cargo build -p bridge_cffi
+          cargo build -p bridge_java
+          cargo build -p bridge_cffi --no-default-features --features ring-crypto,bundle-http
+
+          # cargo test (x86_64-unknown-linux-musl)
+          (
+            export CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
+            export CC_x86_64_unknown_linux_musl=musl-gcc CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc
+            cargo build --tests --bin baml-cli --bin baml-pack-host --workspace \
+              --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+            cargo test --no-run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+          )
+
+          # cargo test (wasm32-unknown-unknown)
+          # shellcheck disable=SC2086 # one -p flag for each package
+          cargo build ${wasm_packages} --target wasm32-unknown-unknown --no-default-features --release
+        )
+
+  # These jobs do not set the opt-level env, so the subshell does not set it either.
+  - script:
+      name: Rust builds of the pre-commit, webview and wasm-pack jobs
+      on: build
+      run: |
+        (
+          # Pre-commit Checks: keep the clippy arguments equal to baml_language/mise.toml.
+          cargo build -p baml_cli
+          cargo build -p cargo-stow
+          cargo clippy --workspace --all-targets --all-features -- -D warnings
+          # shellcheck disable=SC2086
+          CLIPPY_CONF_DIR="$(pwd)/clippy-wasm" cargo clippy ${wasm_packages} --target wasm32-unknown-unknown \
+            --all-features --locked -- -D warnings -W clippy::disallowed-types
+
+          # Typecheck, Unit Tests and Browser Tests: `pnpm --filter pkg-playground build:wasm`.
+          (cd "${SRC}/typescript2/pkg-playground" &&
+            mise exec github:rustwasm/wasm-pack -- wasm-pack build ../../baml_language/crates/bridge_wasm \
+              --target web --out-dir ../../../typescript2/pkg-playground/wasm --release)
+
+          # wasm-pack test
+          cargo check -p bridge_wasm --target wasm32-unknown-unknown
+          (cd crates/bridge_wasm && mise exec node github:rustwasm/wasm-pack -- wasm-pack test --node)
+        )
+
+  # The sdk legs run the job's own commands. A leg that fails makes a smaller warm tree,
+  # not a failed bake: its name goes to the log and to /cache/trunk-template-skipped.
+  - script:
+      name: SDK test legs
+      on: build
+      run: |
+        : >/cache/trunk-template-skipped
+        sdk_leg() {
+          local sdk=$1
+          shift
+          if ! (
+            export CARGO_PROFILE_DEV_OPT_LEVEL=1 CARGO_PROFILE_TEST_OPT_LEVEL=1 CI=true
+            cargo test --no-run -p "sdk_test_${sdk}" --all-features &&
+              mise exec "$@" -- "./sdk_tests/crates/${sdk}/setup.sh"
+          ); then
+            echo "sdk leg ${sdk}" | tee -a /cache/trunk-template-skipped >&2
+          fi
+        }
+        sdk_leg typescript node npm:pnpm
+        sdk_leg typescript_web node npm:pnpm github:rustwasm/wasm-pack
+        sdk_leg rust
+        sdk_leg java java gradle
+        sdk_leg python_pydantic2 python uv
+        sdk_leg go go
+        sdk_leg csharp dotnet
+        sdk_leg cpp
+        sdk_leg ruby_sorbet ruby
+
+        # pnpm links node_modules to a store that the job cannot use (ERR_PNPM_UNEXPECTED_STORE),
+        # so the jobs run a cold `pnpm install`. Only the Rust units of these legs stay warm.
+        find "${SRC}" -path "${SRC}/baml_language/target" -prune -o -type d -name node_modules -prune \
+          -exec rm -rf {} +
+        rm -rf "${SRC}/.pnpm-store" "${SRC}/baml_language/target/pnpm-store"
+
+  # Write the markers last: a bake that stops before this point publishes no snapshot.
+  - script:
+      name: Markers
+      on: build
+      run: |
+        # Run the git stat refresh once here, not in the first checkout of each job.
+        git -C "${SRC}" update-index --refresh >/dev/null || true
+        echo "${BAML_GIT_SHA}" >/cache/trunk-template-basis-sha
+        echo "${SRC}" >/cache/trunk-template-built-at
+        echo "trunk-warm-template-v10" >/cache/trunk-template-variant
+        df -h / && du -sh "${SRC}/baml_language/target" "${MISE_DATA_DIR}"
+        echo "sdk legs that failed:" && cat /cache/trunk-template-skipped
