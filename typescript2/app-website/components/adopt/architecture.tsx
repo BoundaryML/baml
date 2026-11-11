@@ -8,6 +8,7 @@ import {
   usePinnedLang,
 } from '@/components/home/lang-pick';
 import { useReducedMotion } from '@/components/home/pinned';
+import { type SceneDef, ScenePlayer } from '@/components/home/scene-player';
 
 // How BAML works, the /how-baml-works page, for anyone who wants the detail: what
 // `baml generate` makes, where the runtime lives in each target and language, and what happens at
@@ -1760,7 +1761,7 @@ function Section({
 }: {
   children: ReactNode;
   id?: string;
-  lead: string;
+  lead?: string;
   title: string;
 }) {
   return (
@@ -1768,10 +1769,231 @@ function Section({
       <h2 className="font-display text-[28px] leading-tight text-head md:text-[32px]">
         {title}
       </h2>
-      <p className="mt-2 max-w-[40rem] text-[16px] text-ink-2">{lead}</p>
+      {lead && (
+        <p className="mt-2 max-w-[40rem] text-[16px] text-ink-2">{lead}</p>
+      )}
       <div className="mt-8">{children}</div>
     </section>
   );
+}
+
+// ---------- the life of a program, played: startup, a call, shutdown ----------
+
+// Standalone and WebAssembly have no host language, so their steps don't come from HOSTS. Same
+// sources as BEHAVIOR above.
+const STANDALONE_LIFE: Record<'call' | 'shutdown' | 'startup', Step[]> = {
+  call: [
+    { text: './triage classify-ticket "…"', tone: 'host' },
+    {
+      note: 'from the function’s signature',
+      text: 'Parses the arguments',
+      tone: 'baml',
+    },
+    { text: 'Runs your function', tone: 'baml' },
+    { text: 'Prints its result', tone: 'baml' },
+  ],
+  shutdown: [
+    { text: 'The function you ran returns', tone: 'baml' },
+    { text: 'The binary exits', tone: 'host' },
+  ],
+  startup: [
+    { text: 'You run the binary', tone: 'host' },
+    { sysops: true, text: 'Sets up its sysops', tone: 'baml' },
+    {
+      note: 'packed into the binary',
+      text: 'Reads your program from inside itself',
+      tone: 'baml',
+    },
+    { text: 'Starts BAML’s worker threads', tone: 'baml' },
+  ],
+};
+const WASM_LIFE: Record<'call' | 'shutdown' | 'startup', Step[]> = {
+  call: [
+    { text: 'Your JavaScript calls classify_ticket', tone: 'host' },
+    {
+      note: 'no threads of its own',
+      text: 'Runs as a task on your event loop',
+      tone: 'baml',
+    },
+    { text: 'Calls the model with fetch, parses the reply', tone: 'baml' },
+    { text: 'The promise resolves with a typed result', tone: 'host' },
+  ],
+  shutdown: [
+    { text: 'The tab closes, or the Worker finishes', tone: 'host' },
+    { text: 'The WebAssembly module goes with it', tone: 'baml' },
+  ],
+  startup: [
+    { text: 'import from baml_sdk', tone: 'host' },
+    { text: 'Loads the WebAssembly runtime', tone: 'baml' },
+    {
+      sysops: true,
+      text: 'Takes fetch and readFileSync from JavaScript',
+      tone: 'baml',
+    },
+    { text: 'Decodes your compiled program', tone: 'baml' },
+  ],
+};
+
+/** A program's life in the target and language picked: what starts it, one call, how it ends. */
+function lifeFor(target: string, lang: number) {
+  if (target === 'Standalone') return STANDALONE_LIFE;
+  if (target === 'WebAssembly') return WASM_LIFE;
+  const h = HOSTS[lang];
+  return {
+    call: [
+      { text: 'Your code calls classify_ticket', tone: 'host' },
+      {
+        note: h.runtime,
+        text: 'The bridge hands it to a BAML worker thread',
+        tone: 'baml',
+      },
+      {
+        text: 'Builds the prompt, calls the model, parses the reply',
+        tone: 'baml',
+      },
+      { text: 'Your code gets a typed result back', tone: 'host' },
+    ] satisfies Step[],
+    shutdown: h.shutdown,
+    startup: h.startup,
+  };
+}
+
+/** Who's on the left of the lanes: the program BAML runs inside. */
+function hostLabel(target: string, lang: number) {
+  if (target === 'Standalone') return 'You';
+  if (target === 'WebAssembly') return 'Your JavaScript';
+  return `Your ${SDK_LANGS[lang].name} code`;
+}
+
+/** Steps in two lanes, the program's and BAML's, lit one at a time; an arrow marks each hand-off
+ *  from one lane to the other. */
+function Lanes({
+  host,
+  say,
+  step,
+  steps,
+}: {
+  host: string;
+  say: string;
+  step: number;
+  steps: Step[];
+}) {
+  const side = (st: Step) => (st.tone === 'host' ? 0 : 1);
+  return (
+    <div className="flex min-h-[420px] flex-col px-5 py-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1fr)] pb-2 text-[12px] text-muted">
+        <span>{host}</span>
+        <span />
+        <span className="text-clover">BAML</span>
+      </div>
+      <ol className="grid gap-2">
+        {steps.map((st, i) => {
+          const on = i < step;
+          const now = i === step - 1;
+          const crossed = i > 0 && side(steps[i - 1]) !== side(st);
+          const tone =
+            st.tone === 'bad'
+              ? 'border-[#f85149]/60 bg-[#f85149]/10'
+              : st.tone === 'host'
+                ? 'border-white/20 bg-white/[0.04]'
+                : 'border-clover/60 bg-clover/[0.1]';
+          const card = (
+            <div
+              className={`rounded-lg border px-3.5 py-2.5 transition-[opacity,box-shadow] duration-300 ${tone}`}
+              style={{
+                boxShadow: now
+                  ? '0 0 0 1px rgb(255 255 255 / 0.45)'
+                  : undefined,
+                opacity: on ? 1 : 0.22,
+              }}
+            >
+              <p className="text-[14px] text-head">{st.text}</p>
+              {(st.note || st.once) && (
+                <p className="mt-1 flex flex-wrap items-center gap-2">
+                  {st.once && (
+                    <span className="rounded-full border border-clover/50 px-2 py-0.5 font-mono text-[10.5px] text-clover">
+                      once per {st.once}
+                    </span>
+                  )}
+                  {st.note && (
+                    <span className="font-mono text-[11.5px] text-muted [overflow-wrap:anywhere]">
+                      {st.note}
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+          );
+          return (
+            <li
+              className="grid grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1fr)] items-center"
+              key={st.text}
+            >
+              <div>{side(st) === 0 && card}</div>
+              <div
+                aria-hidden="true"
+                className="text-center text-[16px] transition-opacity duration-300"
+                style={{
+                  color:
+                    side(st) === 1 ? 'var(--color-clover)' : 'var(--color-ink)',
+                  opacity: crossed && on ? 1 : 0,
+                }}
+              >
+                {side(st) === 1 ? '→' : '←'}
+              </div>
+              <div>{side(st) === 1 && card}</div>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-auto pt-4 text-[14px] text-head">{say}</p>
+    </div>
+  );
+}
+
+/** Startup, a call and shutdown, played in the shared scene player for the target picked. */
+function Life({ at, lang }: { at: number; lang: number }) {
+  const target = TARGETS[at].name;
+  const life = lifeFor(target, lang);
+  const host = hostLabel(target, lang);
+  const scene = (steps: Step[], say: string) => ({
+    steps: steps.length,
+    View: ({ step }: { step: number }) => (
+      <Lanes host={host} say={say} step={step} steps={steps} />
+    ),
+  });
+  const scenes: SceneDef[] = [
+    {
+      title: 'Startup',
+      ...scene(
+        life.startup,
+        target === 'In your app'
+          ? 'Only the first call pays for this. After that, calls go straight to the runtime.'
+          : 'Once, when it starts.',
+      ),
+    },
+    {
+      title: 'A call',
+      ...scene(
+        life.call,
+        target === 'WebAssembly'
+          ? 'Your event loop keeps running while BAML works.'
+          : target === 'Standalone'
+            ? 'Each function is a subcommand.'
+            : 'Your thread waits for the result; BAML does the work on its own threads.',
+      ),
+    },
+    {
+      title: 'Shutdown',
+      ...scene(
+        life.shutdown,
+        target === 'WebAssembly'
+          ? 'Nothing to clean up: it goes with the page.'
+          : 'BAML finishes its work before your program exits.',
+      ),
+    },
+  ];
+  return <ScenePlayer key={`${target}-${lang}`} scenes={scenes} />;
 }
 
 /** The page as it would ship: the architecture first, then one diagram per moment in a program's
@@ -1810,16 +2032,14 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           <ReleaseView at={at} lang={lang} />
         </div>
       </Section>
-      {MOMENTS.map((m) => (
-        <Section key={m.name} lead={m.lead} title={m.title}>
-          <div
-            className={m.name === 'Shutdown' ? 'max-w-[52rem]' : ''}
-            key={`${target.name}-${lang}`}
-          >
-            {behaviorFor(target.name, lang)[m.name]}
-          </div>
-        </Section>
-      ))}
+      <Section title="Startup, a call, shutdown">
+        <Life at={at} lang={lang} />
+      </Section>
+      <Section lead={MOMENTS[1].lead} title={MOMENTS[1].title}>
+        <div key={`${target.name}-${lang}`}>
+          {behaviorFor(target.name, lang)['An exception']}
+        </div>
+      </Section>
       <Section
         lead="The simplest way to see sysops at work: BAML reads the environment when it needs a value, instead of keeping its own copy."
         title="What happens when you change an environment variable"
