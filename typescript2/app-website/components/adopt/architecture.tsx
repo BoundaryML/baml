@@ -2095,8 +2095,10 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
         <p className="max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
           We’re building something no one has built before: a language, its
           runtime, and the whole toolchain around them. So our time goes to the
-          teams already shipping on it, and to engineering. We spend a lot of
-          time ensuring{' '}
+          teams already shipping on it, and to engineering.
+        </p>
+        <p className="mt-4 max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
+          We spend a lot of time ensuring{' '}
           <a
             className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
             href="/#review"
