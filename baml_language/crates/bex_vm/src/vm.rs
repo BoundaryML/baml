@@ -8003,6 +8003,402 @@ impl BexVm {
         Ok(())
     }
 
+    /// `LoadField`/`LoadFieldLocal`, out of line to keep the dispatch loop small.
+    #[inline(never)]
+    fn op_load_field(&mut self, idx: usize, local: bool) -> Result<(), VmError> {
+        
+        let top = self.stack.ensure_pop();
+        let access = if local {
+            Access::ThreadLocal
+        } else {
+            Access::Shared
+        };
+        let value = self.load_field_op(top, idx, access)?;
+        self.push_stack(value)?;
+        Ok(())
+    }
+
+    /// `StoreField`/`StoreFieldLocal`, out of line.
+    #[inline(never)]
+    fn op_store_field(&mut self, idx: usize, local: bool) -> Result<(), VmError> {
+        
+        let new_value = self.stack.ensure_pop();
+        let instance_value = self.stack.ensure_pop();
+        let access = if local {
+            Access::ThreadLocal
+        } else {
+            Access::Shared
+        };
+        self.store_field_op(instance_value, idx, new_value, access)?;
+        Ok(())
+    }
+
+    /// `InitField`, out of line.
+    #[inline(never)]
+    fn op_init_field(&mut self, idx: usize) -> Result<(), VmError> {
+        
+        let new_value = self.stack.ensure_pop();
+        let instance_value = self.stack.ensure_pop();
+        self.store_field_op(instance_value, idx, new_value, Access::Shared)?;
+        self.seal_if_constructed(instance_value, idx)?;
+        self.push_stack(instance_value)?;
+        Ok(())
+    }
+
+    /// `InitSpread`, out of line.
+    #[inline(never)]
+    fn op_init_spread(&mut self, copies: &bytecode::FieldCopySet) -> Result<(), VmError> {
+        
+        let source_value = self.stack.ensure_pop();
+        let dest_slot = self.stack.ensure_slot_from_top(0);
+        let dest_value = self.stack[dest_slot];
+                                self.init_spread(dest_value, source_value, copies)?;
+        if let Some(last) = copies.fields.iter().map(|copy| copy.dest).max() {
+            self.seal_if_constructed(dest_value, last)?;
+        }
+        Ok(())
+    }
+
+    /// `AllocArray`, out of line.
+    #[inline(never)]
+    fn op_alloc_array(&mut self, size: usize) -> Result<(), VmError> {
+        
+        // The declared element type rides on top of the `size`
+        // elements: a preceding `LoadType` pushed it, already resolved
+        // against the frame's type args. Pop it before the values.
+        let element_ty = self.ensure_pop_type()?;
+        let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
+        let array: Vec<Value> = self.stack.drain(drain_range).collect();
+        let array_index = self.tlab.alloc_array(element_ty, array);
+        self.push_stack(Value::object(array_index))?;
+        Ok(())
+    }
+
+    /// `AllocMap`, out of line.
+    #[inline(never)]
+    fn op_alloc_map(&mut self, n: usize) -> Result<(), VmError> {
+        
+        // The declared value type rides on top, the key type just
+        // below it (two `LoadType`s after the entries, already
+        // resolved against the frame's type args). Pop both before
+        // the entries.
+        let value_ty = self.ensure_pop_type()?;
+        let key_ty = self.ensure_pop_type()?;
+        // Nonempty allocations are compiler-generated string maps.
+        // General-key literals use yielding Map.set calls.
+        let map = if n > 0 {
+            let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
+            let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
+            let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
+            let values = self.stack[end_of_values..end_of_keys].iter().copied();
+            let keys = self.stack[idx_of_last_key..].iter().map(|k| {
+                let obj_index = self.as_object_ptr(*k, ObjectType::String)?;
+                self.get_object(obj_index).as_string().cloned()
+            });
+            let pairs = values
+                .zip(keys)
+                .map(|(val, key_res)| key_res.map(|k| (k, val)));
+            let map = pairs.collect::<Result<IndexMap<_, _>, _>>()?;
+            self.stack.drain(end_of_values..);
+            map
+        } else {
+            IndexMap::new()
+        };
+        let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
+        self.push_stack(Value::object(obj_index))?;
+        Ok(())
+    }
+
+    /// `AllocInstance`, out of line.
+    #[inline(never)]
+    fn op_alloc_instance(&mut self, raw: u32, ntypeargs: usize) -> Result<(), VmError> {
+        
+        
+        let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+
+        let class_type_args: Box<[bex_vm_types::RealizedTy]> = if ntypeargs == 0 {
+            Box::default()
+        } else {
+            self.pop_type_args(ntypeargs)?.tys.into()
+        };
+
+        if !matches!(self.get_object(class_ptr), Object::Class(_)) {
+            return Err(VmInternalError::TypeError {
+                expected: ObjectType::Class.into(),
+                got: ObjectType::of(self.get_object(class_ptr)).into(),
+            }
+            .into());
+        }
+        // Sealed by the store of its last field (see
+        // `seal_if_constructed`), or now if it has none.
+        let instance = self
+            .tlab
+            .alloc_unsealed_instance_cell(class_ptr, class_type_args);
+        if instance.field_len() == 0 {
+            self.tlab.seal_instance(instance);
+        }
+        self.push_stack(Value::object(instance.ptr()))?;
+        Ok(())
+    }
+
+    /// `ContainerLen`/`ContainerLenLocal`, out of line.
+    ///
+    /// # Safety
+    /// With `thread_local`, no other thread can reach the container: the
+    /// emitter selects the `_LOCAL` opcode only where escape analysis proved
+    /// it.
+    #[inline(never)]
+    unsafe fn op_container_len(&mut self, thread_local: bool) -> Result<(), VmError> {
+        // SAFETY (`thread_local`): the emitter selects the
+        // `_LOCAL` opcodes only where escape analysis proved
+        // no other thread can reach the container.
+                                let container = self.stack.ensure_pop();
+        let Some(ptr) = container.as_object_ptr() else {
+            return Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: self.type_of(&container),
+            }
+            .into());
+        };
+        #[allow(clippy::cast_possible_wrap)]
+        let len = match self.get_object(ptr) {
+            Object::Uint8Array(bytes) if thread_local => {
+                // SAFETY: see the function's safety section.
+                unsafe { bytes.lock_thread_local() }.len() as i64
+            }
+            Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
+            Object::Uint8Array(bytes) => bytes.len() as i64,
+            Object::Shared(SharedKind::Map) => self.expect_map(ptr).len() as i64,
+            Object::String(s) => s.byte_len() as i64,
+            other => {
+                return Err(VmInternalError::TypeError {
+                    expected: ObjectType::Array.into(),
+                    got: ObjectType::of(other).into(),
+                }
+                .into());
+            }
+        };
+        self.push_stack(Value::int(len))?;
+        Ok(())
+    }
+
+    /// `LoadArrayElement`/`LoadArrayElementLocal`, out of line.
+    ///
+    /// # Safety
+    /// With `thread_local`, no other thread can reach the container: the
+    /// emitter selects the `_LOCAL` opcode only where escape analysis proved
+    /// it.
+    #[inline(never)]
+    unsafe fn op_load_array_element(&mut self, thread_local: bool) -> Result<(), VmError> {
+        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                                let index_value = self.stack.ensure_pop();
+        let array_value = self.stack.ensure_pop();
+        let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
+        let Some(i) = index_value.as_int() else {
+            return Err(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Int,
+                got: self.type_of(&index_value),
+            }
+            .into());
+        };
+        // Acquire the array's read lock for the duration of the
+        // bounds-check + element load so it stays atomic against
+        // a racing `push`/grow. Guard drops at the end of the
+        // inner scope before any `&mut self` call. A negative index
+        // counts from the end; one that still lands outside the
+        // array reports the original index in the panic.
+        let load_result: Result<SlotValue, (i64, usize)> = {
+            match self.get_object(array_obj_index) {
+                Object::Shared(SharedKind::List) => {
+                    let access = if thread_local {
+                        Access::ThreadLocal
+                    } else {
+                        Access::Shared
+                    };
+                    self.load_list_element(array_obj_index, i, access)
+                }
+                Object::Uint8Array(bytes) => {
+                    let guard = if thread_local {
+                        // SAFETY: see the function's safety section.
+                        unsafe { bytes.lock_thread_local() }
+                    } else {
+                        bytes.lock()
+                    };
+                    let len = guard.len();
+                    match crate::array_index::resolve_index(i, len) {
+                        Some(idx) => {
+                            Ok(SlotValue::Value(Value::int(i64::from(guard[idx]))))
+                        }
+                        None => Err((i, len)),
+                    }
+                }
+                other => {
+                    return Err(VmInternalError::TypeError {
+                        expected: ObjectType::Array.into(),
+                        got: ObjectType::of(other).into(),
+                    }
+                    .into());
+                }
+            }
+        };
+        let element = match load_result {
+            Ok(v) => v,
+            Err((idx, len)) => {
+                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                    VmPanic::IndexOutOfBounds {
+                        index: idx,
+                        length: len,
+                    },
+                )));
+            }
+        };
+        let element = self.slot_value(element);
+        self.push_stack(element)?;
+        Ok(())
+    }
+
+    /// `StoreArrayElement`/`StoreArrayElementLocal`, out of line.
+    ///
+    /// # Safety
+    /// With `thread_local`, no other thread can reach the container: the
+    /// emitter selects the `_LOCAL` opcode only where escape analysis proved
+    /// it.
+    #[inline(never)]
+    unsafe fn op_store_array_element(&mut self, thread_local: bool) -> Result<(), VmError> {
+        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                                let new_value = self.stack.ensure_pop();
+        let index_value = self.stack.ensure_pop();
+        let array_value = self.stack.ensure_pop();
+        let array_object_index =
+            self.as_object_ptr(array_value, ObjectType::Array)?;
+        let Some(i) = index_value.as_int() else {
+            return Err(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Int,
+                got: self.type_of(&index_value),
+            }
+            .into());
+        };
+        let new_value_u8: Option<u8> =
+            new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
+        let store_result: Result<(), (i64, usize)> = {
+            match self.get_object(array_object_index) {
+                Object::Shared(SharedKind::List) => {
+                    let access = if thread_local {
+                        Access::ThreadLocal
+                    } else {
+                        Access::Shared
+                    };
+                    self.store_list_element(
+                        array_object_index,
+                        i,
+                        new_value,
+                        access,
+                    )
+                }
+                Object::Uint8Array(bytes) => {
+                    let Some(byte_v) = new_value_u8 else {
+                        return Err(VmInternalError::TypeError {
+                            expected: bex_vm_types::types::Type::Int,
+                            got: self.type_of(&new_value),
+                        }
+                        .into());
+                    };
+                    let debt = self.tlab.alloc_debt();
+                    let mut guard = if thread_local {
+                        // SAFETY: see the function's safety section.
+                        unsafe { bytes.lock_mut_thread_local(debt) }
+                    } else {
+                        bytes.lock_mut(debt)
+                    };
+                    let len = guard.len();
+                    match crate::array_index::resolve_index(i, len) {
+                        Some(idx) => {
+                            guard[idx] = byte_v;
+                            Ok(())
+                        }
+                        None => Err((i, len)),
+                    }
+                }
+                other => {
+                    return Err(VmInternalError::TypeError {
+                        expected: ObjectType::Array.into(),
+                        got: ObjectType::of(other).into(),
+                    }
+                    .into());
+                }
+            }
+        };
+        match store_result {
+            Ok(()) => {}
+            Err((idx, len)) => {
+                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                    VmPanic::IndexOutOfBounds {
+                        index: idx,
+                        length: len,
+                    },
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// `ArrayIterNext`/`ArrayIterNextLocal`, out of line.
+    #[inline(never)]
+    fn op_array_iter_next(&mut self, frame_idx: usize, iterator: usize, index: usize, local: bool) -> Result<(), VmError> {
+        
+        
+        #[allow(unsafe_code)]
+        let Frame::Bytecode(bf) =
+            (unsafe { self.frames.get_unchecked(frame_idx) })
+        else {
+            unreachable!()
+        };
+        let iterator = Self::local_slot_stack_index(bf.locals_offset, iterator);
+        let index = Self::local_slot_stack_index(bf.locals_offset, index);
+        let array = self.stack.get_at(iterator);
+        let Some(i) = self.stack.get_at(index).as_int() else {
+            return Err(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Int,
+                got: self.type_of(&self.stack.get_at(index)),
+            }
+            .into());
+        };
+        let ptr = self.as_object_ptr(array, ObjectType::Array)?;
+        // SAFETY (`_LOCAL`): see `ContainerLenLocal`.
+        let element = match self.get_object(ptr) {
+            Object::Shared(SharedKind::List) => {
+                let access = if local {
+                    Access::ThreadLocal
+                } else {
+                    Access::Shared
+                };
+                let arr = self.expect_list(ptr);
+                usize::try_from(i)
+                    .ok()
+                    .and_then(|i| arr.get_with(i, access))
+            }
+            other => {
+                return Err(VmInternalError::TypeError {
+                    expected: ObjectType::Array.into(),
+                    got: ObjectType::of(other).into(),
+                }
+                .into());
+            }
+        };
+        let item = match element {
+            Some(element) => {
+                self.stack.set_at(index, Value::int(i + 1));
+                self.slot_value(element)
+            }
+            None => {
+                let done = self.lang_object(crate::lang_items::BAML_ITER_DONE);
+                Value::object(self.alloc_instance(done, Vec::new()))
+            }
+        };
+        self.push_stack(item)?;
+        Ok(())
+    }
+
     /// After a spread literal stores field `stored`: the emitter stores the
     /// fields in index order and covers every one, so storing the last field
     /// completes the construction `AllocInstance` began, and the instance is
@@ -9619,55 +10015,7 @@ impl BexVm {
                     OpCode::ArrayIterNext | OpCode::ArrayIterNextLocal => {
                         let iterator = { read_u32_unchecked(code, pc) as usize };
                         let index = { read_u32_unchecked(code, pc) as usize };
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let iterator = Self::local_slot_stack_index(bf.locals_offset, iterator);
-                        let index = Self::local_slot_stack_index(bf.locals_offset, index);
-                        let array = self.stack.get_at(iterator);
-                        let Some(i) = self.stack.get_at(index).as_int() else {
-                            return Err(VmInternalError::TypeError {
-                                expected: bex_vm_types::types::Type::Int,
-                                got: self.type_of(&self.stack.get_at(index)),
-                            }
-                            .into());
-                        };
-                        let ptr = self.as_object_ptr(array, ObjectType::Array)?;
-                        // SAFETY (`_LOCAL`): see `ContainerLenLocal`.
-                        let element = match self.get_object(ptr) {
-                            Object::Shared(SharedKind::List) => {
-                                let access = if op == OpCode::ArrayIterNextLocal {
-                                    Access::ThreadLocal
-                                } else {
-                                    Access::Shared
-                                };
-                                let arr = self.expect_list(ptr);
-                                usize::try_from(i)
-                                    .ok()
-                                    .and_then(|i| arr.get_with(i, access))
-                            }
-                            other => {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Array.into(),
-                                    got: ObjectType::of(other).into(),
-                                }
-                                .into());
-                            }
-                        };
-                        let item = match element {
-                            Some(element) => {
-                                self.stack.set_at(index, Value::int(i + 1));
-                                self.slot_value(element)
-                            }
-                            None => {
-                                let done = self.lang_object(crate::lang_items::BAML_ITER_DONE);
-                                Value::object(self.alloc_instance(done, Vec::new()))
-                            }
-                        };
-                        self.push_stack(item)?;
+                        self.op_array_iter_next(*frame_idx, iterator, index, op == OpCode::ArrayIterNextLocal)?;
                     }
 
                     // ── Operand-movement superinstructions (CPython-style) ────────
@@ -9754,26 +10102,12 @@ impl BexVm {
                     // so the slot needs no ordering.
                     OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
-                        let top = self.stack.ensure_pop();
-                        let access = if op == OpCode::LoadFieldLocal {
-                            Access::ThreadLocal
-                        } else {
-                            Access::Shared
-                        };
-                        let value = self.load_field_op(top, idx, access)?;
-                        self.push_stack(value)?;
+                        self.op_load_field(idx, op == OpCode::LoadFieldLocal)?;
                     }
 
                     OpCode::StoreField | OpCode::StoreFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
-                        let new_value = self.stack.ensure_pop();
-                        let instance_value = self.stack.ensure_pop();
-                        let access = if op == OpCode::StoreFieldLocal {
-                            Access::ThreadLocal
-                        } else {
-                            Access::Shared
-                        };
-                        self.store_field_op(instance_value, idx, new_value, access)?;
+                        self.op_store_field(idx, op == OpCode::StoreFieldLocal)?;
                     }
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
@@ -9814,23 +10148,12 @@ impl BexVm {
 
                     OpCode::InitField => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
-                        let new_value = self.stack.ensure_pop();
-                        let instance_value = self.stack.ensure_pop();
-                        self.store_field_op(instance_value, idx, new_value, Access::Shared)?;
-                        self.seal_if_constructed(instance_value, idx)?;
-                        self.push_stack(instance_value)?;
+                        self.op_init_field(idx)?;
                     }
 
                     OpCode::InitSpread => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
-                        let source_value = self.stack.ensure_pop();
-                        let dest_slot = self.stack.ensure_slot_from_top(0);
-                        let dest_value = self.stack[dest_slot];
-                        let copies = &function.bytecode.field_copy_sets[idx];
-                        self.init_spread(dest_value, source_value, copies)?;
-                        if let Some(last) = copies.fields.iter().map(|copy| copy.dest).max() {
-                            self.seal_if_constructed(dest_value, last)?;
-                        }
+                        self.op_init_spread(&function.bytecode.field_copy_sets[idx])?;
                     }
 
                     // ── Pop / Copy ────────────────────────────────────────────────
@@ -9850,46 +10173,12 @@ impl BexVm {
                     // ── Allocation opcodes ────────────────────────────────────────
                     OpCode::AllocArray => {
                         let size = { read_u32_unchecked(code, pc) as usize };
-                        // The declared element type rides on top of the `size`
-                        // elements: a preceding `LoadType` pushed it, already resolved
-                        // against the frame's type args. Pop it before the values.
-                        let element_ty = self.ensure_pop_type()?;
-                        let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
-                        let array: Vec<Value> = self.stack.drain(drain_range).collect();
-                        let array_index = self.tlab.alloc_array(element_ty, array);
-                        self.push_stack(Value::object(array_index))?;
+                        self.op_alloc_array(size)?;
                     }
 
                     OpCode::AllocMap => {
                         let n = { read_u32_unchecked(code, pc) as usize };
-                        // The declared value type rides on top, the key type just
-                        // below it (two `LoadType`s after the entries, already
-                        // resolved against the frame's type args). Pop both before
-                        // the entries.
-                        let value_ty = self.ensure_pop_type()?;
-                        let key_ty = self.ensure_pop_type()?;
-                        // Nonempty allocations are compiler-generated string maps.
-                        // General-key literals use yielding Map.set calls.
-                        let map = if n > 0 {
-                            let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
-                            let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
-                            let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
-                            let values = self.stack[end_of_values..end_of_keys].iter().copied();
-                            let keys = self.stack[idx_of_last_key..].iter().map(|k| {
-                                let obj_index = self.as_object_ptr(*k, ObjectType::String)?;
-                                self.get_object(obj_index).as_string().cloned()
-                            });
-                            let pairs = values
-                                .zip(keys)
-                                .map(|(val, key_res)| key_res.map(|k| (k, val)));
-                            let map = pairs.collect::<Result<IndexMap<_, _>, _>>()?;
-                            self.stack.drain(end_of_values..);
-                            map
-                        } else {
-                            IndexMap::new()
-                        };
-                        let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
-                        self.push_stack(Value::object(obj_index))?;
+                        self.op_alloc_map(n)?;
                     }
 
                     OpCode::ConcatStrings => {
@@ -9905,30 +10194,7 @@ impl BexVm {
                     OpCode::AllocInstance => {
                         let raw = { read_u32_unchecked(code, pc) };
                         let ntypeargs = { read_u16_unchecked(code, pc) } as usize;
-                        let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
-
-                        let class_type_args: Box<[bex_vm_types::RealizedTy]> = if ntypeargs == 0 {
-                            Box::default()
-                        } else {
-                            self.pop_type_args(ntypeargs)?.tys.into()
-                        };
-
-                        if !matches!(self.get_object(class_ptr), Object::Class(_)) {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Class.into(),
-                                got: ObjectType::of(self.get_object(class_ptr)).into(),
-                            }
-                            .into());
-                        }
-                        // Sealed by the store of its last field (see
-                        // `seal_if_constructed`), or now if it has none.
-                        let instance = self
-                            .tlab
-                            .alloc_unsealed_instance_cell(class_ptr, class_type_args);
-                        if instance.field_len() == 0 {
-                            self.tlab.seal_instance(instance);
-                        }
-                        self.push_stack(Value::object(instance.ptr()))?;
+                        self.op_alloc_instance(raw, ntypeargs)?;
                     }
 
                     OpCode::InitInstance => {
@@ -11484,103 +11750,11 @@ impl BexVm {
 
                     // ── Array / Map element ops ───────────────────────────────────
                     OpCode::ContainerLen | OpCode::ContainerLenLocal => {
-                        // SAFETY (`thread_local`): the emitter selects the
-                        // `_LOCAL` opcodes only where escape analysis proved
-                        // no other thread can reach the container.
-                        let thread_local = op == OpCode::ContainerLenLocal;
-                        let container = self.stack.ensure_pop();
-                        let Some(ptr) = container.as_object_ptr() else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Array.into(),
-                                got: self.type_of(&container),
-                            }
-                            .into());
-                        };
-                        #[allow(clippy::cast_possible_wrap)]
-                        let len = match self.get_object(ptr) {
-                            Object::Uint8Array(bytes) if thread_local => {
-                                bytes.lock_thread_local().len() as i64
-                            }
-                            Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
-                            Object::Uint8Array(bytes) => bytes.len() as i64,
-                            Object::Shared(SharedKind::Map) => self.expect_map(ptr).len() as i64,
-                            Object::String(s) => s.byte_len() as i64,
-                            other => {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Array.into(),
-                                    got: ObjectType::of(other).into(),
-                                }
-                                .into());
-                            }
-                        };
-                        self.push_stack(Value::int(len))?;
+                        self.op_container_len(op == OpCode::ContainerLenLocal)?;
                     }
 
                     OpCode::LoadArrayElement | OpCode::LoadArrayElementLocal => {
-                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
-                        let thread_local = op == OpCode::LoadArrayElementLocal;
-                        let index_value = self.stack.ensure_pop();
-                        let array_value = self.stack.ensure_pop();
-                        let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-                        let Some(i) = index_value.as_int() else {
-                            return Err(VmInternalError::TypeError {
-                                expected: bex_vm_types::types::Type::Int,
-                                got: self.type_of(&index_value),
-                            }
-                            .into());
-                        };
-                        // Acquire the array's read lock for the duration of the
-                        // bounds-check + element load so it stays atomic against
-                        // a racing `push`/grow. Guard drops at the end of the
-                        // inner scope before any `&mut self` call. A negative index
-                        // counts from the end; one that still lands outside the
-                        // array reports the original index in the panic.
-                        let load_result: Result<SlotValue, (i64, usize)> = {
-                            match self.get_object(array_obj_index) {
-                                Object::Shared(SharedKind::List) => {
-                                    let access = if thread_local {
-                                        Access::ThreadLocal
-                                    } else {
-                                        Access::Shared
-                                    };
-                                    self.load_list_element(array_obj_index, i, access)
-                                }
-                                Object::Uint8Array(bytes) => {
-                                    let guard = if thread_local {
-                                        bytes.lock_thread_local()
-                                    } else {
-                                        bytes.lock()
-                                    };
-                                    let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
-                                        Some(idx) => {
-                                            Ok(SlotValue::Value(Value::int(i64::from(guard[idx]))))
-                                        }
-                                        None => Err((i, len)),
-                                    }
-                                }
-                                other => {
-                                    return Err(VmInternalError::TypeError {
-                                        expected: ObjectType::Array.into(),
-                                        got: ObjectType::of(other).into(),
-                                    }
-                                    .into());
-                                }
-                            }
-                        };
-                        let element = match load_result {
-                            Ok(v) => v,
-                            Err((idx, len)) => {
-                                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: idx,
-                                        length: len,
-                                    },
-                                )));
-                            }
-                        };
-                        let element = self.slot_value(element);
-                        self.push_stack(element)?;
+                        self.op_load_array_element(op == OpCode::LoadArrayElementLocal)?;
                     }
 
                     OpCode::LoadMapElement => {
@@ -11588,80 +11762,7 @@ impl BexVm {
                     }
 
                     OpCode::StoreArrayElement | OpCode::StoreArrayElementLocal => {
-                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
-                        let thread_local = op == OpCode::StoreArrayElementLocal;
-                        let new_value = self.stack.ensure_pop();
-                        let index_value = self.stack.ensure_pop();
-                        let array_value = self.stack.ensure_pop();
-                        let array_object_index =
-                            self.as_object_ptr(array_value, ObjectType::Array)?;
-                        let Some(i) = index_value.as_int() else {
-                            return Err(VmInternalError::TypeError {
-                                expected: bex_vm_types::types::Type::Int,
-                                got: self.type_of(&index_value),
-                            }
-                            .into());
-                        };
-                        let new_value_u8: Option<u8> =
-                            new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
-                        let store_result: Result<(), (i64, usize)> = {
-                            match self.get_object(array_object_index) {
-                                Object::Shared(SharedKind::List) => {
-                                    let access = if thread_local {
-                                        Access::ThreadLocal
-                                    } else {
-                                        Access::Shared
-                                    };
-                                    self.store_list_element(
-                                        array_object_index,
-                                        i,
-                                        new_value,
-                                        access,
-                                    )
-                                }
-                                Object::Uint8Array(bytes) => {
-                                    let Some(byte_v) = new_value_u8 else {
-                                        return Err(VmInternalError::TypeError {
-                                            expected: bex_vm_types::types::Type::Int,
-                                            got: self.type_of(&new_value),
-                                        }
-                                        .into());
-                                    };
-                                    let debt = self.tlab.alloc_debt();
-                                    let mut guard = if thread_local {
-                                        bytes.lock_mut_thread_local(debt)
-                                    } else {
-                                        bytes.lock_mut(debt)
-                                    };
-                                    let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
-                                        Some(idx) => {
-                                            guard[idx] = byte_v;
-                                            Ok(())
-                                        }
-                                        None => Err((i, len)),
-                                    }
-                                }
-                                other => {
-                                    return Err(VmInternalError::TypeError {
-                                        expected: ObjectType::Array.into(),
-                                        got: ObjectType::of(other).into(),
-                                    }
-                                    .into());
-                                }
-                            }
-                        };
-                        match store_result {
-                            Ok(()) => {}
-                            Err((idx, len)) => {
-                                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: idx,
-                                        length: len,
-                                    },
-                                )));
-                            }
-                        }
+                        self.op_store_array_element(op == OpCode::StoreArrayElementLocal)?;
                     }
 
                     OpCode::StoreMapElement => {
