@@ -30,7 +30,8 @@ Arguments:
   [TARGET]
           Function or script to run as the sole entry point.
 
-          Mutually exclusive with `--function` and `--expression`.
+          Defaults to `main` when the project or file has one. Mutually exclusive with `--function`
+          and `--expression`.
 
   [TARGET_ARGS]...
           Arguments for the generated target CLI.
@@ -73,8 +74,7 @@ Project options:
       --file <PATH>
           Load one standalone source file instead of discovering a project.
 
-          Runs its `main` function when no target is supplied. Mutually exclusive with
-          `--project-dir`.
+          Mutually exclusive with `--project-dir`.
 
 Run output options:
       --log <LEVEL>

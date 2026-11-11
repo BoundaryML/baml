@@ -180,7 +180,7 @@ pub struct RunArgs {
 
     /// Function or script to run as the sole entry point.
     ///
-    /// Mutually exclusive with `--function` and `--expression`.
+    /// Defaults to `main` when the project or file has one. Mutually exclusive with `--function` and `--expression`.
     #[arg(value_name = "TARGET")]
     pub target: Option<String>,
 
@@ -230,8 +230,7 @@ pub struct RunArgs {
 
     /// Load one standalone source file instead of discovering a project.
     ///
-    /// Runs its `main` function when no target is supplied. Mutually exclusive
-    /// with `--project-dir`.
+    /// Mutually exclusive with `--project-dir`.
     #[arg(long, value_name = "PATH", help_heading = "Project options")]
     pub file: Option<PathBuf>,
 
@@ -472,15 +471,8 @@ impl RunArgs {
             return Ok(crate::ExitCode::Success);
         }
 
-        if self.file.is_some() && self.target.is_none() && self.functions.is_empty() {
-            return self.run_single_target("main", reporter);
-        }
-
-        // No target → print help and exit non-zero. (Implicit `main` no
-        // longer exists.)
         if self.target.is_none() && self.functions.is_empty() {
-            Self::print_run_help();
-            return Ok(crate::ExitCode::Failure);
+            return self.run_default_target(reporter);
         }
 
         if let Some(target) = &self.target {
@@ -503,9 +495,43 @@ impl RunArgs {
 
     /// Positional `<TARGET>` path: one function, no subcommand layer.
     /// `[scripts]` aliases are resolved here too (positional only).
-    fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
-        let mut argv = self.build_argv_for_single(target);
+    /// With no target, `main` is the entry point. A project that has no
+    /// `main`, or a directory that is not a project, gets the help instead.
+    fn run_default_target(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+        const ENTRY_POINT: &str = "main";
+        let print_help = || {
+            Self::print_run_help();
+            Ok(crate::ExitCode::Failure)
+        };
+        if self.file.is_some() {
+            return self.run_single_target(ENTRY_POINT, reporter);
+        }
+        if crate::project_load::resolve_project_layout(self.project_dir.as_deref())?.is_none() {
+            return print_help();
+        }
         let prepared = self.load_and_compile()?;
+        let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
+        let (_toml_path, toml_content) = Self::project_toml(&prepared.db, prepared.package);
+        if catalog.find_user_function(ENTRY_POINT).is_none()
+            && !Self::parse_scripts(&toml_content).contains_key(ENTRY_POINT)
+        {
+            return print_help();
+        }
+        self.run_prepared_target(ENTRY_POINT, prepared, reporter)
+    }
+
+    fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
+        let prepared = self.load_and_compile()?;
+        self.run_prepared_target(target, prepared, reporter)
+    }
+
+    fn run_prepared_target(
+        &self,
+        target: &str,
+        prepared: Prepared,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
+        let mut argv = self.build_argv_for_single(target);
         let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
         Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
         let project_root = Self::project_root(&prepared.db, prepared.package);

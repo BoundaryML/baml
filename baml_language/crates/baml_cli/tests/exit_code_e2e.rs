@@ -560,6 +560,84 @@ fn run_list_compilation_error_returns_nonzero_exit_code() {
     );
 }
 
+const MAIN_AND_OTHER: &str = "function main() -> string {\n    \"from main\"\n}\n\nfunction other_main() -> string {\n    \"from other_main\"\n}\n";
+
+/// With no target, a project runs its `main`.
+#[test]
+fn run_without_target_runs_project_main() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), MAIN_AND_OTHER);
+
+    let output = run_baml_cli(built, tmp.path(), &["run"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "\"from main\""
+    );
+}
+
+/// A named target wins over the default entry point.
+#[test]
+fn run_with_target_ignores_project_main() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), MAIN_AND_OTHER);
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "other_main"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "\"from other_main\""
+    );
+}
+
+/// A project with no `main` has nothing to default to, so a bare `baml run`
+/// shows what can be run instead.
+#[test]
+fn run_without_target_or_main_prints_help() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), "function answer() -> int {\n    42\n}\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("Usage: baml run"),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+/// Outside any project a bare `baml run` still prints the help.
+#[test]
+fn run_without_target_outside_a_project_prints_help() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("Usage: baml run"),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
 /// `baml run` should only emit the program output for a formatted project.
 /// Compile progress remains reserved for `baml check` and `baml generate`.
 #[test]
