@@ -446,6 +446,82 @@ impl BexVm {
         i64::try_from(len).ok()
     }
 
+    /// `map.get(key)` for a `map<string, V>` with descriptor `descriptor`,
+    /// which the emitter knows: the shared map read in place, with the key's
+    /// hash and the entry's slot kinds taken as known. `Some(null)` for an
+    /// absent key; `None` for any other value, for the builtin's own path.
+    ///
+    /// Replaces, for such a map, the `Map.get` adapter call, which
+    /// re-derived the map's shape and slot kinds from its type on every call.
+    #[inline]
+    pub fn map_get_known(&mut self, map: Value, descriptor: u32, key: Value) -> Option<Value> {
+        let (map, _, pos) = self.locate_string_key(map, descriptor, key)?;
+        let Some(pos) = pos else {
+            return Some(Value::NULL);
+        };
+        let value = map.lock(Access::Shared).value(pos);
+        Some(self.slot_value(value))
+    }
+
+    /// `map.set(key, value)` for a `map<string, V>` with descriptor
+    /// `descriptor`: the previous value, or null when the key was absent and
+    /// is inserted. `None` for any other map or a value its slot does not
+    /// take, for the builtin's own path. Replaces the `Map.set` adapter
+    /// call for such a map, as [`Self::map_get_known`] does `Map.get`.
+    #[inline]
+    pub fn map_set_known(
+        &mut self,
+        map: Value,
+        descriptor: u32,
+        key: Value,
+        value: SlotValue,
+    ) -> Option<Value> {
+        let (map, hash, pos) = self.locate_string_key(map, descriptor, key)?;
+        let guard = map.lock(Access::Shared);
+        let previous = match pos {
+            Some(pos) => {
+                let previous = guard.value(pos);
+                guard.set_value(pos, value).ok()?;
+                Some(previous)
+            }
+            None => {
+                guard
+                    .insert(&mut self.tlab, hash, SlotValue::Value(key), value)
+                    .ok()?;
+                None
+            }
+        };
+        drop(guard);
+        Some(previous.map_or(Value::NULL, |previous| self.slot_value(previous)))
+    }
+
+    /// The map behind `map` when its descriptor is `descriptor`, the hash
+    /// of `key` (a string), and the position of its entry if present.
+    #[inline]
+    fn locate_string_key(
+        &self,
+        map: Value,
+        descriptor: u32,
+        key: Value,
+    ) -> Option<(bex_vm_types::types::MapRef, u64, Option<usize>)> {
+        let ptr = map.as_object_ptr()?;
+        // SAFETY: a `Value` names a live object, and every object has a header.
+        if unsafe { ptr.header() }.descriptor.0 != descriptor {
+            return None;
+        }
+        let map = self.map_at(ptr)?;
+        let text = self.as_string(&key).ok()?.as_str();
+        let hash = bex_vm_types::map_string_hash(text);
+        let pos = map.lock(Access::Shared).find(hash, |candidate| {
+            let candidate = candidate.expect_value();
+            candidate == key
+                || candidate.as_object_ptr().is_some_and(|ptr| {
+                    matches!(self.get_object(ptr), Object::String(other) if other.as_str() == text)
+                })
+        });
+        Some((map, hash, pos))
+    }
+
     /// A new instance of `shape`, zeroed but for its class slot. The caller
     /// stores every field through the returned base before its next
     /// safepoint: a zeroed tagged field reads as held until stored.

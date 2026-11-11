@@ -350,6 +350,24 @@ impl<'db> Generator<'_, 'db> {
 
     /// The descriptor and element slot kind of the list `operand` names, when
     /// it is a local of a list type whose element type is fully known.
+    /// The descriptor and value slot kind of a `map<string, V>` local whose
+    /// value type is fully known.
+    pub(super) fn known_map(&self, operand: &Operand<'db>) -> Option<(u32, SlotKind)> {
+        let (Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))) = operand
+        else {
+            return None;
+        };
+        let RuntimeTy::Map { key, value } = &self.body.locals[local.0].ty else {
+            return None;
+        };
+        if !matches!(**key, RuntimeTy::String) {
+            return None;
+        }
+        let value = baml_compiler2_mir::RealizedTy::try_from(&**value).ok()?;
+        let kind = SlotKind::of_type(&value);
+        Some((bex_vm_types::types::map_descriptor(SlotKind::Ptr, kind).0, kind))
+    }
+
     pub(super) fn known_list(&self, operand: &Operand<'db>) -> Option<(u32, SlotKind)> {
         let (Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))) = operand
         else {

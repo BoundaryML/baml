@@ -93,7 +93,75 @@ impl<'db> Generator<'_, 'db> {
         if let Some(native) = self.scalar_native_call(block, call.info, layout, args, ntypes)? {
             return Ok(Some(native));
         }
-        self.known_push(block, call, layout, args)
+        if let Some(push) = self.known_push(block, call, layout, args)? {
+            return Ok(Some(push));
+        }
+        self.known_map_call(block, call, layout, args)
+    }
+
+    /// `value` as the `SlotValue` a slot of `kind` takes in place: a float
+    /// unboxed for a raw float slot, else the boxed value. `None` for a raw
+    /// float slot and a value not held as a float.
+    fn slot_value(&mut self, kind: SlotKind, value: &Expr) -> Option<String> {
+        match (kind, value.repr) {
+            (SlotKind::Raw(RawKind::Float), Repr::Float) => Some(format!(
+                "bex_vm_types::object_format::SlotValue::Float({})",
+                value.code
+            )),
+            (SlotKind::Raw(RawKind::Float), _) => None,
+            _ => Some(format!(
+                "bex_vm_types::object_format::SlotValue::Value({})",
+                self.value_arg(value)
+            )),
+        }
+    }
+
+    /// `m.get(k)` and `m.set(k, v)` on a `map<string, V>` local whose value
+    /// type is fully known: the shared map in place (`BexVm::map_get_known`,
+    /// `map_set_known`), else the builtin's own path.
+    fn known_map_call(
+        &mut self,
+        block: BlockId,
+        call: &Builtin<'_>,
+        layout: Option<&baml_type::CallLayout>,
+        args: &[Operand<'db>],
+    ) -> Gen<Option<Expr>> {
+        let named = layout.is_some_and(|layout| layout.0.iter().any(Option::is_some));
+        let set = match call.info.native_key.as_deref() {
+            Some(MAP_GET) if args.len() == 2 => false,
+            Some(MAP_SET) if args.len() == 3 => true,
+            _ => return Ok(None),
+        };
+        let Some((descriptor, kind)) = self.known_map(&args[0]).filter(|_| !named) else {
+            return Ok(None);
+        };
+        let map = self.value_operand(block, &args[0])?;
+        let key = self.value_operand(block, &args[1])?;
+        let (fast, boxed_args) = if set {
+            // Bound first: the value's code may borrow the VM the call takes.
+            let value = self.operand(block, &args[2])?;
+            let value = self.hoist(value);
+            let Some(slot_value) = self.slot_value(kind, &value) else {
+                return Ok(None);
+            };
+            let boxed = self.value_arg(&value);
+            (
+                format!("vm.map_set_known({map}, {descriptor}, {key}, {slot_value})"),
+                format!("&[{map}, {key}, {boxed}]"),
+            )
+        } else {
+            (
+                format!("vm.map_get_known({map}, {descriptor}, {key})"),
+                format!("&[{map}, {key}]"),
+            )
+        };
+        let fallback =
+            self.builtin_call(block, call.name, call.info, call.shape, call.types, &boxed_args)?;
+        let fallback = coerce(&fallback.code, fallback.repr, Repr::Value);
+        Ok(Some(Expr::new(
+            format!("(match {fast} {{ Some(v) => v, None => {fallback} }})"),
+            Repr::Value,
+        )))
     }
 
     /// `xs.push(x)` on a list local whose element type is fully known: the
@@ -117,19 +185,11 @@ impl<'db> Generator<'_, 'db> {
             return Ok(None);
         };
         let list = self.value_operand(block, list)?;
+        // Bound first: the value's code may borrow the VM the push takes.
         let value = self.operand(block, value)?;
-        let slot_value = match (kind, value.repr) {
-            (SlotKind::Raw(RawKind::Float), Repr::Float) => {
-                format!(
-                    "bex_vm_types::object_format::SlotValue::Float({})",
-                    value.code
-                )
-            }
-            (SlotKind::Raw(RawKind::Float), _) => return Ok(None),
-            _ => format!(
-                "bex_vm_types::object_format::SlotValue::Value({})",
-                coerce(&value.code, value.repr, Repr::Value)
-            ),
+        let value = self.hoist(value);
+        let Some(slot_value) = self.slot_value(kind, &value) else {
+            return Ok(None);
         };
         let boxed = coerce(&value.code, value.repr, Repr::Value);
         let fallback = self.builtin_call(
@@ -385,9 +445,15 @@ impl<'db> Generator<'_, 'db> {
         });
         let direct = format!("{}_d(vm, fr{passed}, {mask})", site.symbol);
         let call = if site.generic {
+            // A plain body never reads its frame's type arguments (that reads
+            // `fr`, which `keeps_record_state` refuses), so its one body is
+            // every instantiation's and a plain call needs none. The record
+            // path keeps them, for spans and captures.
             self.untimed = true;
+            let plain = self.plain_call(site, &direct);
+            let flag = super::plain_const(&site.symbol);
             format!(
-                "(if {} {{ {} }} else {})",
+                "(if {flag} && vm.plain_calls() {{ {plain} }} else if {} {{ {} }} else {})",
                 site.allowed(),
                 site.recorded(&direct, &args),
                 site.boxed(&args, signature.ret)
@@ -641,6 +707,11 @@ impl<'db> Generator<'_, 'db> {
 /// The native key of `Array.push`, which compiled code makes in place on a
 /// list of known element type.
 const ARRAY_PUSH: &str = "baml.Array.push";
+
+/// The native keys of `Map.get` and `Map.set`, which compiled code makes in
+/// place on a `map<string, V>` of known value type.
+const MAP_GET: &str = "baml.Map.get";
+const MAP_SET: &str = "baml.Map.set";
 
 /// A call of a builtin, as its glue is called.
 struct Builtin<'a> {
