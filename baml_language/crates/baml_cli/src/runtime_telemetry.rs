@@ -43,26 +43,31 @@ pub(crate) fn create_engine_with_context(
                     )
                 })
                 .with_host("baml")
-                .with_sources(sources),
+                .with_sources(sources)
+                .with_source_upload(boundary.upload_sources.unwrap_or(true)),
             ),
             ..bex_engine::EngineConfig::default()
         },
     )
 }
 
-/// The session's `.baml` sources keyed by path relative to the project root,
-/// stored with each recording.
+/// The session's sources keyed by path relative to the project root, stored
+/// with each recording: its `.baml` files, and its `baml.toml` when it has
+/// one. The manifest names the package, so a reader of several programs'
+/// recordings can tell which program a source revision is of, and it is part
+/// of what a revision changed.
 pub(crate) fn session_sources(
     session: &crate::project_session::ProjectSession,
 ) -> Vec<(String, String)> {
     let root = session.root();
-    session
+    let manifest = session
         .resolved
-        .files
+        .manifest
         .iter()
-        .map(|(path, content)| {
-            let path = path.strip_prefix(root).unwrap_or(path);
-            (path.to_string_lossy().into_owned(), content.clone())
-        })
-        .collect()
+        .map(|manifest| (baml_db::BAML_TOML.to_owned(), manifest.clone()));
+    let files = session.resolved.files.iter().map(|(path, content)| {
+        let path = path.strip_prefix(root).unwrap_or(path);
+        (path.to_string_lossy().into_owned(), content.clone())
+    });
+    manifest.chain(files).collect()
 }

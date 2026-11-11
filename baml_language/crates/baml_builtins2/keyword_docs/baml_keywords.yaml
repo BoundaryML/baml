@@ -209,6 +209,35 @@ trace.redact:
   details: |
     A recording keeps a marker saying the value was redacted in its place, wherever the value is captured: a function's inputs or output, a thrown error, or `log.*` data. `@trace.redact` applies to a class field, and `@@trace.redact` to a class, whose every instance is withheld whole, fields and all. Only recordings change: the program reads, prints and serializes the value as before. A value copied out of a redacted field into a plain string or another field is recorded as that copy. Takes no arguments, at most once per declaration.
 
+$trace:
+  summary: "The tracing options of one call: a hidden parameter every function takes, and a directive on a function declaration."
+  syntax: |
+    // At a call site, by name.
+    charge(account, 500, $trace = trace.span())
+    charge(account, 500, $trace = trace.context(
+        distinct_id = "user-42",
+        metadata = { "phase": "billing" },
+    ))
+
+    // On a declaration, for every call of the function.
+    /// baml:$trace=trace.span
+    function charge(account: Account, cents: int) -> int {
+        cents
+    }
+  details: |
+    A recording keeps a call as a span or as timing. A span is one row of `baml query`'s `spans` table, with its parent, times, status and captured values. A timing call adds to its function's totals in `profiler` and keeps no row and no values. At the default level (`BAML_TELEMETRY=medium`), AI functions are spans and other functions are timing. A root call and every `spawn` are spans of type `future`.
+
+    `trace.span()` records the call as a span and captures its inputs, its output and its error. `inputs = false`, `output = false` or `error = false` leaves one out, and `trace.empty_span()` leaves out all three. Any other span, an AI function's or one made by `BAML_TELEMETRY=high` included, records the error it ends with when it throws or panics, and a failed future carries the error that escaped it. `trace.timing()` keeps timing only and `trace.hidden()` leaves the call out. `trace.context(distinct_id = ..., metadata = {...})` sets the distinct id and metadata of the call and of everything it runs; `baml query` serves them as `context_distinct_id` and `context_metadata`. Builders chain: `trace.context(...).span()`. The mode and the capture requests apply to that one call, not to the calls it makes.
+
+    The directive `/// baml:$trace=<name>` takes `trace.span`, `trace.empty_span`, `trace.timing` or `trace.hidden`, or the name of a `throws never` function that returns the `trace.Options` to use. A value that must not be recorded is withheld with `@trace.redact`. See `baml describe trace` and `baml describe trace.redact`.
+
+tracing:
+  summary: "Alias topic for `$trace`."
+  syntax: |
+    charge(account, 500, $trace = trace.span())
+  details: |
+    See `baml describe '$trace'` for spans, timing, capture defaults and the declaration directive.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |
@@ -1218,6 +1247,10 @@ query:
                 FROM spans WHERE input_args['customer']['age'] >= 30" --format jsonl
     baml query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
                 FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
+    baml query "SELECT timestamp, level, event_name, data, function_name, line
+                FROM logs WHERE level IN ('warn', 'error') ORDER BY timestamp"
+    baml query "SELECT baml_source_code['baml_src/main.baml'] FROM processes
+                ORDER BY last_updated DESC LIMIT 1"
     baml query --schema --table spans
   details: |
     Every `baml run`/`baml test` records to `.baml/btel`; the first query
@@ -1225,15 +1258,31 @@ query:
     Relations: `processes` (one row per process, with its status),
     `spans` (completed function calls that were retained, and futures: a
     root call is a future without a parent; `input_args`, `output_value`,
-    `error_value` (a `baml.errors.Context`), `self_usage` (the model usage
+    `error_value` (a `baml.errors.Context`: the error a failed call threw or
+    the error that escaped a failed future), `self_usage` (the model usage
     of the calls an `ai.Client.invoke` span made) and `total_usage` (every
     call under a span, one entry per model with its token counts) are BAML values), `span_announcements` (every
-    started span), and `profiler` (one row per calling-context node of an
-    ended process: invocations, outcomes, total/self/I/O time). Value columns
+    started span), `logs` (one row per `log.*` event: its level, name, `data`
+    value, the function and line that logged, and the span it ran under),
+    `functions` (the definitions a recording carried, with their source file
+    and byte offsets), and `profiler` (one row per calling-context node of an
+    ended process: invocations, outcomes, total/self/I/O time, the
+    process's `process_start_time` and `process_end_time`, which bound code
+    paths by time without a join, and its `baml_source_code_content_id`,
+    which picks one source revision's code paths without a join).
+    `processes.baml_source_code` is the source a process ran, a map
+    from path to content: its `.baml` files and, for a project that has one,
+    its `baml.toml`. Value columns
     support ordinary subscripts and comparisons —
     `input_args['customer']['age'] >= 30`,
-    `input_args = baml_value_json('{"x":1}')` — decoded on demand. `WITH
-    RECURSIVE` walks span trees through `parent_span_id`. Discovery:
+    `input_args = baml_value_json('{"x":1}')` — decoded on demand. An image,
+    audio, pdf or video value is described without its content
+    (`{"$media", "mime", "base64_len"}`); `['base64']` on it reads the content
+    as base64 text. `WITH
+    RECURSIVE` walks span trees through `parent_span_id`, and
+    `WHERE root_span_id = '<span_id>'` reads one run whole: `spans`,
+    `span_announcements` and `logs` name the root future each row runs
+    under. Discovery:
     `--schema`, `--explain`. Output: `--format table|json|jsonl` (jsonl ends
     with an outcome frame). Exit codes: 0 complete, 1 evidence-incomplete,
     2 invalid SQL, 3 budget, 4 cancelled, 5 index/internal.

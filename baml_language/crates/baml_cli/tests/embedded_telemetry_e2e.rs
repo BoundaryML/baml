@@ -573,7 +573,8 @@ async fn malformed_publisher_settings_fail_before_writing_an_artifact() {
 
   Valid [boundary] settings:
     project
-    api_url"#,
+    api_url
+    upload_sources"#,
         ),
     ] {
         let mut config: toml::Value = manifest("").parse().unwrap();

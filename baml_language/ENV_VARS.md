@@ -44,6 +44,7 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.prod.bcs.boundaryml.com`. |
 | `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. |
 | `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; query's `--project` flag takes precedence. |
+| `BOUNDARY_UPLOAD_SOURCES` | `false` keeps the project's BAML source code and `baml.toml` out of cloud recordings. Overrides `[boundary].upload_sources`; default `true`. Local recordings always keep their sources. |
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |
 | `BAML_FEEDBACK_HOST` | Where `baml feedback` sends reports. Staging and tests. |
 | `BAML_AWS_CREDENTIAL_PROCESS` | Allow running an AWS profile's `credential_process`. Off by default because it runs a program. |

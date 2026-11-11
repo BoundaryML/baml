@@ -329,6 +329,7 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
     let mut references = BTreeSet::new();
     let mut offered = BTreeSet::new();
     let mut named_functions = BTreeSet::new();
+    let mut source_ids = BTreeSet::new();
     let (mut announcements, mut completions, mut threads, mut uploaded, mut skipped) =
         (0, 0, 0, 0, 0);
     for (index, request) in prepares.iter().enumerate() {
@@ -371,7 +372,11 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         assert_eq!(file.sequence, sequence);
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, recording_id.as_bytes());
-        assert!(header.source_cas_id.is_none(), "cloud sources stay local");
+        source_ids.insert(snapshot_hex(
+            header
+                .source_cas_id
+                .expect("cloud recordings name their sources"),
+        ));
         // Normal shutdown settles every run: the last uploaded file ends it.
         assert_eq!(file.end.is_some(), index + 1 == prepares.len());
         for definition in file.definitions.unwrap_or_default().functions {
@@ -454,11 +459,114 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         references.is_subset(&offered),
         "captured span values must reach prepare"
     );
+    assert_eq!(source_ids.len(), 1, "every file names the same sources");
+    assert!(
+        source_ids.is_subset(&offered),
+        "the sources snapshot must reach prepare"
+    );
     engine.shutdown().await;
     assert_eq!(
         server.received_requests().await.unwrap().len(),
         requests.len()
     );
+}
+
+/// Run `main` under a cloud recording of `SOURCE` against a server that
+/// accepts every candidate; returns the uploaded files and CAS blobs by id.
+async fn upload_with_sources(
+    upload: bool,
+) -> (
+    Vec<proto::RecordingFile>,
+    std::collections::BTreeMap<String, Vec<u8>>,
+) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200).set_body_json(cloud_protocol::response(request, &base, &[]))
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    let engine = telemetry::recording_engine(
+        SOURCE,
+        &["leaf"],
+        TelemetryRecording::cloud(
+            RecordingConfig::default(),
+            btel_bcs::CloudPublisherConfig::default(),
+            DeliveryConfig::new(server.uri().parse().unwrap()),
+        )
+        .with_sources(vec![("cloud_telemetry.baml".to_owned(), SOURCE.to_owned())])
+        .with_source_upload(upload),
+    );
+    execute(&engine).await;
+    tokio::time::timeout(Duration::from_secs(10), engine.shutdown())
+        .await
+        .expect("shutdown must drain cloud delivery");
+    assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    let mut files = Vec::new();
+    let mut blobs = std::collections::BTreeMap::new();
+    for request in server.received_requests().await.unwrap() {
+        if request.method != "PUT" {
+            continue;
+        }
+        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        if let Some(bytes) = envelope.recording_file {
+            files.push(proto::RecordingFile::decode(bytes.as_slice()).unwrap());
+        }
+        for object in envelope.cas_objects {
+            blobs.insert(hex(&object.snapshot_id), object.blob);
+        }
+    }
+    assert!(!files.is_empty());
+    (files, blobs)
+}
+
+fn holds(blob: &[u8], text: &str) -> bool {
+    blob.windows(text.len())
+        .any(|window| window == text.as_bytes())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cloud_recordings_upload_their_sources_unless_opted_out() {
+    let (files, blobs) = upload_with_sources(true).await;
+    for file in &files {
+        let sources = file.header.as_ref().unwrap().source_cas_id.unwrap();
+        // The header names a map<path, content> whose root blob was PUT.
+        let blob = &blobs[&snapshot_hex(sources)];
+        let snapshot =
+            btel_snapshot::decode_blob(blob, &btel_snapshot::DecodeLimits::default()).unwrap();
+        assert!(matches!(
+            snapshot.root,
+            btel_snapshot::DecodedRoot::Value(btel_snapshot::DecodedValue::Object(_))
+        ));
+    }
+    assert!(
+        blobs
+            .values()
+            .any(|blob| holds(blob, "cloud_telemetry.baml"))
+    );
+    assert!(blobs.values().any(|blob| holds(blob, SOURCE.trim())));
+
+    let (files, blobs) = upload_with_sources(false).await;
+    for file in &files {
+        assert!(file.header.as_ref().unwrap().source_cas_id.is_none());
+    }
+    assert!(
+        !blobs
+            .values()
+            .any(|blob| holds(blob, "cloud_telemetry.baml"))
+    );
+    assert!(!blobs.values().any(|blob| holds(blob, SOURCE.trim())));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

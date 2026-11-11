@@ -331,6 +331,9 @@ struct StandaloneSource {
     package: SourceRoot,
     file: PathBuf,
     root: PathBuf,
+    /// The one file, by its path relative to `root`, as a project's files are stored with a
+    /// recording (`runtime_telemetry::session_sources`).
+    sources: Vec<(String, String)>,
     needs_format_hint: bool,
 }
 
@@ -963,6 +966,7 @@ impl RunArgs {
             db,
             package,
             root,
+            sources,
             needs_format_hint,
             ..
         } = self.load_standalone_source(file_path)?;
@@ -986,7 +990,9 @@ impl RunArgs {
             program,
             recording_root: root,
             launch_context: Default::default(),
-            recording_sources: Vec::new(),
+            // A standalone file is the whole program: its recording keeps it, as a
+            // project's recording keeps the project's files.
+            recording_sources: sources,
             needs_format_hint,
         })
     }
@@ -1008,10 +1014,12 @@ impl RunArgs {
 
         let (mut db, package) = workspace_db(parent);
         db.add_or_update_file_in(package, &canonical, &content);
+        let relative = canonical.strip_prefix(parent).unwrap_or(&canonical);
         Ok(StandaloneSource {
             db,
             package,
             root: parent.to_path_buf(),
+            sources: vec![(relative.to_string_lossy().into_owned(), content)],
             file: canonical,
             needs_format_hint,
         })

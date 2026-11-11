@@ -97,7 +97,11 @@ impl EncodedSpans {
             Event::FunctionCompletion(m) => self.completion(4, &m),
             Event::LateFunctionCompletion(m) => self.completion(5, &m),
             Event::Log(message) => {
-                self.require(btel_settings::encoding::LOG_FORMAT_MINOR);
+                self.require(if message.line.is_some() {
+                    btel_settings::encoding::LOG_LINE_FORMAT_MINOR
+                } else {
+                    btel_settings::encoding::LOG_FORMAT_MINOR
+                });
                 self.variable(6, &message);
             }
             Event::NetworkAnnouncement(message) => {
@@ -112,7 +116,12 @@ impl EncodedSpans {
                 let length = begin(&mut self.bytes, 2, 1);
                 match other {
                     Event::ThreadAnnouncement(m) => leaf(&mut self.bytes, 1, &m),
-                    Event::ThreadCompletion(m) => leaf(&mut self.bytes, 2, &m),
+                    Event::ThreadCompletion(m) => {
+                        if m.error_cas_id.is_some() {
+                            self.require(btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR);
+                        }
+                        leaf(&mut self.bytes, 2, &m);
+                    }
                     Event::ThreadRunning(m) => {
                         self.require(btel_settings::encoding::THREAD_RUNNING_FORMAT_MINOR);
                         leaf(&mut self.bytes, 7, &m);
@@ -356,6 +365,10 @@ mod tests {
                 outcome: proto::InvocationOutcome::Errored as i32,
                 panicked: true,
                 usage: Vec::new(),
+                error_cas_id: Some(proto::CasId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
             }),
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                 manual: false,

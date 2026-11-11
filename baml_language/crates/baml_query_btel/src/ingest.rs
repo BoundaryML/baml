@@ -33,6 +33,7 @@ use crate::{Error, store};
 mod bulk;
 mod context;
 mod profile;
+mod roots;
 mod totals;
 
 #[derive(Clone, Debug)]
@@ -126,12 +127,11 @@ fn sequence_i64(sequence: u64) -> Result<i64, Error> {
     i64::try_from(sequence).map_err(|_| Error::Unsupported("recording sequence exceeds i64".into()))
 }
 
-/// A network event's place in recording order: its file's sequence, then
-/// its position among the file's network events.
+/// A network or log event's place in recording order: its file's sequence,
+/// then its position among the file's events of its kind.
 fn event_seq(sequence: u64, position: u32) -> Result<i64, Error> {
-    i64::try_from((u128::from(sequence) << 32) | u128::from(position)).map_err(|_| {
-        Error::Unsupported("recording sequence exceeds the network event order".into())
-    })
+    i64::try_from((u128::from(sequence) << 32) | u128::from(position))
+        .map_err(|_| Error::Unsupported("recording sequence exceeds the event order".into()))
 }
 
 /// Network evidence the file reader does not check: an announcement,
@@ -898,6 +898,7 @@ fn apply_fresh<'p>(
         metrics.files_applied += 1;
     }
     totals::apply(&tx, rec, &charged)?;
+    roots::resolve(&tx, rec)?;
     if rebuild || !applied.is_empty() {
         mark_profile_pending(&tx, rec)?;
     }
@@ -1135,8 +1136,9 @@ impl<'t> Applier<'t> {
             }
         }
         if let Some(spans) = &file.spans {
-            // Each network event's position among the file's.
+            // Each network event's position among the file's, and each log's.
             let mut network_events = 0_u32;
+            let mut logs = 0_u32;
             for section in &spans.sections {
                 self.references.threads.insert(section.thread_id);
                 for event in &section.events {
@@ -1188,7 +1190,7 @@ impl<'t> Applier<'t> {
                                 .tx
                                 .prepare_cached(
                                     "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5,
-                                       usage = ?6
+                                       usage = ?6, error_cas = ?7
                                      WHERE rec = ?1 AND thread_id = ?2 AND outcome IS NULL",
                                 )?
                                 .execute(params![
@@ -1197,7 +1199,8 @@ impl<'t> Applier<'t> {
                                     completed,
                                     done.outcome,
                                     done.panicked,
-                                    crate::usage::to_json(&usage)
+                                    crate::usage::to_json(&usage),
+                                    done.error_cas_id.as_ref().map(cas_id)
                                 ])?;
                             if changed > 0 && !usage.is_empty() {
                                 self.charged.push((id(section.thread_id), usage));
@@ -1273,8 +1276,37 @@ impl<'t> Applier<'t> {
                             self.completion(sequence, section.thread_id, done, true, &mut tick)?;
                         }
                         Some(Event::Log(log)) => {
-                            // Log query projections are separate from call indexing.
-                            let _ = tick(log.at_ticks);
+                            let seq = event_seq(sequence, logs)?;
+                            logs += 1;
+                            self.references.functions.insert(log.function_id);
+                            let (context_state, context_cas) = context::of_section(section);
+                            if let Some(cas) = context_cas {
+                                self.tx
+                                    .prepare_cached(
+                                        "INSERT OR IGNORE INTO context_snapshot (cas) VALUES (?1)",
+                                    )?
+                                    .execute([cas])?;
+                            }
+                            self.tx
+                                .prepare_cached(
+                                    "INSERT INTO log (rec, seq, thread_id, parent_id, function_id, pc,
+                                       at_ticks, level, event_name, data_cas, context_state, context_cas)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                                )?
+                                .execute(params![
+                                    self.rec,
+                                    seq,
+                                    id(section.thread_id),
+                                    id(log.parent_id),
+                                    id(log.function_id),
+                                    i64::from(log.pc),
+                                    tick(log.at_ticks),
+                                    log.level,
+                                    log.event_name,
+                                    log.data_cas_id.as_ref().map(cas_id),
+                                    context_state,
+                                    context_cas
+                                ])?;
                         }
                         Some(Event::NetworkAnnouncement(entry)) => {
                             self.network_announcement(
@@ -2039,6 +2071,7 @@ impl<'t> Applier<'t> {
             .execute([self.rec])?;
         forget_nodes(self.tx, self.rec, &self.renamed_functions)?;
         resolve_nodes(self.tx, self.rec)?;
+        roots::resolve(self.tx, self.rec)?;
         totals::apply(self.tx, self.rec, &self.charged)
     }
 }

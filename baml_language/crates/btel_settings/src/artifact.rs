@@ -265,7 +265,7 @@ const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY
 /// Other manifest tables (package, generators, etc.) have their own parsers.
 fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError> {
     for (name, fields) in [
-        ("boundary", &["project", "api_url"][..]),
+        ("boundary", &["project", "api_url", "upload_sources"][..]),
         ("pack", PRODUCER_FIELDS),
         ("bridge", PRODUCER_FIELDS),
     ] {
@@ -330,6 +330,16 @@ impl ArtifactTelemetry {
         if let Some(boundary) = manifest.get("boundary") {
             if !boundary.is_table() {
                 return Err(PolicyError("[boundary] must be a table.".into()));
+            }
+            // Read by hosts that record a project's sources; an artifact
+            // carries none, so the setting is only checked here.
+            if boundary
+                .get("upload_sources")
+                .is_some_and(|value| !value.is_bool())
+            {
+                return Err(PolicyError(
+                    "boundary.upload_sources must be a boolean.".into(),
+                ));
             }
             for (field, output) in [
                 ("project", &mut policy.project),
@@ -665,7 +675,8 @@ api_ur = "https://api.cloud.boundaryml.com""#,
 
   Valid [boundary] settings:
     project
-    api_url"#,
+    api_url
+    upload_sources"#,
             ),
         ] {
             let manifest: toml::Value = input.parse().unwrap();

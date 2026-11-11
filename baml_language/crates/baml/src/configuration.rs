@@ -63,7 +63,11 @@ pub(super) fn validate_project(text: &str) -> Result<()> {
         ("package", &["name"][..], &["prelude"][..]),
         ("pack", &[][..], &[][..]),
         ("bridge", &[][..], &[][..]),
-        ("boundary", &["project", "api_url"][..], &[][..]),
+        (
+            "boundary",
+            &["project", "api_url"][..],
+            &["upload_sources"][..],
+        ),
     ] {
         if let Some(value) = document.get(section) {
             let table = value

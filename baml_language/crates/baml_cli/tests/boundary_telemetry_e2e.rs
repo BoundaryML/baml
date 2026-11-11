@@ -114,8 +114,23 @@ fn assert_ingest_forbidden(output: &std::process::Output, endpoint: &str) {
 }
 
 fn run(project: &Path, boundary_url: &str, telemetry: &str, expected_success: bool) {
+    run_with(project, boundary_url, telemetry, None, expected_success);
+}
+
+/// `run`, with `BOUNDARY_UPLOAD_SOURCES` set when `upload_sources` is given.
+fn run_with(
+    project: &Path,
+    boundary_url: &str,
+    telemetry: &str,
+    upload_sources: Option<&str>,
+    expected_success: bool,
+) {
     common::share_build_cache(&project.join("home"));
-    let output = Command::new(common::baml_cli())
+    let mut command = Command::new(common::baml_cli());
+    if let Some(value) = upload_sources {
+        command.env("BOUNDARY_UPLOAD_SOURCES", value);
+    }
+    let output = command
         .args(["run", "main"])
         .current_dir(project)
         .env("BOUNDARY_API_URL", boundary_url)
@@ -138,10 +153,43 @@ fn run(project: &Path, boundary_url: &str, telemetry: &str, expected_success: bo
     assert!(!project.join(RECORDINGS).exists());
 }
 
+const MAIN_SOURCE: &str = "function main() -> int { 7 }\n";
+
+/// The recording files and CAS blobs (by snapshot id) the CLI PUT.
+fn uploads(
+    requests: &[Request],
+) -> (
+    Vec<btel_recorder::proto::RecordingFile>,
+    std::collections::BTreeMap<Vec<u8>, Vec<u8>>,
+) {
+    let mut recordings = Vec::new();
+    let mut blobs = std::collections::BTreeMap::new();
+    for request in requests.iter().filter(|request| request.method == "PUT") {
+        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        if let Some(bytes) = envelope.recording_file {
+            recordings.push(btel_recorder::proto::RecordingFile::decode(bytes.as_slice()).unwrap());
+        }
+        for object in envelope.cas_objects {
+            blobs.insert(object.snapshot_id, object.blob);
+        }
+    }
+    (recordings, blobs)
+}
+
+/// A header's CAS id as an uploaded object names it.
+fn cas_bytes(id: &btel_recorder::proto::CasId) -> Vec<u8> {
+    [id.low.to_le_bytes(), id.high.to_le_bytes()].concat()
+}
+
+fn contains(blob: &[u8], text: &str) -> bool {
+    blob.windows(text.len())
+        .any(|window| window == text.as_bytes())
+}
+
 #[test]
 fn baml_run_uploads_from_boundary_env() {
     let temp = tempfile::tempdir().unwrap();
-    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    common::write_project(temp.path(), MAIN_SOURCE);
     std::fs::create_dir(temp.path().join("home")).unwrap();
     std::fs::write(
         temp.path().join("home/config.toml"),
@@ -185,7 +233,6 @@ fn baml_run_uploads_from_boundary_env() {
             run(temp.path(), &boundary_url, "medium", true);
             let requests = server.received_requests().await.unwrap();
             let mut prepares = 0;
-            let mut recordings = Vec::new();
             for request in &requests {
                 if request.method == "POST" {
                     assert_eq!(request.headers["authorization"], format!("Bearer {KEY}"));
@@ -209,14 +256,9 @@ fn baml_run_uploads_from_boundary_env() {
                     assert_eq!(request.method, "PUT");
                     assert!(!request.headers.contains_key("authorization"));
                     assert_eq!(request.headers["x-required"], "signed-value");
-                    let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
-                    if let Some(bytes) = envelope.recording_file {
-                        recordings.push(
-                            btel_recorder::proto::RecordingFile::decode(bytes.as_slice()).unwrap(),
-                        );
-                    }
                 }
             }
+            let (recordings, blobs) = uploads(&requests);
             assert!(prepares > 0, "CLI must prepare cloud uploads");
             assert!(!recordings.is_empty(), "CLI must upload a recording");
             for recording in &recordings {
@@ -226,17 +268,76 @@ fn baml_run_uploads_from_boundary_env() {
                     header.command.is_empty(),
                     "cloud must omit process arguments"
                 );
+                let sources = header
+                    .source_cas_id
+                    .as_ref()
+                    .expect("cloud recordings name their sources");
                 assert!(
-                    header.source_cas_id.is_none(),
-                    "cloud recordings must omit source metadata"
+                    blobs.contains_key(&cas_bytes(sources)),
+                    "the sources snapshot must be uploaded"
                 );
             }
+            assert!(
+                blobs.values().any(|blob| contains(blob, MAIN_SOURCE.trim())),
+                "the uploaded sources must hold the project's code"
+            );
             assert!(recordings.iter().any(|recording| {
                 recording
                     .aggregates
                     .as_ref()
                     .is_some_and(|batch| !batch.entries.is_empty())
             }));
+
+            // Either opt-out keeps the code off the wire; the environment
+            // variable overrides the project's setting in both directions.
+            let manifest = temp.path().join("baml.toml");
+            let package = std::fs::read_to_string(&manifest).unwrap();
+            let opted_out = format!("{package}\n[boundary]\nupload_sources = false\n");
+            for (project_setting, variable, uploaded) in [
+                (&package, Some("false"), false),
+                (&opted_out, None, false),
+                (&opted_out, Some("true"), true),
+            ] {
+                std::fs::write(&manifest, project_setting).unwrap();
+                // Resetting the server would also drop its mocks.
+                let seen = server.received_requests().await.unwrap().len();
+                run_with(temp.path(), &boundary_url, "medium", variable, true);
+                let (recordings, blobs) =
+                    uploads(&server.received_requests().await.unwrap()[seen..]);
+                assert!(!recordings.is_empty(), "CLI must upload a recording");
+                for recording in &recordings {
+                    let header = recording.header.as_ref().unwrap();
+                    assert_eq!(header.source_cas_id.is_some(), uploaded);
+                }
+                assert_eq!(
+                    blobs.values().any(|blob| contains(blob, MAIN_SOURCE.trim())),
+                    uploaded
+                );
+            }
+            std::fs::write(&manifest, &package).unwrap();
+            // A value that is not a boolean is an error, not a silent upload.
+            let seen = server.received_requests().await.unwrap().len();
+            let output = Command::new(common::baml_cli())
+                .args(["run", "main"])
+                .current_dir(temp.path())
+                .env("BOUNDARY_API_URL", &boundary_url)
+                .env("BOUNDARY_API_KEY", KEY)
+                .env("BOUNDARY_PROJECT", "acme/app")
+                .env("BOUNDARY_UPLOAD_SOURCES", "sometimes")
+                .env("BAML_TELEMETRY", "medium")
+                .env("BAML_HOME", temp.path().join("home"))
+                .env("BAML_CLI_ALLOW_DIRECT", "1")
+                .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+                .env("DO_NOT_TRACK", "1")
+                .output()
+                .unwrap();
+            assert!(!output.status.success(), "{output:?}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("BOUNDARY_UPLOAD_SOURCES"),
+                "{output:?}"
+            );
+            let (recordings, _) = uploads(&server.received_requests().await.unwrap()[seen..]);
+            assert!(recordings.is_empty(), "nothing is recorded before the error");
 
             server.reset().await;
             run(temp.path(), &boundary_url, "off", true);

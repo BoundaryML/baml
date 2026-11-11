@@ -86,6 +86,45 @@ The rest of the language:
 - **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.spawn.Limit.new(n)` caps concurrency (excess spawns queue), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. `baml describe spawn` / `baml describe baml.future`.
 - **Resource safety.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through), like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it.
 
+## Tracing
+
+Every `baml run` and `baml test` records what ran, and `baml query` reads it back (see [Debugging a recorded call](#debugging-a-recorded-call)).
+
+- **Spans and timing.** A recording keeps a call as a *span* or as *timing*. A span is one row of the `spans` table, with its parent, times, status and captured values. A timing call adds to its function's totals in `profiler` and keeps no row and no values. AI functions are spans by default, and other functions are timing. A root call and every `spawn` are spans of type `future`.
+- **Make a function a span** with a directive above its declaration: `/// baml:$trace=trace.span`. `trace.empty_span` (a span without values), `trace.timing` and `trace.hidden` are the other choices.
+- **Or choose per call.** Every function takes a hidden `$trace` parameter, passed by name: `fee(paid, $trace = trace.span())`. `trace.context(distinct_id = …, metadata = {…})` labels the call and everything it runs; `spans` and `logs` serve the labels as `context_distinct_id` and `context_metadata['phase']`. Builders chain: `trace.context(…).span()`.
+- **What a span captures.** `trace.span()` captures the call's inputs, output and error (`input_args`, `output_value`, `error_value`). `inputs = false`, `output = false` or `error = false` leaves one out, and `trace.empty_span()` leaves out all three. Any other span records the error it ends with when it throws or panics, whether or not it captures anything else. A failed future, a failed root call included, carries the error that escaped it. A timing call captures nothing.
+- **Keep a value out** with `@trace.redact` on a class field or `@@trace.redact` on a class. A recording holds a marker in its place wherever the value would be captured.
+
+```baml
+class Account {
+    name: string,
+    api_key: string @trace.redact,
+}
+
+/// baml:$trace=trace.span
+function charge(account: Account, cents: int) -> int {
+    cents
+}
+
+function fee(cents: int) -> int {
+    cents / 100
+}
+
+function checkout(account: Account) -> int {
+    let paid = charge(account, 500);
+    let billing = trace.context(distinct_id = account.name, metadata = { "phase": "billing" });
+    paid + fee(paid, $trace = billing.span())
+}
+
+test "checkout charges and adds the fee" {
+    let account = Account { name: "ann", api_key: "sk-1" };
+    assert.equal(checkout(account), 505);
+}
+```
+
+`baml describe '$trace'` / `baml describe trace` / `baml describe trace.redact`.
+
 ## LLM functions
 
 - **LLM function = typed return.** The RETURN TYPE *is* the schema the model must produce (`class`, `enum`, literal union, `string[]`, `T?`). Structured output is just a typed value; hand it to ordinary code.
@@ -116,7 +155,7 @@ To add cross-cutting behavior (metering, caching, replay, budgets), write a clas
 
 ### Debugging a recorded call
 
-Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml query` answers SQL over them (`baml query --schema` lists the tables). To turn a failing call into a test:
+Runs record their calls. AI functions record their inputs, output, error and type arguments by default, and every failed span and future records its error (see [Tracing](#tracing)). `baml query` answers SQL over them (`baml query --schema` lists the tables). Results keep the stored spellings, which are what SQL filters on. When you put results in front of a person, in a report or a dashboard, show the labels and column headings that `baml query --schema` lists under "Labels for people": a `status` of `user_error` is shown as Failed, a `future` as Task, `context_distinct_id` as User, and a duration in ms or s, not nanoseconds. `--format json` carries the same labels on each column. To turn a failing call into a test:
 
 ```bash
 # 1. Find the call.
@@ -128,6 +167,15 @@ baml query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_i
 # 3. The model's raw HTTP response, from the request under the call.
 baml query "SELECT network_event_values FROM spans
   WHERE span_type = 'network_span' AND parent_span_id = '<span_id>' ORDER BY start_time"
+# 4. What ran under a span logged (log.info/debug/warn/error), with the line that logged it.
+#    span_id is the innermost recorded span; filter on future_id for a whole future's logs,
+#    or on root_span_id (the root call's span_id) for everything one run logged.
+baml query "SELECT timestamp, level, event_name, data, function_name, source_file, line
+  FROM logs WHERE span_id = '<span_id>' ORDER BY timestamp"
+# 5. One file of the source the process ran. The map's keys are the source_file paths,
+#    and 'baml.toml' for a project that has one.
+baml query "SELECT baml_source_code['baml_src/main.baml'] FROM processes
+  WHERE process_id = '<process_id>'"
 ```
 
 `baml_code` returns a block whose value is the recorded type: bind it with `let type`. Replay the model's reply with `F@parse`, so the test never calls the model:

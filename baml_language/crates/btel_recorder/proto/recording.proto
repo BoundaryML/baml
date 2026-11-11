@@ -42,6 +42,8 @@ message RecordingHeader {
                                  // 12 adds general owned-function closure and named input roots.
                                  // 13 adds model usage on completions and model
                                  // invoke functions.
+                                 // 14 adds the source line of a log event and the
+                                 // error a thread ended with.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -338,6 +340,12 @@ message LogEvent {
   LogLevel level = 5;
   optional string event_name = 6; // Absent is unnamed; an empty string remains present.
   CasId data_cas_id = 7;         // May be unavailable; null data is a captured value.
+  // Minor 14. One-based line of the log call in the emitting function's own
+  // source file, from the line table of that function's definition. A function
+  // is defined once per recording, so a reader of a later file alone cannot
+  // place `pc`; the line travels with the event. Absent when the function has
+  // no line table or the table does not place `pc` in the function's own file.
+  optional uint32 line = 8;
 }
 
 enum LogLevel {
@@ -363,6 +371,11 @@ message ThreadCompletion {
   InvocationOutcome outcome = 2;
   bool panicked = 3;            // Minor 3. Only with ERRORED: a panic ended it.
   repeated ModelUsage usage = 4; // Minor 13. Usage charged to the thread node.
+  // Minor 14. Only with ERRORED: the baml.errors.Context of the error that
+  // escaped the thread's outermost frame, as a function completion's value is
+  // for the function it escaped. Absent from older producers, for a thread
+  // that was cancelled, and when the error could not be captured.
+  CasId error_cas_id = 5;
 }
 
 message FunctionAnnouncement {

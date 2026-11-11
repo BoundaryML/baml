@@ -15,12 +15,19 @@ use super::{LAST_CALL_PATH_ID, TelemetryState, allocate_call_path_id, snapshot};
     target_arch = "wasm32",
     expect(dead_code, reason = "wasm publishes no completions")
 )]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent resolved capture requests"
+)]
 pub(crate) struct OperationOptions {
     pub mode: InvocationMode,
     pub reserved_id: Option<TelemetryId>,
     pub inputs: bool,
     pub output: bool,
     pub error: bool,
+    /// The configuration asked for no error capture (`error = false`): a span
+    /// does not record the error it ends with by default.
+    pub error_declined: bool,
     pub policy: super::TelemetryPolicy,
     pub(super) live_policy: Option<super::policy::OwnedPolicy>,
 }
@@ -33,6 +40,7 @@ impl Default for OperationOptions {
             inputs: true,
             output: true,
             error: true,
+            error_declined: false,
             policy: super::TelemetryPolicy::NONE,
             live_policy: None,
         }
@@ -323,7 +331,16 @@ impl ManualSpan {
                     Some(InvocationOutcome::Ok) => {
                         recording.options.output || policy.capture_output
                     }
-                    Some(_) => recording.options.error || policy.capture_error,
+                    Some(outcome) => {
+                        recording.options.error
+                            || policy.capture_error
+                            // A span records the error it ends with by
+                            // default; a timing operation has no value slot.
+                            || (recording.options.mode == InvocationMode::Span
+                                && !recording.options.error_declined
+                                && outcome != InvocationOutcome::Cancelled
+                                && btel_settings::policy::SPAN_CAPTURE_ERROR)
+                    }
                     None => false,
                 }) {
                     recording.completion.captured_value =

@@ -204,6 +204,165 @@ fn fresh_query_processes_index_once_and_then_only_new_files() {
     assert_eq!(calls["outcome"]["status"], "complete");
 }
 
+const LOGGING: &str = r#"function helper(n: int) -> int {
+    log.warn({ "n": n }, event_name = "helper");
+    n + 1
+}
+
+function main() -> int {
+    log.info("start");
+    helper(2)
+}
+"#;
+
+#[test]
+fn logs_functions_and_sources_of_a_run_are_queryable() {
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("baml_src")).unwrap();
+    std::fs::write(project.path().join("baml_src/main.baml"), LOGGING).unwrap();
+    let run = cli(project.path(), &["run", "main"], &[]);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    // Each log names the function and line that logged, and the span (here
+    // the root future) it ran under.
+    let (code, logs) = query(
+        project.path(),
+        "SELECT l.level, l.event_name, l.data, l.function_name, l.source_file, l.line, s.span_type
+         FROM logs l JOIN spans s ON s.span_id = l.span_id ORDER BY l.line",
+    );
+    assert_eq!(code, 0, "{logs}");
+    assert_eq!(
+        logs["rows"],
+        serde_json::json!([
+            ["warn", "helper", {"n": 2}, "user.helper", "baml_src/main.baml", 2, "future"],
+            ["info", null, "start", "user.main", "baml_src/main.baml", 7, "future"],
+        ])
+    );
+
+    // The process recorded its sources, keyed as `source_file` names them.
+    let (code, source) = query(
+        project.path(),
+        "SELECT p.baml_source_code['baml_src/main.baml'], f.source_start, f.source_end
+         FROM functions f
+         JOIN processes p ON p.baml_source_code_content_id = f.baml_source_code_content_id
+         WHERE f.function_name = 'user.helper' AND f.source_file = 'baml_src/main.baml'",
+    );
+    assert_eq!(code, 0, "{source}");
+    let rows = source["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{source}");
+    assert_eq!(rows[0][0], LOGGING);
+    let (start, end) = (
+        usize::try_from(rows[0][1].as_u64().unwrap()).unwrap(),
+        usize::try_from(rows[0][2].as_u64().unwrap()).unwrap(),
+    );
+    assert!(LOGGING[start..end].starts_with("function helper("));
+    assert!(LOGGING[start..end].ends_with('}'));
+
+    // Every profiler row names its process's source revision, so one
+    // revision's code paths are read without joining `processes`.
+    let (code, revisions) = query(
+        project.path(),
+        "SELECT COUNT(*), COUNT(n.baml_source_code_content_id),
+           SUM(n.baml_source_code_content_id = p.baml_source_code_content_id)
+         FROM profiler n JOIN processes p ON p.process_id = n.process_id",
+    );
+    assert_eq!(code, 0, "{revisions}");
+    let row = &revisions["rows"][0];
+    assert!(row[0].as_u64().unwrap() > 0, "{revisions}");
+    assert_eq!((&row[1], &row[2]), (&row[0], &row[0]), "{revisions}");
+    let profiler = cli(
+        project.path(),
+        &["query", "--schema", "--table", "profiler"],
+        &[],
+    );
+    let text = String::from_utf8_lossy(&profiler.stdout);
+    let columns: Vec<&str> = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("  ")?.split_whitespace().next())
+        .collect();
+    assert_eq!(
+        columns[1..5],
+        [
+            "process_id",
+            "process_start_time",
+            "process_end_time",
+            "baml_source_code_content_id"
+        ],
+        "{text}"
+    );
+
+    let schema = cli(project.path(), &["query", "--schema"], &[]);
+    let text = String::from_utf8_lossy(&schema.stdout);
+    for documented in [
+        "logs: ",
+        "functions: ",
+        "baml_source_code ",
+        "process_start_time ",
+        "process_end_time ",
+        // Media is described without its content, which a path reads.
+        "v['base64']",
+        // What a page shows for a stored value, and for a column.
+        "Labels for people",
+        "user_error     Failed",
+        "context_distinct_id          User",
+        "Showing results to people:",
+    ] {
+        assert!(text.contains(documented), "{documented}: {text}");
+    }
+}
+
+/// A project's recorded sources hold its manifest beside its `.baml` files,
+/// so a manifest change is a new source revision. A `--file` run records its
+/// one file only.
+#[test]
+fn a_project_run_records_its_manifest_with_its_sources() {
+    let manifest = |name: &str| format!("[package]\nname = \"{name}\"\n");
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("baml_src")).unwrap();
+    std::fs::write(project.path().join("baml_src/main.baml"), LOGGING).unwrap();
+    std::fs::write(project.path().join("script.baml"), LOGGING).unwrap();
+    for (name, args) in [
+        ("billing", &["run", "main"][..]),
+        ("invoicing", &["run", "main"][..]),
+        ("invoicing", &["run", "--file", "script.baml", "main"][..]),
+    ] {
+        std::fs::write(project.path().join("baml.toml"), manifest(name)).unwrap();
+        let run = cli(project.path(), args, &[]);
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    let (code, sources) = query(
+        project.path(),
+        "SELECT baml_source_code['baml.toml'], baml_source_code['baml_src/main.baml'],
+           baml_source_code, baml_source_code_content_id
+         FROM processes ORDER BY last_updated",
+    );
+    assert_eq!(code, 0, "{sources}");
+    let rows = sources["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 3, "{sources}");
+    let paths = |row: &Value| -> Vec<String> {
+        let mut paths: Vec<String> = row[2].as_object().unwrap().keys().cloned().collect();
+        paths.sort();
+        paths
+    };
+    for (row, name) in rows.iter().zip(["billing", "invoicing"]) {
+        assert_eq!(row[0], manifest(name));
+        assert_eq!(row[1], LOGGING);
+        assert_eq!(paths(row), ["baml.toml", "baml_src/main.baml"]);
+    }
+    // Only the manifest changed between the two project runs.
+    assert_ne!(rows[0][3], rows[1][3]);
+    assert_eq!(rows[2][0], Value::Null);
+    assert_eq!(paths(&rows[2]), ["script.baml"]);
+}
+
 #[test]
 fn schema_invalid_sql_and_stdin() {
     let project = tempfile::tempdir().unwrap();

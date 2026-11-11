@@ -333,6 +333,7 @@ fn network_spans_are_spans_with_their_request_and_events() {
                         outcome: proto::InvocationOutcome::Ok as i32,
                         panicked: false,
                         usage: Vec::new(),
+                        error_cas_id: None,
                     }),
                 ],
             )])),
@@ -347,6 +348,20 @@ fn network_spans_are_spans_with_their_request_and_events() {
         },
     );
     let mut index = index(project.path());
+    // A network span runs under the root future of the call that sent it.
+    for relation in ["spans", "span_announcements"] {
+        assert_eq!(
+            rows(
+                &mut index,
+                &format!(
+                    "SELECT DISTINCT root_span_id FROM {relation}
+                     WHERE span_type = 'network_span'"
+                )
+            ),
+            vec![vec![recording.span(ROOT)]],
+            "{relation}"
+        );
+    }
     assert_eq!(
         rows(
             &mut index,

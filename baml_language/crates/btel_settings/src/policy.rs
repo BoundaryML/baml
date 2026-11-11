@@ -44,6 +44,18 @@ pub const AI_CAPTURE_OUTPUT: bool = true;
 /// Explicit call-site capture options override this default.
 pub const AI_CAPTURE_ERROR: bool = true;
 
+/// **Observability semantics.** A span that ends with a thrown error or a
+/// panic records the error it ended with, whatever its function's capture
+/// settings: a failed span without its error says that something failed and
+/// not what. Inputs and outputs stay opt-in, since every call has them; errors
+/// are rare, and a value that must not be recorded is withheld by
+/// `@trace.redact` wherever it is captured. A cancellation is not a failure of
+/// the span's own code and is captured only on request. A call that passes
+/// `error = false`, as `trace.empty_span` does, declines this default, and an
+/// engine that keeps HTTP bodies out of its recordings (`http_bodies = false`)
+/// does not apply it, since an error can quote a response body.
+pub const SPAN_CAPTURE_ERROR: bool = true;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvocationMode {
     Hidden,

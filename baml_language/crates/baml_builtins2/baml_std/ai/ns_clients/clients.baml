@@ -227,8 +227,10 @@ function _wrapper_turn(attempts: root.ModelTurn[]) -> root.ModelTurn {
 
 /// One `Retry` attempt, as a span of its own: `attempt` counts from 1 and
 /// `client` is the member's `requested_model()`. Run with `$trace = _attempt_trace()`, which
-/// captures only those inputs (`body` is recorded as an opaque closure), never
-/// the client, the prompt or an error's body. The attempt's requests are
+/// captures those inputs (`body` is recorded as an opaque closure) and never
+/// the client or the prompt. An attempt that fails records the error it ended
+/// with, as any span does, so a failed attempt says why it failed; a recording
+/// made with HTTP bodies withheld records none. The attempt's requests are
 /// network spans under it, and each attempt's span ends before the next starts.
 function retry_attempt<T, E>(attempt: int, client: string, body: () -> T throws E) -> T throws E {
     body()
@@ -241,9 +243,10 @@ function fallback_attempt<T, E>(member: int, client: string, body: () -> T throw
     body()
 }
 
-/// (internal) The tracing options of an attempt span: its inputs only.
+/// (internal) The tracing options of an attempt span: its inputs, and the
+/// error it ends with under the span default.
 function _attempt_trace() -> trace.Options throws never {
-    trace.span(inputs = true, output = false, error = false)
+    trace.span(inputs = true, output = false)
 }
 
 /// (internal) An attempt that failed and may be tried again: kept apart from

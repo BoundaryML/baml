@@ -13,6 +13,9 @@ use btel_settings::artifact::{ArtifactTelemetry, InitialFailureAction, InitialFa
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
 const BOUNDARY_API_KEY: &str = "BOUNDARY_API_KEY";
+/// Whether a cloud recording uploads the project's sources. Overrides the
+/// host's project setting (`[boundary].upload_sources`); unset means upload.
+const BOUNDARY_UPLOAD_SOURCES: &str = "BOUNDARY_UPLOAD_SOURCES";
 
 /// One recording per engine, delivered to local files or BCS. Cloud payload
 /// failures discard that payload and allow later delivery. Initial cloud authorization
@@ -27,6 +30,9 @@ pub struct TelemetryRecording {
     destination: Destination,
     host: String,
     sources: Vec<(String, String)>,
+    /// Whether a cloud destination receives `sources`. Local destinations
+    /// always keep them.
+    upload_sources: bool,
     exit: Arc<btel_types::ProcessExitSlot>,
     initial_failure: Option<InitialFailurePolicy>,
     recording_override: RecordingOverride,
@@ -377,6 +383,7 @@ impl TelemetryRecording {
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
+            upload_sources: true,
             exit: Arc::default(),
             destination: Destination::Cloud {
                 publisher,
@@ -400,6 +407,7 @@ impl TelemetryRecording {
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
+            upload_sources: true,
             exit: Arc::default(),
             destination: Destination::LocalFiles {
                 recordings: project_root
@@ -426,6 +434,7 @@ impl TelemetryRecording {
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
+            upload_sources: true,
             exit: Arc::default(),
             destination: Destination::LocalFiles { recordings, cas },
             initial_failure: None,
@@ -444,6 +453,7 @@ impl TelemetryRecording {
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
+            upload_sources: true,
             exit: Arc::default(),
             destination: Destination::UserFiles {
                 project_from_cwd: false,
@@ -485,11 +495,22 @@ impl TelemetryRecording {
         self
     }
 
-    /// The project's BAML sources, `(path, content)`, stored once in the CAS
-    /// so a recording can be read against the code that produced it.
+    /// The project's sources, `(path, content)`, stored once in the CAS so a
+    /// recording can be read against the code that produced it: its `.baml`
+    /// files and, when the host supplies it, its `baml.toml`.
     #[must_use]
     pub fn with_sources(mut self, sources: Vec<(String, String)>) -> Self {
         self.sources = sources;
+        self
+    }
+
+    /// The project's setting for uploading its sources with a cloud recording
+    /// (`[boundary].upload_sources`). Sources are uploaded unless this or
+    /// `BOUNDARY_UPLOAD_SOURCES`, which takes precedence, turns it off. Local
+    /// recordings keep their sources either way.
+    #[must_use]
+    pub fn with_source_upload(mut self, upload: bool) -> Self {
+        self.upload_sources = upload;
         self
     }
 
@@ -519,11 +540,14 @@ impl TelemetryRecording {
                 },
                 started_at_unix_ns: process_started_at_unix_ns(),
             },
-            // Cloud source uploads are a separate feature; local recordings retain their code.
-            sources: (matches!(
-                self.destination,
-                Destination::LocalFiles { .. } | Destination::UserFiles { .. }
-            ) && !self.sources.is_empty())
+            // A recording carries the code that produced it, so its spans and
+            // logs can be read against that code. A cloud recording uploads
+            // it unless the project or the environment opted out.
+            sources: (match self.destination {
+                Destination::LocalFiles { .. } | Destination::UserFiles { .. } => true,
+                Destination::Cloud { .. } => self.upload_sources,
+                Destination::InvalidConfiguration(_) => false,
+            } && !self.sources.is_empty())
             .then(|| {
                 let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
                 btel_snapshot::string_map(&pool, &self.sources, SOURCES_MAX_BYTES)
@@ -538,7 +562,7 @@ impl TelemetryRecording {
     }
 
     pub(crate) fn start(
-        self,
+        mut self,
         source_snapshot: Option<[u8; 32]>,
         functions: Arc<btel_types::FunctionMetadataTable>,
         launch_context: &btel_types::context::Context,
@@ -549,6 +573,14 @@ impl TelemetryRecording {
         ),
         EngineError,
     > {
+        // The variable only has meaning for a cloud destination, so a local
+        // recording does not fail on its value.
+        if matches!(self.destination, Destination::Cloud { .. })
+            && let Some(upload) = baml_env::bool_var(BOUNDARY_UPLOAD_SOURCES)
+                .map_err(|error| EngineError::Other(error.to_string()))?
+        {
+            self.upload_sources = upload;
+        }
         let transport = btel_settings::transport::ChunkConfig::default();
         let process = self.process(launch_context);
         self.config
@@ -1245,34 +1277,51 @@ mod user_files_tests;
 mod source_privacy_tests {
     use super::*;
 
-    #[test]
-    fn cloud_recordings_exclude_sources_while_local_recordings_remain_readable() {
-        let sources = vec![(
+    fn sources() -> Vec<(String, String)> {
+        vec![(
             "main.baml".to_owned(),
             "function Secret() -> int { 42 }".to_owned(),
-        )];
-        let local =
-            TelemetryRecording::local_files("/tmp/baml-source-privacy", RecordingConfig::default())
-                .with_sources(sources.clone());
-        let cloud = TelemetryRecording::cloud(
+        )]
+    }
+
+    fn cloud() -> TelemetryRecording {
+        TelemetryRecording::cloud(
             RecordingConfig::default(),
             btel_bcs::CloudPublisherConfig::default(),
             btel_bcs::delivery::DeliveryConfig::new(
                 "https://boundary.example.test".parse().unwrap(),
             ),
         )
-        .with_sources(sources);
+        .with_sources(sources())
+    }
+
+    fn records_sources(recording: &TelemetryRecording) -> bool {
+        recording
+            .process(&btel_types::context::Context::default())
+            .sources
+            .is_some()
+    }
+
+    #[test]
+    fn cloud_recordings_carry_sources_unless_the_project_opts_out() {
+        let local =
+            TelemetryRecording::local_files("/tmp/baml-source-privacy", RecordingConfig::default())
+                .with_sources(sources());
+        assert!(records_sources(&local));
+        assert!(records_sources(&cloud()));
+        assert!(!records_sources(&cloud().with_source_upload(false)));
+        // The opt-out is about uploads: a local recording keeps its code.
+        assert!(records_sources(&local.with_source_upload(false)));
+    }
+
+    #[test]
+    fn cloud_recordings_never_carry_process_arguments() {
         assert!(
-            local
+            cloud()
                 .process(&btel_types::context::Context::default())
-                .sources
-                .is_some()
-        );
-        assert!(
-            cloud
-                .process(&btel_types::context::Context::default())
-                .sources
-                .is_none()
+                .info
+                .command
+                .is_empty()
         );
     }
 }

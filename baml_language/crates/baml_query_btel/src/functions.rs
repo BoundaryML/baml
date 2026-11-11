@@ -1510,6 +1510,31 @@ fn register_identity_and_time(conn: &Connection) -> rusqlite::Result<()> {
             }
         }))
     })?;
+    // A log's public id from its recording and stored order: `<recording
+    // hex>:<file sequence>.<position among the file's logs>`.
+    conn.create_scalar_function("__btel_log_id", 2, pure, |ctx| {
+        let (Some(recording), Some(seq)) = (opt_blob(ctx, 0)?, opt_i64(ctx, 1)?) else {
+            return Ok(None);
+        };
+        Ok(Some(format!(
+            "{}:{}.{}",
+            hex(recording),
+            seq >> 32,
+            seq & 0xffff_ffff
+        )))
+    })?;
+    // `(source map, pc)`: the one-based line of the instruction at `pc` in
+    // the function's recorded line table. NULL without a valid map, and for
+    // a PC the map does not place in the function's own file.
+    conn.create_scalar_function("__btel_line", 2, pure, |ctx| {
+        let (Some(map), Some(pc)) = (opt_blob(ctx, 0)?, opt_i64(ctx, 1)?) else {
+            return Ok(None);
+        };
+        Ok(btel_reader::source_map::SourceMap::decode(map)
+            .zip(u32::try_from(pc).ok())
+            .and_then(|(map, pc)| map.resolve(pc).ok())
+            .map(|site| i64::from(site.line)))
+    })?;
     // Checked i64 addition: NULL on NULL input or overflow, never a float.
     conn.create_scalar_function("__btel_add", 2, pure, |ctx| {
         Ok(opt_i64(ctx, 0)?

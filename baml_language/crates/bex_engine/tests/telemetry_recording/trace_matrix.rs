@@ -614,9 +614,11 @@ async fn capture_flags(program: &Program) {
                             (inputs == Some(true)).then_some(&args),
                         );
                         if fail {
+                            // A span records the error it ends with unless
+                            // the call declined it with `error = false`.
                             recording.assert_error_capture(
                                 done.value_cas_id.as_ref(),
-                                (error == Some(true)).then_some(&returned),
+                                (error != Some(false)).then_some(&returned),
                             );
                         } else {
                             recording.assert_capture(
@@ -641,6 +643,8 @@ async fn capture_flags(program: &Program) {
     }
 }
 
+/// `trace.span`, as a declaration hook and at a call site, records inputs,
+/// output and error; `trace.empty_span` records none of them.
 async fn span_defaults(program: &Program) {
     for empty in [false, true] {
         for fail in [false, true] {
@@ -654,7 +658,8 @@ async fn span_defaults(program: &Program) {
             assert_eq!(result.is_err(), fail);
             assert_eq!(recording.spans.len(), 1);
             let (_, entry, done) = &recording.spans[0];
-            assert!(entry.inputs_cas_id.is_none());
+            let args = snapshot(true, &[value.clone(), External::Bool(fail)]);
+            recording.assert_capture(entry.inputs_cas_id.as_ref(), (!empty).then_some(&args));
             let returned = snapshot(false, std::slice::from_ref(&value));
             let expected = (!empty).then_some(&returned);
             if fail {
@@ -682,7 +687,9 @@ async fn span_defaults(program: &Program) {
                     assert_eq!(result.is_err(), fail);
                     assert_eq!(recording.spans.len(), 1);
                     let (_, entry, done) = &recording.spans[0];
-                    assert!(entry.inputs_cas_id.is_none());
+                    let args = snapshot(true, std::slice::from_ref(&value));
+                    recording
+                        .assert_capture(entry.inputs_cas_id.as_ref(), (!empty).then_some(&args));
                     let returned = snapshot(false, std::slice::from_ref(&value));
                     let expected = (!empty).then_some(&returned);
                     if fail {
@@ -1386,10 +1393,14 @@ async fn exceptional_completion(program: &Program) {
                 outcome,
             );
             let expected = one_field_instance(program, class, &fields["message"], false, &[]);
-            recording.assert_capture(
-                done.value_cas_id.as_ref(),
-                (error == Some(true)).then_some(&expected),
-            );
+            // A panic is the span's own failure: it is recorded unless the
+            // call declined it. A cancellation is recorded only on request.
+            let recorded = if cancel {
+                error == Some(true)
+            } else {
+                error != Some(false)
+            };
+            recording.assert_capture(done.value_cas_id.as_ref(), recorded.then_some(&expected));
         }
     }
 }

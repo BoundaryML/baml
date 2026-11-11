@@ -101,8 +101,56 @@ fn parse_duration(value: &str) -> Result<Duration, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Value functions, after the relations.
+/// What to show a person for the relations' values and columns, after their columns: one
+/// block per set of labels, under every column that takes it.
+fn print_labels(relations: &[&catalog::Relation]) {
+    let mut sets: Vec<(&[catalog::ValueLabel], Vec<String>)> = Vec::new();
+    let mut headings: Vec<(&str, &str)> = Vec::new();
+    for relation in relations {
+        for column in relation.columns {
+            if !column.labels.is_empty() {
+                let name = format!("{}.{}", relation.name, column.name);
+                match sets.iter_mut().find(|(labels, _)| *labels == column.labels) {
+                    Some((_, names)) => names.push(name),
+                    None => sets.push((column.labels, vec![name])),
+                }
+            }
+            let heading = (column.name, column.heading);
+            if !column.heading.is_empty() && !headings.contains(&heading) {
+                headings.push(heading);
+            }
+        }
+    }
+    if sets.is_empty() && headings.is_empty() {
+        return;
+    }
+    println!(
+        "Labels for people (results keep the stored value, which is what SQL filters on; a report or a dashboard shows the label):"
+    );
+    for (labels, names) in sets {
+        println!("  {}", names.join(", "));
+        for label in labels {
+            println!(
+                "    {:<14} {:<19} {}",
+                label.value, label.label, label.meaning
+            );
+        }
+    }
+    if !headings.is_empty() {
+        println!("  column headings");
+        for (name, heading) in headings {
+            println!("    {name:<28} {heading}");
+        }
+    }
+    println!();
+}
+
+/// Value navigation and functions, after the relations.
 fn print_guide() {
+    println!("BAML values:");
+    println!(
+        "  v['key'], v[0]       navigate a value. A media value is described without its content ({{\"$media\", \"mime\", \"base64_len\"}}); v['base64'] on it reads the content as base64 text"
+    );
     println!("BAML value functions:");
     println!(
         "  baml_value_state(v)  present, null, missing, omitted, redacted, no_value, or why the value is unavailable (cas_missing, value_truncated, capture_pending, ...)"
@@ -134,7 +182,7 @@ impl QueryArgs {
                 println!("{}", serde_json::to_string_pretty(&relations)?);
             }
             QueryFormat::Table => {
-                for relation in relations {
+                for relation in &relations {
                     println!("{}: {}", relation.name, relation.doc);
                     for column in relation.columns {
                         let doc = if column.doc.is_empty() {
@@ -146,7 +194,12 @@ impl QueryArgs {
                     }
                     println!();
                 }
+                print_labels(&relations);
                 if self.table.is_none() {
+                    println!("Showing results to people:");
+                    for line in catalog::PRESENTING {
+                        println!("  {line}");
+                    }
                     print_guide();
                 }
             }

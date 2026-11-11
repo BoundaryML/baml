@@ -6565,11 +6565,24 @@ impl BexVm {
     /// Cheap single-frame variant of `Self::capture_stack_trace`.
     pub fn current_function_name(&self) -> Option<String> {
         let frame = self.top_frame()?;
-        let func = self
-            .get_object(self.frame_callable(frame))
-            .as_callable()
-            .ok()?;
+        let func = self.callable_function(self.frame_callable(frame))?;
         Some(func.name())
+    }
+
+    /// The function the callable `callable` runs, for a frame that is named or
+    /// located in a trace. `as_callable` alone does not see through a
+    /// generic-function value, which is what a function held as a typed
+    /// function value is: the callee of `reflect.call_any`, and so every tool
+    /// an agent calls. A frame that could not be resolved used to drop out of
+    /// the stack trace without a word, taking the line that threw with it.
+    fn callable_function(&self, callable: HeapPtr) -> Option<&Function> {
+        match self.get_object(callable) {
+            Object::GenericFunction(generic) => {
+                let authored = self.generic_function_authored_ptr(generic).ok()?;
+                self.get_object(authored).as_function().ok()
+            }
+            object => object.as_callable().ok(),
+        }
     }
 
     /// Whether program global `slot` still waits for its initializer: true
@@ -6602,10 +6615,7 @@ impl BexVm {
                 {
                     return None;
                 }
-                let func = self
-                    .get_object(self.frame_callable(frame))
-                    .as_callable()
-                    .ok()?;
+                let func = self.callable_function(self.frame_callable(frame))?;
                 if !self.frame_is_bytecode(frame) {
                     return Some(StackFrame {
                         function_name: func.name(),
@@ -6981,6 +6991,17 @@ impl BexVm {
             if self.frames.len() <= 1 {
                 if let Some(evidence) = evidence.take() {
                     self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
+                }
+                // No frame is left to carry the error: the thread's own
+                // completion does, as its `baml.errors.Context`.
+                if self.telemetry.is_some() {
+                    let recorded = self.recorded_context(&mut context, exception_value);
+                    if let Some(state) = self.telemetry.as_mut() {
+                        // SAFETY: unwinding runs under the heap permit, and
+                        // `recorded` is the in-flight context or the thrown
+                        // value, both rooted by the unwinder.
+                        unsafe { state.record_thread_error(recorded) };
+                    }
                 }
                 let trace = match &context {
                     InFlightContext::Carried(context) => self.context_trace(*context)?,
@@ -10091,10 +10112,14 @@ impl BexVm {
                                             }
                                             _ => btel_types::InvocationMode::Span,
                                         }),
+                                        // `trace.span`'s own defaults, as in
+                                        // `TraceHookMode::config`.
                                         inputs: if op == OpCode::TraceHookEmptySpan {
                                             Some(false)
                                         } else {
-                                            (op == OpCode::TraceHookRich).then_some(true)
+                                            (op == OpCode::TraceHookRich
+                                                || op == OpCode::TraceHookSpan)
+                                                .then_some(true)
                                         },
                                         output: if op == OpCode::TraceHookEmptySpan {
                                             Some(false)
@@ -12059,7 +12084,7 @@ impl BexVm {
                         let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx]
                         {
                             let pc = cur_pc;
-                            let func_obj = self.get_object(bf.function).as_callable().ok();
+                            let func_obj = self.callable_function(bf.function);
                             func_obj
                                 .and_then(|func| {
                                     if let Some(compact) = &func.bytecode.compact {

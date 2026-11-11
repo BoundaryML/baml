@@ -13,8 +13,17 @@ A function requesting auto (`null` / no explicit policy) inherits
 - `low`: auto functions are unobserved.
 - `medium` (default): ordinary auto functions produce timing aggregates; auto LLM
   functions produce spans with their default input/output/error captures.
-- `high`: supported auto functions produce spans, without extra value capture.
+- `high`: supported auto functions produce spans, without extra input or output
+  capture.
 - `off`: global kill switch; no telemetry resources are created.
+
+At every level, a span that ends with a thrown error or a panic records that
+error, whether or not its function captures anything else, unless the call
+declined it with `error = false` (as `trace.empty_span` does) or the artifact
+sets `http_bodies = false`, under which an error is recorded only on request.
+A span that was cancelled records the cancellation only when error capture was
+requested.
+Timing-only and unobserved functions record no values.
 
 Explicit function policies take precedence over every automatic level. In
 particular, `high` does not promote an explicitly configured timing-only function.
@@ -36,6 +45,9 @@ validation. Otherwise an invalid Boundary URL cancels execution with an actionab
 configuration diagnostic. Initial authorization rejection also cancels execution;
 later revocation disables cloud recording and lets execution continue.
 `BAML_TELEMETRY=off` disables recording. Cloud recordings omit process arguments.
+They include the project's sources (its `.baml` files and its `baml.toml`) when
+the host supplies them, unless
+`BOUNDARY_UPLOAD_SOURCES=false` or `[boundary].upload_sources = false` opts out.
 Environment reads live in `bex_engine::TelemetryRecording`, not this transport crate.
 
 Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint.

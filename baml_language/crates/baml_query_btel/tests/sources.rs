@@ -1,0 +1,205 @@
+//! A recording's sources as a value on `processes`, and the `functions`
+//! relation: the definitions a recording carried, per source revision.
+mod support;
+
+use bex_engine::{BexCallArg, BexExternalValue, TelemetryRecording};
+use btel_recorder::RecordingConfig;
+use serde_json::{Value, json};
+use support::*;
+
+const SOURCE: &str = include_str!("../../baml_tests/baml_src/ns_trace_logs/logs.baml");
+
+/// One recording of `log_sequence` that carries `sources`.
+async fn record_with(project: &std::path::Path, sources: Vec<(String, String)>) {
+    let results = record_program_into(
+        TelemetryRecording::local_files(project, RecordingConfig::default()).with_sources(sources),
+        SOURCE,
+        &[],
+        vec![(
+            "log_sequence",
+            vec![BexCallArg::Provided(Box::new(BexExternalValue::String(
+                "long-name".into(),
+            )))],
+        )],
+    )
+    .await;
+    assert_eq!(results, vec![Ok(BexExternalValue::Int(14))]);
+}
+
+fn sources(extra: &str) -> Vec<(String, String)> {
+    vec![
+        ("test.baml".to_owned(), SOURCE.to_owned()),
+        ("lib/extra.baml".to_owned(), extra.to_owned()),
+    ]
+}
+
+fn is_content_id(value: &Value) -> bool {
+    value
+        .as_str()
+        .is_some_and(|id| id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_process_exposes_the_sources_it_ran() {
+    let project = tempfile::tempdir().unwrap();
+    // Large enough to be stored as a blob of its own, apart from the map.
+    let large = format!("// {}\n", "x".repeat(512 * 1024));
+    record_with(project.path(), sources(&large)).await;
+    let mut index = index(project.path());
+
+    let files = sql(
+        &mut index,
+        "SELECT baml_source_code_content_id, baml_source_code['test.baml'],
+           baml_source_code['lib/extra.baml'], baml_kind(baml_source_code),
+           baml_source_code['missing.baml'], baml_value_state(baml_source_code['missing.baml'])
+         FROM processes",
+    );
+    assert_eq!(files.rows.len(), 1);
+    let row = &files.rows[0];
+    assert!(is_content_id(&row[0]), "{}", row[0]);
+    assert_eq!(row[1], json!(SOURCE));
+    assert_eq!(row[2], json!(large));
+    assert_eq!(row[3], json!("json"));
+    assert_eq!(row[4], Value::Null);
+    assert_eq!(row[5], json!("missing"));
+
+    // The whole value is the map; a file's text can be filtered on.
+    let whole = sql(
+        &mut index,
+        "SELECT baml_source_code FROM processes
+         WHERE baml_source_code['test.baml'] LIKE '%function span_log()%'",
+    );
+    assert_eq!(
+        whole.rows,
+        vec![vec![json!({"test.baml": SOURCE, "lib/extra.baml": large})]]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_process_without_recorded_sources_has_null_source_columns() {
+    let project = tempfile::tempdir().unwrap();
+    record_with(project.path(), Vec::new()).await;
+    let mut index = index(project.path());
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT baml_source_code_content_id, baml_source_code,
+               baml_source_code_content_id IS NULL, baml_source_code IS NULL,
+               baml_value_state(baml_source_code)
+             FROM processes"
+        )
+        .rows,
+        vec![vec![
+            Value::Null,
+            Value::Null,
+            json!(1),
+            json!(1),
+            json!("no_value")
+        ]]
+    );
+    // An unrecorded id is NULL, never the empty string.
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT COUNT(*) FROM processes WHERE baml_source_code_content_id = ''"
+        )
+        .rows,
+        vec![vec![json!(0)]]
+    );
+    // Its definitions are still listed, under no revision.
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT COUNT(*), COUNT(baml_source_code_content_id) FROM functions
+             WHERE function_name = 'user.span_log'"
+        )
+        .rows,
+        vec![vec![json!(1), json!(0)]]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn functions_list_each_definition_once_per_source_revision() {
+    let project = tempfile::tempdir().unwrap();
+    // Two recordings of one revision, one of another, and one without sources.
+    record_with(project.path(), sources("// one\n")).await;
+    record_with(project.path(), sources("// one\n")).await;
+    record_with(project.path(), sources("// two\n")).await;
+    record_with(project.path(), Vec::new()).await;
+    let mut index = index(project.path());
+
+    let revisions = sql(
+        &mut index,
+        "SELECT baml_source_code_content_id, function_name, display_name, kind, origin, package,
+           namespace, source_file, source_start, source_end
+         FROM functions WHERE function_name = 'user.span_log'
+         ORDER BY baml_source_code_content_id",
+    );
+    assert_eq!(revisions.rows.len(), 3, "{:?}", revisions.rows);
+    assert_eq!(revisions.rows[0][0], Value::Null);
+    assert!(is_content_id(&revisions.rows[1][0]));
+    assert!(is_content_id(&revisions.rows[2][0]));
+    assert_ne!(revisions.rows[1][0], revisions.rows[2][0]);
+    for row in &revisions.rows {
+        assert_eq!(
+            row[1..8],
+            [
+                json!("user.span_log"),
+                json!("span_log"),
+                json!("bytecode"),
+                json!("user"),
+                json!("user"),
+                Value::Null,
+                json!("test.baml"),
+            ]
+        );
+        // Half-open byte offsets of the definition in its file.
+        let (start, end) = (row[8].as_u64().unwrap(), row[9].as_u64().unwrap());
+        let text = &SOURCE[usize::try_from(start).unwrap()..usize::try_from(end).unwrap()];
+        assert!(text.starts_with("function span_log()"), "{text}");
+        assert!(text.ends_with('}'), "{text}");
+    }
+
+    // A revision's id is the one `processes` reports for its sources, so a
+    // definition's text can be cut from the recorded file.
+    let located = sql(
+        &mut index,
+        "SELECT f.source_file, f.source_start, f.source_end, p.baml_source_code['test.baml']
+         FROM functions f
+         JOIN processes p ON p.baml_source_code_content_id = f.baml_source_code_content_id
+         WHERE f.function_name = 'user.hidden_log'",
+    );
+    assert_eq!(located.rows.len(), 1, "{:?}", located.rows);
+    let row = &located.rows[0];
+    assert_eq!(row[0], json!("test.baml"));
+    let file = row[3].as_str().unwrap();
+    let (start, end) = (row[1].as_u64().unwrap(), row[2].as_u64().unwrap());
+    assert!(
+        file[usize::try_from(start).unwrap()..usize::try_from(end).unwrap()]
+            .starts_with("function hidden_log()"),
+        "{row:?}"
+    );
+
+    // One row per revision and name; only definitions the recording resolved.
+    let shape = sql(
+        &mut index,
+        "SELECT COUNT(*), COUNT(function_name),
+           COUNT(DISTINCT COALESCE(baml_source_code_content_id, '') || ' ' || function_name)
+         FROM functions",
+    );
+    let total = shape.rows[0][0].as_i64().unwrap();
+    assert!(total >= 9, "{:?}", shape.rows);
+    assert_eq!(
+        shape.rows[0],
+        vec![json!(total), json!(total), json!(total)]
+    );
+    // Builtins a recording referenced are definitions too, with their origin.
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT DISTINCT origin, package FROM functions WHERE function_name = 'assert.equal'"
+        )
+        .rows,
+        vec![vec![json!("builtin"), json!("assert")]]
+    );
+}

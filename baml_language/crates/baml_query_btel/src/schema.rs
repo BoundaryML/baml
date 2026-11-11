@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 22;
+pub const SCHEMA_VERSION: i64 = 25;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -217,9 +217,17 @@ CREATE TABLE thread (
   -- as on `call`.
   usage TEXT,
   total_usage TEXT,
+  -- The baml.errors.Context of the error it ended with, from its first
+  -- completion (format minor 14); NULL when none was recorded.
+  error_cas BLOB,
+  -- The root future it runs under: itself when it is defined without a
+  -- parent, else the root of the thread that spawned it. NULL until every
+  -- thread up to the root is indexed (`ingest::roots`).
+  root_id BLOB,
   PRIMARY KEY (rec, thread_id)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX thread_by_parent ON thread (rec, parent_id);
+CREATE INDEX thread_unrooted ON thread (rec) WHERE root_id IS NULL;
 CREATE INDEX thread_charged ON thread (rec) WHERE usage IS NOT NULL;
 CREATE INDEX thread_totaled ON thread (rec) WHERE total_usage IS NOT NULL;
 
@@ -371,6 +379,37 @@ CREATE TABLE network_event (
   PRIMARY KEY (rec, span_id, seq)
 ) STRICT, WITHOUT ROWID;
 
+-- Log events (`log.info`, `log.debug`, `log.warn`, `log.error`), one row
+-- each. A log is evidence of its own: it never creates or changes a call.
+CREATE TABLE log (
+  rec INTEGER NOT NULL,
+  -- Recording order: the file's sequence << 32, plus the event's position
+  -- among the file's log events.
+  seq INTEGER NOT NULL,
+  -- The section's thread: the future that logged. Its epoch times at_ticks.
+  thread_id BLOB NOT NULL,
+  -- The innermost recorded span it ran under, otherwise the thread.
+  parent_id BLOB NOT NULL,
+  -- The function whose code logged, which need not be a span, and the
+  -- log call's compact bytecode offset in it.
+  function_id BLOB NOT NULL,
+  pc INTEGER NOT NULL,
+  at_ticks INTEGER,
+  -- 1 info, 2 debug, 3 warn, 4 error.
+  level INTEGER NOT NULL,
+  -- NULL when unnamed; an empty name stays empty.
+  event_name TEXT,
+  data_cas BLOB,
+  -- The section's context, as `event_context` stores one: state 0
+  -- unavailable, 1 explicitly empty, 2 snapshot, 3 invalid marker.
+  context_state INTEGER NOT NULL,
+  context_cas BLOB,
+  PRIMARY KEY (rec, seq)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX log_by_parent ON log (rec, parent_id);
+-- Most sections have no context snapshot, so only those that do are indexed.
+CREATE INDEX log_by_context ON log (context_cas) WHERE context_cas IS NOT NULL;
+
 -- A folded recording's call paths summed by profiler node: its share of its
 -- process's profiler. Sums are NULL when unknown or too large for i64.
 CREATE TABLE profile_part (
@@ -458,6 +497,7 @@ pub const FACT_TABLES: &[&str] = &[
     "call",
     "network_span",
     "network_event",
+    "log",
     "profile_part",
     "issue",
     "usage_pending",
@@ -481,6 +521,7 @@ pub const ALL_TABLES: &[&str] = &[
     "call",
     "network_span",
     "network_event",
+    "log",
     "profile_part",
     "profile_node",
     "profile_pending",

@@ -7,6 +7,9 @@ use serde::Deserialize;
 pub(crate) struct Boundary {
     pub project: Option<String>,
     pub api_url: Option<String>,
+    /// `false` keeps the project's sources out of cloud recordings.
+    /// `BOUNDARY_UPLOAD_SOURCES` takes precedence; unset means upload.
+    pub upload_sources: Option<bool>,
 }
 impl Boundary {
     pub fn read(root: &Path) -> Result<Self> {

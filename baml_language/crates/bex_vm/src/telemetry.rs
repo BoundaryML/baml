@@ -64,6 +64,11 @@ const POLICY_CAPTURE_OUTPUT: u8 = 1 << 1;
 const POLICY_CAPTURE_ERROR: u8 = 1 << 2;
 const REENTRY: u8 = 1 << 3;
 const REQUIRES_ANNOUNCEMENT: u8 = 1 << 4;
+/// The span does not record the error it ends with by default: the call
+/// asked for no error capture (`error = false`, as `trace.empty_span` does),
+/// or the engine keeps HTTP bodies out of recordings, and an error can quote
+/// a response body.
+const ERROR_DECLINED: u8 = 1 << 5;
 
 static LAST_CALL_PATH_ID: AtomicU32 = AtomicU32::new(0);
 
@@ -98,6 +103,8 @@ pub struct FrameTelemetry {
     flags: u8,
     // Requests are local to this invocation. False adds no request; policy
     // requests latched at entry (and later updates) cannot be vetoed here.
+    // A false error request also declines a span's default error capture
+    // (`ERROR_DECLINED`).
     output_request: bool,
     error_request: bool,
 }
@@ -151,6 +158,14 @@ impl FrameTelemetry {
         self.flags & REENTRY != 0
     }
 
+    /// A span records the error it ends with by default
+    /// (`btel_settings::policy::SPAN_CAPTURE_ERROR`), unless its call declined
+    /// error capture. A timing invocation has no such default.
+    #[inline(always)]
+    const fn records_error_by_default(self) -> bool {
+        btel_settings::policy::SPAN_CAPTURE_ERROR && self.flags & (SPAN | ERROR_DECLINED) == SPAN
+    }
+
     #[inline(always)]
     pub fn add_await(&mut self, elapsed: ClockDuration) {
         self.await_duration = self.await_duration.saturating_add(elapsed);
@@ -182,6 +197,9 @@ pub struct ThreadTelemetry {
     running: bool,
     completed: bool,
     name: Option<btel_records::ThreadName>,
+    /// The error that escaped the thread's outermost frame, until the thread's
+    /// completion, which is written with it.
+    error: Option<btel_snapshot::Snapshot>,
 }
 
 pub struct TelemetryState {
@@ -269,6 +287,7 @@ impl TelemetryState {
             error: config.error == Some(true)
                 || policy.capture_error
                 || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR),
+            error_declined: config.error == Some(false) || !self.policies.http_bodies(),
             policy,
             live_policy: function.telemetry_function_id.map(|function_id| {
                 self.policies
@@ -366,6 +385,7 @@ impl TelemetryState {
                 running: false,
                 completed: false,
                 name: None,
+                error: None,
             },
             call_paths: FxHashMap::default(),
             call_path_keys: FxHashMap::default(),
@@ -826,6 +846,10 @@ impl TelemetryState {
         let mut flags = if reentry { REENTRY } else { 0 };
         if mode == InvocationMode::Span {
             flags |= SPAN;
+            if trace.and_then(|config| config.error) == Some(false) || !self.policies.http_bodies()
+            {
+                flags |= ERROR_DECLINED;
+            }
         }
         let capture_inputs = trace.and_then(|config| config.inputs) == Some(true)
             || policy.capture_inputs
@@ -940,7 +964,8 @@ impl TelemetryState {
         if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
             return false;
         }
-        telemetry.error_request
+        telemetry.records_error_by_default()
+            || telemetry.error_request
             || telemetry.flags & POLICY_CAPTURE_ERROR != 0
             || self.policy_by_id(policy_id).capture_error
     }
@@ -1005,7 +1030,9 @@ impl TelemetryState {
             | InvocationOutcome::Panicked
                 if telemetry.error_request
                     || telemetry.flags & POLICY_CAPTURE_ERROR != 0
-                    || policy.capture_error =>
+                    || policy.capture_error
+                    || (outcome != InvocationOutcome::Cancelled
+                        && telemetry.records_error_by_default()) =>
             {
                 value
             }
@@ -1345,6 +1372,22 @@ impl TelemetryState {
         }
     }
 
+    /// Capture `error`, the value that escaped the thread's outermost frame,
+    /// for the thread's completion. The last one wins: a host can resume a
+    /// thread after an unhandled throw, and only the throw that ends it counts.
+    ///
+    /// # Safety
+    /// `error` and its reachable objects must remain live under the heap permit.
+    pub unsafe fn record_thread_error(&mut self, error: Value) {
+        // Without HTTP bodies nothing records an error by default: it can
+        // quote a response body, as a failed `send_sse`'s does.
+        self.thread.error = if self.policies.http_bodies() {
+            self.capture(snapshot::Input::Value(error))
+        } else {
+            None
+        };
+    }
+
     pub fn complete_thread(&mut self, outcome: InvocationOutcome) {
         if self.thread.completed {
             return;
@@ -1365,6 +1408,18 @@ impl TelemetryState {
             self.write_span(SpanRecord::ThreadSpanRunning { at: completed_at });
         }
         self.flush_model_usage(self.thread.id);
+        // A thread that ended otherwise than with the error captured for it,
+        // returning after a host resumed it or cancelled, says nothing of it.
+        let error = self.thread.error.take();
+        if matches!(
+            outcome,
+            InvocationOutcome::Errored | InvocationOutcome::Panicked
+        ) && error.is_some()
+        {
+            self.write_span(SpanRecord::ThreadSpanError {
+                captured_error: error,
+            });
+        }
         self.write_span(SpanRecord::ThreadSpanCompletion {
             id: self.thread.id,
             parent_id: self.thread.parent_id,
@@ -1942,6 +1997,7 @@ mod tests {
                 for outcome in [
                     InvocationOutcome::Ok,
                     InvocationOutcome::Errored,
+                    InvocationOutcome::Panicked,
                     InvocationOutcome::Cancelled,
                 ] {
                     let function = function(FunctionKind::Bytecode, None);
@@ -1970,10 +2026,13 @@ mod tests {
                     )
                     .unwrap();
                     let id = frame.span_id().unwrap();
+                    // A span records the error it ends with unless the call
+                    // declined it; a policy request still captures.
+                    let records_failure = error != Some(false) || capture_error;
                     assert_eq!(
                         state.wants_error_capture(&frame, &function),
-                        error == Some(true) || capture_error,
-                        "error context construction follows additive capture requests",
+                        records_failure,
+                        "the unwinder builds an error context only for a frame that records it",
                     );
                     unsafe {
                         state.complete_invocation(frame, &function, outcome, Some(Value::int(9)));
@@ -1981,9 +2040,9 @@ mod tests {
                     let expected_inputs = inputs == Some(true) || capture_inputs;
                     let expected_value = match outcome {
                         InvocationOutcome::Ok => output == Some(true) || capture_output,
-                        InvocationOutcome::Errored
-                        | InvocationOutcome::Cancelled
-                        | InvocationOutcome::Panicked => error == Some(true) || capture_error,
+                        InvocationOutcome::Errored | InvocationOutcome::Panicked => records_failure,
+                        // A cancellation is recorded only on request.
+                        InvocationOutcome::Cancelled => error == Some(true) || capture_error,
                     };
                     let inputs = state
                         .span_records()
@@ -2007,44 +2066,10 @@ mod tests {
                     let output = state
                         .span_records()
                         .iter()
-                        .find_map(|record| match record {
-                            SpanRecord::FunctionSpanCompletionOk {
-                                id: record_id,
-                                captured_value,
-                                ..
-                            }
-                            | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
-                                id: record_id,
-                                captured_value,
-                                ..
-                            } if *record_id == id && outcome == InvocationOutcome::Ok => {
-                                Some(captured_value)
-                            }
-                            SpanRecord::FunctionSpanCompletionErrored {
-                                id: record_id,
-                                captured_value,
-                                ..
-                            }
-                            | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
-                                id: record_id,
-                                captured_value,
-                                ..
-                            } if *record_id == id && outcome == InvocationOutcome::Errored => {
-                                Some(captured_value)
-                            }
-                            SpanRecord::FunctionSpanCompletionCancelled {
-                                id: record_id,
-                                captured_value,
-                                ..
-                            }
-                            | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
-                                id: record_id,
-                                captured_value,
-                                ..
-                            } if *record_id == id && outcome == InvocationOutcome::Cancelled => {
-                                Some(captured_value)
-                            }
-                            _ => None,
+                        .find_map(|record| {
+                            let done = record.completion()?;
+                            (done.id == id && done.outcome == outcome)
+                                .then_some(done.captured_value)
                         })
                         .unwrap();
                     assert_eq!(output.is_some(), expected_value);
@@ -2070,6 +2095,120 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn a_span_records_the_error_it_ends_with_and_a_timing_invocation_records_none() {
+        // No capture is requested by the call or by a policy. A call that
+        // passes `error = false`, as `trace.empty_span` does, declines the
+        // default.
+        for error in [None, Some(false)] {
+            let declined = error == Some(false);
+            for (outcome, captured) in [
+                (InvocationOutcome::Ok, false),
+                (InvocationOutcome::Errored, !declined),
+                (InvocationOutcome::Panicked, !declined),
+                (InvocationOutcome::Cancelled, false),
+            ] {
+                let function = function(FunctionKind::Bytecode, None);
+                let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+                let frame = trace_entry(
+                    &mut state,
+                    &function,
+                    Some(TraceConfig {
+                        mode: Some(InvocationMode::Span),
+                        error,
+                        ..TraceConfig::default()
+                    }),
+                )
+                .unwrap();
+                assert!(frame.is_span());
+                assert_eq!(state.wants_error_capture(&frame, &function), !declined);
+                unsafe {
+                    state.complete_invocation(frame, &function, outcome, Some(Value::int(9)));
+                }
+                let done = state
+                    .span_records()
+                    .iter()
+                    .find_map(SpanRecord::completion)
+                    .unwrap();
+                assert_eq!(done.outcome, outcome);
+                assert_eq!(
+                    done.captured_value.is_some(),
+                    captured,
+                    "{error:?}/{outcome:?}"
+                );
+                if let Some(value) = done.captured_value {
+                    assert!(matches!(
+                        value.roots()[0],
+                        btel_snapshot::SnapshotValue::Int(9)
+                    ));
+                }
+            }
+        }
+        // An engine that keeps HTTP bodies out of its recordings records no
+        // error by default, since an error can quote a response body; a
+        // requested capture still records it.
+        for (error, captured) in [(None, false), (Some(true), true)] {
+            let function = function(FunctionKind::Bytecode, None);
+            let mut state = test_state(
+                Arc::new(TelemetryPolicies::new().with_http_bodies(false)),
+                test_clock(),
+            );
+            let frame = trace_entry(
+                &mut state,
+                &function,
+                Some(TraceConfig {
+                    mode: Some(InvocationMode::Span),
+                    error,
+                    ..TraceConfig::default()
+                }),
+            )
+            .unwrap();
+            assert_eq!(state.wants_error_capture(&frame, &function), captured);
+            unsafe {
+                state.complete_invocation(
+                    frame,
+                    &function,
+                    InvocationOutcome::Errored,
+                    Some(Value::int(9)),
+                );
+            }
+            let done = state
+                .span_records()
+                .iter()
+                .find_map(SpanRecord::completion)
+                .unwrap();
+            assert_eq!(done.captured_value.is_some(), captured, "{error:?}");
+        }
+        // A timing-only invocation has no span to carry a value, so the
+        // unwinder builds no error context for it.
+        for outcome in [InvocationOutcome::Errored, InvocationOutcome::Panicked] {
+            let function = function(FunctionKind::Bytecode, None);
+            let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+            let frame = trace_entry(
+                &mut state,
+                &function,
+                Some(TraceConfig {
+                    mode: Some(InvocationMode::Timing),
+                    ..TraceConfig::default()
+                }),
+            )
+            .unwrap();
+            assert!(!frame.is_span());
+            assert!(!state.wants_error_capture(&frame, &function));
+            unsafe {
+                state.complete_invocation(frame, &function, outcome, Some(Value::int(9)));
+            }
+            assert!(state.span_records().iter().all(|record| {
+                record.completion().is_none() && record.captures().next().is_none()
+            }));
+            assert!(state.timing_records().iter().any(|record| matches!(
+                record,
+                TimingRecord::FunctionTimingCompletion { outcome: recorded, .. }
+                    if *recorded == outcome
+            )));
         }
     }
 
@@ -3074,6 +3213,116 @@ mod tests {
         }
     }
 
+    /// An owned operation that is a span records the error it ends with unless
+    /// its configuration declined it; one that is timing has no such default,
+    /// even when its completion is promoted to a span.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn owned_operation_records_its_error_by_default_only_as_a_span() {
+        /// Each completion's outcome and the integer it captured, if any.
+        type Completions = Vec<(InvocationOutcome, Option<i64>)>;
+        struct Sink(Arc<std::sync::Mutex<Completions>>);
+        impl btel_processor::Publisher<btel_snapshot::Snapshot, btel_snapshot::Snapshot> for Sink {
+            fn aggregate(&mut self, _: btel_processor::AggregateDelta) {}
+            fn span(&mut self, _: TelemetryId, record: &mut VmSpanRecord) {
+                let done = match record {
+                    SpanRecord::ManualSpanCompletion(done) => done
+                        .outcome
+                        .map(|outcome| (outcome, done.captured_value.as_ref())),
+                    record => record
+                        .completion()
+                        .map(|done| (done.outcome, done.captured_value)),
+                };
+                if let Some((outcome, value)) = done {
+                    let value = value.and_then(|snapshot| match snapshot.roots()[0] {
+                        btel_snapshot::SnapshotValue::Int(n) => Some(n),
+                        _ => None,
+                    });
+                    self.0.lock().unwrap().push((outcome, value));
+                }
+            }
+            fn flush(&mut self) {}
+        }
+
+        for (mode, error, by_default) in [
+            (InvocationMode::Span, None, true),
+            (InvocationMode::Span, Some(false), false),
+            (InvocationMode::Timing, None, false),
+        ] {
+            for outcome in [
+                InvocationOutcome::Ok,
+                InvocationOutcome::Errored,
+                InvocationOutcome::Panicked,
+                InvocationOutcome::Cancelled,
+            ] {
+                let observed = Arc::new(std::sync::Mutex::new(Completions::new()));
+                let runtime =
+                    btel_processor::TelemetryRuntime::with_publisher(Sink(observed.clone()))
+                        .unwrap();
+                let policies = Arc::new(TelemetryPolicies::new());
+                let clock = test_clock();
+                let function = function(FunctionKind::Bytecode, None);
+                let mut creator =
+                    TelemetryState::new_root(policies.clone(), clock.clone(), runtime.clone());
+                // A timing operation is promoted at completion, by a policy
+                // that asks for no capture.
+                if mode == InvocationMode::Timing {
+                    creator
+                        .set_policy(
+                            &function,
+                            TelemetryPolicy {
+                                promotion_duration_threshold: Some(
+                                    clock.threshold(std::time::Duration::ZERO),
+                                ),
+                                ..TelemetryPolicy::NONE
+                            },
+                        )
+                        .unwrap();
+                }
+                let options = creator.operation_options(
+                    &function,
+                    TraceConfig {
+                        mode: Some(mode),
+                        error,
+                        ..TraceConfig::default()
+                    },
+                );
+                assert!(!options.output && !options.error);
+                let metadata = function.runtime_metadata().unwrap();
+                // SAFETY: no value is supplied at creation.
+                let span = unsafe {
+                    manual::ManualSpan::start_with_options(
+                        Some(&mut creator),
+                        btel_types::RecordingId::generate(),
+                        btel_types::context::Context::default(),
+                        &metadata,
+                        None,
+                        None,
+                        options,
+                        None,
+                    )
+                };
+                // SAFETY: the output/error is immediate and needs no heap traversal.
+                unsafe {
+                    span.finish(Some(outcome), Some(Value::int(42)));
+                }
+                drop(creator);
+                drop(span);
+                runtime.finish().unwrap();
+                let captured = by_default
+                    && matches!(
+                        outcome,
+                        InvocationOutcome::Errored | InvocationOutcome::Panicked
+                    );
+                assert_eq!(
+                    *observed.lock().unwrap(),
+                    vec![(outcome, captured.then_some(42))],
+                    "{mode:?}/{error:?}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn completion_reads_current_policy_for_late_promotion() {
         let function = function(FunctionKind::Bytecode, None);
@@ -3427,12 +3676,19 @@ mod tests {
                                 state.span_records().last().unwrap().completion().unwrap();
                             assert_eq!(recorded.outcome, outcome);
                             assert_eq!(recorded.late, !initially_span);
+                            // A span from entry records the error it ends
+                            // with unless the call declined it. A frame
+                            // promoted at completion has no such default.
+                            let by_default = initially_span
+                                && outcome == InvocationOutcome::Errored
+                                && override_ != Some(false);
                             assert_eq!(
                                 recorded.captured_value.map(|snapshot| matches!(
                                     snapshot.roots()[0],
                                     btel_snapshot::SnapshotValue::Int(7)
                                 )),
-                                (override_ == Some(true) || initial || current).then_some(true),
+                                (override_ == Some(true) || initial || current || by_default)
+                                    .then_some(true),
                                 "{mode:?}/{initial}/{current}/{override_:?}/{outcome:?}",
                             );
                         }
@@ -3486,15 +3742,88 @@ mod tests {
                     let recorded = state.span_records().last().unwrap().completion().unwrap();
                     assert!(!recorded.late, "an entry-selected span must remain a span");
                     assert_eq!(recorded.outcome, outcome);
+                    // The output follows the policy at entry or at completion;
+                    // a span records the error it ends with under either.
                     assert_eq!(
                         recorded
                             .captured_value
                             .map(|s| matches!(s.roots()[0], btel_snapshot::SnapshotValue::Int(7))),
-                        (initial || current).then_some(true)
+                        (initial || current || outcome == InvocationOutcome::Errored)
+                            .then_some(true)
                     );
                 }
             }
         }
+    }
+
+    #[test]
+    fn thread_completion_follows_the_error_the_thread_ended_with() {
+        for (outcome, recorded, carried) in [
+            (InvocationOutcome::Errored, true, true),
+            (InvocationOutcome::Panicked, true, true),
+            // No error was captured for the thread: nothing precedes its completion.
+            (InvocationOutcome::Errored, false, false),
+            // A host resumed the thread after the throw, or cancelled it: it
+            // did not end with the error.
+            (InvocationOutcome::Ok, true, false),
+            (InvocationOutcome::Cancelled, true, false),
+        ] {
+            let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+            state.start_thread();
+            if recorded {
+                // An earlier unhandled throw is superseded by the one that ends the thread.
+                unsafe {
+                    state.record_thread_error(Value::int(1));
+                    state.record_thread_error(Value::int(9));
+                }
+            }
+            state.complete_thread(outcome);
+            let records = state.span_records();
+            let completion = records
+                .iter()
+                .position(|record| matches!(record, SpanRecord::ThreadSpanCompletion { .. }))
+                .unwrap();
+            let errors: Vec<usize> = records
+                .iter()
+                .enumerate()
+                .filter(|(_, record)| matches!(record, SpanRecord::ThreadSpanError { .. }))
+                .map(|(index, _)| index)
+                .collect();
+            if carried {
+                assert_eq!(errors, vec![completion - 1], "{outcome:?}");
+                let SpanRecord::ThreadSpanError {
+                    captured_error: Some(error),
+                } = &records[completion - 1]
+                else {
+                    panic!("the thread error record owns its capture");
+                };
+                assert!(matches!(
+                    error.roots()[0],
+                    btel_snapshot::SnapshotValue::Int(9)
+                ));
+            } else {
+                assert!(errors.is_empty(), "{outcome:?}/{recorded}");
+            }
+            // A completed thread writes nothing more.
+            let written = state.span_records().len();
+            state.complete_thread(InvocationOutcome::Errored);
+            assert_eq!(state.span_records().len(), written);
+        }
+        // An engine that keeps HTTP bodies out of its recordings carries no
+        // thread error: it can quote a response body.
+        let mut state = test_state(
+            Arc::new(TelemetryPolicies::new().with_http_bodies(false)),
+            test_clock(),
+        );
+        state.start_thread();
+        unsafe { state.record_thread_error(Value::int(9)) };
+        state.complete_thread(InvocationOutcome::Errored);
+        assert!(
+            !state
+                .span_records()
+                .iter()
+                .any(|record| matches!(record, SpanRecord::ThreadSpanError { .. }))
+        );
     }
 
     #[test]
