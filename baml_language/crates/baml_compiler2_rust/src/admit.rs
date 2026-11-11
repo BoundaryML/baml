@@ -146,7 +146,7 @@ pub fn compile_program(
 struct LoweredProgram<'db> {
     units: BTreeMap<usize, Unit<'db>>,
     rejected: Vec<(String, Rejection)>,
-    refs: HashMap<usize, BTreeSet<usize>>,
+    refs: HashMap<usize, crate::reach::References>,
     seeds: BTreeSet<usize>,
 }
 
@@ -161,7 +161,7 @@ fn lower_program<'db>(
     let mut units: BTreeMap<usize, Unit<'db>> = BTreeMap::new();
     let mut rejected: Vec<(String, Rejection)> = Vec::new();
     // Rejected bodies still contribute edges to reachability.
-    let mut refs: HashMap<usize, BTreeSet<usize>> = HashMap::new();
+    let mut refs: HashMap<usize, crate::reach::References> = HashMap::new();
     let mut seeds: BTreeSet<usize> = entries.into_iter().flatten().copied().collect();
 
     let mut admission = Admission {
@@ -259,7 +259,7 @@ fn retain_reachable(index: &ProgramIndex, lowered: &mut LoweredProgram<'_>) {
         seeds,
     } = lowered;
     seeds.extend(index.user_methods.iter().copied());
-    let reached = reachable(std::mem::take(seeds), refs);
+    let reached = reachable(index, std::mem::take(seeds), refs);
     units.retain(|object, _| {
         let keep = reached.contains(object);
         if !keep {

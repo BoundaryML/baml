@@ -36,6 +36,9 @@ pub(crate) struct ProgramIndex<'p> {
     methods: HashMap<String, Vec<usize>>,
     /// The methods and interface bodies of every non-stdlib package.
     pub(crate) user_methods: Vec<usize>,
+    /// Method object → the class whose instances run it: an inherent
+    /// method's class, or the class a non-generic impl rule names.
+    method_classes: HashMap<usize, usize>,
     /// String literal → the compile-time string object bytecode loads it from.
     pub(crate) strings: HashMap<String, usize>,
     /// Global slot used by pooled generic function values.
@@ -62,6 +65,7 @@ impl<'p> ProgramIndex<'p> {
             lambdas: HashMap::new(),
             methods: HashMap::new(),
             user_methods: Vec::new(),
+            method_classes: HashMap::new(),
             strings: HashMap::new(),
             globals: HashMap::new(),
             generic_functions: Vec::new(),
@@ -70,7 +74,38 @@ impl<'p> ProgramIndex<'p> {
         };
         index.index_objects(program);
         index.index_globals(program);
+        index.index_method_classes(program);
         index
+    }
+
+    fn index_method_classes(&mut self, program: &Program) {
+        for (object, item) in program.objects.iter().enumerate() {
+            if let Object::Class(class) = item {
+                for method in class.methods.values() {
+                    self.method_classes.insert(method.function.raw(), object);
+                }
+            }
+        }
+        let rules = program
+            .packages
+            .iter()
+            .flat_map(|package| package.impl_rules.values().flatten());
+        for rule in rules {
+            let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
+                continue;
+            };
+            let Some(class) = head.tag().static_index().filter(|_| args.is_empty()) else {
+                continue;
+            };
+            for method in rule.methods.values() {
+                self.method_classes.insert(method.fqn.raw(), class);
+            }
+        }
+    }
+
+    /// The class whose instances run method `object`, when one class does.
+    pub(crate) fn method_class(&self, object: usize) -> Option<usize> {
+        self.method_classes.get(&object).copied()
     }
 
     fn index_objects(&mut self, program: &'p Program) {

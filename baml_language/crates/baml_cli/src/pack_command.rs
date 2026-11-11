@@ -137,8 +137,9 @@ pub struct PackArgs {
     )]
     pub rust_build_dir: Option<PathBuf>,
 
-    /// Cargo optimization: `release` ships with fat LTO; `fast` uses opt-level 1
-    /// without LTO for correctness runs, not performance measurements.
+    /// Cargo optimization: `release` is opt-level 3 against a runtime built once
+    /// per workspace; `fast` uses opt-level 1 for correctness runs, not
+    /// performance measurements.
     #[arg(
         long,
         value_enum,
@@ -617,7 +618,7 @@ impl PackArgs {
             std::fs::copy(&lockfile, build_dir.join("Cargo.lock"))
                 .context("failed to copy the workspace's Cargo.lock")?;
         }
-        let target_dir = build_dir.join("target");
+        let target_dir = runtime_target_dir(&workspace, self.rust_profile);
         let status = reporter.suspend(|| {
             let mut cargo = std::process::Command::new("cargo");
             cargo
@@ -961,6 +962,63 @@ fn workspace_head(workspace: &Path) -> Result<Option<String>> {
     }
 }
 
+/// The Cargo target directory every pack from `workspace` at `profile`
+/// shares: the runtime crates build there once, so a pack compiles only its
+/// generated crate and links. Cargo's lock serializes concurrent packs.
+fn runtime_target_dir(workspace: &Path, profile: RustProfile) -> PathBuf {
+    use sha2::Digest as _;
+    let digest = sha2::Sha256::digest(workspace.to_string_lossy().as_bytes());
+    let key: String = digest[..8]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let profile = match profile {
+        RustProfile::Release => "release",
+        RustProfile::Fast => "fast",
+    };
+    baml_release::baml_home()
+        .join("build")
+        .join("rust")
+        .join(key)
+        .join(profile)
+}
+
+/// The crates a compiled pack links but runs only off its hot paths: the
+/// compiler (for runtime compilation), the network stack and the CLI parser.
+const COLD_RUNTIME_CRATES: &[&str] = &[
+    "baml_compiler2_ast",
+    "baml_compiler2_emit",
+    "baml_compiler2_hir",
+    "baml_compiler2_hir_ty",
+    "baml_compiler2_mir",
+    "baml_compiler2_visualization",
+    "baml_compiler_diagnostics",
+    "baml_compiler_lexer",
+    "baml_compiler_parser",
+    "baml_compiler_syntax",
+    "baml_db",
+    "baml_fmt",
+    "bex_project",
+    "clap",
+    "clap_builder",
+    "h2",
+    "hyper",
+    "hyper-rustls",
+    "hyper-util",
+    "logos",
+    "prost",
+    "reqwest",
+    "rowan",
+    "rustls",
+    "rustls-webpki",
+    "salsa",
+    "toml",
+    "toml_edit",
+    "toml_parser",
+    "tower",
+    "tower-http",
+];
+
 fn rust_manifest(workspace: &Path, profile: RustProfile) -> String {
     let mut manifest = String::from(
         r#"[package]
@@ -981,13 +1039,27 @@ publish = false
     }
     manifest.push_str("\n[profile.release]\npanic = \"unwind\"\n");
     manifest.push_str(match profile {
+        // No LTO: the runtime is a prebuilt dependency and only the generated
+        // crate compiles per pack. Generated code reaches the runtime's hot
+        // paths through `#[inline]` and generic functions.
         RustProfile::Release => {
-            "lto = \"fat\"\ncodegen-units = 1\nopt-level = 3\nstrip = \"symbols\"\n"
+            "lto = false\ncodegen-units = 16\nopt-level = 3\nstrip = \"symbols\"\n\n\
+             [profile.release.package.\"*\"]\ncodegen-units = 1\n"
         }
         RustProfile::Fast => {
             "lto = false\ncodegen-units = 16\nopt-level = 1\nstrip = \"none\"\ndebug = \"line-tables-only\"\n"
         }
     });
+    if profile == RustProfile::Release {
+        // Without LTO the binary keeps more of the runtime: the compiler and
+        // network crates, which compiled code never runs on a hot path, are
+        // optimized for size so the pack stays smaller than a bytecode pack.
+        for name in COLD_RUNTIME_CRATES {
+            manifest.push_str(&format!(
+                "\n[profile.release.package.{name}]\nopt-level = \"s\"\n"
+            ));
+        }
+    }
     manifest
 }
 
@@ -1649,8 +1721,12 @@ mod tests {
             "a path is a TOML string, escaped as TOML"
         );
         let release = &parsed["profile"]["release"];
-        assert_eq!(release["lto"].as_str(), Some("fat"));
-        assert_eq!(release["codegen-units"].as_integer(), Some(1));
+        assert_eq!(release["lto"].as_bool(), Some(false));
+        assert_eq!(release["codegen-units"].as_integer(), Some(16));
+        assert_eq!(
+            release["package"]["*"]["codegen-units"].as_integer(),
+            Some(1)
+        );
         assert_eq!(release["opt-level"].as_integer(), Some(3));
         assert_eq!(release["strip"].as_str(), Some("symbols"));
     }
