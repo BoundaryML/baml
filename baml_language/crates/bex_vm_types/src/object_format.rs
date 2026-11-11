@@ -333,6 +333,19 @@ impl TaggedSlot {
         )
     }
 
+    /// Replace the payload of a slot holding a pointer, written by the
+    /// collector while no mutator runs: the tag stays [`TaggedKind::Ptr`].
+    /// The pair of [`Self::read_paused`].
+    #[inline]
+    pub fn forward_paused(&self, payload: u64) {
+        debug_assert_eq!(
+            self.read_paused().0,
+            TaggedKind::Ptr,
+            "forwarding a tagged slot that holds no pointer"
+        );
+        self.payload.store(payload, Ordering::Relaxed);
+    }
+
     #[inline]
     fn single_copy(&self) -> bool {
         has_lse2() && std::ptr::from_ref(self).addr().is_multiple_of(TAGGED_ALIGN)
@@ -710,6 +723,24 @@ pub unsafe fn slot_pointer(addr: *const u8, kind: ElemKind) -> Option<u64> {
         }
     };
     (bits != 0).then_some(bits)
+}
+
+/// Replace the pointer a slot of `kind` at `addr` holds, for the collector:
+/// the pair of [`slot_pointer`], for a slot it found a pointer in. A tagged
+/// slot keeps its tag; a raw slot holds no pointer and is never written.
+///
+/// # Safety
+/// `addr` addresses a slot of `kind` that [`slot_pointer`] found a pointer
+/// in; no mutator runs.
+pub unsafe fn set_slot_pointer(addr: *const u8, kind: ElemKind, bits: u64) {
+    debug_assert!(bits != 0, "forwarding a slot to null");
+    match kind {
+        ElemKind::Raw8 => unreachable!("a raw slot holds no pointer to forward"),
+        // SAFETY: forwarded to the caller.
+        ElemKind::Ptr => unsafe { &*addr.cast::<AtomicU64>() }.store(bits, Ordering::Relaxed),
+        // SAFETY: forwarded to the caller.
+        ElemKind::Tagged16 => unsafe { &*addr.cast::<TaggedSlot>() }.forward_paused(bits),
+    }
 }
 
 #[cfg(test)]

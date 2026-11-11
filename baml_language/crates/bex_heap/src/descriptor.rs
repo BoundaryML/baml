@@ -91,6 +91,10 @@ pub enum Trace {
 pub struct RustHooks {
     /// Push every heap pointer the value holds.
     pub trace: unsafe fn(*const u8, &mut Vec<HeapPtr>),
+    /// Replace every heap pointer the value holds, in place, by what the
+    /// closure returns for it. Visits exactly the non-null pointers `trace`
+    /// pushes; a null is never passed to the closure.
+    pub forward: unsafe fn(*mut u8, &mut dyn FnMut(HeapPtr) -> HeapPtr),
     /// Drop the value in place.
     pub drop: unsafe fn(*mut u8),
     /// Report what the value keeps alive outside its cell.
@@ -434,29 +438,81 @@ const _: () = assert!(RUST_PAYLOAD_OFFSET < GRANULE_BYTES);
 
 static OBJECT_HOOKS: RustHooks = RustHooks {
     trace: crate::object_trace::trace_object_hook,
+    forward: crate::object_trace::forward_object_hook,
     drop: crate::object_trace::drop_object_hook,
     measure: crate::object_trace::measure_object_hook,
 };
 
 const OBJECT_DESCRIPTOR: Descriptor = Descriptor::rust::<Object>(&OBJECT_HOOKS, 0);
 
-/// Push a pointer word found in a slot, ignoring zero.
-fn push_word(word: usize, out: &mut Vec<HeapPtr>) {
-    if word != 0 {
-        out.push(crate::object_trace::heap_ptr_at(word));
+/// What a walk over a cell's pointer slots does with each pointer it finds.
+/// Null slots, and tagged slots holding a scalar, are passed over either way.
+enum SlotWalk<'a> {
+    /// Push the pointer.
+    Trace(&'a mut Vec<HeapPtr>),
+    /// Replace the pointer by what the closure returns for it.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the copying collector's rewrite")
+    )]
+    Forward(&'a mut dyn FnMut(HeapPtr) -> HeapPtr),
+}
+
+impl SlotWalk<'_> {
+    /// Visit the slot of `kind` at `slot`.
+    ///
+    /// # Safety
+    /// `slot` addresses a slot of `kind`, and no mutator runs.
+    unsafe fn visit(&mut self, slot: usize, kind: ElemKind) {
+        use bex_vm_types::object_format::{set_slot_pointer, slot_pointer};
+        // SAFETY: forwarded to the caller.
+        let Some(bits) = (unsafe { slot_pointer(slot as *const u8, kind) }) else {
+            return;
+        };
+        let ptr = crate::object_trace::heap_ptr_at(bits as usize);
+        match self {
+            SlotWalk::Trace(out) => out.push(ptr),
+            SlotWalk::Forward(f) => {
+                let moved = f(ptr);
+                // SAFETY: `slot_pointer` just found a pointer in this slot.
+                unsafe { set_slot_pointer(slot as *const u8, kind, moved.as_ptr() as u64) };
+            }
+        }
     }
 }
 
-/// Push the pointer a slot holds, if any.
+/// Walk every pointer slot of the slot-described cell at `cell`, `cell_bytes`
+/// long: its pointer slots, its tagged slots, then its elements, in that order.
+/// The one walk behind [`trace_slots`] and [`forward_slots`], so the pointers
+/// they see cannot differ.
 ///
 /// # Safety
-/// `slot` addresses a readable slot of `kind`.
-unsafe fn push_slot(slot: usize, kind: ElemKind, out: &mut Vec<HeapPtr>) {
-    // SAFETY: forwarded to the caller.
-    if let Some(bits) =
-        unsafe { bex_vm_types::object_format::slot_pointer(slot as *const u8, kind) }
-    {
-        push_word(bits as usize, out);
+/// `cell` is an allocated cell laid out by `descriptor`, and no mutator runs.
+unsafe fn for_each_pointer_slot(
+    descriptor: &Descriptor,
+    cell: usize,
+    cell_bytes: usize,
+    walk: &mut SlotWalk<'_>,
+) {
+    let slots = [
+        (&descriptor.ptr_slots, ElemKind::Ptr),
+        (&descriptor.tagged_slots, ElemKind::Tagged16),
+    ];
+    for (offsets, kind) in slots {
+        for &offset in offsets.iter() {
+            // SAFETY: validated in bounds when the descriptor was registered.
+            unsafe { walk.visit(cell + offset as usize, kind) };
+        }
+    }
+    let Some(elems) = descriptor.elems else {
+        return;
+    };
+    if elems == ElemKind::Raw8 {
+        return;
+    }
+    for offset in (descriptor.size as usize..cell_bytes).step_by(elems.stride()) {
+        // SAFETY: each element lies inside the cell.
+        unsafe { walk.visit(cell + offset, elems) };
     }
 }
 
@@ -470,26 +526,29 @@ pub(crate) unsafe fn trace_slots(
     cell_bytes: usize,
     out: &mut Vec<HeapPtr>,
 ) {
-    let slots = [
-        (&descriptor.ptr_slots, ElemKind::Ptr),
-        (&descriptor.tagged_slots, ElemKind::Tagged16),
-    ];
-    for (offsets, kind) in slots {
-        for &offset in offsets.iter() {
-            // SAFETY: validated in bounds when the descriptor was registered.
-            unsafe { push_slot(cell + offset as usize, kind, out) };
-        }
-    }
-    let Some(elems) = descriptor.elems else {
-        return;
-    };
-    if elems == ElemKind::Raw8 {
-        return;
-    }
-    for offset in (descriptor.size as usize..cell_bytes).step_by(elems.stride()) {
-        // SAFETY: each element lies inside the cell.
-        unsafe { push_slot(cell + offset, elems, out) };
-    }
+    // SAFETY: forwarded to the caller.
+    unsafe { for_each_pointer_slot(descriptor, cell, cell_bytes, &mut SlotWalk::Trace(out)) };
+}
+
+/// Replace every pointer of the slot-described cell at `cell`, `cell_bytes`
+/// long, by what `f` returns for it: the same slots [`trace_slots`] pushes,
+/// rewritten in place. A tagged slot keeps its tag; raw slots and scalars
+/// are untouched, and a null is never passed to `f`.
+///
+/// # Safety
+/// `cell` is an allocated cell laid out by `descriptor`, and no mutator runs.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the copying collector's rewrite")
+)]
+pub(crate) unsafe fn forward_slots(
+    descriptor: &Descriptor,
+    cell: usize,
+    cell_bytes: usize,
+    f: &mut dyn FnMut(HeapPtr) -> HeapPtr,
+) {
+    // SAFETY: forwarded to the caller.
+    unsafe { for_each_pointer_slot(descriptor, cell, cell_bytes, &mut SlotWalk::Forward(f)) };
 }
 
 #[cfg(test)]
@@ -556,5 +615,185 @@ mod tests {
         assert_eq!(descriptor.size, 48);
         let table = DescriptorTable::new();
         assert!(table.register(descriptor).is_ok());
+    }
+
+    use std::sync::Arc;
+
+    use bex_vm_types::{Value, object_format::SlotValue};
+
+    use crate::{
+        BexHeap, Tlab,
+        object_trace::tests::{Forwarder, class_with_fields},
+        space::{cell_bytes, cell_of},
+    };
+
+    /// The bytes of the cell `ptr` names.
+    unsafe fn cell_image(cell: usize, bytes: usize) -> Vec<u8> {
+        // SAFETY: the caller names an allocated cell of `bytes`.
+        unsafe { std::slice::from_raw_parts(cell as *const u8, bytes) }.to_vec()
+    }
+
+    /// `image` with every word holding one of `moved`'s sources replaced by
+    /// its destination: what a cell should look like after a forward and
+    /// nothing else.
+    fn expected_image(image: &[u8], moved: &[(HeapPtr, HeapPtr)]) -> Vec<u8> {
+        let mut expected = image.to_vec();
+        for word in expected.as_chunks_mut::<WORD_BYTES>().0 {
+            let bits = u64::from_ne_bytes(*word);
+            if let Some((_, to)) = moved.iter().find(|(from, _)| from.as_ptr() as u64 == bits) {
+                *word = (to.as_ptr() as u64).to_ne_bytes();
+            }
+        }
+        expected
+    }
+
+    /// Forward every pointer of the cell `ptr` names to a fresh address and
+    /// check that exactly the pointers `trace_slots` finds moved, as bytes;
+    /// then forward them back so the heap is as it was. Returns the pointers
+    /// the cell held.
+    fn forward_round_trip(heap: &BexHeap, ptr: HeapPtr) -> Vec<HeapPtr> {
+        let cell = cell_of(ptr.as_ptr() as usize);
+        // SAFETY: `ptr` names an allocated cell, and no mutator runs.
+        let (descriptor, bytes, image) = unsafe {
+            let header = Header::at(cell);
+            let bytes = cell_bytes(cell);
+            (
+                heap.descriptors().get(header.descriptor),
+                bytes,
+                cell_image(cell, bytes),
+            )
+        };
+        let mut before = Vec::new();
+        // SAFETY: as above.
+        unsafe { trace_slots(descriptor, cell, bytes, &mut before) };
+
+        let mut forwarder = Forwarder::default();
+        // SAFETY: as above.
+        unsafe { forward_slots(descriptor, cell, bytes, &mut |old| forwarder.forward(old)) };
+        assert_eq!(
+            forwarder.visited, before,
+            "forward visits what trace yields"
+        );
+        let mut after = Vec::new();
+        // SAFETY: as above.
+        unsafe { trace_slots(descriptor, cell, bytes, &mut after) };
+        let expected: Vec<HeapPtr> = before.iter().map(|&old| forwarder.image(old)).collect();
+        assert_eq!(
+            after, expected,
+            "every pointer moved where the closure sent it"
+        );
+        assert_eq!(
+            // SAFETY: as above.
+            unsafe { cell_image(cell, bytes) },
+            expected_image(&image, &forwarder.moved),
+            "only the pointer words changed"
+        );
+
+        // SAFETY: as above.
+        unsafe {
+            forward_slots(descriptor, cell, bytes, &mut |moved| {
+                forwarder
+                    .moved
+                    .iter()
+                    .find(|(_, to)| *to == moved)
+                    .map(|(from, _)| *from)
+                    .expect("forwarding back a pointer this walk handed out")
+            });
+        }
+        // SAFETY: as above.
+        assert_eq!(unsafe { cell_image(cell, bytes) }, image, "restored");
+        before
+    }
+
+    /// An instance's class pointer, pointer field and tagged pointer field
+    /// are forwarded; its raw int and float fields, and the tag word of the
+    /// tagged field, are not.
+    #[test]
+    fn forward_slots_rewrites_an_instance_s_pointer_and_tagged_slots() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let union = RealizedTy::Union(Box::new([RealizedTy::Int, RealizedTy::String]));
+        let class = tlab.alloc(class_with_fields(vec![
+            ("n", RealizedTy::Int),
+            ("x", RealizedTy::Float),
+            ("u", union),
+            ("s", RealizedTy::String),
+        ]));
+        let by_tag = tlab.alloc_string("through the tagged slot");
+        let by_ptr = tlab.alloc_string("through the pointer slot");
+        let float = tlab.alloc_float(2.5);
+        let instance = tlab.alloc_instance(
+            class,
+            vec![
+                Value::int(7),
+                Value::object(float),
+                Value::object(by_tag),
+                Value::object(by_ptr),
+            ],
+        );
+
+        let held = forward_round_trip(&heap, instance);
+        for wanted in [class, by_tag, by_ptr] {
+            assert!(held.contains(&wanted), "{wanted:?} is a pointer slot");
+        }
+        assert!(
+            !held.contains(&float),
+            "the float was unboxed into a raw slot"
+        );
+
+        // A tagged slot holding a scalar is passed over.
+        let instance = tlab.alloc_instance(
+            class,
+            vec![
+                Value::int(7),
+                Value::object(float),
+                Value::int(-3),
+                Value::NULL,
+            ],
+        );
+        assert_eq!(forward_round_trip(&heap, instance), [class]);
+    }
+
+    /// A list's backing and element-type pointers, and every pointer element
+    /// of its backing, are forwarded; the backing's spare capacity is not.
+    #[test]
+    fn forward_slots_rewrites_a_list_and_its_pointer_backing() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let first = tlab.alloc_string("first");
+        let second = tlab.alloc_string("second");
+        let list = tlab.alloc_list_of(
+            RealizedTy::String,
+            &[
+                SlotValue::Value(Value::object(first)),
+                SlotValue::Value(Value::object(second)),
+            ],
+        );
+        let (backing, capacity) = list.backing_object().expect("a backing");
+        assert!(capacity >= 2);
+
+        let held = forward_round_trip(&heap, list.ptr());
+        assert!(held.contains(&backing), "the list points at its backing");
+        assert_eq!(forward_round_trip(&heap, backing), [first, second]);
+    }
+
+    /// Of a tagged backing's elements only the pointer is forwarded: the
+    /// int and the unboxed float keep their words and tags.
+    #[test]
+    fn forward_slots_rewrites_only_the_pointers_of_a_tagged_backing() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let text = tlab.alloc_string("through a tagged element");
+        let list = tlab.alloc_list_of(
+            RealizedTy::Unknown,
+            &[
+                SlotValue::Value(Value::int(1)),
+                SlotValue::Float(2.5),
+                SlotValue::Value(Value::object(text)),
+                SlotValue::Value(Value::NULL),
+            ],
+        );
+        let (backing, _) = list.backing_object().expect("a backing");
+        assert_eq!(forward_round_trip(&heap, backing), [text]);
     }
 }
