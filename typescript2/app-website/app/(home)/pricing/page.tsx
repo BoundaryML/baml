@@ -1,4 +1,5 @@
 // CONTENT PARITY: keep substantive copy in sync with content/pricing.md.
+import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { section } from '@/components/home/analytics';
 import { BOOK } from '@/components/home/links';
@@ -6,43 +7,43 @@ import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button, LINKS } from '@/components/home/ui';
 import { SoftwareApplicationStructuredData } from '@/components/structured-data';
 
-// The pricing page, in the homepage's BAML lane. The nav links it. The plans, rates and what's
-// metered are Boundary Cloud's code (BCS, origin/main: config/bcs.toml, control-plane/README.md,
-// control-plane/src/projector/billing.rs). Retention pricing, the BYOC add-on and the money-back
-// guarantee are the founders'
-// decisions, not yet in that code. Change this page when either changes.
+// The pricing page, in the homepage's BAML lane. The nav links it. Laid out after Better Stack's
+// pricing page: a centered head with the guarantee, a wide card for the free tier, then the paid
+// plans and one line-item table, each price set as an amount with its unit small under it.
+//
+// The plans, rates and what's metered are Boundary Cloud's code (BCS, origin/main: config/bcs.toml,
+// control-plane/README.md, control-plane/src/projector/billing.rs). Retention pricing, the BYOC
+// add-on and the money-back guarantee are the founders' decisions, not yet in that code. Change this
+// page when either changes.
 
-// The rows the two Cloud plans differ on, in the same order on both cards so they read across.
-const ROWS = [
-  'Data included',
-  'After that',
-  'Retention',
-  'Longer retention',
-  'Your own cloud',
+/** A table cell: an amount and, for a price, its unit under it. */
+type Cell = [amount: string, unit?: string];
+
+// The line items, Starter then Pro.
+const ROWS: { cells: [Cell, Cell]; label: string }[] = [
+  {
+    cells: [
+      ['1 GB', 'per month'],
+      ['5 GB', 'per month'],
+    ],
+    label: 'Data included',
+  },
+  {
+    cells: [
+      ['$4', 'per GB'],
+      ['$3', 'per GB'],
+    ],
+    label: 'Data after that',
+  },
+  { cells: [['30 days'], ['30 days']], label: 'Retention included' },
+  {
+    cells: [['—'], ['$0.10', 'per GB per 30 days']],
+    label: 'Longer retention',
+  },
+  { cells: [['—'], ['Add-on']], label: 'Bring your own cloud' },
 ];
 
-const CLOUD: { cells: string[]; lit?: boolean; name: string; price: string }[] =
-  [
-    {
-      cells: ['1 GB a month', '$4 per GB', '30 days', '—', '—'],
-      name: 'Starter',
-      price: '$0',
-    },
-    {
-      cells: [
-        '5 GB a month',
-        '$3 per GB',
-        '30 days',
-        '$0.10 per GB per 30 days',
-        'Add-on',
-      ],
-      lit: true,
-      name: 'Pro',
-      price: '$250',
-    },
-  ];
-
-// Never billed, on either plan: only data and retention are.
+// Never billed, on either plan.
 const FREE = [
   'Spans',
   'Profiles',
@@ -53,30 +54,36 @@ const FREE = [
   'API keys',
 ];
 
-function Card({
-  children,
-  lit,
-  name,
-  price,
-  unit,
-}: {
-  children: ReactNode;
-  lit?: boolean;
-  name: string;
-  price: string;
-  unit: string;
-}) {
+const PLANS = [
+  { name: 'Starter', price: '$0' },
+  { lit: true, name: 'Pro', price: '$250' },
+];
+
+// Label, Starter, Pro.
+const COLUMNS =
+  'grid grid-cols-[minmax(0,1fr)_6.5rem_8.5rem] gap-4 px-5 sm:grid-cols-[minmax(0,1fr)_9rem_11rem]';
+
+function Tick({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={`flex flex-col rounded-xl border p-6 ${lit ? 'border-clover/60 bg-clover/[0.07]' : 'border-rule bg-raised'}`}
-    >
-      <p className="font-display text-[20px] font-medium text-head">{name}</p>
-      <p className="mt-4 font-display text-[40px] leading-none font-medium text-head tabular-nums">
-        {price}
-      </p>
-      <p className="mt-1 text-[14px] text-muted">{unit}</p>
+    <li className="flex items-start gap-2.5">
+      <Check
+        aria-hidden="true"
+        className="mt-[3px] size-4 shrink-0 text-clover"
+        strokeWidth={2.25}
+      />
       {children}
-    </div>
+    </li>
+  );
+}
+
+function Amount({ cell }: { cell: Cell }) {
+  return (
+    <dd className="text-right">
+      <span className="block text-head">{cell[0]}</span>
+      {cell[1] && (
+        <span className="block text-[13px] text-muted">{cell[1]}</span>
+      )}
+    </dd>
   );
 }
 
@@ -87,60 +94,105 @@ export default function PricingPage() {
       <SoftwareApplicationStructuredData />
       <section
         {...section('pricing_header')}
-        className={`${PAGE_WRAP} pt-14 md:pt-20 pb-20 md:pb-32`}
+        className={`${PAGE_WRAP} pt-16 md:pt-24 pb-20 md:pb-32`}
       >
-        <h1 className="v4-h1 max-w-[12em]">Pricing</h1>
-        <p className="mt-6 max-w-[36rem] v4-body text-ink-2">
-          You pay for data and retention. Spans, seats, queries and profiles are
-          free.
-        </p>
+        <div className="text-center">
+          <h1 className="v4-h1">Pricing</h1>
+          <p className="mt-5 v4-body text-ink-2">
+            Every Boundary Cloud plan comes with a 60-day money-back guarantee.
+          </p>
+        </div>
 
-        <div className="mt-12 md:mt-16 grid gap-4 md:grid-cols-3">
-          <Card name="BAML" price="Free" unit="open source">
-            <p className="mt-6 text-[15px] text-ink-2">
-              The language and toolchain. Runs on your machine.
-            </p>
-            <div className="mt-auto pt-8">
+        <div className="mx-auto mt-14 max-w-[960px] space-y-20 md:mt-20">
+          {/* The free tier, wide, the way Better Stack opens with theirs. */}
+          <div className="rounded-xl border border-rule bg-raised p-6 md:p-8">
+            <div className="flex flex-wrap items-end justify-between gap-6">
+              <div>
+                <p className="text-[15px] font-medium text-head">
+                  BAML, free and open source
+                </p>
+                <p className="mt-2 font-display text-[40px] leading-none font-medium text-head">
+                  $0
+                  <span className="ml-2 font-sans text-[15px] font-normal text-muted">
+                    forever
+                  </span>
+                </p>
+              </div>
               <Button href={LINKS.quickstart} variant="secondary">
                 Install BAML
               </Button>
             </div>
-          </Card>
+            <ul className="mt-6 grid gap-x-8 gap-y-2.5 border-t border-rule pt-6 text-[15px] text-ink-2 sm:grid-cols-2">
+              <Tick>The language, compiler and toolchain</Tick>
+              <Tick>Runs on your machine</Tick>
+              <Tick>Never calls our servers</Tick>
+              <Tick>Source on GitHub</Tick>
+            </ul>
+          </div>
 
-          {CLOUD.map((p) => (
-            <Card
-              key={p.name}
-              lit={p.lit}
-              name={p.name}
-              price={p.price}
-              unit="per month"
-            >
-              <dl className="mt-6 divide-y divide-rule border-y border-rule text-[15px]">
-                {ROWS.map((row, i) => (
-                  <div className="flex justify-between gap-4 py-2.5" key={row}>
-                    <dt className="shrink-0 text-muted">{row}</dt>
-                    <dd className="text-right text-head">{p.cells[i]}</dd>
+          <div>
+            <div className="border-b border-rule pb-5">
+              <h2 className="v4-h3 text-head">Boundary Cloud</h2>
+              <p className="mt-2 text-ink-2">
+                You pay for data and retention. Spans, seats, queries and
+                profiles are free.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              {PLANS.map((p) => (
+                <div
+                  className={`flex flex-wrap items-end justify-between gap-6 rounded-xl border p-6 ${p.lit ? 'border-clover/60 bg-clover/[0.07]' : 'border-rule bg-raised'}`}
+                  key={p.name}
+                >
+                  <div>
+                    <p className="text-[15px] font-medium text-head">
+                      {p.name}
+                    </p>
+                    <p className="mt-2 font-display text-[40px] leading-none font-medium text-head tabular-nums">
+                      {p.price}
+                    </p>
+                    <p className="mt-1 text-[13px] text-muted">per month</p>
+                  </div>
+                  <Button href={BOOK} variant={p.lit ? 'primary' : 'secondary'}>
+                    Get early access
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {/* One line-item table for both plans: the item, then Starter, then Pro. */}
+            <div className="mt-4 overflow-hidden rounded-xl border border-rule">
+              <div
+                className={`${COLUMNS} border-b border-rule bg-raised py-3 text-[13px] text-muted`}
+              >
+                <span />
+                <span className="text-right">Starter</span>
+                <span className="text-right">Pro</span>
+              </div>
+              <dl className="divide-y divide-rule text-[15px]">
+                {ROWS.map((r) => (
+                  <div
+                    className={`${COLUMNS} items-baseline py-3`}
+                    key={r.label}
+                  >
+                    <dt className="text-ink-2">{r.label}</dt>
+                    <Amount cell={r.cells[0]} />
+                    <Amount cell={r.cells[1]} />
                   </div>
                 ))}
               </dl>
-              <div className="mt-auto pt-8">
-                <Button href={BOOK} variant={p.lit ? 'primary' : 'secondary'}>
-                  Get early access
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        <div className="mt-16 md:mt-20 max-w-[44rem]">
-          <h2 className="v4-h3 text-head">Free on both plans</h2>
-          <p className="mt-3 text-[17px] text-ink-2">{FREE.join(' · ')}</p>
-          <ul className="mt-8 space-y-1.5 text-[15px] text-muted">
-            <li>60-day money-back guarantee.</li>
-            <li>
+            </div>
+            {/* What's never billed, as Better Stack lists features under each table. */}
+            <ul className="mt-6 grid grid-cols-2 gap-x-6 gap-y-2.5 px-1 text-[15px] text-ink-2 sm:grid-cols-3">
+              {FREE.map((f) => (
+                <Tick key={f}>{`${f} included`}</Tick>
+              ))}
+            </ul>
+            <p className="mt-6 px-1 text-[14px] text-muted">
               Going over your included data never blocks ingest or queries.
-            </li>
-          </ul>
+            </p>
+          </div>
         </div>
       </section>
     </PageShell>

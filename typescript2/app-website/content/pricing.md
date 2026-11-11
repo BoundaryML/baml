@@ -23,7 +23,7 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 
 Free on both plans: spans, profiles, queries, dashboards, members, projects, API keys.
 
-60-day money-back guarantee. Going over your included data never blocks ingest or queries.
+Every Boundary Cloud plan comes with a 60-day money-back guarantee. Going over your included data never blocks ingest or queries.
 
 [Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
 
