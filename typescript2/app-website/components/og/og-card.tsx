@@ -5,7 +5,11 @@
 // the headline (/podcast), and `photo` replaces the painting (/who-are-we).
 // Rendered to PNG via `next/og`.
 
+import { LOGO_ASPECT } from './og-assets';
+
 export const OG_SIZE = { height: 630, width: 1200 };
+// The logo's height, with the lamb rising above the wordmark.
+const LOGO_HEIGHT = 60;
 export const OG_CONTENT_TYPE = 'image/png';
 
 const BLACK = '#0F0F0F';
@@ -62,7 +66,12 @@ export function OgCard({
           padding: '60px 64px',
         }}
       >
-        <img alt="Boundary" height={40} src={logo} width={234} />
+        <img
+          alt="Boundary"
+          height={LOGO_HEIGHT}
+          src={logo}
+          width={Math.round(LOGO_HEIGHT * LOGO_ASPECT)}
+        />
         <div
           style={{
             display: 'flex',
