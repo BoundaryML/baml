@@ -7,7 +7,13 @@
 //! local balance, settled with the budget in quanta, whenever the allocator
 //! takes a new block, when the owner asks, and when the allocator is dropped.
 
-use std::{ptr::NonNull, sync::Arc};
+use std::{
+    ptr::NonNull,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use std::collections::HashMap;
 
@@ -153,6 +159,35 @@ impl Tlab {
         // SAFETY: a fresh cell of `cell_bytes`; the header stays intact.
         unsafe { ((cell + HEADER_BYTES) as *mut u8).write_bytes(0, cell_bytes - HEADER_BYTES) };
         NonNull::new(cell as *mut u8).expect("cells are never at address zero")
+    }
+
+    /// A zeroed instance of `class` laid out by `descriptor` in `bytes`, with
+    /// only its class slot written, for compiled code that stores every
+    /// field itself before its next safepoint (a zeroed tagged field reads
+    /// as held until then). `descriptor` and `bytes` are the class's
+    /// `InstanceLayout`'s, for a class without type arguments.
+    #[inline]
+    pub fn alloc_instance_unfilled(
+        &mut self,
+        descriptor: DescriptorId,
+        bytes: usize,
+        class: HeapPtr,
+    ) -> HeapPtr {
+        debug_assert_eq!(
+            self.heap.descriptors().get(descriptor).size as usize,
+            bytes,
+            "an instance cell is its layout's size"
+        );
+        let (cell, cell_bytes) = self.alloc_cell(descriptor, granule_align(bytes));
+        self.spend(cell_bytes);
+        // SAFETY: a fresh cell of `cell_bytes`; the header stays intact, and
+        // the class slot lies inside the instance.
+        unsafe {
+            ((cell + HEADER_BYTES) as *mut u8).write_bytes(0, cell_bytes - HEADER_BYTES);
+            let slot = (cell + bex_vm_types::types::CLASS_OFFSET as usize) as *const AtomicU64;
+            (*slot).store(Value::object(class).bits(), Ordering::Relaxed);
+        }
+        self.payload_ptr(NonNull::new(cell as *mut u8).expect("cells are never at address zero"))
     }
 
     /// Place a cell for `bytes` (granule-aligned) and write its header.

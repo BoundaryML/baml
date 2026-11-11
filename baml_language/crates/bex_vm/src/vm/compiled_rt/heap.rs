@@ -383,6 +383,42 @@ impl BexVm {
         Value::object(self.alloc_instance(class, fields))
     }
 
+    /// How compiled code allocates `class`'s instances in place, or `None`
+    /// when an instance needs more than its fields: type arguments, or a
+    /// finalizer, which the generic path registers once construction ends.
+    #[inline]
+    #[must_use]
+    pub fn instance_shape(&self, class: HeapPtr) -> Option<InstanceShape> {
+        // SAFETY: the caller's frame roots the class.
+        #[allow(unsafe_code)]
+        let Object::Class(def) = (unsafe { class.get() }) else {
+            return None;
+        };
+        if def.generic_param_count != 0 || def.cleanup.is_some() {
+            return None;
+        }
+        let layout = self.heap.instance_layout(def);
+        Some(InstanceShape {
+            descriptor: layout.descriptor(),
+            bytes: layout.size(),
+            class,
+        })
+    }
+
+    /// A new instance of `shape`, zeroed but for its class slot. The caller
+    /// stores every field through the returned base before its next
+    /// safepoint: a zeroed tagged field reads as held until stored.
+    #[allow(unsafe_code)]
+    #[inline]
+    pub fn alloc_shaped(&mut self, shape: InstanceShape) -> (Value, FieldBase) {
+        let ptr = self
+            .tlab
+            .alloc_instance_unfilled(shape.descriptor, shape.bytes, shape.class);
+        // SAFETY: the instance's cell starts at its header.
+        let base = unsafe { ptr.as_ptr().cast::<u8>().sub(HEADER_BYTES) };
+        (Value::object(ptr), FieldBase(base))
+    }
+
     #[inline]
     pub fn new_array(&mut self, element_ty: RealizedTy, values: Vec<Value>) -> Value {
         Value::object(self.alloc_array(element_ty, values))
@@ -511,6 +547,15 @@ pub struct FieldBase(*const u8);
 #[must_use]
 pub fn class_word(class: HeapPtr) -> u64 {
     Value::object(class).bits()
+}
+
+/// How compiled code allocates one class's instances in place; see
+/// [`BexVm::instance_shape`].
+#[derive(Clone, Copy)]
+pub struct InstanceShape {
+    descriptor: bex_vm_types::layout::DescriptorId,
+    bytes: usize,
+    class: HeapPtr,
 }
 
 /// The class-slot word of `value` when it is an instance, else zero, which no

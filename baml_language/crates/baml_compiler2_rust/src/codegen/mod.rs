@@ -1,5 +1,6 @@
 //! Generates Rust bodies from MIR using the VM runtime and structured control flow.
 
+mod alloc;
 mod call;
 mod constant;
 mod dispatch;

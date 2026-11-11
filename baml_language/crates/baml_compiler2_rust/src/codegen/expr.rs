@@ -99,12 +99,13 @@ impl<'db> Generator<'_, 'db> {
                         fields.len()
                     ));
                 }
+                if type_arg_templates.is_empty() {
+                    return self.new_instance(block, object, fields);
+                }
                 let values = self.arg_values(block, fields)?;
                 let class = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
                 let values = values.join(", ");
-                if type_arg_templates.is_empty() {
-                    format!("vm.new_instance({class}, vec![{values}])")
-                } else {
+                {
                     let type_args = self.realized_all(type_arg_templates)?.join(", ");
                     format!(
                         "vm.new_generic_instance({class}, Box::new([{type_args}]), vec![{values}])"
