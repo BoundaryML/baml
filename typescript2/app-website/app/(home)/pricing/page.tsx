@@ -189,7 +189,7 @@ function HowBilling() {
           A lot of our engineering goes into shrinking what you send over the
           wire.
         </p>
-        <p className="text-[13px] text-muted">Two examples of many</p>
+        <p className="text-[13px] text-muted">A few examples of many</p>
       </div>
       <div className="mt-4">
         <Meter />
