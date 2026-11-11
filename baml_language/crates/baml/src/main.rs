@@ -1957,7 +1957,7 @@ fn self_update() -> Result<()> {
 #[cfg(any(not(feature = "self-update"), feature = "no-self-update"))]
 fn self_update_impl() -> Result<()> {
     Err(anyhow!(
-        "self-update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status"
+        "baml self update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status"
     ))
 }
 

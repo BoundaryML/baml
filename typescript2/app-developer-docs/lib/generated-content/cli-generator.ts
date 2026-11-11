@@ -182,8 +182,8 @@ function parseFlags(rows: HelpRow[]): CliCommandNodeInput['flags'] {
 
 /**
  * Parses clap-style help. `fallbackUsage` is for wrapper-owned commands:
- * wrapper 0.3 prints `baml toolchain help` and `baml self-update --help`
- * without a Usage line.
+ * the wrapper prints `baml toolchain help` and its self-update help without
+ * a Usage line.
  */
 export function parseHelp(text: string, fallbackUsage?: string): ParsedHelp {
   const lines = text.replaceAll('\r\n', '\n').split('\n');
@@ -227,11 +227,14 @@ export async function resolveCliHelpBinary(
   if (!wrapperAnswersRootHelp(identity.wrapperVersion)) {
     return bamlBinary;
   }
+  // Wrapper 0.3 spells the flag `--json`; later wrappers take the CLI's
+  // `--output-format json`.
   const status = await invokeBaml(bamlBinary, [
     'toolchain',
     'status',
-    '--json',
-  ]);
+    '--output-format',
+    'json',
+  ]).catch(() => invokeBaml(bamlBinary, ['toolchain', 'status', '--json']));
   const resolved = toolchainStatusSchema.parse(JSON.parse(status.stdout));
   if (
     resolved.version !== null &&
@@ -288,7 +291,7 @@ export async function generateCliPublicationInput(
   const visited = new Set<string>();
 
   // CLI commands come from the toolchain binary. `toolchain` and
-  // `self-update` belong to the wrapper; `fallbackUsage` covers wrapper help
+  // the self-updater belong to the wrapper; `fallbackUsage` covers wrapper help
   // that has no Usage line.
   const capture = async (
     binary: string,
@@ -352,13 +355,41 @@ export async function generateCliPublicationInput(
     false,
     'baml toolchain <command>',
   );
-  const selfUpdate = await capture(
-    bamlBinary,
-    ['self-update'],
-    ['self-update', '--help'],
-    false,
-    'baml self-update',
+  // Wrapper 0.3 spells the updater `baml self-update`; later wrappers spell
+  // it `baml self update`. Only the wrapper knows which it is.
+  const spacedSelfUpdate = await invokeBaml(bamlBinary, [
+    'self',
+    'update',
+    '--help',
+  ]).then(
+    () => true,
+    () => false,
   );
+  const selfUpdate = spacedSelfUpdate
+    ? cliCommandNodeSchema.parse({
+        arguments: [],
+        command_path: ['self'],
+        description: 'Manage the wrapper executable',
+        flags: [],
+        name: 'self',
+        subcommands: [
+          await capture(
+            bamlBinary,
+            ['self', 'update'],
+            ['self', 'update', '--help'],
+            false,
+            'baml self update',
+          ),
+        ],
+        usage: 'baml self <command>',
+      })
+    : await capture(
+        bamlBinary,
+        ['self-update'],
+        ['self-update', '--help'],
+        false,
+        'baml self-update',
+      );
   root.subcommands.push(toolchain, selfUpdate);
   root.subcommands.sort((left, right) => left.name.localeCompare(right.name));
 
