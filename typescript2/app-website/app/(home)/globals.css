@@ -650,6 +650,13 @@ body > footer::before {
   letter-spacing: -0.02em;
   border-left-width: 2px;
 }
+/* A highlighted figure in a post: the accent at low strength, not the browser's yellow. */
+.blog-prose :where(mark):not(:where(.not-prose *)) {
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+  background: rgb(202 170 242 / 0.16);
+  color: var(--head);
+}
 .blog-prose :where(blockquote p):not(:where(.not-prose *))::before,
 .blog-prose :where(blockquote p):not(:where(.not-prose *))::after {
   content: none;

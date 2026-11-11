@@ -1,0 +1,193 @@
+---
+title: "Compiling BAML to Rust"
+description: "A new compiler backend that turns BAML into Rust: ~3.5x faster than our interpreter on average, up to 34x on tight loops."
+slug: compiling-baml-to-rust
+date: November 11, 2026
+isPublished: true
+tags: ['Engineering']
+author:
+  name: Harivansh Rathi
+---
+We wrote a new backend for the BAML compiler that lets us compile all BAML code into Rust.
+On average the compiled code runs <mark>~3.5x</mark> faster than our interpreter, and up to <mark>34x</mark> faster on tight loops.
+
+| Workload | Interpreter | Compiled | Speedup |
+| :--- | ---: | ---: | ---: |
+| <Term def="Two nested loops of 500 iterations each.">nested loops 500×500</Term> | 12.61 ms | 0.38 ms | <mark>33.6×</mark> |
+| <Term def="A read-only recursive walk of a live tree of 262,144 nodes.">tree walk, 262k nodes</Term> | 892 ms | 35.8 ms | <mark>24.9×</mark> |
+| <Term def="Iterate, index and rebuild an array of 8,192 integers.">array traversal 8k</Term> | 10.33 ms | 0.86 ms | <mark>12.0×</mark> |
+| <Term def="1,000,000 calls of a one-line function.">1M function calls</Term> | 80.5 ms | 8.1 ms | <mark>9.9×</mark> |
+| <Term def="The Richards benchmark: an OS task-scheduler simulation, run 50 times.">Richards scheduler</Term> | 578 ms | 114 ms | <mark>5.1×</mark> |
+| <Term def="An agent loop over 300 recorded conversations: typed decode into a union, match dispatch and retries.">agent loop, 300 conversations</Term> | 129 ms | 87 ms | <mark>1.5×</mark> |
+
+BAML may look like a small language from the outside, but it is extremely feature heavy and provides a lot of runtime guarantees. It reads like TypeScript and is concurrent like Go. Any function can await/pause and there's no `async` keyword. It also profiles every function call it makes down to the nanosecond and automatically tracks where each error started and how it moved up the stack.
+
+![The BAML compiler: source, tokens, CST, AST, HIR, TIR and MIR are shared. From MIR one path emits bytecode for the VM exec loop; the new path emits Rust, built by rustc with fat LTO into compiled functions. Both live in one executable with the heap, GC and BTEL, and call each other.](/blog/compiling-baml-to-rust/pipeline.svg)
+
+This diagram shows the inner workings of the BAML compiler and all of its intermediate representations. We chose to compile from MIR (mid-level intermediate representation), one level above bytecode. Any higher and we would have to redo all of BAML's lowering ourselves and hope we made the same choices as the bytecode compiler.
+
+## Why Rust
+
+Most of the options we looked at end up at LLVM or something like it. The question that mattered to us was: "What sits between our MIR and the runtime, and how little of the runtime can we rebuild to get the maximum amount of optimization?"
+
+LLVM IR is a decent pick. It is basic blocks and branches, the same shape as our MIR, so we don't need to rebuild structured loops from our MIR. Since our VM is written in Rust, the IR can only call it through the C ABI. This means all VM calls become a black box that the inliner cannot optimize through unless they are rewritten as IR operations. This is too much work.
+
+C also has `goto` ootb, so MIR can compile to it 1:1. The ABI wall is hit with this as well, since even `+` in BAML is a 63-bit checked add that lives in a VM helper, which C can neither see nor optimize.
+Cranelift can only inline its own IR, meaning our Rust runtime is again a black box.
+
+Since our VM runtime is written in Rust, most of these problems disappear with this choice. Generated code calls VM functions that already exist and can reuse the same types. With fat LTO, LLVM optimizes the generated code and the runtime as a single unit, which means shared helpers also get inlined. This is great. rustc typechecks the output too, so we find most field index errors at compile time.
+
+## Control flow
+
+MIR is basic blocks connected by gotos, and Rust has no `goto`.
+We must make do with loops, ifs and breaks.
+
+For reference, here is a `while` loop in BAML and its MIR:
+
+<CodeBlocks>
+```rust filename="sum.mir"
+fn user.sum(xs: int[]) -> int {
+    bb0: {
+        _2 = const 0_i64;
+        _3 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = copy _3;
+        _6 = len(_1);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = copy _5 < copy _6;
+        branch copy _4 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _0 = copy _2;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        _8 = copy _1;
+        _9 = copy _3;
+        _7 = copy _8[_9];
+        _2 = copy _2 + copy _7;
+        _3 = copy _3 + const 1_i64;
+        goto -> bb1;
+    }
+}
+```
+
+```baml filename="sum.baml"
+function sum(xs: int[]) -> int {
+  let total = 0;
+  let i = 0;
+  while (i < xs.length()) {
+    total += xs[i];
+    i += 1;
+  }
+  total
+}
+```
+</CodeBlocks>
+
+![The control-flow graph of sum: bb0 to bb1 to bb2, which branches to bb5 or bb3; bb5 jumps back to bb1; bb3 goes to bb4 and returns.](/blog/compiling-baml-to-rust/sum-cfg.svg)
+
+Note that the arrow from `bb5` back to `bb1` is the only jump that goes backwards.
+
+The naive approach is a loop around a match, with one arm per basic block. This technically works, but LLVM can't reliably find and optimize the loops inside the match. It can't <Term def="Run several iterations of a loop at once with SIMD instructions, e.g. four adds in one instruction.">vectorize</Term> the loop or <Term def="Move work that gives the same answer every iteration out of the loop, so it runs once.">hoist</Term> work out of it, so it's pretty slow at runtime.
+
+<CodeBlocks>
+```rust filename="naive.rs"
+let mut block = 0;
+loop {
+    match block {
+        0 => { total = 0; i = 0; block = 1; }
+        1 => { n = len(xs); block = 2; }
+        2 => { block = if i < n { 5 } else { 3 }; }
+        3 => { result = total; block = 4; }
+        4 => return result,
+        5 => { total += xs[i]; i += 1; block = 1; }
+        _ => unreachable!(),
+    }
+}
+```
+</CodeBlocks>
+
+We can turn every back edge into a loop and every forward jump into a `break 'label`.
+This only works if every loop has exactly one entry point (otherwise it's <Term def="A loop that can be entered at more than one block. No single block is the way in, so it cannot be written as a structured loop (loop, break, continue) without duplicating code.">irreducible control flow</Term>). After a sweep of ~15k BAML functions, we found no exceptions to this. We did not formally verify this finding, so instead we get around it with two rules:
+
+1. the only jump allowed to go backwards is a loop jumping to its own header
+2. the only way into a loop is through that same header
+
+The MIR builder checks both rules at compile time. The Rust we emit for `sum` looks like this:
+
+<CodeBlocks>
+```rust filename="user_sum.rs"
+'l1: loop {
+    l5 = l3;
+    l6 = expect_int(vm.container_len(l1)?)?;
+    l4 = l5 < l6;
+    if l4 {
+        l9 = l3;
+        l7 = expect_int(vm.load_array_element(l1, Value::int(l9))?)?;
+        l2 = vm.add_i64(l2, l7)?;
+        l3 = vm.add_i64(l3, 1)?;
+        continue 'l1;
+    } else {
+        return Ok(l2);
+    }
+}
+```
+</CodeBlocks>
+
+LLVM can see this loop and optimize it, which makes larger `while` loops 2-5x faster at runtime.
+
+## Pausing
+
+The second thing Rust doesn't offer by default is pausing a function during execution. A function's locals live in its stack frame, which is popped on return, so compiled code can't hand control back to the VM mid-call and resume later.
+
+The usual workaround is compiling every function that may suspend into a state machine (Rust's `async` does this). Since suspension is transitive, this design spreads to ~69% of compiled functions and makes them ~1.3–1.8x slower than the interpreter itself.
+
+We solve this with [stackful coroutines](https://github.com/Amanieu/corosensei). Each VM owns a separate stack (a `fiber`) and compiled code runs on it, so suspending is just a context switch between two stacks on the same thread.
+
+A function pauses by calling `vm.suspend` with a request such as `Await(future)`. `suspend` pushes the callee-saved registers onto the fiber and switches the stack pointer back to the thread's stack, returning control to the VM.
+The VM handles the request the same way it would for the interpreter and schedules other tasks in the meantime.
+
+To resume, the VM switches the stack pointer back to the fiber and restores the registers. `suspend` then returns the request's result like an ordinary function call.
+
+![Three panels: classify runs on the fiber; suspend swaps the stack pointer back to the VM with Await(fut); resume swaps it back into suspend.](/blog/compiling-baml-to-rust/fiber-switch.svg)
+
+Functions that never suspend pay almost nothing. A suspended task occupies ~3.7 KB in memory (depending on object being a generic or growing container like array)
+
+## Garbage collection
+
+BAML's GC is a <Term def="Objects are grouped by age. New objects start in a young generation that's collected often, and the few that survive move to older generations that are collected rarely.">generational</Term>, <Term def="Every VM pauses while the collector runs, so no code touches the heap mid-collection.">stop-the-world</Term> <Term def="Live objects are copied out to a new region instead of freeing dead ones one by one, so the old region can be reset all at once.">copying</Term> collector. When it runs, every VM is stopped and the live objects (anything still reachable) in the generation being collected are copied into an older one. The source generation is then wiped by the collector.
+
+Since every live object moves to a new address, every pointer to it has to be updated. The interpreter can do this since all of its pointers live in VM frame slots, but Rust doesn't expose the pointers a compiled function holds in its locals/registers.
+
+Our MIR types every local and tracks which ones are live at each point. At compile time the backend knows which live locals hold heap values at every point where a collection can happen (a pause, or a VM call that may collect). It emits code to copy them into the VM's frame slots (already scanned by the GC) before that point, and the compiled code reads them back after.
+
+The GC never scans the fiber. To the collector, a paused compiled function looks exactly like paused bytecode (ie. we didn't need to touch any GC code for the new native backend)
+
+## Escape analysis
+
+BAML has a `spawn` keyword (like Go's `go`), and tasks run on multiple threads over a single shared heap. Since any array or map could be accessed by two threads at once, every array and map access takes a spin lock and every field access is atomic. This also applies to operations that are provably local, causing slowdown where it can be avoided.
+
+At compile time we follow each object through the program (assignments, function calls and builtins) to see which tasks can reach it.
+If only the task that created it can access it (it's `local`), then both the compiled code and the interpreter can skip the spin lock.
+This gave us another ~2-3x speedup on array and sort heavy code.
+
+## Runtime v2
+
+This was a great project and we ended up with a backend that is able to compile 100% of BAML into native Rust code. To keep the scope of this experiment small, we kept the VM's data model as-is.
+
+Compiled code still goes through the VM for every field read, allocation and container access, so data-heavy programs (like our agent loop) only got ~1.5x faster.
+
+Our goal is to be as fast as, if not faster than, Node.js and V8. We are working on a v2 runtime with typed object layouts for the heap. Excited to share more soon !
