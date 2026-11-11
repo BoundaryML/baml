@@ -1,6 +1,6 @@
 # BAML Pricing
 
-> BAML is free and open source.
+> BAML is free and open source. Boundary Cloud has a Starter plan at $0 a month and a Pro plan at $250 a month.
 
 Web page: https://boundaryml.com/pricing
 
@@ -12,17 +12,16 @@ You can install the toolchain, write and run BAML programs, generate SDKs, use t
 
 [Install BAML](https://boundaryml.com/quickstart.md).
 
-## BAML Cloud
+## Boundary Cloud
 
-BAML Cloud is coming later this year, adding hosted capabilities for:
+Boundary Cloud is in early access. Both plans include unlimited spans; data is what your programs send to Boundary Cloud, counted in decimal GB each billing month.
 
-- Observability
-- Team controls
-- Governance
+| Plan | Price | Data included | Data after that |
+| --- | --- | --- | --- |
+| Starter | $0 a month | 1 GB a month | $4 per GB |
+| Pro | $250 a month | 5 GB a month | $3 per GB |
 
-Cloud is not required to run BAML locally. Cloud pricing has not yet been published on this page.
-
-For current availability or early access, [contact the team through Discord](https://boundaryml.com/discord).
+Boundary Cloud is not required to run BAML locally. [Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
 
 ## Source and license
 

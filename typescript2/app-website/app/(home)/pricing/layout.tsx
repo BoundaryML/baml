@@ -1,10 +1,10 @@
 import { createMetadata } from '@/app/_lib/metadata';
 
-// `/pricing` is a client component, so its metadata lives in this server layout.
+// The page's metadata lives in this server layout.
 export const metadata = createMetadata({
   description:
-    'Free and open source, runs entirely on your machine, never calls our servers. Cloud tools come later this year.',
-  ogTitle: 'Free and open source',
+    'BAML is free and open source. Boundary Cloud has a Starter plan at $0 a month and a Pro plan at $250 a month, both with unlimited spans.',
+  ogTitle: 'Pricing',
   path: '/pricing',
   title: 'Pricing',
 });
