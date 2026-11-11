@@ -793,9 +793,12 @@ export function Meter() {
             </span>
           )}
         </div>
+        {/* Shown only once the scene is done, with the last bar; it keeps its room so nothing moves. */}
         <button
-          className="cursor-pointer whitespace-nowrap text-ink-2 transition-colors hover:text-head"
+          aria-hidden={!done}
+          className={`cursor-pointer whitespace-nowrap text-ink-2 transition-[opacity,color] duration-300 hover:text-head ${done ? '' : 'invisible opacity-0'}`}
           onClick={() => go(nextIndex)}
+          tabIndex={done ? 0 : -1}
           type="button"
         >
           Next: {next.title} →
