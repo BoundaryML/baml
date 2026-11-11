@@ -7,6 +7,7 @@ mod codegen;
 mod coords;
 mod index;
 mod init;
+mod json_codec;
 mod operands;
 mod reach;
 mod render;

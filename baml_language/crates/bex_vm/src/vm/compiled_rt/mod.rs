@@ -14,6 +14,7 @@ pub(in crate::vm) use frame::validate_compiled_program;
 pub use frame::{CompiledBodies, CompiledBodyTable};
 pub(crate) use state::CompiledState;
 mod heap;
+pub mod json;
 pub use heap::{FieldBase, InstanceShape, ListBase, class_word, debug_class, instance_class_word};
 mod program;
 mod record;

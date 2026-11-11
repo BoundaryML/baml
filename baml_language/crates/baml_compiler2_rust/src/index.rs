@@ -292,10 +292,61 @@ impl<'p> ProgramIndex<'p> {
         self.class_fields(class_head_coords(head))
     }
 
+    pub(crate) fn program(&self) -> &'p Program {
+        self.program
+    }
+
     /// Whether `class` is declared by a package other than the standard
     /// library's.
     pub(crate) fn is_user_class(&self, class: usize) -> bool {
         self.user_classes.contains(&class)
+    }
+
+    /// The classes a rule of the standard library's interface `interface`
+    /// (`FromJson`, `ToJson`) names, or `None` when some rule's pattern is
+    /// not one class (it may then apply to any class).
+    pub(crate) fn rule_classes(&self, interface: &str) -> Option<std::collections::HashSet<usize>> {
+        let found = self.program.packages.iter().find_map(|package| {
+            if !matches!(package.kind, bex_vm_types::types::PackageKind::Language(_)) {
+                return None;
+            }
+            package
+                .interfaces
+                .iter()
+                .find(|(name, _)| name.namespace.is_empty() && name.name.as_str() == interface)
+                .map(|(_, object)| object.raw())
+        });
+        let Some(interface) = found else {
+            return Some(std::collections::HashSet::new());
+        };
+        let mut classes = std::collections::HashSet::new();
+        let rules = self
+            .program
+            .packages
+            .iter()
+            .filter_map(|package| package.impl_rules.get(&ObjectIndex::from_raw(interface)))
+            .flatten();
+        for rule in rules {
+            match &rule.for_ty_pattern {
+                // A class pattern, generic or not, names its class.
+                bex_vm_types::TyTemplate::Class(head, _) => {
+                    classes.insert(head.tag().static_index()?);
+                }
+                // A list, map, scalar or other non-class pattern names no
+                // class; anything else (a type parameter) may match one.
+                bex_vm_types::TyTemplate::List(_)
+                | bex_vm_types::TyTemplate::Map { .. }
+                | bex_vm_types::TyTemplate::Int
+                | bex_vm_types::TyTemplate::Float
+                | bex_vm_types::TyTemplate::Bool
+                | bex_vm_types::TyTemplate::String
+                | bex_vm_types::TyTemplate::Null
+                | bex_vm_types::TyTemplate::Enum(_)
+                | bex_vm_types::TyTemplate::Media(_) => {}
+                _ => return None,
+            }
+        }
+        Some(classes)
     }
 
     pub(crate) fn interface_at(&self, head: &baml_type::DeclName) -> Option<usize> {

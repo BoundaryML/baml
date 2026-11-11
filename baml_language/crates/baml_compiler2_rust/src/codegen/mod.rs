@@ -4,6 +4,7 @@ mod alloc;
 mod call;
 mod constant;
 mod dispatch;
+mod json;
 mod expr;
 mod place;
 mod stmt;
@@ -72,6 +73,8 @@ pub(crate) struct ProgramContext<'a, 'db> {
     /// Per compiled body: the locality-mask bits some compiled caller can
     /// set. A bit no caller sets compiles its condition to the locked path.
     pub(crate) masks: &'a HashMap<usize, u64>,
+    /// The module's JSON schemas, shared by every body's decode sites.
+    pub(crate) json: &'a std::cell::RefCell<crate::json_codec::JsonCodecs>,
 }
 
 pub(crate) struct Generator<'a, 'db> {
@@ -91,6 +94,7 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) pauses: bool,
     pub(crate) recursive: bool,
     pub(crate) builtins: &'a mut BTreeMap<String, usize>,
+    pub(crate) json: &'a std::cell::RefCell<crate::json_codec::JsonCodecs>,
     pub(crate) body: &'a MirFunctionBody<'db>,
     pub(crate) lambdas: &'a [MirFunction<'db>],
     pub(crate) analysis: &'a Analysis,
@@ -146,6 +150,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
             builtins,
+            json: program.json,
             body: &unit.body,
             lambdas: &unit.lambdas,
             analysis: &unit.analysis,

@@ -13,11 +13,11 @@
 
 mod decode;
 mod decode_text;
-mod encode;
+pub(crate) mod encode;
 mod path;
 mod plan;
 mod serde_bridge;
-mod text;
+pub(crate) mod text;
 mod union;
 
 use std::sync::Arc;

@@ -24,6 +24,9 @@ pub(crate) struct CompiledState {
     /// parked; the conservative range starts there.
     pub(crate) parked_sp: usize,
     pub(crate) builtin_type_args: Vec<RealizedTy>,
+    /// Compiled JSON decode: realized field types of compile-time classes,
+    /// by (class object index, field), for fields holding lists and maps.
+    pub(crate) json_field_types: FxHashMap<(usize, usize), RealizedTy>,
     pub(crate) call_type_args: Vec<RealizedTy>,
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
     pub(crate) delivery: Option<Box<VmError>>,
@@ -49,6 +52,7 @@ impl Default for CompiledState {
             on_fiber: false,
             parked_sp: 0,
             builtin_type_args: Vec::new(),
+            json_field_types: FxHashMap::default(),
             call_type_args: Vec::new(),
             saved_call_types: Vec::new(),
             delivery: None,
@@ -76,6 +80,8 @@ impl RootHaver for CompiledState {
             on_fiber: _,
             parked_sp,
             builtin_type_args,
+            // Field types of compile-time classes, which never move or die.
+            json_field_types: _,
             call_type_args,
             saved_call_types,
             delivery,

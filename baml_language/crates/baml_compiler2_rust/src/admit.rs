@@ -325,6 +325,7 @@ fn admission_fixpoint(
             .collect();
         let mut done = Vec::new();
         let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
+        let json = std::cell::RefCell::new(crate::json_codec::JsonCodecs::default());
         let mut failed = Vec::new();
         for (&object, unit) in units.iter() {
             let program = ProgramContext {
@@ -336,6 +337,7 @@ fn admission_fixpoint(
                 signatures: &signatures,
                 recursive: &recursive,
                 masks: &masks,
+                json: &json,
             };
             match generate(&program, &mut builtins, object, unit) {
                 Ok(generated) => done.push((object, generated)),
@@ -343,7 +345,8 @@ fn admission_fixpoint(
             }
         }
         if failed.is_empty() {
-            let (bodies, functions) = assemble(units, &symbols, done);
+            let (mut bodies, functions) = assemble(units, &symbols, done);
+            bodies.push_str(json.borrow().statics());
             break (bodies, functions, builtins);
         }
         for (object, rejection) in failed {

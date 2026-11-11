@@ -29,17 +29,17 @@ const BIGINT_SAFE_DIGITS: usize = (baml_type::MAX_BIGINT_BITS / 4) as usize;
 
 /// The text is not valid JSON, or does not fit what the reader was asked for.
 #[derive(Debug)]
-pub(super) struct Stop;
+pub(crate) struct Stop;
 
 /// A position to come back to: where a union member that did not match began.
 #[derive(Clone, Copy)]
-pub(super) struct Mark {
+pub(crate) struct Mark {
     pos: usize,
     depth: u32,
 }
 
 /// A cursor over JSON text.
-pub(super) struct Reader<'a> {
+pub(crate) struct Reader<'a> {
     src: &'a str,
     pos: usize,
     depth: u32,
@@ -49,7 +49,7 @@ pub(super) struct Reader<'a> {
 
 /// A number token, as written.
 #[derive(Clone, Copy)]
-pub(super) struct Number<'a> {
+pub(crate) struct Number<'a> {
     pub(super) text: &'a str,
     /// No fraction and no exponent.
     pub(super) integral: bool,
@@ -57,7 +57,7 @@ pub(super) struct Number<'a> {
 
 impl Number<'_> {
     /// The integer the token writes, when it is integral and fits `i64`.
-    pub(super) fn as_i64(self) -> Option<i64> {
+    pub(crate) fn as_i64(self) -> Option<i64> {
         if !self.integral {
             return None;
         }
@@ -77,7 +77,7 @@ impl Number<'_> {
     }
 
     /// The number as a finite `f64`, or `None` when it overflows.
-    pub(super) fn as_f64(self) -> Option<f64> {
+    pub(crate) fn as_f64(self) -> Option<f64> {
         self.text
             .parse::<f64>()
             .ok()
@@ -107,7 +107,7 @@ impl Number<'_> {
 }
 
 impl<'a> Reader<'a> {
-    pub(super) fn new(src: &'a str) -> Self {
+    pub(crate) fn new(src: &'a str) -> Self {
         Self {
             src,
             pos: 0,
@@ -116,14 +116,14 @@ impl<'a> Reader<'a> {
         }
     }
 
-    pub(super) fn mark(&self) -> Mark {
+    pub(crate) fn mark(&self) -> Mark {
         Mark {
             pos: self.pos,
             depth: self.depth,
         }
     }
 
-    pub(super) fn reset(&mut self, mark: Mark) {
+    pub(crate) fn reset(&mut self, mark: Mark) {
         self.pos = mark.pos;
         self.depth = mark.depth;
     }
@@ -140,13 +140,13 @@ impl<'a> Reader<'a> {
     }
 
     /// The next byte after whitespace, not consumed.
-    pub(super) fn peek(&mut self) -> Option<u8> {
+    pub(crate) fn peek(&mut self) -> Option<u8> {
         self.skip_ws();
         self.bytes().get(self.pos).copied()
     }
 
     /// The end of the document: only whitespace may follow.
-    pub(super) fn finish(&mut self) -> Result<(), Stop> {
+    pub(crate) fn finish(&mut self) -> Result<(), Stop> {
         self.skip_ws();
         if self.pos == self.src.len() {
             Ok(())
@@ -165,14 +165,14 @@ impl<'a> Reader<'a> {
         }
     }
 
-    pub(super) fn null(&mut self) -> Result<(), Stop> {
+    pub(crate) fn null(&mut self) -> Result<(), Stop> {
         match self.peek() {
             Some(b'n') => self.literal("null"),
             _ => Err(Stop),
         }
     }
 
-    pub(super) fn bool(&mut self) -> Result<bool, Stop> {
+    pub(crate) fn bool(&mut self) -> Result<bool, Stop> {
         match self.peek() {
             Some(b't') => self.literal("true").map(|()| true),
             Some(b'f') => self.literal("false").map(|()| false),
@@ -191,7 +191,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Consume the `[` that opens an array.
-    pub(super) fn open_array(&mut self) -> Result<(), Stop> {
+    pub(crate) fn open_array(&mut self) -> Result<(), Stop> {
         match self.peek() {
             Some(b'[') => self.open(),
             _ => Err(Stop),
@@ -200,7 +200,7 @@ impl<'a> Reader<'a> {
 
     /// Whether another element follows, consuming the `,` before it or the
     /// closing `]`. `first` is whether no element has been read yet.
-    pub(super) fn next_element(&mut self, first: bool) -> Result<bool, Stop> {
+    pub(crate) fn next_element(&mut self, first: bool) -> Result<bool, Stop> {
         match self.peek() {
             Some(b']') => {
                 self.pos += 1;
@@ -217,7 +217,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Consume the `{` that opens an object.
-    pub(super) fn open_object(&mut self) -> Result<(), Stop> {
+    pub(crate) fn open_object(&mut self) -> Result<(), Stop> {
         match self.peek() {
             Some(b'{') => self.open(),
             _ => Err(Stop),
@@ -226,7 +226,7 @@ impl<'a> Reader<'a> {
 
     /// The next key and its `:`, or `None` at the closing `}`. `first` is
     /// whether no entry has been read yet.
-    pub(super) fn next_key(&mut self, first: bool) -> Result<Option<&str>, Stop> {
+    pub(crate) fn next_key(&mut self, first: bool) -> Result<Option<&str>, Stop> {
         match self.peek() {
             Some(b'}') => {
                 self.pos += 1;
@@ -249,7 +249,7 @@ impl<'a> Reader<'a> {
     }
 
     /// The string at the cursor, decoded.
-    pub(super) fn string(&mut self) -> Result<&str, Stop> {
+    pub(crate) fn string(&mut self) -> Result<&str, Stop> {
         if self.peek() != Some(b'"') {
             return Err(Stop);
         }
@@ -354,7 +354,7 @@ impl<'a> Reader<'a> {
     }
 
     /// The number at the cursor.
-    pub(super) fn number(&mut self) -> Result<Number<'a>, Stop> {
+    pub(crate) fn number(&mut self) -> Result<Number<'a>, Stop> {
         self.skip_ws();
         let bytes = self.bytes();
         let start = self.pos;
@@ -420,7 +420,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Consume one value without building it, checking it as `parse` would.
-    pub(super) fn skip_value(&mut self) -> Result<(), Stop> {
+    pub(crate) fn skip_value(&mut self) -> Result<(), Stop> {
         match self.peek().ok_or(Stop)? {
             b'"' => {
                 self.string_span()?;
@@ -532,7 +532,7 @@ pub(super) fn number_value(vm: &mut BexVm, number: Number<'_>) -> Result<Value, 
 /// The entries of a JSON object being built, keyed by text: a repeated key
 /// keeps its first position and takes its last value, as it always has.
 #[derive(Default)]
-pub(super) struct Entries {
+pub(crate) struct Entries {
     entries: Vec<(u64, bex_vm_types::BexStr, Value)>,
     /// Positions by key hash, once there are enough entries that a scan for
     /// a repeated key costs more than the index.
@@ -543,11 +543,11 @@ pub(super) struct Entries {
 const ENTRIES_SCANNED: usize = 32;
 
 impl Entries {
-    pub(super) fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
-    pub(super) fn insert(&mut self, key: bex_vm_types::BexStr, value: Value) {
+    pub(crate) fn insert(&mut self, key: bex_vm_types::BexStr, value: Value) {
         let hash = bex_vm_types::map_string_hash(&key);
         let entries = &mut self.entries;
         let seen = match &self.index {
@@ -575,7 +575,7 @@ impl Entries {
     }
 
     /// The map of these entries, typed `map<key, value>`.
-    pub(super) fn alloc(self, vm: &mut BexVm, key: RealizedTy, value: RealizedTy) -> Value {
+    pub(crate) fn alloc(self, vm: &mut BexVm, key: RealizedTy, value: RealizedTy) -> Value {
         let data = self
             .entries
             .into_iter()

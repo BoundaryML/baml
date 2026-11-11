@@ -303,6 +303,28 @@ impl<'db> Generator<'_, 'db> {
                 let code = coerce(&discriminant.code, discriminant.repr, Repr::Int);
                 self.emit_statement(&format!("d{} = {code};", id.0));
             }
+            terminator @ Terminator::Call { .. } if self.decode_site(terminator).is_some() => {
+                let site = self.decode_site(terminator).expect("checked");
+                let suspends = self.call_suspends(terminator);
+                self.decode_through_schema(id, site, |this| {
+                    if suspends {
+                        this.suspension(id)
+                    } else {
+                        this.direct_call(id, terminator)
+                    }
+                })?;
+            }
+            terminator @ Terminator::Call { .. } if self.encode_site(terminator).is_some() => {
+                let site = self.encode_site(terminator).expect("checked");
+                let suspends = self.call_suspends(terminator);
+                self.encode_through_schema(id, site, |this| {
+                    if suspends {
+                        this.suspension(id)
+                    } else {
+                        this.direct_call(id, terminator)
+                    }
+                })?;
+            }
             terminator @ Terminator::Call { .. } if self.call_suspends(terminator) => {
                 self.suspension(id)?;
             }
