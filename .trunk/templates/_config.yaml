@@ -1,7 +1,4 @@
 version: 1
-# Template previews (TRD-0094): a push to a matching branch builds a preview of each changed
-# template. A Kiln job uses a preview only when its runs-on names it with `..template=<id>`.
 previews:
   refs: ["*/kiln-template-*"]
-  region: us-west
   ttl_days: 7
