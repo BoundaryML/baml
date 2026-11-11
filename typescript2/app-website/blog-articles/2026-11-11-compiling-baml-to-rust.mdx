@@ -174,8 +174,6 @@ Since every live object moves to a new address, every pointer to it has to be up
 
 Our MIR types every local and tracks which ones are live at each point. At compile time the backend knows which live locals hold heap values at every point where a collection can happen (a pause, or a VM call that may collect). It emits code to copy them into the VM's frame slots (already scanned by the GC) before that point, and the compiled code reads them back after.
 
-The GC never scans the fiber. To the collector, a paused compiled function looks exactly like paused bytecode (ie. we didn't need to touch any GC code for the new native backend)
-
 ## Escape analysis
 
 BAML has a `spawn` keyword (like Go's `go`), and tasks run on multiple threads over a single shared heap. Since any array or map could be accessed by two threads at once, every array and map access takes a spin lock and every field access is atomic. This also applies to operations that are provably local, causing slowdown where it can be avoided.
