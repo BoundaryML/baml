@@ -41,6 +41,8 @@ Every Boundary Cloud plan comes with a 60-day money-back guarantee. [Get early a
 
 You pay for the values your programs record, never for the metadata around them.
 
+We never want our pricing to stop us from doing the right thing. So every way we make your data smaller makes your bill smaller too.
+
 Billed: function inputs and outputs, logs, network requests and responses, process and thread context.
 
 Never billed: spans and their timings, profiles, function names, source and types, a value your programs record again, retried uploads, uploads that never arrive.

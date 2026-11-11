@@ -5,6 +5,7 @@ import { section } from '@/components/home/analytics';
 import { BOOK } from '@/components/home/links';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button, LINKS } from '@/components/home/ui';
+import { Meter } from '@/components/pricing/meter';
 import { SoftwareApplicationStructuredData } from '@/components/structured-data';
 
 // The pricing page, in the homepage's BAML lane. The nav links it. Laid out after Better Stack's
@@ -198,28 +199,36 @@ function HowBilling() {
         You pay for the values your programs record, never for the metadata
         around them.
       </p>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg border border-rule bg-raised p-5 text-[13px]">
-          <p className="font-medium text-head">Billed</p>
-          <ul className="mt-3 space-y-2 text-ink-2">
-            {BILLED.map((b) => (
-              <li className="flex items-start gap-2" key={b}>
-                <span
-                  aria-hidden="true"
-                  className="mt-[7px] size-1.5 shrink-0 rounded-full bg-muted"
-                />
-                {b}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="rounded-lg border border-clover/40 bg-clover/[0.06] p-5 text-[13px]">
-          <p className="font-medium text-head">Never billed</p>
-          <ul className="mt-3 space-y-2 text-ink-2">
-            {NOT_BILLED.map((b) => (
-              <Tick key={b}>{b}</Tick>
-            ))}
-          </ul>
+      {/* The culture line: pricing should never give us a reason to do the wrong thing. */}
+      <p className="mt-6 max-w-[40rem] border-l-2 border-clover pl-4 text-[15px] text-head">
+        We never want our pricing to stop us from doing the right thing. So
+        every way we make your data smaller makes your bill smaller too.
+      </p>
+      <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <Meter />
+        <div className="grid gap-4 text-[13px]">
+          <div className="rounded-lg border border-rule bg-raised p-5">
+            <p className="font-medium text-head">Billed</p>
+            <ul className="mt-3 space-y-2 text-ink-2">
+              {BILLED.map((b) => (
+                <li className="flex items-start gap-2" key={b}>
+                  <span
+                    aria-hidden="true"
+                    className="mt-[7px] size-1.5 shrink-0 rounded-full bg-muted"
+                  />
+                  {b}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-lg border border-clover/40 bg-clover/[0.06] p-5">
+            <p className="font-medium text-head">Never billed</p>
+            <ul className="mt-3 space-y-2 text-ink-2">
+              {NOT_BILLED.map((b) => (
+                <Tick key={b}>{b}</Tick>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
       <dl className="mt-8 grid gap-x-8 gap-y-6 text-[13px] sm:grid-cols-2">
