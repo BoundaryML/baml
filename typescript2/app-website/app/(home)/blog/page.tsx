@@ -299,12 +299,12 @@ export default async function BlogIndex({
   const releases = posts.filter((p) => p.type === 'release');
 
   // The lead, Start here, and release notes stay put under every filter, so picking one changes only
-  // the list below them.
+  // the list below them. "All posts" means all: the lead is listed there too.
   const lead = articles.at(0);
   const featured = articles.filter((p) => p.featured && p !== lead);
   const listed =
     selected === 'all'
-      ? articles.filter((p) => p !== lead)
+      ? articles
       : selected === 'release'
         ? releases
         : articles.filter((p) => topicsOf(p).includes(selected));
