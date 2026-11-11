@@ -1,5 +1,6 @@
 'use client';
 
+import { Pause, Play, RotateCcw } from 'lucide-react';
 import {
   type ReactNode,
   useEffect,
@@ -23,7 +24,6 @@ import { useReducedMotion, useVisible } from '@/components/home/pinned';
 // Sizes are kept round enough to follow; the hashes are made up.
 
 const STEP_MS = 1300;
-const HOLD_MS = 4500;
 
 const size = (bytes: number) =>
   bytes >= 1_000_000
@@ -495,25 +495,17 @@ const RECORD: Rec[] = [
     value: '"My refund came twice."',
   },
 ];
-const LONG = 'customer_email_address_on_file';
-// One step per record, then the rename.
-const COUNT_STEPS = RECORD.length + 1;
+// One step per record.
+const COUNT_STEPS = RECORD.length;
 
 function Counts({ step }: { step: number }) {
-  const renamed = step > RECORD.length;
   const seen = RECORD.slice(0, step);
   const billed = seen.reduce(
     (sum, r) => sum + (r.kind === 'field' ? r.bytes : 0),
     0,
   );
   const free = seen.reduce(
-    (sum, r) =>
-      sum +
-      (r.kind === 'call'
-        ? r.bytes
-        : renamed && r.name === 'customer_email'
-          ? LONG.length
-          : r.nameBytes),
+    (sum, r) => sum + (r.kind === 'call' ? r.bytes : r.nameBytes),
     0,
   );
   const fieldsSeen = seen.filter((r) => r.kind === 'field');
@@ -540,7 +532,7 @@ function Counts({ step }: { step: number }) {
                   <Tag on={on} />
                 </div>
               );
-            const name = renamed && r.name === 'customer_email' ? LONG : r.name;
+            const name = r.name;
             return (
               <div
                 className="flex items-center justify-between gap-3 transition-opacity duration-500"
@@ -605,13 +597,7 @@ function Counts({ step }: { step: number }) {
           </div>
         </Pane>
       }
-      say={
-        renamed
-          ? 'Renamed to customer_email_address_on_file. More free, same bill.'
-          : step <= 4
-            ? 'The call’s name, timing and types come along free.'
-            : 'You pay for the values. Their field names come along free.'
-      }
+      say="You pay for the values. The call’s name, timing and types, and every field name, come along free."
     />
   );
 }
@@ -675,27 +661,31 @@ export function Meter() {
   const reduce = useReducedMotion();
   const [scene, setScene] = useState(0);
   const [step, setStep] = useState(0);
+  // Plays a scene once, then stops on it so it can be read; a click pauses or plays it.
+  const [playing, setPlaying] = useState(true);
   const current = SCENES[scene] ?? SCENES[0];
   const last = current.steps;
+  const done = step >= last;
 
   useEffect(() => {
     if (reduce) {
       setStep(last);
       return;
     }
-    if (!visible) return;
+    if (!visible || !playing || done) return;
     const timer = setTimeout(
-      () => {
-        if (step < last) setStep(step + 1);
-        else {
-          setScene((n) => (n + 1) % SCENES.length);
-          setStep(0);
-        }
-      },
-      step === 0 ? 600 : step >= last ? HOLD_MS : STEP_MS,
+      () => setStep((n) => n + 1),
+      step === 0 ? 600 : STEP_MS,
     );
     return () => clearTimeout(timer);
-  }, [step, last, visible, reduce]);
+  }, [step, last, visible, reduce, playing, done]);
+
+  const go = (i: number) => {
+    setScene(i);
+    setStep(reduce ? SCENES[i].steps : 0);
+    setPlaying(true);
+  };
+  const next = SCENES[scene + 1];
 
   const View = current.View;
   return (
@@ -708,10 +698,7 @@ export function Meter() {
           <button
             className={`relative cursor-pointer whitespace-nowrap px-3 pt-1.5 pb-2.5 text-[13px] transition-colors ${i === scene ? 'text-head' : 'text-muted hover:text-ink'}`}
             key={sc.title}
-            onClick={() => {
-              setScene(i);
-              setStep(reduce ? sc.steps : 0);
-            }}
+            onClick={() => go(i)}
             type="button"
           >
             {sc.title}
@@ -722,7 +709,73 @@ export function Meter() {
           </button>
         ))}
       </div>
-      <View step={step} />
+      {/* A click anywhere on the scene pauses it, or plays it again. */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the controls below do the same from the keyboard */}
+      <div
+        className="cursor-pointer"
+        onClick={() => {
+          if (done) setStep(0);
+          setPlaying((p) => (done ? true : !p));
+        }}
+      >
+        <View step={step} />
+      </div>
+      <div className="flex items-center gap-3 border-t border-rule px-4 py-2.5 text-[12.5px]">
+        <button
+          aria-label={done ? 'Replay' : playing ? 'Pause' : 'Play'}
+          className="focus-ring grid size-7 cursor-pointer place-items-center rounded-full bg-white/[0.06] text-ink hover:bg-white/10"
+          onClick={() => {
+            if (done) setStep(0);
+            setPlaying((p) => (done ? true : !p));
+          }}
+          type="button"
+        >
+          {done ? (
+            <RotateCcw className="size-3.5" />
+          ) : playing ? (
+            <Pause className="size-3.5" />
+          ) : (
+            <Play className="size-3.5" />
+          )}
+        </button>
+        {/* One dot a step: click one to jump there and stop. */}
+        <div className="flex flex-1 items-center gap-1.5">
+          {Array.from({ length: last }, (_, i) => (
+            <button
+              aria-label={`Step ${i + 1}`}
+              className="h-1.5 flex-1 cursor-pointer rounded-full transition-colors"
+              // biome-ignore lint/suspicious/noArrayIndexKey: steps
+              key={i}
+              onClick={() => {
+                setStep(i + 1);
+                setPlaying(false);
+              }}
+              style={{
+                background:
+                  i < step ? 'var(--color-clover)' : 'rgba(255,255,255,0.1)',
+              }}
+              type="button"
+            />
+          ))}
+        </div>
+        {next ? (
+          <button
+            className="cursor-pointer whitespace-nowrap text-ink-2 transition-colors hover:text-head"
+            onClick={() => go(scene + 1)}
+            type="button"
+          >
+            Next: {next.title} →
+          </button>
+        ) : (
+          <button
+            className="cursor-pointer whitespace-nowrap text-ink-2 transition-colors hover:text-head"
+            onClick={() => go(0)}
+            type="button"
+          >
+            Start over
+          </button>
+        )}
+      </div>
     </div>
   );
 }
