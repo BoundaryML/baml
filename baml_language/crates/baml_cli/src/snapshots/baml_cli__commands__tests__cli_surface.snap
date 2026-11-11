@@ -126,7 +126,9 @@ baml ide install
 baml agent
 baml agent install
 baml telemetry
-  <action> [default: status]
+baml telemetry status
+baml telemetry enable
+baml telemetry disable
 baml help
   <command>
 baml lsp

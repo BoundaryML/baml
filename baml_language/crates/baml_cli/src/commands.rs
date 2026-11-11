@@ -771,12 +771,6 @@ mod tests {
                     "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error,\n          warn, info, debug, trace]",
                 ],
             ),
-            (
-                &["telemetry"],
-                &[
-                    "[ACTION]\n          Telemetry action [default: status] [possible values: status, enable, disable]",
-                ],
-            ),
         ];
 
         for (path, expected) in cases {

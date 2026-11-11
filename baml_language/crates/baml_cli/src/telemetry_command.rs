@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::Result;
-use clap::{Args, ValueEnum};
+use clap::{Args, Subcommand};
 use serde::Serialize;
 
 use crate::{
@@ -37,35 +37,31 @@ impl FlushTelemetryArgs {
 
 /// Show or change BAML CLI telemetry preferences.
 ///
-/// Run without an action to see the current status, config file path, and
+/// Run without a subcommand to see the current status, config file path, and
 /// docs link. Use `baml telemetry disable` to opt out, or
 /// `baml telemetry enable` to opt back in. See <https://boundaryml.com/telemetry>.
-//
-// Impl note: modeled as a positional `ValueEnum` rather than a nested
-// subcommand so `baml telemetry` (no action) works cleanly as "show status"
-// without fighting clap 4's default `subcommand_required = true` on
-// tuple-variant subcommands. UX matches Next.js's
-// `next telemetry [enable|disable|status]`.
 #[derive(Args, Debug)]
 pub(crate) struct TelemetryArgs {
-    #[arg(
-        value_enum,
-        value_name = "ACTION",
-        help = "Telemetry action [default: status] [possible values: status, enable, disable]",
-        hide_default_value = true,
-        hide_possible_values = true,
-        default_value_t = TelemetryAction::Status
-    )]
-    pub action: TelemetryAction,
+    #[command(subcommand)]
+    pub command: Option<TelemetryCommand>,
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TelemetryAction {
-    /// Show the current telemetry preference.
+#[derive(Subcommand, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TelemetryCommand {
+    #[command(
+        about = "Show the current telemetry preference",
+        after_long_help = "Examples:\n  Show the current setting:\n    baml telemetry status"
+    )]
     Status,
-    /// Enable BAML CLI telemetry.
+    #[command(
+        about = "Enable BAML CLI telemetry",
+        after_long_help = "Examples:\n  Opt in:\n    baml telemetry enable"
+    )]
     Enable,
-    /// Disable BAML CLI telemetry.
+    #[command(
+        about = "Disable BAML CLI telemetry",
+        after_long_help = "Examples:\n  Opt out:\n    baml telemetry disable"
+    )]
     Disable,
 }
 
@@ -117,11 +113,11 @@ impl Command for TelemetryArgs {
             Some(path) => reporter.status("Saved", path.display().to_string()),
             None => reporter.warning("could not save the telemetry preference"),
         };
-        match self.action {
-            TelemetryAction::Status => {}
-            TelemetryAction::Enable => saved(t.set_enabled(true)),
-            TelemetryAction::Disable if was_enabled => saved(t.set_enabled(false)),
-            TelemetryAction::Disable => {
+        match self.command.unwrap_or(TelemetryCommand::Status) {
+            TelemetryCommand::Status => {}
+            TelemetryCommand::Enable => saved(t.set_enabled(true)),
+            TelemetryCommand::Disable if was_enabled => saved(t.set_enabled(false)),
+            TelemetryCommand::Disable => {
                 t.set_enabled(false);
                 reporter.status("Unchanged", "BAML CLI telemetry is already disabled");
             }
@@ -151,23 +147,22 @@ mod tests {
         args: TelemetryArgs,
     }
 
-    /// `baml telemetry` with no action defaults to `Status`.
+    /// `baml telemetry` with no subcommand shows the status.
     #[test]
-    fn no_action_parses_and_defaults_to_status() {
+    fn no_subcommand_parses() {
         let cli = TestCli::try_parse_from(Vec::<String>::new()).unwrap();
-        assert_eq!(cli.args.action, TelemetryAction::Status);
+        assert_eq!(cli.args.command, None);
     }
 
-    /// Explicit actions parse to their respective variants.
     #[test]
-    fn actions_parse() {
-        let cli = TestCli::try_parse_from(["enable"]).unwrap();
-        assert_eq!(cli.args.action, TelemetryAction::Enable);
-
-        let cli = TestCli::try_parse_from(["disable"]).unwrap();
-        assert_eq!(cli.args.action, TelemetryAction::Disable);
-
-        let cli = TestCli::try_parse_from(["status"]).unwrap();
-        assert_eq!(cli.args.action, TelemetryAction::Status);
+    fn subcommands_parse() {
+        for (name, expected) in [
+            ("enable", TelemetryCommand::Enable),
+            ("disable", TelemetryCommand::Disable),
+            ("status", TelemetryCommand::Status),
+        ] {
+            let cli = TestCli::try_parse_from([name]).unwrap();
+            assert_eq!(cli.args.command, Some(expected));
+        }
     }
 }
