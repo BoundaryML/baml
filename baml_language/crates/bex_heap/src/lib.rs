@@ -40,6 +40,7 @@ mod object_trace;
 mod root_source;
 pub mod space;
 mod tlab;
+mod verify;
 
 // Re-export types from bex_external_types for convenience
 pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};

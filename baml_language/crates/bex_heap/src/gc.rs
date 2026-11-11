@@ -197,7 +197,7 @@ impl BexHeap {
     unsafe fn collect_inner(
         &self,
         roots: &mut dyn RootSource,
-        holder: Option<&mut dyn RootHaver>,
+        mut holder: Option<&mut dyn RootHaver>,
         record: bool,
     ) -> (GcStats, Restamp) {
         // SAFETY: the caller guarantees exclusive heap access.
@@ -252,8 +252,7 @@ impl BexHeap {
             self.forward_weak_entries(&mut marker);
             self.forward_handles(&mut marker);
         }
-        let mut holder = holder;
-        if let Some(holder) = holder.as_deref_mut() {
+        if let Some(holder) = &mut holder {
             holder.visit_roots(&mut ForwardInPause {
                 heap: self,
                 marker: &mut marker,
@@ -267,7 +266,13 @@ impl BexHeap {
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
         // SAFETY: mutators are parked and the mark is complete.
-        let swept = unsafe { reclaim(&mut blocks, &mut large, self.descriptors(), gc_poison()) };
+        let poison = gc_poison();
+        let swept = unsafe { reclaim(&mut blocks, &mut large, self.descriptors(), poison) };
+        if poison {
+            // SAFETY: right after the reclaim, under its locks, with every
+            // mutator parked.
+            unsafe { self.verify_after_reclaim(&blocks, &large, holder.as_mut().map(|h| &mut **h)) };
+        }
         drop(large);
         drop(blocks);
         profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
@@ -959,6 +964,68 @@ mod tests {
             "the copy dropped once it died"
         );
         let _ = roots;
+    }
+
+    /// Under poisoning the verifier runs after the reclaim: a holder root
+    /// that names a reclaimed cell is reported with the holder and the
+    /// pointer. (The holder hides the root from the root scan and the
+    /// forwarding walk, and shows it to the verifier's walk only.)
+    #[test]
+    #[should_panic(expected = "gc verifier: a holder's strong root holds")]
+    fn verifier_reports_a_root_that_names_a_reclaimed_cell() {
+        use crate::space::POISON_FOR_TESTS;
+
+        struct LateRoot {
+            ptr: HeapPtr,
+            walks: usize,
+        }
+        impl RootHaver for LateRoot {
+            fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+                self.walks += 1;
+                if self.walks >= 3 {
+                    visitor.visit(&mut self.ptr);
+                }
+            }
+        }
+
+        POISON_FOR_TESTS.store(true, std::sync::atomic::Ordering::Relaxed);
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let dead = tlab.alloc_string("dead".to_string());
+        let mut holder = LateRoot {
+            ptr: dead,
+            walks: 0,
+        };
+        unsafe { heap.collect_with_holder(&mut holder, &[]) };
+    }
+
+    /// Under poisoning the verifier accepts a collection whose every
+    /// pointer was forwarded: cells, a holder's strong and weak roots, a
+    /// handle, a pending finalizer.
+    #[test]
+    fn verifier_accepts_a_forwarded_heap() {
+        use crate::space::POISON_FOR_TESTS;
+
+        POISON_FOR_TESTS.store(true, std::sync::atomic::Ordering::Relaxed);
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(class_object(Some(finalizer)));
+        heap.note_finalizable_class();
+        let dead = tlab.alloc_instance(class, vec![]);
+        let leaf = tlab.alloc_string("leaf".to_string());
+        let list = tlab.alloc_array(RealizedTy::unknown(), vec![Value::object(leaf)]);
+        let handle = heap.create_handle(leaf);
+        let mut holder = (list, WeakRefs(vec![leaf, dead]));
+        let (stats, _, _) = unsafe { heap.collect_with_holder(&mut holder, &[]) };
+        assert_eq!(
+            stats.live_count, 7,
+            "list, its backing and element type, leaf, dead, class, finalizer"
+        );
+        assert_ne!(holder.0, list, "moved");
+        assert!(!holder.1.0.iter().any(|ptr| ptr.is_null()));
+        assert_eq!(heap.take_pending_finalizers().len(), 1);
+        drop(handle);
     }
 
     /// Under poisoning, a moved cell's old copy reads as the pattern.

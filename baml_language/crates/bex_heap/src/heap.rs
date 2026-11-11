@@ -213,7 +213,7 @@ pub struct BexHeap {
     /// for exactly that drop.
     ///
     /// [`HandleInner`]: bex_external_types::HandleInner
-    handles_by_ptr: RwLock<HashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
+    pub(crate) handles_by_ptr: RwLock<HashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
 
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
@@ -234,7 +234,7 @@ pub struct BexHeap {
     /// Unobserved errors discovered while collecting unreachable futures.
     /// Entries are drained before execution
     /// resumes or another collection runs.
-    pending_unhandled_spawn_errors: Mutex<Vec<UnhandledSpawnError>>,
+    pub(crate) pending_unhandled_spawn_errors: Mutex<Vec<UnhandledSpawnError>>,
 
     /// BEP-042 fast path: `true` iff some `Class` on this heap opts into a
     /// `cleanup` finalizer (`Class::cleanup`): computed over the compile-time
