@@ -640,7 +640,8 @@ function Research() {
           sure the only BAML that gets checked in is great BAML.
         </p>
         <p className="mt-5 text-[15px] text-clover">
-          Teaching Agents to Write Maintainable Code{' '}
+          <span className="text-muted">Blog:</span> Teaching Agents to Write
+          Maintainable Code{' '}
           <span className="inline-block transition-transform group-hover:translate-x-1">
             →
           </span>
