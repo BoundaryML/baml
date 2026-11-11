@@ -685,6 +685,10 @@ function Side({
             type="range"
             value={Math.round(rate * 100)}
           />
+          {/* Readers took the slider for a gauge, so it says it moves. */}
+          <p className="mt-1.5 text-[13px] text-white/45">
+            Drag to change the sampling
+          </p>
         </div>
         <div>
           <div className="mb-2 flex items-baseline justify-between gap-3">

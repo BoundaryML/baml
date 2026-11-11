@@ -25,6 +25,14 @@ export function Hyper({
   );
 }
 
+/** Whether the pointer left `e.currentTarget` through its top or bottom edge. A figure the reader
+ *  paused stays paused when the mouse drifts out sideways, into the margin beside it; it resumes
+ *  only when they move on up or down the page (or scroll it away). */
+export function leftVertically(e: { clientY: number; currentTarget: Element }) {
+  const r = e.currentTarget.getBoundingClientRect();
+  return e.clientY <= r.top + 1 || e.clientY >= r.bottom - 1;
+}
+
 /** Scroll progress as a straight line, with a little held at each end. */
 export const sweep = (p: number) => Math.min(1, Math.max(0, (p - 0.04) / 0.9));
 
@@ -256,6 +264,11 @@ export function Looped({
       } else {
         cancelAnimationFrame(frame);
         frame = 0;
+        // Scrolled away: a pick left in place by a sideways exit lets go.
+        if (picked.current !== null) {
+          resume.current = picked.current;
+          picked.current = null;
+        }
       }
     });
     io.observe(el);
@@ -268,7 +281,11 @@ export function Looped({
   return (
     <div
       onPointerLeave={(e) => {
-        if (e.pointerType === 'mouse' && picked.current !== null) {
+        if (
+          e.pointerType === 'mouse' &&
+          picked.current !== null &&
+          leftVertically(e)
+        ) {
           resume.current = picked.current;
           picked.current = null;
         }

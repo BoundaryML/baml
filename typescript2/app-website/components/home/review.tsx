@@ -11,10 +11,12 @@ import {
   SiRust,
   SiTypescript,
 } from 'react-icons/si';
+import { PostDrawing } from '@/app/(home)/blog/_lib/art';
 import { section } from '@/components/home/analytics';
 import { BAML_LOGO, LAMB_PATHS } from '@/components/home/lamb';
 import {
   Hyper,
+  leftVertically,
   sweep,
   useInView,
   useReducedMotion,
@@ -612,6 +614,70 @@ function Run() {
   );
 }
 
+// ---------- the research behind it ----------
+
+const POST = {
+  href: '/blog/teaching-agents-to-write-maintainable-code',
+  slug: 'teaching-agents-to-write-maintainable-code',
+};
+
+/** The post that measured it, as a feature of its own: the before and after from the post, what the
+ *  eval ran, and what it found. Every number is the post's. */
+function Research() {
+  return (
+    <a
+      className="focus-ring group mt-10 grid overflow-hidden rounded-xl border border-rule bg-raised transition-colors hover:border-white/25 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]"
+      href={POST.href}
+    >
+      <div className="flex items-center border-rule p-3 max-md:border-b md:border-r">
+        <PostDrawing
+          alt="An agent's chess move generator with a cognitive complexity of 50, beside the version written with the new skill, with a cognitive complexity of 2."
+          className="rounded-lg"
+          slug={POST.slug}
+        />
+      </div>
+      <div className="flex flex-col p-6 md:p-8">
+        <p className="text-[13px] uppercase tracking-[0.08em] text-muted">
+          The research
+        </p>
+        <p className="mt-3 font-display text-[24px] leading-tight font-medium text-head md:text-[28px]">
+          Teaching Agents to Write Maintainable Code
+        </p>
+        <p className="mt-2 text-[15px] text-ink-2">Avery Townsend</p>
+        <dl className="mt-6 grid grid-cols-3 gap-4 border-y border-rule py-4">
+          {[
+            ['4', 'programs'],
+            ['10', 'runs each'],
+            ['4', 'skill setups'],
+          ].map(([n, what]) => (
+            <div key={what}>
+              <dt className="sr-only">{what}</dt>
+              <dd className="font-mono text-[26px] text-head tabular-nums">
+                {n}
+              </dd>
+              <dd className="text-[13px] text-muted">{what}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-5 text-[15px] leading-relaxed text-ink-2">
+          With the new skill and{' '}
+          <code className="font-mono text-[14px] text-ink">
+            baml codequality
+          </code>
+          , the worst function beat the old skill on cognitive complexity,
+          cyclomatic complexity, NPath and nesting, on all four programs.
+        </p>
+        <p className="mt-auto pt-6 text-[15px] font-medium text-clover">
+          Read the post{' '}
+          <span className="inline-block transition-transform group-hover:translate-x-1">
+            →
+          </span>
+        </p>
+      </div>
+    </a>
+  );
+}
+
 // ---------- the pull request comment ----------
 
 const GH = {
@@ -621,6 +687,21 @@ const GH = {
   panel: '#161b22',
 };
 const AXES = ['Readable', 'Few branches', 'Few paths', 'Flat', 'Few exits'];
+// What each axis measures, shown on hover. The names are render.baml's for `baml codequality`'s metrics.
+const DEFINE: Record<string, string> = {
+  'Few branches': 'Cyclomatic complexity: how many decisions a function makes.',
+  'Few exits': 'How many places a function can return or throw.',
+  'Few paths':
+    'NPath complexity: how many different routes there are through a function.',
+  Flat: 'Nesting: how deep the ifs and loops go.',
+  Readable: 'Cognitive complexity: how hard a function is to follow.',
+};
+// The same, by the metric names the comment's rows use.
+const DEFINE_ROW: Record<string, string> = {
+  cognitive: DEFINE.Readable,
+  NPath: DEFINE['Few paths'],
+  nesting: DEFINE.Flat,
+};
 // A made-up pull request, to show what the comment does for you: an agent removes a feature, the
 // code gets worse anyway, the comment says so, and the agent's next push fixes it.
 const FIRST = [0.31, 0.52, 0.22, 0.6, 0.8];
@@ -860,7 +941,8 @@ function Radar({ now }: { now: number[] }) {
         const [x, y] = at(i, R);
         const [lx, ly] = at(i, R + 18);
         return (
-          <g key={name}>
+          <g className="cursor-help" key={name}>
+            <title>{DEFINE[name]}</title>
             <line
               stroke="#828280"
               strokeOpacity={0.5}
@@ -929,7 +1011,7 @@ const STAGES: {
   },
   {
     at: 0.31,
-    label: 'The comment flags worse code',
+    label: 'Bad code is flagged',
     ms: 4500,
     says: (
       <>
@@ -946,7 +1028,7 @@ const STAGES: {
   },
   {
     at: 1,
-    label: 'Simpler than main',
+    label: 'Simpler code is merged',
     ms: 4500,
     says: (
       <span className="text-clover">The code is now simpler than main.</span>
@@ -969,6 +1051,10 @@ function Story() {
   useEffect(() => {
     at.current = stage;
   }, [stage]);
+  // Scrolled away: a hold left by a sideways exit lets go.
+  useEffect(() => {
+    if (!visible) setHeld(false);
+  }, [visible]);
   useEffect(() => {
     const el = dot.current;
     if (!el) return;
@@ -1065,7 +1151,12 @@ function Story() {
     </div>
   );
   return (
-    <div onPointerLeave={() => setHeld(false)} ref={ref}>
+    <div
+      onPointerLeave={(e) => {
+        if (leftVertically(e)) setHeld(false);
+      }}
+      ref={ref}
+    >
       <Comment
         fixing={seen && stage === 2}
         opening={seen && stage === 0}
@@ -1123,10 +1214,10 @@ function Comment({
     // A box like the others in this section, so the story reads as one of them.
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
       <p className="v4-h3 text-head" style={PIXEL}>
-        Every other language was designed before CI/CD. BAML wasn't.
+        Our GitHub Action measures code quality on every pull request.
       </p>
       <p className="mt-2 text-[18px] text-white/70">
-        Measure code quality on every pull request. $0 token bill.
+        No model in the loop, so the token bill is $0.
       </p>
       {/* CI/CD by default: the action that posts the comment, in one line. */}
       <p className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[14px]">
@@ -1294,7 +1385,21 @@ function Comment({
                         {c.name}
                       </code>
                       <span className="text-[13px]" style={{ color: GH.muted }}>
-                        {c.change}
+                        {c.change.split(', ').map((part, k) => {
+                          const metric = part.split(' ')[0];
+                          return (
+                            <span key={part}>
+                              {k ? ', ' : ''}
+                              <span
+                                className="cursor-help underline decoration-dotted decoration-white/30 underline-offset-2"
+                                title={DEFINE_ROW[metric]}
+                              >
+                                {metric}
+                              </span>
+                              {part.slice(metric.length)}
+                            </span>
+                          );
+                        })}
                       </span>
                     </span>
                   </div>
@@ -1348,6 +1453,7 @@ export default function Review() {
             sure the only BAML that gets checked in is great BAML.
           </p>
         </div>
+        <Research />
       </div>
     </section>
   );

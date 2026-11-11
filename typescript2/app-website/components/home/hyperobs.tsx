@@ -229,34 +229,8 @@ const BUILT: Span[] = [
 // Every row is this tall, sized by the figure so the whole thing fits in the window.
 const ROW = 'var(--r)';
 
-const TS_TOKENS =
-  /("[^"]*"|\b(?:const|async|function|return|await|try|catch|finally|throw|if)\b|\b\w+(?=\())/;
-
-function TsText({ line }: { line: string }) {
-  return (
-    <>
-      {line.split(TS_TOKENS).map((part, i) => {
-        const key = `${i}-${part}`;
-        if (i % 2 === 0) return <span key={key}>{part}</span>;
-        const tone = part.startsWith('"')
-          ? 'text-(--color-pasture-200)'
-          : /^(const|async|function|return|await|try|catch|finally|throw|if)$/.test(
-                part,
-              )
-            ? 'text-clover'
-            : 'text-white';
-        return (
-          <span className={tone} key={key}>
-            {part}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
 /** The TypeScript listing. `level` is how much tracing has piled on, from 0 to 4; fractions ease a
- *  line in. The original lines keep a clover tint, so they stay findable, and the tracing is muted. */
+ *  line in. The tracing is tinted yellow, and the original logic it wraps stays plain. */
 function TsCode({ level }: { level: number }) {
   return (
     // On a phone the longest lines are wider than the panel. The listing scrolls sideways there
@@ -269,7 +243,9 @@ function TsCode({ level }: { level: number }) {
           const indent = level > 0.5 ? l.d : (l.d0 ?? l.d);
           return (
             <div
-              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'bg-clover/14 text-white' : 'text-white/35'}`}
+              // The tracing you write by hand is what grows, so it's what's highlighted, in yellow;
+              // the logic it wraps stays plain.
+              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'text-white/45' : 'bg-[#f5c451]/12 text-[#f5d27a]'}`}
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed listing
               key={i}
               style={{
@@ -278,7 +254,7 @@ function TsCode({ level }: { level: number }) {
                 paddingLeft: `calc(1rem + ${indent * 2}ch)`,
               }}
             >
-              {l.k === 'logic' ? <TsText line={l.s} /> : l.s}
+              {l.s}
             </div>
           );
         })}
