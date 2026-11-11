@@ -262,12 +262,28 @@ impl ListRef {
     /// [`Self::get`] with `access`.
     #[inline]
     pub fn get_with(self, index: usize, access: Access) -> Option<SlotValue> {
-        let backing = self.backing(Ordering::Acquire)?;
-        if index >= self.len() || index >= backing.cap() {
-            return None;
-        }
-        // SAFETY: in bounds of the live backing.
-        Some(unsafe { read_slot(backing.elem(index), self.elem_slot(), access) })
+        self.view().get(index, access)
+    }
+
+    /// The length, backing and slot kind, each loaded once: the length, then
+    /// the backing (both Acquire, so the backing is at least as new as the
+    /// length's writer saw). An operation that touches elements takes one
+    /// view, so it reads the header and the list's words once, not per
+    /// element.
+    #[inline]
+    pub fn view(self) -> ListView {
+        let slot = self.elem_slot();
+        let len = self.len();
+        let bits = self.word(LIST_BACKING_OFFSET).load(Ordering::Acquire);
+        // SAFETY: the backing slot holds zero or a live backing's pointer.
+        let backing = unsafe { Value::from_bits(bits) }
+            .as_object_ptr()
+            .map(|ptr| Backing {
+                ptr,
+                stride: slot.elem_kind().stride(),
+            });
+        let len = backing.map_or(0, |backing| len.min(backing.cap()));
+        ListView { backing, len, slot }
     }
 
     /// The list for mutation. Single-element operations take no lock (see
@@ -286,6 +302,53 @@ impl ListRef {
     /// Every element.
     pub fn snapshot(self, access: Access) -> Vec<SlotValue> {
         self.lock(access).to_vec()
+    }
+}
+
+/// A list's length, backing and slot kind as one operation loaded them. The
+/// length is clamped to the backing's capacity, so every index it admits is
+/// inside the backing.
+#[derive(Clone, Copy)]
+pub struct ListView {
+    backing: Option<Backing>,
+    len: usize,
+    slot: SlotKind,
+}
+
+impl ListView {
+    #[inline]
+    pub fn len(self) -> usize {
+        self.len
+    }
+
+    #[inline]
+    pub fn is_empty(self) -> bool {
+        self.len == 0
+    }
+
+    /// Element `index`, or `None` past the end.
+    #[inline]
+    pub fn get(self, index: usize, access: Access) -> Option<SlotValue> {
+        let backing = self.backing.filter(|_| index < self.len)?;
+        // SAFETY: below the clamped length, so inside the backing.
+        Some(unsafe { read_slot(backing.elem(index), self.slot, access) })
+    }
+
+    /// Store `value` to element `index`; dropped past the end.
+    #[inline]
+    pub fn set(self, index: usize, value: SlotValue, access: Access) -> Result<(), SlotMismatch> {
+        let Some(backing) = self.backing.filter(|_| index < self.len) else {
+            return Ok(());
+        };
+        // SAFETY: below the clamped length, so inside the backing.
+        unsafe { write_value(backing.elem(index), self.slot, value, access) }
+    }
+
+    /// Every element.
+    pub fn to_vec(self, access: Access) -> Vec<SlotValue> {
+        (0..self.len)
+            .filter_map(|index| self.get(index, access))
+            .collect()
     }
 }
 
@@ -397,14 +460,11 @@ impl ListGuard {
         self.list.backing(Ordering::Acquire)
     }
 
-    /// The length, then the backing (both Acquire, so the backing is at least
-    /// as new as the length's writer saw), and the elements usable in it.
+    /// The backing and the elements usable in it, from one [`ListRef::view`].
     #[inline]
     fn view(&self) -> (Option<Backing>, usize) {
-        let len = self.len();
-        let backing = self.backing();
-        let usable = backing.map_or(0, |backing| len.min(backing.cap()));
-        (backing, usable)
+        let view = self.list.view();
+        (view.backing, view.len)
     }
 
     #[inline]
@@ -432,26 +492,13 @@ impl ListGuard {
 
     /// Every element.
     pub fn to_vec(&self) -> Vec<SlotValue> {
-        let (Some(backing), usable) = self.view() else {
-            return Vec::new();
-        };
-        (0..usable)
-            // SAFETY: below the loaded backing's capacity.
-            .map(|index| unsafe { read_slot(backing.elem(index), self.slot(), self.access) })
-            .collect()
+        self.list.view().to_vec(self.access)
     }
 
     /// Store `value` to element `index`. Past the end (a racing pop or grow
     /// moved it) the store is dropped.
     pub fn set(&self, index: usize, value: SlotValue) -> Result<(), SlotMismatch> {
-        let (Some(backing), usable) = self.view() else {
-            return Ok(());
-        };
-        if index >= usable {
-            return Ok(());
-        }
-        // SAFETY: below the loaded backing's capacity.
-        unsafe { write_value(backing.elem(index), self.slot(), value, self.access) }
+        self.list.view().set(index, value, self.access)
     }
 
     /// A backing with room for `needed` elements: the current one, or a
@@ -577,8 +624,9 @@ impl ListGuard {
             self.truncate(0);
             return Ok(());
         }
-        let (_, old) = self.view();
-        let backing = match self.backing() {
+        let slot = self.slot();
+        let (current, old) = self.view();
+        let backing = match current {
             Some(backing) if values.len() <= backing.cap() => backing,
             _ => {
                 self.set_len(0);
@@ -587,7 +635,7 @@ impl ListGuard {
         };
         for (index, value) in values.iter().enumerate() {
             // SAFETY: below the capacity checked or just allocated.
-            unsafe { write_value(backing.elem(index), self.slot(), *value, self.access) }?;
+            unsafe { write_value(backing.elem(index), slot, *value, self.access) }?;
         }
         self.set_len(values.len());
         if values.len() < old {

@@ -7916,11 +7916,11 @@ impl BexVm {
         index: i64,
         access: Access,
     ) -> Result<SlotValue, (i64, usize)> {
-        let list = self.expect_list(ptr);
-        let len = list.len();
-        crate::array_index::resolve_index(index, len)
-            .and_then(|idx| list.get_with(idx, access))
-            .ok_or((index, len))
+        // SAFETY: the caller matched the object as a list.
+        let view = unsafe { ListRef::new_unchecked(ptr) }.view();
+        crate::array_index::resolve_index(index, view.len())
+            .and_then(|idx| view.get(idx, access))
+            .ok_or((index, view.len()))
     }
 
     /// `StoreArrayElement` on a list, under its lock.
@@ -7932,11 +7932,14 @@ impl BexVm {
         value: Value,
         access: Access,
     ) -> Result<(), (i64, usize)> {
-        let guard = self.expect_list(ptr).lock(access);
-        let len = guard.len();
-        let idx = crate::array_index::resolve_index(index, len).ok_or((index, len))?;
-        guard
-            .set(idx, SlotValue::Value(value))
+        // SAFETY: the caller matched the object as a list.
+        let list = unsafe { ListRef::new_unchecked(ptr) };
+        // Holds the lock only under `locked-containers`.
+        let _guard = list.lock(access);
+        let view = list.view();
+        let idx = crate::array_index::resolve_index(index, view.len())
+            .ok_or((index, view.len()))?;
+        view.set(idx, SlotValue::Value(value), access)
             .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"));
         Ok(())
     }
