@@ -229,6 +229,37 @@ const BUILT: Span[] = [
 // Every row is this tall, sized by the figure so the whole thing fits in the window.
 const ROW = 'var(--r)';
 
+const TS_TOKENS =
+  /("[^"]*"|\b(?:const|async|function|return|await|try|catch|finally|throw|if)\b|\b\w+(?=\())/;
+const TS_KEYWORD =
+  /^(const|async|function|return|await|try|catch|finally|throw|if)$/;
+
+/** A line of TypeScript, highlighted: strings, keywords and calls each get a color. The tracing lines
+ *  use a yellow set of the same three, so they stay yellow while still reading as code. */
+function TsText({ line, tracing }: { line: string; tracing?: boolean }) {
+  const [string, keyword, call] = tracing
+    ? ['text-[#efd9a4]', 'text-[#f7c548]', 'text-[#fff3d1]']
+    : ['text-(--color-pasture-200)', 'text-clover', 'text-white'];
+  return (
+    <>
+      {line.split(TS_TOKENS).map((part, i) => {
+        const key = `${i}-${part}`;
+        if (i % 2 === 0) return <span key={key}>{part}</span>;
+        const tone = part.startsWith('"')
+          ? string
+          : TS_KEYWORD.test(part)
+            ? keyword
+            : call;
+        return (
+          <span className={tone} key={key}>
+            {part}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 /** The TypeScript listing. `level` is how much tracing has piled on, from 0 to 4; fractions ease a
  *  line in. The tracing is tinted yellow, and the logic it wraps clover. */
 function TsCode({ level }: { level: number }) {
@@ -245,7 +276,7 @@ function TsCode({ level }: { level: number }) {
             <div
               // The tracing you write by hand is in yellow, and the logic it wraps keeps the BAML
               // side's clover, so the two read as tracing versus the code that matters.
-              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'bg-clover/14 text-white' : 'bg-[#f5c451]/12 text-[#f5d27a]'}`}
+              className={`flex items-center overflow-hidden whitespace-pre px-4 transition-[padding] duration-300 ${l.k === 'logic' ? 'bg-clover/14 text-white' : 'bg-[#f5c451]/12 text-[#c9ab68]'}`}
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed listing
               key={i}
               style={{
@@ -254,7 +285,7 @@ function TsCode({ level }: { level: number }) {
                 paddingLeft: `calc(1rem + ${indent * 2}ch)`,
               }}
             >
-              {l.s}
+              <TsText line={l.s} tracing={l.k !== 'logic'} />
             </div>
           );
         })}
