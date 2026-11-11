@@ -10,6 +10,7 @@ import { MDXMedia } from './media';
 import { MDXNote } from './note';
 import { ProblemStatement, TechniqueTitle, WhatIsSAP } from './sap/intro';
 import { SkillResultsChart } from './skill-results-chart';
+import { MDXTerm } from './term';
 import { MDXTip } from './tip';
 import Video from './video';
 
@@ -80,6 +81,7 @@ export const mdxComponents: MDXComponents = {
   SapTechniqueTitle: TechniqueTitle,
   SapWhatIsSAP: WhatIsSAP,
   SkillResultsChart: SkillResultsChart,
+  Term: MDXTerm,
   Tip: MDXTip,
   Video: Video,
   // pre: ({ children, ...props }: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLPreElement>) => {
