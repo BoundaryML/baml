@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod ir;
 mod newline_style;
 pub mod package_source;
 pub mod printer;

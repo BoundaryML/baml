@@ -707,13 +707,17 @@ dependencies = [
  "baml_db",
  "baml_parser",
  "baml_syntax",
+ "bumpalo",
  "caseless",
  "insta",
+ "nunny",
  "ouroboros",
+ "rustc-hash 2.1.2",
  "salsa",
  "text-size",
  "thiserror 2.0.18",
  "unicode-normalization",
+ "unicode-width 0.2.0",
  "walkdir",
 ]
 

@@ -179,6 +179,7 @@ bitflags = "2"
 # derives for the four runtime-only types (Value, Object, FunctionKind,
 # HeapPtr) that need to refuse or proxy their on-disk form.
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
+bumpalo = { version = "3" }
 bytes = "1"
 bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
@@ -317,6 +318,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
   "fmt",
 ] }
 unicode-normalization = "0.1.25"
+unicode-width = { version = "0.2" }
 ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
 url = "2.5"
 uuid = { version = "1", features = [ "serde", "v4" ] }
