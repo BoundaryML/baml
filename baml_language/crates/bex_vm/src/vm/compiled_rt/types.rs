@@ -210,7 +210,10 @@ impl BexVm {
         Value::object(self.tlab.alloc(generic))
     }
 
-    /// Append type arguments to a callable while preserving captures and bound methods.
+    /// Append type arguments to a callable while preserving captures and bound
+    /// methods (`g<int>` where `g` is a function value). The one
+    /// implementation compiled code and the interpreter's
+    /// `MakeGenericFunctionFromValue` share.
     pub fn specialize_function_value(
         &mut self,
         callable: Value,
@@ -218,6 +221,20 @@ impl BexVm {
     ) -> Result<Value, Box<VmError>> {
         let callable_ptr =
             self.as_object_ptr(callable, ObjectType::from(FunctionType::Callable))?;
+        // A bound method keeps its receiver and its class/impl frame. Specialize
+        // a fresh value so aliases of the original keep their own environment.
+        if let Object::BoundMethod(method) = self.get_object(callable_ptr) {
+            let mut method = method.clone();
+            let mut carried = method.type_args.into_vec();
+            carried.extend_from_slice(type_args);
+            method.type_args = carried.into_boxed_slice();
+            return Ok(Value::object(self.tlab.alloc(Object::BoundMethod(method))));
+        }
+        // A plain function or closure is wrapped in a closure carrying the type
+        // args after any it already captured (the outer/class environment), so
+        // a later indirect call seeds a complete `frame.type_args`.
+        // `GenericFunction` does not reach here: TIR rejects type args on an
+        // already-specialized value.
         let wrapped = match self.get_object(callable_ptr) {
             Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
             Object::Closure(closure) => Some((

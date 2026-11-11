@@ -11651,53 +11651,10 @@ impl BexVm {
                         // resolved `Object::Type` args sit beneath it.
                         let callable = self.stack.ensure_pop();
                         let type_args = self.pop_type_args(ntypeargs)?;
-                        // Resolve the callable to its inner Function pointer (and any
-                        // captures, if it is already a closure).
-                        let callable_ptr =
-                            self.as_object_ptr(callable, FunctionType::Callable.into())?;
-                        // A plain function or closure is wrapped in a closure
-                        // carrying the type args (closures carry over their existing
-                        // `captured_type_args` — the outer/class generic environment
-                        // — then append the new instantiation args in call order, so
-                        // a later indirect call seeds a complete `frame.type_args`).
-                        //
-                        // A bound method must retain its receiver as well as its
-                        // class/impl frame. Specialize a fresh value so aliases of
-                        // the original method keep their own generic environment.
-                        if let Object::BoundMethod(method) = self.get_object(callable_ptr) {
-                            let mut method = method.clone();
-                            let mut carried = method.type_args.into_vec();
-                            carried.extend(type_args.tys);
-                            method.type_args = carried.into_boxed_slice();
-                            let ptr = self.tlab.alloc(Object::BoundMethod(method));
-                            self.push_stack(Value::object(ptr))?;
-                            continue;
-                        }
-                        // `GenericFunction` does not reach here: TIR rejects
-                        // type args on an already-specialized value.
-                        let wrap: Option<(HeapPtr, Vec<Value>, Vec<bex_vm_types::RealizedTy>)> =
-                            match self.get_object(callable_ptr) {
-                                Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
-                                Object::Closure(c) => Some((
-                                    c.function,
-                                    c.captures.to_vec(),
-                                    c.captured_type_args.to_vec(),
-                                )),
-                                _ => None,
-                            };
-                        match wrap {
-                            Some((function_ptr, captures, mut captured_type_args)) => {
-                                captured_type_args.extend(type_args.tys);
-                                let closure = Object::Closure(Closure {
-                                    function: function_ptr,
-                                    captures: captures.into_boxed_slice(),
-                                    captured_type_args: captured_type_args.into_boxed_slice(),
-                                });
-                                let ptr = self.tlab.alloc(closure);
-                                self.push_stack(Value::object(ptr))?;
-                            }
-                            None => self.push_stack(callable)?,
-                        }
+                        let value = self
+                            .specialize_function_value(callable, &type_args.tys)
+                            .map_err(|error| *error)?;
+                        self.push_stack(value)?;
                     }
 
                     // ── LoadDeref / StoreDeref ────────────────────────────────────
