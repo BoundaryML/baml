@@ -2011,23 +2011,15 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           <h1 className="v4-h2 text-head">How BAML works</h1>
         )}
         <p className="mt-4 max-w-[42rem] text-[17px] leading-relaxed text-ink-2">
-          {embedded
-            ? 'BAML compiles when you build and runs inside your app as a library, with no sidecar and no server. Pick where it runs, and the diagrams below follow.'
-            : 'BAML compiles when you build and runs inside your app as a library. There’s no sidecar and no server. Pick where it runs, and every diagram on this page follows.'}
+          BAML compiles when you build and runs inside your app as a library. No
+          sidecar, no server.
         </p>
       </header>
       <ControlBar at={at} lang={lang} setAt={setAt} setLang={setLang} />
-      <Section
-        lead="baml generate type-checks and compiles your BAML, then writes an SDK in your language with the compiled program inside. Your app ships with it."
-        title="Build, then run"
-      >
+      <Section title="Build, then run">
         <Architecture at={at} lang={lang} />
       </Section>
-      <Section
-        id="release"
-        lead="What ships with your app, and what to set so production runs the same as your machine."
-        title="What happens at release"
-      >
+      <Section id="release" title="What happens at release">
         <div key={`${target.name}-${lang}`}>
           <ReleaseView at={at} lang={lang} />
         </div>
@@ -2035,7 +2027,7 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
       <Section title="Startup, a call, shutdown">
         <Life at={at} lang={lang} />
       </Section>
-      <Section lead={MOMENTS[1].lead} title={MOMENTS[1].title}>
+      <Section title={MOMENTS[1].title}>
         <div key={`${target.name}-${lang}`}>
           {behaviorFor(target.name, lang)['An exception']}
         </div>
