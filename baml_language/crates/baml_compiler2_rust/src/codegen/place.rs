@@ -199,10 +199,12 @@ impl<'db> Generator<'_, 'db> {
         let Place::Local(local) = base else {
             return None;
         };
-        let RuntimeTy::Class(name, _) = &self.body.locals[local.0].ty else {
+        // A nullable base reaches a field access only where it is not null;
+        // the access's class check takes the generic path when it is.
+        let RuntimeTy::Class(name, _) = self.body.locals[local.0].ty.strip_null() else {
             return None;
         };
-        let (class, _) = self.index.class_at(name)?;
+        let (class, _) = self.index.class_at(&name)?;
         let slot = self.index.field_slot(class, field)?;
         Some(KnownField {
             class,
@@ -212,7 +214,7 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// The bound class word of `class`, bound in the body's prologue.
-    fn class_word(&mut self, class: usize) -> String {
+    pub(super) fn class_word(&mut self, class: usize) -> String {
         self.class_words.insert(class);
         format!("k{class}")
     }

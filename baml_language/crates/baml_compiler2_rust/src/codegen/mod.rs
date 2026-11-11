@@ -2,6 +2,7 @@
 
 mod call;
 mod constant;
+mod dispatch;
 mod expr;
 mod place;
 mod stmt;
@@ -114,6 +115,9 @@ pub(crate) struct Generator<'a, 'db> {
     /// Classes whose class word the body binds in its prologue, for direct
     /// field access (`place::direct_load`).
     pub(crate) class_words: BTreeSet<usize>,
+    /// Whether the body suspends where its analysis said it would not: a
+    /// virtual call whose targets did not all compile. It is then not plain.
+    pub(crate) suspends_late: bool,
 }
 
 type Gen<T> = Result<T, Rejection>;
@@ -155,6 +159,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             structured: None,
             static_value_sites: Vec::new(),
             class_words: BTreeSet::new(),
+            suspends_late: false,
         }
     }
 }
@@ -173,11 +178,14 @@ fn pc_arg(pc: Option<usize>) -> String {
 /// record (its caller's) serves equally, which are PC notes, object lookups
 /// and calls. See `BexVm::plain_calls`.
 pub(crate) fn keeps_record_state(code: &str) -> bool {
-    const BEFORE: [&str; 8] = [
+    // `call_inline` is a devirtualized site's path for a receiver whose class
+    // was made at run time; see `dispatch`.
+    const BEFORE: [&str; 9] = [
         "vm.record_object(",
         "vm.call_record(",
         "vm.call_record_typed(",
         "vm.call_compiled(",
+        "vm.call_inline(",
         "vm.plain_unwound(",
         "(vm, ",
         "|vm, ",

@@ -14,7 +14,7 @@ pub(in crate::vm) use frame::validate_compiled_program;
 pub use frame::{CompiledBodies, CompiledBodyTable};
 pub(crate) use state::CompiledState;
 mod heap;
-pub use heap::{FieldBase, ListBase, class_word};
+pub use heap::{FieldBase, ListBase, class_word, instance_class_word};
 mod program;
 mod record;
 pub(crate) use record::{FrameAt, RecordChain, record_ref};

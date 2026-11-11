@@ -161,6 +161,9 @@ impl Analysis {
                 user_callees.insert(callee);
                 user_callees_at.insert(block.id.0, callee);
             }
+            // A dispatched call reaches each target body directly.
+            let targets = dispatch_targets(index, terminator).unwrap_or_default();
+            user_callees.extend(targets.into_iter().map(|(_, object)| object));
             let array_iteration = array_iter_walk(db, body, arity, terminator, &array_iters)
                 .is_some()
                 || array_next_call(db, terminator, &array_iters).is_some();
@@ -172,7 +175,8 @@ impl Analysis {
                 &static_types,
                 &intrinsics.hook_results,
             ) || (matches!(terminator, Terminator::VirtualCall { .. })
-                && !array_iteration);
+                && !array_iteration
+                && dispatch_targets(index, terminator).is_none());
         }
         let loop_headers = cfg.loop_headers();
         if loop_headers.len() > 128 {
@@ -663,6 +667,41 @@ pub(crate) fn suspends_directly<'db>(
         }
         _ => false,
     }
+}
+
+/// The bodies a virtual call can reach, as (class, method object), when
+/// compiled code can dispatch it by the receiver's class alone: a plain
+/// method call (no type or interface arguments, trace or named arguments) on
+/// an interface every implementation of which is a class providing the
+/// method with the call's arity. See `ProgramIndex::dispatch_targets`.
+pub(crate) fn dispatch_targets(
+    index: &ProgramIndex,
+    terminator: &Terminator<'_>,
+) -> Option<Vec<(usize, usize)>> {
+    let Terminator::VirtualCall {
+        has_trace: false,
+        argument_layout,
+        iface,
+        method,
+        args,
+        ntypeargs: 0,
+        self_arg: 0,
+        ..
+    } = terminator
+    else {
+        return None;
+    };
+    let named = argument_layout
+        .as_ref()
+        .is_some_and(|layout| layout.0.iter().any(Option::is_some));
+    if named || !iface.generics.is_empty() {
+        return None;
+    }
+    let targets = index.dispatch_targets(index.interface_at(&iface.name)?, method)?;
+    targets
+        .iter()
+        .all(|&(_, object)| index.info(object).arity == args.len())
+        .then_some(targets)
 }
 
 pub(crate) fn user_callee<'db>(

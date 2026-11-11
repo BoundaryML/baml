@@ -513,6 +513,25 @@ pub fn class_word(class: HeapPtr) -> u64 {
     Value::object(class).bits()
 }
 
+/// The class-slot word of `value` when it is an instance, else zero, which no
+/// [`class_word`] is: what a dispatch on the receiver's class compares.
+#[allow(clippy::inline_always, unsafe_code)]
+#[inline(always)]
+#[must_use]
+pub fn instance_class_word(value: Value) -> u64 {
+    let Some(ptr) = value.as_object_ptr() else {
+        return 0;
+    };
+    // SAFETY: as in `FieldBase::of`.
+    unsafe {
+        if ptr.header().descriptor.0 < FIRST_INSTANCE_DESC.0 {
+            return 0;
+        }
+        let base = ptr.as_ptr().cast::<u8>().sub(HEADER_BYTES);
+        (*base.add(CLASS_OFFSET as usize).cast::<AtomicU64>()).load(Ordering::Relaxed)
+    }
+}
+
 impl FieldBase {
     /// `value` as an instance of the class whose [`class_word`] is `class`,
     /// or `None` (null, another object, another class) for the generic path.

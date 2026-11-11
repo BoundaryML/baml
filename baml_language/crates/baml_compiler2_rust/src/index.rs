@@ -39,6 +39,9 @@ pub(crate) struct ProgramIndex<'p> {
     /// Method object → the class whose instances run it: an inherent
     /// method's class, or the class a non-generic impl rule names.
     method_classes: HashMap<usize, usize>,
+    /// Interface object → per impl rule, the one class it names (`None` for
+    /// any other pattern) and the methods it provides by name.
+    impl_rules: HashMap<usize, Vec<(Option<usize>, HashMap<String, usize>)>>,
     /// String literal → the compile-time string object bytecode loads it from.
     pub(crate) strings: HashMap<String, usize>,
     /// Global slot used by pooled generic function values.
@@ -66,6 +69,7 @@ impl<'p> ProgramIndex<'p> {
             methods: HashMap::new(),
             user_methods: Vec::new(),
             method_classes: HashMap::new(),
+            impl_rules: HashMap::new(),
             strings: HashMap::new(),
             globals: HashMap::new(),
             generic_functions: Vec::new(),
@@ -89,18 +93,56 @@ impl<'p> ProgramIndex<'p> {
         let rules = program
             .packages
             .iter()
-            .flat_map(|package| package.impl_rules.values().flatten());
-        for rule in rules {
-            let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
-                continue;
-            };
-            let Some(class) = head.tag().static_index().filter(|_| args.is_empty()) else {
-                continue;
-            };
-            for method in rule.methods.values() {
-                self.method_classes.insert(method.fqn.raw(), class);
+            .flat_map(|package| &package.impl_rules);
+        for (interface, rules) in rules {
+            for rule in rules {
+                self.index_impl_rule(interface.raw(), rule);
             }
         }
+    }
+
+    fn index_impl_rule(&mut self, interface: usize, rule: &bex_vm_types::types::ProgramImplRule) {
+        let class = match &rule.for_ty_pattern {
+            bex_vm_types::TyTemplate::Class(head, args)
+                if args.is_empty() && rule.generic_param_bounds.is_empty() =>
+            {
+                head.tag().static_index()
+            }
+            _ => None,
+        };
+        let mut methods = HashMap::new();
+        for (name, method) in &rule.methods {
+            if let Some(class) = class {
+                self.method_classes.insert(method.fqn.raw(), class);
+            }
+            methods.insert(name.as_str().to_owned(), method.fqn.raw());
+        }
+        self.impl_rules
+            .entry(interface)
+            .or_default()
+            .push((class, methods));
+    }
+
+    /// Every body a call of `method` on `interface` can dispatch to, as
+    /// (class, method object), one per impl rule: `None` unless each rule
+    /// names one class and provides the method itself (no adopted default),
+    /// and the interface has no structural default.
+    pub(crate) fn dispatch_targets(
+        &self,
+        interface: usize,
+        method: &str,
+    ) -> Option<Vec<(usize, usize)>> {
+        let Object::Interface(def) = &self.program.objects[ObjectIndex::from_raw(interface)] else {
+            return None;
+        };
+        if def.structural_default.is_some() {
+            return None;
+        }
+        self.impl_rules
+            .get(&interface)?
+            .iter()
+            .map(|(class, methods)| Some(((*class)?, *methods.get(method)?)))
+            .collect()
     }
 
     /// The class whose instances run method `object`, when one class does.

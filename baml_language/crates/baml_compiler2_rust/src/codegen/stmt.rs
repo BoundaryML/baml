@@ -307,7 +307,9 @@ impl<'db> Generator<'_, 'db> {
                 self.suspension(id)?;
             }
             terminator @ Terminator::VirtualCall { .. } if !self.array_iteration(terminator) => {
-                self.suspension(id)?;
+                if !self.devirtualized(id)? {
+                    self.suspension(id)?;
+                }
             }
             Terminator::Call {
                 callee,

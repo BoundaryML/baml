@@ -612,6 +612,7 @@ fn assemble(
 /// `BexVm::plain_calls`. Its callees decide the rest ([`close_plain`]).
 fn locally_plain(unit: &Unit<'_>, generator: &Generator<'_, '_>, code: &str) -> bool {
     !unit.analysis.suspends
+        && !generator.suspends_late
         && generator.slots == 0
         && generator.cause_slot.is_none()
         && !crate::codegen::keeps_record_state(code)
