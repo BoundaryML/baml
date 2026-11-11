@@ -209,11 +209,24 @@ export function Looped({
   useEffect(() => {
     const el = ref.current?.firstElementChild;
     if (!el) return;
+    const height = () => el.getBoundingClientRect().height;
+    // A figure hidden at this width measures 0 and holds no space.
     const watcher = new ResizeObserver(() =>
-      setTallest((h) => Math.max(h, el.getBoundingClientRect().height)),
+      setTallest((h) => (height() === 0 ? 0 : Math.max(h, height()))),
     );
     watcher.observe(el);
-    return () => watcher.disconnect();
+    // A new window width lays the figure out again, so the tallest starts over from what it is now.
+    let width = innerWidth;
+    const resized = () => {
+      if (innerWidth === width) return;
+      width = innerWidth;
+      setTallest(height());
+    };
+    addEventListener('resize', resized);
+    return () => {
+      watcher.disconnect();
+      removeEventListener('resize', resized);
+    };
   }, []);
 
   useEffect(() => {
