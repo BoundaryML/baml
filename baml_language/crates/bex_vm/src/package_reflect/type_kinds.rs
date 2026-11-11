@@ -2000,8 +2000,8 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
         return Err("reflect.Enum.new values must be strings or reflect.enum.Value rows".into());
     };
     match vm.get_object(ptr) {
-        Object::String(name) => Ok(EnumVariant {
-            name: name.to_string(),
+        Object::Shared(bex_vm_types::types::SharedKind::Str) => Ok(EnumVariant {
+            name: vm.expect_str(ptr).to_string(),
             description: None,
             alias: None,
             docstring: None,
@@ -2165,7 +2165,7 @@ fn same_kind_containers(
 /// not depend on `baml`, so its natives never throw a `baml.errors` value.
 pub(super) fn invalid_argument(
     vm: &mut BexVm,
-    message: impl Into<bex_str::BexStr>,
+    message: impl AsRef<str>,
 ) -> crate::errors::VmRustFnError {
     let message = Value::object(vm.alloc_string(message));
     crate::errors::VmRustFnError::thrown_fresh(

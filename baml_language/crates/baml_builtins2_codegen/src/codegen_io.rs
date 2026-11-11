@@ -307,7 +307,7 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
         }
         BamlType::String => {
             *needs_heap = true;
-            quote! { Result<&'a bex_str::BexStr, AccessError> }
+            quote! { Result<std::borrow::Cow<'a, bex_str::BexStr>, AccessError> }
         }
         BamlType::RustType => {
             *needs_heap = true;

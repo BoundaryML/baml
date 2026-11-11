@@ -112,6 +112,8 @@ pub enum Format {
     /// A map ([`MapRef`](crate::types::MapRef)) with these key and value
     /// slots.
     Map(SlotKind, SlotKind),
+    /// A flat string ([`StrRef`](crate::types::StrRef)).
+    Str,
 }
 
 impl Format {
@@ -122,6 +124,9 @@ impl Format {
         }
         if descriptor.0 >= FIRST_INSTANCE_DESC.0 {
             return Format::Instance;
+        }
+        if descriptor == crate::types::STR_DESC {
+            return Format::Str;
         }
         if let Some(slot) = crate::types::list_slot_of(descriptor) {
             return Format::List(slot);

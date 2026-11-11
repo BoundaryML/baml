@@ -98,7 +98,7 @@ pub fn decode_json(
     ty: &RealizedTy,
     codec: &'static Codec,
 ) -> Option<Value> {
-    let text = vm.as_string(&text).ok()?.clone();
+    let text = vm.as_string(&text).ok()?.to_bex_str();
     let mut decoder = Decoder {
         reader: Reader::new(text.as_str()),
     };

@@ -326,6 +326,12 @@ impl<'vm> ValueModel<'vm> {
         self.vm.get_object(heap_ptr(ptr))
     }
 
+    fn string(&self, ptr: ObjPtr) -> bex_vm_types::StrRef<'_> {
+        self.vm
+            .str_at(heap_ptr(ptr))
+            .unwrap_or_else(|| panic!("string ABI call on {}", ObjectType::of(self.object(ptr))))
+    }
+
     fn array(&self, list: ObjPtr) -> ListRef {
         self.vm
             .list_at(heap_ptr(list))
@@ -414,7 +420,9 @@ impl<'vm> ValueModel<'vm> {
             return false;
         };
         match self.vm.get_object(ptr) {
-            Object::String(text) => text.as_str() == self.str_text(key.ptr),
+            Object::Shared(SharedKind::Str) => {
+                self.vm.expect_str(ptr).as_str() == self.str_text(key.ptr)
+            }
             _ => false,
         }
     }
@@ -526,7 +534,7 @@ impl Descriptors for ValueModel<'_> {
                     value: self.slot_of(map.value_ty()),
                 }
             }
-            Object::String(_) => Shape::Str,
+            Object::Shared(SharedKind::Str) => Shape::Str,
             Object::Shared(SharedKind::Instance) => Shape::Other(Kind::Instance),
             Object::Closure(_) => Shape::Other(Kind::Closure),
             Object::Future(_) => Shape::Other(Kind::Future),
@@ -662,24 +670,16 @@ impl<V: ValueElem> Maps<V> for ValueModel<'_> {
 
 impl Strings for ValueModel<'_> {
     fn str_text(&self, string: ObjPtr) -> &str {
-        match self.object(string) {
-            Object::String(text) => text.as_str(),
-            other => panic!("string ABI call on {}", ObjectType::of(other)),
-        }
+        self.string(string).as_str()
     }
 
     fn str_char_len(&self, string: ObjPtr) -> usize {
-        match self.object(string) {
-            Object::String(text) => text.char_len(),
-            other => panic!("string ABI call on {}", ObjectType::of(other)),
-        }
+        self.string(string).char_len()
     }
 
     fn str_char_bytes(&self, string: ObjPtr, chars: Range<usize>) -> Range<usize> {
-        match self.object(string) {
-            Object::String(text) => text.char_to_byte(chars.start)..text.char_to_byte(chars.end),
-            other => panic!("string ABI call on {}", ObjectType::of(other)),
-        }
+        let text = self.string(string);
+        text.char_to_byte(chars.start)..text.char_to_byte(chars.end)
     }
 
     fn str_alloc(&mut self, text: &str) -> ObjPtr {
@@ -687,10 +687,7 @@ impl Strings for ValueModel<'_> {
     }
 
     fn str_substring(&mut self, string: ObjPtr, bytes: Range<usize>) -> ObjPtr {
-        let sliced = match self.object(string) {
-            Object::String(text) => text.byte_slice(bytes),
-            other => panic!("string ABI call on {}", ObjectType::of(other)),
-        };
+        let sliced = self.string(string).as_str()[bytes].to_owned();
         obj_ptr(Value::object(self.vm.alloc_string(sliced)))
     }
 

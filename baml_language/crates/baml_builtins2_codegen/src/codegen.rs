@@ -350,7 +350,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}    .expect(\"{class_name}.{raw_name}: expected String\")"
+                    "{inner2}    .expect(\"{class_name}.{raw_name}: expected String\").as_str()"
                 )
                 .unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
@@ -512,7 +512,7 @@ fn view_optional_type_and_expr(
         BamlType::String => (
             "Option<&'v str>".to_string(),
             format!(
-                "vm.as_string(&self.instance.load({field_index}).expect_value()).expect(\"{class_name}.{field_name}: expected String\")"
+                "vm.as_string(&self.instance.load({field_index}).expect_value()).expect(\"{class_name}.{field_name}: expected String\").as_str()"
             ),
         ),
         _ => (
@@ -1604,7 +1604,7 @@ fn emit_mut_receiver_extraction_indented(
     let expr = match recv.builtin_name() {
         "Array" => "vm.as_array_mut(&args[0])?".to_string(),
         "Map" => "vm.as_map_mut(&args[0])?".to_string(),
-        "String" => "vm.as_string_mut(&args[0])?".to_string(),
+        "String" => "&mut vm.as_string(&args[0])?.to_bex_str()".to_string(),
         "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
@@ -1684,11 +1684,12 @@ fn receiver_immut_extraction_expr(
                 format!("vm.as_map({val})?")
             }
         }
+        // See `extraction_expr`: natives still take `&BexStr`.
         "String" => {
             if needs_owned {
-                format!("vm.as_string({val})?.clone()")
+                format!("vm.as_string({val})?.to_bex_str()")
             } else {
-                format!("vm.as_string({val})?")
+                format!("&vm.as_string({val})?.to_bex_str()")
             }
         }
         "Uint8Array" => {
@@ -1750,13 +1751,15 @@ fn extraction_expr(
     arraymap_needs_owned: bool,
 ) -> String {
     match ty {
+        // Natives still take `&BexStr`; the flat cell's text is copied out
+        // for them until they read `StrRef` directly.
         BamlType::String => {
             if is_mut {
-                format!("vm.as_string_mut({val})?")
+                format!("&mut vm.as_string({val})?.to_bex_str()")
             } else if needs_owned {
-                format!("vm.as_string({val})?.clone()")
+                format!("vm.as_string({val})?.to_bex_str()")
             } else {
-                format!("vm.as_string({val})?")
+                format!("&vm.as_string({val})?.to_bex_str()")
             }
         }
         // The local `__v: &Value` binding lets the `Value::as_*` methods

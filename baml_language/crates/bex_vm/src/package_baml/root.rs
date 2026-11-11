@@ -328,7 +328,7 @@ pub(crate) fn render_to_string_honoring_overrides(
     // value is its own rendering. A primitive needs neither the probe nor the
     // walker: no package can override how it renders (E0139).
     if let ValueKind::Object(ptr) = value.kind()
-        && matches!(vm.get_object(ptr), Object::String(_))
+        && vm.str_at(ptr).is_some()
     {
         return NativeCallResult::Done(value);
     }
@@ -501,8 +501,8 @@ impl JoinContinuation {
             if self.index > 0 {
                 self.out.push_str(&self.separator);
             }
-            match element.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-                Some(Object::String(s)) => self.out.push_str(s.as_str()),
+            match element.as_object_ptr().and_then(|ptr| vm.str_at(ptr)) {
+                Some(s) => self.out.push_str(s.as_str()),
                 _ => {
                     let mut state = StringRenderState::with_overrides(&self.pending, &self.results);
                     let mut sink = StringRenderSink(std::mem::take(&mut self.out));
@@ -686,7 +686,10 @@ pub(crate) fn scalar_text(value: bex_vm_types::layout::Tagged) -> Option<String>
 /// Whether `ptr` is a string or a float, which no package can give a
 /// `baml.ToString` override (E0139).
 fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
-    matches!(vm.get_object(ptr), Object::String(_) | Object::Float(_))
+    matches!(
+        vm.get_object(ptr),
+        Object::Shared(SharedKind::Str) | Object::Float(_)
+    )
 }
 
 /// Human-readable rendering used by `string.from` / the `baml.ToString` default.
@@ -764,7 +767,9 @@ pub(super) fn render_to_sink(
     // Capture an owned snapshot, dropping the heap borrow / container lock
     // before recursing.
     let snap = match vm.get_object(ptr) {
-        Object::String(s) => DisplaySnap::Str(s.as_str().to_string()),
+        Object::Shared(SharedKind::Str) => {
+            DisplaySnap::Str(vm.expect_str(ptr).as_str().to_string())
+        }
         Object::Bigint(b) => DisplaySnap::Leaf(b.to_string()),
         Object::Shared(SharedKind::List) => {
             let values = vm.expect_list(ptr);
@@ -980,6 +985,10 @@ fn deep_copy_value_recursive(
 
             let new_ptr = match object {
                 Object::Float(f) => vm.tlab.alloc(Object::Float(f)),
+                Object::Shared(SharedKind::Str) => {
+                    let text = vm.expect_str(ptr).as_str().to_owned();
+                    vm.alloc_string(text)
+                }
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 

@@ -1148,7 +1148,7 @@ impl Continuation for FinishPackageTests {
             let Ok(name) = vm.as_string(&name_value) else {
                 continue;
             };
-            tests.insert(name.clone(), body);
+            tests.insert(name.to_bex_str(), body);
         }
         NativeCallResult::Done(Value::object(vm.tlab.alloc_map(
             RealizedTy::string(),

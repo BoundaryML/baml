@@ -137,13 +137,14 @@ fn patch_from_values(
                 } else if let Some(value) = value.as_int() {
                     Some(ContextValue::Int(value))
                 } else {
-                    Some(
-                        match vm.get_object(value.as_object_ptr().expect("context primitive")) {
-                            Object::String(value) => ContextValue::String(value.to_string()),
-                            Object::Float(value) => ContextValue::Float(*value),
-                            _ => unreachable!("context metadata must be primitive"),
-                        },
-                    )
+                    let ptr = value.as_object_ptr().expect("context primitive");
+                    Some(match vm.get_object(ptr) {
+                        Object::Shared(bex_vm_types::types::SharedKind::Str) => {
+                            ContextValue::String(vm.expect_str(ptr).to_string())
+                        }
+                        Object::Float(value) => ContextValue::Float(*value),
+                        _ => unreachable!("context metadata must be primitive"),
+                    })
                 };
                 (key.to_string(), value)
             })
@@ -514,7 +515,7 @@ fn start_span_impl(
             btel_types::FunctionMetadata {
                 function_id: vm
                     .heap
-                    .named_span_function_id(name)
+                    .named_span_function_id(name.as_str())
                     .map_err(|_| invalid("function identities exhausted"))?,
                 definition_key: Some(btel_types::DefinitionKey(format!("manual:{name}"))),
                 fqn: name.to_string(),

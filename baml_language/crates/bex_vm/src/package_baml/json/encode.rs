@@ -223,7 +223,7 @@ impl ToJsonCache {
         };
         let key = match vm.get_object(ptr) {
             Object::Float(_) => OverrideKey::Float,
-            Object::String(_) => OverrideKey::String,
+            Object::Shared(SharedKind::Str) => OverrideKey::String,
             Object::Bigint(_) => OverrideKey::Bigint,
             Object::Uint8Array(_) => OverrideKey::Uint8Array,
             // Containers and instances are keyed by the addresses of their
@@ -624,7 +624,7 @@ impl Walker<'_, '_> {
                 Some(Slot::Key(key)) => {
                     let key = vm
                         .as_string(key)
-                        .map(bex_vm_types::BexStr::as_str)
+                        .map(|key| key.as_str())
                         .unwrap_or_default();
                     write!(path, "[{key:?}]")
                 }
@@ -692,7 +692,7 @@ impl Walker<'_, '_> {
         }
         let shape = match vm.get_object(ptr) {
             Object::Float(f) => Shape::Float(*f),
-            Object::String(_) => Shape::String,
+            Object::Shared(SharedKind::Str) => Shape::String,
             Object::Bigint(_) => Shape::Bigint,
             Object::Shared(SharedKind::List) => {
                 let values = vm.expect_list(ptr);
@@ -804,7 +804,7 @@ impl Walker<'_, '_> {
     ) -> Result<(), Stopped> {
         let shape = match vm.get_object(ptr) {
             Object::Float(f) => JsonShape::Float(*f),
-            Object::String(_) => JsonShape::String,
+            Object::Shared(SharedKind::Str) => JsonShape::String,
             Object::Bigint(_) => JsonShape::Bigint,
             Object::Shared(SharedKind::List) => {
                 let values = vm.expect_list(ptr);
@@ -1013,7 +1013,7 @@ impl Walker<'_, '_> {
                 let written: Vec<_> = entries
                     .into_iter()
                     .filter(|(key, _)| {
-                        let key = vm.as_string(key).map(bex_vm_types::BexStr::as_str);
+                        let key = vm.as_string(key).map(|key| key.as_str());
                         key.is_ok_and(|key| !declared.contains(&key))
                     })
                     .map(|(key, value)| (Some(Slot::Key(key)), value))

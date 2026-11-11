@@ -4,6 +4,8 @@
 //! module provides an API that takes a `PermitProof<'_>` (obtained from any
 //! held `ActiveHeapPermit<T>`) to witness GC-exclusion at the type level.
 
+use std::borrow::Cow;
+
 use bex_external_types::{BexExternalAdt, BexExternalValue, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, PermitProof, Value};
 
@@ -278,19 +280,19 @@ impl<'a> BexValue<'a> {
         self,
         heap: &BexHeap,
         permit: PermitProof<'a>,
-    ) -> Result<&'a bex_str::BexStr, AccessError> {
+    ) -> Result<Cow<'a, bex_str::BexStr>, AccessError> {
         match self {
             // Phase 3: BexExternalValue::String now holds BexStr directly.
-            BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s),
+            BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(Cow::Borrowed(s)),
             other => other.as_object("string", heap, permit, |ptr| {
-                let obj = unsafe { ptr.get() };
-                let Object::String(s) = obj else {
+                // SAFETY: the permit keeps the object alive.
+                let Some(string) = (unsafe { bex_vm_types::StrRef::of(*ptr) }) else {
                     return Err(AccessError::TypeMismatch {
                         expected: "string",
-                        actual: obj.to_string(),
+                        actual: unsafe { ptr.get() }.to_string(),
                     });
                 };
-                Ok(s)
+                Ok(Cow::Owned(string.to_bex_str()))
             }),
         }
     }
@@ -696,6 +698,11 @@ fn convert_object(
         Object::Future(..) => unconvertible("future"),
 
         Object::String(s) => Ok(BexExternalValue::String(s.clone())),
+        Object::Shared(bex_vm_types::types::SharedKind::Str) => {
+            // SAFETY: the marker is only shown for a string.
+            let string = unsafe { bex_vm_types::StrRef::new_unchecked(heap_ptr) };
+            Ok(BexExternalValue::String(string.to_bex_str()))
+        }
         // Deep-copy path for trace payloads: no declared type is available here,
         // so placeholder types with default attr are used.
         Object::Shared(bex_vm_types::types::SharedKind::List) => {
@@ -732,8 +739,11 @@ fn convert_object(
                     .entries()
                     .into_iter()
                     .map(|(k, v)| {
-                        let key = match k.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
-                            Some(Object::String(key)) => key.as_str().to_owned(),
+                        let key = match k
+                            .as_object_ptr()
+                            .and_then(|ptr| unsafe { bex_vm_types::StrRef::of(ptr) })
+                        {
+                            Some(key) => key.as_str().to_owned(),
                             _ => {
                                 return Err(AccessError::CannotConvertToOwned {
                                     reason: "SDK interchange requires maps with string keys"

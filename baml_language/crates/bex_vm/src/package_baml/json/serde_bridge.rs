@@ -37,8 +37,8 @@ fn string_map_entries(
         .snapshot_entries()
         .into_iter()
         .map(
-            |(key, value)| match key.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-                Some(Object::String(key)) => Ok((key.clone(), value)),
+            |(key, value)| match key.as_object_ptr().and_then(|ptr| vm.str_at(ptr)) {
+                Some(key) => Ok((key.to_bex_str(), value)),
                 _ => Err(STRING_MAP_REQUIRED),
             },
         )
@@ -169,6 +169,9 @@ fn object_to_serde_at(
         Object::Float(f) => serde_json::Number::from_f64(*f)
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null),
+        Object::Shared(SharedKind::Str) => {
+            serde_json::Value::String(vm.expect_str(ptr).to_string())
+        }
         Object::String(s) => serde_json::Value::String(s.to_string()),
         Object::Shared(SharedKind::List) => {
             let arr = vm.expect_list(ptr);

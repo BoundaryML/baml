@@ -556,11 +556,14 @@ fn fill_package_slots(
             .chain(pkg.type_aliases.values())
         {
             match heap.compile_time_object_mut(index.into_raw()) {
-                Object::Class(class) => class.owner = bex_vm_types::types::Owner::Package(owner),
-                Object::Enum(enm) => enm.owner = bex_vm_types::types::Owner::Package(owner),
-                Object::Interface(interface) => interface.owner = owner,
-                Object::TypeAlias(alias) => alias.owner = owner,
-                other => unreachable!(
+                None => unreachable!("a package's declaration table names a string literal"),
+                Some(Object::Class(class)) => {
+                    class.owner = bex_vm_types::types::Owner::Package(owner)
+                }
+                Some(Object::Enum(enm)) => enm.owner = bex_vm_types::types::Owner::Package(owner),
+                Some(Object::Interface(interface)) => interface.owner = owner,
+                Some(Object::TypeAlias(alias)) => alias.owner = owner,
+                Some(other) => unreachable!(
                     "a package's declaration table names a {:?} object",
                     bex_vm_types::ObjectType::of(other)
                 ),
@@ -572,7 +575,7 @@ fn fill_package_slots(
         // renders a static function's name, and its telemetry's parent and
         // package, under its package.
         for index in pkg.objects.clone() {
-            if let Object::Function(function) = heap.compile_time_object_mut(index as usize) {
+            if let Some(Object::Function(function)) = heap.compile_time_object_mut(index as usize) {
                 function.owner = owner;
             }
         }

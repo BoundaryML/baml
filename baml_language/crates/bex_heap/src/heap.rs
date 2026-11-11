@@ -27,6 +27,7 @@ use bex_vm_types::{HeapPtr, Object};
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState,
+    compile_time::CompileTimeSpace,
     descriptor::{Descriptor, DescriptorError, DescriptorId, DescriptorTable},
     space::{
         BLOCK_BYTES, block::BlockHeader, cell_of, large::LargeSpace, mark::is_cell_marked,
@@ -135,23 +136,6 @@ impl Finalizable {
     }
 }
 
-/// A compile-time object with the header every heap object has, so a
-/// pointer to it reads its format like any other (`HeapPtr::format`).
-#[repr(C)]
-struct CompileTimeCell {
-    header: bex_vm_types::object_format::Header,
-    object: Object,
-}
-
-impl CompileTimeCell {
-    fn new(object: Object) -> Self {
-        Self {
-            header: bex_vm_types::object_format::Header::new(crate::OBJECT_DESC, 0),
-            object,
-        }
-    }
-}
-
 /// Unified heap for the BEX virtual machine.
 ///
 /// All heap-allocated objects live here. The heap is shared across
@@ -165,7 +149,7 @@ impl CompileTimeCell {
 pub struct BexHeap {
     /// Compile-time objects (never collected).
     /// These are permanent: functions, classes, enums, string literals.
-    compile_time: Vec<CompileTimeCell>,
+    compile_time: CompileTimeSpace,
     pub(crate) functions: btel_types::FunctionLookup<HeapPtr>,
     pub(crate) span_definitions: std::sync::Mutex<HashMap<String, btel_types::FunctionId>>,
 
@@ -343,10 +327,7 @@ impl BexHeap {
     /// yet the objects themselves must live inside it. The caller appends
     /// placeholder slots, builds unsealed, fills each slot using
     /// `compile_time_ptr`, then calls [`Self::seal`].
-    pub fn build_unsealed(
-        mut compile_time_objects: Vec<Object>,
-        debug: HeapDebuggerConfig,
-    ) -> Self {
+    pub fn build_unsealed(compile_time_objects: Vec<Object>, debug: HeapDebuggerConfig) -> Self {
         // Resolve bytecode constants for all Function objects before sealing.
         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
         // BEP-042: precompute whether any class opts into a `cleanup` finalizer,
@@ -354,10 +335,7 @@ impl BexHeap {
         let has_finalizable_classes = compile_time_objects
             .iter()
             .any(|o| matches!(o, Object::Class(c) if c.cleanup.is_some()));
-        let mut compile_time: Vec<CompileTimeCell> = compile_time_objects
-            .drain(..)
-            .map(CompileTimeCell::new)
-            .collect();
+        let mut compile_time = CompileTimeSpace::new(compile_time_objects);
         Self::resolve_function_constants(&mut compile_time);
 
         Self {
@@ -410,8 +388,8 @@ impl BexHeap {
         // Assign IDs only after all placeholders have been replaced. The Vec
         // and its pointers remain stable for the lifetime of the sealed heap.
         for index in 0..self.compile_time.len() {
-            let ptr = self.compile_time_ptr(index);
-            if let Object::Function(function) = &mut self.compile_time[index].object {
+            let ptr = self.compile_time.heap_ptr(index);
+            if let Some(Object::Function(function)) = self.compile_time.object_mut(index) {
                 function.telemetry_function_id = Some(
                     self.functions
                         .register_static(ptr, &function.telemetry_registration)
@@ -431,20 +409,21 @@ impl BexHeap {
     ///
     /// # Panics
     ///
-    /// Panics if `index` is out of bounds.
+    /// Panics if `index` is out of bounds or names a string literal.
     pub fn set_compile_time_object(&mut self, index: usize, object: Object) {
-        self.compile_time[index].object = object;
+        self.compile_time.set_object(index, object);
     }
 
     /// A compile-time object, mutably, before the heap is [sealed](Self::seal):
     /// what the loader fills in once every pointer is known (a declaration's
-    /// owner edge to its package).
+    /// owner edge to its package). `None` for a string literal, which is a
+    /// flat string cell and not an enum.
     ///
     /// # Panics
     ///
     /// Panics if `index` is out of bounds.
-    pub fn compile_time_object_mut(&mut self, index: usize) -> &mut Object {
-        &mut self.compile_time[index].object
+    pub fn compile_time_object_mut(&mut self, index: usize) -> Option<&mut Object> {
+        self.compile_time.object_mut(index)
     }
 
     /// Resolve every pooled `ObjectIndex` operand into a `HeapPtr` before the
@@ -453,23 +432,14 @@ impl BexHeap {
     ///
     /// Converts ConstValue (compile-time, with ObjectIndex) to Value (runtime, with HeapPtr).
     /// Must be called before wrapping in Arc since we need mutable access.
-    fn resolve_function_constants(cells: &mut [CompileTimeCell]) {
-        // First, compute pointers for all objects (they're at stable positions in the slice)
-        let base_ptr = cells.as_ptr();
+    fn resolve_function_constants(space: &mut CompileTimeSpace) {
+        // Every cell is at its final address already.
+        let ptrs: Vec<HeapPtr> = (0..space.len())
+            .map(|index| space.heap_ptr(index))
+            .collect();
+        let resolve_idx = |idx: bex_vm_types::ObjectIndex| -> HeapPtr { ptrs[idx.into_raw()] };
 
-        let resolve_idx = |idx: bex_vm_types::ObjectIndex| -> bex_vm_types::HeapPtr {
-            let ptr = unsafe { &raw const (*base_ptr.add(idx.into_raw())).object }.cast_mut();
-            #[cfg(feature = "heap_debug")]
-            unsafe {
-                bex_vm_types::HeapPtr::from_ptr(ptr, 0)
-            }
-            #[cfg(not(feature = "heap_debug"))]
-            unsafe {
-                bex_vm_types::HeapPtr::from_ptr(ptr)
-            }
-        };
-
-        for obj in cells.iter_mut().map(|cell| &mut cell.object) {
+        space.for_each_object_mut(|_, obj| {
             if let Object::Function(func) = obj {
                 // Resolve each constant, converting ObjectIndex to HeapPtr.
                 // ConstValue::Type is NOT pre-resolved here — it must be
@@ -509,7 +479,7 @@ impl BexHeap {
                     method.function_ptr = resolve_idx(method.function);
                 }
             }
-        }
+        });
     }
 
     /// Bind every [`bex_vm_types::TypeHead`] in the compile-time image to the
@@ -529,15 +499,17 @@ impl BexHeap {
     /// dispatch that cannot resolve, so a program image that cannot bind
     /// completely must not run at all.
     pub fn bind_type_heads(&mut self) {
-        let tags: Vec<Option<baml_type::typetag::TypeTag>> = self
-            .compile_time
-            .iter()
-            .map(|cell| Self::declaration_tag(&cell.object))
+        let tags: Vec<Option<baml_type::typetag::TypeTag>> = (0..self.compile_time.len())
+            .map(|index| {
+                self.compile_time
+                    .object(index)
+                    .and_then(Self::declaration_tag)
+            })
             .collect();
         let ptrs: Vec<HeapPtr> = (0..self.compile_time.len())
             .map(|index| self.compile_time_ptr(index))
             .collect();
-        for object in self.compile_time.iter_mut().map(|cell| &mut cell.object) {
+        self.compile_time.for_each_object_mut(|_, object| {
             bex_vm_types::head_walk::visit_object_heads_mut(object, &mut |head| {
                 if head.is_resolved() {
                     return;
@@ -549,9 +521,9 @@ impl BexHeap {
                     head.resolve(ptrs[index]);
                 }
             });
-        }
+        });
         let mut unbound: Vec<String> = Vec::new();
-        for object in self.compile_time.iter().map(|cell| &cell.object) {
+        for object in self.compile_time.objects() {
             bex_vm_types::head_walk::visit_object_heads(object, &mut |head| {
                 if head.is_resolved() {
                     return;
@@ -590,8 +562,8 @@ impl BexHeap {
     pub fn assert_switch_tables_dispatch(&self) {
         let undispatchable: Vec<String> = self
             .compile_time
-            .iter()
-            .filter_map(|cell| match &cell.object {
+            .objects()
+            .filter_map(|object| match object {
                 Object::Function(function) => Some(function),
                 _ => None,
             })
@@ -629,10 +601,11 @@ impl BexHeap {
         self.compile_time.len()
     }
 
-    /// Borrow a compile-time object. These slots are immutable after sealing
-    /// and are never moved or collected.
-    pub(crate) fn compile_time_object(&self, index: usize) -> &Object {
-        &self.compile_time[index].object
+    /// Borrow a compile-time enum object. These slots are immutable after
+    /// sealing and are never moved or collected. `None` for a string literal,
+    /// which is a flat string cell.
+    pub(crate) fn compile_time_object(&self, index: usize) -> Option<&Object> {
+        self.compile_time.object(index)
     }
 
     /// Get the compile-time boundary index (alias for compile_time_len).
@@ -656,8 +629,7 @@ impl BexHeap {
 
     /// Addresses of the compile-time objects.
     pub(crate) fn compile_time_range(&self) -> Range<usize> {
-        let range = self.compile_time.as_ptr_range();
-        range.start as usize..range.end as usize
+        self.compile_time.range()
     }
 
     /// Get a HeapPtr to a compile-time object by index.
@@ -667,12 +639,7 @@ impl BexHeap {
     /// Panics if the index is out of bounds.
     #[inline]
     pub fn compile_time_ptr(&self, index: usize) -> HeapPtr {
-        assert!(
-            index < self.compile_time.len(),
-            "compile-time index {index} out of bounds (len={})",
-            self.compile_time.len()
-        );
-        let raw_ptr = (&raw const self.compile_time[index].object).cast_mut();
+        let raw_ptr = self.compile_time.heap_ptr(index).as_ptr();
         // SAFETY: The pointer is valid and points to a compile-time object
         // that will never be moved or deallocated.
         unsafe { self.make_heap_ptr(raw_ptr) }
@@ -1179,6 +1146,33 @@ mod tests {
         let heap = BexHeap::new(objects);
         assert_eq!(heap.len(), 2);
         assert_eq!(heap.compile_time_boundary(), 2);
+    }
+
+    /// A string literal is laid out as a flat string cell among the enum
+    /// cells, at a stable address, readable like a runtime string.
+    #[test]
+    fn compile_time_strings_are_flat_cells() {
+        let heap = BexHeap::new(vec![
+            Object::Float(1.5),
+            Object::String("literal".into()),
+            Object::String("x".repeat(1000).into()),
+            Object::Float(2.5),
+        ]);
+        let literal = heap.compile_time_ptr(1);
+        assert!(heap.is_compile_time_ptr(literal));
+        assert!(heap.compile_time_object(1).is_none());
+        assert!(matches!(
+            heap.compile_time_object(3),
+            Some(Object::Float(_))
+        ));
+        // SAFETY: compile-time objects live as long as the heap.
+        unsafe {
+            let literal = bex_vm_types::StrRef::of(literal).expect("a flat string cell");
+            assert_eq!(literal.as_str(), "literal");
+            let long = bex_vm_types::StrRef::of(heap.compile_time_ptr(2)).unwrap();
+            assert_eq!(long.byte_len(), 1000);
+            assert!(matches!(heap.compile_time_ptr(3).get(), Object::Float(f) if *f == 2.5));
+        }
     }
 
     #[test]

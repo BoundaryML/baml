@@ -228,7 +228,7 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
     active.push(value);
     let ptr = value.as_object_ptr().expect("object kind has a pointer");
     let result = match vm.get_object(ptr) {
-        Object::String(s) => Ok(Node::Scalar(s.as_str().into())),
+        Object::Shared(SharedKind::Str) => Ok(Node::Scalar(vm.expect_str(ptr).as_str().into())),
         Object::Float(f) => Ok(Node::Scalar((*f).into())),
         Object::Shared(SharedKind::List) => {
             let values = vm.list_values(vm.expect_list(ptr), Access::Shared);

@@ -1218,7 +1218,7 @@ fn node_of(vm: &BexVm, json: Value) -> Node {
         ValueKind::Int(i) => Node::Int(i),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Float(f) => Node::Float(*f),
-            Object::String(_) => Node::String(json),
+            Object::Shared(SharedKind::Str) => Node::String(json),
             Object::Bigint(b) => Node::Bigint(Arc::clone(b)),
             Object::Shared(SharedKind::List) => Node::Array(ptr),
             Object::Shared(SharedKind::Map) => Node::Object(ptr),
@@ -1267,7 +1267,7 @@ impl Node {
     /// The text of a string node.
     fn text<'a>(&'a self, vm: &'a BexVm) -> Option<&'a str> {
         match self {
-            Node::String(value) => vm.as_string(value).ok().map(BexStr::as_str),
+            Node::String(value) => vm.as_string(value).ok().map(|value| value.as_str()),
             Node::Variant(name) => Some(name),
             _ => None,
         }

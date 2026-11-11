@@ -11,8 +11,6 @@ pub trait ObjectTrait {
     /// inner `Function`. This fixes the silent-empty-trace bug in `stack_trace()`
     /// where closure frames were causing an early `Err` that got swallowed.
     fn as_callable(&self) -> Result<&Function, VmInternalError>;
-    fn as_string(&self) -> Result<&bex_vm_types::BexStr, VmInternalError>;
-    fn as_string_mut(&mut self) -> Result<&mut bex_vm_types::BexStr, VmInternalError>;
 }
 
 #[allow(unsafe_code)]
@@ -59,27 +57,5 @@ impl ObjectTrait for Object {
                 got: ObjectType::of(self).into(),
             }),
         }
-    }
-
-    fn as_string(&self) -> Result<&bex_vm_types::BexStr, VmInternalError> {
-        let Self::String(str) = self else {
-            return Err(VmInternalError::TypeError {
-                expected: ObjectType::String.into(),
-                got: ObjectType::of(self).into(),
-            });
-        };
-
-        Ok(str)
-    }
-
-    fn as_string_mut(&mut self) -> Result<&mut bex_vm_types::BexStr, VmInternalError> {
-        let Self::String(str) = self else {
-            return Err(VmInternalError::TypeError {
-                expected: ObjectType::String.into(),
-                got: ObjectType::of(self).into(),
-            });
-        };
-
-        Ok(str)
     }
 }

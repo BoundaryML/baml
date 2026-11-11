@@ -1971,7 +1971,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
             return Err(CellTextErr::Unsupported("omitted argument".to_string()));
         }
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::String(s) => s.as_str().to_string(),
+            Object::Shared(SharedKind::Str) => vm.expect_str(ptr).as_str().to_string(),
             Object::Float(f) => float_cell_text(*f)?,
             Object::Bigint(b) => b.to_string(),
             Object::Variant(var) => {

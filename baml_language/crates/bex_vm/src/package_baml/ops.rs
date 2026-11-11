@@ -478,7 +478,11 @@ impl EqualsDriver {
             // Distinct boxes: compare the values, reflexively (`NaN == NaN`).
             (Object::Float(x), Object::Float(y)) => step(bex_vm_types::float_order::eq(*x, *y)),
             (Object::Float(_), _) => Cmp::NotEqual,
-            (Object::String(x), Object::String(y)) => step(x == y),
+            (Object::Shared(SharedKind::Str), Object::Shared(SharedKind::Str)) => {
+                step(vm.expect_str(pa) == vm.expect_str(pb))
+            }
+            (Object::Shared(SharedKind::Str), _) => Cmp::NotEqual,
+            // An enum string is a pool object, never a runtime value.
             (Object::String(_), _) => Cmp::NotEqual,
             // Different `Arc`s with the same numeric value compare equal.
             (Object::Bigint(x), Object::Bigint(y)) => step(x == y),

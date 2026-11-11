@@ -22,8 +22,9 @@ use bex_vm_types::{
     layout::{ElemKind, SlotKind},
     object_format::{Access, SlotValue},
     types::{
-        BackingAlloc, LIST_BYTES, MAP_BYTES, MapRef, TypeValue, Variant, backing_bytes,
-        backing_descriptor, init_backing, list_descriptor, map_descriptor,
+        BackingAlloc, LIST_BYTES, MAP_BYTES, MapRef, STR_DESC, StrRef, TypeValue, Variant,
+        backing_bytes, backing_descriptor, init_backing, list_descriptor, map_descriptor,
+        str_cell_bytes,
     },
 };
 use indexmap::IndexMap;
@@ -317,10 +318,20 @@ impl Tlab {
         self.alloc(Object::Float(f))
     }
 
-    /// Allocate a string object.
+    /// Allocate a flat string cell holding a copy of `s`.
     #[inline]
-    pub fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
-        self.alloc(Object::String(s.into()))
+    pub fn alloc_string(&mut self, s: impl AsRef<str>) -> HeapPtr {
+        let text = s.as_ref();
+        let bytes = str_cell_bytes(text.len());
+        let (cell, cell_bytes) = self.alloc_cell(STR_DESC, bytes, false);
+        self.spend(cell_bytes);
+        let ptr = self
+            .payload_ptr(NonNull::new(cell as *mut u8).expect("cells are never at address zero"));
+        // SAFETY: a fresh cell sized for `text`, its header written.
+        unsafe { StrRef::init(ptr, text) };
+        #[cfg(feature = "gc_profiling")]
+        self.heap.record_alloc();
+        ptr
     }
 
     /// Allocate a list whose elements have static type `element_ty`.
@@ -692,7 +703,7 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_float(f)
     }
 
-    fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
+    fn alloc_string(&mut self, s: impl AsRef<str>) -> HeapPtr {
         self.tlab_mut().alloc_string(s)
     }
 
@@ -768,6 +779,7 @@ pub trait TlabHolder {
 mod tests {
     use super::*;
     use crate::descriptor::OBJECT_CELL_BYTES;
+    use bex_vm_types::types::SharedKind;
 
     #[test]
     fn test_tlab_alloc_single() {
@@ -866,12 +878,89 @@ mod tests {
 
         let ptr = tlab.alloc_string("hello world");
 
+        // SAFETY: just allocated; nothing collects.
+        let string = unsafe { StrRef::of(ptr) }.expect("a flat string cell");
+        assert_eq!(string.as_str(), "hello world");
+        assert_eq!(string.byte_len(), 11);
+        assert_eq!(string.char_len(), 11);
+        assert!(matches!(
+            unsafe { ptr.get() },
+            Object::Shared(SharedKind::Str)
+        ));
+    }
+
+    /// A flat string cell: lengths in bytes and chars, granule-sized, the
+    /// hash computed once, and large text on the large-object path.
+    #[test]
+    fn flat_string_cells_hold_their_text_and_sizes() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let empty = tlab.alloc_string("");
+        let small = tlab.alloc_string("héllo");
+        let text = "x".repeat(LARGE_OBJECT_THRESHOLD + 1);
+        let large = tlab.alloc_string(&text);
+
+        // SAFETY: all just allocated; nothing collects.
         unsafe {
-            match ptr.get() {
-                Object::String(s) => assert_eq!(s.as_str(), "hello world"),
-                _ => panic!("Expected String"),
-            }
+            let empty = StrRef::of(empty).unwrap();
+            assert_eq!(
+                (empty.as_str(), empty.byte_len(), empty.char_len()),
+                ("", 0, 0)
+            );
+            assert!(empty.is_empty());
+
+            let small = StrRef::of(small).unwrap();
+            assert_eq!(small.as_str(), "héllo");
+            assert_eq!((small.byte_len(), small.char_len()), (6, 5));
+            let cell = small.ptr().header();
+            assert_eq!(cell.descriptor, STR_DESC);
+            assert_eq!(cell.cell_bytes(), 32, "a 6-byte string is one 32-byte cell");
+            let hash = small.hash();
+            assert_ne!(hash, 0);
+            assert_eq!(small.hash(), hash, "the hash is cached");
+
+            let large = StrRef::of(large).unwrap();
+            assert_eq!(large.as_str(), text);
+            assert_eq!(large.ptr().header().granules(), 0, "a large cell");
         }
+        assert_eq!(heap.stats().large_objects, 1);
+    }
+
+    /// Flat string cells are collected like any cell: rooted ones keep their
+    /// text, unrooted ones are freed, and a large one leaves the large space.
+    #[test]
+    fn flat_string_cells_are_collected() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let kept = tlab.alloc_string("kept");
+        tlab.alloc_string("dead");
+        let kept_large = tlab.alloc_string("k".repeat(LARGE_OBJECT_THRESHOLD + 1));
+        tlab.alloc_string("d".repeat(LARGE_OBJECT_THRESHOLD + 1));
+        let list = tlab.alloc_array(RealizedTy::string(), vec![Value::object(kept)]);
+        assert_eq!(heap.stats().large_objects, 2);
+
+        // SAFETY: single-threaded test; the roots are the only live pointers.
+        let (stats, roots, _) = unsafe { heap.collect_garbage(&[kept_large, list]) };
+        tlab.invalidate();
+        assert_eq!(stats.collected_count, 2);
+        assert_eq!(heap.stats().large_objects, 1);
+
+        // SAFETY: survivors of the collection just run.
+        unsafe {
+            let large = StrRef::of(roots[0]).unwrap();
+            assert_eq!(large.byte_len(), LARGE_OBJECT_THRESHOLD + 1);
+            assert!(large.as_str().bytes().all(|b| b == b'k'));
+            let list = ListRef::of(roots[1]).unwrap();
+            let kept = list.get(0).unwrap().as_object_ptr().unwrap();
+            assert_eq!(StrRef::of(kept).unwrap().as_str(), "kept");
+        }
+
+        // The dead cell's slot is reused by the next string of its class.
+        let again = tlab.alloc_string("dead");
+        // SAFETY: just allocated.
+        assert_eq!(unsafe { StrRef::of(again) }.unwrap().as_str(), "dead");
     }
 
     #[test]
@@ -905,9 +994,8 @@ mod tests {
             let entries = m.snapshot_entries();
             assert_eq!(entries.len(), 1);
             assert_eq!(entries[0].1, SlotValue::Value(Value::int(42)));
-            assert!(
-                matches!(entries[0].0.as_object_ptr().unwrap().get(), Object::String(key) if key == "key")
-            );
+            let key = StrRef::of(entries[0].0.as_object_ptr().unwrap()).expect("a string key");
+            assert_eq!(key.as_str(), "key");
         }
     }
 
@@ -1080,8 +1168,8 @@ mod tests {
         assert_eq!(tlab.remaining(), remaining);
 
         let obj3 = tlab.alloc_string("after_gc_1".to_string());
-        assert!(matches!(unsafe { obj1.get() }, Object::String(s) if s == "before_gc_1"));
-        assert!(matches!(unsafe { obj3.get() }, Object::String(s) if s == "after_gc_1"));
+        assert_eq!(unsafe { StrRef::of(obj1) }.unwrap().as_str(), "before_gc_1");
+        assert_eq!(unsafe { StrRef::of(obj3) }.unwrap().as_str(), "after_gc_1");
     }
 
     /// A reservation's address is where its object is published, and the

@@ -130,7 +130,9 @@ impl HashDriver {
                                 framed(3, &bits.to_le_bytes())
                             }
                             Object::Bigint(value) => framed(4, &value.to_signed_bytes_le()),
-                            Object::String(value) => framed(5, value.as_bytes()),
+                            Object::Shared(SharedKind::Str) => {
+                                framed(5, vm.expect_str(ptr).as_bytes())
+                            }
                             Object::Uint8Array(value) => framed(6, &value.lock()),
                             Object::Shared(SharedKind::List) => {
                                 let values = vm.list_values(vm.expect_list(ptr), Access::Shared);

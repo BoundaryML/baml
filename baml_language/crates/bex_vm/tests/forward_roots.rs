@@ -27,8 +27,9 @@ fn make_vm() -> BexVm {
 #[test]
 fn forward_roots_keeps_the_tlab_blocks() {
     let mut vm = make_vm();
-    // `Tlab::new_empty` defers taking a block until first alloc.
-    let _ = vm.tlab.alloc_string("force_refill".to_string());
+    // `Tlab::new_empty` defers taking a block until first alloc. A float is
+    // an `Object` cell, the class `is_valid` looks at.
+    let _ = vm.tlab.alloc_float(1.0);
     assert!(
         vm.tlab.is_valid(),
         "TLAB should hold a block after the first allocation"

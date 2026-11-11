@@ -182,7 +182,7 @@ fn dump(vm: &BexVm, value: Value) -> String {
     };
     match vm.get_object(ptr) {
         Object::Float(float) => format!("{float:?}f"),
-        Object::String(text) => format!("{:?}", text.as_str()),
+        Object::Shared(SharedKind::Str) => format!("{:?}", vm.expect_str(ptr).as_str()),
         Object::Shared(SharedKind::List) => {
             let array = vm.expect_list(ptr);
             format!(

@@ -866,6 +866,12 @@ impl Ord for BexStr {
     }
 }
 
+impl AsRef<str> for BexStr {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 impl Borrow<str> for BexStr {
     fn borrow(&self) -> &str {
         self.as_str()

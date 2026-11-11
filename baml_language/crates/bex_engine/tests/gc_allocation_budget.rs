@@ -127,9 +127,9 @@ async fn short_calls_service_pressure_on_next_entry() {
 #[tokio::test(start_paused = true)]
 async fn spawn_services_pressure_after_rooting_child_and_future() {
     let engine = engine();
-    let count = engine.heap().gc_budget().full_budget_bytes
-        / std::mem::size_of::<bex_vm_types::Object>()
-        + 1;
+    // Each text is a flat string cell of one byte.
+    let count =
+        engine.heap().gc_budget().full_budget_bytes / bex_vm_types::types::str_cell_bytes(1) + 1;
     let texts = Ext::Array {
         element_type: bex_engine::WireTy::String,
         items: vec![Ext::String("x".into()); count],

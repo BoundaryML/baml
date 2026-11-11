@@ -437,6 +437,11 @@ impl BexEngine {
 
         match obj {
             Object::Float(f) => Ok(BexExternalValue::Float(*f)),
+            Object::Shared(bex_vm_types::types::SharedKind::Str) => {
+                // SAFETY: the marker is only shown for a string.
+                let s = unsafe { bex_vm_types::StrRef::new_unchecked(ptr) };
+                Ok(BexExternalValue::String(s.to_bex_str()))
+            }
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Shared(bex_vm_types::types::SharedKind::List) => {
@@ -500,8 +505,8 @@ impl BexEngine {
                     snapshot
                         .iter()
                         .map(|(k, v)| {
-                            let key = match k.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
-                                Some(Object::String(key)) => key.to_string(),
+                            let key = match k.as_object_ptr().and_then(|ptr| unsafe { bex_vm_types::StrRef::of(ptr) }) {
+                                Some(key) => key.to_string(),
                                 _ => return Err(EngineError::CannotConvert {
                                     type_name: "map with non-string keys (SDK interchange requires string keys)".to_owned(),
                                 }),
@@ -848,14 +853,17 @@ impl BexEngine {
             .map_snapshot(optional_map, bex_vm_types::object_format::Access::Shared)
             .snapshot_entries()
             .into_iter()
-            .map(
-                |(key, value)| match key.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
-                    Some(Object::String(key)) => Ok((key.clone(), value)),
+            .map(|(key, value)| {
+                match key
+                    .as_object_ptr()
+                    .and_then(|ptr| unsafe { bex_vm_types::StrRef::of(ptr) })
+                {
+                    Some(key) => Ok((key.to_bex_str(), value)),
                     _ => Err(malformed(
                         "host-call optional argument names must be strings".to_owned(),
                     )),
-                },
-            )
+                }
+            })
             .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
         let (required_types, optional_types) = host_call_parameter_types(
             params,
@@ -1786,17 +1794,24 @@ fn find_matching_union_member(
                             .iter()
                             .find(|member| matches!(member, bex_vm_types::RealizedTy::Float))
                     }),
-                Object::String(value) => members
-                    .iter()
-                    .find(|member| {
-                        matches!(member, bex_vm_types::RealizedTy::Literal(Literal::String(expected), _)
-                            if value.as_str() == expected)
-                    })
-                    .or_else(|| {
-                        members
-                            .iter()
-                            .find(|member| matches!(member, bex_vm_types::RealizedTy::String))
-                    }),
+                Object::Shared(bex_vm_types::types::SharedKind::Str) | Object::String(_) => {
+                    let value = match obj {
+                        Object::String(value) => value.as_str(),
+                        // SAFETY: the marker is only shown for a string.
+                        _ => unsafe { bex_vm_types::StrRef::new_unchecked(ptr) }.as_str(),
+                    };
+                    members
+                        .iter()
+                        .find(|member| {
+                            matches!(member, bex_vm_types::RealizedTy::Literal(Literal::String(expected), _)
+                                if value == expected)
+                        })
+                        .or_else(|| {
+                            members
+                                .iter()
+                                .find(|member| matches!(member, bex_vm_types::RealizedTy::String))
+                        })
+                }
                 Object::Shared(bex_vm_types::types::SharedKind::Instance) => {
                     // SAFETY: the marker is only shown for an instance.
                     let inst = unsafe { bex_vm_types::InstanceRef::new_unchecked(ptr) };

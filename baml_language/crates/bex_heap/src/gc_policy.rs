@@ -119,6 +119,7 @@ impl BexHeap {
 mod tests {
     use super::*;
     use crate::{Tlab, descriptor::OBJECT_CELL_BYTES};
+    use bex_vm_types::Object;
 
     const BUDGET: isize = MIN_FULL_BUDGET as isize;
     /// What one `Object` cell spends.
@@ -206,14 +207,14 @@ mod tests {
     fn cells_spend_their_size() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
-        tlab.alloc_string("inline");
+        tlab.alloc(Object::String(("inline").into()));
         assert_eq!(
             heap.gc_budget().bytes_since_full_gc,
             CELL,
             "the first cell took a block, which settled it"
         );
         for _ in 0..10 {
-            tlab.alloc_string("inline");
+            tlab.alloc(Object::String(("inline").into()));
         }
         assert_eq!(heap.gc_budget().bytes_since_full_gc, CELL);
         tlab.flush_alloc_debt();
@@ -227,7 +228,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
         for _ in 0..65 {
-            tlab.alloc_string("inline");
+            tlab.alloc(Object::String(("inline").into()));
         }
         let remaining = tlab.remaining();
         // SAFETY: single-threaded heap with no surviving roots.
@@ -236,7 +237,7 @@ mod tests {
         }
         tlab.invalidate();
         assert_eq!(tlab.remaining(), remaining + 65 * OBJECT_CELL_BYTES);
-        tlab.alloc_string("inline");
+        tlab.alloc(Object::String(("inline").into()));
         drop(tlab);
         assert_eq!(heap.gc_budget().bytes_since_full_gc, CELL);
     }
@@ -263,8 +264,8 @@ mod tests {
         let text = bex_str::BexStr::from("x".repeat(1 << 18));
         let whole = text.unshared_heap_bytes() as isize;
         for _ in 0..8 {
-            tlab.alloc_string(text.clone());
-            tlab.alloc_string(text.byte_slice(1..128));
+            tlab.alloc(Object::String((text.clone()).into()));
+            tlab.alloc(Object::String((text.byte_slice(1..128)).into()));
         }
         tlab.flush_alloc_debt();
         let spent = heap.gc_budget().bytes_since_full_gc;

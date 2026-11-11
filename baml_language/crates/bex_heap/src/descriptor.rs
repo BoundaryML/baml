@@ -36,6 +36,7 @@ pub type TypeId = u32;
 pub type FinalizerId = u32;
 
 pub use bex_vm_types::object_format::{HEADER_BYTES, Header, OBJECT_DESC, TaggedKind, TaggedSlot};
+use bex_vm_types::types::{STR_BYTES_OFFSET, STR_DESC};
 
 /// What the heap reads and writes of a [`Header`] beyond the object format.
 pub(crate) trait CellHeader {
@@ -238,6 +239,22 @@ impl Descriptor {
         }
     }
 
+    /// The descriptor of flat strings: the lengths and hash word, then the
+    /// bytes to the end of the cell. No pointers.
+    fn str() -> Self {
+        Self {
+            kind: Kind::Str,
+            trace: Trace::Slots,
+            size: STR_BYTES_OFFSET,
+            elems: None,
+            ptr_slots: Cow::Borrowed(&[]),
+            tagged_slots: Cow::Borrowed(&[]),
+            slot_kinds: Cow::Borrowed(&[]),
+            type_id: STR_DESC.0,
+            finalizer: None,
+        }
+    }
+
     /// The descriptor of instances laid out by `layout`: the class and type
     /// pointers and the declared fields' slots.
     pub fn for_instance(layout: &InstanceLayout) -> Self {
@@ -298,6 +315,7 @@ fn fixed_descriptors() -> &'static [Option<Descriptor>] {
         for (key, value, id) in map_descriptors() {
             fixed[id.0 as usize] = Some(Descriptor::map(key, value));
         }
+        fixed[STR_DESC.0 as usize] = Some(Descriptor::str());
         fixed
     });
     &FIXED
@@ -527,7 +545,7 @@ mod tests {
             Err(DescriptorError::BadSlot(24)),
             "overruns the object"
         );
-        assert_eq!(table.len(), 1 + 5 + 3 + 25 + 1);
+        assert_eq!(table.len(), 1 + 5 + 3 + 25 + 1 + 1);
     }
 
     /// Fields are laid out after the header in declaration order, each in

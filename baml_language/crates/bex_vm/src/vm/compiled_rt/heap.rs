@@ -54,7 +54,7 @@ impl BexVm {
             Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
             Object::Shared(SharedKind::Map) => self.expect_map(ptr).len() as i64,
-            Object::String(s) => s.byte_len() as i64,
+            Object::Shared(SharedKind::Str) => self.expect_str(ptr).byte_len() as i64,
             other => return Err(object_type_error(ObjectType::Array, other)),
         };
         Ok(Value::int(len))
@@ -515,9 +515,9 @@ impl BexVm {
         let pos = map.lock(Access::Shared).find(hash, |candidate| {
             let candidate = candidate.expect_value();
             candidate == key
-                || candidate.as_object_ptr().is_some_and(|ptr| {
-                    matches!(self.get_object(ptr), Object::String(other) if other.as_str() == text)
-                })
+                || candidate
+                    .as_object_ptr()
+                    .is_some_and(|ptr| self.str_at(ptr).is_some_and(|other| other.as_str() == text))
         });
         Some((map, hash, pos))
     }

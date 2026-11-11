@@ -196,7 +196,8 @@ fn indent_text(vm: &mut BexVm, indent: Value) -> Result<String, VmRustFnError> {
             Err(_) => format!("indent must not be negative, got {count}"),
         },
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::String(text) => {
+            Object::Shared(SharedKind::Str) => {
+                let text = vm.expect_str(ptr);
                 let width = text.as_str().chars().count();
                 if width > MAX_INDENT {
                     format!("indent must be at most {MAX_INDENT} characters, got {width}")
@@ -260,7 +261,7 @@ fn rest_value(
         .map_snapshot(map, bex_vm_types::object_format::Access::Shared)
         .snapshot_entries()
     {
-        let Ok(text) = vm.as_string(&key).map(BexStr::as_str) else {
+        let Ok(text) = vm.as_string(&key).map(|key| key.as_str()) else {
             continue;
         };
         let claimed = rest == plan::Rest::Unclaimed
@@ -323,7 +324,7 @@ fn string_entries(vm: &BexVm, ptr: HeapPtr) -> Vec<(BexStr, Value)> {
     vm.map_snapshot(map, bex_vm_types::object_format::Access::Shared)
         .snapshot_entries()
         .into_iter()
-        .filter_map(|(key, value)| Some((vm.as_string(&key).ok()?.clone(), value)))
+        .filter_map(|(key, value)| Some((vm.as_string(&key).ok()?.to_bex_str(), value)))
         .collect()
 }
 
@@ -363,7 +364,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                 Some((Some((_, key)), _)) => {
                     let key = vm
                         .as_string(key)
-                        .map(bex_vm_types::BexStr::as_str)
+                        .map(|key| key.as_str())
                         .unwrap_or_default();
                     let _ = write!(path, "[{key:?}]");
                 }
@@ -478,7 +479,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
 fn copy_leaf(vm: &mut BexVm, value: Value, ptr: HeapPtr) -> Value {
     let name = match vm.get_object(ptr) {
         Object::Float(_) => return value,
-        Object::String(_) => return value,
+        Object::Shared(SharedKind::Str) => return value,
         Object::Bigint(b) => {
             return i64::try_from(&**b)
                 .ok()
