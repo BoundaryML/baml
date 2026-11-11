@@ -28,8 +28,12 @@
 //! the caller (the interpreter's hashing, which may run user code), so the
 //! map stores hashes, never computes them.
 //!
-//! Every access takes the map's lock, as the old container did, so a
-//! multi-step lookup can validate its snapshot by epoch.
+//! Reads and value updates take no lock: every index is bounded by the
+//! backing it reads, so a racing mutation can lose an update but never reach
+//! past a backing. Insertions, removals and clears serialize on the map's
+//! lock, and each bumps the epoch, so a multi-step lookup still detects a
+//! membership change between its steps. The `locked-containers` feature makes
+//! every operation hold the lock, as the old container did.
 
 #![allow(unsafe_code)]
 
@@ -234,21 +238,21 @@ impl MapRef {
         Some([columns.keys.ptr, columns.values.ptr, columns.index.ptr])
     }
 
-    /// Hold the map. A thread-local access takes no lock; debug builds check
-    /// that nobody else holds it.
+    fn mutex(self) -> &'static LazyBiasedMutex {
+        // SAFETY: the lock byte is inside the live map, zero (unlocked) when
+        // allocated.
+        unsafe { &*self.field(MAP_LOCK_OFFSET).cast::<LazyBiasedMutex>() }
+    }
+
+    /// The map for reading and mutation. Reads and value updates take no
+    /// lock; insertions, removals and clears serialize on the map's lock.
+    /// With the `locked-containers` feature every operation through the
+    /// guard holds the lock, as `LockedContainer` did.
     pub fn lock(self, access: Access) -> MapGuard {
         // SAFETY: the lock byte is inside the live map, zero (unlocked) when
         // allocated.
-        let mutex = unsafe { &*self.field(MAP_LOCK_OFFSET).cast::<LazyBiasedMutex>() };
-        let guard = match access {
-            Access::Shared => Some(mutex.enter()),
-            Access::ThreadLocal if cfg!(debug_assertions) => {
-                Some(mutex.try_enter().unwrap_or_else(|| {
-                    panic!("a map accessed as thread-local is locked by another holder")
-                }))
-            }
-            Access::ThreadLocal => None,
-        };
+        let guard = (cfg!(feature = "locked-containers") && access == Access::Shared)
+            .then(|| self.mutex().enter());
         MapGuard {
             map: self,
             access,
@@ -290,29 +294,43 @@ impl Column {
     }
 }
 
-/// The three backings, present together once the map has room for an entry.
+/// The three backings of one generation. A reader may load backings of
+/// different generations while a grow races it, so every index is bounded by
+/// the backing it reads: keys and values by their own capacity, hashes and
+/// probe slots by the index's, whose word 0 records its entry capacity.
 #[derive(Clone, Copy)]
 struct Columns {
     keys: Column,
     values: Column,
     index: Column,
-    /// Entry capacity: the keys' and values' capacity, and the number of
-    /// hash words at the start of the index.
-    cap: usize,
 }
 
 impl Columns {
-    /// Probe slots in the index, after the hashes.
+    /// Entries the index has hash words for.
+    fn cap(self) -> usize {
+        self.index.word(0).load(Ordering::Relaxed) as usize
+    }
+
+    /// Probe slots in the index, after the capacity word and the hashes.
     fn table_len(self) -> usize {
-        self.index.cap() - self.cap
+        self.index.cap() - 1 - self.cap()
+    }
+
+    /// Whether entry `pos` lies in every backing.
+    fn holds(self, pos: usize) -> bool {
+        pos < self.keys.cap() && pos < self.values.cap() && pos < self.cap()
     }
 
     fn hash(self, pos: usize) -> u64 {
-        self.index.word(pos).load(Ordering::Relaxed)
+        self.index.word(1 + pos).load(Ordering::Relaxed)
+    }
+
+    fn set_hash(self, pos: usize, hash: u64) {
+        self.index.word(1 + pos).store(hash, Ordering::Relaxed);
     }
 
     fn probe(self, slot: usize) -> &'static AtomicU64 {
-        self.index.word(self.cap + slot)
+        self.index.word(1 + self.cap() + slot)
     }
 }
 
@@ -375,52 +393,55 @@ impl MapGuard {
 
     fn columns(&self) -> Option<Columns> {
         let (key, value) = self.map.slots();
-        let keys = self.column(MAP_KEYS_OFFSET, key.elem_kind())?;
         Some(Columns {
-            keys,
+            keys: self.column(MAP_KEYS_OFFSET, key.elem_kind())?,
             values: self.column(MAP_VALUES_OFFSET, value.elem_kind())?,
             index: self.column(MAP_INDEX_OFFSET, ElemKind::Raw8)?,
-            cap: keys.cap(),
         })
     }
 
-    /// The key of entry `pos`.
-    ///
-    /// # Panics
-    /// Past the last entry.
+    /// The map's lock for an insertion, removal or clear, unless already held
+    /// or the map is thread-local.
+    fn exclusive(&self) -> Option<AccessGuard<'static>> {
+        (self._guard.is_none() && self.access == Access::Shared).then(|| self.map.mutex().enter())
+    }
+
+    /// The backings when entry `pos` is in the map and in every backing; a
+    /// racing removal or grow can take it away.
+    fn entry_columns(&self, pos: usize) -> Option<Columns> {
+        let len = self.len();
+        let columns = self.columns()?;
+        (pos < len && columns.holds(pos)).then_some(columns)
+    }
+
+    /// The key of entry `pos`; null when a race took it away.
     pub fn key(&self, pos: usize) -> SlotValue {
-        let columns = self.entry_columns(pos);
-        // SAFETY: below the length, so inside the backing.
+        let Some(columns) = self.entry_columns(pos) else {
+            return SlotValue::Value(Value::NULL);
+        };
+        // SAFETY: inside the keys backing.
         unsafe { read_slot(columns.keys.at(pos), self.map.slots().0, self.access) }
     }
 
-    /// The value of entry `pos`.
-    ///
-    /// # Panics
-    /// Past the last entry.
+    /// The value of entry `pos`; null when a race took it away.
     pub fn value(&self, pos: usize) -> SlotValue {
-        let columns = self.entry_columns(pos);
-        // SAFETY: below the length, so inside the backing.
+        let Some(columns) = self.entry_columns(pos) else {
+            return SlotValue::Value(Value::NULL);
+        };
+        // SAFETY: inside the values backing.
         unsafe { read_slot(columns.values.at(pos), self.map.slots().1, self.access) }
     }
 
     /// The stored hash of entry `pos`.
     pub fn hash(&self, pos: usize) -> u64 {
-        self.entry_columns(pos).hash(pos)
-    }
-
-    fn entry_columns(&self, pos: usize) -> Columns {
-        assert!(
-            pos < self.len(),
-            "entry {pos} of a {}-entry map",
-            self.len()
-        );
-        self.columns().expect("a non-empty map has backings")
+        self.entry_columns(pos)
+            .map_or(0, |columns| columns.hash(pos))
     }
 
     /// Every entry, in order.
     pub fn entries(&self) -> Vec<(SlotValue, SlotValue)> {
         (0..self.len())
+            .filter(|&pos| self.entry_columns(pos).is_some())
             .map(|pos| (self.key(pos), self.value(pos)))
             .collect()
     }
@@ -431,20 +452,17 @@ impl MapGuard {
         let Some(columns) = self.columns() else {
             return Vec::new();
         };
-        let mask = columns.table_len() - 1;
-        let mut found = Vec::new();
+        let len = self.len().min(columns.cap());
+        let table = columns.table_len();
+        let mask = table - 1;
         #[expect(clippy::cast_possible_truncation, reason = "masked to the table")]
-        let mut slot = (hash as usize) & mask;
-        loop {
-            let entry = columns.probe(slot).load(Ordering::Relaxed) as usize;
-            if entry == 0 {
-                break;
-            }
-            if columns.hash(entry - 1) == hash {
-                found.push(entry - 1);
-            }
-            slot = (slot + 1) & mask;
-        }
+        let start = (hash as usize) & mask;
+        let mut found: Vec<usize> = (0..table)
+            .map(|step| columns.probe((start + step) & mask).load(Ordering::Relaxed) as usize)
+            .take_while(|&entry| entry != 0)
+            .map(|entry| entry - 1)
+            .filter(|&pos| pos < len && columns.hash(pos) == hash)
+            .collect();
         found.sort_unstable();
         found
     }
@@ -456,10 +474,13 @@ impl MapGuard {
             .find(|&pos| matches(self.key(pos)))
     }
 
-    /// Replace entry `pos`'s value, keeping its position.
+    /// Replace entry `pos`'s value, keeping its position. Takes no lock; a
+    /// racing removal can lose the update.
     pub fn set_value(&self, pos: usize, value: SlotValue) -> Result<(), SlotMismatch> {
-        let columns = self.entry_columns(pos);
-        // SAFETY: below the length, so inside the backing.
+        let Some(columns) = self.entry_columns(pos) else {
+            return Ok(());
+        };
+        // SAFETY: inside the values backing.
         unsafe {
             write_entry(
                 columns.values.at(pos),
@@ -479,6 +500,7 @@ impl MapGuard {
         key: SlotValue,
         value: SlotValue,
     ) -> Result<usize, SlotMismatch> {
+        let _exclusive = self.exclusive();
         let pos = self.len();
         let columns = self.reserve(alloc, pos + 1);
         let (key_slot, value_slot) = self.map.slots();
@@ -487,7 +509,7 @@ impl MapGuard {
             write_entry(columns.keys.at(pos), key_slot, key, self.access)?;
             write_entry(columns.values.at(pos), value_slot, value, self.access)?;
         }
-        columns.index.word(pos).store(hash, Ordering::Relaxed);
+        columns.set_hash(pos, hash);
         place(columns, pos, hash);
         self.set_len(pos + 1);
         self.advance_epoch();
@@ -496,12 +518,19 @@ impl MapGuard {
 
     /// Remove entry `pos`, shifting the later entries down; returns its value.
     pub fn remove(&self, pos: usize) -> SlotValue {
+        let _exclusive = self.exclusive();
         let value = self.value(pos);
-        let columns = self.entry_columns(pos);
-        let len = self.len();
+        let Some(columns) = self.entry_columns(pos) else {
+            return value;
+        };
+        let len = self
+            .len()
+            .min(columns.cap())
+            .min(columns.keys.cap())
+            .min(columns.values.cap());
         let (key_slot, value_slot) = self.map.slots();
         for from in pos + 1..len {
-            // SAFETY: both positions are below the length.
+            // SAFETY: both positions are below every backing's capacity.
             unsafe {
                 copy_slot(
                     columns.keys.at(from),
@@ -516,8 +545,7 @@ impl MapGuard {
                     self.access,
                 );
             }
-            let hash = columns.hash(from);
-            columns.index.word(from - 1).store(hash, Ordering::Relaxed);
+            columns.set_hash(from - 1, columns.hash(from));
         }
         self.set_len(len - 1);
         self.vacate(columns, len - 1..len);
@@ -528,11 +556,14 @@ impl MapGuard {
 
     /// Remove every entry.
     pub fn clear(&self) {
+        let _exclusive = self.exclusive();
         let len = self.len();
+        let Some(columns) = self.columns() else {
+            return;
+        };
         if len == 0 {
             return;
         }
-        let columns = self.columns().expect("a non-empty map has backings");
         self.set_len(0);
         self.vacate(columns, 0..len);
         rebuild_table(columns, 0);
@@ -541,15 +572,20 @@ impl MapGuard {
 
     /// Make room for `needed` entries, moving to larger backings.
     fn reserve(&self, alloc: &mut dyn BackingAlloc, needed: usize) -> Columns {
-        if let Some(columns) = self.columns()
-            && needed <= columns.cap
+        let columns = self.columns();
+        if let Some(columns) = columns
+            && needed <= columns.cap()
+            && needed <= columns.keys.cap()
+            && needed <= columns.values.cap()
         {
             return columns;
         }
-        let cap = self.columns().map_or(0, |columns| columns.cap);
+        let cap = columns.map_or(0, Columns::cap);
         self.regrow(alloc, needed.max(cap * 2).max(4))
     }
 
+    /// Copy the entries to fresh backings of `cap` and publish them, each
+    /// with a Release store.
     fn regrow(&self, alloc: &mut dyn BackingAlloc, cap: usize) -> Columns {
         let (key_slot, value_slot) = self.map.slots();
         let fresh = Columns {
@@ -562,15 +598,21 @@ impl MapGuard {
                 stride: value_slot.elem_kind().stride(),
             },
             index: Column {
-                ptr: alloc.alloc_backing(ElemKind::Raw8, cap + table_len_for(cap)),
+                ptr: alloc.alloc_backing(ElemKind::Raw8, 1 + cap + table_len_for(cap)),
                 stride: ElemKind::Raw8.stride(),
             },
-            cap,
         };
-        let len = self.len();
+        fresh.index.word(0).store(cap as u64, Ordering::Relaxed);
+        let mut len = 0;
         if let Some(old) = self.columns() {
+            len = self
+                .len()
+                .min(old.cap())
+                .min(old.keys.cap())
+                .min(old.values.cap())
+                .min(cap);
             for pos in 0..len {
-                // SAFETY: below the length and both capacities.
+                // SAFETY: below every capacity, old and new.
                 unsafe {
                     copy_slot(old.keys.at(pos), fresh.keys.at(pos), key_slot, self.access);
                     copy_slot(
@@ -580,10 +622,7 @@ impl MapGuard {
                         self.access,
                     );
                 }
-                fresh
-                    .index
-                    .word(pos)
-                    .store(old.hash(pos), Ordering::Relaxed);
+                fresh.set_hash(pos, old.hash(pos));
             }
         }
         rebuild_table(fresh, len);
@@ -599,12 +638,13 @@ impl MapGuard {
         fresh
     }
 
-    /// Clear the key and value slots in `range` so the collector does not
-    /// keep what they held.
+    /// Clear the key and value slots in `range`, clamped to the backings, so
+    /// the collector does not keep what they held.
     fn vacate(&self, columns: Columns, range: std::ops::Range<usize>) {
         let (key_slot, value_slot) = self.map.slots();
-        for pos in range {
-            // SAFETY: below the capacity.
+        let end = range.end.min(columns.keys.cap()).min(columns.values.cap());
+        for pos in range.start.min(end)..end {
+            // SAFETY: below both capacities.
             unsafe {
                 write_slot(columns.keys.at(pos), key_slot, Value::NULL, self.access)
                     .expect("null fits every slot");

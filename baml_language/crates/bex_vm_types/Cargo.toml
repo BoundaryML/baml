@@ -44,3 +44,6 @@ indexmap = { workspace = true }
 [features]
 default = [  ]
 heap_debug = [  ]
+# Every list and map mutation holds the container's lock, as before the
+# lock-free containers (design section 11, decision 1). Off by default.
+locked-containers = [  ]

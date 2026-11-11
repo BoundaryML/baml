@@ -23,13 +23,17 @@
 //! }
 //! ```
 //!
-//! Reads of one element or the length take no lock: they Acquire-load the
-//! backing pointer and the length and bounds-check against both. Every
-//! mutation, and every whole-list snapshot, takes the list's lock, so no
-//! update is lost and a snapshot is never torn. Growth allocates a new
-//! backing, copies the elements, and publishes it with a Release store; a
-//! reader holding the old backing keeps reading valid (if stale) memory,
-//! since a collection cannot run while it reads.
+//! Lists are lock-free (design section 11, decision 1): a push stores the
+//! element (Relaxed for a raw slot, Release for a pointer) then the length
+//! with Release; a reader Acquire-loads the length and the backing and bounds
+//! every index by the capacity of the backing it loaded. Growth allocates a
+//! new backing, copies, and publishes it with a Release store; a reader still
+//! holding the old one reads valid (if stale) memory, since a collection
+//! cannot run while it reads. A racing push can be lost; no interleaving
+//! reads or writes past a backing. `insert`, `remove` and `replace_all` move
+//! many elements and serialize among themselves on the list's lock. The
+//! `locked-containers` feature makes every mutation hold the lock, as the old
+//! `LockedContainer` did.
 
 #![allow(unsafe_code)]
 
@@ -260,18 +264,12 @@ impl ListRef {
         Some(unsafe { read_slot(backing.elem(index), self.elem_slot(), access) })
     }
 
-    /// Hold the list for a mutation or a consistent read. A thread-local
-    /// access takes no lock; debug builds check that nobody else holds it.
+    /// The list for mutation. Single-element operations take no lock (see
+    /// the module doc); with the `locked-containers` feature every operation
+    /// through the guard holds the list's lock, as `LockedContainer` did.
     pub fn lock(self, access: Access) -> ListGuard {
-        let guard = match access {
-            Access::Shared => Some(self.mutex().enter()),
-            Access::ThreadLocal if cfg!(debug_assertions) => {
-                Some(self.mutex().try_enter().unwrap_or_else(|| {
-                    panic!("a list accessed as thread-local is locked by another holder")
-                }))
-            }
-            Access::ThreadLocal => None,
-        };
+        let guard = (cfg!(feature = "locked-containers") && access == Access::Shared)
+            .then(|| self.mutex().enter());
         ListGuard {
             list: self,
             access,
@@ -279,7 +277,7 @@ impl ListRef {
         }
     }
 
-    /// Every element, read under the lock.
+    /// Every element.
     pub fn snapshot(self, access: Access) -> Vec<SlotValue> {
         self.lock(access).to_vec()
     }
@@ -359,7 +357,13 @@ pub fn backing_bytes(elem: ElemKind, cap: usize) -> usize {
     BACKING_ELEMS_OFFSET as usize + cap * elem.stride()
 }
 
-/// The list's lock, held: element reads, whole-list reads and mutations.
+/// A list being read or mutated (see [`ListRef::lock`]).
+///
+/// Every access bounds its index by the capacity of the backing it loaded,
+/// so a racing grow, push or pop can lose an update but never reach past a
+/// backing. `push`, `pop`, `set`, `truncate` and `clear` take no lock;
+/// `insert`, `remove` and `replace_all` move many elements and take the
+/// list's lock among themselves, short and only for their own duration.
 pub struct ListGuard {
     list: ListRef,
     access: Access,
@@ -387,6 +391,16 @@ impl ListGuard {
         self.list.backing(Ordering::Acquire)
     }
 
+    /// The length, then the backing (both Acquire, so the backing is at least
+    /// as new as the length's writer saw), and the elements usable in it.
+    #[inline]
+    fn view(&self) -> (Option<Backing>, usize) {
+        let len = self.len();
+        let backing = self.backing();
+        let usable = backing.map_or(0, |backing| len.min(backing.cap()));
+        (backing, usable)
+    }
+
     #[inline]
     fn slot(&self) -> SlotKind {
         self.list.elem_slot()
@@ -398,6 +412,12 @@ impl ListGuard {
             .store(len as u64, Ordering::Release);
     }
 
+    /// The list's lock for a many-element mutation, unless already held or
+    /// the list is thread-local.
+    fn exclusive(&self) -> Option<AccessGuard<'static>> {
+        (self._guard.is_none() && self.access == Access::Shared).then(|| self.list.mutex().enter())
+    }
+
     /// Element `index`, or `None` past the end.
     #[inline]
     pub fn get(&self, index: usize) -> Option<SlotValue> {
@@ -406,69 +426,75 @@ impl ListGuard {
 
     /// Every element.
     pub fn to_vec(&self) -> Vec<SlotValue> {
-        let Some(backing) = self.backing() else {
+        let (Some(backing), usable) = self.view() else {
             return Vec::new();
         };
-        (0..self.len())
-            // SAFETY: below the length, so inside the backing.
+        (0..usable)
+            // SAFETY: below the loaded backing's capacity.
             .map(|index| unsafe { read_slot(backing.elem(index), self.slot(), self.access) })
             .collect()
     }
 
-    /// Store `value` to element `index`, which must be in bounds.
-    ///
-    /// # Panics
-    /// Past the end.
+    /// Store `value` to element `index`. Past the end (a racing pop or grow
+    /// moved it) the store is dropped.
     pub fn set(&self, index: usize, value: SlotValue) -> Result<(), SlotMismatch> {
-        assert!(
-            index < self.len(),
-            "set element {index} of a {}-element list",
-            self.len()
-        );
-        let backing = self.backing().expect("a non-empty list has a backing");
-        // SAFETY: in bounds of the live backing.
+        let (Some(backing), usable) = self.view() else {
+            return Ok(());
+        };
+        if index >= usable {
+            return Ok(());
+        }
+        // SAFETY: below the loaded backing's capacity.
         unsafe { write_value(backing.elem(index), self.slot(), value, self.access) }
+    }
+
+    /// A backing with room for `needed` elements: the current one, or a
+    /// larger one with the elements copied in, published.
+    fn room_for(&self, alloc: &mut dyn BackingAlloc, needed: usize) -> Backing {
+        let backing = self.backing();
+        let cap = backing.map_or(0, Backing::cap);
+        match backing {
+            Some(backing) if needed <= cap => backing,
+            _ => self.regrow(alloc, needed.max(cap * 2).max(4)),
+        }
     }
 
     /// Make room for `additional` more elements, growing the backing.
     pub fn reserve(&self, alloc: &mut dyn BackingAlloc, additional: usize) {
-        let needed = self.len() + additional;
-        let cap = self.backing().map_or(0, Backing::cap);
-        if needed <= cap {
-            return;
-        }
-        let new_cap = needed.max(cap * 2).max(4);
-        self.regrow(alloc, new_cap);
+        self.room_for(alloc, self.len() + additional);
     }
 
-    /// Move the elements to a fresh backing of `cap` and publish it.
-    fn regrow(&self, alloc: &mut dyn BackingAlloc, cap: usize) {
+    /// Copy the elements to a fresh backing of `cap` and publish it with a
+    /// Release store. A reader still holding the old backing reads it until
+    /// it next loads the pointer; the collector keeps it alive meanwhile.
+    fn regrow(&self, alloc: &mut dyn BackingAlloc, cap: usize) -> Backing {
         let slot = self.slot();
         let fresh = Backing {
             ptr: alloc.alloc_backing(slot.elem_kind(), cap),
             stride: slot.elem_kind().stride(),
         };
-        if let Some(old) = self.backing() {
-            for index in 0..self.len().min(cap) {
-                // SAFETY: below the length and the new capacity.
+        if let (Some(old), usable) = self.view() {
+            for index in 0..usable.min(cap) {
+                // SAFETY: below both backings' capacities.
                 unsafe { copy_slot(old.elem(index), fresh.elem(index), slot, self.access) };
             }
         }
         self.list
             .word(LIST_BACKING_OFFSET)
             .store(Value::object(fresh.ptr).bits(), Ordering::Release);
+        fresh
     }
 
-    /// Append `value`; returns the new length.
+    /// Append `value` (element store, then a Release length store); returns
+    /// the new length. A racing push may be lost.
     pub fn push(
         &self,
         alloc: &mut dyn BackingAlloc,
         value: SlotValue,
     ) -> Result<usize, SlotMismatch> {
-        self.reserve(alloc, 1);
         let len = self.len();
-        let backing = self.backing().expect("reserved");
-        // SAFETY: below the capacity just reserved.
+        let backing = self.room_for(alloc, len + 1);
+        // SAFETY: below the capacity of the backing just made room in.
         unsafe { write_value(backing.elem(len), self.slot(), value, self.access) }?;
         self.set_len(len + 1);
         Ok(len + 1)
@@ -476,11 +502,11 @@ impl ListGuard {
 
     /// Remove and return the last element.
     pub fn pop(&self) -> Option<SlotValue> {
-        let len = self.len();
-        let last = len.checked_sub(1)?;
+        let (_, usable) = self.view();
+        let last = usable.checked_sub(1)?;
         let value = self.get(last)?;
         self.set_len(last);
-        self.vacate(last..len);
+        self.vacate(last..last + 1);
         Some(value)
     }
 
@@ -494,12 +520,12 @@ impl ListGuard {
         index: usize,
         value: SlotValue,
     ) -> Result<(), SlotMismatch> {
+        let _exclusive = self.exclusive();
         let len = self.len();
         assert!(index <= len, "insert at {index} of a {len}-element list");
-        self.reserve(alloc, 1);
-        self.shift(index, index + 1, len - index);
-        let backing = self.backing().expect("reserved");
-        // SAFETY: below the capacity just reserved.
+        let backing = self.room_for(alloc, len + 1);
+        self.shift(backing, index, index + 1, len - index);
+        // SAFETY: below the capacity of the backing just made room in.
         unsafe { write_value(backing.elem(index), self.slot(), value, self.access) }?;
         self.set_len(len + 1);
         Ok(())
@@ -507,22 +533,27 @@ impl ListGuard {
 
     /// Remove and return element `index`, shifting the rest down.
     pub fn remove(&self, index: usize) -> Option<SlotValue> {
-        let len = self.len();
+        let _exclusive = self.exclusive();
+        let (backing, usable) = self.view();
+        if index >= usable {
+            return None;
+        }
         let value = self.get(index)?;
-        self.shift(index + 1, index, len - index - 1);
-        self.set_len(len - 1);
-        self.vacate(len - 1..len);
+        let backing = backing?;
+        self.shift(backing, index + 1, index, usable - index - 1);
+        self.set_len(usable - 1);
+        self.vacate(usable - 1..usable);
         Some(value)
     }
 
     /// Keep the first `len` elements.
     pub fn truncate(&self, len: usize) {
-        let old = self.len();
-        if len >= old {
+        let (_, usable) = self.view();
+        if len >= usable {
             return;
         }
         self.set_len(len);
-        self.vacate(len..old);
+        self.vacate(len..usable);
     }
 
     pub fn clear(&self) {
@@ -535,16 +566,21 @@ impl ListGuard {
         alloc: &mut dyn BackingAlloc,
         values: &[SlotValue],
     ) -> Result<(), SlotMismatch> {
-        let old = self.len();
-        let cap = self.backing().map_or(0, Backing::cap);
-        if values.len() > cap {
-            self.set_len(0);
-            self.regrow(alloc, values.len());
+        let _exclusive = self.exclusive();
+        if values.is_empty() {
+            self.truncate(0);
+            return Ok(());
         }
-        let backing = self.backing();
+        let (_, old) = self.view();
+        let backing = match self.backing() {
+            Some(backing) if values.len() <= backing.cap() => backing,
+            _ => {
+                self.set_len(0);
+                self.regrow(alloc, values.len().max(1))
+            }
+        };
         for (index, value) in values.iter().enumerate() {
-            let backing = backing.expect("room for every value");
-            // SAFETY: below the capacity.
+            // SAFETY: below the capacity checked or just allocated.
             unsafe { write_value(backing.elem(index), self.slot(), *value, self.access) }?;
         }
         self.set_len(values.len());
@@ -554,12 +590,12 @@ impl ListGuard {
         Ok(())
     }
 
-    /// Move `count` elements from `from` to `to`, overlapping allowed.
-    fn shift(&self, from: usize, to: usize, count: usize) {
-        let Some(backing) = self.backing() else {
-            return;
-        };
+    /// Move `count` elements from `from` to `to` within `backing`, overlapping
+    /// allowed, clamped to its capacity.
+    fn shift(&self, backing: Backing, from: usize, to: usize, count: usize) {
         let slot = self.slot();
+        let cap = backing.cap();
+        let count = count.min(cap.saturating_sub(from.max(to)));
         let mut copy = |index: usize| {
             // SAFETY: both indexes are below the capacity.
             unsafe {
@@ -568,8 +604,8 @@ impl ListGuard {
                     backing.elem(to + index),
                     slot,
                     self.access,
-                )
-            };
+                );
+            }
         };
         if to > from {
             (0..count).rev().for_each(&mut copy);
@@ -578,14 +614,14 @@ impl ListGuard {
         }
     }
 
-    /// Clear the slots in `range`, past the length, so the collector does not
-    /// keep what they held.
+    /// Clear the slots in `range` of the current backing, clamped to its
+    /// capacity, so the collector does not keep what they held.
     fn vacate(&self, range: std::ops::Range<usize>) {
         let Some(backing) = self.backing() else {
             return;
         };
         let slot = self.slot();
-        for index in range {
+        for index in range.start.min(backing.cap())..range.end.min(backing.cap()) {
             // SAFETY: below the capacity.
             unsafe { write_slot(backing.elem(index), slot, Value::NULL, self.access) }
                 .expect("null fits every slot");

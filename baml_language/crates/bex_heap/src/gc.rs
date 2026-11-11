@@ -2405,6 +2405,55 @@ mod tests {
         assert!(map.is_empty());
     }
 
+    /// Racing pushes, growth, pops and reads on one list, and racing inserts
+    /// and lookups on one map, stay in bounds: pushes may be lost, every
+    /// element read is one some writer stored, and nothing reads past a
+    /// backing.
+    #[test]
+    fn racing_container_mutations_stay_in_bounds() {
+        use bex_vm_types::object_format::{Access, SlotValue};
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let list = tlab.alloc_list(bex_vm_types::RealizedTy::Int);
+        let map =
+            tlab.alloc_empty_map(bex_vm_types::RealizedTy::Int, bex_vm_types::RealizedTy::Int);
+        std::thread::scope(|scope| {
+            for writer in 0..4_i64 {
+                let heap = Arc::clone(&heap);
+                scope.spawn(move || {
+                    let mut tlab = Tlab::new(heap);
+                    for i in 0..2_000 {
+                        let value = SlotValue::Value(Value::int(writer * 10_000 + i));
+                        list.lock(Access::Shared).push(&mut tlab, value).unwrap();
+                        if i % 7 == 0 {
+                            list.lock(Access::Shared).pop();
+                        }
+                        let key = writer * 10_000 + i;
+                        map.lock(Access::Shared)
+                            .insert(&mut tlab, key.cast_unsigned(), value, value)
+                            .unwrap();
+                    }
+                });
+            }
+            for _ in 0..2 {
+                scope.spawn(|| {
+                    for _ in 0..2_000 {
+                        for value in list.snapshot(Access::Shared) {
+                            let int = value.expect_value().as_int().unwrap();
+                            assert!((0..40_000).contains(&int), "{int} was never stored");
+                        }
+                        let guard = map.lock(Access::Shared);
+                        let _ = guard.find(17, |_| true);
+                        assert!(guard.entries().len() <= 8_000);
+                    }
+                });
+            }
+        });
+        assert!(list.len() <= 8_000);
+        assert_eq!(map.len(), 8_000, "map inserts serialize, so none is lost");
+    }
+
     /// A generic instance keeps its type arguments in a type object its
     /// type slot points to, which the collector keeps alive.
     #[test]
