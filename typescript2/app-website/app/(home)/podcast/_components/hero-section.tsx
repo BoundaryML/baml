@@ -8,7 +8,7 @@ const HOST_LINK =
 
 // The hosts, each with their X photo, linking to their X profile.
 const HOSTS = [
-  { handle: 'vaibcode', photo: '/host-vaibcode.jpg' },
+  { handle: 'vaibcode', photo: '/profile-vbv.jpeg' },
   { handle: 'dexhorthy', photo: '/host-dexhorthy.jpg' },
 ];
 
@@ -50,7 +50,7 @@ export function HeroSection({
   const stats = [
     [views, 'views on YouTube'],
     [String(episodes), 'episodes'],
-    ['Weekly', `since ${since}`],
+    ['Mostly weekly', `since ${since}`],
   ];
   return (
     <section
@@ -86,7 +86,7 @@ export function HeroSection({
           Add to your calendar
         </Button>
       </div>
-      <dl className="mt-12 grid max-w-[40rem] grid-cols-3 gap-6 border-t border-rule pt-6">
+      <dl className="mt-12 flex max-w-[44rem] flex-wrap gap-x-12 gap-y-6 border-t border-rule pt-6">
         {stats.map(([value, label]) => (
           <div className="flex flex-col-reverse justify-end gap-1" key={label}>
             <dt className="text-[13px] text-muted">{label}</dt>

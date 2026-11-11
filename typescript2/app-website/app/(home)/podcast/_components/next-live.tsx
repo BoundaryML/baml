@@ -85,7 +85,8 @@ function describe(start: Date, zone: string | undefined) {
   return { time, weekday };
 }
 
-/** "Every Tuesday at 10:15 AM PST", in the reader's zone once the page loads, or "Live now". */
+/** "Every Tuesday at 10:15 AM PST (your time, next one in 6 days)", in the reader's zone once the
+ *  page loads, or "Live now". */
 export function NextLive() {
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
@@ -112,10 +113,26 @@ export function NextLive() {
         <strong className="font-medium text-head">Live now</strong>
       </span>
     );
+  // Once the browser has its own zone, say so, and how long until the next one.
+  const days = now
+    ? Math.round((start.getTime() - now.getTime()) / 86_400_000)
+    : null;
+  const until =
+    days === null
+      ? null
+      : days === 0
+        ? 'today'
+        : new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' }).format(
+            days,
+            'day',
+          );
   return (
     <span suppressHydrationWarning>
       Every <strong className="font-medium text-head">{weekday}</strong> at{' '}
       <strong className="font-medium text-head">{time}</strong>
+      {until && (
+        <span className="text-muted"> (your time, next one {until})</span>
+      )}
     </span>
   );
 }

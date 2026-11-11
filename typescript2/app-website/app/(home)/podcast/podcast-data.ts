@@ -1,4 +1,4 @@
-import { fetchPlaylistVideos, viewsFor } from './youtube-views';
+import { fetchPlaylistVideos, lengthFor, viewsFor } from './youtube-views';
 
 type ExternalEpisode = {
   folder: string;
@@ -35,6 +35,8 @@ export type PodcastEpisode = {
   youtubeUrl?: string;
   /** YouTube views, when there's a video. */
   views?: number;
+  /** The video's length in seconds, when known. */
+  seconds?: number;
   slug: string;
 };
 
@@ -404,7 +406,7 @@ export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
     episodes.map((e) => getYouTubeVideoId(e.youtubeUrl)).filter(Boolean),
   );
   const WEEK = 7 * 24 * 60 * 60 * 1000;
-  return episodes.map((e) => {
+  const withIds = episodes.map((e) => {
     let id = getYouTubeVideoId(e.youtubeUrl);
     if (!id) {
       const aired = new Date(e.date).getTime();
@@ -418,11 +420,16 @@ export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
         linked.add(id);
       }
     }
-    if (!id) return e;
-    return {
-      ...e,
-      views: viewsFor(id, videos),
-      youtubeUrl: e.youtubeUrl ?? `https://www.youtube.com/watch?v=${id}`,
-    };
+    return { e, id };
   });
+  return withIds.map(({ e, id }) =>
+    id
+      ? {
+          ...e,
+          seconds: lengthFor(id),
+          views: viewsFor(id, videos),
+          youtubeUrl: e.youtubeUrl ?? `https://www.youtube.com/watch?v=${id}`,
+        }
+      : e,
+  );
 }
