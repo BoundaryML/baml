@@ -34,8 +34,9 @@ pub struct FrameRecord {
     anchor: u32,
     /// Where the body's slots start on the VM stack.
     base: u32,
-    /// The record's level; an entry record has its VM frame's.
-    level: u32,
+    /// The record's level; an entry record has its VM frame's. Linking a
+    /// plain call's zombie below a record moves it up a level.
+    level: Cell<u32>,
     entry: bool,
     /// Whether a manual span activation is scoped to this record; see
     /// [`BexVm::activate_manual_span`].
@@ -76,7 +77,7 @@ impl FrameRecord {
 
     #[inline]
     pub(crate) fn level(&self) -> usize {
-        self.level as usize
+        self.level.get() as usize
     }
 
     /// Whether the record holds a receipt, reading only its tag.
@@ -153,6 +154,11 @@ pub(crate) struct RecordChain {
     /// Records of bodies that returned an error, kept until unwound.
     #[allow(clippy::vec_box, reason = "the chain links zombies by address")]
     zombies: UnsafeCell<Vec<Box<FrameRecord>>>,
+    /// Zombies of bodies a plain call ran without a record, innermost first,
+    /// until the error reaches the record they ran under; see
+    /// [`BexVm::plain_unwound`].
+    #[allow(clippy::vec_box, reason = "linked by address once the error lands")]
+    pending: UnsafeCell<Vec<Box<FrameRecord>>>,
 }
 
 impl Default for RecordChain {
@@ -161,6 +167,7 @@ impl Default for RecordChain {
             top: Cell::new(ptr::null()),
             count: Cell::new(0),
             zombies: UnsafeCell::new(Vec::new()),
+            pending: UnsafeCell::new(Vec::new()),
         }
     }
 }
@@ -191,6 +198,54 @@ impl RecordChain {
         unsafe { &mut *self.zombies.get() }
     }
 
+    #[allow(
+        unsafe_code,
+        clippy::mut_from_ref,
+        clippy::vec_box,
+        reason = "the chain links zombies by address"
+    )]
+    fn pending(&self) -> &mut Vec<Box<FrameRecord>> {
+        // SAFETY: as `zombies`.
+        unsafe { &mut *self.pending.get() }
+    }
+
+    /// Link the pending plain zombies directly above `record`, the record
+    /// their bodies ran under, and move every record above them up as many
+    /// levels.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "pending zombies are bounded by the fiber stack"
+    )]
+    fn link_pending(&self, record: *const FrameRecord) {
+        let pending = std::mem::take(self.pending());
+        if pending.is_empty() {
+            return;
+        }
+        let added = pending.len() as u32;
+        let mut above: Option<&FrameRecord> = None;
+        for linked in self.iter() {
+            if ptr::eq(linked, record) {
+                break;
+            }
+            linked.level.set(linked.level.get() + added);
+            above = Some(linked);
+        }
+        let mut prev = record;
+        let mut level = record_ref(record).level.get();
+        for zombie in pending.iter().rev() {
+            level += 1;
+            zombie.prev.set(prev);
+            zombie.level.set(level);
+            prev = &raw const **zombie;
+        }
+        match above {
+            Some(above) => above.prev.set(prev),
+            None => self.top.set(prev),
+        }
+        self.count.set(self.count.get() + added);
+        self.zombies().extend(pending);
+    }
+
     fn unlink(&self, record: *const FrameRecord) {
         self.relink(record, record_ref(record).prev());
     }
@@ -209,6 +264,9 @@ impl RecordChain {
     /// visitor.
     pub(crate) fn visit_roots(&self, visitor: &mut dyn RootVisitor) {
         for record in self.iter() {
+            record.visit_roots(visitor);
+        }
+        for record in self.pending().iter() {
             record.visit_roots(visitor);
         }
     }
@@ -284,6 +342,56 @@ impl BexVm {
             && type_args
                 .iter()
                 .all(crate::reachable::is_statically_declared)
+    }
+
+    /// Whether a compiled call to a plain body (one that keeps no state in
+    /// its record) may run it without a record: nothing observes calls, and
+    /// direct calls are on. Its record is made only if an error leaves it
+    /// ([`Self::plain_unwound`]).
+    #[allow(clippy::inline_always, reason = "checked at every plain call site")]
+    #[inline(always)]
+    #[must_use]
+    pub fn plain_calls(&self) -> bool {
+        self.telemetry.is_none() && self.direct_calls()
+    }
+
+    /// `error` left `callee`, which a plain call ran under `caller`, the
+    /// record of the nearest body that has one, at the PC it noted there.
+    /// Keep a zombie for it: it is linked above that record when the error
+    /// reaches it, where the record a call would have pushed stands.
+    #[cold]
+    #[inline(never)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "levels and stack offsets are bounded by the fiber stack, so they fit u32"
+    )]
+    pub fn plain_unwound(
+        &mut self,
+        caller: &FrameRecord,
+        callee: HeapPtr,
+        error: Box<VmError>,
+    ) -> Box<VmError> {
+        let zombie = FrameRecord {
+            prev: Cell::new(ptr::null()),
+            function: Cell::new(callee),
+            package: Cell::new(caller.package.get()),
+            pc: Cell::new(caller.pc()),
+            anchor: self.frames.len() as u32,
+            base: self.stack.len() as u32,
+            level: Cell::new(0),
+            entry: false,
+            scoped: Cell::new(false),
+            receipt: Cell::new(None),
+            type_args: UnsafeCell::new(Box::default()),
+        };
+        self.compiled.records.pending().push(Box::new(zombie));
+        error
+    }
+
+    /// Link the zombies of plain calls an error left above `record`, before
+    /// a handler in its body reads the stack.
+    pub(crate) fn link_pending(&self, record: &FrameRecord) {
+        self.compiled.records.link_pending(record);
     }
 
     /// Errors retain the record for unwinding. `args` runs only when telemetry records the call.
@@ -386,7 +494,7 @@ impl BexVm {
             pc: Cell::new(0),
             anchor: self.frames.len() as u32,
             base: base as u32,
-            level: level as u32,
+            level: Cell::new(level as u32),
             entry: false,
             scoped: Cell::new(false),
             receipt: Cell::new(None),
@@ -421,6 +529,7 @@ impl BexVm {
             Err(_) => {
                 std::mem::forget(pop);
                 let linked: *const FrameRecord = &raw const record;
+                links.link_pending(linked);
                 self.zombify(linked, record);
             }
         }
@@ -541,7 +650,7 @@ impl BexVm {
             pc: Cell::new(0),
             anchor: self.frames.len() as u32,
             base: base as u32,
-            level: (idx + links.count.get() as usize) as u32,
+            level: Cell::new((idx + links.count.get() as usize) as u32),
             entry: true,
             scoped: Cell::new(false),
             receipt: Cell::new(None),
@@ -561,6 +670,7 @@ impl BexVm {
             if let Some(Frame::Bytecode(frame)) = self.frames.get_mut(idx) {
                 frame.faulting_pc = record.pc() as usize;
             }
+            self.compiled.records.link_pending(&raw const record);
             self.compiled.records.unlink(&raw const record);
         }
         result

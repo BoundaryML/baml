@@ -29,6 +29,7 @@ use crate::{
     structure::{Structured, structurize},
 };
 
+#[derive(Clone)]
 struct Expr {
     code: String,
     repr: Repr,
@@ -64,6 +65,8 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) framed: &'a BTreeSet<usize>,
     /// Typed signatures of the direct entries of compiled bodies.
     pub(crate) signatures: &'a HashMap<usize, Signature>,
+    /// Bodies in a recursive cycle: a plain call to one checks the stack.
+    pub(crate) recursive: &'a BTreeSet<usize>,
     /// Per compiled body: the locality-mask bits some compiled caller can
     /// set. A bit no caller sets compiles its condition to the locked path.
     pub(crate) masks: &'a HashMap<usize, u64>,
@@ -79,6 +82,7 @@ pub(crate) struct Generator<'a, 'db> {
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
     pub(crate) signatures: &'a HashMap<usize, Signature>,
+    pub(crate) recursive_bodies: &'a BTreeSet<usize>,
     /// The locality-mask bits some caller can set ([`ProgramContext::masks`]).
     pub(crate) mask_bits: u64,
     /// Whether this body may suspend: it then polls at loop back edges.
@@ -129,6 +133,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             symbols: program.symbols,
             framed: program.framed,
             signatures: program.signatures,
+            recursive_bodies: program.recursive,
             mask_bits: program.masks.get(&object).copied().unwrap_or(0),
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
@@ -161,6 +166,38 @@ const YIELD_EVERY: u32 = 16;
 /// body set (`pc`) for a position the bytecode emitted nothing for.
 fn pc_arg(pc: Option<usize>) -> String {
     pc.map_or_else(|| "pc".to_string(), |pc| pc.to_string())
+}
+
+/// Whether a generated body keeps state in its own frame record, so a call
+/// must push one: it names `fr` in some form other than those a plain call's
+/// record (its caller's) serves equally, which are PC notes, object lookups
+/// and calls. See `BexVm::plain_calls`.
+pub(crate) fn keeps_record_state(code: &str) -> bool {
+    const BEFORE: [&str; 8] = [
+        "vm.record_object(",
+        "vm.call_record(",
+        "vm.call_record_typed(",
+        "vm.call_compiled(",
+        "vm.plain_unwound(",
+        "(vm, ",
+        "|vm, ",
+        "vm: &mut BexVm, ",
+    ];
+    const AFTER: [&str; 2] = [".note_pc(", ": &FrameRecord"];
+    let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    code.match_indices("fr").any(|(at, _)| {
+        let (before, after) = (&code[..at], &code[at + 2..]);
+        let bounded = !before.ends_with(word) && !after.starts_with(word);
+        bounded
+            && !BEFORE.iter().any(|prefix| before.ends_with(prefix))
+            && !AFTER.iter().any(|suffix| after.starts_with(suffix))
+    })
+}
+
+/// The name of the constant that says whether `symbol`'s body may run
+/// without a frame record; see [`keeps_record_state`].
+pub(crate) fn plain_const(symbol: &str) -> String {
+    format!("PLAIN_{symbol}")
 }
 
 fn unsupported<T>(what: impl Into<String>) -> Gen<T> {
@@ -804,5 +841,31 @@ impl<'db> Generator<'_, 'db> {
         };
         user_callee(self.db, self.index, callee)
             .is_some_and(|object| !self.symbols.contains_key(&object))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::keeps_record_state;
+
+    #[test]
+    fn record_state_is_any_use_of_fr_a_callers_record_cannot_serve() {
+        for plain in [
+            "pub fn f_d(vm: &mut BexVm, fr: &FrameRecord, mask: u64) { fr.note_pc(pc); }",
+            "let k: u64 = class_word(vm.record_object(fr, ObjectIndex::from_raw(3)));",
+            "vm.call_record(fr, c, 4, |vm: &mut BexVm| -> [Value; 0] { [] }, |vm, fr| g_d(vm, fr, 0))",
+            "Err(e) => Err(vm.plain_unwound(fr, c, e))",
+            "let frame = 1; let free = frx;",
+        ] {
+            assert!(!keeps_record_state(plain), "{plain}");
+        }
+        for framed in [
+            "vm.static_type_value(fr, 3)",
+            "vm.set_slot(fr, 0, Value::NULL);",
+            "vm.catch_at(error, fr, 1, 2)?",
+            "vm.capture_cell(fr, 0)",
+        ] {
+            assert!(keeps_record_state(framed), "{framed}");
+        }
     }
 }

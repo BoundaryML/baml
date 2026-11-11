@@ -323,8 +323,7 @@ fn admission_fixpoint(
             .keys()
             .map(|&object| (object, symbol_for(index.display(object), object)))
             .collect();
-        let mut bodies = String::new();
-        let mut functions = Vec::new();
+        let mut done = Vec::new();
         let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
         let mut failed = Vec::new();
         for (&object, unit) in units.iter() {
@@ -335,36 +334,16 @@ fn admission_fixpoint(
                 pausing: &pausing,
                 framed: &framed,
                 signatures: &signatures,
+                recursive: &recursive,
                 masks: &masks,
             };
-            let mut generator = Generator::new(&program, &mut builtins, object, unit);
-            match generator.function(&symbols[&object]) {
-                Ok(code) => {
-                    let Ok(slots) = u32::try_from(generator.slots) else {
-                        failed.push((
-                            object,
-                            Rejection::Unsupported("compiled frame slot count exceeds u32".into()),
-                        ));
-                        continue;
-                    };
-                    bodies.push_str(&code);
-                    functions.push(CompiledFunction {
-                        name: index.name(object).to_owned(),
-                        display: index.display(object).to_owned(),
-                        symbol: symbols[&object].clone(),
-                        object,
-                        arity: index.info(object).arity,
-                        slots,
-                        cause_slot: generator
-                            .cause_slot
-                            .map(|slot| u32::try_from(slot).expect("bounded MIR slots")),
-                        framed: framed.contains(&object),
-                    });
-                }
+            match generate(&program, &mut builtins, object, unit) {
+                Ok(generated) => done.push((object, generated)),
                 Err(rejection) => failed.push((object, rejection)),
             }
         }
         if failed.is_empty() {
+            let (bodies, functions) = assemble(units, &symbols, done);
             break (bodies, functions, builtins);
         }
         for (object, rejection) in failed {
@@ -565,6 +544,117 @@ fn recursive_functions(graph: &BTreeMap<usize, BTreeSet<usize>>) -> BTreeSet<usi
 }
 
 /// Propagate a call effect until the set stops growing.
+/// One compiled body: its code and table entry, and whether it is plain
+/// before its callees are ([`locally_plain`]).
+struct Generated {
+    code: String,
+    function: CompiledFunction,
+    plain: bool,
+}
+
+fn generate(
+    program: &ProgramContext<'_, '_>,
+    builtins: &mut BTreeMap<String, usize>,
+    object: usize,
+    unit: &Unit<'_>,
+) -> Result<Generated, Rejection> {
+    let index = program.index;
+    let mut generator = Generator::new(program, builtins, object, unit);
+    let code = generator.function(&program.symbols[&object])?;
+    let slots = u32::try_from(generator.slots)
+        .map_err(|_| Rejection::Unsupported("compiled frame slot count exceeds u32".into()))?;
+    let framed = program.framed.contains(&object);
+    let plain = !framed && locally_plain(unit, &generator, &code);
+    let function = CompiledFunction {
+        name: index.name(object).to_owned(),
+        display: index.display(object).to_owned(),
+        symbol: program.symbols[&object].clone(),
+        object,
+        arity: index.info(object).arity,
+        slots,
+        cause_slot: generator
+            .cause_slot
+            .map(|slot| u32::try_from(slot).expect("bounded MIR slots")),
+        framed,
+    };
+    Ok(Generated {
+        code,
+        function,
+        plain,
+    })
+}
+
+/// The module's bodies, in unit order, and their table entries, once every
+/// unit compiled; the bodies end with each one's plain constant.
+fn assemble(
+    units: &BTreeMap<usize, Unit<'_>>,
+    symbols: &HashMap<usize, String>,
+    done: Vec<(usize, Generated)>,
+) -> (String, Vec<CompiledFunction>) {
+    let mut bodies = String::new();
+    let mut functions = Vec::with_capacity(done.len());
+    // Bodies that keep no state in their record, before their callees'.
+    let mut plain = BTreeSet::new();
+    for (object, generated) in done {
+        if generated.plain {
+            plain.insert(object);
+        }
+        bodies.push_str(&generated.code);
+        functions.push(generated.function);
+    }
+    close_plain(units, &mut plain);
+    bodies.push_str(&plain_consts(symbols, &plain));
+    (bodies, functions)
+}
+
+/// Whether a generated body (`code`) keeps no state in its frame record and
+/// never suspends into the VM, so a call may run it plain; see
+/// `BexVm::plain_calls`. Its callees decide the rest ([`close_plain`]).
+fn locally_plain(unit: &Unit<'_>, generator: &Generator<'_, '_>, code: &str) -> bool {
+    !unit.analysis.suspends
+        && generator.slots == 0
+        && generator.cause_slot.is_none()
+        && !crate::codegen::keeps_record_state(code)
+}
+
+/// Per compiled body, the constant that says whether calls may run it plain.
+fn plain_consts(symbols: &HashMap<usize, String>, plain: &BTreeSet<usize>) -> String {
+    let mut out = String::new();
+    for (object, symbol) in symbols {
+        let flag = crate::codegen::plain_const(symbol);
+        let value = plain.contains(object);
+        out.push_str(&format!(
+            "#[allow(non_upper_case_globals, dead_code)]\nconst {flag}: bool = {value};\n"
+        ));
+    }
+    out
+}
+
+/// Keep the bodies of `plain` whose every compiled callee is plain too: a
+/// plain body runs under its caller's record, so nothing it calls may push
+/// a record or VM frame whose level or trace would miss it.
+fn close_plain(units: &BTreeMap<usize, Unit<'_>>, plain: &mut BTreeSet<usize>) {
+    loop {
+        let unplain: Vec<usize> = plain
+            .iter()
+            .copied()
+            .filter(|object| {
+                units[object]
+                    .analysis
+                    .user_callees
+                    .iter()
+                    .any(|callee| !plain.contains(callee))
+            })
+            .collect();
+        if unplain.is_empty() {
+            return;
+        }
+        for object in unplain {
+            plain.remove(&object);
+        }
+    }
+}
+
 fn propagate_pausing(units: &BTreeMap<usize, Unit<'_>>, set: &mut BTreeSet<usize>) {
     loop {
         let grown: Vec<usize> = units

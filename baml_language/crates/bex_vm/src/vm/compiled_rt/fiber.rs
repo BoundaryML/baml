@@ -389,7 +389,7 @@ mod stackful {
         }
 
         #[inline]
-        pub(crate) fn stack_room(&mut self) -> Result<(), Box<VmError>> {
+        pub fn stack_room(&mut self) -> Result<(), Box<VmError>> {
             if stack_address() >= self.compiled.fiber_floor {
                 return Ok(());
             }
@@ -452,7 +452,7 @@ mod stackless {
             unreachable!("{NEVER}")
         }
 
-        pub(crate) fn stack_room(&mut self) -> Result<(), Box<VmError>> {
+        pub fn stack_room(&mut self) -> Result<(), Box<VmError>> {
             Ok(())
         }
     }

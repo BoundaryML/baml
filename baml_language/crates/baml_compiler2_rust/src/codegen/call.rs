@@ -8,7 +8,7 @@ use bex_vm_types::{FunctionKind, types::Function};
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::Rejection,
-    analysis::{EQUALS_EQUALS, Repr, builtin_is_callable, call_shape, operand_ty},
+    analysis::{EQUALS_EQUALS, Repr, Signature, builtin_is_callable, call_shape, operand_ty},
     render::coerce,
 };
 
@@ -123,23 +123,29 @@ impl<'db> Generator<'_, 'db> {
         args: &[Operand<'db>],
         types: &[String],
     ) -> Gen<Expr> {
-        let site = self.site_pc(block);
-        let callee = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
-        // A generic callee's frame starts with the call's type arguments (a
-        // plain function carries none of its own).
-        let type_args = if types.is_empty() {
-            "&[]".to_string()
-        } else {
-            let name = format!("ty{}", self.temps);
-            self.temps += 1;
-            self.pending.push(format!(
-                "let {name}: [RealizedTy; {}] = [{}];",
-                types.len(),
-                types.join(", ")
-            ));
-            format!("&{name}")
-        };
         let slots = self.laid_out_operands(block, name, info, layout, args)?;
+        self.entry_call(block, object, symbol, slots, types)
+    }
+
+    /// A call to the compiled body of `object` with arguments in its slot
+    /// order (`None` for a slot left to its default): a plain call, a call
+    /// with a frame record, or through the boxed entry, as the VM allows.
+    pub(super) fn entry_call(
+        &mut self,
+        block: BlockId,
+        object: usize,
+        symbol: &str,
+        slots: Vec<Option<Expr>>,
+        types: &[String],
+    ) -> Gen<Expr> {
+        let site = CallSite {
+            object,
+            symbol: symbol.to_owned(),
+            callee: format!("vm.record_object(fr, ObjectIndex::from_raw({object}))"),
+            pc: self.site_pc(block),
+            type_args: self.bind_type_args(types),
+            generic: !types.is_empty(),
+        };
         let typed = self.signatures.get(&object).filter(|signature| {
             !self.framed.contains(&object)
                 && signature.params.len() == slots.len()
@@ -148,40 +154,86 @@ impl<'db> Generator<'_, 'db> {
                     .zip(&signature.params)
                     .all(|(slot, repr)| slot.is_some() || *repr == Repr::Value)
         });
-        let Some(signature) = typed else {
-            let values: Vec<String> = slots
-                .iter()
-                .map(|slot| match slot {
-                    Some(expr) => self.value_arg(expr),
-                    None => "Value::OMITTED_ARG".to_string(),
-                })
-                .collect();
-            let observed = format!(
-                "|_: &mut BexVm| -> [Value; {}] {{ [{}] }}",
-                values.len(),
-                values.join(", ")
-            );
-            let values = format!("&[{}]", values.join(", "));
-            let framed =
-                format!("vm.call_compiled(fr, {callee}, {symbol}, {type_args}, {values}, {site})");
-            // Through the boxed entry, with a frame record when the callee
-            // has no VM-frame state.
-            let call = if self.framed.contains(&object) {
-                framed
-            } else if types.is_empty() {
-                format!(
-                    "(if vm.direct_calls() {{ vm.call_record(fr, {callee}, {site}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
-                )
-            } else {
-                format!(
-                    "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
-                )
-            };
-            let code = self.call_code(block, &call)?;
-            return Ok(Expr::new(code, Repr::Value));
+        match typed {
+            Some(signature) => self.typed_entry_call(block, &site, &slots, signature),
+            None => self.boxed_entry_call(block, &site, &slots),
+        }
+    }
+
+    /// A generic callee's frame starts with the call's type arguments (a
+    /// plain function carries none of its own): a binding of them, or `&[]`.
+    fn bind_type_args(&mut self, types: &[String]) -> String {
+        if types.is_empty() {
+            return "&[]".to_string();
+        }
+        let name = format!("ty{}", self.temps);
+        self.temps += 1;
+        self.pending.push(format!(
+            "let {name}: [RealizedTy; {}] = [{}];",
+            types.len(),
+            types.join(", ")
+        ));
+        format!("&{name}")
+    }
+
+    /// Through the boxed entry, with a frame record when the callee has no
+    /// VM-frame state.
+    fn boxed_entry_call(
+        &mut self,
+        block: BlockId,
+        site: &CallSite,
+        slots: &[Option<Expr>],
+    ) -> Gen<Expr> {
+        let CallSite {
+            object,
+            symbol,
+            callee,
+            pc,
+            type_args,
+            generic,
+        } = site;
+        let values: Vec<String> = slots
+            .iter()
+            .map(|slot| match slot {
+                Some(expr) => self.value_arg(expr),
+                None => "Value::OMITTED_ARG".to_string(),
+            })
+            .collect();
+        let observed = format!(
+            "|_: &mut BexVm| -> [Value; {}] {{ [{}] }}",
+            values.len(),
+            values.join(", ")
+        );
+        let values = format!("&[{}]", values.join(", "));
+        let framed =
+            format!("vm.call_compiled(fr, {callee}, {symbol}, {type_args}, {values}, {pc})");
+        let call = if self.framed.contains(object) {
+            framed
+        } else if !generic {
+            format!(
+                "(if vm.direct_calls() {{ vm.call_record(fr, {callee}, {pc}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+            )
+        } else {
+            format!(
+                "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {pc}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+            )
         };
+        let code = self.call_code(block, &call)?;
+        Ok(Expr::new(code, Repr::Value))
+    }
+
+    /// Through the callee's typed direct entry: plain when nothing observes
+    /// calls and the callee keeps no record state, else with a frame record,
+    /// else through the boxed entry.
+    fn typed_entry_call(
+        &mut self,
+        block: BlockId,
+        site: &CallSite,
+        slots: &[Option<Expr>],
+        signature: &Signature,
+    ) -> Gen<Expr> {
         // Arguments are bound once, as the callee holds them.
-        let mut typed_args = Vec::with_capacity(slots.len());
+        let mut args = Vec::with_capacity(slots.len());
         for (slot, repr) in slots.iter().zip(&signature.params) {
             let code = match slot {
                 Some(expr) => coerce(&expr.code, expr.repr, *repr),
@@ -191,58 +243,46 @@ impl<'db> Generator<'_, 'db> {
             self.temps += 1;
             self.pending
                 .push(format!("let {temp}: {} = {code};", repr.rust_type()));
-            typed_args.push(temp);
+            args.push((temp, *repr));
         }
-        let callee_mask = self.callee_mask(block);
-        let direct_args = typed_args.iter().fold(String::new(), |mut out, arg| {
-            let _ = write!(out, ", {arg}");
-            out
-        });
-        // Telemetry boxes the arguments only for an invocation it records.
-        let observed: Vec<String> = typed_args
-            .iter()
-            .zip(&signature.params)
-            .map(|(arg, repr)| coerce(arg, *repr, Repr::Value))
-            .collect();
-        let observed = format!(
-            "|vm: &mut BexVm| -> [Value; {}] {{ [{}] }}",
-            observed.len(),
-            observed.join(", ")
+        let mask = self.callee_mask(block);
+        let direct = format!(
+            "{}_d(vm, fr{}, {mask})",
+            site.symbol,
+            args.iter().fold(String::new(), |mut out, (arg, _)| {
+                let _ = write!(out, ", {arg}");
+                out
+            })
         );
-        let direct = if types.is_empty() {
-            format!(
-                "vm.call_record(fr, {callee}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}, {callee_mask}))"
-            )
-        } else {
-            format!(
-                "vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}, {callee_mask}))"
-            )
-        };
-        let mut boxed = String::from("{ ");
-        let mut values = Vec::with_capacity(typed_args.len());
-        for (j, (arg, repr)) in typed_args.iter().zip(&signature.params).enumerate() {
-            let _ = write!(boxed, "let v{j} = {}; ", coerce(arg, *repr, Repr::Value));
-            values.push(format!("v{j}"));
-        }
-        let unbox = match signature.ret {
-            Repr::Int => "bex_vm::compiled_rt::expect_int(v)",
-            Repr::Bool => "bex_vm::compiled_rt::expect_bool(v)",
-            Repr::Float => "bex_vm::compiled_rt::expect_f64(v)",
-            Repr::Value => "Ok(v)",
-        };
-        let _ = write!(
-            boxed,
-            "match vm.call_compiled(fr, {callee}, {symbol}, {type_args}, &[{}], {site}) {{ Ok(v) => {unbox}, Err(e) => Err(e) }} }}",
-            values.join(", ")
+        let call = format!(
+            "(if {} {{ {} }} else {})",
+            site.allowed(),
+            site.recorded(&direct, &args),
+            site.boxed(&args, signature.ret)
         );
-        let allowed = if types.is_empty() {
-            "vm.direct_calls()".to_string()
+        let call = if site.generic {
+            call
         } else {
-            format!("vm.direct_calls_typed({type_args})")
+            let plain = self.plain_call(site, &direct);
+            let flag = super::plain_const(&site.symbol);
+            format!("(if {flag} && vm.plain_calls() {{ {plain} }} else {{ {call} }})")
         };
-        let call = format!("(if {allowed} {{ {direct} }} else {boxed})");
         let code = self.call_code(block, &call)?;
         Ok(Expr::new(code, signature.ret))
+    }
+
+    /// A plain body runs without a record when nothing observes calls; one
+    /// in a recursive cycle checks the stack first, as a record call does.
+    fn plain_call(&self, site: &CallSite, direct: &str) -> String {
+        let plain = format!(
+            "match {direct} {{ Ok(v) => Ok(v), Err(e) => Err(vm.plain_unwound(fr, {}, e)) }}",
+            site.callee
+        );
+        if self.recursive_bodies.contains(&site.object) {
+            format!("match vm.stack_room() {{ Ok(()) => {plain}, Err(e) => Err(e) }}")
+        } else {
+            plain
+        }
     }
 
     /// Route a compiled call's error. A callee that suspends parks this
@@ -442,6 +482,85 @@ impl<'db> Generator<'_, 'db> {
             "match vm.call_inline(fr, callee, &[{values}], {site}) {{ \
              Ok(Some(v)) => Ok(v), Ok(None) => {suspend}, Err(e) => Err(e) }}"
         ))
+    }
+}
+
+/// What every form of a direct call to one compiled callee names.
+struct CallSite {
+    object: usize,
+    symbol: String,
+    /// The callee's function object, as generated code loads it.
+    callee: String,
+    pc: String,
+    type_args: String,
+    generic: bool,
+}
+
+impl CallSite {
+    /// Whether the VM allows a call with a frame record.
+    fn allowed(&self) -> String {
+        if self.generic {
+            format!("vm.direct_calls_typed({})", self.type_args)
+        } else {
+            "vm.direct_calls()".to_string()
+        }
+    }
+
+    /// The call of `direct` with a frame record; telemetry boxes the
+    /// arguments only for an invocation it records.
+    fn recorded(&self, direct: &str, args: &[(String, Repr)]) -> String {
+        let observed: Vec<String> = args
+            .iter()
+            .map(|(arg, repr)| coerce(arg, *repr, Repr::Value))
+            .collect();
+        let observed = format!(
+            "|vm: &mut BexVm| -> [Value; {}] {{ [{}] }}",
+            observed.len(),
+            observed.join(", ")
+        );
+        let Self {
+            callee,
+            pc,
+            type_args,
+            ..
+        } = self;
+        if self.generic {
+            format!(
+                "vm.call_record_typed(fr, {callee}, {type_args}, {pc}, {observed}, |vm, fr| {direct})"
+            )
+        } else {
+            format!("vm.call_record(fr, {callee}, {pc}, {observed}, |vm, fr| {direct})")
+        }
+    }
+
+    /// The call through the boxed entry, with a VM frame, its result
+    /// unboxed to the typed entry's return representation.
+    fn boxed(&self, args: &[(String, Repr)], ret: Repr) -> String {
+        let mut boxed = String::from("{ ");
+        let mut values = Vec::with_capacity(args.len());
+        for (j, (arg, repr)) in args.iter().enumerate() {
+            let _ = write!(boxed, "let v{j} = {}; ", coerce(arg, *repr, Repr::Value));
+            values.push(format!("v{j}"));
+        }
+        let unbox = match ret {
+            Repr::Int => "bex_vm::compiled_rt::expect_int(v)",
+            Repr::Bool => "bex_vm::compiled_rt::expect_bool(v)",
+            Repr::Float => "bex_vm::compiled_rt::expect_f64(v)",
+            Repr::Value => "Ok(v)",
+        };
+        let Self {
+            callee,
+            symbol,
+            pc,
+            type_args,
+            ..
+        } = self;
+        let _ = write!(
+            boxed,
+            "match vm.call_compiled(fr, {callee}, {symbol}, {type_args}, &[{}], {pc}) {{ Ok(v) => {unbox}, Err(e) => Err(e) }} }}",
+            values.join(", ")
+        );
+        boxed
     }
 }
 

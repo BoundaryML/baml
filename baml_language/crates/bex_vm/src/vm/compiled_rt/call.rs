@@ -156,6 +156,7 @@ impl BexVm {
         error: Box<VmError>,
         frame: &FrameRecord,
     ) -> Result<(Value, Value), Box<VmError>> {
+        self.link_pending(frame);
         let level = self.level_of(Self::record_frame(frame));
         self.land_compiled_catch(error, level, None)
     }
@@ -169,6 +170,7 @@ impl BexVm {
         context_slot: usize,
         handler_pc: usize,
     ) -> Result<(Value, Value), Box<VmError>> {
+        self.link_pending(frame);
         let at = Self::record_frame(frame);
         // SAFETY: the live frame roots its function under the heap permit.
         let function = unsafe { self.frame_function(at) }?;
