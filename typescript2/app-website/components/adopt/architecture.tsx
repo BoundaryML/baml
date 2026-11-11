@@ -2072,8 +2072,10 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
       {/* The question readers ask after a page like this one, answered plainly, and by the founder. */}
       <Section id="docs" title="Why don’t you have docs?">
         <p className="max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
-          We’re a small team, and we chose to make BAML right before making it
-          documented. Agents already use it well, because{' '}
+          We’re building something no one has built before: a language, its
+          runtime, and the whole toolchain around them. So engineering comes
+          first, and so do the teams already shipping on it. Agents already use
+          it well, because{' '}
           <a
             className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
             href="/#review"
