@@ -91,11 +91,28 @@ impl SlotKind {
         }
     }
 
+    /// Whether a union is an optional reference type (`Class?`, `string?`,
+    /// `T[]?`, ...): null and exactly one other member, whose slot is a
+    /// pointer. Other unions, optional scalars included, stay tagged.
+    fn is_nullable_pointer(members: &[RealizedTy]) -> bool {
+        let has_null = members
+            .iter()
+            .any(|member| matches!(member, RealizedTy::Null));
+        let mut others = members
+            .iter()
+            .filter(|member| !matches!(member, RealizedTy::Null));
+        match (others.next(), others.next()) {
+            (Some(only), None) => has_null && Self::of_type(only) == SlotKind::Ptr,
+            _ => false,
+        }
+    }
+
     /// The slot a value of `ty` is stored in (design section 1, slot table).
     ///
     /// Known scalars are raw; types whose every value is one heap object are
     /// pointers; anything that may hold more than one representation is
-    /// tagged.
+    /// tagged. An optional reference type is a pointer slot whose null is
+    /// the zero word; optional scalars and other unions are tagged.
     pub fn of_type(ty: &RealizedTy) -> SlotKind {
         use baml_base::Literal;
         match ty {
@@ -124,6 +141,9 @@ impl SlotKind {
             | RealizedTy::Type
             | RealizedTy::Resource
             | RealizedTy::PromptAst => SlotKind::Ptr,
+            // A nullable object type (`Packet?`): null is the zero word a
+            // pointer slot already holds, so it needs no tag.
+            RealizedTy::Union(members) if Self::is_nullable_pointer(members) => SlotKind::Ptr,
             RealizedTy::Null
             | RealizedTy::Interface(..)
             | RealizedTy::Union(_)
@@ -530,6 +550,23 @@ mod tests {
             (RealizedTy::String, SlotKind::Ptr),
             (RealizedTy::list(RealizedTy::Int), SlotKind::Ptr),
             (RealizedTy::optional(RealizedTy::Int), SlotKind::Tagged16),
+            // An optional reference type is a pointer slot, null the zero word.
+            (RealizedTy::optional(RealizedTy::String), SlotKind::Ptr),
+            (
+                RealizedTy::optional(RealizedTy::list(RealizedTy::Int)),
+                SlotKind::Ptr,
+            ),
+            // Other unions stay tagged, optional or not.
+            (
+                RealizedTy::Union(vec![RealizedTy::String, RealizedTy::Int].into()),
+                SlotKind::Tagged16,
+            ),
+            (
+                RealizedTy::optional(RealizedTy::Union(
+                    vec![RealizedTy::String, RealizedTy::list(RealizedTy::Int)].into(),
+                )),
+                SlotKind::Tagged16,
+            ),
             (RealizedTy::Unknown, SlotKind::Tagged16),
         ];
         for (ty, slot) in cases {
