@@ -1584,12 +1584,12 @@ function Threads() {
 
 // ---------- the heading ----------
 
-// What observability slows down. All plural, so the second sentence's "them" fits every one.
-const SLOWED = ['decisions', 'product calls', 'fixes'];
+// What observability slows down. Both sentences say the same word.
+const SLOWED = ['decisions', 'on-call', 'fixes'];
 const ROTATE_MS = 2600;
 
-/** "Observability makes X slow. Hyperobservability makes them fast.", with X rotating, one sentence
- *  a line. Under reduced motion it stays on the first. */
+/** "Observability makes X slow. Hyperobservability makes X fast.", with X rotating in both, one
+ *  sentence a line. Under reduced motion it stays on the first. */
 function Rotating() {
   const [n, setN] = useState(0);
   useEffect(() => {
@@ -1613,7 +1613,11 @@ function Rotating() {
           slow.
         </span>
         <span className="block sm:whitespace-nowrap">
-          <Hyper>Hyperobservability</Hyper> makes them fast.
+          <Hyper>Hyperobservability</Hyper> makes{' '}
+          <span className="heading-swap" key={n}>
+            {SLOWED[n % SLOWED.length]}
+          </span>{' '}
+          fast.
         </span>
       </span>
     </>
