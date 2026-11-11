@@ -55,9 +55,16 @@ def _cli_env():
     return {**os.environ, "DEV_BAML_CLI_DISABLE_AGENT_DETECTION": "1"}
 
 
-def build_baml(cli, workload, stage):
-    """Pack main.baml plus the driver into one executable. Returns a build record."""
-    project = stage / workload["id"].replace("/", "__")
+# The baml_language checkout a compiled (`rt-*`) row's host is built from.
+WORKSPACE = Path(__file__).resolve().parents[4]
+
+
+def build_baml(cli, workload, stage, backend="vm"):
+    """Pack main.baml plus the driver into one executable. Returns a build record.
+
+    The `rt` backend packs with `--rust`; every workload shares one Rust build
+    directory, so the workspace crates build once per run."""
+    project = stage / backend / workload["id"].replace("/", "__")
     src = project / "baml_src"
     src.mkdir(parents=True)
     # A packed executable records at the level baked in at pack time unless
@@ -70,8 +77,10 @@ def build_baml(cli, workload, stage):
     shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
     out = project / "workload"
     start = time.perf_counter()
-    r = subprocess.run([str(cli), "--no-progress", "--color", "never", "pack", "speedtest_driver", "-o", str(out)],
-                       cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
+    command = [str(cli), "--no-progress", "--color", "never", "pack", "speedtest_driver", "-o", str(out)]
+    if backend == "rt":
+        command += ["--rust", "--rust-workspace", str(WORKSPACE), "--rust-build-dir", str(stage / "rust-build")]
+    r = subprocess.run(command, cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
     seconds = time.perf_counter() - start
     if r.returncode != 0 or not out.exists():
         lines = [l for l in r.stderr.strip().splitlines() if l.strip() and not l.startswith("warning:")]
@@ -211,21 +220,23 @@ def cmd_run(args):
         _log(f"warning: load average {load_start[0]:.1f} on {os.cpu_count()} cores; results will be noisy")
     try:
         _log(f"building {len(workloads)} workloads with {cli}")
+        backends = sorted({r.backend for r in row_list if r.is_baml})
         for w in workloads:
-            builds[w["id"]] = build_baml(cli, w, stage)
-            b = builds[w["id"]]
-            if b["status"] != "ok":
-                _log(f"  {w['name']}: pack failed: {b['error']}")
+            for backend in backends:
+                b = builds[(w["id"], backend)] = build_baml(cli, w, stage, backend)
+                if b["status"] != "ok":
+                    _log(f"  {w['name']} [{backend}]: pack failed: {b['error']}")
 
         _log(f"verifying {len(cells)} (workload, row) pairs")
         for (wid, _), cell in cells.items():
             if not cell.row.is_baml and versions.get(cell.row.kind) is None:
                 cell.status, cell.reason = "unavailable", f"{cell.row.kind} is not installed"
                 continue
-            if cell.row.is_baml and builds[wid]["status"] != "ok":
-                cell.fail(f"pack failed: {builds[wid]['error']}")
+            build = builds.get((wid, cell.row.backend), {})
+            if cell.row.is_baml and build["status"] != "ok":
+                cell.fail(f"pack failed: {build['error']}")
                 continue
-            t = _trial(cell, builds[wid].get("artifact"), 1, 0, stage, args.cpu)
+            t = _trial(cell, build.get("artifact"), 1, 0, stage, args.cpu)
             if t.ok:
                 cell.status = "ok"
             else:
@@ -241,7 +252,8 @@ def cmd_run(args):
             for cell in order:
                 w = cell.workload
                 jobs = args.jobs or w["jobs"]
-                t = _trial(cell, builds[w["id"]].get("artifact"), jobs, w["warmup"], stage, args.cpu)
+                t = _trial(cell, builds.get((w["id"], cell.row.backend), {}).get("artifact"), jobs,
+                           w["warmup"], stage, args.cpu)
                 cell.trials.append(t)
                 if not t.ok:
                     _log(f"  trial {i + 1}: {w['name']} [{cell.row.key}]: {t.error}")
@@ -292,7 +304,12 @@ def _save(args, cli, workloads, row_list, cells, builds, versions, trials_n, tim
     args.runs, args.measurement_time = trials_n, 0
     data = build_run_data(args, results, [legacy[r.key] for r in row_list if r.key in legacy], baml_cli=str(cli))
     data.update(protocol="speedtest-2", trials=trials_n, seed=args.seed, cpu=args.cpu, machine=_machine(),
-                toolchains=versions, rows=[r.key for r in row_list], builds=builds, summary=summaries, **timing)
+                toolchains=versions, rows=[r.key for r in row_list],
+                # `builds` keeps its per-workload shape (the bytecode pack);
+                # compiled packs, with their build time and size, sit beside it.
+                builds={wid: b for (wid, backend), b in builds.items() if backend == "vm"},
+                rust_builds={wid: b for (wid, backend), b in builds.items() if backend == "rt"},
+                summary=summaries, **timing)
 
     rdir = results_dir(args)
     run_path = save_run(rdir, data, getattr(args, "_profile_files", None))
