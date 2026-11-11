@@ -1993,6 +1993,13 @@ function Crossing({ at, lang }: { at: number; lang: number }) {
   return <ScenePlayer key={`${target}-${lang}`} scenes={scenes} />;
 }
 
+// The founder's email, with the subject and the start of the message already filled in.
+const EMAIL_ME = `mailto:vbv@boundaryml.com?subject=${encodeURIComponent(
+  'Hi, I’m curious about Boundary/BAML',
+)}&body=${encodeURIComponent(
+  'Hi Vaibhav,\n\nI’m working on \n\nand I’d love to talk about \n',
+)}`;
+
 // Every question the page answers, in order, for the list at the top.
 const QUESTIONS = [
   { id: 'build', title: 'What happens when you build?' },
@@ -2096,8 +2103,8 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           >
             agents use the toolchain well
           </a>
-          . Docs for humans are coming by the end of 2026. Until then, you get
-          us.
+          . Docs for humans are coming by the end of 2026. Until then, we’re
+          more than happy to make time with you directly.
         </p>
         <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
           {/* biome-ignore lint/performance/noImgElement: a small static photo */}
@@ -2118,9 +2125,7 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
               Vaibhav Gupta, co-founder and CEO
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Button href="mailto:vbv@boundaryml.com">
-                vbv@boundaryml.com
-              </Button>
+              <Button href={EMAIL_ME}>vbv@boundaryml.com</Button>
               <Button href={BOOK} variant="secondary">
                 Get on a call
               </Button>
