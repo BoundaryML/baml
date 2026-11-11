@@ -282,6 +282,27 @@ pub struct TaggedSlot {
 
 const _: () = assert!(size_of::<TaggedSlot>() == 16);
 
+/// Whether this CPU reads and writes an aligned 16-byte pair single-copy
+/// atomically (aarch64 LSE2). Known at compile time when `+lse2` is in the
+/// rustflags (`cfg(baml_lse2)`), else detected once at run time; the branch
+/// on it predicts perfectly.
+#[inline]
+fn has_lse2() -> bool {
+    #[cfg(all(target_arch = "aarch64", baml_lse2))]
+    {
+        true
+    }
+    #[cfg(all(target_arch = "aarch64", not(baml_lse2)))]
+    {
+        static LSE2: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *LSE2.get_or_init(|| std::arch::is_aarch64_feature_detected!("lse2"))
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        false
+    }
+}
+
 /// Alignment a tagged slot needs for the single-copy-atomic path.
 pub const TAGGED_ALIGN: usize = 16;
 
@@ -299,8 +320,7 @@ impl TaggedSlot {
 
     #[inline]
     fn single_copy(&self) -> bool {
-        cfg!(all(target_arch = "aarch64", baml_lse2))
-            && std::ptr::from_ref(self).addr().is_multiple_of(TAGGED_ALIGN)
+        has_lse2() && std::ptr::from_ref(self).addr().is_multiple_of(TAGGED_ALIGN)
     }
 
     #[inline]
@@ -351,7 +371,7 @@ impl TaggedSlot {
 
     /// One 16-byte `ldp`: tag and payload always come from the same write.
     /// Retries only past a seqlock writer, which no aligned slot has.
-    #[cfg(all(target_arch = "aarch64", baml_lse2))]
+    #[cfg(target_arch = "aarch64")]
     #[inline]
     fn read_pair(&self) -> (TaggedKind, u64) {
         loop {
@@ -376,7 +396,7 @@ impl TaggedSlot {
 
     /// One 16-byte `stp`, after a Release fence only when the payload is a
     /// pointer: a scalar publishes nothing.
-    #[cfg(all(target_arch = "aarch64", baml_lse2))]
+    #[cfg(target_arch = "aarch64")]
     #[inline]
     fn write_pair(&self, tag: TaggedKind, payload: u64) {
         if tag == TaggedKind::Ptr {
@@ -395,12 +415,12 @@ impl TaggedSlot {
         }
     }
 
-    #[cfg(not(all(target_arch = "aarch64", baml_lse2)))]
+    #[cfg(not(target_arch = "aarch64"))]
     fn read_pair(&self) -> (TaggedKind, u64) {
         self.read_seqlock()
     }
 
-    #[cfg(not(all(target_arch = "aarch64", baml_lse2)))]
+    #[cfg(not(target_arch = "aarch64"))]
     fn write_pair(&self, tag: TaggedKind, payload: u64) {
         self.write_seqlock(tag, payload);
     }
