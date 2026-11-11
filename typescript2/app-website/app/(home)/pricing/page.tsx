@@ -1,5 +1,5 @@
 // CONTENT PARITY: keep substantive copy in sync with content/pricing.md.
-import { Check, Plus } from 'lucide-react';
+import { Check, ChevronDown, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { section } from '@/components/home/analytics';
 import { BOOK } from '@/components/home/links';
@@ -26,8 +26,15 @@ type Row = { cells: [Cell, Cell]; extra?: boolean; label: string };
 
 const SAME = (cell: Cell): [Cell, Cell] => [cell, cell];
 
-const BLOCKS: { free: string[]; note: string; rows: Row[]; title: string }[] = [
+const BLOCKS: {
+  billed?: boolean;
+  free: string[];
+  note: string;
+  rows: Row[];
+  title: string;
+}[] = [
   {
+    billed: true,
     free: [
       'Unlimited spans',
       'Unlimited profiles',
@@ -141,8 +148,94 @@ function Amount({ cell, strong }: { cell: Cell; strong?: boolean }) {
   );
 }
 
+// What ingestion counts, from BCS's billing code (control-plane/src/projector/billing.rs and its
+// README): the recorded values a file points to are billed; the structure around them isn't. That a
+// repeated value is billed once is the founders' decision, not yet in that code.
+const BILLED = [
+  'Function inputs and outputs',
+  'Logs',
+  'Network requests and responses',
+  'Process and thread context',
+];
+const NOT_BILLED = [
+  'Spans and their timings',
+  'Profiles',
+  'Function names, source and types',
+  'A value your programs record again',
+  'Retried uploads',
+  'Uploads that never arrive',
+];
+
+// How the meter keeps the bill down, each a fact of BCS's billing code (README "Usage ledger",
+// projector/billing.rs), except billing a repeated value once, which is the founders' decision.
+const SAVINGS: [string, string][] = [
+  [
+    'Logical size, not storage',
+    'We count each value at its size in your program. Compression, storage layout and overhead never reach your bill.',
+  ],
+  [
+    'Each value once',
+    'Values are stored by content, so a prompt your programs send a thousand times is stored once and billed once.',
+  ],
+  [
+    'Structure is free',
+    'Spans, timings, profiles, function names, source and types are never billed, so you never sample to save money.',
+  ],
+  [
+    'Retries count once',
+    'A retried upload is counted once, and an upload that never arrives counts as nothing.',
+  ],
+];
+
+/** The bottom of the page: what ingestion bills, what it doesn't, and how the meter keeps it down. */
+function HowBilling() {
+  return (
+    <div className="scroll-mt-28 border-t border-rule pt-10" id="billing">
+      <h3 className="font-display text-[20px] font-medium text-head">
+        How ingestion is billed
+      </h3>
+      <p className="mt-2 max-w-[34rem] text-[14px] text-ink-2">
+        You pay for the values your programs record, never for the metadata
+        around them.
+      </p>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-rule bg-raised p-5 text-[13px]">
+          <p className="font-medium text-head">Billed</p>
+          <ul className="mt-3 space-y-2 text-ink-2">
+            {BILLED.map((b) => (
+              <li className="flex items-start gap-2" key={b}>
+                <span
+                  aria-hidden="true"
+                  className="mt-[7px] size-1.5 shrink-0 rounded-full bg-muted"
+                />
+                {b}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-lg border border-clover/40 bg-clover/[0.06] p-5 text-[13px]">
+          <p className="font-medium text-head">Never billed</p>
+          <ul className="mt-3 space-y-2 text-ink-2">
+            {NOT_BILLED.map((b) => (
+              <Tick key={b}>{b}</Tick>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <dl className="mt-8 grid gap-x-8 gap-y-6 text-[13px] sm:grid-cols-2">
+        {SAVINGS.map(([title, body]) => (
+          <div key={title}>
+            <dt className="font-medium text-head">{title}</dt>
+            <dd className="mt-1 text-ink-2">{body}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 /** One topic: a heading and a line, the table, then what's free as a checklist. */
-function Block({ free, note, rows, title }: (typeof BLOCKS)[number]) {
+function Block({ billed, free, note, rows, title }: (typeof BLOCKS)[number]) {
   return (
     <div className="border-t border-rule pt-10">
       <h3 className="font-display text-[20px] font-medium text-head">
@@ -176,6 +269,15 @@ function Block({ free, note, rows, title }: (typeof BLOCKS)[number]) {
           ))}
         </dl>
       </div>
+      {billed && (
+        <a
+          className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-clover hover:underline"
+          href="#billing"
+        >
+          What counts as ingestion?
+          <ChevronDown aria-hidden="true" className="size-3.5" />
+        </a>
+      )}
       {free.length > 0 && (
         <ul className="mt-5 grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] text-ink-2 sm:grid-cols-3">
           {free.map((f) => (
@@ -259,6 +361,7 @@ export default function PricingPage() {
             {BLOCKS.map((b) => (
               <Block key={b.title} {...b} />
             ))}
+            <HowBilling />
           </div>
         </div>
       </section>

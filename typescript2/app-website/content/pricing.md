@@ -37,6 +37,19 @@ Free on both plans: unlimited spans, profiles, dashboards, members, projects and
 
 Every Boundary Cloud plan comes with a 60-day money-back guarantee. [Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
 
+### How ingestion is billed
+
+You pay for the values your programs record, never for the metadata around them.
+
+Billed: function inputs and outputs, logs, network requests and responses, process and thread context.
+
+Never billed: spans and their timings, profiles, function names, source and types, a value your programs record again, retried uploads, uploads that never arrive.
+
+- Logical size, not storage: each value is counted at its size in your program. Compression, storage layout and overhead never reach your bill.
+- Each value once: values are stored by content, so a prompt your programs send a thousand times is stored once and billed once.
+- Structure is free: spans, timings, profiles, function names, source and types are never billed, so you never sample to save money.
+- Retries count once: a retried upload is counted once, and an upload that never arrives counts as nothing.
+
 ## Source and license
 
 The BAML source code and repository license are available on [GitHub](https://github.com/boundaryml/baml).
