@@ -1622,69 +1622,6 @@ function DemoLine({ line }: { line: string }) {
   );
 }
 
-/** Change a variable between two calls and the second call sees it: BAML reads the process
- *  environment at the request, it doesn't keep a copy. */
-function EnvChange({ at, lang }: { at: number; lang: number }) {
-  const name = TARGETS[at].name;
-  if (name === 'WebAssembly')
-    return (
-      <p className="max-w-[44rem] text-[15px] leading-snug text-ink-2">
-        There’s no process environment in a browser or a Worker, so env.get
-        isn’t available there. Calling it panics with HostUnavailable.
-      </p>
-    );
-  const code = envDemo(name, lang);
-  return (
-    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-      {code ? (
-        <div className="overflow-hidden rounded-xl border border-rule bg-raised">
-          <p className="flex h-10 items-center gap-2 border-b border-rule px-3.5 font-mono text-[12px] text-ink-2">
-            {name === 'In your app' && (
-              <LangIcon className="size-3.5" name={SDK_LANGS[lang].name} />
-            )}
-            {name === 'In your app' ? 'your code' : 'your shell'}
-          </p>
-          <pre className="overflow-x-auto px-3.5 py-3 font-mono text-[12.5px] leading-[1.65] text-body">
-            {code.split('\n').map((line, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: the sample's lines never reorder.
-              <DemoLine key={i} line={line} />
-            ))}
-          </pre>
-        </div>
-      ) : (
-        <p className="text-[15px] leading-snug text-ink-2">
-          Java can’t change its own environment, so BAML reads what the JVM
-          started with, the same as System.getenv.
-        </p>
-      )}
-      <ul className="space-y-4 text-[15px] leading-snug text-ink-2">
-        <li>
-          <span className="text-head">It reads at the request.</span>{' '}
-          env.OPENAI_API_KEY holds the variable’s name, not its value, so a
-          secret you load after startup is used from the next call on.
-        </li>
-        <li>
-          <span className="text-head">BAML only reads.</span> There’s no
-          env.set: changes come from your code. For a single command,
-          baml.sys.run takes env overrides that only that child process sees.
-        </li>
-        <li>
-          <span className="text-head">Clients never hold the key.</span>{' '}
-          Printing or recording a client can’t leak it.
-        </li>
-        <li>
-          <span className="text-head">Proxies follow too.</span> Change
-          HTTPS_PROXY, NO_PROXY or SSL_CERT_FILE and the next request uses them.
-        </li>
-        <li className="text-[13px] text-muted">
-          Set variables before starting calls on other threads. Changing the
-          environment isn’t thread-safe in C, or in any language built on it.
-        </li>
-      </ul>
-    </div>
-  );
-}
-
 /** The page's two choices: what BAML runs in, and for an app, its language. Pinned to the top so
  *  every diagram below follows it. */
 /** How far down a sticky bar has to sit to clear the site's own sticky nav, if the page has one,
@@ -1979,6 +1916,83 @@ function Life({
   return <ScenePlayer key={`${target}-${lang}-${moment}`} scenes={scenes} />;
 }
 
+// ---------- a function crossing between your code and BAML ----------
+// Sources (an audit of the bridges): values are protobuf (crates/bridge_ctypes/types/baml_bridge/
+// cffi/v1/*.proto), data is copied (value_encode.rs) and functions, streams and resources go as
+// handles (handle_table.rs); a host function passed in becomes a HOST_VALUE_CALLABLE that BAML calls
+// through the call_host_value sysop and awaits (sys_native/src/host_impls.rs); where it runs is each
+// SDK's dispatch (sdks/*/host_value.*); the result is checked against the declared type, and an
+// undeclared throw becomes baml.panics.HostContractViolation (bex_engine land_host_outcome).
+
+// A small function in each language, in SDK_LANGS order, and where BAML's call to it runs.
+const CROSSING: { fn: string; runs: string }[] = [
+  {
+    fn: 'lambda name: name.upper()',
+    runs: 'on your thread, or your asyncio loop',
+  },
+  { fn: '(name) => name.toUpperCase()', runs: 'on your event loop' },
+  { fn: 'a Go func', runs: 'in a new goroutine' },
+  { fn: '|name| name.to_uppercase()', runs: 'on the bridge’s dispatch pool' },
+  { fn: 'name -> name.toUpperCase()', runs: 'on a dispatch thread' },
+  { fn: 'a C++ lambda', runs: 'on its own thread' },
+  { fn: '{ $0.uppercased() }', runs: 'in a Task' },
+];
+
+function crossingSteps(target: string, lang: number): Step[] {
+  const c =
+    target === 'WebAssembly'
+      ? { fn: '(name) => name.toUpperCase()', runs: 'on your event loop' }
+      : CROSSING[lang];
+  return [
+    { note: c.fn, text: 'You pass a function to make_widget', tone: 'host' },
+    {
+      note: 'a reference to your function, not a copy',
+      text: 'It crosses as a handle',
+      tone: 'baml',
+    },
+    { text: 'BAML calls it, and waits for the answer', tone: 'baml' },
+    { note: c.runs, text: 'Your function runs on your side', tone: 'host' },
+    {
+      note: 'checked against the type BAML declared',
+      text: 'The result crosses back as a value',
+      tone: 'baml',
+    },
+    {
+      note: 'data copied, functions as handles you can call later',
+      text: 'make_widget returns a Widget',
+      tone: 'host',
+    },
+  ];
+}
+
+/** Passing a function into BAML and getting values back, played in the two lanes. */
+function Crossing({ at, lang }: { at: number; lang: number }) {
+  const target = TARGETS[at].name;
+  if (target === 'Standalone')
+    return (
+      <p className="text-[16px] text-ink-2">
+        A standalone binary has no host language, so nothing crosses.
+      </p>
+    );
+  const steps = crossingSteps(target, lang);
+  const host = hostLabel(target, lang);
+  const scenes: SceneDef[] = [
+    {
+      steps: steps.length,
+      title: 'crossing',
+      View: ({ step }) => (
+        <Lanes
+          host={host}
+          say="Data crosses as a copy. Functions cross as handles, freed when the side holding one lets go."
+          step={step}
+          steps={steps}
+        />
+      ),
+    },
+  ];
+  return <ScenePlayer key={`${target}-${lang}`} scenes={scenes} />;
+}
+
 // Every question the page answers, in order, for the list at the top.
 const QUESTIONS = [
   { id: 'build', title: 'What happens when you build?' },
@@ -1987,7 +2001,10 @@ const QUESTIONS = [
   { id: 'call', title: 'What happens when you call a BAML function?' },
   { id: 'exceptions', title: 'What happens when BAML throws an exception?' },
   { id: 'shutdown', title: 'What happens at shutdown?' },
-  { id: 'env', title: 'What happens when you change an environment variable?' },
+  {
+    id: 'functions',
+    title: 'What happens when a function crosses between your code and BAML?',
+  },
   { id: 'docs', title: 'Why don’t you have docs?' },
 ];
 
@@ -2061,28 +2078,26 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
         <Life at={at} lang={lang} moment="shutdown" />
       </Section>
       <Section
-        id="env"
-        lead="The simplest way to see sysops at work: BAML reads the environment when it needs a value, instead of keeping its own copy."
-        title="What happens when you change an environment variable?"
+        id="functions"
+        title="What happens when a function crosses between your code and BAML?"
       >
-        <div key={`${target.name}-${lang}`}>
-          <EnvChange at={at} lang={lang} />
-        </div>
+        <Crossing at={at} lang={lang} />
       </Section>
       {/* The question readers ask after a page like this one, answered plainly, and by the founder. */}
       <Section id="docs" title="Why don’t you have docs?">
         <p className="max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
           We’re building something no one has built before: a language, its
-          runtime, and the whole toolchain around them. So engineering comes
-          first, and so do the teams already shipping on it. Agents already use
-          it well, because{' '}
+          runtime, and the whole toolchain around them. So our time goes to the
+          teams already shipping on it, and to engineering. We spend a lot of
+          time ensuring{' '}
           <a
             className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
             href="/#review"
           >
-            the toolchain tells them when they’re wrong
+            agents use the toolchain well
           </a>
-          . Docs for humans are coming. Until then, you get us.
+          . Docs for humans are coming by the end of 2026. Until then, you get
+          us.
         </p>
         <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
           {/* biome-ignore lint/performance/noImgElement: a small static photo */}
