@@ -20,7 +20,7 @@ Both wrappers interpret `--project-dir PATH` and `--project-dir=PATH` when selec
 
 `toolchain install` without a selector installs the active environment/project/user/fallback selection. For a recorded channel it installs that recorded concrete version, preserving the mapping; `toolchain update` is the explicit operation that advances a channel. A local-path selection has nothing to install.
 
-`toolchain status [--install] [--json]` reports the active selection and available releases. `--json` writes one versioned resolution object with available releases to stdout. Every non-help toolchain command first attempts to install the active selection; failures are reported on stderr and the requested operation continues. `--install` requires installation to succeed. Recorded channels retain their concrete version; unrecorded channels establish their first mapping. A validated local-path toolchain returns `version: null` and is never executed to discover its version. Detected installation damage remains an error.
+`toolchain status [--install] [--output-format <text|json>]` reports the active selection and available releases. `--output-format json` writes one versioned resolution object with available releases to stdout. Every non-help toolchain command first attempts to install the active selection; failures are reported on stderr and the requested operation continues. `--install` requires installation to succeed. Recorded channels retain their concrete version; unrecorded channels establish their first mapping. A validated local-path toolchain returns `version: null` and is never executed to discover its version. Detected installation damage remains an error.
 
 ```json
 {

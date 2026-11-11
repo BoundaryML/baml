@@ -1,6 +1,8 @@
 type ManagementName = "use" | "install" | "update" | "status" | "list" | "uninstall";
 
-type ManagementFlag = "--global" | "--force" | "--install" | "--json";
+type ManagementFlag = "--global" | "--force" | "--install";
+
+const OUTPUT_FORMAT_FLAG = "--output-format";
 
 class UnexpectedManagementArgument {
     command: string,
@@ -140,21 +142,43 @@ function management_command(args: string[]) -> ManagementCommand {
     let allowed: ManagementFlag[] = match (name) {
         "use" => ["--global"],
         "install" => ["--force"],
-        "status" => ["--install", "--json"],
+        "status" => ["--install"],
         "update" | "list" | "uninstall" => [],
     };
     let options = args.slice(1, args.length());
-    let flags = options
-        .filter((arg) -> bool {
-            arg.starts_with("-")
-        })
-        .map((arg) -> string {
-            if (name == "use" && arg == "-g") {
-                "--global"
-            } else {
-                arg
+    let flags: string[] = [];
+    let positional: string[] = [];
+    let output_format: string? = null;
+    let index = 0;
+    while (index < options.length()) {
+        let arg = options[index];
+        index += 1;
+        if (
+            name == "status"
+                && (arg == OUTPUT_FORMAT_FLAG || arg.starts_with(`${OUTPUT_FORMAT_FLAG}=`))
+        ) {
+            if (output_format != null) {
+                throw UnexpectedManagementArgument { command: name, argument: OUTPUT_FORMAT_FLAG }
             }
-        });
+            if (arg == OUTPUT_FORMAT_FLAG) {
+                ensure(index < options.length(), `${OUTPUT_FORMAT_FLAG} requires text or json`);
+                output_format = options[index];
+                index += 1;
+            } else {
+                output_format = arg.slice(OUTPUT_FORMAT_FLAG.length() + 1, arg.length());
+            }
+        } else if (arg.starts_with("-")) {
+            flags.push(
+                if (name == "use" && arg == "-g") {
+                    "--global"
+                } else {
+                    arg
+                },
+            );
+        } else {
+            positional.push(arg);
+        }
+    }
     for (let flag in flags) {
         if (
             !allowed.some((option) -> bool {
@@ -170,9 +194,6 @@ function management_command(args: string[]) -> ManagementCommand {
             throw UnexpectedManagementArgument { command: name, argument: flag }
         }
     }
-    let positional = options.filter((arg) -> bool {
-        !arg.starts_with("-")
-    });
     let accepts_selector = match (name) {
         "use" | "install" | "uninstall" => true,
         "update" | "status" | "list" => false,
@@ -198,7 +219,11 @@ function management_command(args: string[]) -> ManagementCommand {
         "status" => {
             StatusCommand {
                 install_missing: flags.includes("--install"),
-                json: flags.includes("--json"),
+                json: match (output_format ?? "text") {
+                    "text" => false,
+                    "json" => true,
+                    _ => fail(`${OUTPUT_FORMAT_FLAG} must be text or json`),
+                },
             }
         },
         "list" => ListCommand {},
