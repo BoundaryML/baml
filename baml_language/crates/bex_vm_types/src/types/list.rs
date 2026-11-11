@@ -104,19 +104,19 @@ pub fn backing_descriptor(elem: ElemKind) -> DescriptorId {
 }
 
 /// The element slot of the list descriptor `id`, if it is one.
+#[inline]
 pub fn list_slot_of(id: DescriptorId) -> Option<SlotKind> {
-    LIST_DESCS
-        .iter()
-        .find(|(_, desc)| *desc == id)
-        .map(|(kind, _)| *kind)
+    // The list descriptors are consecutive from the first one.
+    let index = id.0.checked_sub(LIST_DESCS[0].1.0)? as usize;
+    LIST_DESCS.get(index).map(|(kind, _)| *kind)
 }
 
 /// The element kind of the backing descriptor `id`, if it is one.
+#[inline]
 pub fn backing_elem_of(id: DescriptorId) -> Option<ElemKind> {
-    BACKING_DESCS
-        .iter()
-        .find(|(_, desc)| *desc == id)
-        .map(|(kind, _)| *kind)
+    // The backing descriptors are consecutive from the first one.
+    let index = id.0.checked_sub(BACKING_DESCS[0].1.0)? as usize;
+    BACKING_DESCS.get(index).map(|(kind, _)| *kind)
 }
 
 /// Allocates a list's backing: a zeroed cell of `backing_descriptor(elem)`

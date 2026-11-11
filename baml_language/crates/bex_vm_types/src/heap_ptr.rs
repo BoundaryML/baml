@@ -127,7 +127,22 @@ impl HeapPtr {
     /// [`Object::Shared`] marker; read it through its view.
     #[inline]
     pub unsafe fn get(self) -> &'static Object {
-        // SAFETY: Caller guarantees pointer validity and aliasing rules
+        // SAFETY: Caller guarantees pointer validity and aliasing rules.
+        // The enum is the common case; the shared formats read as markers.
+        if unsafe { self.header() }.descriptor == crate::object_format::OBJECT_DESC {
+            return unsafe { &*self.ptr };
+        }
+        unsafe { self.shared_marker() }
+    }
+
+    /// The [`Object::Shared`] marker of a shared-format object.
+    ///
+    /// # Safety
+    /// As for [`Self::get`].
+    #[cold]
+    #[inline(never)]
+    unsafe fn shared_marker(self) -> &'static Object {
+        // SAFETY: forwarded to the caller.
         match unsafe { self.format() } {
             crate::object_format::Format::Object => unsafe { &*self.ptr },
             crate::object_format::Format::Instance => crate::types::SharedKind::Instance.marker(),
