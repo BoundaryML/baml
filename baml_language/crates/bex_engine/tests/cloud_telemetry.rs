@@ -155,6 +155,11 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
             baml_env::agent::detect()
                 .ok()
                 .flatten()
+                .filter(|agent| {
+                    !agent.trim().is_empty()
+                        && agent.len() <= 128
+                        && !agent.chars().any(char::is_control)
+                })
                 .map(|agent| btel_snapshot::DecodedValue::String(agent.into()))
                 .as_ref()
         );
