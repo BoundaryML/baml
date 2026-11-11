@@ -60,7 +60,7 @@ export function HeroSection() {
         <Calendar aria-hidden className="size-4 text-muted" />
         <span>
           Every <strong className="font-medium text-head">Tuesday</strong> at{' '}
-          <strong className="font-medium text-head">10 AM PST</strong>, live on{' '}
+          <strong className="font-medium text-head">10:15 AM PST</strong>, live on{' '}
           <span className="text-head underline decoration-accent decoration-1 underline-offset-[3px] group-hover:text-clover">
             Twitch
           </span>
