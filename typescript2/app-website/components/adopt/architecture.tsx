@@ -1979,6 +1979,18 @@ function Life({
   return <ScenePlayer key={`${target}-${lang}-${moment}`} scenes={scenes} />;
 }
 
+// Every question the page answers, in order, for the list at the top.
+const QUESTIONS = [
+  { id: 'build', title: 'What happens when you build?' },
+  { id: 'release', title: 'What happens at release?' },
+  { id: 'startup', title: 'What happens at startup?' },
+  { id: 'call', title: 'What happens when you call a BAML function?' },
+  { id: 'exceptions', title: 'What happens when BAML throws an exception?' },
+  { id: 'shutdown', title: 'What happens at shutdown?' },
+  { id: 'env', title: 'What happens when you change an environment variable?' },
+  { id: 'docs', title: 'Why don’t you have docs?' },
+];
+
 /** The page as it would ship: the architecture first, then one diagram per moment in a program's
  *  life, all for the environment picked in the bar. */
 export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
@@ -1998,8 +2010,32 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           sidecar, no server.
         </p>
       </header>
+      {/* The questions this page answers, each a link to its answer. */}
+      <nav aria-label="Questions on this page" className="pb-10">
+        <ol className="grid gap-px overflow-hidden rounded-xl border border-rule bg-rule sm:grid-cols-2">
+          {QUESTIONS.map((q, i) => (
+            <li className="bg-ground" key={q.id}>
+              <a
+                className="focus-ring group flex h-full items-start gap-3 px-4 py-3 text-[15px] leading-snug text-ink-2 transition-colors hover:bg-raised hover:text-head"
+                href={`#${q.id}`}
+              >
+                <span className="mt-0.5 font-mono text-[12px] text-muted">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span className="flex-1">{q.title}</span>
+                <span
+                  aria-hidden="true"
+                  className="text-muted transition-[translate] group-hover:translate-y-0.5"
+                >
+                  ↓
+                </span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
       <ControlBar at={at} lang={lang} setAt={setAt} setLang={setLang} />
-      <Section title="What happens when you build?">
+      <Section id="build" title="What happens when you build?">
         <Architecture at={at} lang={lang} />
       </Section>
       <Section id="release" title="What happens at release?">
@@ -2007,21 +2043,25 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           <ReleaseView at={at} lang={lang} />
         </div>
       </Section>
-      <Section title="What happens at startup?">
+      <Section id="startup" title="What happens at startup?">
         <Life at={at} lang={lang} moment="startup" />
       </Section>
-      <Section title="What happens when you call a BAML function?">
+      <Section id="call" title="What happens when you call a BAML function?">
         <Life at={at} lang={lang} moment="call" />
       </Section>
-      <Section title="What happens when BAML throws an exception?">
+      <Section
+        id="exceptions"
+        title="What happens when BAML throws an exception?"
+      >
         <div key={`${target.name}-${lang}`}>
           {behaviorFor(target.name, lang)['An exception']}
         </div>
       </Section>
-      <Section title="What happens at shutdown?">
+      <Section id="shutdown" title="What happens at shutdown?">
         <Life at={at} lang={lang} moment="shutdown" />
       </Section>
       <Section
+        id="env"
         lead="The simplest way to see sysops at work: BAML reads the environment when it needs a value, instead of keeping its own copy."
         title="What happens when you change an environment variable?"
       >
@@ -2030,11 +2070,19 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
         </div>
       </Section>
       {/* The question readers ask after a page like this one, answered plainly, and by the founder. */}
-      <Section title="Why don’t you have docs?">
+      <Section id="docs" title="Why don’t you have docs?">
         <p className="max-w-[40rem] text-[16px] leading-relaxed text-ink-2">
           Boundary is still in early access, and right now nearly all of our
           effort goes into engineering and working directly with our
-          early-access customers. Docs will catch up.
+          early-access customers. We work hard to make sure AI agents can
+          already use the toolchain well, with{' '}
+          <a
+            className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
+            href="/#review"
+          >
+            backpressure built in
+          </a>
+          . Docs for humans will catch up.
         </p>
         <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
           {/* biome-ignore lint/performance/noImgElement: a small static photo */}
