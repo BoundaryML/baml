@@ -1,16 +1,13 @@
-use std::io::{self, Write};
-
 use anyhow::Result;
 use baml_db::{
     CheckedWorld, ProjectDatabase, ProjectDiagnostics, SourceRoot, WorldHasErrors,
-    baml_compiler_diagnostics::{Diagnostic, Severity, render},
+    baml_compiler_diagnostics::{Diagnostic, render},
 };
 use clap::Args;
-use serde::Serialize;
 
 use crate::{
     ExitCode,
-    output::{Command, CommandContext, Outcome, Report, Style},
+    output::{Command, CommandContext, Outcome},
     reporter::Reporter,
 };
 
@@ -31,24 +28,10 @@ pub struct CheckArgs {
     pub compiler: crate::commands::CompilerArgs,
 }
 
-/// What `baml check` found. The diagnostics themselves go to stderr.
-#[derive(Debug, Default, Serialize)]
-pub(crate) struct CheckReport {
-    pub files: usize,
-    pub errors: usize,
-    pub warnings: usize,
-}
-
-impl Report for CheckReport {
-    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
-        Ok(())
-    }
-}
-
 impl Command for CheckArgs {
-    type Output = CheckReport;
+    type Output = ();
 
-    fn run(&self, cx: &CommandContext) -> Result<Outcome<CheckReport>> {
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<()>> {
         let reporter = Reporter::new();
         let mut session = crate::project_session::ProjectSession::open(
             cx.project_dir.as_deref(),
@@ -59,7 +42,7 @@ impl Command for CheckArgs {
                 "no .baml files found in {}",
                 session.root().display()
             ));
-            return Ok(Outcome::new(CheckReport::default(), ExitCode::Failure));
+            return Ok(Outcome::new((), ExitCode::Failure));
         }
         let file_count = session.file_count();
 
@@ -100,17 +83,6 @@ impl Command for CheckArgs {
             // re-derivation is Salsa-memoized against the check just performed.
             cache.store_stdlib_diagnostics(db);
         }
-        let count = |severity| {
-            diagnostics
-                .iter()
-                .filter(|d| d.severity == severity)
-                .count()
-        };
-        let report = CheckReport {
-            files: file_count,
-            errors: count(Severity::Error),
-            warnings: count(Severity::Warning),
-        };
         if !diagnostics.is_empty() {
             let rendered = render_project_diagnostics(db, &diagnostics);
             #[allow(clippy::print_stderr)]
@@ -121,7 +93,7 @@ impl Command for CheckArgs {
 
         // Every diagnostic is rendered above; the world's check is the verdict.
         let Ok(world) = CheckedWorld::check(&diagnostics, package) else {
-            return Ok(Outcome::new(report, ExitCode::Failure));
+            return Ok(Outcome::new((), ExitCode::Failure));
         };
 
         // Seed the bytecode cache from this clean check — the same
@@ -155,7 +127,7 @@ impl Command for CheckArgs {
                         crate::reporter::print_error(format_args!(
                             "internal compiler error: {message}"
                         ));
-                        return Ok(Outcome::new(report, ExitCode::Failure));
+                        return Ok(Outcome::new((), ExitCode::Failure));
                     }
                     // Any other failed emit leaves the cache cold and is not
                     // an error.
@@ -165,7 +137,7 @@ impl Command for CheckArgs {
         }
 
         reporter.finish("Finished", format!("checked {file_count} file(s)"));
-        Ok(Outcome::ok(report))
+        Ok(Outcome::ok(()))
     }
 }
 

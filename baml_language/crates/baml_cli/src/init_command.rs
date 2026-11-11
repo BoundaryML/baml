@@ -10,17 +10,13 @@
 // Both flows share the same writer (`scaffold`) so the produced layout
 // stays consistent — only the directory precondition differs.
 
-use std::{
-    io::{self, Write},
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
 use clap::Args;
-use serde::Serialize;
 
 use crate::{
-    output::{Command, CommandContext, Outcome, Report, Style},
+    output::{Command, CommandContext, Outcome},
     reporter::Reporter,
 };
 
@@ -48,25 +44,10 @@ pub struct InitArgs {
     pub name: Option<String>,
 }
 
-/// The project `init` or `new` created.
-#[derive(Debug, Serialize)]
-pub(crate) struct Scaffolded {
-    pub name: String,
-    pub root: PathBuf,
-    /// Files written, relative to `root`.
-    pub created: Vec<PathBuf>,
-}
-
-impl Report for Scaffolded {
-    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
-        Ok(())
-    }
-}
-
 impl Command for InitArgs {
-    type Output = Scaffolded;
+    type Output = ();
 
-    fn run(&self, _cx: &CommandContext) -> Result<Outcome<Scaffolded>> {
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<()>> {
         let reporter = &Reporter::new();
         // `init` is in-place: create-or-reuse the directory, then
         // refuse if `baml.toml` already exists so we never clobber a
@@ -111,9 +92,9 @@ pub struct NewArgs {
 }
 
 impl Command for NewArgs {
-    type Output = Scaffolded;
+    type Output = ();
 
-    fn run(&self, _cx: &CommandContext) -> Result<Outcome<Scaffolded>> {
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<()>> {
         let reporter = &Reporter::new();
         if self.path.exists() {
             anyhow::bail!(
@@ -139,14 +120,13 @@ fn scaffold(
     explicit_name: Option<&str>,
     reporter: &Reporter,
     verb: &str,
-) -> Result<Outcome<Scaffolded>> {
+) -> Result<Outcome<()>> {
     let name = explicit_name
         .map(str::to_string)
         .or_else(|| default_project_name(canonical))
         .unwrap_or_else(|| "baml-project".to_string());
     validate_project_name(&name)?;
 
-    let mut created = vec![PathBuf::from("baml.toml")];
     let toml_path = canonical.join("baml.toml");
     reporter.spin("Creating", format!("baml.toml ({name})"));
     std::fs::write(&toml_path, render_baml_toml(&name))
@@ -161,15 +141,10 @@ fn scaffold(
         reporter.spin("Creating", "baml_src/main.baml");
         std::fs::write(&main_path, STARTER_MAIN_BAML)
             .with_context(|| format!("failed to write {}", main_path.display()))?;
-        created.push(PathBuf::from("baml_src/main.baml"));
     }
 
     reporter.finish(verb, format!("{} ({name})", canonical.display()));
-    Ok(Outcome::ok(Scaffolded {
-        name,
-        root: canonical.to_path_buf(),
-        created,
-    }))
+    Ok(Outcome::ok(()))
 }
 
 /// Derive a project name from the canonical path's basename. Returns

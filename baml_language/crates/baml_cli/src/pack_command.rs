@@ -25,7 +25,7 @@
 
 use std::{
     collections::HashMap,
-    io::{self, Write},
+    io::{self},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -37,12 +37,11 @@ use baml_exec::{PACK_SECTION_NAME, PackEnvelope, validate_help_param};
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
 use clap::Args;
-use serde::Serialize;
 use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    output::{Command, CommandContext, Outcome, Report, Style},
+    output::{Command, CommandContext, Outcome},
     project_load::{resolve_standalone_file, validate_file_project_flags, workspace_db},
     reporter::Reporter,
 };
@@ -182,26 +181,10 @@ struct ResolvedPackTarget {
     subcommand_name: String,
 }
 
-/// The executable `baml pack` wrote.
-#[derive(Debug, Serialize)]
-pub(crate) struct Packed {
-    pub output: PathBuf,
-    /// The target triple the executable runs on.
-    pub target: String,
-    /// The packed entry points, by display name.
-    pub functions: Vec<String>,
-}
-
-impl Report for Packed {
-    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
-        Ok(())
-    }
-}
-
 impl Command for PackArgs {
-    type Output = Packed;
+    type Output = ();
 
-    fn run(&self, cx: &CommandContext) -> Result<Outcome<Packed>> {
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<()>> {
         let mut args = self.clone();
         args.project_dir.clone_from(&cx.project_dir);
         args.run_with_reporter(&Reporter::new()).map(Outcome::ok)
@@ -209,7 +192,7 @@ impl Command for PackArgs {
 }
 
 impl PackArgs {
-    fn run_with_reporter(&self, reporter: &Reporter) -> Result<Packed> {
+    fn run_with_reporter(&self, reporter: &Reporter) -> Result<()> {
         self.validate_flags()?;
         let manifest = self.artifact_manifest()?;
         let mut telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
@@ -328,11 +311,7 @@ impl PackArgs {
             "Finished",
             format!("{} [{label}, {}]", output_path.display(), target_triple),
         );
-        Ok(Packed {
-            output: output_path,
-            target: target_triple.to_string(),
-            functions: targets.into_iter().map(|t| t.display_name).collect(),
-        })
+        Ok(())
     }
 
     /// Validate flag combinations the clap-side `Args` derive can't catch.

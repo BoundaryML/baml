@@ -2,7 +2,6 @@
 
 use std::{
     collections::HashMap,
-    io::{self, Write},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -20,7 +19,6 @@ use clap::{
     Args, Subcommand,
     builder::{PossibleValuesParser, TypedValueParser},
 };
-use serde::Serialize;
 use text_size::{TextRange, TextSize};
 use toml::Spanned;
 use toml_edit::{DocumentMut, Item, Table, value};
@@ -28,62 +26,21 @@ use toml_edit::{DocumentMut, Item, Table, value};
 use crate::{
     ExitCode,
     commands::release_version,
-    output::{Command, CommandContext, Outcome, Report, Style},
+    output::{Command, CommandContext, Outcome},
     reporter::Reporter,
 };
 
 mod package_name;
 
-/// What `baml generate` or `baml generate add` did.
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub(crate) enum GenerateReport {
-    Generated {
-        generators: Vec<GeneratedSdk>,
-    },
-    Added {
-        generator: String,
-        manifest: PathBuf,
-    },
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct GeneratedSdk {
-    pub name: String,
-    pub output_dir: PathBuf,
-    /// Every file in the SDK, relative to `output_dir`.
-    pub files: Vec<PathBuf>,
-    /// Identifiers renamed to be legal in the target language.
-    pub renames: Vec<IdentifierRename>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct IdentifierRename {
-    pub kind: String,
-    pub fqn: String,
-    pub original: String,
-    pub generated: String,
-    pub reason: String,
-}
-
-impl Report for GenerateReport {
-    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-fn generated_status(sdk: &GeneratedSdk) -> String {
-    let renames = sdk.renames.len();
+fn generated_status(name: &str, files: usize, renames: usize, output_dir: &Path) -> String {
     let label = if renames == 1 {
         "identifier rename"
     } else {
         "identifier renames"
     };
     format!(
-        "{} ({} file(s), {renames} {label} → {})",
-        sdk.name,
-        sdk.files.len(),
-        sdk.output_dir.display()
+        "{name} ({files} file(s), {renames} {label} → {})",
+        output_dir.display()
     )
 }
 
@@ -174,7 +131,7 @@ struct GeneratorDef {
 }
 
 impl AddGeneratorArgs {
-    fn run(&self, cx: &CommandContext) -> Result<Outcome<GenerateReport>> {
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<()>> {
         let root = crate::project_load::find_project_root_from(cx.project_dir.as_deref())?
             .ok_or_else(|| {
                 anyhow!("no BAML project found; run `baml init` before adding a generator")
@@ -226,10 +183,7 @@ impl AddGeneratorArgs {
             "Added",
             format!("generator.{name} to {}", toml_path.display()),
         );
-        Ok(Outcome::ok(GenerateReport::Added {
-            generator: name,
-            manifest: toml_path,
-        }))
+        Ok(Outcome::ok(()))
     }
 }
 
@@ -297,9 +251,9 @@ fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(St
 }
 
 impl Command for GenerateArgs {
-    type Output = GenerateReport;
+    type Output = ();
 
-    fn run(&self, cx: &CommandContext) -> Result<Outcome<GenerateReport>> {
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<()>> {
         if self.command.is_some() && self.telemetry.embed_telemetry {
             anyhow::bail!(
                 "`--embed-telemetry` applies to `baml generate`, which produces the SDK. Add the generator first, then run `baml generate --embed-telemetry`."
@@ -313,16 +267,8 @@ impl Command for GenerateArgs {
 }
 
 impl GenerateArgs {
-    fn run_generate(&self, cx: &CommandContext) -> Result<Outcome<GenerateReport>> {
-        let failed = || {
-            Ok(Outcome::new(
-                GenerateReport::Generated {
-                    generators: Vec::new(),
-                },
-                ExitCode::Failure,
-            ))
-        };
-        let mut sdks = Vec::new();
+    fn run_generate(&self, cx: &CommandContext) -> Result<Outcome<()>> {
+        let failed = || Ok(Outcome::new((), ExitCode::Failure));
         let reporter = Reporter::new();
         reporter.status(
             "Generating",
@@ -516,15 +462,12 @@ impl GenerateArgs {
                     program_identity: &generator.name,
                     output_directory: output_dir.clone(),
                 })?;
-                total_files += report.written_files.len();
-                let sdk = GeneratedSdk {
-                    name: generator.name.clone(),
-                    output_dir,
-                    files: report.written_files,
-                    renames: Vec::new(),
-                };
-                reporter.status("Generated", generated_status(&sdk));
-                sdks.push(sdk);
+                let count = report.written_files.len();
+                reporter.status(
+                    "Generated",
+                    generated_status(&generator.name, count, 0, &output_dir),
+                );
+                total_files += count;
                 continue;
             }
 
@@ -676,25 +619,17 @@ impl GenerateArgs {
                 )
             })?;
             let count = report.written_files.len();
-            let sdk = GeneratedSdk {
-                name: generator.name.clone(),
-                output_dir: output_dir.clone(),
-                files: report.written_files,
-                renames: identifier_renames
-                    .into_iter()
-                    .map(|rename| IdentifierRename {
-                        kind: rename.kind,
-                        fqn: rename.fqn,
-                        original: rename.original,
-                        generated: rename.generated,
-                        reason: rename.reason.to_string(),
-                    })
-                    .collect(),
-            };
             // One persistent status line per generator, like cargo's
             // `   Compiling foo v0.1.0`.
-            reporter.status("Generated", generated_status(&sdk));
-            sdks.push(sdk);
+            reporter.status(
+                "Generated",
+                generated_status(
+                    &generator.name,
+                    count,
+                    identifier_renames.len(),
+                    &output_dir,
+                ),
+            );
             if self.output.is_none()
                 && generator.package_name.is_some()
                 && let Some(previous) =
@@ -717,7 +652,7 @@ impl GenerateArgs {
         }
 
         reporter.finish("Finished", format!("generated {total_files} file(s)"));
-        Ok(Outcome::ok(GenerateReport::Generated { generators: sdks }))
+        Ok(Outcome::ok(()))
     }
 }
 
@@ -1160,13 +1095,12 @@ fn to_text_range(span: std::ops::Range<usize>) -> TextRange {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::PathBuf};
+    use std::{fs, path::Path};
 
     use super::{
-        AddGeneratorArgs, Diagnostic, GenerateArgs, GeneratedSdk, Generator, GeneratorDef,
-        IdentifierRename, NamingConvention, NamingSupport, OutputType, add_generator_to_manifest,
-        build_embedded_baml_toml, discover_generators, generated_status, is_valid_go_import_path,
-        parse_add_output_type,
+        AddGeneratorArgs, Diagnostic, GenerateArgs, Generator, GeneratorDef, NamingConvention,
+        NamingSupport, OutputType, add_generator_to_manifest, build_embedded_baml_toml,
+        discover_generators, generated_status, is_valid_go_import_path, parse_add_output_type,
     };
     use crate::output::CommandContext;
 
@@ -1251,20 +1185,8 @@ naming_convention = "preserve-case"
 
     #[test]
     fn generated_status_counts_files_and_renames() {
-        let sdk = GeneratedSdk {
-            name: "py".to_string(),
-            output_dir: PathBuf::from("generated"),
-            files: vec![PathBuf::from("a.py"); 4],
-            renames: vec![IdentifierRename {
-                kind: "enum variant".to_string(),
-                fqn: "user.Choice.None".to_string(),
-                original: "None".to_string(),
-                generated: "None_".to_string(),
-                reason: "Python keyword".to_string(),
-            }],
-        };
         assert_eq!(
-            generated_status(&sdk),
+            generated_status("py", 4, 1, Path::new("generated")),
             "py (4 file(s), 1 identifier rename → generated)"
         );
     }

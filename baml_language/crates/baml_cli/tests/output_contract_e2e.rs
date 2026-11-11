@@ -1,6 +1,7 @@
 //! The output contract every command shares: stdout carries the result and
-//! nothing else, so `--output-format json` always yields exactly one JSON
-//! document, and status, logs and diagnostics stay on stderr.
+//! nothing else. A command with a result prints exactly one JSON document
+//! under `--output-format json`; a command with none prints nothing in any
+//! format. Status, logs and diagnostics stay on stderr.
 
 mod common;
 
@@ -62,30 +63,25 @@ fn json(dir: &Path, args: &[&str]) -> (Output, serde_json::Value) {
 }
 
 #[test]
-fn json_mode_writes_exactly_one_document_for_every_command() {
+fn json_mode_writes_exactly_one_document_for_every_result() {
     let dir = project(SOURCE);
     let dir = dir.path();
     for args in [
-        &["check"][..],
-        &["fmt", "--check"],
+        &["fmt", "--check"][..],
         &["fmt", "--dry-run"],
-        &["fmt"],
         &["test"],
         &["test", "--list"],
         &["run", "main"],
         &["run", "--list"],
-        &["generate"],
         &["describe"],
         &["describe", "main"],
         &["describe", "baml"],
         &["describe", "match"],
         &["describe", "--search", "read a file"],
-        &["describe", "no_such_symbol"],
         &["codequality"],
         &["codequality", "--functions"],
         &["local", "recordings", "schema"],
         &["local", "recordings", "query", "SELECT COUNT(*) FROM spans"],
-        &["local", "recordings", "query", "SELECT nonsense FROM spans"],
         &["query", "SELECT COUNT(*) FROM spans"],
         &["telemetry"],
         &["help", "check"],
@@ -94,40 +90,72 @@ fn json_mode_writes_exactly_one_document_for_every_command() {
     }
 
     let scratch = tempfile::tempdir().unwrap();
-    json(scratch.path(), &["new", "created"]);
-    json(scratch.path(), &["init", "initialized"]);
+    assert_silent(scratch.path(), &["new", "created"]);
     json(
         scratch.path(),
         &["agent", "install", "--project-dir", "created"],
     );
 }
 
-/// A failing command still reports what it found.
+/// A failing command that has a result still reports it.
 #[test]
 fn json_mode_reports_failures_as_json() {
-    let dir = project("function main() -> Missing {\n    1\n}\n");
-    let (output, report) = json(dir.path(), &["check"]);
+    let dir = project("test \"fails\" {\n    assert.is_true(false)\n}\n");
+    let (output, report) = json(dir.path(), &["test"]);
     assert_eq!(output.status.code(), Some(1), "{output:?}");
-    assert!(report["errors"].as_u64().unwrap() >= 1, "{report}");
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("Missing"),
-        "diagnostics stay on stderr: {output:?}"
-    );
+    assert_eq!(report["summary"]["failed"], 1, "{report}");
 }
 
-/// Commands that only act print nothing to stdout in text mode.
-#[test]
-fn action_commands_are_silent_on_stdout_in_text_mode() {
-    let dir = project(SOURCE);
-    for args in [&["check"][..], &["fmt"], &["generate"]] {
-        let output = baml(dir.path(), args);
-        assert!(output.status.success(), "{output:?}");
+/// Runs `args` as text and as JSON and requires an empty stdout from both.
+fn assert_silent(dir: &Path, args: &[&str]) -> Output {
+    let mut last = None;
+    for format in ["text", "json"] {
+        let mut argv = args.to_vec();
+        argv.extend(["--output-format", format]);
+        let output = baml(dir, &argv);
         assert!(
             output.stdout.is_empty(),
             "`baml {}` wrote to stdout: {}",
-            args.join(" "),
+            argv.join(" "),
             String::from_utf8_lossy(&output.stdout)
         );
+        last = Some(output);
+    }
+    last.unwrap()
+}
+
+/// A command that prints nothing as text prints nothing as JSON either.
+#[test]
+fn commands_without_a_result_are_silent_in_every_format() {
+    let dir = project(SOURCE);
+    for args in [&["check"][..], &["fmt"], &["generate"]] {
+        let output = assert_silent(dir.path(), args);
+        assert!(output.status.success(), "{output:?}");
+    }
+
+    let scratch = tempfile::tempdir().unwrap();
+    assert_silent(scratch.path(), &["init", "initialized"]);
+}
+
+/// A failure with nothing to show leaves stdout empty; the reason is on
+/// stderr.
+#[test]
+fn failures_without_a_result_are_silent_in_every_format() {
+    let broken = project("function main() -> Missing {\n    1\n}\n");
+    let output = assert_silent(broken.path(), &["check"]);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Missing"),
+        "{output:?}"
+    );
+
+    let dir = project(SOURCE);
+    for args in [
+        &["describe", "no_such_symbol"][..],
+        &["local", "recordings", "query", "SELECT nonsense FROM spans"],
+    ] {
+        let output = assert_silent(dir.path(), args);
+        assert_eq!(output.status.code(), Some(1), "{args:?}: {output:?}");
     }
 }
 

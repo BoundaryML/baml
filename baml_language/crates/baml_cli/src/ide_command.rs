@@ -2,16 +2,15 @@ use std::{
     env,
     ffi::OsString,
     fs,
-    io::{self, Write},
+    io::{self},
     path::{Path, PathBuf},
     process,
 };
 
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
-use serde::Serialize;
 
-use crate::output::{Command, CommandContext, Outcome, Report, Style};
+use crate::output::{Command, CommandContext, Outcome};
 
 #[derive(clap::Subcommand, Clone, Debug)]
 pub(crate) enum IdeCommand {
@@ -52,28 +51,10 @@ pub(crate) struct IdeInstallArgs {
     pub dir: Option<PathBuf>,
 }
 
-/// Where the extension went.
-#[derive(Debug, Serialize)]
-pub(crate) struct IdeInstalled {
-    pub vsix: PathBuf,
-    /// The editor CLI the extension was installed through.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub editor: Option<String>,
-    /// The copy made by `--output-dir`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub copied_to: Option<PathBuf>,
-}
-
-impl Report for IdeInstalled {
-    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
-        Ok(())
-    }
-}
-
 impl Command for IdeInstallArgs {
-    type Output = IdeInstalled;
+    type Output = ();
 
-    fn run(&self, _cx: &CommandContext) -> Result<Outcome<IdeInstalled>> {
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<()>> {
         let reporter = crate::reporter::Reporter::new();
         let vsix = active_toolchain_vsix()?;
         if let Some(dir) = &self.dir {
@@ -84,11 +65,7 @@ impl Command for IdeInstallArgs {
                 format!("failed to copy {} to {}", vsix.display(), dest.display())
             })?;
             reporter.status("Extracted", dest.display().to_string());
-            return Ok(Outcome::ok(IdeInstalled {
-                vsix,
-                editor: None,
-                copied_to: Some(dest),
-            }));
+            return Ok(Outcome::ok(()));
         }
 
         let editor = self.resolve_editor()?;
@@ -109,11 +86,7 @@ impl Command for IdeInstallArgs {
         }
 
         reporter.status("Installed", vsix.display().to_string());
-        Ok(Outcome::ok(IdeInstalled {
-            vsix,
-            editor: Some(editor.to_string_lossy().into_owned()),
-            copied_to: None,
-        }))
+        Ok(Outcome::ok(()))
     }
 }
 

@@ -135,12 +135,13 @@ pub(crate) struct QueryReport {
 impl Report for QueryReport {
     const JSONL: bool = true;
 
+    /// A failed query has no result to show; the error is on stderr.
+    fn is_silent(&self) -> bool {
+        self.columns.is_empty()
+    }
+
     fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
         const MAX_CELL: usize = 80;
-        // A failed query has no result to show; the error is on stderr.
-        if self.columns.is_empty() {
-            return Ok(());
-        }
         let header: Vec<String> = self.column_names().map(str::to_owned).collect();
         let cells: Vec<Vec<String>> = self
             .rows
@@ -460,7 +461,10 @@ impl Query<'_> {
                 }
                 ExitCode::Failure
             }
-            Some("cancelled") => ExitCode::Failure,
+            Some("cancelled") => {
+                crate::reporter::print_error("Cloud query was cancelled.");
+                ExitCode::Failure
+            }
             _ => anyhow::bail!("Boundary returned an unknown query outcome"),
         };
         Ok(Outcome::new(report, status))

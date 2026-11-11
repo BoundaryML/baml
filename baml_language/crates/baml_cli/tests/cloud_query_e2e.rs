@@ -1,4 +1,4 @@
-//! Cloud queries preserve the CLI's public exit-code contract.
+//! Cloud queries follow the CLI's exit-code and output contract.
 use std::process::Command;
 
 use serde_json::{Value, json};
@@ -41,8 +41,9 @@ async fn cancelled_cloud_query_fails() {
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1), "{output:?}");
-    let result: Value = serde_json::from_slice(&output.stdout)
-        .unwrap_or_else(|error| panic!("{error}: {output:?}"));
-    assert_eq!(result["outcome"]["status"], "cancelled");
-    assert_eq!(result["rows"], json!([]));
+    assert!(output.stdout.is_empty(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("cancelled"),
+        "{output:?}"
+    );
 }

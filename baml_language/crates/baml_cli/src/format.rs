@@ -100,6 +100,11 @@ enum Mode {
 }
 
 impl Report for FormatReport {
+    /// Writing files in place has no result beyond the files.
+    fn is_silent(&self) -> bool {
+        self.mode == Mode::Write
+    }
+
     fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
         for file in &self.files {
             match self.mode {

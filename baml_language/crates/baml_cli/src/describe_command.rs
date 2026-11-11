@@ -120,6 +120,11 @@ impl Serialize for DescribeReport {
 }
 
 impl Report for DescribeReport {
+    /// An unknown name has no description; the suggestions are on stderr.
+    fn is_silent(&self) -> bool {
+        matches!(self.found, Found::Nothing)
+    }
+
     fn text(&self, mut out: &mut dyn Write, style: &Style) -> io::Result<()> {
         let limit = self.limit.unwrap_or(usize::from(DEFAULT_LIMIT));
         match &self.found {

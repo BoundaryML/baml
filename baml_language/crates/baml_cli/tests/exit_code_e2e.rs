@@ -199,7 +199,7 @@ fn generate_compilation_error_returns_nonzero_exit_code() {
 }
 
 #[test]
-fn generate_reports_identifier_renames_on_stderr_and_in_json() {
+fn generate_reports_identifier_renames_on_stderr() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
@@ -216,11 +216,7 @@ fn generate_reports_identifier_renames_on_stderr_and_in_json() {
     )
     .unwrap();
 
-    let verbose = run_baml_cli(
-        built,
-        tmp.path(),
-        &["generate", "--project-dir", ".", "--output-format", "json"],
-    );
+    let verbose = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
     assert!(
         verbose.status.success(),
         "stderr: {}",
@@ -231,13 +227,6 @@ fn generate_reports_identifier_renames_on_stderr_and_in_json() {
         verbose_stderr.contains("1 identifier rename →"),
         "{verbose_stderr}"
     );
-    // The renames themselves are part of the JSON result.
-    let report: serde_json::Value =
-        serde_json::from_slice(&verbose.stdout).expect("generate --output-format json is JSON");
-    let rename = &report["generators"][0]["renames"][0];
-    assert_eq!(rename["fqn"], "user.Choice.None", "{report}");
-    assert_eq!(rename["generated"], "None_", "{report}");
-    assert_eq!(rename["reason"], "Python keyword", "{report}");
     assert!(
         verbose_stderr.contains(&format!(
             "Generating clients with CLI version: {}",

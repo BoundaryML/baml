@@ -83,20 +83,8 @@ pub(crate) struct LogoutArgs {}
 #[derive(Args, Debug)]
 pub(crate) struct TokenArgs {}
 
-/// Who is logged in after `baml cloud auth login`.
-#[derive(Debug, Serialize)]
-pub(crate) struct LoginReport {
-    pub user: Option<String>,
-}
-
-impl Report for LoginReport {
-    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
-        Ok(())
-    }
-}
-
 impl Command for LoginArgs {
-    type Output = LoginReport;
+    type Output = ();
 
     /// Runs `baml cloud auth login`.
     ///
@@ -109,7 +97,7 @@ impl Command for LoginArgs {
     /// Errors:
     /// - When authorization can't be started, the user denies the login,
     ///   the code expires, or [`LOGIN_TIMEOUT`] elapses.
-    fn run(&self, _cx: &CommandContext) -> Result<Outcome<LoginReport>> {
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<()>> {
         let reporter = crate::reporter::Reporter::new();
         // Check protected storage before asking the user to approve a login.
         let endpoint = crate::cloud_config::login_endpoint()?;
@@ -124,9 +112,7 @@ impl Command for LoginArgs {
                         "Login",
                         format!("already logged in as {}", session.caller.email),
                     );
-                    return Ok(Outcome::ok(LoginReport {
-                        user: Some(session.caller.email),
-                    }));
+                    return Ok(Outcome::ok(()));
                 }
                 Err(error)
                     if error
@@ -145,7 +131,7 @@ impl Command for LoginArgs {
         }
         let email = device_login(self.no_open)?;
         reporter.finish("Login", format!("logged in as {email}"));
-        Ok(Outcome::ok(LoginReport { user: Some(email) }))
+        Ok(Outcome::ok(()))
     }
 }
 
@@ -301,22 +287,10 @@ impl Report for AuthenticationStatus {
     }
 }
 
-/// Whether `baml cloud auth logout` removed a saved login.
-#[derive(Debug, Serialize)]
-pub(crate) struct LogoutReport {
-    pub logged_out: bool,
-}
-
-impl Report for LogoutReport {
-    fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
-        Ok(())
-    }
-}
-
 impl Command for LogoutArgs {
-    type Output = LogoutReport;
+    type Output = ();
 
-    fn run(&self, _cx: &CommandContext) -> Result<Outcome<LogoutReport>> {
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<()>> {
         use bcs_api::{Client, Store};
         let reporter = crate::reporter::Reporter::new();
         let endpoint = crate::cloud_config::login_endpoint()?;
@@ -331,7 +305,6 @@ impl Command for LogoutArgs {
             Err(error @ bcs_api::Error::InvalidStoredLogin { .. }) => Some(Err(error)),
             Err(error) => return Err(error.into()),
         };
-        let logged_out = revocation.is_some();
         if let Some(revocation) = revocation {
             store.clear()?;
             reporter.status("Logout", "local login removed");
@@ -343,7 +316,7 @@ impl Command for LogoutArgs {
         } else {
             reporter.status("Logout", "not logged in");
         }
-        Ok(Outcome::ok(LogoutReport { logged_out }))
+        Ok(Outcome::ok(()))
     }
 }
 

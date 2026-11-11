@@ -77,6 +77,12 @@ pub(crate) trait Report: Serialize {
 
     fn text(&self, out: &mut dyn Write, style: &Style) -> io::Result<()>;
 
+    /// Whether there is nothing to print. A report that prints nothing as
+    /// text prints nothing in any other format either.
+    fn is_silent(&self) -> bool {
+        false
+    }
+
     /// The report as a sequence of JSON lines. Only called when
     /// [`Report::JSONL`] is set.
     fn jsonl(&self) -> Vec<serde_json::Value> {
@@ -84,15 +90,19 @@ pub(crate) trait Report: Serialize {
     }
 }
 
-/// Nothing to report: no stdout in text mode, `null` in JSON.
+/// Nothing to report, in any format.
 impl Report for () {
+    fn is_silent(&self) -> bool {
+        true
+    }
+
     fn text(&self, _out: &mut dyn Write, _style: &Style) -> io::Result<()> {
         Ok(())
     }
 }
 
 /// A value plus the exit status it should produce. Failing commands still
-/// return a value, so `check --output-format json` reports what failed.
+/// return a value, so `test --output-format json` reports what failed.
 #[derive(Debug)]
 pub(crate) struct Outcome<T> {
     pub value: T,
@@ -144,6 +154,9 @@ pub(crate) fn run_raw<C: RawCommand>(command: &C, cx: &CommandContext) -> anyhow
 
 /// Render one value to stdout in the selected format.
 pub(crate) fn write<T: Report>(format: OutputFormat, value: &T) -> anyhow::Result<()> {
+    if value.is_silent() {
+        return Ok(());
+    }
     let mut out = io::stdout().lock();
     match format {
         OutputFormat::Text => value.text(&mut out, &super::stdout_style())?,
