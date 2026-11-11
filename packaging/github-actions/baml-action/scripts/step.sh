@@ -12,8 +12,9 @@ flags=(--agent-skill-check off --color never)
 
 # The flag that names a project directory was renamed from `--project` to
 # `--project-dir`, and the action runs whichever toolchain the caller selects.
+# Probe from the project so the wrapper resolves the toolchain the steps use.
 project_flag=--project
-if [[ "$(baml check --help 2>/dev/null || true)" == *--project-dir* ]]; then
+if [[ "$(cd "$project" && baml check --help 2>/dev/null || true)" == *--project-dir* ]]; then
   project_flag=--project-dir
 fi
 

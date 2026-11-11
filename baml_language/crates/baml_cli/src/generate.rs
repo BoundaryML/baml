@@ -1158,10 +1158,7 @@ fn to_text_range(span: std::ops::Range<usize>) -> TextRange {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
-    use crate::output::CommandContext;
-    use std::fs;
+    use std::{fs, path::PathBuf};
 
     use super::{
         AddGeneratorArgs, Diagnostic, GenerateArgs, GeneratedSdk, Generator, GeneratorDef,
@@ -1169,6 +1166,7 @@ mod tests {
         build_embedded_baml_toml, discover_generators, generated_status, is_valid_go_import_path,
         parse_add_output_type,
     };
+    use crate::output::CommandContext;
 
     /// Test blocks and checkout paths must not affect persisted production bytecode.
     #[test]

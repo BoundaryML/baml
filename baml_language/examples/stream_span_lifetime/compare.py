@@ -29,7 +29,7 @@ def main():
         project.mkdir()
         for file in ["baml.toml", "main.baml"]:
             shutil.copyfile(HERE / file, project / file)
-        run_env = dict(env, BAML_VERSION=args.nightly if name == "nightly" else local)
+        run_env = dict(env, BAML_TOOLCHAIN=args.nightly) if name == "nightly" else env
         # Run from the project directory: the pinned nightly predates `--project-dir`.
         subprocess.run(command + ["run", "main", "--agent-skill-check", "off"],
             cwd=project, env=run_env, check=True)
